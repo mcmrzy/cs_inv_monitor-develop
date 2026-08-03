@@ -13,7 +13,10 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:8888',
+        // E2E tests (Playwright) point this at the isolated test gateway
+        // (http://localhost:18888) via VITE_PROXY_TARGET; local development
+        // keeps the default dev gateway on 8888.
+        target: process.env.VITE_PROXY_TARGET || 'http://localhost:8888',
         changeOrigin: true,
       },
     },
@@ -51,7 +54,8 @@ export default defineConfig({
             if (antdComponent === 'form') return 'vendor-antd-form-controls'
             if (/^(input|input-number|mentions)$/.test(antdComponent)) return 'vendor-antd-input'
             if (/^(select|cascader|tree-select)$/.test(antdComponent)) return 'vendor-antd-selection'
-            if (/^(checkbox|radio|switch|slider|rate|color-picker)$/.test(antdComponent)) return 'vendor-antd-choices'
+            if (/^(checkbox|radio|switch)$/.test(antdComponent)) return 'vendor-antd-choices'
+            if (/^(slider|rate|color-picker)$/.test(antdComponent)) return 'vendor-antd-controls'
             if (antdComponent === 'upload') return 'vendor-antd-upload'
             if (/^(modal|message|notification|drawer|popover|popconfirm|tooltip|alert|progress|skeleton|spin|result)$/.test(antdComponent)) return 'vendor-antd-feedback'
             if (/^(menu|dropdown|tabs|steps|breadcrumb|anchor)$/.test(antdComponent)) return 'vendor-antd-navigation'
@@ -74,10 +78,12 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     css: true,
+    // Playwright E2E specs live in e2e/ and must not be collected by vitest
+    exclude: ['node_modules/', 'dist/', 'e2e/'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
-      exclude: ['node_modules/', 'src/test/'],
+      exclude: ['node_modules/', 'src/test/', 'e2e/'],
     },
   },
 })

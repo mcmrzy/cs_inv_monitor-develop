@@ -11,32 +11,34 @@ import paho.mqtt.client as mqtt
 import json
 import time
 import random
+import os
 import sys
 from datetime import datetime, timezone
 import ssl
 import requests
 from kafka import KafkaProducer
 
-# MQTT配置
-MQTT_BROKER = "broker.jiuxiaoyw.online"
-MQTT_PORT = 8883
-MQTT_USERNAME = "CSKJ-INV-DEVICE-SERVER"
-MQTT_PASSWORD = "CSKJINVDEVICESERVER"
+# MQTT配置（默认指向隔离测试环境 EMQX，可用环境变量覆盖）
+MQTT_BROKER = os.environ.get("SIM_MQTT_HOST", "127.0.0.1")
+MQTT_PORT = int(os.environ.get("SIM_MQTT_PORT", "11883"))
+MQTT_USERNAME = os.environ.get("SIM_MQTT_USER", "")
+MQTT_PASSWORD = os.environ.get("SIM_MQTT_PASS", "")
 MQTT_TLS_INSECURE = True
+MQTT_TLS = os.environ.get("SIM_MQTT_TLS", "0") == "1"
 
 # API配置（直接通过API Server发送数据）
 API_SERVER = "http://localhost:8081"
 INTERNAL_KEY = "local-dev-internal-key-1234567890"
 
-# Kafka配置
-KAFKA_BROKER = "broker.jiuxiaoyw.online:9092"
-KAFKA_TOPIC = "inv-telemetry"
+# Kafka配置（可用环境变量覆盖，默认指向隔离测试环境）
+KAFKA_BROKER = os.environ.get("SIM_KAFKA_BROKER", "127.0.0.1:19092")
+KAFKA_TOPIC = os.environ.get("SIM_KAFKA_TOPIC", "inv-telemetry")
 
 # 运行模式：mqtt、api 或 kafka
-RUN_MODE = "kafka"
+RUN_MODE = os.environ.get("SIM_RUN_MODE", "mqtt")
 
 # 设备数量
-DEVICE_COUNT = 10000
+DEVICE_COUNT = int(os.environ.get("SIM_DEVICE_COUNT", "5000"))
 BATCH_SIZE = 100  # 每批发送设备数
 BATCH_DELAY = 0.5  # 批次间延迟秒
 
@@ -71,7 +73,7 @@ def generate_telemetry_data(device_sn, device_index):
     
     return {
         "sn": device_sn,
-        "topic": f"inv/{device_sn}/telemetry",
+        "topic": f"cs_inv/{device_sn}/telemetry",
         "data": {
             "voltage_pv1": round(base_voltage_pv, 1),
             "current_pv1": round(base_current_pv, 2),
@@ -230,8 +232,7 @@ def send_via_kafka(device_sn, data):
     }
     
     try:
-        future = kafka_producer.send(KAFKA_TOPIC, key=device_sn.encode(), value=json.dumps(kafka_msg).encode())
-        future.get(timeout=10)
+        kafka_producer.send(KAFKA_TOPIC, key=device_sn.encode(), value=json.dumps(kafka_msg).encode())
         return True
     except Exception as e:
         print(f"Kafka error for {device_sn}: {e}")
@@ -273,11 +274,13 @@ def main():
     if RUN_MODE == "mqtt":
         # MQTT模式
         client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="device-simulator-001")
-        client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
+        if MQTT_USERNAME:
+            client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
         
-        # TLS配置
-        client.tls_set(cert_reqs=ssl.CERT_NONE)
-        client.tls_insecure_set(MQTT_TLS_INSECURE)
+        # TLS配置（仅生产 broker 启用）
+        if MQTT_TLS:
+            client.tls_set(cert_reqs=ssl.CERT_NONE)
+            client.tls_insecure_set(MQTT_TLS_INSECURE)
         
         # 设置回调
         client.on_connect = on_connect
@@ -305,7 +308,7 @@ def main():
             
             for i in range(batch_start, batch_end):
                 device_sn = f"MASS-TEST-{i + 1}"
-                topic = f"inv/{device_sn}/telemetry"
+                topic = f"cs_inv/{device_sn}/telemetry"
                 data = generate_telemetry_data(device_sn, i)
                 
                 try:
@@ -388,8 +391,12 @@ def main():
             if batch_end < DEVICE_COUNT:
                 time.sleep(BATCH_DELAY)
         
-        # 关闭Kafka Producer
+        # 冲刷并关闭Kafka Producer（异步 send 后必须 flush 等待全部发送完成）
         if kafka_producer:
+            try:
+                kafka_producer.flush(timeout=120)
+            except Exception as e:
+                print(f"Kafka flush error: {e}")
             kafka_producer.close()
     
     # 计算统计

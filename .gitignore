@@ -129,3 +129,12 @@ inv-admin-frontend/public/images/login/login-bg-7.png
 
 # Generated bridge binary
 mqtt-kafka-bridge/mqtt-kafka-bridge-linux
+
+# E2E 凭据与测试产物（禁止提交：含明文密码与有效 JWT）
+e2e_evidence/auth-storage.json
+e2e_evidence/e2e-account.json
+e2e_evidence/playwright-report/
+e2e_evidence/playwright-output/
+
+# Go 覆盖率产物
+mqtt-kafka-bridge/cover/

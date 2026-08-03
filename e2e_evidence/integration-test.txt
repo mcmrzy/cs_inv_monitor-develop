@@ -1,0 +1,659 @@
+﻿=== RUN   TestHealthCheck
+--- PASS: TestHealthCheck (0.02s)
+=== RUN   TestAuthFlow
+    api_e2e_test.go:199: register status=200 code=0 msg=success
+    api_e2e_test.go:213: refresh: status=200 code=401 msg=invalid refresh token
+    api_e2e_test.go:218: logout: status=200 code=0 msg=logout success
+--- PASS: TestAuthFlow (0.30s)
+=== RUN   TestEmailLoginFlow
+    api_e2e_test.go:244: email-register: status=200 code=0 msg=success
+    api_e2e_test.go:254: email-login: status=200 code=0 msg=success
+--- PASS: TestEmailLoginFlow (0.10s)
+=== RUN   TestDeviceManagementFlow
+    api_e2e_test.go:267: register status=200 code=0 msg=success
+    api_e2e_test.go:279: bind: status=403 code=403 msg=权限不足，无法访问该资源
+    api_e2e_test.go:280: 
+        	Error Trace:	D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/tests/integration/api_e2e_test.go:280
+        	Error:      	Not equal: 
+        	            	expected: 200
+        	            	actual  : 403
+        	Test:       	TestDeviceManagementFlow
+        	Messages:   	bind HTTP status
+--- FAIL: TestDeviceManagementFlow (0.11s)
+=== RUN   TestUnauthorizedAccess
+=== RUN   TestUnauthorizedAccess/GET_/api/v1/devices
+=== RUN   TestUnauthorizedAccess/GET_/api/v1/stations
+=== RUN   TestUnauthorizedAccess/GET_/api/v1/alarms
+=== RUN   TestUnauthorizedAccess/GET_/api/v1/auth/profile
+--- PASS: TestUnauthorizedAccess (0.00s)
+    --- PASS: TestUnauthorizedAccess/GET_/api/v1/devices (0.00s)
+    --- PASS: TestUnauthorizedAccess/GET_/api/v1/stations (0.00s)
+    --- PASS: TestUnauthorizedAccess/GET_/api/v1/alarms (0.00s)
+    --- PASS: TestUnauthorizedAccess/GET_/api/v1/auth/profile (0.00s)
+=== RUN   TestDataIsolation
+    api_e2e_test.go:337: register status=200 code=0 msg=success
+    api_e2e_test.go:342: register status=200 code=0 msg=success
+    api_e2e_test.go:349: userA bind: status=403 code=403 msg=权限不足，无法访问该资源
+    api_e2e_test.go:350: 
+        	Error Trace:	D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/tests/integration/api_e2e_test.go:350
+        	Error:      	Not equal: 
+        	            	expected: 200
+        	            	actual  : 403
+        	Test:       	TestDataIsolation
+        	Messages:   	user A bind HTTP status
+--- FAIL: TestDataIsolation (0.22s)
+=== RUN   TestRateLimiting
+--- PASS: TestRateLimiting (0.03s)
+=== RUN   TestCrossTenant_AccessOrgFromDifferentTenant
+    cross_tenant_test.go:20: 429 rate limited on POST http://localhost:18888/api/v1/auth/email-register, retry 1/5 after 500ms
+    cross_tenant_test.go:20: register status=200 code=0 msg=success
+    cross_tenant_test.go:20: register status=200 code=0 msg=success
+    cross_tenant_test.go:20: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestCrossTenant_AccessOrgFromDifferentTenant (0.61s)
+=== RUN   TestCrossTenant_UpdateOrgFromDifferentTenant
+    cross_tenant_test.go:35: register status=200 code=0 msg=success
+    cross_tenant_test.go:35: register status=200 code=0 msg=success
+    cross_tenant_test.go:35: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestCrossTenant_UpdateOrgFromDifferentTenant (0.10s)
+=== RUN   TestCrossTenant_DeleteOrgFromDifferentTenant
+    cross_tenant_test.go:47: register status=200 code=0 msg=success
+    cross_tenant_test.go:47: register status=200 code=0 msg=success
+    cross_tenant_test.go:47: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestCrossTenant_DeleteOrgFromDifferentTenant (0.10s)
+=== RUN   TestCrossTenant_MoveOrgFromDifferentTenant
+    cross_tenant_test.go:58: register status=200 code=0 msg=success
+    cross_tenant_test.go:58: register status=200 code=0 msg=success
+    cross_tenant_test.go:58: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestCrossTenant_MoveOrgFromDifferentTenant (0.11s)
+=== RUN   TestCrossTenant_ToggleStatusFromDifferentTenant
+    cross_tenant_test.go:71: 429 rate limited on POST http://localhost:18888/api/v1/auth/email-register, retry 1/5 after 500ms
+    cross_tenant_test.go:71: register status=200 code=0 msg=success
+    cross_tenant_test.go:71: register status=200 code=0 msg=success
+    cross_tenant_test.go:71: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestCrossTenant_ToggleStatusFromDifferentTenant (0.60s)
+=== RUN   TestCrossTenant_GetTreeFromDifferentTenant
+    cross_tenant_test.go:83: register status=200 code=0 msg=success
+    cross_tenant_test.go:83: register status=200 code=0 msg=success
+    cross_tenant_test.go:83: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestCrossTenant_GetTreeFromDifferentTenant (0.10s)
+=== RUN   TestCrossTenant_TransferDeviceNonAdmin
+    cross_tenant_test.go:94: register status=200 code=0 msg=success
+    cross_tenant_test.go:94: register status=200 code=0 msg=success
+    cross_tenant_test.go:94: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestCrossTenant_TransferDeviceNonAdmin (0.11s)
+=== RUN   TestCrossTenant_ViewMemberFromDifferentTenant
+    cross_tenant_test.go:116: register status=200 code=0 msg=success
+    cross_tenant_test.go:116: register status=200 code=0 msg=success
+    cross_tenant_test.go:116: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestCrossTenant_ViewMemberFromDifferentTenant (0.10s)
+=== RUN   TestCrossTenant_CreateInvitationInOtherTenant
+    cross_tenant_test.go:141: register status=200 code=0 msg=success
+    cross_tenant_test.go:141: 429 rate limited on POST http://localhost:18888/api/v1/auth/email-register, retry 1/5 after 500ms
+    cross_tenant_test.go:141: register status=200 code=0 msg=success
+    cross_tenant_test.go:141: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestCrossTenant_CreateInvitationInOtherTenant (0.64s)
+=== RUN   TestCrossTenant_ListOrgsOnlyOwnTenant
+    cross_tenant_test.go:160: register status=200 code=0 msg=success
+    cross_tenant_test.go:160: register status=200 code=0 msg=success
+    cross_tenant_test.go:160: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestCrossTenant_ListOrgsOnlyOwnTenant (0.11s)
+=== RUN   TestCrossTenant_GenerateClaimCodeForOtherTenantDevice
+    cross_tenant_test.go:187: register status=200 code=0 msg=success
+    cross_tenant_test.go:187: register status=200 code=0 msg=success
+    cross_tenant_test.go:187: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestCrossTenant_GenerateClaimCodeForOtherTenantDevice (0.10s)
+=== RUN   TestFreshDatabaseBaselineAndMigrations
+    db_migration_test.go:31: failed to ping DB: failed to connect to `user=testuser database=postgres`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestFreshDatabaseBaselineAndMigrations (0.00s)
+=== RUN   TestMigration064ChannelAuthorizationConstraints
+    db_migration_test.go:105: failed to ping DB: failed to connect to `user=testuser database=postgres`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestMigration064ChannelAuthorizationConstraints (0.00s)
+=== RUN   TestMigration065AuditOutboxContracts
+    db_migration_test.go:419: failed to ping DB: failed to connect to `user=testuser database=postgres`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestMigration065AuditOutboxContracts (0.00s)
+=== RUN   TestMigration066ChannelBackfillControlContracts
+    db_migration_test.go:633: failed to ping DB: failed to connect to `user=testuser database=postgres`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestMigration066ChannelBackfillControlContracts (0.00s)
+=== RUN   TestMigration011ModelFieldCompatibility
+    db_migration_test.go:696: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestMigration011ModelFieldCompatibility (0.00s)
+=== RUN   TestMigration016TimestampCompatibility
+    db_migration_test.go:765: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestMigration016TimestampCompatibility (0.00s)
+=== RUN   TestBaselineCommandAndInstallerRepair
+    db_migration_test.go:852: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestBaselineCommandAndInstallerRepair (0.00s)
+=== RUN   TestBaselinePerformanceIndexRepair
+    db_migration_test.go:985: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestBaselinePerformanceIndexRepair (0.00s)
+=== RUN   TestRBACDefaultSeedRepair
+    db_migration_test.go:1154: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestRBACDefaultSeedRepair (0.00s)
+=== RUN   TestRBACCurrentBaselineTerminalModelRead
+    db_migration_test.go:1272: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestRBACCurrentBaselineTerminalModelRead (0.00s)
+=== RUN   TestTerminalModelReadPermissionMigration
+    db_migration_test.go:1357: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestTerminalModelReadPermissionMigration (0.00s)
+=== RUN   TestTelemetryAdvisoryLockNamespaceMigration
+    db_migration_test.go:1428: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestTelemetryAdvisoryLockNamespaceMigration (0.00s)
+=== RUN   TestLegacyTelemetryRetirementMigration
+    db_migration_test.go:1484: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestLegacyTelemetryRetirementMigration (0.00s)
+=== RUN   TestCriticalTablesExist
+    db_migration_test.go:1531: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestCriticalTablesExist (0.00s)
+=== RUN   TestCriticalIndexesExist
+    db_migration_test.go:1589: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestCriticalIndexesExist (0.00s)
+=== RUN   TestTimescaleDBHypertable
+    db_migration_test.go:1648: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestTimescaleDBHypertable (0.00s)
+=== RUN   TestTimescaleDBContinuousAggregates
+    db_migration_test.go:1683: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestTimescaleDBContinuousAggregates (0.00s)
+=== RUN   TestTelemetryInsertAndQuery
+    db_migration_test.go:1707: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestTelemetryInsertAndQuery (0.01s)
+=== RUN   TestProtocol039SchemaContract
+    db_migration_test.go:1751: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestProtocol039SchemaContract (0.00s)
+=== RUN   TestProtocol039LegacyWrites
+    db_migration_test.go:1855: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestProtocol039LegacyWrites (0.00s)
+=== RUN   TestTriggersAndFunctions
+    db_migration_test.go:1971: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestTriggersAndFunctions (0.00s)
+=== RUN   TestDeviceClaimCode_Generate
+    device_claim_test.go:21: register status=200 code=0 msg=success
+    device_claim_test.go:21: register status=200 code=0 msg=success
+    device_claim_test.go:21: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestDeviceClaimCode_Generate (0.10s)
+=== RUN   TestDeviceClaimCode_Generate_AlreadyClaimed
+    device_claim_test.go:31: register status=200 code=0 msg=success
+    device_claim_test.go:31: register status=200 code=0 msg=success
+    device_claim_test.go:31: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestDeviceClaimCode_Generate_AlreadyClaimed (0.09s)
+=== RUN   TestDeviceClaimCode_Generate_InvalidExpires
+    device_claim_test.go:51: register status=200 code=0 msg=success
+    device_claim_test.go:51: register status=200 code=0 msg=success
+    device_claim_test.go:51: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestDeviceClaimCode_Generate_InvalidExpires (0.10s)
+=== RUN   TestDeviceClaimCode_Verify_Valid
+    device_claim_test.go:61: 429 rate limited on POST http://localhost:18888/api/v1/auth/email-register, retry 1/5 after 500ms
+    device_claim_test.go:61: register status=200 code=0 msg=success
+    device_claim_test.go:61: register status=200 code=0 msg=success
+    device_claim_test.go:61: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestDeviceClaimCode_Verify_Valid (0.60s)
+=== RUN   TestDeviceClaimCode_Verify_Invalid
+    device_claim_test.go:81: register status=200 code=0 msg=success
+    device_claim_test.go:81: register status=200 code=0 msg=success
+    device_claim_test.go:81: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestDeviceClaimCode_Verify_Invalid (0.09s)
+=== RUN   TestDeviceClaim_WithValidCode
+    device_claim_test.go:90: register status=200 code=0 msg=success
+    device_claim_test.go:90: register status=200 code=0 msg=success
+    device_claim_test.go:90: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestDeviceClaim_WithValidCode (0.09s)
+=== RUN   TestDeviceClaim_WithWrongCode
+    device_claim_test.go:113: register status=200 code=0 msg=success
+    device_claim_test.go:113: register status=200 code=0 msg=success
+    device_claim_test.go:113: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestDeviceClaim_WithWrongCode (0.10s)
+=== RUN   TestDeviceClaim_UnauthorizedNoToken
+--- PASS: TestDeviceClaim_UnauthorizedNoToken (0.00s)
+=== RUN   TestDeviceTransfer_RequestTransfer
+    device_claim_test.go:143: 429 rate limited on POST http://localhost:18888/api/v1/auth/email-register, retry 1/5 after 500ms
+    device_claim_test.go:143: register status=200 code=0 msg=success
+    device_claim_test.go:143: register status=200 code=0 msg=success
+    device_claim_test.go:143: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestDeviceTransfer_RequestTransfer (0.61s)
+=== RUN   TestDeviceTransfer_ListTransfers
+    device_claim_test.go:164: register status=200 code=0 msg=success
+    device_claim_test.go:164: register status=200 code=0 msg=success
+    device_claim_test.go:164: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestDeviceTransfer_ListTransfers (0.10s)
+=== RUN   TestDeviceTransfer_ApproveNonExistent
+    device_claim_test.go:173: register status=200 code=0 msg=success
+    device_claim_test.go:173: register status=200 code=0 msg=success
+    device_claim_test.go:173: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestDeviceTransfer_ApproveNonExistent (0.09s)
+=== RUN   TestDeviceTransfer_RejectNonExistent
+    device_claim_test.go:183: register status=200 code=0 msg=success
+    device_claim_test.go:183: register status=200 code=0 msg=success
+    device_claim_test.go:183: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestDeviceTransfer_RejectNonExistent (0.09s)
+=== RUN   TestDeviceTransfer_CancelNonExistent
+    device_claim_test.go:193: register status=200 code=0 msg=success
+    device_claim_test.go:193: 429 rate limited on POST http://localhost:18888/api/v1/auth/email-register, retry 1/5 after 500ms
+    device_claim_test.go:193: register status=200 code=0 msg=success
+    device_claim_test.go:193: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestDeviceTransfer_CancelNonExistent (0.60s)
+=== RUN   TestDeviceTransfer_FullLifecycle
+    device_claim_test.go:202: register status=200 code=0 msg=success
+    device_claim_test.go:202: register status=200 code=0 msg=success
+    device_claim_test.go:202: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestDeviceTransfer_FullLifecycle (0.10s)
+=== RUN   TestInvitationCreate_ValidEmail
+    invitation_test.go:21: register status=200 code=0 msg=success
+    invitation_test.go:21: register status=200 code=0 msg=success
+    invitation_test.go:21: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestInvitationCreate_ValidEmail (0.10s)
+=== RUN   TestInvitationCreate_DuplicateEmail
+    invitation_test.go:32: register status=200 code=0 msg=success
+    invitation_test.go:32: register status=200 code=0 msg=success
+    invitation_test.go:32: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestInvitationCreate_DuplicateEmail (0.09s)
+=== RUN   TestInvitationCreate_InvalidEmail
+    invitation_test.go:50: register status=200 code=0 msg=success
+    invitation_test.go:50: 429 rate limited on POST http://localhost:18888/api/v1/auth/email-register, retry 1/5 after 500ms
+    invitation_test.go:50: register status=200 code=0 msg=success
+    invitation_test.go:50: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestInvitationCreate_InvalidEmail (0.60s)
+=== RUN   TestInvitationCreate_InvalidRoleID
+    invitation_test.go:60: register status=200 code=0 msg=success
+    invitation_test.go:60: register status=200 code=0 msg=success
+    invitation_test.go:60: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestInvitationCreate_InvalidRoleID (0.15s)
+=== RUN   TestInvitationAccept_ValidCode
+    invitation_test.go:71: register status=200 code=0 msg=success
+    invitation_test.go:71: register status=200 code=0 msg=success
+    invitation_test.go:71: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestInvitationAccept_ValidCode (0.11s)
+=== RUN   TestInvitationAccept_WrongCode
+    invitation_test.go:110: register status=200 code=0 msg=success
+    invitation_test.go:110: register status=200 code=0 msg=success
+    invitation_test.go:110: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestInvitationAccept_WrongCode (0.10s)
+=== RUN   TestInvitationList_WithStatusFilter
+    invitation_test.go:125: register status=200 code=0 msg=success
+    invitation_test.go:125: register status=200 code=0 msg=success
+    invitation_test.go:125: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestInvitationList_WithStatusFilter (0.10s)
+=== RUN   TestInvitationRevoke_Pending
+    invitation_test.go:145: register status=200 code=0 msg=success
+    invitation_test.go:145: 429 rate limited on POST http://localhost:18888/api/v1/auth/email-register, retry 1/5 after 500ms
+    invitation_test.go:145: register status=200 code=0 msg=success
+    invitation_test.go:145: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestInvitationRevoke_Pending (0.60s)
+=== RUN   TestInvitationRevoke_AlreadyRevoked
+    invitation_test.go:169: register status=200 code=0 msg=success
+    invitation_test.go:169: register status=200 code=0 msg=success
+    invitation_test.go:169: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestInvitationRevoke_AlreadyRevoked (0.10s)
+=== RUN   TestInvitationDetails_Found
+    invitation_test.go:189: register status=200 code=0 msg=success
+    invitation_test.go:189: register status=200 code=0 msg=success
+    invitation_test.go:189: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestInvitationDetails_Found (0.10s)
+=== RUN   TestInvitationDetails_NotFound
+    invitation_test.go:207: register status=200 code=0 msg=success
+    invitation_test.go:207: register status=200 code=0 msg=success
+    invitation_test.go:207: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestInvitationDetails_NotFound (0.09s)
+=== RUN   TestInvitationCreate_UnauthorizedNoToken
+--- PASS: TestInvitationCreate_UnauthorizedNoToken (0.00s)
+=== RUN   TestMemberAdd_Success
+    member_lifecycle_test.go:21: register status=200 code=0 msg=success
+    member_lifecycle_test.go:21: register status=200 code=0 msg=success
+    member_lifecycle_test.go:21: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestMemberAdd_Success (0.10s)
+=== RUN   TestMemberAdd_ExistingActiveMember
+    member_lifecycle_test.go:42: 429 rate limited on POST http://localhost:18888/api/v1/auth/email-register, retry 1/5 after 500ms
+    member_lifecycle_test.go:42: register status=200 code=0 msg=success
+    member_lifecycle_test.go:42: register status=200 code=0 msg=success
+    member_lifecycle_test.go:42: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestMemberAdd_ExistingActiveMember (0.60s)
+=== RUN   TestMemberAdd_InvalidOrganization
+    member_lifecycle_test.go:70: register status=200 code=0 msg=success
+    member_lifecycle_test.go:70: register status=200 code=0 msg=success
+    member_lifecycle_test.go:70: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestMemberAdd_InvalidOrganization (0.10s)
+=== RUN   TestMemberUpdateMembership_Roles
+    member_lifecycle_test.go:81: register status=200 code=0 msg=success
+    member_lifecycle_test.go:81: register status=200 code=0 msg=success
+    member_lifecycle_test.go:81: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestMemberUpdateMembership_Roles (0.09s)
+=== RUN   TestMemberDeactivate
+    member_lifecycle_test.go:113: register status=200 code=0 msg=success
+    member_lifecycle_test.go:113: register status=200 code=0 msg=success
+    member_lifecycle_test.go:113: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestMemberDeactivate (0.10s)
+=== RUN   TestMemberReactivate
+    member_lifecycle_test.go:138: 429 rate limited on POST http://localhost:18888/api/v1/auth/email-register, retry 1/5 after 500ms
+    member_lifecycle_test.go:138: register status=200 code=0 msg=success
+    member_lifecycle_test.go:138: register status=200 code=0 msg=success
+    member_lifecycle_test.go:138: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestMemberReactivate (0.60s)
+=== RUN   TestMemberRemove_SoftDelete
+    member_lifecycle_test.go:147: register status=200 code=0 msg=success
+    member_lifecycle_test.go:147: register status=200 code=0 msg=success
+    member_lifecycle_test.go:147: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestMemberRemove_SoftDelete (0.10s)
+=== RUN   TestMemberTransfer_Initiate
+    member_lifecycle_test.go:171: register status=200 code=0 msg=success
+    member_lifecycle_test.go:171: register status=200 code=0 msg=success
+    member_lifecycle_test.go:171: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestMemberTransfer_Initiate (0.10s)
+=== RUN   TestMemberTransfer_Accept
+    member_lifecycle_test.go:201: register status=200 code=0 msg=success
+    member_lifecycle_test.go:201: register status=200 code=0 msg=success
+    member_lifecycle_test.go:201: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestMemberTransfer_Accept (0.11s)
+=== RUN   TestMemberTransfer_Reject
+    member_lifecycle_test.go:214: register status=200 code=0 msg=success
+    member_lifecycle_test.go:214: 429 rate limited on POST http://localhost:18888/api/v1/auth/email-register, retry 1/5 after 500ms
+    member_lifecycle_test.go:214: register status=200 code=0 msg=success
+    member_lifecycle_test.go:214: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestMemberTransfer_Reject (0.60s)
+=== RUN   TestMemberTransfer_ListTransfers
+    member_lifecycle_test.go:228: register status=200 code=0 msg=success
+    member_lifecycle_test.go:228: register status=200 code=0 msg=success
+    member_lifecycle_test.go:228: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestMemberTransfer_ListTransfers (0.09s)
+=== RUN   TestMemberBulkAdd
+    member_lifecycle_test.go:237: register status=200 code=0 msg=success
+    member_lifecycle_test.go:237: register status=200 code=0 msg=success
+    member_lifecycle_test.go:237: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestMemberBulkAdd (0.09s)
+=== RUN   TestMemberBulkTransfer
+    member_lifecycle_test.go:274: register status=200 code=0 msg=success
+    member_lifecycle_test.go:274: register status=200 code=0 msg=success
+    member_lifecycle_test.go:274: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestMemberBulkTransfer (0.09s)
+=== RUN   TestMemberAdd_UnauthorizedNoToken
+--- PASS: TestMemberAdd_UnauthorizedNoToken (0.00s)
+=== RUN   TestMQTTConnect
+--- PASS: TestMQTTConnect (0.04s)
+=== RUN   TestMQTTPubSub
+--- PASS: TestMQTTPubSub (0.02s)
+=== RUN   TestMQTTTelemetryDataFormat
+--- PASS: TestMQTTTelemetryDataFormat (0.01s)
+=== RUN   TestMQTTQoSLevels
+=== RUN   TestMQTTQoSLevels/QoS0
+=== RUN   TestMQTTQoSLevels/QoS1
+=== RUN   TestMQTTQoSLevels/QoS2
+--- PASS: TestMQTTQoSLevels (0.01s)
+    --- PASS: TestMQTTQoSLevels/QoS0 (0.00s)
+    --- PASS: TestMQTTQoSLevels/QoS1 (0.00s)
+    --- PASS: TestMQTTQoSLevels/QoS2 (0.00s)
+=== RUN   TestMQTTRetainedMessage
+--- PASS: TestMQTTRetainedMessage (0.51s)
+=== RUN   TestMQTTDeviceOnlineOffline
+--- PASS: TestMQTTDeviceOnlineOffline (0.01s)
+=== RUN   TestTelemetryEndToEnd
+    mqtt_flow_test.go:304: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestTelemetryEndToEnd (0.00s)
+=== RUN   TestOrganizationCreate_ValidData
+    organization_test.go:21: register status=200 code=0 msg=success
+    organization_test.go:21: register status=200 code=0 msg=success
+    organization_test.go:21: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestOrganizationCreate_ValidData (0.11s)
+=== RUN   TestOrganizationCreate_InvalidType
+    organization_test.go:38: register status=200 code=0 msg=success
+    organization_test.go:38: register status=200 code=0 msg=success
+    organization_test.go:38: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestOrganizationCreate_InvalidType (0.10s)
+=== RUN   TestOrganizationCreate_MissingName
+    organization_test.go:46: register status=200 code=0 msg=success
+    organization_test.go:46: register status=200 code=0 msg=success
+    organization_test.go:46: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestOrganizationCreate_MissingName (0.10s)
+=== RUN   TestOrganizationList_Pagination
+    organization_test.go:54: register status=200 code=0 msg=success
+    organization_test.go:54: register status=200 code=0 msg=success
+    organization_test.go:54: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestOrganizationList_Pagination (0.10s)
+=== RUN   TestOrganizationList_FilterByType
+    organization_test.go:74: register status=200 code=0 msg=success
+    organization_test.go:74: register status=200 code=0 msg=success
+    organization_test.go:74: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestOrganizationList_FilterByType (0.09s)
+=== RUN   TestOrganizationGetByID_Found
+    organization_test.go:94: register status=200 code=0 msg=success
+    organization_test.go:94: register status=200 code=0 msg=success
+    organization_test.go:94: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestOrganizationGetByID_Found (0.09s)
+=== RUN   TestOrganizationGetByID_NotFound
+    organization_test.go:108: 429 rate limited on POST http://localhost:18888/api/v1/auth/email-register, retry 1/5 after 500ms
+    organization_test.go:108: register status=200 code=0 msg=success
+    organization_test.go:108: register status=200 code=0 msg=success
+    organization_test.go:108: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestOrganizationGetByID_NotFound (0.60s)
+=== RUN   TestOrganizationUpdate_NameOnly
+    organization_test.go:116: register status=200 code=0 msg=success
+    organization_test.go:116: register status=200 code=0 msg=success
+    organization_test.go:116: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestOrganizationUpdate_NameOnly (0.10s)
+=== RUN   TestOrganizationMove_ToNewParent
+    organization_test.go:135: register status=200 code=0 msg=success
+    organization_test.go:135: register status=200 code=0 msg=success
+    organization_test.go:135: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestOrganizationMove_ToNewParent (0.10s)
+=== RUN   TestOrganizationMove_CircularReference
+    organization_test.go:158: register status=200 code=0 msg=success
+    organization_test.go:158: register status=200 code=0 msg=success
+    organization_test.go:158: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestOrganizationMove_CircularReference (0.10s)
+=== RUN   TestOrganizationToggleStatus_ActiveDisabled
+    organization_test.go:173: register status=200 code=0 msg=success
+    organization_test.go:173: 429 rate limited on POST http://localhost:18888/api/v1/auth/email-register, retry 1/5 after 500ms
+    organization_test.go:173: register status=200 code=0 msg=success
+    organization_test.go:173: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestOrganizationToggleStatus_ActiveDisabled (0.60s)
+=== RUN   TestOrganizationToggleStatus_InvalidValue
+    organization_test.go:199: register status=200 code=0 msg=success
+    organization_test.go:199: register status=200 code=0 msg=success
+    organization_test.go:199: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestOrganizationToggleStatus_InvalidValue (0.09s)
+=== RUN   TestOrganizationDelete_SoftDelete
+    organization_test.go:210: register status=200 code=0 msg=success
+    organization_test.go:210: register status=200 code=0 msg=success
+    organization_test.go:210: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestOrganizationDelete_SoftDelete (0.09s)
+=== RUN   TestOrganizationDelete_WithChildren_ShouldFail
+    organization_test.go:225: register status=200 code=0 msg=success
+    organization_test.go:225: register status=200 code=0 msg=success
+    organization_test.go:225: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestOrganizationDelete_WithChildren_ShouldFail (0.09s)
+=== RUN   TestOrganizationGetTree_FullHierarchy
+    organization_test.go:237: register status=200 code=0 msg=success
+    organization_test.go:237: 429 rate limited on POST http://localhost:18888/api/v1/auth/email-register, retry 1/5 after 500ms
+    organization_test.go:237: register status=200 code=0 msg=success
+    organization_test.go:237: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestOrganizationGetTree_FullHierarchy (0.60s)
+=== RUN   TestOrganizationGetTree_NotFound
+    organization_test.go:257: register status=200 code=0 msg=success
+    organization_test.go:257: register status=200 code=0 msg=success
+    organization_test.go:257: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestOrganizationGetTree_NotFound (0.09s)
+=== RUN   TestOrganizationCreate_WithParent
+    organization_test.go:265: register status=200 code=0 msg=success
+    organization_test.go:265: register status=200 code=0 msg=success
+    organization_test.go:265: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestOrganizationCreate_WithParent (0.09s)
+=== RUN   TestOrganizationCreate_ParentNotFound
+    organization_test.go:281: register status=200 code=0 msg=success
+    organization_test.go:281: register status=200 code=0 msg=success
+    organization_test.go:281: failed to ping DB: failed to connect to `user=testuser database=inv_test`:
+        	[::1]:15432 (localhost): dial error: dial tcp [::1]:15432: connectex: No connection could be made because the target machine actively refused it.
+        	127.0.0.1:15432 (localhost): server error: FATAL: sorry, too many clients already (SQLSTATE 53300)
+--- FAIL: TestOrganizationCreate_ParentNotFound (0.09s)
+FAIL
+FAIL	integration-tests	15.106s
+FAIL

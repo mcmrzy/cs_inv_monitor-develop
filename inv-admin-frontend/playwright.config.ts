@@ -1,0 +1,44 @@
+import { defineConfig } from '@playwright/test'
+
+/**
+ * Playwright E2E configuration for the admin frontend.
+ *
+ * - Runs against the isolated test stack (deploy/docker-compose.test.yml):
+ *   vite dev server on :5173 proxies /api to the test gateway :18888.
+ * - Uses the system-installed Microsoft Edge channel locally (no browser
+ *   download); CI sets PLAYWRIGHT_CHANNEL=chromium and installs it via
+ *   `npx playwright install --with-deps chromium`.
+ * - Evidence (reports, screenshots, traces) lands in ../e2e_evidence/.
+ */
+export default defineConfig({
+  testDir: './e2e',
+  globalSetup: './e2e/global-setup.ts',
+  timeout: 90_000,
+  expect: { timeout: 20_000 },
+  fullyParallel: false,
+  workers: 1,
+  retries: 0,
+  reporter: [
+    ['list'],
+    ['html', { open: 'never', outputFolder: '../e2e_evidence/playwright-report' }],
+    ['json', { outputFile: '../e2e_evidence/playwright-results.json' }],
+  ],
+  use: {
+    baseURL: 'http://localhost:5173',
+    channel: process.env.PLAYWRIGHT_CHANNEL || 'msedge',
+    headless: true,
+    screenshot: 'only-on-failure',
+    trace: 'retain-on-failure',
+    locale: 'zh-CN',
+  },
+  outputDir: '../e2e_evidence/playwright-output',
+  webServer: {
+    command: 'npm run dev',
+    url: 'http://localhost:5173',
+    reuseExistingServer: false,
+    timeout: 120_000,
+    env: {
+      VITE_PROXY_TARGET: 'http://localhost:18888',
+    },
+  },
+})

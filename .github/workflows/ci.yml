@@ -50,6 +50,9 @@ jobs:
       - name: Install
         working-directory: inv-admin-frontend
         run: npm ci
+      - name: Lint
+        working-directory: inv-admin-frontend
+        run: npm run lint
       - name: Type Check
         working-directory: inv-admin-frontend
         run: npx tsc --noEmit
@@ -108,6 +111,46 @@ jobs:
       - name: Stop integration environment
         if: always()
         run: docker compose -f deploy/docker-compose.test.yml down -v
+
+  e2e-test:
+    name: E2E Tests (Playwright)
+    needs: [go-check]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: inv-admin-frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: inv-admin-frontend
+        run: npm ci
+      - name: Install Playwright chromium
+        working-directory: inv-admin-frontend
+        run: npx playwright install --with-deps chromium
+      - name: Start isolated test stack
+        run: docker compose -f deploy/docker-compose.test.yml up -d --build --wait --wait-timeout 300
+      - name: Run E2E tests
+        working-directory: inv-admin-frontend
+        env:
+          PLAYWRIGHT_CHANNEL: chromium
+        run: npx playwright test
+      - name: Show service logs on failure
+        if: failure()
+        run: docker compose -f deploy/docker-compose.test.yml logs --no-color
+      - name: Stop test environment
+        if: always()
+        run: docker compose -f deploy/docker-compose.test.yml down -v
+      - name: Upload E2E evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-evidence
+          path: e2e_evidence/
+          retention-days: 14
 
   security-scan:
     name: Security Scan

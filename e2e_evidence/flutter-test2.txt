@@ -1,0 +1,454 @@
+﻿00:00 +0: loading D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/api_paths_test.dart
+00:00 +0: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/api_paths_test.dart: Device API Paths Validation getDetail should use /devices/by-sn/{sn} path
+00:00 +1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/api_paths_test.dart: Device API Paths Validation getRealtimeData should use /devices/by-sn/{sn}/realtime path
+00:00 +2: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/api_paths_test.dart: Device API Paths Validation unbind should use /devices/by-sn/{sn}/unbind path
+00:00 +3: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/api_paths_test.dart: Device API Paths Validation control should use /devices/by-sn/{sn}/control path
+00:00 +4: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/api_paths_test.dart: Device API Paths Validation getStatistics should use /devices/by-sn/{sn}/statistics path
+00:00 +5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/api_paths_test.dart: Device API Paths Validation getHistory should use /devices/by-sn/{sn}/history path
+00:00 +6: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/api_paths_test.dart: Device API Paths Validation getAlarms should use /devices/by-sn/{sn}/alarms path
+00:00 +7: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/api_paths_test.dart: Device API Paths Validation getAlarmEvents should use /devices/by-sn/{sn}/alarm-events path
+00:00 +8: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/api_paths_test.dart: Device API Paths Validation getParallelState should use /devices/by-sn/{sn}/parallel-state path
+00:00 +9: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/api_paths_test.dart: Device API Paths Validation getThreePhase should use /devices/by-sn/{sn}/three-phase path
+00:00 +10: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/api_paths_test.dart: API Path Format Validation all device API paths should start with /devices/by-sn/
+00:00 +11: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/api_paths_test.dart: API Path Format Validation no device API paths should use old /devices/{sn} format
+00:00 +12: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/api_response_test.dart: unwrapApiResponse returns valid data
+00:00 +13: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/api_response_test.dart: unwrapApiResponse rejects a HTTP-200 business failure
+00:00 +14: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/api_response_test.dart: unwrapApiResponse rejects missing or malformed data
+00:01 +15: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/comprehensive_test.dart: 阶段 2：单元测试 数据模型 - ACData 创建和序列化
+00:01 +16: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/comprehensive_test.dart: 阶段 2：单元测试 数据模型 - BatteryData 创建
+00:01 +17: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/comprehensive_test.dart: 阶段 2：单元测试 数据模型 - PVData 创建
+00:01 +18: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/comprehensive_test.dart: 阶段 2：单元测试 数据模型 - SystemStatus 创建
+00:01 +19: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/comprehensive_test.dart: 阶段 2：单元测试 数据模型 - EnergyData 创建
+00:01 +20: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/comprehensive_test.dart: 阶段 2：单元测试 数据模型 - OnlineStatus 创建
+00:01 +21: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/comprehensive_test.dart: 阶段 2：单元测试 数据模型 - InverterRealtime 完整创建
+00:01 +22: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/comprehensive_test.dart: 阶段 3：功能测试 - API 路径验证 设备详情 API 路径格式正确
+00:01 +23: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/comprehensive_test.dart: 阶段 3：功能测试 - API 路径验证 设备实时数据 API 路径格式正确
+00:01 +24: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/comprehensive_test.dart: 阶段 3：功能测试 - API 路径验证 设备控制 API 路径格式正确
+00:01 +25: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/comprehensive_test.dart: 阶段 3：功能测试 - API 路径验证 设备参数配置 API 路径格式正确
+00:01 +26: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/comprehensive_test.dart: 阶段 3：功能测试 - API 路径验证 设备控制状态 API 路径格式正确
+00:01 +27: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/comprehensive_test.dart: 阶段 3：功能测试 - API 路径验证 设备告警 API 路径格式正确
+00:01 +28: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/comprehensive_test.dart: 阶段 3：功能测试 - API 路径验证 设备解绑 API 路径格式正确
+00:01 +29: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/comprehensive_test.dart: 阶段 3：功能测试 - API 路径验证 WiFi 配置 API 路径格式正确
+00:01 +30: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/comprehensive_test.dart: 阶段 3：功能测试 - API 路径验证 能源调度 API 路径格式正确
+00:01 +31: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/comprehensive_test.dart: 阶段 5：业务逻辑测试 - 数据解析 嵌套结构解析 - 标准格式
+00:01 +32: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/comprehensive_test.dart: 阶段 5：业务逻辑测试 - 数据解析 扁平结构解析 - 键值对格式
+00:01 +33: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/comprehensive_test.dart: 阶段 5：业务逻辑测试 - 数据解析 在线状态管理 - 状态切换
+00:01 +34: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/comprehensive_test.dart: 阶段 5：业务逻辑测试 - 数据解析 异常数据处理 - 空值处理
+00:01 +35: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/comprehensive_test.dart: 阶段 5：业务逻辑测试 - 数据解析 异常数据处理 - 类型转换
+00:01 +36: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/comprehensive_test.dart: 阶段 5：业务逻辑测试 - 数据解析 数据验证 - 电压范围检查
+00:01 +37: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/comprehensive_test.dart: 阶段 5：业务逻辑测试 - 数据解析 数据验证 - 功率计算
+00:02 +38: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/api_service_test.dart: (setUpAll)
+00:02 +38: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/api_service_test.dart: GET returns Right on successful response with code 0
+00:02 +39: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/api_service_test.dart: GET returns Left with ServerFailure on non-zero code
+00:02 +40: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/api_service_test.dart: GET returns Left with UnauthorizedFailure on 401
+00:02 +41: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/api_service_test.dart: GET returns Left with NetworkFailure on connection timeout
+00:02 +42: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/api_service_test.dart: GET returns Left with NetworkFailure on connection error
+00:02 +43: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/api_service_test.dart: GET returns Left with ServerFailure on generic exception
+00:02 +44: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/api_service_test.dart: POST returns Right on successful response
+00:02 +45: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/api_service_test.dart: POST returns Left on DioException
+00:02 +46: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/api_service_test.dart: PUT returns Right on successful response
+00:02 +47: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/api_service_test.dart: DELETE returns Right on successful response
+00:02 +47 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/api_service_test.dart: DELETE returns Left with NotFoundFailure on 404
+00:02 +48 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/api_service_test.dart: Response edge cases returns Left on invalid response format (non-map)
+00:02 +49 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/api_service_test.dart: Response edge cases returns Left on non-200/201 status code
+00:02 +50 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/api_service_test.dart: (tearDownAll)
+00:02 +50 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/connection_mode_service_test.dart: initial state defaults to remote mode
+00:02 +51 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/connection_mode_service_test.dart: init sets local mode when storage returns true
+00:02 +52 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/connection_mode_service_test.dart: init sets remote mode when storage returns false
+00:02 +53 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/connection_mode_service_test.dart: init emits mode to stream on init
+00:02 +54 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/connection_mode_service_test.dart: setLocalMode switches to local mode and saves to storage
+00:02 +55 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/connection_mode_service_test.dart: setLocalMode switches to remote mode and saves to storage
+00:02 +56 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/connection_mode_service_test.dart: setLocalMode emits mode change to stream
+00:02 +57 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/connection_mode_service_test.dart: isLocalMode returns value from storage
+00:02 +58 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/connection_mode_service_test.dart: isLocalMode returns false when storage returns false
+00:02 +59 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/connection_mode_service_test.dart: switchToLocal switches to local mode and saves
+00:02 +60 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/connection_mode_service_test.dart: switchToRemote switches to remote mode and saves
+00:02 +61 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/connection_mode_service_test.dart: switchToRemote does not reconnect MQTT when switching to remote (API polling mode)
+00:02 +62 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/connection_mode_service_test.dart: switchToRemote does not reconnect MQTT when already connected
+00:02 +63 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/connection_mode_service_test.dart: modeStream is a broadcast stream
+00:03 +64 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/data_cache_service_test.dart: save & load saves and loads data correctly
+00:03 +65 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/data_cache_service_test.dart: save & load returns null for non-existent key
+00:03 +66 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/data_cache_service_test.dart: save & load returns null for expired data
+00:03 +67 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/data_cache_service_test.dart: save & load handles nested data structures
+00:03 +68 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/data_cache_service_test.dart: loadOrNull returns data regardless of TTL
+00:03 +69 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/data_cache_service_test.dart: loadOrNull returns null for non-existent key
+00:03 +70 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/data_cache_service_test.dart: getTimestamp returns non-zero timestamp after save
+00:03 +71 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/data_cache_service_test.dart: getTimestamp returns 0 for non-existent key
+00:03 +72 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/data_cache_service_test.dart: remove removes cached data
+00:03 +73 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/data_cache_service_test.dart: clearAll removes all cached data
+00:03 +74 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/data_cache_service_test.dart: static cache keys stationDetail generates correct key
+00:03 +75 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/data_cache_service_test.dart: static cache keys deviceDetail generates correct key
+00:03 +76 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/data_cache_service_test.dart: static cache keys stationDevices generates correct key
+00:03 +77 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/heartbeat_v1_mapper_test.dart: maps heartbeat v1 fixed arrays into named realtime data
+00:03 +78 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/heartbeat_v1_mapper_test.dart: rejects an invalid fixed array length
+00:04 +79 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/locale_service_test.dart: currentLocale returns saved locale when available
+00:04 +80 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/locale_service_test.dart: currentLocale returns zh locale when saved locale is zh
+00:04 +81 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/locale_service_test.dart: currentLocale returns default locale (zh) when no saved locale
+00:04 +82 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/locale_service_test.dart: currentLocale uses a supported system locale when no locale was saved
+00:04 +83 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/locale_service_test.dart: currentLocale returns default locale (zh) for unknown locale code
+00:04 +84 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/locale_service_test.dart: switchLocale saves locale and emits to stream
+00:04 +85 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/locale_service_test.dart: switchLocale saves zh locale correctly
+00:04 +86 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/locale_service_test.dart: localeStream is a broadcast stream
+00:05 +87 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/local_ota_manifest_test.dart: accepts a canonical signed local OTA manifest
+00:05 +88 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/local_ota_manifest_test.dart: rejects metadata the device would reject
+00:05 +89 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/role_service_test.dart: RoleService permission constants permission code constants are defined correctly
+00:05 +90 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/role_service_test.dart: RoleService.hasPermission system admin always has permission
+00:05 +91 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/role_service_test.dart: RoleService.hasPermission non-admin checks permissions list
+00:05 +92 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/role_service_test.dart: RoleService.hasPermission empty permissions denies all for non-admin
+00:05 +93 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/role_service_test.dart: RoleService.getRoleName system admin returns System Admin
+00:05 +94 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/role_service_test.dart: RoleService.getRoleName org admin with admin:manage returns Org Admin
+00:05 +95 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/role_service_test.dart: RoleService.getRoleName regular member returns Member
+00:05 +96 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/role_service_test.dart: RoleService convenience methods hasOtaAccess checks ota:manage or devices:manage
+00:05 +97 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/role_service_test.dart: RoleService convenience methods hasStatisticsAccess checks statistics:view
+00:05 +98 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/role_service_test.dart: RoleService convenience methods canManageDevices checks devices:manage
+00:05 +99 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/role_service_test.dart: RoleService convenience methods canControlDevices checks device_control:basic
+00:05 +100 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/role_service_test.dart: RoleService.getNavItems returns 5 nav items for all users
+00:05 +101 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/core/services/role_service_test.dart: RoleService.getNavItems accepts custom labels
+00:06 +102 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/device_protocol_test.dart: strongly typed entities retain sampling and receiving times
+00:06 +103 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/device_protocol_test.dart: disabled parallel topology remains a reported current state
+00:06 +104 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/device_protocol_test.dart: DeviceProtocolRepositoryImpl unwraps API envelope and parses alarm page
+00:06 +105 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/device_protocol_test.dart: DeviceProtocolRepositoryImpl cache write failure does not hide valid server data
+00:06 +106 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/device_protocol_test.dart: DeviceProtocolRepositoryImpl network failure returns timestamped offline cache
+00:06 +107 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/device_protocol_test.dart: DeviceProtocolRepositoryImpl HTTP 403 remains forbidden and does not read cache
+00:06 +108 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/device_protocol_test.dart: keeps empty and forbidden states distinct
+00:06 +109 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/energy_schedule_test.dart: validates and normalizes schedule payloads
+00:06 +110 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/energy_schedule_test.dart: replaces exactly one matching period
+00:06 +111 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/energy_schedule_test.dart: removes exactly one duplicate period
+00:06 +112 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/energy_schedule_test.dart: rejects edits and deletes for a missing period
+00:06 +113 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/alarm/presentation/bloc/alarm_bloc_test.dart: AlarmListRequested failure visibility does not hide a server failure with cached alarms
+00:06 +114 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/alarm/presentation/bloc/alarm_bloc_test.dart: AlarmListRequested failure visibility uses explicitly marked cache on network failure
+00:07 +115 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/auth/presentation/bloc/auth_bloc_test.dart: initial state is AuthInitial
+00:07 +116 ~1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/auth/presentation/bloc/auth_bloc_test.dart: AuthCheckRequested emits [AuthLoading, AuthAuthenticated] when token and userId exist
+00:07 +116 ~1 -1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/auth/presentation/bloc/auth_bloc_test.dart: AuthCheckRequested emits [AuthLoading, AuthAuthenticated] when token and userId exist [E]
+  type 'Null' is not a subtype of type 'Future<List<String>>'
+  test\helpers\mock_providers.dart 65:7                                 MockStorageService.getPermissions
+  package:inv_app/features/auth/presentation/bloc/auth_bloc.dart 82:55  AuthBloc._onAuthCheckRequested
+  ===== asynchronous gap ===========================
+  dart:async                                                            _CustomZone.registerBinaryCallback
+  package:bloc/src/bloc.dart 229:13                                     Bloc.on.<fn>.handleEvent
+  package:bloc/src/bloc.dart 238:9                                      Bloc.on.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                                            _ForwardingStream.listen
+  package:bloc/src/bloc.dart 313:40                                     _FlatMapStreamTransformer.bind.<fn>
+  dart:async                                                            _StreamImpl.listen
+  package:bloc/src/bloc.dart 241:7                                      Bloc.on
+  package:inv_app/features/auth/presentation/bloc/auth_bloc.dart 53:5   new AuthBloc
+  test\features\auth\presentation\bloc\auth_bloc_test.dart 62:16        main.<fn>
+  
+  Expected: [<<Instance of 'AuthLoading'>>, <<Instance of 'AuthAuthenticated'>>]
+    Actual: [AuthLoading:AuthLoading()]
+     Which: at location [1] is [AuthLoading:AuthLoading()] which shorter than expected
+  
+  package:matcher                              expect
+  package:bloc_test/src/bloc_test.dart 220:16  testBloc.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                   _Completer.completeError
+  package:bloc_test/src/bloc_test.dart 257:43  _runZonedGuarded.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                   _CustomZone.registerBinaryCallback
+  package:bloc_test/src/bloc_test.dart 254:5   _runZonedGuarded.<fn>
+  dart:async                                   runZonedGuarded
+  package:bloc_test/src/bloc_test.dart 253:3   _runZonedGuarded
+  package:bloc_test/src/bloc_test.dart 200:11  testBloc
+  package:bloc_test/src/bloc_test.dart 156:13  blocTest.<fn>
+  
+00:07 +116 ~1 -1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/auth/presentation/bloc/auth_bloc_test.dart: AuthCheckRequested emits [AuthLoading, AuthUnauthenticated] when no token
+00:07 +117 ~1 -1: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/auth/presentation/bloc/auth_bloc_test.dart: AuthLoginRequested emits [AuthLoading, AuthAuthenticated] on successful login
+00:07 +117 ~1 -2: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/auth/presentation/bloc/auth_bloc_test.dart: AuthLoginRequested emits [AuthLoading, AuthAuthenticated] on successful login [E]
+  type 'Null' is not a subtype of type 'Future<void>'
+  test\helpers\mock_providers.dart 65:7                                  MockStorageService.savePermissions
+  package:inv_app/features/auth/presentation/bloc/auth_bloc.dart 137:30  AuthBloc._onLoginRequested.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                                             _CustomZone.registerBinaryCallback
+  package:bloc/src/bloc.dart 229:13                                      Bloc.on.<fn>.handleEvent
+  package:bloc/src/bloc.dart 238:9                                       Bloc.on.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                                             _ForwardingStream.listen
+  package:bloc/src/bloc.dart 313:40                                      _FlatMapStreamTransformer.bind.<fn>
+  dart:async                                                             _StreamImpl.listen
+  package:bloc/src/bloc.dart 241:7                                       Bloc.on
+  package:inv_app/features/auth/presentation/bloc/auth_bloc.dart 54:5    new AuthBloc
+  test\features\auth\presentation\bloc\auth_bloc_test.dart 62:16         main.<fn>
+  
+  Expected: [<<Instance of 'AuthLoading'>>, <<Instance of 'AuthAuthenticated'>>]
+    Actual: [AuthLoading:AuthLoading()]
+     Which: at location [1] is [AuthLoading:AuthLoading()] which shorter than expected
+  
+  package:matcher                              expect
+  package:bloc_test/src/bloc_test.dart 220:16  testBloc.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                   _Completer.completeError
+  package:bloc_test/src/bloc_test.dart 257:43  _runZonedGuarded.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                   _CustomZone.registerBinaryCallback
+  package:bloc_test/src/bloc_test.dart 254:5   _runZonedGuarded.<fn>
+  dart:async                                   runZonedGuarded
+  package:bloc_test/src/bloc_test.dart 253:3   _runZonedGuarded
+  package:bloc_test/src/bloc_test.dart 200:11  testBloc
+  package:bloc_test/src/bloc_test.dart 156:13  blocTest.<fn>
+  
+00:07 +117 ~1 -2: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/auth/presentation/bloc/auth_bloc_test.dart: AuthLoginRequested emits [AuthLoading, AuthError] on login failure
+00:07 +118 ~1 -2: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/auth/presentation/bloc/auth_bloc_test.dart: AuthLoginRequested saves credentials when rememberPassword is true
+00:07 +118 ~1 -3: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/auth/presentation/bloc/auth_bloc_test.dart: AuthLoginRequested saves credentials when rememberPassword is true [E]
+  type 'Null' is not a subtype of type 'Future<void>'
+  test\helpers\mock_providers.dart 65:7                                  MockStorageService.savePermissions
+  package:inv_app/features/auth/presentation/bloc/auth_bloc.dart 137:30  AuthBloc._onLoginRequested.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                                             _CustomZone.registerBinaryCallback
+  package:bloc/src/bloc.dart 229:13                                      Bloc.on.<fn>.handleEvent
+  package:bloc/src/bloc.dart 238:9                                       Bloc.on.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                                             _ForwardingStream.listen
+  package:bloc/src/bloc.dart 313:40                                      _FlatMapStreamTransformer.bind.<fn>
+  dart:async                                                             _StreamImpl.listen
+  package:bloc/src/bloc.dart 241:7                                       Bloc.on
+  package:inv_app/features/auth/presentation/bloc/auth_bloc.dart 54:5    new AuthBloc
+  test\features\auth\presentation\bloc\auth_bloc_test.dart 62:16         main.<fn>
+  
+  No matching calls. All calls: MockStorageService.saveToken(test_access_token), MockStorageService.saveRefreshToken(test_refresh_token), MockStorageService.saveUserId(1), MockStorageService.saveUserPhone(13800138000), MockStorageService.saveIsSystemAdmin(false), MockStorageService.savePermissions([])
+  (If you called `verify(...).called(0);`, please instead use `verifyNever(...);`.)
+  package:matcher                                                  fail
+  package:mocktail/src/mocktail.dart 728:7                         _VerifyCall._checkWith
+  package:mocktail/src/mocktail.dart 519:18                        _makeVerify.<fn>
+  test\features\auth\presentation\bloc\auth_bloc_test.dart 274:15  main.<fn>.<fn>
+  package:bloc_test/src/bloc_test.dart 230:21                      testBloc.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                                       _Completer.completeError
+  package:bloc_test/src/bloc_test.dart 257:43                      _runZonedGuarded.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                                       _CustomZone.registerBinaryCallback
+  package:bloc_test/src/bloc_test.dart 254:5                       _runZonedGuarded.<fn>
+  dart:async                                                       runZonedGuarded
+  package:bloc_test/src/bloc_test.dart 253:3                       _runZonedGuarded
+  package:bloc_test/src/bloc_test.dart 200:11                      testBloc
+  package:bloc_test/src/bloc_test.dart 156:13                      blocTest.<fn>
+  
+00:07 +118 ~1 -3: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/auth/presentation/bloc/auth_bloc_test.dart: AuthLogoutRequested emits [AuthUnauthenticated] and clears storage
+00:07 +118 ~1 -4: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/auth/presentation/bloc/auth_bloc_test.dart: AuthLogoutRequested emits [AuthUnauthenticated] and clears storage [E]
+  type 'Null' is not a subtype of type 'Future<void>'
+  test\helpers\mock_providers.dart 65:7                                  MockStorageService.deletePermissions
+  package:inv_app/features/auth/presentation/bloc/auth_bloc.dart 218:26  AuthBloc._onLogoutRequested
+  ===== asynchronous gap ===========================
+  dart:async                                                             _CustomZone.registerBinaryCallback
+  package:bloc/src/bloc.dart 229:13                                      Bloc.on.<fn>.handleEvent
+  package:bloc/src/bloc.dart 238:9                                       Bloc.on.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                                             _ForwardingStream.listen
+  package:bloc/src/bloc.dart 313:40                                      _FlatMapStreamTransformer.bind.<fn>
+  dart:async                                                             _StreamImpl.listen
+  package:bloc/src/bloc.dart 241:7                                       Bloc.on
+  package:inv_app/features/auth/presentation/bloc/auth_bloc.dart 56:5    new AuthBloc
+  test\features\auth\presentation\bloc\auth_bloc_test.dart 62:16         main.<fn>
+  
+  Expected: [<<Instance of 'AuthUnauthenticated'>>]
+    Actual: []
+     Which: at location [0] is [] which shorter than expected
+  
+  package:matcher                              expect
+  package:bloc_test/src/bloc_test.dart 220:16  testBloc.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                   _Completer.completeError
+  package:bloc_test/src/bloc_test.dart 257:43  _runZonedGuarded.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                   _CustomZone.registerBinaryCallback
+  package:bloc_test/src/bloc_test.dart 254:5   _runZonedGuarded.<fn>
+  dart:async                                   runZonedGuarded
+  package:bloc_test/src/bloc_test.dart 253:3   _runZonedGuarded
+  package:bloc_test/src/bloc_test.dart 200:11  testBloc
+  package:bloc_test/src/bloc_test.dart 156:13  blocTest.<fn>
+  
+00:07 +118 ~1 -4: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/auth/presentation/bloc/auth_bloc_test.dart: AuthEmailLoginRequested emits [AuthLoading, AuthAuthenticated] on successful email login
+00:07 +118 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/auth/presentation/bloc/auth_bloc_test.dart: AuthEmailLoginRequested emits [AuthLoading, AuthAuthenticated] on successful email login [E]
+  type 'Null' is not a subtype of type 'Future<void>'
+  test\helpers\mock_providers.dart 65:7                                  MockStorageService.savePermissions
+  package:inv_app/features/auth/presentation/bloc/auth_bloc.dart 365:30  AuthBloc._onEmailLoginRequested.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                                             _CustomZone.registerBinaryCallback
+  package:bloc/src/bloc.dart 229:13                                      Bloc.on.<fn>.handleEvent
+  package:bloc/src/bloc.dart 238:9                                       Bloc.on.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                                             _ForwardingStream.listen
+  package:bloc/src/bloc.dart 313:40                                      _FlatMapStreamTransformer.bind.<fn>
+  dart:async                                                             _StreamImpl.listen
+  package:bloc/src/bloc.dart 241:7                                       Bloc.on
+  package:inv_app/features/auth/presentation/bloc/auth_bloc.dart 61:5    new AuthBloc
+  test\features\auth\presentation\bloc\auth_bloc_test.dart 62:16         main.<fn>
+  
+  Expected: [<<Instance of 'AuthLoading'>>, <<Instance of 'AuthAuthenticated'>>]
+    Actual: [AuthLoading:AuthLoading()]
+     Which: at location [1] is [AuthLoading:AuthLoading()] which shorter than expected
+  
+  package:matcher                              expect
+  package:bloc_test/src/bloc_test.dart 220:16  testBloc.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                   _Completer.completeError
+  package:bloc_test/src/bloc_test.dart 257:43  _runZonedGuarded.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                   _CustomZone.registerBinaryCallback
+  package:bloc_test/src/bloc_test.dart 254:5   _runZonedGuarded.<fn>
+  dart:async                                   runZonedGuarded
+  package:bloc_test/src/bloc_test.dart 253:3   _runZonedGuarded
+  package:bloc_test/src/bloc_test.dart 200:11  testBloc
+  package:bloc_test/src/bloc_test.dart 156:13  blocTest.<fn>
+  
+00:07 +118 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/auth/presentation/bloc/auth_bloc_test.dart: AuthEmailLoginRequested emits [AuthLoading, AuthError] on email login failure
+00:07 +119 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/auth/presentation/bloc/auth_bloc_test.dart: AuthSendCodeRequested emits [AuthCodeSending, AuthCodeSent] on success
+00:07 +120 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/auth/presentation/bloc/auth_bloc_test.dart: AuthSendCodeRequested emits [AuthCodeSending, AuthError] on failure
+00:07 +121 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/auth/presentation/bloc/auth_bloc_test.dart: AuthResetPasswordRequested emits [AuthLoading, AuthPasswordResetSuccess] on success
+00:07 +122 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/auth/presentation/bloc/auth_bloc_test.dart: AuthChangePasswordRequested emits [AuthLoading, AuthPasswordChangedSuccess] on success
+00:07 +123 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/auth/presentation/bloc/auth_bloc_test.dart: AuthChangePasswordRequested emits [AuthLoading, AuthError] on failure
+00:07 +124 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/auth/presentation/bloc/auth_bloc_test.dart: AuthTokenRefreshed saves new token without emitting states
+00:07 +125 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/dashboard/presentation/bloc/dashboard_bloc_test.dart: initial state is DashboardInitial
+00:07 +126 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/dashboard/presentation/bloc/dashboard_bloc_test.dart: DashboardLoadRequested emits [DashboardLoading, DashboardLoaded] when all APIs succeed
+00:07 +127 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/dashboard/presentation/bloc/dashboard_bloc_test.dart: DashboardLoadRequested emits [DashboardLoading, DashboardError] when all APIs fail without cache
+00:07 +128 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/dashboard/presentation/bloc/dashboard_bloc_test.dart: DashboardLoadRequested emits [DashboardLoaded] from cache when all APIs fail with cache available
+00:07 +129 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/dashboard/presentation/bloc/dashboard_bloc_test.dart: DashboardLoadRequested marks failed sections when only partial API results are available
+00:07 +130 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/dashboard/presentation/bloc/dashboard_bloc_test.dart: DashboardSSEConnectRequested emits SSE connected state when already loaded
+00:07 +131 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/dashboard/presentation/bloc/dashboard_bloc_test.dart: DashboardSSEDisconnectRequested emits SSE disconnected state when already loaded
+00:07 +132 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/dashboard/presentation/bloc/dashboard_bloc_test.dart: DashboardSSEDataReceived updates data when in DashboardLoaded state with dashboard_update type
+00:07 +133 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/dashboard/presentation/bloc/dashboard_bloc_test.dart: DashboardSSEDataReceived ignores data when not in DashboardLoaded state
+00:07 +134 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/dashboard/presentation/bloc/dashboard_bloc_test.dart: DashboardTimeRangeChanged updates selectedTimeRange and reloads trend data when in loaded state
+00:08 +135 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/device/presentation/bloc/device_bloc_test.dart: initial state is DeviceInitial
+00:08 +136 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/device/presentation/bloc/device_bloc_test.dart: DeviceListRequested emits [DeviceLoading, DeviceListLoaded] on success
+00:08 +137 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/device/presentation/bloc/device_bloc_test.dart: DeviceListRequested emits [DeviceLoading, DeviceError] on failure without cache
+00:08 +138 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/device/presentation/bloc/device_bloc_test.dart: DeviceListRequested does not hide a server failure with cached data
+00:08 +139 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/device/presentation/bloc/device_bloc_test.dart: DeviceListRequested uses explicitly marked cache on network failure
+00:08 +140 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/device/presentation/bloc/device_bloc_test.dart: DeviceListRequested saves data to cache on success
+00:08 +141 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/device/presentation/bloc/device_bloc_test.dart: DeviceDetailRequested emits [DeviceLoading, DeviceDetailLoaded] on success
+00:08 +142 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/device/presentation/bloc/device_bloc_test.dart: DeviceDetailRequested emits [DeviceLoading, DeviceError] on failure
+00:08 +143 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/device/presentation/bloc/device_bloc_test.dart: DeviceControlRequested emits [DeviceLoading, DeviceControlSuccess] on cloud success
+00:08 +144 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/device/presentation/bloc/device_bloc_test.dart: DeviceControlRequested emits [DeviceLoading, DeviceError] on cloud failure
+00:08 +145 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/device/presentation/bloc/device_bloc_test.dart: DeviceBindRequested emits [DeviceLoading, DeviceBindSuccess] on success
+00:08 +146 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/device/presentation/bloc/device_bloc_test.dart: DeviceBindRequested emits [DeviceLoading, DeviceError] on failure
+00:08 +147 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/device/presentation/bloc/device_bloc_test.dart: DeviceUnbindRequested emits [DeviceLoading, DeviceUnbindSuccess] on success
+00:08 +148 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/device/presentation/bloc/device_bloc_test.dart: DeviceUnbindRequested emits [DeviceLoading, DeviceError] on failure
+00:08 +149 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/device/presentation/bloc/device_bloc_test.dart: DeviceHistoryRequested emits [DeviceHistoryLoaded] on success
+00:08 +150 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/device/presentation/bloc/device_bloc_test.dart: DeviceHistoryRequested emits [DeviceError] on failure
+00:08 +151 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/device/presentation/bloc/device_bloc_test.dart: DeviceRealtimeWSUpdate updates DeviceDetailLoaded with realtime data when in detail state
+00:08 +152 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/notification/presentation/bloc/notification_bloc_test.dart: (setUpAll)
+00:08 +152 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/notification/presentation/bloc/notification_bloc_test.dart: SystemNotification serialization preserves semantic app update version
+00:08 +153 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/notification/presentation/bloc/notification_bloc_test.dart: SystemNotification serialization extracts version from legacy localized title
+00:08 +154 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/notification/presentation/bloc/notification_bloc_test.dart: initial state is NotificationInitial
+00:08 +155 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/notification/presentation/bloc/notification_bloc_test.dart: SystemNotificationsRequested emits [SystemNotificationsLoaded] with backend notifications
+00:08 +156 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/notification/presentation/bloc/notification_bloc_test.dart: SystemNotificationsRequested emits [SystemNotificationsLoaded] with empty list when no data
+00:08 +157 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/notification/presentation/bloc/notification_bloc_test.dart: SystemNotificationsRequested includes local OTA notifications from storage
+00:08 +158 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/notification/presentation/bloc/notification_bloc_test.dart: (tearDownAll)
+00:09 +158 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/ota/presentation/bloc/ota_bloc_test.dart: initial state is OTAInitial
+00:09 +159 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/ota/presentation/bloc/ota_bloc_test.dart: OTACheckRequested emits [OTAUpdateAvailable] when update is available
+00:09 +160 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/ota/presentation/bloc/ota_bloc_test.dart: OTACheckRequested emits [OTAUpToDate] when no update available
+00:09 +161 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/ota/presentation/bloc/ota_bloc_test.dart: OTACheckRequested emits [OTAError] on failure
+00:09 +162 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/ota/presentation/bloc/ota_bloc_test.dart: OTATriggerRequested emits [OTATriggered] on success
+00:09 +163 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/ota/presentation/bloc/ota_bloc_test.dart: OTATriggerRequested emits [OTAError] on failure
+00:09 +164 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/ota/presentation/bloc/ota_bloc_test.dart: OTAProgressPollRequested emits [OTAProgress] with current progress
+00:09 +165 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/ota/presentation/bloc/ota_bloc_test.dart: OTAProgressPollRequested emits [OTAProgress, OTAComplete] when status is completed
+00:09 +166 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/ota/presentation/bloc/ota_bloc_test.dart: OTAProgressPollRequested emits [OTAProgress, OTAError] when status is failed
+00:09 +167 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/ota/presentation/bloc/ota_bloc_test.dart: OTAProgressPollRequested emits [OTAError] on API failure
+00:09 +168 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/ota/presentation/bloc/ota_bloc_test.dart: OTAProgressStopPoll emits [OTAInitial] when stopping poll
+00:09 +169 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/ota/presentation/bloc/ota_bloc_test.dart: OTAFirmwareListRequested emits [OTAFirmwareListLoading, OTAFirmwareListLoaded] on success
+00:09 +170 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/ota/presentation/bloc/ota_bloc_test.dart: OTAFirmwareListRequested emits [OTAFirmwareListLoading, OTAFirmwareListError] on failure
+00:09 +171 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/ota/presentation/bloc/ota_bloc_test.dart: OTAFirmwareInstallRequested emits [OTAFirmwareInstalling, OTATriggered] on success
+00:09 +172 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/ota/presentation/bloc/ota_bloc_test.dart: OTAFirmwareInstallRequested emits [OTAFirmwareInstalling, OTAError] on failure
+00:09 +173 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/ota/presentation/bloc/ota_bloc_test.dart: LoadAvailablePackages emits [OTAAvailablePackagesLoading, OTAAvailablePackagesLoaded] on success
+00:09 +174 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/ota/presentation/bloc/ota_bloc_test.dart: LoadAvailablePackages emits [OTAAvailablePackagesLoading, OTAAvailablePackagesError] on failure
+00:09 +175 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/repository_response_contract_test.dart: read response contracts device list rejects a successful envelope with list data
+00:09 +176 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/repository_response_contract_test.dart: read response contracts station list rejects null data instead of returning an empty page
+00:09 +177 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/repository_response_contract_test.dart: read response contracts alarm list rejects list data when a page object is required
+00:09 +178 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/repository_response_contract_test.dart: read response contracts dashboard statistics rejects non-object data
+00:09 +179 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/repository_response_contract_test.dart: read response contracts dashboard trend rejects non-list data
+00:09 +180 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/repository_response_contract_test.dart: read response contracts OTA package list rejects an unexpected successful shape
+00:09 +181 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/repository_response_contract_test.dart: write endpoints may still acknowledge success with null data
+00:09 +182 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/station/presentation/bloc/station_bloc_test.dart: initial state is StationInitial
+00:09 +183 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/station/presentation/bloc/station_bloc_test.dart: StationSummaryRequested emits [StationSummaryLoaded] on success
+00:09 +184 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/station/presentation/bloc/station_bloc_test.dart: StationSummaryRequested emits [StationError] on failure without cache
+00:09 +185 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/station/presentation/bloc/station_bloc_test.dart: StationSummaryRequested emits [StationSummaryLoaded] from cache on failure
+00:09 +186 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/station/presentation/bloc/station_bloc_test.dart: StationSummaryRequested does not hide a server failure with summary cache
+00:09 +187 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/station/presentation/bloc/station_bloc_test.dart: StationListRequested emits [StationLoading, StationListLoaded] on success from initial
+00:09 +188 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/station/presentation/bloc/station_bloc_test.dart: StationListRequested emits [StationError] on failure
+00:09 +189 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/station/presentation/bloc/station_bloc_test.dart: StationDetailRequested emits [StationLoading, StationDetailLoaded] on success
+00:09 +190 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/station/presentation/bloc/station_bloc_test.dart: StationDetailRequested emits [StationLoading, StationError] on failure without cache
+00:09 +191 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/station/presentation/bloc/station_bloc_test.dart: StationDetailRequested emits [StationLoading, StationDetailLoaded] from cache on failure
+00:09 +192 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/station/presentation/bloc/station_bloc_test.dart: StationDetailRequested does not hide a server failure with detail cache
+00:09 +193 ~1 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/station/presentation/bloc/station_bloc_test.dart: StationCreateRequested emits [StationCreateSuccess, ...] on success
+00:09 +193 ~2 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/station/presentation/bloc/station_bloc_test.dart: StationCreateRequested emits [StationError] on failure
+00:09 +194 ~2 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/station/presentation/bloc/station_bloc_test.dart: StationUpdateRequested emits [StationUpdateSuccess, ...] on success
+00:09 +194 ~3 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/station/presentation/bloc/station_bloc_test.dart: StationUpdateRequested emits [StationError] on failure
+00:09 +195 ~3 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/station/presentation/bloc/station_bloc_test.dart: StationDeleteRequested emits [StationDeleteSuccess, ...] on success
+00:09 +195 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/station/presentation/bloc/station_bloc_test.dart: StationDeleteRequested emits [StationError] on failure
+00:10 +196 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/helpers/helpers_test.dart: test_data factories createTestUser returns valid User with defaults
+00:10 +197 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/helpers/helpers_test.dart: test_data factories createTestUser allows overrides
+00:10 +198 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/helpers/helpers_test.dart: test_data factories createTestLoginResponse returns valid LoginResponse
+00:10 +199 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/helpers/helpers_test.dart: test_data factories createTestLoginResponse allows custom user
+00:10 +200 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/helpers/helpers_test.dart: test_data factories failure factories return correct types
+00:10 +201 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/helpers/helpers_test.dart: test_data factories createTestDeviceMap returns valid device map
+00:10 +202 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/helpers/helpers_test.dart: test_data factories createTestDeviceListResponse returns paginated structure
+00:10 +203 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/helpers/helpers_test.dart: test_data factories createTestStationListResponse returns paginated structure
+00:10 +204 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/helpers/helpers_test.dart: test_data factories createTestAlarmListResponse returns paginated structure
+00:10 +205 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/helpers/helpers_test.dart: test_data factories createTestDashboardStatistics returns expected keys
+00:10 +206 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/helpers/helpers_test.dart: mock providers MockAuthRepository can be instantiated and stubbed
+00:10 +207 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/helpers/helpers_test.dart: mock providers MockStorageService can be instantiated and stubbed
+00:10 +208 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/helpers/helpers_test.dart: mock providers MockMQTTService can be instantiated and stubbed
+00:10 +209 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/helpers/helpers_test.dart: mock providers MockDeviceRepository can be stubbed with test data
+00:10 +210 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/helpers/helpers_test.dart: pumpMinimalApp renders a simple widget with localization
+00:11 +211 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/helpers/helpers_test.dart: pumpMinimalApp provides AppLocalizations
+00:11 +212 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/helpers/helpers_test.dart: pumpApp renders widget without any bloc providers
+00:11 +213 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/helpers/helpers_test.dart: pumpApp injects AuthBloc provider when supplied
+00:11 +214 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/helpers/helpers_test.dart: pumpApp supports custom theme override
+00:11 +215 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/helpers/helpers_test.dart: pumpApp supports English locale
+00:11 +216 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/localization_parity_test.dart: Chinese and English locale catalogs have identical keys
+00:11 +217 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/localization_parity_test.dart: locale keys and values are valid
+00:13 +218 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/realtime_data_service_test.dart: RealtimeDataService 数据解析测试 嵌套结构解析 解析标准嵌套格式 - 包含所有字段
+00:13 +219 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/realtime_data_service_test.dart: RealtimeDataService 数据解析测试 嵌套结构解析 解析标准嵌套格式 - 使用别名字段
+00:13 +220 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/realtime_data_service_test.dart: RealtimeDataService 数据解析测试 扁平结构解析 解析扁平格式 - AC 电压和功率
+00:13 +221 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/realtime_data_service_test.dart: RealtimeDataService 数据解析测试 扁平结构解析 解析扁平格式 - 电池数据
+00:13 +222 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/realtime_data_service_test.dart: RealtimeDataService 数据解析测试 扁平结构解析 解析扁平格式 - PV 数据
+00:13 +223 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/realtime_data_service_test.dart: RealtimeDataService 数据解析测试 扁平结构解析 解析扁平格式 - 系统状态
+00:13 +224 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/realtime_data_service_test.dart: RealtimeDataService 数据解析测试 扁平结构解析 解析扁平格式 - 能源数据
+00:13 +225 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/realtime_data_service_test.dart: RealtimeDataService 数据解析测试 在线状态管理 在线状态 - 从 realtime 获取
+00:13 +226 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/realtime_data_service_test.dart: RealtimeDataService 数据解析测试 在线状态管理 在线状态 - 从 responseData 获取
+00:13 +227 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/realtime_data_service_test.dart: RealtimeDataService 数据解析测试 在线状态管理 在线状态 - 默认值处理
+00:13 +228 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/realtime_data_service_test.dart: RealtimeDataService 数据解析测试 在线状态管理 在线状态 - 状态切换
+00:13 +229 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/realtime_data_service_test.dart: RealtimeDataService 数据解析测试 异常数据处理 null 值处理 - AC 数据
+00:13 +230 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/realtime_data_service_test.dart: RealtimeDataService 数据解析测试 异常数据处理 null 值处理 - 所有字段为 null
+00:13 +231 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/realtime_data_service_test.dart: RealtimeDataService 数据解析测试 异常数据处理 类型转换 - num 到 double
+00:13 +232 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/realtime_data_service_test.dart: RealtimeDataService 数据解析测试 异常数据处理 类型转换 - num 到 int
+00:13 +233 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/realtime_data_service_test.dart: RealtimeDataService 数据解析测试 异常数据处理 边界值处理 - SOC 0% 和 100%
+00:13 +234 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/realtime_data_service_test.dart: RealtimeDataService 数据解析测试 异常数据处理 边界值处理 - 功率为 0
+00:13 +235 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/realtime_data_service_test.dart: RealtimeDataService 数据解析测试 异常数据处理 边界值处理 - 负值处理
+00:13 +236 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/realtime_data_service_test.dart: RealtimeDataService 数据解析测试 时间戳处理 ISO 8601 格式解析
+00:13 +237 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/realtime_data_service_test.dart: RealtimeDataService 数据解析测试 时间戳处理 带时区偏移的 ISO 8601 格式解析
+00:13 +238 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/realtime_data_service_test.dart: RealtimeDataService 数据解析测试 时间戳处理 无效时间字符串处理
+00:13 +239 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/realtime_data_service_test.dart: RealtimeDataService 数据解析测试 时间戳处理 空时间字符串处理
+00:14 +240 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/telemetry_quality_test.dart: quality mask zero is normal
+00:14 +241 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/telemetry_quality_test.dart: quality mask follows the storage contract and keeps unknown bits
+00:14 +242 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/telemetry_quality_test.dart: API decimal and hexadecimal strings are parsed strictly
+00:14 +243 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/telemetry_quality_test.dart: realtime entity roundtrips device_sn and updated_at through JSON
+00:14 +244 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/verification_test.dart: 完整验证测试 验证 RealtimeDataService 修复 类型修复验证 - SystemStatus.faultCode 应为 int
+00:14 +245 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/verification_test.dart: 完整验证测试 验证 RealtimeDataService 修复 类型修复验证 - EnergyData.runtimeHours 应为 int
+00:14 +246 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/verification_test.dart: 完整验证测试 验证 RealtimeDataService 修复 数据解析 - 嵌套结构完整解析
+00:14 +247 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/verification_test.dart: 完整验证测试 验证 RealtimeDataService 修复 数据解析 - 扁平结构完整解析
+00:14 +248 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/verification_test.dart: 完整验证测试 验证在线状态管理 在线状态 - 从 realtime 获取
+00:14 +249 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/verification_test.dart: 完整验证测试 验证在线状态管理 在线状态 - 从 responseData 获取
+00:14 +250 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/verification_test.dart: 完整验证测试 验证在线状态管理 在线状态 - 默认值处理
+00:14 +251 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/verification_test.dart: 完整验证测试 验证在线状态管理 在线状态 - 状态切换
+00:14 +252 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/verification_test.dart: 完整验证测试 验证异常数据处理 null 值处理
+00:14 +253 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/verification_test.dart: 完整验证测试 验证异常数据处理 边界值处理 - SOC 0% 和 100%
+00:14 +254 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/verification_test.dart: 完整验证测试 验证异常数据处理 边界值处理 - 功率为 0
+00:14 +255 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/verification_test.dart: 完整验证测试 验证异常数据处理 边界值处理 - 负值处理
+00:14 +256 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/verification_test.dart: 完整验证测试 验证类型转换 num 到 double 转换
+00:14 +257 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/verification_test.dart: 完整验证测试 验证类型转换 num 到 int 转换
+00:14 +258 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/verification_test.dart: 完整验证测试 验证时间戳处理 ISO 8601 格式解析
+00:14 +259 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/verification_test.dart: 完整验证测试 验证时间戳处理 带时区偏移的 ISO 8601 格式解析
+00:14 +260 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/verification_test.dart: 完整验证测试 验证时间戳处理 无效时间字符串处理
+00:14 +261 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/verification_test.dart: 完整验证测试 验证 API 路径 设备详情 API 路径
+00:14 +262 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/verification_test.dart: 完整验证测试 验证 API 路径 设备实时数据 API 路径
+00:14 +263 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/verification_test.dart: 完整验证测试 验证 API 路径 设备控制 API 路径
+00:14 +264 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/verification_test.dart: 完整验证测试 验证 API 路径 设备解绑 API 路径
+00:14 +265 ~4 -5: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/widget_test.dart: App smoke test
+00:15 +266 ~4 -5: Some tests failed.
+
+Failing tests:
+  D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/auth/presentation/bloc/auth_bloc_test.dart: AuthCheckRequested emits [AuthLoading, AuthAuthenticated] when token and userId exist
+  D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/auth/presentation/bloc/auth_bloc_test.dart: AuthEmailLoginRequested emits [AuthLoading, AuthAuthenticated] on successful email login
+  D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/auth/presentation/bloc/auth_bloc_test.dart: AuthLoginRequested emits [AuthLoading, AuthAuthenticated] on successful login
+  D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/auth/presentation/bloc/auth_bloc_test.dart: AuthLoginRequested saves credentials when rememberPassword is true
+  D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv_app/test/features/auth/presentation/bloc/auth_bloc_test.dart: AuthLogoutRequested emits [AuthUnauthenticated] and clears storage

@@ -1,0 +1,166 @@
+﻿Analyzing inv_app...                                            
+
+   info - Dangling library doc comment. Add a 'library' directive after the library comment - lib\core\data\province_name_mapping.dart:1:1 - dangling_library_doc_comments
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\core\widgets\device_list_view.dart:190:7 - require_trailing_commas
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - lib\core\widgets\device_list_view.dart:217:24 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - lib\core\widgets\device_list_view.dart:226:26 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - lib\core\widgets\device_list_view.dart:235:26 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - lib\core\widgets\device_list_view.dart:236:49 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - lib\core\widgets\device_list_view.dart:244:26 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - lib\core\widgets\device_list_view.dart:245:55 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - lib\core\widgets\device_list_view.dart:253:26 - prefer_const_constructors
+   info - Statements in an if should be enclosed in a block. Try wrapping the statement in a block - lib\core\widgets\device_list_view.dart:286:31 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block. Try wrapping the statement in a block - lib\core\widgets\device_list_view.dart:288:7 - curly_braces_in_flow_control_structures
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - lib\core\widgets\device_list_view.dart:328:25 - prefer_const_constructors
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\core\widgets\device_list_view.dart:349:115 - require_trailing_commas
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - lib\core\widgets\device_list_view.dart:350:19 - prefer_const_constructors
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\core\widgets\device_list_view.dart:355:106 - require_trailing_commas
+   info - Unnecessary use of string interpolation. Try replacing the string literal with the variable name - lib\core\widgets\device_list_view.dart:367:31 - unnecessary_string_interpolations
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - lib\core\widgets\device_list_view.dart:402:18 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - lib\core\widgets\device_list_view.dart:410:45 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - lib\core\widgets\device_list_view.dart:428:18 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - lib\core\widgets\device_list_view.dart:436:45 - prefer_const_constructors
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\core\widgets\device_list_view.dart:548:88 - require_trailing_commas
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - lib\core\widgets\device_list_view.dart:583:32 - prefer_const_constructors
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - lib\features\profile\presentation\pages\edit_profile_page.dart:56:5 - prefer_const_declarations
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\profile\presentation\pages\edit_profile_page.dart:274:57 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\profile\presentation\pages\edit_profile_page.dart:386:59 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\profile\presentation\pages\edit_profile_page.dart:409:65 - require_trailing_commas
+   info - Use a 'SizedBox' to add whitespace to a layout. Try using a 'SizedBox' rather than a 'Container' - lib\features\profile\presentation\pages\edit_profile_page.dart:415:21 - sized_box_for_whitespace
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\profile\presentation\pages\edit_profile_page.dart:421:72 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\profile\presentation\pages\edit_profile_page.dart:462:73 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\profile\presentation\pages\edit_profile_page.dart:486:47 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\profile\presentation\pages\edit_profile_page.dart:655:59 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\profile\presentation\pages\edit_profile_page.dart:678:65 - require_trailing_commas
+   info - Use a 'SizedBox' to add whitespace to a layout. Try using a 'SizedBox' rather than a 'Container' - lib\features\profile\presentation\pages\edit_profile_page.dart:684:21 - sized_box_for_whitespace
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\profile\presentation\pages\edit_profile_page.dart:690:72 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\profile\presentation\pages\edit_profile_page.dart:731:73 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\profile\presentation\pages\edit_profile_page.dart:755:47 - require_trailing_commas
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - lib\features\profile\presentation\pages\edit_profile_page.dart:930:27 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - lib\features\profile\presentation\pages\edit_profile_page.dart:935:28 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - lib\features\profile\presentation\pages\edit_profile_page.dart:1004:29 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - lib\features\profile\presentation\pages\edit_profile_page.dart:1074:33 - prefer_const_constructors
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\profile\presentation\pages\edit_profile_page.dart:1208:60 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\profile\presentation\pages\edit_profile_page.dart:1592:69 - require_trailing_commas
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - lib\features\profile\presentation\pages\profile_page.dart:28:5 - prefer_const_declarations
+warning - Unused import: 'package:inv_app/features/station/presentation/pages/location_picker_page.dart'. Try removing the import directive - lib\features\station\presentation\pages\create_station_page.dart:14:8 - unused_import
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\station\presentation\pages\create_station_page.dart:168:8 - require_trailing_commas
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - lib\features\station\presentation\pages\create_station_page.dart:806:37 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - lib\features\station\presentation\pages\create_station_page.dart:810:37 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - lib\features\station\presentation\pages\create_station_page.dart:814:37 - prefer_const_constructors
+warning - Unused import: 'package:inv_app/features/station/presentation/pages/location_picker_page.dart'. Try removing the import directive - lib\features\station\presentation\pages\edit_station_page.dart:6:8 - unused_import
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - lib\features\station\presentation\pages\home_page.dart:514:24 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - lib\features\station\presentation\pages\home_page.dart:522:24 - prefer_const_constructors
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\station\presentation\pages\location_picker_page.dart:169:8 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\station\presentation\pages\location_picker_page.dart:333:68 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\station\presentation\pages\location_picker_page.dart:387:86 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\station\presentation\pages\location_picker_page.dart:407:78 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\station\presentation\pages\location_picker_page.dart:410:83 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\station\presentation\pages\location_picker_page.dart:410:84 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\station\presentation\pages\location_picker_page.dart:414:78 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\station\presentation\pages\location_picker_page.dart:414:79 - require_trailing_commas
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - lib\features\station\presentation\pages\station_detail_page.dart:588:23 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - lib\features\station\presentation\pages\station_detail_page.dart:605:25 - prefer_const_constructors
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\station\presentation\pages\station_detail_page.dart:1598:24 - require_trailing_commas
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - lib\features\station\presentation\pages\station_detail_page.dart:1608:21 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - lib\features\station\presentation\pages\station_detail_page.dart:1608:39 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - lib\features\station\presentation\pages\station_detail_page.dart:1614:21 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - lib\features\station\presentation\pages\station_detail_page.dart:1614:39 - prefer_const_constructors
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\station\presentation\widgets\inline_location_picker.dart:182:8 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\station\presentation\widgets\inline_location_picker.dart:242:8 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\station\presentation\widgets\inline_location_picker.dart:328:58 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\station\presentation\widgets\inline_location_picker.dart:336:76 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\station\presentation\widgets\inline_location_picker.dart:360:74 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\station\presentation\widgets\inline_location_picker.dart:380:70 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\station\presentation\widgets\inline_location_picker.dart:386:58 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\station\presentation\widgets\inline_location_picker.dart:386:59 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\station\presentation\widgets\inline_location_picker.dart:396:78 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\station\presentation\widgets\inline_location_picker.dart:406:60 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\station\presentation\widgets\inline_location_picker.dart:411:63 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\station\presentation\widgets\inline_location_picker.dart:420:70 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\station\presentation\widgets\inline_location_picker.dart:420:71 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\station\presentation\widgets\inline_location_picker.dart:425:63 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - lib\features\station\presentation\widgets\inline_location_picker.dart:425:64 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - test\api_paths_test.dart:69:12 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - test\api_paths_test.dart:81:12 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - test\api_paths_test.dart:90:12 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - test\api_paths_test.dart:99:52 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - test\api_paths_test.dart:103:12 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - test\api_paths_test.dart:111:12 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - test\api_paths_test.dart:120:52 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - test\api_paths_test.dart:124:12 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - test\api_paths_test.dart:132:12 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - test\api_paths_test.dart:144:12 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - test\api_paths_test.dart:153:12 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - test\api_paths_test.dart:165:12 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - test\api_paths_test.dart:182:50 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - test\api_paths_test.dart:182:51 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - test\api_paths_test.dart:191:12 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - test\api_paths_test.dart:203:12 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - test\api_paths_test.dart:232:67 - require_trailing_commas
+   info - Missing a required trailing comma. Try adding a trailing comma - test\api_paths_test.dart:247:75 - require_trailing_commas
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - test\comprehensive_test.dart:12:22 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - test\comprehensive_test.dart:38:27 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - test\comprehensive_test.dart:63:22 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - test\comprehensive_test.dart:77:25 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - test\comprehensive_test.dart:95:27 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - test\comprehensive_test.dart:100:26 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - test\comprehensive_test.dart:121:28 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - test\comprehensive_test.dart:135:13 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - test\comprehensive_test.dart:136:18 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - test\comprehensive_test.dart:137:13 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - test\comprehensive_test.dart:138:20 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - test\comprehensive_test.dart:139:17 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - test\comprehensive_test.dart:140:23 - prefer_const_constructors
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\comprehensive_test.dart:156:7 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\comprehensive_test.dart:163:7 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\comprehensive_test.dart:169:7 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\comprehensive_test.dart:175:7 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\comprehensive_test.dart:181:7 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\comprehensive_test.dart:187:7 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\comprehensive_test.dart:193:7 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\comprehensive_test.dart:199:7 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\comprehensive_test.dart:205:7 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\comprehensive_test.dart:333:7 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\comprehensive_test.dart:342:7 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\comprehensive_test.dart:349:7 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\comprehensive_test.dart:353:7 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\comprehensive_test.dart:357:7 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\comprehensive_test.dart:363:7 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\comprehensive_test.dart:364:7 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\comprehensive_test.dart:370:7 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\comprehensive_test.dart:371:7 - prefer_const_declarations
+warning - Unused import: 'package:inv_app/core/entities/inverter_data.dart'. Try removing the import directive - test\realtime_data_service_test.dart:2:8 - unused_import
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\realtime_data_service_test.dart:339:9 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\realtime_data_service_test.dart:344:9 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\realtime_data_service_test.dart:349:9 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\realtime_data_service_test.dart:356:9 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\realtime_data_service_test.dart:361:9 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\realtime_data_service_test.dart:366:9 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\realtime_data_service_test.dart:411:9 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\realtime_data_service_test.dart:421:9 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\realtime_data_service_test.dart:428:9 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\realtime_data_service_test.dart:438:9 - prefer_const_declarations
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - test\verification_test.dart:8:27 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - test\verification_test.dart:21:28 - prefer_const_constructors
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\verification_test.dart:302:9 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\verification_test.dart:306:9 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\verification_test.dart:310:9 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\verification_test.dart:316:9 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\verification_test.dart:320:9 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\verification_test.dart:324:9 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\verification_test.dart:332:9 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\verification_test.dart:342:9 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\verification_test.dart:349:9 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\verification_test.dart:361:9 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\verification_test.dart:367:9 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\verification_test.dart:373:9 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value. Try replacing 'final' with 'const' - test\verification_test.dart:379:9 - prefer_const_declarations
+
+flutter : 156 issues found. (ran in 8.1s)
+所在位置 行:1 字符: 136
++ ... =[Text.Encoding]::UTF8; flutter analyze --no-fatal-infos 2>&1 | Out-F ...
++                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (156 issues found. (ran in 8.1s):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 

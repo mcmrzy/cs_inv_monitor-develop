@@ -1,0 +1,1967 @@
+﻿
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.10 [39m[90mD:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv-admin-frontend[39m
+
+ [32m✓[39m src/services/protocolApi.test.ts[2m > [22mprotocolApi[2m > [22mloads the reported parallel state without using legacy groups[32m 30[2mms[22m[39m
+ [32m✓[39m src/services/protocolApi.test.ts[2m > [22mprotocolApi[2m > [22mloads paged three-phase 3-minute samples[32m 8[2mms[22m[39m
+ [32m✓[39m src/services/protocolApi.test.ts[2m > [22mprotocolApi[2m > [22mloads alarm lifecycle and trace fields[32m 6[2mms[22m[39m
+ [32m✓[39m src/services/protocolApi.test.ts[2m > [22mprotocolApi[2m > [22mloads one alarm event with before/after snapshots[32m 7[2mms[22m[39m
+ [32m✓[39m src/services/protocolApi.test.ts[2m > [22mprotocolApi[2m > [22msurfaces alarm detail HTTP 403 errors[32m 5[2mms[22m[39m
+ [32m✓[39m src/services/protocolApi.test.ts[2m > [22mprotocolApi[2m > [22msurfaces alarm detail HTTP 404 errors[32m 4[2mms[22m[39m
+ [32m✓[39m src/services/protocolApi.test.ts[2m > [22mprotocolApi[2m > [22msurfaces alarm detail HTTP 500 errors[32m 3[2mms[22m[39m
+ [32m✓[39m src/services/protocolApi.test.ts[2m > [22mprotocolApi[2m > [22mmakes access-denied errors visible to callers[32m 6[2mms[22m[39m
+ [32m✓[39m src/services/channelApi.test.ts[2m > [22mchannelApi[2m > [22mOrganization Management[2m > [22mgetOrganizations should return organization list[32m 32[2mms[22m[39m
+ [32m✓[39m src/services/channelApi.test.ts[2m > [22mchannelApi[2m > [22mOrganization Management[2m > [22mgetOrganization should return single organization[32m 5[2mms[22m[39m
+ [32m✓[39m src/services/channelApi.test.ts[2m > [22mchannelApi[2m > [22mOrganization Management[2m > [22mcreateOrganization should create new organization[32m 4[2mms[22m[39m
+ [32m✓[39m src/services/channelApi.test.ts[2m > [22mchannelApi[2m > [22mOrganization Management[2m > [22mupdateOrganization should update organization[32m 4[2mms[22m[39m
+ [32m✓[39m src/services/channelApi.test.ts[2m > [22mchannelApi[2m > [22mOrganization Management[2m > [22mdeleteOrganization should delete organization[32m 12[2mms[22m[39m
+ [32m✓[39m src/services/channelApi.test.ts[2m > [22mchannelApi[2m > [22mOrganization Management[2m > [22mtoggleOrganization should use PATCH /organizations/:id/status[32m 4[2mms[22m[39m
+ [32m✓[39m src/services/channelApi.test.ts[2m > [22mchannelApi[2m > [22mMember Management[2m > [22mgetOrganizationMembers should return member list[32m 7[2mms[22m[39m
+ [32m✓[39m src/services/channelApi.test.ts[2m > [22mchannelApi[2m > [22mMember Management[2m > [22maddMember should add member to organization[32m 4[2mms[22m[39m
+ [32m✓[39m src/services/channelApi.test.ts[2m > [22mchannelApi[2m > [22mMember Management[2m > [22mremoveMember should call DELETE /members/memberships/:id/remove[32m 11[2mms[22m[39m
+ [32m✓[39m src/services/alertApi.test.ts[2m > [22malertApi[2m > [22mlist[2m > [22mshould fetch alarm list[32m 34[2mms[22m[39m
+ [32m✓[39m src/services/alertApi.test.ts[2m > [22malertApi[2m > [22mlist[2m > [22mshould filter by status[32m 5[2mms[22m[39m
+ [32m✓[39m src/services/alertApi.test.ts[2m > [22malertApi[2m > [22mgetStats[2m > [22mshould fetch alarm statistics[32m 4[2mms[22m[39m
+ [32m✓[39m src/services/alertApi.test.ts[2m > [22malertApi[2m > [22mhandle (acknowledge)[2m > [22mshould acknowledge an alarm[32m 4[2mms[22m[39m
+ [32m✓[39m src/services/alertApi.test.ts[2m > [22malertApi[2m > [22mignore[2m > [22mshould ignore an alarm[32m 5[2mms[22m[39m
+ [32m✓[39m src/services/alertApi.test.ts[2m > [22malertApi[2m > [22mdelete[2m > [22mshould delete an alarm[32m 6[2mms[22m[39m
+ [32m✓[39m src/services/alertApi.test.ts[2m > [22malertApi[2m > [22mclearAll[2m > [22mshould clear all alarms[32m 8[2mms[22m[39m
+ [32m✓[39m src/services/alertApi.test.ts[2m > [22mnotificationApi[2m > [22mlist[2m > [22mshould fetch notification list[32m 20[2mms[22m[39m
+ [32m✓[39m src/services/alertApi.test.ts[2m > [22mnotificationApi[2m > [22mgetStats[2m > [22mshould fetch notification stats[32m 8[2mms[22m[39m
+ [32m✓[39m src/services/otaApi.test.ts[2m > [22motaApi[2m > [22mFirmware Management[2m > [22mlistFirmware should return firmware list[32m 35[2mms[22m[39m
+ [32m✓[39m src/services/otaApi.test.ts[2m > [22motaApi[2m > [22mFirmware Management[2m > [22mgetAllFirmware should request with large page_size[32m 5[2mms[22m[39m
+ [32m✓[39m src/services/otaApi.test.ts[2m > [22motaApi[2m > [22mFirmware Management[2m > [22mdeleteFirmware should delete by id[32m 5[2mms[22m[39m
+ [32m✓[39m src/services/otaApi.test.ts[2m > [22motaApi[2m > [22mFirmware Management[2m > [22muploadFirmware should post form data[32m 16[2mms[22m[39m
+ [32m✓[39m src/services/otaApi.test.ts[2m > [22motaApi[2m > [22mUpgrade Task Management[2m > [22mlistTasks should return task list[32m 7[2mms[22m[39m
+ [32m✓[39m src/services/otaApi.test.ts[2m > [22motaApi[2m > [22mUpgrade Task Management[2m > [22mcreateTask should create a new upgrade task[32m 7[2mms[22m[39m
+ [32m✓[39m src/services/otaApi.test.ts[2m > [22motaApi[2m > [22mUpgrade Task Management[2m > [22mcancelTask should cancel a running task[32m 3[2mms[22m[39m
+ [32m✓[39m src/services/otaApi.test.ts[2m > [22motaApi[2m > [22mUpgrade Task Management[2m > [22mgetTaskStats should return task statistics[32m 4[2mms[22m[39m
+ [32m✓[39m src/services/otaApi.test.ts[2m > [22motaApi[2m > [22mUpgrade Dashboard[2m > [22mgetUpgradeDashboard should return dashboard data[32m 9[2mms[22m[39m
+ [32m✓[39m src/services/otaApi.test.ts[2m > [22motaApi[2m > [22mPackage Management[2m > [22mlistPackages should return package list[32m 5[2mms[22m[39m
+ [32m✓[39m src/test/api-compatibility.test.ts[2m > [22mAPI Compatibility Tests[2m > [22mOTA Firmware Management - Path Verification[2m > [22mlistFirmware should call /ota/firmware[32m 32[2mms[22m[39m
+ [32m✓[39m src/test/api-compatibility.test.ts[2m > [22mAPI Compatibility Tests[2m > [22mOTA Firmware Management - Path Verification[2m > [22mdeleteFirmware should call /ota/firmware/:id[32m 5[2mms[22m[39m
+ [32m✓[39m src/test/api-compatibility.test.ts[2m > [22mAPI Compatibility Tests[2m > [22mOrganization Member Management - Path Verification[2m > [22mremoveMember should call /members/memberships/:id/remove[32m 4[2mms[22m[39m
+ [32m✓[39m src/test/api-compatibility.test.ts[2m > [22mAPI Compatibility Tests[2m > [22mOrganization Member Management - Path Verification[2m > [22mupdateMemberRole should call /members/memberships/:id/role[32m 4[2mms[22m[39m
+ [32m✓[39m src/test/api-compatibility.test.ts[2m > [22mAPI Compatibility Tests[2m > [22mOrganization Member Management - Path Verification[2m > [22mreactivateMember should call PATCH /members/memberships/:id/reactivate[32m 3[2mms[22m[39m
+ [32m✓[39m src/test/api-compatibility.test.ts[2m > [22mAPI Compatibility Tests[2m > [22mOrganization Status Toggle - Method Verification[2m > [22mtoggleOrganization should use PATCH method[32m 3[2mms[22m[39m
+ [32m✓[39m src/test/api-compatibility.test.ts[2m > [22mAPI Compatibility Tests[2m > [22mOther API Functions - Regression Tests[2m > [22mdeviceApi should work correctly[32m 4[2mms[22m[39m
+ [32m✓[39m src/test/api-compatibility.test.ts[2m > [22mAPI Compatibility Tests[2m > [22mOther API Functions - Regression Tests[2m > [22muserApi should work correctly[32m 5[2mms[22m[39m
+ [32m✓[39m src/test/api-compatibility.test.ts[2m > [22mAPI Compatibility Tests[2m > [22mOther API Functions - Regression Tests[2m > [22malertApi should work correctly[32m 6[2mms[22m[39m
+ [32m✓[39m src/test/api-compatibility.test.ts[2m > [22mAPI Compatibility Tests[2m > [22mOther API Functions - Regression Tests[2m > [22mworkOrderApi should work correctly[32m 4[2mms[22m[39m
+ [32m✓[39m src/services/alertApi.test.ts[2m > [22mnotificationApi[2m > [22mdelete[2m > [22mshould delete a notification[32m 4[2mms[22m[39m
+ [32m✓[39m src/services/alertApi.test.ts[2m > [22mnotificationApi[2m > [22mclearAll[2m > [22mshould clear all notifications[32m 3[2mms[22m[39m
+ [32m✓[39m src/services/otaApi.test.ts[2m > [22motaApi[2m > [22mPackage Management[2m > [22mcreatePackage should create a new package[32m 6[2mms[22m[39m
+ [32m✓[39m src/services/channelApi.test.ts[2m > [22mchannelApi[2m > [22mMember Management[2m > [22mupdateMemberRole should call PUT /members/memberships/:id/role[32m 15[2mms[22m[39m
+ [32m✓[39m src/services/channelApi.test.ts[2m > [22mchannelApi[2m > [22mMember Management[2m > [22mreactivateMember should use PATCH /members/memberships/:id/reactivate[32m 5[2mms[22m[39m
+ [32m✓[39m src/services/channelApi.test.ts[2m > [22mchannelApi[2m > [22mInvitation Management[2m > [22mgetInvitations should return invitation list[32m 3[2mms[22m[39m
+ [32m✓[39m src/services/channelApi.test.ts[2m > [22mchannelApi[2m > [22mInvitation Management[2m > [22msendInvitation should create invitations in batch[32m 6[2mms[22m[39m
+ [32m✓[39m src/services/channelApi.test.ts[2m > [22mchannelApi[2m > [22mInvitation Management[2m > [22mrevokeInvitation should revoke invitation[32m 2[2mms[22m[39m
+ [32m✓[39m src/services/channelApi.test.ts[2m > [22mchannelApi[2m > [22mInvitation Management[2m > [22mgetInvitationLink should return copy-link guidance[32m 3[2mms[22m[39m
+ [32m✓[39m src/services/channelApi.test.ts[2m > [22mchannelApi[2m > [22mTransfer Management[2m > [22mgetTransferRequests should return transfer list[32m 3[2mms[22m[39m
+ [32m✓[39m src/services/channelApi.test.ts[2m > [22mchannelApi[2m > [22mTransfer Management[2m > [22mapproveTransfer should approve transfer[32m 3[2mms[22m[39m
+ [32m✓[39m src/services/channelApi.test.ts[2m > [22mchannelApi[2m > [22mTransfer Management[2m > [22mrejectTransfer should reject transfer[32m 2[2mms[22m[39m
+ [31m×[39m src/locales/index.test.ts[2m > [22mlocale catalogs[2m > [22mkeeps Chinese and English key sets identical[32m 36[2mms[22m[39m
+[31m   → expected [ 'admin.adminGroup', …(3198) ] to deeply equal [ 'admin.adminGroup', …(3194) ][39m
+[90mstdout[2m | src/locales/index.test.ts[2m > [22m[2mlocale catalogs[2m > [22m[2mdefines every literal translation key used by production code
+[22m[39mIgnored 68 remote.xxx keys (manual translation pending): [
+  [32m'remote.chargePowerPctTooltip'[39m,
+  [32m'remote.mainChargeParams'[39m,
+  [32m'remote.chargeCurrentLimitTooltip'[39m,
+  [32m'remote.chargeVoltageTooltip'[39m,
+  [32m'remote.floatVoltageTooltip'[39m
+]
+
+ [32m✓[39m src/utils/timezone.test.ts[2m > [22mformatInTimezone[2m > [22mshould format UTC time in Shanghai timezone[32m 95[2mms[22m[39m
+ [32m✓[39m src/utils/timezone.test.ts[2m > [22mformatInTimezone[2m > [22mshould format UTC time in New York timezone[32m 3[2mms[22m[39m
+ [32m✓[39m src/utils/timezone.test.ts[2m > [22mformatInTimezone[2m > [22mshould return "-" for null/undefined input[32m 0[2mms[22m[39m
+ [32m✓[39m src/utils/timezone.test.ts[2m > [22mformatInTimezone[2m > [22mshould use custom format[32m 1[2mms[22m[39m
+ [32m✓[39m src/utils/timezone.test.ts[2m > [22mformatInTimezone[2m > [22mshould default to Asia/Shanghai when timezone is null[32m 1[2mms[22m[39m
+ [32m✓[39m src/utils/timezone.test.ts[2m > [22mgetTimezoneLabel[2m > [22mshould return Chinese label for zh locale[32m 0[2mms[22m[39m
+ [32m✓[39m src/utils/timezone.test.ts[2m > [22mgetTimezoneLabel[2m > [22mshould return English label for en locale[32m 0[2mms[22m[39m
+ [32m✓[39m src/utils/timezone.test.ts[2m > [22mgetTimezoneLabel[2m > [22mshould default to zh locale[32m 0[2mms[22m[39m
+ [32m✓[39m src/utils/timezone.test.ts[2m > [22mgetTimezoneLabel[2m > [22mshould return timezone id for unknown timezone[32m 0[2mms[22m[39m
+ [32m✓[39m src/utils/timezone.test.ts[2m > [22mTIMEZONE_LIST[2m > [22mshould contain common timezones[32m 1[2mms[22m[39m
+ [32m✓[39m src/utils/timezone.test.ts[2m > [22mTIMEZONE_LIST[2m > [22mshould have offset for each timezone[32m 1[2mms[22m[39m
+ [32m✓[39m src/utils/timezone.test.ts[2m > [22mTIMEZONE_LIST[2m > [22mshould have both Chinese and English labels[32m 1[2mms[22m[39m
+ [32m✓[39m src/locales/index.test.ts[2m > [22mlocale catalogs[2m > [22mkeeps interpolation parameters identical across languages[32m 81[2mms[22m[39m
+ [32m✓[39m src/locales/index.test.ts[2m > [22mlocale catalogs[2m > [22mdoes not leak Chinese copy into the English catalog[32m 55[2mms[22m[39m
+ [32m✓[39m src/locales/index.test.ts[2m > [22mlocale catalogs[2m > [22mdefines every literal translation key used by production code[32m 7[2mms[22m[39m
+ [32m✓[39m src/services/api.test.ts[2m > [22mAxios Instance Configuration[2m > [22mshould have correct baseURL[32m 2[2mms[22m[39m
+ [32m✓[39m src/services/api.test.ts[2m > [22mAxios Instance Configuration[2m > [22mshould have correct timeout[32m 0[2mms[22m[39m
+ [32m✓[39m src/services/api.test.ts[2m > [22mAxios Instance Configuration[2m > [22mshould have withCredentials enabled[32m 0[2mms[22m[39m
+ [32m✓[39m src/services/api.test.ts[2m > [22mAxios Instance Configuration[2m > [22mshould have JSON content type[32m 0[2mms[22m[39m
+ [32m✓[39m src/services/api.test.ts[2m > [22mRequest Interceptor - Token Injection[2m > [22mshould add Authorization header when token exists[32m 75[2mms[22m[39m
+ [32m✓[39m src/services/api.test.ts[2m > [22mRequest Interceptor - Token Injection[2m > [22mshould not add Authorization header when no token[32m 5[2mms[22m[39m
+ [32m✓[39m src/services/api.test.ts[2m > [22mResponse Interceptor - 401 Token Refresh[2m > [22mshould attempt token refresh on 401 response[32m 10[2mms[22m[39m
+ [32m✓[39m src/services/userApi.test.ts[2m > [22muserApi[2m > [22mlist[2m > [22mshould fetch user list[32m 69[2mms[22m[39m
+ [32m✓[39m src/services/userApi.test.ts[2m > [22muserApi[2m > [22mlist[2m > [22mshould filter users by role[32m 5[2mms[22m[39m
+ [32m✓[39m src/services/userApi.test.ts[2m > [22muserApi[2m > [22mget[2m > [22mshould fetch user by id[32m 11[2mms[22m[39m
+ [32m✓[39m src/services/deviceApi.test.ts[2m > [22mdeviceApi[2m > [22mgetDevices[2m > [22mshould fetch device list with pagination[32m 69[2mms[22m[39m
+ [32m✓[39m src/services/deviceApi.test.ts[2m > [22mdeviceApi[2m > [22mgetDevices[2m > [22mshould pass query parameters correctly[32m 7[2mms[22m[39m
+ [32m✓[39m src/services/deviceApi.test.ts[2m > [22mdeviceApi[2m > [22mgetDeviceBySn[2m > [22mshould fetch device by SN[32m 5[2mms[22m[39m
+ [32m✓[39m src/services/deviceApi.test.ts[2m > [22mdeviceApi[2m > [22mgetDeviceBySn[2m > [22mshould return 404 for non-existent SN[32m 4[2mms[22m[39m
+ [32m✓[39m src/services/deviceApi.test.ts[2m > [22mdeviceApi[2m > [22mcreateDevice[2m > [22mshould create a new device[32m 4[2mms[22m[39m
+ [32m✓[39m src/services/deviceApi.test.ts[2m > [22mdeviceApi[2m > [22mupdateDevice[2m > [22mshould update device by SN[32m 4[2mms[22m[39m
+ [32m✓[39m src/locales/index.test.ts[2m > [22mlocale catalogs[2m > [22mcontains valid non-empty zh entries[32m 224[2mms[22m[39m
+ [32m✓[39m src/services/workOrderApi.test.ts[2m > [22mworkOrderApi business contract[2m > [22monly exposes legal next states[32m 2[2mms[22m[39m
+ [32m✓[39m src/services/workOrderApi.test.ts[2m > [22mworkOrderApi business contract[2m > [22mmatches installer and end-user operational ownership[32m 1[2mms[22m[39m
+ [32m✓[39m src/services/workOrderApi.test.ts[2m > [22mworkOrderApi business contract[2m > [22msends optimistic version and idempotency key for a status command[32m 65[2mms[22m[39m
+ [32m✓[39m src/services/workOrderApi.test.ts[2m > [22mworkOrderApi business contract[2m > [22mdownloads an attachment through an internal identifier-only path[32m 7[2mms[22m[39m
+ [32m✓[39m src/services/api.test.ts[2m > [22mResponse Interceptor - 401 Token Refresh[2m > [22mshould redirect to login when refresh fails[32m 28[2mms[22m[39m
+ [32m✓[39m src/services/api.test.ts[2m > [22mauthApi[2m > [22mlogin should post credentials and return tokens[32m 6[2mms[22m[39m
+ [32m✓[39m src/services/api.test.ts[2m > [22mauthApi[2m > [22mlogin should fail with wrong credentials[32m 7[2mms[22m[39m
+ [32m✓[39m src/services/api.test.ts[2m > [22mauthApi[2m > [22mrefreshToken should return new tokens[32m 3[2mms[22m[39m
+ [32m✓[39m src/services/api.test.ts[2m > [22mauthApi[2m > [22mlogout should call the logout endpoint[32m 3[2mms[22m[39m
+ [32m✓[39m src/services/userApi.test.ts[2m > [22muserApi[2m > [22mget[2m > [22mshould return 404 for non-existent user[32m 12[2mms[22m[39m
+ [32m✓[39m src/services/userApi.test.ts[2m > [22muserApi[2m > [22mcreate[2m > [22mshould create a new user[32m 5[2mms[22m[39m
+ [32m✓[39m src/services/userApi.test.ts[2m > [22muserApi[2m > [22mupdate[2m > [22mshould update user info[32m 4[2mms[22m[39m
+ [32m✓[39m src/services/userApi.test.ts[2m > [22muserApi[2m > [22mdelete[2m > [22mshould delete user[32m 3[2mms[22m[39m
+ [32m✓[39m src/services/userApi.test.ts[2m > [22muserApi[2m > [22mresetPassword[2m > [22mshould reset user password[32m 5[2mms[22m[39m
+ [32m✓[39m src/services/userApi.test.ts[2m > [22muserApi[2m > [22mtoggleStatus[2m > [22mshould toggle user status[32m 8[2mms[22m[39m
+ [32m✓[39m src/services/deviceApi.test.ts[2m > [22mdeviceApi[2m > [22mdeleteDevice[2m > [22mshould delete device by SN[32m 7[2mms[22m[39m
+ [32m✓[39m src/services/deviceApi.test.ts[2m > [22mdeviceApi[2m > [22mgetRealtime[2m > [22mshould fetch realtime telemetry data[32m 6[2mms[22m[39m
+ [32m✓[39m src/services/deviceApi.test.ts[2m > [22mdeviceApi[2m > [22mgetTelemetry[2m > [22mshould fetch telemetry history[32m 7[2mms[22m[39m
+ [32m✓[39m src/services/deviceApi.test.ts[2m > [22mdeviceApi[2m > [22msendCommand[2m > [22mshould send control command to device[32m 5[2mms[22m[39m
+ [32m✓[39m src/services/deviceApi.test.ts[2m > [22mdeviceApi[2m > [22munbindDevice[2m > [22mshould unbind device[32m 7[2mms[22m[39m
+ [32m✓[39m src/services/deviceApi.test.ts[2m > [22mdeviceApi[2m > [22mgetAll[2m > [22mshould fetch all devices with page_size 200[32m 6[2mms[22m[39m
+ [32m✓[39m src/services/deviceApi.test.ts[2m > [22mdeviceApi[2m > [22mbatchAssignInstaller[2m > [22mshould batch assign installer to multiple devices[32m 5[2mms[22m[39m
+ [32m✓[39m src/locales/index.test.ts[2m > [22mlocale catalogs[2m > [22mcontains valid non-empty en entries[32m 114[2mms[22m[39m
+ [32m✓[39m src/test/setup.test.tsx[2m > [22mVitest 基础能力[2m > [22m支持基本断言[32m 3[2mms[22m[39m
+ [32m✓[39m src/test/setup.test.tsx[2m > [22mVitest 基础能力[2m > [22m支持异步断言[32m 1[2mms[22m[39m
+ [32m✓[39m src/test/setup.test.tsx[2m > [22mjest-dom 扩展断言[2m > [22mtoBeInTheDocument() 可用[32m 3[2mms[22m[39m
+ [32m✓[39m src/test/setup.test.tsx[2m > [22mjest-dom 扩展断言[2m > [22mtoBeVisible() / toBeDisabled() 可用[32m 97[2mms[22m[39m
+ [32m✓[39m src/test/setup.test.tsx[2m > [22mMSW Mock Server[2m > [22m拦截登录请求并返回 mock 数据[32m 34[2mms[22m[39m
+ [32m✓[39m src/test/setup.test.tsx[2m > [22mMSW Mock Server[2m > [22m拦截设备列表请求[32m 5[2mms[22m[39m
+ [32m✓[39m src/test/setup.test.tsx[2m > [22mMSW Mock Server[2m > [22m拦截用户列表请求[32m 5[2mms[22m[39m
+ [31m×[39m src/test/setup.test.tsx[2m > [22mMSW Mock Server[2m > [22m拦截固件列表请求[32m 50[2mms[22m[39m
+[31m   → Request failed with status code 401[39m
+ [32m✓[39m src/test/setup.test.tsx[2m > [22mMSW Mock Server[2m > [22m支持 server.use() 覆盖默认 handler[32m 5[2mms[22m[39m
+ [32m✓[39m src/components/ProtectedRoute.test.tsx[2m > [22mProtectedRoute[2m > [22mshould show loading spinner initially[32m 215[2mms[22m[39m
+ [32m✓[39m src/components/ProtectedRoute.test.tsx[2m > [22mProtectedRoute[2m > [22mshould redirect to /login when not authenticated[32m 19[2mms[22m[39m
+ [32m✓[39m src/components/ProtectedRoute.test.tsx[2m > [22mProtectedRoute[2m > [22mshould render children when authenticated[32m 27[2mms[22m[39m
+ [32m✓[39m src/components/ProtectedRoute.test.tsx[2m > [22mProtectedRoute[2m > [22mshould render children when token is set after mount[32m 140[2mms[22m[39m
+ [32m✓[39m src/test/setup.test.tsx[2m > [22mMSW Mock Server[2m > [22mserver.resetHandlers() 后恢复默认 handler[32m 4[2mms[22m[39m
+ [32m✓[39m src/test/setup.test.tsx[2m > [22mMSW Mock Server[2m > [22mHTTP 200 但业务 code 非 0 时拒绝请求[32m 6[2mms[22m[39m
+ [32m✓[39m src/test/setup.test.tsx[2m > [22mMSW Mock Server[2m > [22mGET 成功包缺少 data 时按响应格式错误处理[32m 5[2mms[22m[39m
+ [32m✓[39m src/test/setup.test.tsx[2m > [22mMSW Mock Server[2m > [22m写操作允许成功包不返回 data[32m 7[2mms[22m[39m
+ [32m✓[39m src/test/setup.test.tsx[2m > [22mMSW Mock Server[2m > [22m按调用方声明校验分页响应结构[32m 8[2mms[22m[39m
+ [32m✓[39m src/test/setup.test.tsx[2m > [22mMSW Mock Server[2m > [22m接受 items/total 完整的分页响应[32m 3[2mms[22m[39m
+ [32m✓[39m src/test/setup.test.tsx[2m > [22mrenderWithProviders[2m > [22m正确渲染简单组件[32m 117[2mms[22m[39m
+ [32m✓[39m src/test/setup.test.tsx[2m > [22mrenderWithProviders[2m > [22m支持自定义路由初始路径[32m 15[2mms[22m[39m
+ [32m✓[39m src/test/setup.test.tsx[2m > [22mrenderWithProviders[2m > [22m异步组件配合 waitFor 正常工作[32m 50[2mms[22m[39m
+ [32m✓[39m src/utils/fieldI18n.test.ts[2m > [22mfieldI18n[2m > [22mkeeps common device acronyms readable[32m 3[2mms[22m[39m
+ [32m✓[39m src/utils/fieldI18n.test.ts[2m > [22mfieldI18n[2m > [22mdoes not leak a Chinese backend label into English UI[32m 1[2mms[22m[39m
+ [32m✓[39m src/utils/constants.test.ts[2m > [22mparseFaultCode[2m > [22mshould parse decimal string[32m 2[2mms[22m[39m
+ [32m✓[39m src/utils/constants.test.ts[2m > [22mparseFaultCode[2m > [22mshould parse hex string[32m 0[2mms[22m[39m
+ [32m✓[39m src/utils/constants.test.ts[2m > [22mparseFaultCode[2m > [22mshould parse number directly[32m 0[2mms[22m[39m
+ [32m✓[39m src/utils/constants.test.ts[2m > [22mparseFaultCode[2m > [22mshould return -1 for null/undefined[32m 0[2mms[22m[39m
+ [32m✓[39m src/utils/constants.test.ts[2m > [22mparseFaultCode[2m > [22mshould return -1 for invalid strings[32m 0[2mms[22m[39m
+ [32m✓[39m src/utils/constants.test.ts[2m > [22mgetAlarmLevelDisplay[2m > [22mshould use alarm code mapping when code is valid[32m 0[2mms[22m[39m
+ [32m✓[39m src/utils/constants.test.ts[2m > [22mgetAlarmLevelDisplay[2m > [22mshould fall back to alarm_level when code is not in map[32m 0[2mms[22m[39m
+ [32m✓[39m src/utils/constants.test.ts[2m > [22mgetAlarmLevelDisplay[2m > [22mshould handle string alarm level[32m 0[2mms[22m[39m
+ [32m✓[39m src/utils/constants.test.ts[2m > [22mgetAlarmLevelDisplay[2m > [22mshould handle null fault code[32m 0[2mms[22m[39m
+ [32m✓[39m src/utils/constants.test.ts[2m > [22mgetAlarmLevelDisplay[2m > [22mshould handle hex fault code[32m 0[2mms[22m[39m
+ [32m✓[39m src/utils/constants.test.ts[2m > [22mConstants maps[2m > [22mDEVICE_STATUS_MAP should cover numeric and string statuses[32m 0[2mms[22m[39m
+ [32m✓[39m src/utils/constants.test.ts[2m > [22mConstants maps[2m > [22mALARM_LEVEL_MAP should have 3 numeric levels[32m 0[2mms[22m[39m
+ [32m✓[39m src/utils/constants.test.ts[2m > [22mConstants maps[2m > [22mALARM_CODE_LEVEL should map known codes[32m 0[2mms[22m[39m
+ [32m✓[39m src/utils/constants.test.ts[2m > [22mConstants maps[2m > [22mALARM_CODE_MESSAGE should have descriptions[32m 0[2mms[22m[39m
+ [32m✓[39m src/utils/telemetryQuality.test.ts[2m > [22mtelemetry quality flags[2m > [22mtreats zero as a normal sample[32m 2[2mms[22m[39m
+ [32m✓[39m src/utils/telemetryQuality.test.ts[2m > [22mtelemetry quality flags[2m > [22mdecodes the storage contract and preserves unknown bits[32m 1[2mms[22m[39m
+ [32m✓[39m src/utils/telemetryQuality.test.ts[2m > [22mtelemetry quality flags[2m > [22maccepts decimal and hexadecimal API strings without coercing invalid data[32m 1[2mms[22m[39m
+ [32m✓[39m src/stores/authStore.test.ts[2m > [22mauthStore[2m > [22mInitial State[2m > [22mshould have default unauthenticated state[32m 3[2mms[22m[39m
+ [32m✓[39m src/stores/authStore.test.ts[2m > [22mauthStore[2m > [22mlogin[2m > [22mshould set auth state on login[32m 1[2mms[22m[39m
+ [32m✓[39m src/stores/authStore.test.ts[2m > [22mauthStore[2m > [22mlogin[2m > [22mshould default permissions to empty array[32m 0[2mms[22m[39m
+ [32m✓[39m src/stores/authStore.test.ts[2m > [22mauthStore[2m > [22mlogout[2m > [22mshould clear all auth state on logout[32m 0[2mms[22m[39m
+ [32m✓[39m src/stores/authStore.test.ts[2m > [22mauthStore[2m > [22msetUser[2m > [22mshould update user without affecting tokens[32m 0[2mms[22m[39m
+ [32m✓[39m src/stores/authStore.test.ts[2m > [22mauthStore[2m > [22mrefreshAuth[2m > [22mshould update tokens without affecting user[32m 0[2mms[22m[39m
+ [32m✓[39m src/stores/authStore.test.ts[2m > [22mauthStore[2m > [22mhasPermission[2m > [22mshould return true for super admin regardless of permissions[32m 0[2mms[22m[39m
+ [32m✓[39m src/stores/authStore.test.ts[2m > [22mauthStore[2m > [22mhasPermission[2m > [22mshould check permission in list for non-admin[32m 0[2mms[22m[39m
+ [32m✓[39m src/stores/authStore.test.ts[2m > [22mauthStore[2m > [22mhasPermission[2m > [22mdoes not let non-system-admin bypass explicit permissions[32m 0[2mms[22m[39m
+ [32m✓[39m src/stores/authStore.test.ts[2m > [22mauthStore[2m > [22mhasPermission[2m > [22mshould return false when permissions is not an array[32m 0[2mms[22m[39m
+ [32m✓[39m src/stores/authStore.test.ts[2m > [22mauthStore[2m > [22mhasAnyPermission[2m > [22mshould return true for super admin[32m 0[2mms[22m[39m
+ [32m✓[39m src/stores/authStore.test.ts[2m > [22mauthStore[2m > [22mhasAnyPermission[2m > [22mshould return true when any permission matches[32m 0[2mms[22m[39m
+ [32m✓[39m src/stores/authStore.test.ts[2m > [22mauthStore[2m > [22mhasAnyPermission[2m > [22mshould return false when no permissions match[32m 0[2mms[22m[39m
+ [32m✓[39m src/services/commandApi.test.ts[2m > [22mcommandApi contracts[2m > [22mloads executable templates from control capabilities[32m 38[2mms[22m[39m
+ [32m✓[39m src/services/commandApi.test.ts[2m > [22mcommandApi contracts[2m > [22mloads command history from the paginated history endpoint[32m 7[2mms[22m[39m
+ [32m✓[39m src/hooks/useTranslation.test.ts[2m > [22museTranslation[2m > [22mshould return translation for zh locale[32m 14[2mms[22m[39m
+ [32m✓[39m src/hooks/useTranslation.test.ts[2m > [22museTranslation[2m > [22mshould return translation for en locale[32m 2[2mms[22m[39m
+ [32m✓[39m src/hooks/useTranslation.test.ts[2m > [22museTranslation[2m > [22mshould return key when translation is missing[32m 1[2mms[22m[39m
+ [32m✓[39m src/hooks/useTranslation.test.ts[2m > [22museTranslation[2m > [22mshould support parameter interpolation[32m 1[2mms[22m[39m
+ [32m✓[39m src/hooks/useTranslation.test.ts[2m > [22museTranslation[2m > [22mshould support parameter interpolation in English[32m 1[2mms[22m[39m
+ [32m✓[39m src/hooks/useTranslation.test.ts[2m > [22museTranslation[2m > [22mshould return current lang[32m 1[2mms[22m[39m
+ [32m✓[39m src/hooks/useTranslation.test.ts[2m > [22museTranslation[2m > [22mshould return en lang when switched[32m 1[2mms[22m[39m
+ [32m✓[39m src/hooks/useTranslation.test.ts[2m > [22museTranslation[2m > [22mshould translate device-related keys[32m 1[2mms[22m[39m
+ [32m✓[39m src/hooks/useTranslation.test.ts[2m > [22museTranslation[2m > [22mshould translate status-related keys[32m 1[2mms[22m[39m
+ [32m✓[39m src/hooks/useTranslation.test.ts[2m > [22museTranslation[2m > [22mshould translate batch operation keys[32m 1[2mms[22m[39m
+node.exe : Not implemented: Window's getComputedStyle() method: with pseudo-elements
+所在位置 行:1 字符: 1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Not implemented...pseudo-elements:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/users/UsersPage.test.tsx[2m > [22m[2mUsersPage[2m > [22m[2mshould render the users pa
+ge title
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+ [32m✓[39m src/pages/login/LoginPage.test.tsx[2m > [22mLoginPage[2m > [22mshould render the login form[33m 516[2mms[22m[39m
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+ [32m✓[39m src/pages/parallel/ParallelPage.test.tsx[2m > [22mParallelPage[2m > [22mdistinguishes a reported disabled state from missing data[33m 637[2mms[22m[39m
+ [32m✓[39m src/pages/parallel/ParallelPage.test.tsx[2m > [22mParallelPage[2m > [22mshows access errors instead of an empty state[32m 95[2mms[22m[39m
+ [32m✓[39m src/pages/models/ModelRegistryWorkspace.test.tsx[2m > [22mModelRegistryWorkspace[2m > [22mrenders page title and tab labels in English[33m 694[2mms[22m[39m
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/users/UsersPage.test.tsx[2m > [22m[2mUsersPage[2m > [22m[2mshould render user list wi
+th correct data
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+ [32m✓[39m src/pages/login/LoginPage.test.tsx[2m > [22mLoginPage[2m > [22mshould render the English login experience when English is selected[32m 249[2mms[22m[39m
+ [32m✓[39m src/pages/login/LoginPage.test.tsx[2m > [22mLoginPage[2m > [22mshould render login tab, register tab, and reset tab[32m 87[2mms[22m[39m
+ [32m✓[39m src/pages/models/ModelRegistryWorkspace.test.tsx[2m > [22mModelRegistryWorkspace[2m > [22mrenders table column headers in English[32m 113[2mms[22m[39m
+[90mstderr[2m | src/pages/users/UsersPage.test.tsx[2m > [22m[2mUsersPage[2m > [22m[2mshould render user list wi
+th correct data
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+ [32m✓[39m src/pages/users/UsersPage.test.tsx[2m > [22mUsersPage[2m > [22mshould render the users page title[33m 696[2mms[22m[39m
+ [32m✓[39m src/pages/login/LoginPage.test.tsx[2m > [22mLoginPage[2m > [22mshould show account and password input fields[32m 80[2mms[22m[39m
+ [31m×[39m src/pages/login/LoginPage.test.tsx[2m > [22mLoginPage[2m > [22mshould show remember me checkbox[32m 65[2mms[22m[39m
+[31m   → Unable to find an element with the text: 记住我. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[31m
+  [36m<div>[31m
+    [36m<div[31m
+      [33mclass[31m=[32m"css-dev-only-do-not-override-mncuj7 ant-app"[31m
+    [36m>[31m
+      [36m<div[31m
+        [33mstyle[31m=[32m"min-height: 100vh; display: flex; align-items: center; justify-content: center; background-image: url(\"/images/login/login-bg-6.jpg\"), linear-gradient(135deg, rgb(26, 31, 54) 0%, rgb(45, 53, 97) 100%); background-size: cover; background-position: center center; background-repeat: no-repeat; padding: 40px 20px; position: relative;"[31m
+      [36m>[31m
+        [36m<div[31m
+          [33mstyle[31m=[32m"position: absolute; inset: 0px; background: rgba(15, 23, 42, 0.3);"[31m
+        [36m/>[31m
+        [36m<div[31m
+          [33mstyle[31m=[32m"position: relative; z-index: 1; width: 100%; max-width: 1060px; border-radius: 24px; overflow: hidden; background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.2); box-shadow: 0 8px 48px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.15); display: flex; min-height: 78vh;"[31m
+        [36m>[31m
+          [36m<div[31m
+            [33mstyle[31m=[32m"flex: 1 1 0%; display: flex; flex-direction: column; justify-content: flex-start; padding: 60px 48px 48px; position: relative; background: rgba(255, 255, 255, 0.06); backdrop-filter: blur(32px) saturate(1.3); border-right: 1px solid rgba(255, 255, 255, 0.1);"[31m
+          [36m>[31m
+            [36m<div[31m
+              [33mstyle[31m=[32m"padding-top: 4px;"[31m
+            [36m>[31m
+              [36m<div[31m
+                [33mstyle[31m=[32m"margin-bottom: 36px;"[31m
+              [36m>[31m
+                [36m<span[31m
+                  [33mstyle[31m=[32m"font-size: 32px; font-weight: 800; color: rgb(255, 255, 255); letter-spacing: 2px;"[31m
+                [36m>[31m
+                  [0mCSERGY[0m
+                [36m</span>[31m
+                [36m<span[31m
+                  [33mstyle[31m=[32m"font-size: 32px; font-weight: 300; color: rgba(255, 255, 255, 0.3); margin: 0px 8px;"[31m
+                [36m>[31m
+                  [0m|[0m
+                [36m</span>[31m
+                [36m<span[31m
+                  [33mstyle[31m=[32m"font-size: 32px; font-weight: 800; color: rgb(255, 255, 255);"[31m
+                [36m>[31m
+                  [0m辰烁科技[0m
+                [36m</span>[31m
+              [36m</div>[31m
+              [36m<div[31m
+                [33mstyle[31m=[32m"font-size: 42px; font-weight: 700; color: rgb(255, 255, 255); line-height: 1.25; margin-bottom: 40px; letter-spacing: -0.5px; white-space: pre-line; text-shadow: 0 2px 12px rgba(0,0,0,0.15);"[31m
+              [36m>[31m
+                [0m光伏逆变器
+智能运维平台[0m
+              [36m</div>[31m
+              [36m<div[31m
+                [33mstyle[31m=[32m"display: flex; flex-direction: column; gap: 22px; max-width: 400px; margin-bottom: 40px;"[31m
+              [36m>[31m
+                [36m<div[31m
+                  [33mstyle[31m=[32m"display: flex; gap: 16px; align-items: flex-start;"[31m
+                [36m>[31m
+                  [36m<div[31m
+                    [33mstyle[31m=[32m"width: 42px; height: 42px; border-radius: 10px; flex-shrink: 0; background: rgba(255, 255, 255, 0.12); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; color: rgb(147, 197, 253); font-size: 20px; border: 1px solid rgba(255, 255, 255, 0.1);"[31m
+                  [36m>[31m
+                    [36m<span[31m
+                      [33maria-label[31m=[32m"cloud"[31m
+                      [33mclass[31m=[32m"anticon anticon-cloud"[31m
+                      [33mrole[31m=[32m"img"[31m
+                    [36m>[31m
+                      [36m<svg[31m
+                        [33maria-hidden[31m=[32m"true"[31m
+                        [33mdata-icon[31m=[32m"cloud"[31m
+                        [33mfill[31m=[32m"currentColor"[31m
+                        [33mfocusable[31m=[32m"false"[31m
+                        [33mheight[31m=[32m"1em"[31m
+                        [33mviewBox[31m=[32m"64 64 896 896"[31m
+                        [33mwidth[31m=[32m"1em"[31m
+                      [36m>[31m
+                        [36m<path[31m
+                          [33md[31m=[32m"M811.4 418.7C765.6 297.9 648.9 212 512.2 212S258.8 297.8 213 418.6C127.3 441.1 64 519.1 64 612c0 110.5 89.5 200 199.9 200h496.2C870.5 812 960 722.5 960 612c0-92.7-63.1-170.7-148.6-193.3zm36.3 281a123.07 123.07 0 01-87.6 36.3H263.9c-33.1 0-64.2-12.9-87.6-36.3A123.3 123.3 0 01140 612c0-28 9.1-54.3 26.2-76.3a125.7 125.7 0 0166.1-43.7l37.9-9.9 13.9-36.6c8.6-22.8 20.6-44.1 35.7-63.4a245.6 245.6 0 0152.4-49.9c41.1-28.9 89.5-44.2 140-44.2s98.9 15.3 140 44.2c19.9 14 37.5 30.8 52.4 49.9 15.1 19.3 27.1 40.7 35.7 63.4l13.8 36.5 37.8 10c54.3 14.5 92.1 63.8 92.1 120 0 33.1-12.9 64.3-36.3 87.7z"[31m
+                        [36m/>[31m
+                      [36m</svg>[31m
+                    [36m</span>[31m
+                  [36m</div>[31m
+                  [36m<div>[31m
+                    [36m<div[31m
+                      [33mstyle[31m=[32m"font-size: 16px; font-weight: 600; color: rgb(255, 255, 255); margin-bottom: 4px;"[31m
+                    [36m>[31m
+                      [0m云端集中监控[0m
+                    [36m</div>[31m
+                    [36m<div[31m
+                      [33mstyle[31m=[32m"font-size: 13px; color: rgba(255, 255, 255, 0.5); line-height: 1.6;"[31m
+                    [36m>[31m
+                      [0m实时采集设备数据，多电站统一管理[0m
+                    [36m</div>[31m
+                  [36m</div>[31m
+                [36m</div>[31m
+                [36m<div[31m
+                  [33mstyle[31m=[32m"display: flex; gap: 16px; align-items: flex-start;"[31m
+                [36m>[31m
+                  [36m<div[31m
+                    [33mstyle[31m=[32m"width: 42px; height: 42px; border-radius: 10px; flex-shrink: 0; background: rgba(255, 255, 255, 0.12); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; color: rgb(134, 239, 172); font-size: 20px; border: 1px solid rgba(255, 255, 255, 0.1);"[31m
+                  [36m>[31m
+                    [36m<span[31m
+                      [33maria-label[31m=[32m"safety"[31m
+                      [33mclass[31m=[32m"anticon anticon-safety"[31m
+                      [33mrole[31m=[32m"img"[31m
+                    [36m>[31m
+                      [36m<svg[31m
+                        [33maria-hidden[31m=[32m"true"[31m
+                        [33mdata-icon[31m=[32m"safety"[31m
+                        [33mfill[31m=[32m"currentColor"[31m
+                        [33mfocusable[31m=[32m"false"[31m
+                        [33mheight[31m=[32m"1em"[31m
+                        [33mviewBox[31m=[32m"0 0 1024 1024"[31m
+                      ...[39m
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+ [32m✓[39m src/pages/models/ModelRegistryWorkspace.test.tsx[2m > [22mModelRegistryWorkspace[2m > [22mrenders model data rows in English mode[32m 168[2mms[22m[39m
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/users/UsersPage.test.tsx[2m > [22m[2mUsersPage[2m > [22m[2mshould show role tags
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+ [32m✓[39m src/pages/users/UsersPage.test.tsx[2m > [22mUsersPage[2m > [22mshould render user list with correct data[32m 289[2mms[22m[39m
+ [32m✓[39m src/pages/login/LoginPage.test.tsx[2m > [22mLoginPage[2m > [22mshould show forgot password link[32m 68[2mms[22m[39m
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/users/UsersPage.test.tsx[2m > [22m[2mUsersPage[2m > [22m[2mshould show role tags
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+ [32m✓[39m src/pages/models/ModelRegistryWorkspace.test.tsx[2m > [22mModelRegistryWorkspace[2m > [22mrenders page title and tab labels in Chinese[32m 130[2mms[22m[39m
+ [32m✓[39m src/pages/models/ModelRegistryWorkspace.test.tsx[2m > [22mModelRegistryWorkspace[2m > [22mrenders table column headers in Chinese[32m 79[2mms[22m[39m
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/users/UsersPage.test.tsx[2m > [22m[2mUsersPage[2m > [22m[2mshould render role filter 
+tabs
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+ [32m✓[39m src/pages/users/UsersPage.test.tsx[2m > [22mUsersPage[2m > [22mshould show role tags[32m 203[2mms[22m[39m
+ [32m✓[39m src/pages/models/ModelRegistryWorkspace.test.tsx[2m > [22mModelRegistryWorkspace[2m > [22mshows English error alert when model list API fails[32m 110[2mms[22m[39m
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+ [32m✓[39m src/pages/models/ModelRegistryWorkspace.test.tsx[2m > [22mModelRegistryWorkspace[2m > [22mshows Chinese error alert when model list API fails[32m 111[2mms[22m[39m
+ [32m✓[39m src/pages/models/ModelRegistryWorkspace.test.tsx[2m > [22mModelRegistryWorkspace[2m > [22mrenders empty table when model list is empty (English)[32m 91[2mms[22m[39m
+ [32m✓[39m src/pages/models/ModelRegistryWorkspace.test.tsx[2m > [22mModelRegistryWorkspace[2m > [22mrenders empty table when model list is empty (Chinese)[32m 95[2mms[22m[39m
+[90mstderr[2m | src/pages/users/UsersPage.test.tsx[2m > [22m[2mUsersPage[2m > [22m[2mshould show add user butto
+n for admin
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+ [32m✓[39m src/pages/users/UsersPage.test.tsx[2m > [22mUsersPage[2m > [22mshould render role filter tabs[32m 169[2mms[22m[39m
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshould render the alert
+s page
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+ [32m✓[39m src/pages/login/LoginPage.test.tsx[2m > [22mLoginPage[2m > [22mshould submit login form with valid credentials[33m 544[2mms[22m[39m
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/users/UsersPage.test.tsx[2m > [22m[2mUsersPage[2m > [22m[2mshould render search input
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+ [32m✓[39m src/pages/users/UsersPage.test.tsx[2m > [22mUsersPage[2m > [22mshould show add user button for admin[32m 286[2mms[22m[39m
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshould show alarm stati
+stics cards
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+[90mstderr[2m | src/pages/users/UsersPage.test.tsx[2m > [22m[2mUsersPage[2m > [22m[2mshould render pagination
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+ [32m✓[39m src/pages/alerts/AlertsPage.test.tsx[2m > [22mAlertsPage[2m > [22mshould render the alerts page[33m 776[2mms[22m[39m
+[90mstderr[2m | src/pages/users/UsersPage.test.tsx[2m > [22m[2mUsersPage[2m > [22m[2mshould render pagination
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+ [32m✓[39m src/pages/users/UsersPage.test.tsx[2m > [22mUsersPage[2m > [22mshould render search input[32m 161[2mms[22m[39m
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/users/UsersPage.test.tsx[2m > [22m[2mUsersPage[2m > [22m[2mshould show table columns
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+ [32m✓[39m src/pages/users/UsersPage.test.tsx[2m > [22mUsersPage[2m > [22mshould render pagination[32m 300[2mms[22m[39m
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshould render alarm lis
+t with data
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+[90mstderr[2m | src/pages/users/UsersPage.test.tsx[2m > [22m[2mUsersPage[2m > [22m[2mshould show table columns
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+ [32m✓[39m src/pages/users/UsersPage.test.tsx[2m > [22mUsersPage[2m > [22mshould show table columns[32m 242[2mms[22m[39m
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshould render alarm lis
+t with data
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+ [32m✓[39m src/pages/alerts/AlertsPage.test.tsx[2m > [22mAlertsPage[2m > [22mshould show alarm statistics cards[32m 287[2mms[22m[39m
+ [32m✓[39m src/pages/login/LoginPage.test.tsx[2m > [22mLoginPage[2m > [22mshould show error on failed login[33m 654[2mms[22m[39m
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/users/UsersPage.test.tsx[2m > [22m[2mUsersPage[2m > [22m[2mshould handle empty user l
+ist
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+ [32m✓[39m src/pages/users/UsersPage.test.tsx[2m > [22mUsersPage[2m > [22mshould handle empty user list[32m 120[2mms[22m[39m
+[90mstderr[2m | src/pages/admin/AdminPage.roles.test.tsx[2m > [22m[2mAdminPage role permission contract[2m > [22
+m[2mrenders the permission config tab with org-based role selectors
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+ [32m✓[39m src/test/integration.test.tsx[2m > [22mIntegration Tests[2m > [22mLogin Flow[2m > [22mshould complete full login flow: enter credentials -> submit -> auth state updated[33m 1275[2mms[22m[39m
+ [32m✓[39m src/pages/admin/AdminPage.roles.test.tsx[2m > [22mAdminPage role permission contract[2m > [22mrenders the permission config tab with org-based role selectors[33m 1275[2mms[22m[39m
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshould show alarm statu
+s tags
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+ [32m✓[39m src/pages/login/LoginPage.test.tsx[2m > [22mLoginPage[2m > [22mshould navigate to register tab when clicking register[32m 189[2mms[22m[39m
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshould show alarm statu
+s tags
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+ [32m✓[39m src/pages/alerts/AlertsPage.test.tsx[2m > [22mAlertsPage[2m > [22mshould render alarm list with data[33m 342[2mms[22m[39m
+ [32m✓[39m src/pages/login/LoginPage.test.tsx[2m > [22mLoginPage[2m > [22mshould navigate to reset tab when clicking reset tab[32m 170[2mms[22m[39m
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshould render filter co
+ntrols
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+ [32m✓[39m src/pages/alerts/AlertsPage.test.tsx[2m > [22mAlertsPage[2m > [22mshould show alarm status tags[32m 245[2mms[22m[39m
+ [32m✓[39m src/pages/login/LoginPage.test.tsx[2m > [22mLoginPage[2m > [22mshould navigate to reset when clicking forgot password link[32m 169[2mms[22m[39m
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshould show tabs for al
+l/alarm/notification
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+ [32m✓[39m src/pages/login/LoginPage.test.tsx[2m > [22mLoginPage[2m > [22mshould show brand information[32m 60[2mms[22m[39m
+ [32m✓[39m src/pages/login/LoginPage.test.tsx[2m > [22mLoginPage[2m > [22mshould show feature descriptions[32m 61[2mms[22m[39m
+ [32m✓[39m src/pages/login/LoginPage.test.tsx[2m > [22mLoginPage[2m > [22mshould show link to register from login tab[32m 58[2mms[22m[39m
+ [32m✓[39m src/pages/alerts/AlertsPage.test.tsx[2m > [22mAlertsPage[2m > [22mshould render filter controls[32m 168[2mms[22m[39m
+ [32m✓[39m src/test/integration.test.tsx[2m > [22mIntegration Tests[2m > [22mLogin Flow[2m > [22mshould show error message on failed login[33m 492[2mms[22m[39m
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshould render refresh b
+utton
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+ [32m✓[39m src/pages/alerts/AlertsPage.test.tsx[2m > [22mAlertsPage[2m > [22mshould show tabs for all/alarm/notification[32m 141[2mms[22m[39m
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshould show clear all b
+utton
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+ [32m✓[39m src/pages/alerts/AlertsPage.test.tsx[2m > [22mAlertsPage[2m > [22mshould render refresh button[32m 139[2mms[22m[39m
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshould handle empty ale
+rt list
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+ [32m✓[39m src/pages/alerts/AlertsPage.test.tsx[2m > [22mAlertsPage[2m > [22mshould show clear all button[32m 111[2mms[22m[39m
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshould show notificatio
+n statistics
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+ [32m✓[39m src/pages/alerts/AlertsPage.test.tsx[2m > [22mAlertsPage[2m > [22mshould handle empty alert list[32m 105[2mms[22m[39m
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshould display fault me
+ssages in the table
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshould display fault me
+ssages in the table
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+ [32m✓[39m src/pages/alerts/AlertsPage.test.tsx[2m > [22mAlertsPage[2m > [22mshould show notification statistics[32m 110[2mms[22m[39m
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mloads selected event de
+tail and renders telemetry or missing snapshots
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mloads selected event de
+tail and renders telemetry or missing snapshots
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+ [32m✓[39m src/pages/alerts/AlertsPage.test.tsx[2m > [22mAlertsPage[2m > [22mshould display fault messages in the table[32m 146[2mms[22m[39m
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mloads selected event de
+tail and renders telemetry or missing snapshots
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mloads selected event de
+tail and renders telemetry or missing snapshots
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshows alarm event detai
+l access errors
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshows alarm event detai
+l access errors
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+ [31m×[39m src/pages/alerts/AlertsPage.test.tsx[2m > [22mAlertsPage[2m > [22mloads selected event detail and renders telemetry or missing snapshots[33m 1242[2mms[22m[39m
+[31m   → Unable to find an element with the text: ALM8. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[31m
+  [36m<div>[31m
+    [36m<div[31m
+      [33mclass[31m=[32m"css-dev-only-do-not-override-mncuj7 ant-app"[31m
+    [36m>[31m
+      [36m<div>[31m
+        [36m<h4[31m
+          [33mclass[31m=[32m"ant-typography css-dev-only-do-not-override-mncuj7"[31m
+          [33mstyle[31m=[32m"margin-bottom: 16px;"[31m
+        [36m>[31m
+          [36m<span[31m
+            [33maria-label[31m=[32m"alert"[31m
+            [33mclass[31m=[32m"anticon anticon-alert"[31m
+            [33mrole[31m=[32m"img"[31m
+            [33mstyle[31m=[32m"margin-right: 8px;"[31m
+          [36m>[31m
+            [36m<svg[31m
+              [33maria-hidden[31m=[32m"true"[31m
+              [33mdata-icon[31m=[32m"alert"[31m
+              [33mfill[31m=[32m"currentColor"[31m
+              [33mfocusable[31m=[32m"false"[31m
+              [33mheight[31m=[32m"1em"[31m
+              [33mviewBox[31m=[32m"64 64 896 896"[31m
+              [33mwidth[31m=[32m"1em"[31m
+            [36m>[31m
+              [36m<path[31m
+                [33md[31m=[32m"M193 796c0 17.7 14.3 32 32 32h574c17.7 0 32-14.3 32-32V563c0-176.2-142.8-319-319-319S193 386.8 193 563v233zm72-233c0-136.4 110.6-247 247-247s247 110.6 247 247v193H404V585c0-5.5-4.5-10-10-10h-44c-5.5 0-10 4.5-10 10v171h-75V563zm-48.1-252.5l39.6-39.6c3.1-3.1 3.1-8.2 0-11.3l-67.9-67.9a8.03 8.03 0 00-11.3 0l-39.6 39.6a8.03 8.03 0 000 11.3l67.9 67.9c3.1 3.1 8.1 3.1 11.3 0zm669.6-79.2l-39.6-39.6a8.03 8.03 0 00-11.3 0l-67.9 67.9a8.03 8.03 0 000 11.3l39.6 39.6c3.1 3.1 8.2 3.1 11.3 0l67.9-67.9c3.1-3.2 3.1-8.2 0-11.3zM832 892H192c-17.7 0-32 14.3-32 32v24c0 4.4 3.6 8 8 8h688c4.4 0 8-3.6 8-8v-24c0-17.7-14.3-32-32-32zM484 180h56c4.4 0 8-3.6 8-8V76c0-4.4-3.6-8-8-8h-56c-4.4 0-8 3.6-8 8v96c0 4.4 3.6 8 8 8z"[31m
+              [36m/>[31m
+            [36m</svg>[31m
+          [36m</span>[31m
+          [0m通知中心[0m
+        [36m</h4>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"ant-row css-dev-only-do-not-override-mncuj7"[31m
+          [33mstyle[31m=[32m"margin-left: -8px; margin-right: -8px; margin-bottom: 16px;"[31m
+        [36m>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"ant-col ant-col-4 css-dev-only-do-not-override-mncuj7"[31m
+            [33mstyle[31m=[32m"padding-left: 8px; padding-right: 8px;"[31m
+          [36m>[31m
+            [36m<div[31m
+              [33mclass[31m=[32m"ant-pro-card css-dev-only-do-not-override-mncuj7 ant-pro-card-hoverable"[31m
+              [33mstyle[31m=[32m"border-radius: 12px;"[31m
+            [36m>[31m
+              [36m<div[31m
+                [33mclass[31m=[32m"ant-pro-card-body css-dev-only-do-not-override-mncuj7"[31m
+                [33mstyle[31m=[32m"padding: 12px 16px;"[31m
+              [36m>[31m
+                [36m<div[31m
+                  [33mclass[31m=[32m"ant-statistic css-dev-only-do-not-override-mncuj7"[31m
+                [36m>[31m
+                  [36m<div[31m
+                    [33mclass[31m=[32m"ant-statistic-title"[31m
+                  [36m>[31m
+                    [0m通知总数[0m
+                  [36m</div>[31m
+                  [36m<div[31m
+                    [33mclass[31m=[32m"ant-statistic-content"[31m
+                  [36m>[31m
+                    [36m<span[31m
+                      [33mclass[31m=[32m"ant-statistic-content-value"[31m
+                    [36m>[31m
+                      [36m<span[31m
+                        [33mclass[31m=[32m"ant-statistic-content-value-int"[31m
+                      [36m>[31m
+                        [0m18[0m
+                      [36m</span>[31m
+                    [36m</span>[31m
+                  [36m</div>[31m
+                [36m</div>[31m
+              [36m</div>[31m
+            [36m</div>[31m
+          [36m</div>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"ant-col ant-col-4 css-dev-only-do-not-override-mncuj7"[31m
+            [33mstyle[31m=[32m"padding-left: 8px; padding-right: 8px;"[31m
+          [36m>[31m
+            [36m<div[31m
+              [33mclass[31m=[32m"ant-pro-card css-dev-only-do-not-override-mncuj7 ant-pro-card-hoverable"[31m
+              [33mstyle[31m=[32m"border-radius: 12px;"[31m
+            [36m>[31m
+              [36m<div[31m
+                [33mclass[31m=[32m"ant-pro-card-body css-dev-only-do-not-override-mncuj7"[31m
+                [33mstyle[31m=[32m"padding: 12px 16px;"[31m
+              [36m>[31m
+                [36m<div[31m
+                  [33mclass[31m=[32m"ant-statistic css-dev-only-do-not-override-mncuj7"[31m
+                [36m>[31m
+                  [36m<div[31m
+                    [33mclass[31m=[32m"ant-statistic-title"[31m
+                  [36m>[31m
+                    [0m未处理[0m
+                  [36m</div>[31m
+                  [36m<div[31m
+                    [33mclass[31m=[32m"ant-statistic-content"[31m
+                    [33mstyle[31m=[32m"color: rgb(255, 77, 79);"[31m
+                  [36m>[31m
+                    [36m<span[31m
+                      [33mclass[31m=[32m"ant-statistic-content-value"[31m
+                    [36m>[31m
+                      [36m<span[31m
+                        [33mclass[31m=[32m"ant-statistic-content-value-int"[31m
+                      [36m>[31m
+                        [0m5[0m
+                      [36m</span>[31m
+                    [36m</span>[31m
+                  [36m</div>[31m
+                [36m</div>[31m
+              [36m</div>[31m
+            [36m</div>[31m
+          [36m</div>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"ant-col ant-col-4 css-dev-only-do-not-override-mncuj7"[31m
+            [33mstyle[31m=[32m"padding-left: 8px; padding-right: 8px;"[31m
+          [36m>[31m
+            [36m<div[31m
+              [33mclass[31m=[32m"ant-pro-card css-dev-only-do-not-override-mncuj7 ant-pro-card-hoverable"[31m
+              [33mstyle[31m=[32m"border-radius: 12px;"[31m
+            [36m>[31m
+              [36m<div[31m
+                [33mclass[31m=[32m"ant-pro-card-body css-dev-only-do-not-override-mncuj7"[31m
+                [33mstyle[31m=[32m"padding: 12px 16px;"[31m
+              [36m>[31m
+                [36m<div[31m
+                  [33mclass[31m=[32m"ant-statistic css-dev-only-do-not-override-mncuj7"[31m
+                [36m>[31m
+                  [36m<div[31m
+                    [33mclass[31m=[32m"ant-statistic-title"[31m
+                  [36m>[31m
+                    [0m已处理[0m
+                  [36m</div>[31m
+                  [36m<div[31m
+                    [33mclass[31m=[32m"ant-statistic-content"[31m
+                    [33mstyle[31m=[32m"color: rgb(82, 196, 26);"[31m
+                  [36m>[31m
+                    [36m<span[31m
+                      [33mclass[31m=[32m"ant-statistic-content...
+
+Ignored nodes: comments, script, style
+[36m<body>[31m
+  [36m<div>[31m
+    [36m<div[31m
+      [33mclass[31m=[32m"css-dev-only-do-not-override-mncuj7 ant-app"[31m
+    [36m>[31m
+      [36m<div>[31m
+        [36m<h4[31m
+          [33mclass[31m=[32m"ant-typography css-dev-only-do-not-override-mncuj7"[31m
+          [33mstyle[31m=[32m"margin-bottom: 16px;"[31m
+        [36m>[31m
+          [36m<span[31m
+            [33maria-label[31m=[32m"alert"[31m
+            [33mclass[31m=[32m"anticon anticon-alert"[31m
+            [33mrole[31m=[32m"img"[31m
+            [33mstyle[31m=[32m"margin-right: 8px;"[31m
+          [36m>[31m
+            [36m<svg[31m
+              [33maria-hidden[31m=[32m"true"[31m
+              [33mdata-icon[31m=[32m"alert"[31m
+              [33mfill[31m=[32m"currentColor"[31m
+              [33mfocusable[31m=[32m"false"[31m
+              [33mheight[31m=[32m"1em"[31m
+              [33mviewBox[31m=[32m"64 64 896 896"[31m
+              [33mwidth[31m=[32m"1em"[31m
+            [36m>[31m
+              [36m<path[31m
+                [33md[31m=[32m"M193 796c0 17.7 14.3 32 32 32h574c17.7 0 32-14.3 32-32V563c0-176.2-142.8-319-319-319S193 386.8 193 563v233zm72-233c0-136.4 110.6-247 247-247s247 110.6 247 247v193H404V585c0-5.5-4.5-10-10-10h-44c-5.5 0-10 4.5-10 10v171h-75V563zm-48.1-252.5l39.6-39.6c3.1-3.1 3.1-8.2 0-11.3l-67.9-67.9a8.03 8.03 0 00-11.3 0l-39.6 39.6a8.03 8.03 0 000 11.3l67.9 67.9c3.1 3.1 8.1 3.1 11.3 0zm669.6-79.2l-39.6-39.6a8.03 8.03 0 00-11.3 0l-67.9 67.9a8.03 8.03 0 000 11.3l39.6 39.6c3.1 3.1 8.2 3.1 11.3 0l67.9-67.9c3.1-3.2 3.1-8.2 0-11.3zM832 892H192c-17.7 0-32 14.3-32 32v24c0 4.4 3.6 8 8 8h688c4.4 0 8-3.6 8-8v-24c0-17.7-14.3-32-32-32zM484 180h56c4.4 0 8-3.6 8-8V76c0-4.4-3.6-8-8-8h-56c-4.4 0-8 3.6-8 8v96c0 4.4 3.6 8 8 8z"[31m
+              [36m/>[31m
+            [36m</svg>[31m
+          [36m</span>[31m
+          [0m通知中心[0m
+        [36m</h4>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"ant-row css-dev-only-do-not-override-mncuj7"[31m
+          [33mstyle[31m=[32m"margin-left: -8px; margin-right: -8px; margin-bottom: 16px;"[31m
+        [36m>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"ant-col ant-col-4 css-dev-only-do-not-override-mncuj7"[31m
+            [33mstyle[31m=[32m"padding-left: 8px; padding-right: 8px;"[31m
+          [36m>[31m
+            [36m<div[31m
+              [33mclass[31m=[32m"ant-pro-card css-dev-only-do-not-override-mncuj7 ant-pro-card-hoverable"[31m
+              [33mstyle[31m=[32m"border-radius: 12px;"[31m
+            [36m>[31m
+              [36m<div[31m
+                [33mclass[31m=[32m"ant-pro-card-body css-dev-only-do-not-override-mncuj7"[31m
+                [33mstyle[31m=[32m"padding: 12px 16px;"[31m
+              [36m>[31m
+                [36m<div[31m
+                  [33mclass[31m=[32m"ant-statistic css-dev-only-do-not-override-mncuj7"[31m
+                [36m>[31m
+                  [36m<div[31m
+                    [33mclass[31m=[32m"ant-statistic-title"[31m
+                  [36m>[31m
+                    [0m通知总数[0m
+                  [36m</div>[31m
+                  [36m<div[31m
+                    [33mclass[31m=[32m"ant-statistic-content"[31m
+                  [36m>[31m
+                    [36m<span[31m
+                      [33mclass[31m=[32m"ant-statistic-content-value"[31m
+                    [36m>[31m
+                      [36m<span[31m
+                        [33mclass[31m=[32m"ant-statistic-content-value-int"[31m
+                      [36m>[31m
+                        [0m18[0m
+                      [36m</span>[31m
+                    [36m</span>[31m
+                  [36m</div>[31m
+                [36m</div>[31m
+              [36m</div>[31m
+            [36m</div>[31m
+          [36m</div>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"ant-col ant-col-4 css-dev-only-do-not-override-mncuj7"[31m
+            [33mstyle[31m=[32m"padding-left: 8px; padding-right: 8px;"[31m
+          [36m>[31m
+            [36m<div[31m
+              [33mclass[31m=[32m"ant-pro-card css-dev-only-do-not-override-mncuj7 ant-pro-card-hoverable"[31m
+              [33mstyle[31m=[32m"border-radius: 12px;"[31m
+            [36m>[31m
+              [36m<div[31m
+                [33mclass[31m=[32m"ant-pro-card-body css-dev-only-do-not-override-mncuj7"[31m
+                [33mstyle[31m=[32m"padding: 12px 16px;"[31m
+              [36m>[31m
+                [36m<div[31m
+                  [33mclass[31m=[32m"ant-statistic css-dev-only-do-not-override-mncuj7"[31m
+                [36m>[31m
+                  [36m<div[31m
+                    [33mclass[31m=[32m"ant-statistic-title"[31m
+                  [36m>[31m
+                    [0m未处理[0m
+                  [36m</div>[31m
+                  [36m<div[31m
+                    [33mclass[31m=[32m"ant-statistic-content"[31m
+                    [33mstyle[31m=[32m"color: rgb(255, 77, 79);"[31m
+                  [36m>[31m
+                    [36m<span[31m
+                      [33mclass[31m=[32m"ant-statistic-content-value"[31m
+                    [36m>[31m
+                      [36m<span[31m
+                        [33mclass[31m=[32m"ant-statistic-content-value-int"[31m
+                      [36m>[31m
+                        [0m5[0m
+                      [36m</span>[31m
+                    [36m</span>[31m
+                  [36m</div>[31m
+                [36m</div>[31m
+              [36m</div>[31m
+            [36m</div>[31m
+          [36m</div>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"ant-col ant-col-4 css-dev-only-do-not-override-mncuj7"[31m
+            [33mstyle[31m=[32m"padding-left: 8px; padding-right: 8px;"[31m
+          [36m>[31m
+            [36m<div[31m
+              [33mclass[31m=[32m"ant-pro-card css-dev-only-do-not-override-mncuj7 ant-pro-card-hoverable"[31m
+              [33mstyle[31m=[32m"border-radius: 12px;"[31m
+            [36m>[31m
+              [36m<div[31m
+                [33mclass[31m=[32m"ant-pro-card-body css-dev-only-do-not-override-mncuj7"[31m
+                [33mstyle[31m=[32m"padding: 12px 16px;"[31m
+              [36m>[31m
+                [36m<div[31m
+                  [33mclass[31m=[32m"ant-statistic css-dev-only-do-not-override-mncuj7"[31m
+                [36m>[31m
+                  [36m<div[31m
+                    [33mclass[31m=[32m"ant-statistic-title"[31m
+                  [36m>[31m
+                    [0m已处理[0m
+                  [36m</div>[31m
+                  [36m<div[31m
+                    [33mclass[31m=[32m"ant-statistic-content"[31m
+                    [33mstyle[31m=[32m"color: rgb(82, 196, 26);"[31m
+                  [36m>[31m
+                    [36m<span[31m
+                      [33mclass[31m=[32m"ant-statistic-content...[39m
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshows alarm event detai
+l access errors
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshows alarm event detai
+l access errors
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+ [32m✓[39m src/test/integration.test.tsx[2m > [22mIntegration Tests[2m > [22mUnauthenticated Route Protection[2m > [22mshould show login page when accessing protected route without auth[33m 2096[2mms[22m[39m
+ [32m✓[39m src/test/integration.test.tsx[2m > [22mIntegration Tests[2m > [22mAuthenticated Navigation[2m > [22mshould show dashboard when authenticated user navigates to /[33m 629[2mms[22m[39m
+ [31m×[39m src/pages/alerts/AlertsPage.test.tsx[2m > [22mAlertsPage[2m > [22mshows alarm event detail access errors[33m 1213[2mms[22m[39m
+[31m   → Unable to find an element with the text: ALM8. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[31m
+  [36m<div>[31m
+    [36m<div[31m
+      [33mclass[31m=[32m"css-dev-only-do-not-override-mncuj7 ant-app"[31m
+    [36m>[31m
+      [36m<div>[31m
+        [36m<h4[31m
+          [33mclass[31m=[32m"ant-typography css-dev-only-do-not-override-mncuj7"[31m
+          [33mstyle[31m=[32m"margin-bottom: 16px;"[31m
+        [36m>[31m
+          [36m<span[31m
+            [33maria-label[31m=[32m"alert"[31m
+            [33mclass[31m=[32m"anticon anticon-alert"[31m
+            [33mrole[31m=[32m"img"[31m
+            [33mstyle[31m=[32m"margin-right: 8px;"[31m
+          [36m>[31m
+            [36m<svg[31m
+              [33maria-hidden[31m=[32m"true"[31m
+              [33mdata-icon[31m=[32m"alert"[31m
+              [33mfill[31m=[32m"currentColor"[31m
+              [33mfocusable[31m=[32m"false"[31m
+              [33mheight[31m=[32m"1em"[31m
+              [33mviewBox[31m=[32m"64 64 896 896"[31m
+              [33mwidth[31m=[32m"1em"[31m
+            [36m>[31m
+              [36m<path[31m
+                [33md[31m=[32m"M193 796c0 17.7 14.3 32 32 32h574c17.7 0 32-14.3 32-32V563c0-176.2-142.8-319-319-319S193 386.8 193 563v233zm72-233c0-136.4 110.6-247 247-247s247 110.6 247 247v193H404V585c0-5.5-4.5-10-10-10h-44c-5.5 0-10 4.5-10 10v171h-75V563zm-48.1-252.5l39.6-39.6c3.1-3.1 3.1-8.2 0-11.3l-67.9-67.9a8.03 8.03 0 00-11.3 0l-39.6 39.6a8.03 8.03 0 000 11.3l67.9 67.9c3.1 3.1 8.1 3.1 11.3 0zm669.6-79.2l-39.6-39.6a8.03 8.03 0 00-11.3 0l-67.9 67.9a8.03 8.03 0 000 11.3l39.6 39.6c3.1 3.1 8.2 3.1 11.3 0l67.9-67.9c3.1-3.2 3.1-8.2 0-11.3zM832 892H192c-17.7 0-32 14.3-32 32v24c0 4.4 3.6 8 8 8h688c4.4 0 8-3.6 8-8v-24c0-17.7-14.3-32-32-32zM484 180h56c4.4 0 8-3.6 8-8V76c0-4.4-3.6-8-8-8h-56c-4.4 0-8 3.6-8 8v96c0 4.4 3.6 8 8 8z"[31m
+              [36m/>[31m
+            [36m</svg>[31m
+          [36m</span>[31m
+          [0m通知中心[0m
+        [36m</h4>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"ant-row css-dev-only-do-not-override-mncuj7"[31m
+          [33mstyle[31m=[32m"margin-left: -8px; margin-right: -8px; margin-bottom: 16px;"[31m
+        [36m>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"ant-col ant-col-4 css-dev-only-do-not-override-mncuj7"[31m
+            [33mstyle[31m=[32m"padding-left: 8px; padding-right: 8px;"[31m
+          [36m>[31m
+            [36m<div[31m
+              [33mclass[31m=[32m"ant-pro-card css-dev-only-do-not-override-mncuj7 ant-pro-card-hoverable"[31m
+              [33mstyle[31m=[32m"border-radius: 12px;"[31m
+            [36m>[31m
+              [36m<div[31m
+                [33mclass[31m=[32m"ant-pro-card-body css-dev-only-do-not-override-mncuj7"[31m
+                [33mstyle[31m=[32m"padding: 12px 16px;"[31m
+              [36m>[31m
+                [36m<div[31m
+                  [33mclass[31m=[32m"ant-statistic css-dev-only-do-not-override-mncuj7"[31m
+                [36m>[31m
+                  [36m<div[31m
+                    [33mclass[31m=[32m"ant-statistic-title"[31m
+                  [36m>[31m
+                    [0m通知总数[0m
+                  [36m</div>[31m
+                  [36m<div[31m
+                    [33mclass[31m=[32m"ant-statistic-content"[31m
+                  [36m>[31m
+                    [36m<span[31m
+                      [33mclass[31m=[32m"ant-statistic-content-value"[31m
+                    [36m>[31m
+                      [36m<span[31m
+                        [33mclass[31m=[32m"ant-statistic-content-value-int"[31m
+                      [36m>[31m
+                        [0m18[0m
+                      [36m</span>[31m
+                    [36m</span>[31m
+                  [36m</div>[31m
+                [36m</div>[31m
+              [36m</div>[31m
+            [36m</div>[31m
+          [36m</div>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"ant-col ant-col-4 css-dev-only-do-not-override-mncuj7"[31m
+            [33mstyle[31m=[32m"padding-left: 8px; padding-right: 8px;"[31m
+          [36m>[31m
+            [36m<div[31m
+              [33mclass[31m=[32m"ant-pro-card css-dev-only-do-not-override-mncuj7 ant-pro-card-hoverable"[31m
+              [33mstyle[31m=[32m"border-radius: 12px;"[31m
+            [36m>[31m
+              [36m<div[31m
+                [33mclass[31m=[32m"ant-pro-card-body css-dev-only-do-not-override-mncuj7"[31m
+                [33mstyle[31m=[32m"padding: 12px 16px;"[31m
+              [36m>[31m
+                [36m<div[31m
+                  [33mclass[31m=[32m"ant-statistic css-dev-only-do-not-override-mncuj7"[31m
+                [36m>[31m
+                  [36m<div[31m
+                    [33mclass[31m=[32m"ant-statistic-title"[31m
+                  [36m>[31m
+                    [0m未处理[0m
+                  [36m</div>[31m
+                  [36m<div[31m
+                    [33mclass[31m=[32m"ant-statistic-content"[31m
+                    [33mstyle[31m=[32m"color: rgb(255, 77, 79);"[31m
+                  [36m>[31m
+                    [36m<span[31m
+                      [33mclass[31m=[32m"ant-statistic-content-value"[31m
+                    [36m>[31m
+                      [36m<span[31m
+                        [33mclass[31m=[32m"ant-statistic-content-value-int"[31m
+                      [36m>[31m
+                        [0m5[0m
+                      [36m</span>[31m
+                    [36m</span>[31m
+                  [36m</div>[31m
+                [36m</div>[31m
+              [36m</div>[31m
+            [36m</div>[31m
+          [36m</div>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"ant-col ant-col-4 css-dev-only-do-not-override-mncuj7"[31m
+            [33mstyle[31m=[32m"padding-left: 8px; padding-right: 8px;"[31m
+          [36m>[31m
+            [36m<div[31m
+              [33mclass[31m=[32m"ant-pro-card css-dev-only-do-not-override-mncuj7 ant-pro-card-hoverable"[31m
+              [33mstyle[31m=[32m"border-radius: 12px;"[31m
+            [36m>[31m
+              [36m<div[31m
+                [33mclass[31m=[32m"ant-pro-card-body css-dev-only-do-not-override-mncuj7"[31m
+                [33mstyle[31m=[32m"padding: 12px 16px;"[31m
+              [36m>[31m
+                [36m<div[31m
+                  [33mclass[31m=[32m"ant-statistic css-dev-only-do-not-override-mncuj7"[31m
+                [36m>[31m
+                  [36m<div[31m
+                    [33mclass[31m=[32m"ant-statistic-title"[31m
+                  [36m>[31m
+                    [0m已处理[0m
+                  [36m</div>[31m
+                  [36m<div[31m
+                    [33mclass[31m=[32m"ant-statistic-content"[31m
+                    [33mstyle[31m=[32m"color: rgb(82, 196, 26);"[31m
+                  [36m>[31m
+                    [36m<span[31m
+                      [33mclass[31m=[32m"ant-statistic-content...
+
+Ignored nodes: comments, script, style
+[36m<body>[31m
+  [36m<div>[31m
+    [36m<div[31m
+      [33mclass[31m=[32m"css-dev-only-do-not-override-mncuj7 ant-app"[31m
+    [36m>[31m
+      [36m<div>[31m
+        [36m<h4[31m
+          [33mclass[31m=[32m"ant-typography css-dev-only-do-not-override-mncuj7"[31m
+          [33mstyle[31m=[32m"margin-bottom: 16px;"[31m
+        [36m>[31m
+          [36m<span[31m
+            [33maria-label[31m=[32m"alert"[31m
+            [33mclass[31m=[32m"anticon anticon-alert"[31m
+            [33mrole[31m=[32m"img"[31m
+            [33mstyle[31m=[32m"margin-right: 8px;"[31m
+          [36m>[31m
+            [36m<svg[31m
+              [33maria-hidden[31m=[32m"true"[31m
+              [33mdata-icon[31m=[32m"alert"[31m
+              [33mfill[31m=[32m"currentColor"[31m
+              [33mfocusable[31m=[32m"false"[31m
+              [33mheight[31m=[32m"1em"[31m
+              [33mviewBox[31m=[32m"64 64 896 896"[31m
+              [33mwidth[31m=[32m"1em"[31m
+            [36m>[31m
+              [36m<path[31m
+                [33md[31m=[32m"M193 796c0 17.7 14.3 32 32 32h574c17.7 0 32-14.3 32-32V563c0-176.2-142.8-319-319-319S193 386.8 193 563v233zm72-233c0-136.4 110.6-247 247-247s247 110.6 247 247v193H404V585c0-5.5-4.5-10-10-10h-44c-5.5 0-10 4.5-10 10v171h-75V563zm-48.1-252.5l39.6-39.6c3.1-3.1 3.1-8.2 0-11.3l-67.9-67.9a8.03 8.03 0 00-11.3 0l-39.6 39.6a8.03 8.03 0 000 11.3l67.9 67.9c3.1 3.1 8.1 3.1 11.3 0zm669.6-79.2l-39.6-39.6a8.03 8.03 0 00-11.3 0l-67.9 67.9a8.03 8.03 0 000 11.3l39.6 39.6c3.1 3.1 8.2 3.1 11.3 0l67.9-67.9c3.1-3.2 3.1-8.2 0-11.3zM832 892H192c-17.7 0-32 14.3-32 32v24c0 4.4 3.6 8 8 8h688c4.4 0 8-3.6 8-8v-24c0-17.7-14.3-32-32-32zM484 180h56c4.4 0 8-3.6 8-8V76c0-4.4-3.6-8-8-8h-56c-4.4 0-8 3.6-8 8v96c0 4.4 3.6 8 8 8z"[31m
+              [36m/>[31m
+            [36m</svg>[31m
+          [36m</span>[31m
+          [0m通知中心[0m
+        [36m</h4>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"ant-row css-dev-only-do-not-override-mncuj7"[31m
+          [33mstyle[31m=[32m"margin-left: -8px; margin-right: -8px; margin-bottom: 16px;"[31m
+        [36m>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"ant-col ant-col-4 css-dev-only-do-not-override-mncuj7"[31m
+            [33mstyle[31m=[32m"padding-left: 8px; padding-right: 8px;"[31m
+          [36m>[31m
+            [36m<div[31m
+              [33mclass[31m=[32m"ant-pro-card css-dev-only-do-not-override-mncuj7 ant-pro-card-hoverable"[31m
+              [33mstyle[31m=[32m"border-radius: 12px;"[31m
+            [36m>[31m
+              [36m<div[31m
+                [33mclass[31m=[32m"ant-pro-card-body css-dev-only-do-not-override-mncuj7"[31m
+                [33mstyle[31m=[32m"padding: 12px 16px;"[31m
+              [36m>[31m
+                [36m<div[31m
+                  [33mclass[31m=[32m"ant-statistic css-dev-only-do-not-override-mncuj7"[31m
+                [36m>[31m
+                  [36m<div[31m
+                    [33mclass[31m=[32m"ant-statistic-title"[31m
+                  [36m>[31m
+                    [0m通知总数[0m
+                  [36m</div>[31m
+                  [36m<div[31m
+                    [33mclass[31m=[32m"ant-statistic-content"[31m
+                  [36m>[31m
+                    [36m<span[31m
+                      [33mclass[31m=[32m"ant-statistic-content-value"[31m
+                    [36m>[31m
+                      [36m<span[31m
+                        [33mclass[31m=[32m"ant-statistic-content-value-int"[31m
+                      [36m>[31m
+                        [0m18[0m
+                      [36m</span>[31m
+                    [36m</span>[31m
+                  [36m</div>[31m
+                [36m</div>[31m
+              [36m</div>[31m
+            [36m</div>[31m
+          [36m</div>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"ant-col ant-col-4 css-dev-only-do-not-override-mncuj7"[31m
+            [33mstyle[31m=[32m"padding-left: 8px; padding-right: 8px;"[31m
+          [36m>[31m
+            [36m<div[31m
+              [33mclass[31m=[32m"ant-pro-card css-dev-only-do-not-override-mncuj7 ant-pro-card-hoverable"[31m
+              [33mstyle[31m=[32m"border-radius: 12px;"[31m
+            [36m>[31m
+              [36m<div[31m
+                [33mclass[31m=[32m"ant-pro-card-body css-dev-only-do-not-override-mncuj7"[31m
+                [33mstyle[31m=[32m"padding: 12px 16px;"[31m
+              [36m>[31m
+                [36m<div[31m
+                  [33mclass[31m=[32m"ant-statistic css-dev-only-do-not-override-mncuj7"[31m
+                [36m>[31m
+                  [36m<div[31m
+                    [33mclass[31m=[32m"ant-statistic-title"[31m
+                  [36m>[31m
+                    [0m未处理[0m
+                  [36m</div>[31m
+                  [36m<div[31m
+                    [33mclass[31m=[32m"ant-statistic-content"[31m
+                    [33mstyle[31m=[32m"color: rgb(255, 77, 79);"[31m
+                  [36m>[31m
+                    [36m<span[31m
+                      [33mclass[31m=[32m"ant-statistic-content-value"[31m
+                    [36m>[31m
+                      [36m<span[31m
+                        [33mclass[31m=[32m"ant-statistic-content-value-int"[31m
+                      [36m>[31m
+                        [0m5[0m
+                      [36m</span>[31m
+                    [36m</span>[31m
+                  [36m</div>[31m
+                [36m</div>[31m
+              [36m</div>[31m
+            [36m</div>[31m
+          [36m</div>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"ant-col ant-col-4 css-dev-only-do-not-override-mncuj7"[31m
+            [33mstyle[31m=[32m"padding-left: 8px; padding-right: 8px;"[31m
+          [36m>[31m
+            [36m<div[31m
+              [33mclass[31m=[32m"ant-pro-card css-dev-only-do-not-override-mncuj7 ant-pro-card-hoverable"[31m
+              [33mstyle[31m=[32m"border-radius: 12px;"[31m
+            [36m>[31m
+              [36m<div[31m
+                [33mclass[31m=[32m"ant-pro-card-body css-dev-only-do-not-override-mncuj7"[31m
+                [33mstyle[31m=[32m"padding: 12px 16px;"[31m
+              [36m>[31m
+                [36m<div[31m
+                  [33mclass[31m=[32m"ant-statistic css-dev-only-do-not-override-mncuj7"[31m
+                [36m>[31m
+                  [36m<div[31m
+                    [33mclass[31m=[32m"ant-statistic-title"[31m
+                  [36m>[31m
+                    [0m已处理[0m
+                  [36m</div>[31m
+                  [36m<div[31m
+                    [33mclass[31m=[32m"ant-statistic-content"[31m
+                    [33mstyle[31m=[32m"color: rgb(82, 196, 26);"[31m
+                  [36m>[31m
+                    [36m<span[31m
+                      [33mclass[31m=[32m"ant-statistic-content...[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 5 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/locales/index.test.ts[2m > [22mlocale catalogs[2m > [22mkeeps Chinese and English key
+ sets identical
+[31m[1mAssertionError[22m: expected [ 'admin.adminGroup', …(3198) ] to deeply equal [ 'admin.adminGroup', …(3194) ]
+[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[33m@@ -41,11 +41,15 @@[39m
+[2m    "admin.enterTenantName",[22m
+[2m    "admin.firmwareManagement",[22m
+[2m    "admin.hours",[22m
+[2m    "admin.installerRole",[22m
+[2m    "admin.lastCheck",[22m
+[31m+   "admin.maxAlertsPerDay",[39m
+[31m+   "admin.maxDevicesPerTenant",[39m
+[2m    "admin.maxLoginAttempts",[22m
+[31m+   "admin.maxOtaTasksPerMonth",[39m
+[31m+   "admin.maxUsersPerTenant",[39m
+[2m    "admin.memoryUsage",[22m
+[2m    "admin.minutes",[22m
+[2m    "admin.mqttBroker",[22m
+[2m    "admin.mqttPassword",[22m
+[2m    "admin.mqttPort",[22m
+
+[36m [2m❯[22m src/locales/index.test.ts:[2m18:44[22m[39m
+    [90m 16|[39m [34mdescribe[39m([32m'locale catalogs'[39m[33m,[39m () [33m=>[39m {
+    [90m 17|[39m   [34mit[39m([32m'keeps Chinese and English key sets identical'[39m[33m,[39m () [33m=>[39m {
+    [90m 18|[39m     expect(Object.keys(locales.en).sort()).toEqual(Object.keys(locales…
+    [90m   |[39m                                            [31m^[39m
+    [90m 19|[39m   })
+    [90m 20|[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/test/setup.test.tsx[2m > [22mMSW Mock Server[2m > [22m拦截固件列表请求
+[31m[1mAxiosError[22m: Request failed with status code 401[39m
+[90m [2m❯[22m settle node_modules/axios/lib/core/settle.js:[2m19:12[22m[39m
+[90m [2m❯[22m XMLHttpRequest.onloadend node_modules/axios/lib/adapters/xhr.js:[2m63:9[22m[39m
+[90m [2m❯[22m XMLHttpRequest.invokeTheCallbackFunction node_modules/jsdom/lib/generated/idl/EventHandlerNonNull.js:
+[2m14:28[22m[39m
+[90m [2m❯[22m XMLHttpRequest.<anonymous> node_modules/jsdom/lib/jsdom/living/helpers/create-event-accessor.js:[2m57
+:32[22m[39m
+[90m [2m❯[22m innerInvokeEventListeners node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:[2m360:16[2
+2m[39m
+[90m [2m❯[22m invokeEventListeners node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:[2m296:3[22m[39
+m
+[90m [2m❯[22m XMLHttpRequestImpl._dispatch node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:[2m243:9
+[22m[39m
+[90m [2m❯[22m fireAnEvent node_modules/jsdom/lib/jsdom/living/helpers/events.js:[2m18:36[22m[39m
+[90m [2m❯[22m node_modules/jsdom/lib/jsdom/living/xhr/XMLHttpRequest-impl.js:[2m860:11[22m[39m
+[90m [2m❯[22m Axios.request node_modules/axios/lib/core/Axios.js:[2m46:41[22m[39m
+[36m [2m❯[22m src/test/setup.test.tsx:[2m82:17[22m[39m
+    [90m 80|[39m
+    [90m 81|[39m   [34mit[39m([32m'拦截固件列表请求'[39m[33m,[39m [35masync[39m () [33m=>[39m {
+    [90m 82|[39m     [35mconst[39m res [33m=[39m [35mawait[39m api[33m.[39m[35mget[39m([32m'/firmwares'[3
+9m)
+    [90m   |[39m                 [31m^[39m
+    [90m 83|[39m     [34mexpect[39m(res[33m.[39mdata[33m.[39mcode)[33m.[39m[34mtoBe[39m([34m0[39m)
+    [90m 84|[39m     [34mexpect[39m(res[33m.[39mdata[33m.[39mdata)[33m.[39m[34mtoEqual[39m(mockFirmwares)
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ description: undefined, number: undefined, config: { transitional: { silent
+JSONParsing: true, forcedJSONParsing: true, clarifyTimeoutError: false, legacyInterceptorReqResOrdering: true, advertis
+eZstdAcceptEncoding: false, validateStatusUndefinedResolves: true }, adapter: [ 'xhr', 'http', 'fetch' ], transformRequ
+est: [ 'Function<transformRequest>' ], transformResponse: [ 'Function<transformResponse>' ], timeout: 15000, xsrfCookie
+Name: 'XSRF-TOKEN', xsrfHeaderName: 'X-XSRF-TOKEN', maxContentLength: -1, maxBodyLength: -1, env: { FormData: 'Function
+<FormData>', Blob: 'Function<Blob>' }, validateStatus: 'Function<validateStatus>', headers: { Accept: 'application/json
+, text/plain, */*', 'Content-Type': 'application/json' }, baseURL: '/api/v1', withCredentials: true, method: 'get', url
+: '/firmwares', allowAbsoluteUrls: true, _retry: true }, code: 'ERR_BAD_REQUEST', status: 401 }[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/pages/alerts/AlertsPage.test.tsx[2m > [22mAlertsPage[2m > [22mloads selected event de
+tail and renders telemetry or missing snapshots
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element with the text: ALM8. This could be because the
+ text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your ma
+tcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"css-dev-only-do-not-override-mncuj7 ant-app"[39m
+    [36m>[39m
+      [36m<div>[39m
+        [36m<h4[39m
+          [33mclass[39m=[32m"ant-typography css-dev-only-do-not-override-mncuj7"[39m
+          [33mstyle[39m=[32m"margin-bottom: 16px;"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33maria-label[39m=[32m"alert"[39m
+            [33mclass[39m=[32m"anticon anticon-alert"[39m
+            [33mrole[39m=[32m"img"[39m
+            [33mstyle[39m=[32m"margin-right: 8px;"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mdata-icon[39m=[32m"alert"[39m
+              [33mfill[39m=[32m"currentColor"[39m
+              [33mfocusable[39m=[32m"false"[39m
+              [33mheight[39m=[32m"1em"[39m
+              [33mviewBox[39m=[32m"64 64 896 896"[39m
+              [33mwidth[39m=[32m"1em"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M193 796c0 17.7 14.3 32 32 32h574c17.7 0 32-14.3 32-32V563c0-176.2-142.8-319-319-319S
+193 386.8 193 563v233zm72-233c0-136.4 110.6-247 247-247s247 110.6 247 247v193H404V585c0-5.5-4.5-10-10-10h-44c-5.5 0-10 
+4.5-10 10v171h-75V563zm-48.1-252.5l39.6-39.6c3.1-3.1 3.1-8.2 0-11.3l-67.9-67.9a8.03 8.03 0 00-11.3 0l-39.6 39.6a8.03 8.
+03 0 000 11.3l67.9 67.9c3.1 3.1 8.1 3.1 11.3 0zm669.6-79.2l-39.6-39.6a8.03 8.03 0 00-11.3 0l-67.9 67.9a8.03 8.03 0 000 
+11.3l39.6 39.6c3.1 3.1 8.2 3.1 11.3 0l67.9-67.9c3.1-3.2 3.1-8.2 0-11.3zM832 892H192c-17.7 0-32 14.3-32 32v24c0 4.4 3.6 
+8 8 8h688c4.4 0 8-3.6 8-8v-24c0-17.7-14.3-32-32-32zM484 180h56c4.4 0 8-3.6 8-8V76c0-4.4-3.6-8-8-8h-56c-4.4 0-8 3.6-8 8v
+96c0 4.4 3.6 8 8 8z"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+          [36m</span>[39m
+          [0m通知中心[0m
+        [36m</h4>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"ant-row css-dev-only-do-not-override-mncuj7"[39m
+          [33mstyle[39m=[32m"margin-left: -8px; margin-right: -8px; margin-bottom: 16px;"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"ant-col ant-col-4 css-dev-only-do-not-override-mncuj7"[39m
+            [33mstyle[39m=[32m"padding-left: 8px; padding-right: 8px;"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"ant-pro-card css-dev-only-do-not-override-mncuj7 ant-pro-card-hoverable"[39m
+              [33mstyle[39m=[32m"border-radius: 12px;"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"ant-pro-card-body css-dev-only-do-not-override-mncuj7"[39m
+                [33mstyle[39m=[32m"padding: 12px 16px;"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"ant-statistic css-dev-only-do-not-override-mncuj7"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"ant-statistic-title"[39m
+                  [36m>[39m
+                    [0m通知总数[0m
+                  [36m</div>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"ant-statistic-content"[39m
+                  [36m>[39m
+                    [36m<span[39m
+                      [33mclass[39m=[32m"ant-statistic-content-value"[39m
+                    [36m>[39m
+                      [36m<span[39m
+                        [33mclass[39m=[32m"ant-statistic-content-value-int"[39m
+                      [36m>[39m
+                        [0m18[0m
+                      [36m</span>[39m
+                    [36m</span>[39m
+                  [36m</div>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"ant-col ant-col-4 css-dev-only-do-not-override-mncuj7"[39m
+            [33mstyle[39m=[32m"padding-left: 8px; padding-right: 8px;"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"ant-pro-card css-dev-only-do-not-override-mncuj7 ant-pro-card-hoverable"[39m
+              [33mstyle[39m=[32m"border-radius: 12px;"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"ant-pro-card-body css-dev-only-do-not-override-mncuj7"[39m
+                [33mstyle[39m=[32m"padding: 12px 16px;"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"ant-statistic css-dev-only-do-not-override-mncuj7"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"ant-statistic-title"[39m
+                  [36m>[39m
+                    [0m未处理[0m
+                  [36m</div>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"ant-statistic-content"[39m
+                    [33mstyle[39m=[32m"color: rgb(255, 77, 79);"[39m
+                  [36m>[39m
+                    [36m<span[39m
+                      [33mclass[39m=[32m"ant-statistic-content-value"[39m
+                    [36m>[39m
+                      [36m<span[39m
+                        [33mclass[39m=[32m"ant-statistic-content-value-int"[39m
+                      [36m>[39m
+                        [0m5[0m
+                      [36m</span>[39m
+                    [36m</span>[39m
+                  [36m</div>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"ant-col ant-col-4 css-dev-only-do-not-override-mncuj7"[39m
+            [33mstyle[39m=[32m"padding-left: 8px; padding-right: 8px;"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"ant-pro-card css-dev-only-do-not-override-mncuj7 ant-pro-card-hoverable"[39m
+              [33mstyle[39m=[32m"border-radius: 12px;"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"ant-pro-card-body css-dev-only-do-not-override-mncuj7"[39m
+                [33mstyle[39m=[32m"padding: 12px 16px;"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"ant-statistic css-dev-only-do-not-override-mncuj7"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"ant-statistic-title"[39m
+                  [36m>[39m
+                    [0m已处理[0m
+                  [36m</div>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"ant-statistic-content"[39m
+                    [33mstyle[39m=[32m"color: rgb(82, 196, 26);"[39m
+                  [36m>[39m
+                    [36m<span[39m
+                      [33mclass[39m=[32m"ant-statistic-content...
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"css-dev-only-do-not-override-mncuj7 ant-app"[39m
+    [36m>[39m
+      [36m<div>[39m
+        [36m<h4[39m
+          [33mclass[39m=[32m"ant-typography css-dev-only-do-not-override-mncuj7"[39m
+          [33mstyle[39m=[32m"margin-bottom: 16px;"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33maria-label[39m=[32m"alert"[39m
+            [33mclass[39m=[32m"anticon anticon-alert"[39m
+            [33mrole[39m=[32m"img"[39m
+            [33mstyle[39m=[32m"margin-right: 8px;"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mdata-icon[39m=[32m"alert"[39m
+              [33mfill[39m=[32m"currentColor"[39m
+              [33mfocusable[39m=[32m"false"[39m
+              [33mheight[39m=[32m"1em"[39m
+              [33mviewBox[39m=[32m"64 64 896 896"[39m
+              [33mwidth[39m=[32m"1em"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M193 796c0 17.7 14.3 32 32 32h574c17.7 0 32-14.3 32-32V563c0-176.2-142.8-319-319-319S
+193 386.8 193 563v233zm72-233c0-136.4 110.6-247 247-247s247 110.6 247 247v193H404V585c0-5.5-4.5-10-10-10h-44c-5.5 0-10 
+4.5-10 10v171h-75V563zm-48.1-252.5l39.6-39.6c3.1-3.1 3.1-8.2 0-11.3l-67.9-67.9a8.03 8.03 0 00-11.3 0l-39.6 39.6a8.03 8.
+03 0 000 11.3l67.9 67.9c3.1 3.1 8.1 3.1 11.3 0zm669.6-79.2l-39.6-39.6a8.03 8.03 0 00-11.3 0l-67.9 67.9a8.03 8.03 0 000 
+11.3l39.6 39.6c3.1 3.1 8.2 3.1 11.3 0l67.9-67.9c3.1-3.2 3.1-8.2 0-11.3zM832 892H192c-17.7 0-32 14.3-32 32v24c0 4.4 3.6 
+8 8 8h688c4.4 0 8-3.6 8-8v-24c0-17.7-14.3-32-32-32zM484 180h56c4.4 0 8-3.6 8-8V76c0-4.4-3.6-8-8-8h-56c-4.4 0-8 3.6-8 8v
+96c0 4.4 3.6 8 8 8z"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+          [36m</span>[39m
+          [0m通知中心[0m
+        [36m</h4>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"ant-row css-dev-only-do-not-override-mncuj7"[39m
+          [33mstyle[39m=[32m"margin-left: -8px; margin-right: -8px; margin-bottom: 16px;"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"ant-col ant-col-4 css-dev-only-do-not-override-mncuj7"[39m
+            [33mstyle[39m=[32m"padding-left: 8px; padding-right: 8px;"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"ant-pro-card css-dev-only-do-not-override-mncuj7 ant-pro-card-hoverable"[39m
+              [33mstyle[39m=[32m"border-radius: 12px;"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"ant-pro-card-body css-dev-only-do-not-override-mncuj7"[39m
+                [33mstyle[39m=[32m"padding: 12px 16px;"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"ant-statistic css-dev-only-do-not-override-mncuj7"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"ant-statistic-title"[39m
+                  [36m>[39m
+                    [0m通知总数[0m
+                  [36m</div>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"ant-statistic-content"[39m
+                  [36m>[39m
+                    [36m<span[39m
+                      [33mclass[39m=[32m"ant-statistic-content-value"[39m
+                    [36m>[39m
+                      [36m<span[39m
+                        [33mclass[39m=[32m"ant-statistic-content-value-int"[39m
+                      [36m>[39m
+                        [0m18[0m
+                      [36m</span>[39m
+                    [36m</span>[39m
+                  [36m</div>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"ant-col ant-col-4 css-dev-only-do-not-override-mncuj7"[39m
+            [33mstyle[39m=[32m"padding-left: 8px; padding-right: 8px;"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"ant-pro-card css-dev-only-do-not-override-mncuj7 ant-pro-card-hoverable"[39m
+              [33mstyle[39m=[32m"border-radius: 12px;"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"ant-pro-card-body css-dev-only-do-not-override-mncuj7"[39m
+                [33mstyle[39m=[32m"padding: 12px 16px;"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"ant-statistic css-dev-only-do-not-override-mncuj7"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"ant-statistic-title"[39m
+                  [36m>[39m
+                    [0m未处理[0m
+                  [36m</div>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"ant-statistic-content"[39m
+                    [33mstyle[39m=[32m"color: rgb(255, 77, 79);"[39m
+                  [36m>[39m
+                    [36m<span[39m
+                      [33mclass[39m=[32m"ant-statistic-content-value"[39m
+                    [36m>[39m
+                      [36m<span[39m
+                        [33mclass[39m=[32m"ant-statistic-content-value-int"[39m
+                      [36m>[39m
+                        [0m5[0m
+                      [36m</span>[39m
+                    [36m</span>[39m
+                  [36m</div>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"ant-col ant-col-4 css-dev-only-do-not-override-mncuj7"[39m
+            [33mstyle[39m=[32m"padding-left: 8px; padding-right: 8px;"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"ant-pro-card css-dev-only-do-not-override-mncuj7 ant-pro-card-hoverable"[39m
+              [33mstyle[39m=[32m"border-radius: 12px;"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"ant-pro-card-body css-dev-only-do-not-override-mncuj7"[39m
+                [33mstyle[39m=[32m"padding: 12px 16px;"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"ant-statistic css-dev-only-do-not-override-mncuj7"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"ant-statistic-title"[39m
+                  [36m>[39m
+                    [0m已处理[0m
+                  [36m</div>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"ant-statistic-content"[39m
+                    [33mstyle[39m=[32m"color: rgb(82, 196, 26);"[39m
+                  [36m>[39m
+                    [36m<span[39m
+                      [33mclass[39m=[32m"ant-statistic-content...
+[90m [2m❯[22m waitForWrapper node_modules/@testing-library/dom/dist/wait-for.js:[2m163:27[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m86:33[22m[39m
+[36m [2m❯[22m src/pages/alerts/AlertsPage.test.tsx:[2m155:36[22m[39m
+    [90m153|[39m     [35mconst[39m traceButton [33m=[39m [35mawait[39m screen[33m.[39m[34mfindAllByText[39m
+([32m'事件追溯'[39m)
+    [90m154|[39m     fireEvent[33m.[39m[34mclick[39m(traceButton[[34m0[39m])
+    [90m155|[39m     [35mconst[39m eventCode [33m=[39m [35mawait[39m screen[33m.[39m[34mfindByText[39m([32
+m'ALM8'[39m)
+    [90m   |[39m                                    [31m^[39m
+    [90m156|[39m     fireEvent[33m.[39m[34mclick[39m(eventCode[33m.[39m[34mclosest[39m([32m'tr'[39m)[33m!
+[39m)
+    [90m157|[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/pages/alerts/AlertsPage.test.tsx[2m > [22mAlertsPage[2m > [22mshows alarm event detai
+l access errors
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element with the text: ALM8. This could be because the
+ text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your ma
+tcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"css-dev-only-do-not-override-mncuj7 ant-app"[39m
+    [36m>[39m
+      [36m<div>[39m
+        [36m<h4[39m
+          [33mclass[39m=[32m"ant-typography css-dev-only-do-not-override-mncuj7"[39m
+          [33mstyle[39m=[32m"margin-bottom: 16px;"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33maria-label[39m=[32m"alert"[39m
+            [33mclass[39m=[32m"anticon anticon-alert"[39m
+            [33mrole[39m=[32m"img"[39m
+            [33mstyle[39m=[32m"margin-right: 8px;"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mdata-icon[39m=[32m"alert"[39m
+              [33mfill[39m=[32m"currentColor"[39m
+              [33mfocusable[39m=[32m"false"[39m
+              [33mheight[39m=[32m"1em"[39m
+              [33mviewBox[39m=[32m"64 64 896 896"[39m
+              [33mwidth[39m=[32m"1em"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M193 796c0 17.7 14.3 32 32 32h574c17.7 0 32-14.3 32-32V563c0-176.2-142.8-319-319-319S
+193 386.8 193 563v233zm72-233c0-136.4 110.6-247 247-247s247 110.6 247 247v193H404V585c0-5.5-4.5-10-10-10h-44c-5.5 0-10 
+4.5-10 10v171h-75V563zm-48.1-252.5l39.6-39.6c3.1-3.1 3.1-8.2 0-11.3l-67.9-67.9a8.03 8.03 0 00-11.3 0l-39.6 39.6a8.03 8.
+03 0 000 11.3l67.9 67.9c3.1 3.1 8.1 3.1 11.3 0zm669.6-79.2l-39.6-39.6a8.03 8.03 0 00-11.3 0l-67.9 67.9a8.03 8.03 0 000 
+11.3l39.6 39.6c3.1 3.1 8.2 3.1 11.3 0l67.9-67.9c3.1-3.2 3.1-8.2 0-11.3zM832 892H192c-17.7 0-32 14.3-32 32v24c0 4.4 3.6 
+8 8 8h688c4.4 0 8-3.6 8-8v-24c0-17.7-14.3-32-32-32zM484 180h56c4.4 0 8-3.6 8-8V76c0-4.4-3.6-8-8-8h-56c-4.4 0-8 3.6-8 8v
+96c0 4.4 3.6 8 8 8z"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+          [36m</span>[39m
+          [0m通知中心[0m
+        [36m</h4>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"ant-row css-dev-only-do-not-override-mncuj7"[39m
+          [33mstyle[39m=[32m"margin-left: -8px; margin-right: -8px; margin-bottom: 16px;"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"ant-col ant-col-4 css-dev-only-do-not-override-mncuj7"[39m
+            [33mstyle[39m=[32m"padding-left: 8px; padding-right: 8px;"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"ant-pro-card css-dev-only-do-not-override-mncuj7 ant-pro-card-hoverable"[39m
+              [33mstyle[39m=[32m"border-radius: 12px;"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"ant-pro-card-body css-dev-only-do-not-override-mncuj7"[39m
+                [33mstyle[39m=[32m"padding: 12px 16px;"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"ant-statistic css-dev-only-do-not-override-mncuj7"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"ant-statistic-title"[39m
+                  [36m>[39m
+                    [0m通知总数[0m
+                  [36m</div>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"ant-statistic-content"[39m
+                  [36m>[39m
+                    [36m<span[39m
+                      [33mclass[39m=[32m"ant-statistic-content-value"[39m
+                    [36m>[39m
+                      [36m<span[39m
+                        [33mclass[39m=[32m"ant-statistic-content-value-int"[39m
+                      [36m>[39m
+                        [0m18[0m
+                      [36m</span>[39m
+                    [36m</span>[39m
+                  [36m</div>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"ant-col ant-col-4 css-dev-only-do-not-override-mncuj7"[39m
+            [33mstyle[39m=[32m"padding-left: 8px; padding-right: 8px;"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"ant-pro-card css-dev-only-do-not-override-mncuj7 ant-pro-card-hoverable"[39m
+              [33mstyle[39m=[32m"border-radius: 12px;"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"ant-pro-card-body css-dev-only-do-not-override-mncuj7"[39m
+                [33mstyle[39m=[32m"padding: 12px 16px;"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"ant-statistic css-dev-only-do-not-override-mncuj7"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"ant-statistic-title"[39m
+                  [36m>[39m
+                    [0m未处理[0m
+                  [36m</div>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"ant-statistic-content"[39m
+                    [33mstyle[39m=[32m"color: rgb(255, 77, 79);"[39m
+                  [36m>[39m
+                    [36m<span[39m
+                      [33mclass[39m=[32m"ant-statistic-content-value"[39m
+                    [36m>[39m
+                      [36m<span[39m
+                        [33mclass[39m=[32m"ant-statistic-content-value-int"[39m
+                      [36m>[39m
+                        [0m5[0m
+                      [36m</span>[39m
+                    [36m</span>[39m
+                  [36m</div>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"ant-col ant-col-4 css-dev-only-do-not-override-mncuj7"[39m
+            [33mstyle[39m=[32m"padding-left: 8px; padding-right: 8px;"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"ant-pro-card css-dev-only-do-not-override-mncuj7 ant-pro-card-hoverable"[39m
+              [33mstyle[39m=[32m"border-radius: 12px;"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"ant-pro-card-body css-dev-only-do-not-override-mncuj7"[39m
+                [33mstyle[39m=[32m"padding: 12px 16px;"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"ant-statistic css-dev-only-do-not-override-mncuj7"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"ant-statistic-title"[39m
+                  [36m>[39m
+                    [0m已处理[0m
+                  [36m</div>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"ant-statistic-content"[39m
+                    [33mstyle[39m=[32m"color: rgb(82, 196, 26);"[39m
+                  [36m>[39m
+                    [36m<span[39m
+                      [33mclass[39m=[32m"ant-statistic-content...
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"css-dev-only-do-not-override-mncuj7 ant-app"[39m
+    [36m>[39m
+      [36m<div>[39m
+        [36m<h4[39m
+          [33mclass[39m=[32m"ant-typography css-dev-only-do-not-override-mncuj7"[39m
+          [33mstyle[39m=[32m"margin-bottom: 16px;"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33maria-label[39m=[32m"alert"[39m
+            [33mclass[39m=[32m"anticon anticon-alert"[39m
+            [33mrole[39m=[32m"img"[39m
+            [33mstyle[39m=[32m"margin-right: 8px;"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mdata-icon[39m=[32m"alert"[39m
+              [33mfill[39m=[32m"currentColor"[39m
+              [33mfocusable[39m=[32m"false"[39m
+              [33mheight[39m=[32m"1em"[39m
+              [33mviewBox[39m=[32m"64 64 896 896"[39m
+              [33mwidth[39m=[32m"1em"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M193 796c0 17.7 14.3 32 32 32h574c17.7 0 32-14.3 32-32V563c0-176.2-142.8-319-319-319S
+193 386.8 193 563v233zm72-233c0-136.4 110.6-247 247-247s247 110.6 247 247v193H404V585c0-5.5-4.5-10-10-10h-44c-5.5 0-10 
+4.5-10 10v171h-75V563zm-48.1-252.5l39.6-39.6c3.1-3.1 3.1-8.2 0-11.3l-67.9-67.9a8.03 8.03 0 00-11.3 0l-39.6 39.6a8.03 8.
+03 0 000 11.3l67.9 67.9c3.1 3.1 8.1 3.1 11.3 0zm669.6-79.2l-39.6-39.6a8.03 8.03 0 00-11.3 0l-67.9 67.9a8.03 8.03 0 000 
+11.3l39.6 39.6c3.1 3.1 8.2 3.1 11.3 0l67.9-67.9c3.1-3.2 3.1-8.2 0-11.3zM832 892H192c-17.7 0-32 14.3-32 32v24c0 4.4 3.6 
+8 8 8h688c4.4 0 8-3.6 8-8v-24c0-17.7-14.3-32-32-32zM484 180h56c4.4 0 8-3.6 8-8V76c0-4.4-3.6-8-8-8h-56c-4.4 0-8 3.6-8 8v
+96c0 4.4 3.6 8 8 8z"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+          [36m</span>[39m
+          [0m通知中心[0m
+        [36m</h4>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"ant-row css-dev-only-do-not-override-mncuj7"[39m
+          [33mstyle[39m=[32m"margin-left: -8px; margin-right: -8px; margin-bottom: 16px;"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"ant-col ant-col-4 css-dev-only-do-not-override-mncuj7"[39m
+            [33mstyle[39m=[32m"padding-left: 8px; padding-right: 8px;"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"ant-pro-card css-dev-only-do-not-override-mncuj7 ant-pro-card-hoverable"[39m
+              [33mstyle[39m=[32m"border-radius: 12px;"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"ant-pro-card-body css-dev-only-do-not-override-mncuj7"[39m
+                [33mstyle[39m=[32m"padding: 12px 16px;"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"ant-statistic css-dev-only-do-not-override-mncuj7"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"ant-statistic-title"[39m
+                  [36m>[39m
+                    [0m通知总数[0m
+                  [36m</div>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"ant-statistic-content"[39m
+                  [36m>[39m
+                    [36m<span[39m
+                      [33mclass[39m=[32m"ant-statistic-content-value"[39m
+                    [36m>[39m
+                      [36m<span[39m
+                        [33mclass[39m=[32m"ant-statistic-content-value-int"[39m
+                      [36m>[39m
+                        [0m18[0m
+                      [36m</span>[39m
+                    [36m</span>[39m
+                  [36m</div>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"ant-col ant-col-4 css-dev-only-do-not-override-mncuj7"[39m
+            [33mstyle[39m=[32m"padding-left: 8px; padding-right: 8px;"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"ant-pro-card css-dev-only-do-not-override-mncuj7 ant-pro-card-hoverable"[39m
+              [33mstyle[39m=[32m"border-radius: 12px;"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"ant-pro-card-body css-dev-only-do-not-override-mncuj7"[39m
+                [33mstyle[39m=[32m"padding: 12px 16px;"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"ant-statistic css-dev-only-do-not-override-mncuj7"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"ant-statistic-title"[39m
+                  [36m>[39m
+                    [0m未处理[0m
+                  [36m</div>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"ant-statistic-content"[39m
+                    [33mstyle[39m=[32m"color: rgb(255, 77, 79);"[39m
+                  [36m>[39m
+                    [36m<span[39m
+                      [33mclass[39m=[32m"ant-statistic-content-value"[39m
+                    [36m>[39m
+                      [36m<span[39m
+                        [33mclass[39m=[32m"ant-statistic-content-value-int"[39m
+                      [36m>[39m
+                        [0m5[0m
+                      [36m</span>[39m
+                    [36m</span>[39m
+                  [36m</div>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"ant-col ant-col-4 css-dev-only-do-not-override-mncuj7"[39m
+            [33mstyle[39m=[32m"padding-left: 8px; padding-right: 8px;"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"ant-pro-card css-dev-only-do-not-override-mncuj7 ant-pro-card-hoverable"[39m
+              [33mstyle[39m=[32m"border-radius: 12px;"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"ant-pro-card-body css-dev-only-do-not-override-mncuj7"[39m
+                [33mstyle[39m=[32m"padding: 12px 16px;"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"ant-statistic css-dev-only-do-not-override-mncuj7"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"ant-statistic-title"[39m
+                  [36m>[39m
+                    [0m已处理[0m
+                  [36m</div>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"ant-statistic-content"[39m
+                    [33mstyle[39m=[32m"color: rgb(82, 196, 26);"[39m
+                  [36m>[39m
+                    [36m<span[39m
+                      [33mclass[39m=[32m"ant-statistic-content...
+[90m [2m❯[22m waitForWrapper node_modules/@testing-library/dom/dist/wait-for.js:[2m163:27[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m86:33[22m[39m
+[36m [2m❯[22m src/pages/alerts/AlertsPage.test.tsx:[2m173:35[22m[39m
+    [90m171|[39m     [34mrenderAsAdmin[39m([33m<[39m[33mAlertsPage[39m [33m/[39m[33m>[39m)
+    [90m172|[39m     fireEvent[33m.[39m[34mclick[39m(([35mawait[39m screen[33m.[39m[34mfindAllByText[39m([
+32m'事件追溯'[39m))[[34m0[39m])
+    [90m173|[39m     fireEvent[33m.[39m[34mclick[39m(([35mawait[39m screen[33m.[39m[34mfindByText[39m([32m
+'ALM8'[39m))[33m.[39m[34mclosest[39m([32m'tr'[39m)[33m![39m)
+    [90m   |[39m                                   [31m^[39m
+    [90m174|[39m     [34mexpect[39m([35mawait[39m screen[33m.[39m[34mfindByText[39m([36m/无权访问该设备/[39m))[33
+m.[39m[34mtoBeInTheDocument[39m()
+    [90m175|[39m   })
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/pages/login/LoginPage.test.tsx[2m > [22mLoginPage[2m > [22mshould show remember me ch
+eckbox
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element with the text: 记住我. This could be because the 
+text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your mat
+cher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"css-dev-only-do-not-override-mncuj7 ant-app"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mstyle[39m=[32m"min-height: 100vh; display: flex; align-items: center; justify-content: center; backgroun
+d-image: url(\"/images/login/login-bg-6.jpg\"), linear-gradient(135deg, rgb(26, 31, 54) 0%, rgb(45, 53, 97) 100%); back
+ground-size: cover; background-position: center center; background-repeat: no-repeat; padding: 40px 20px; position: rel
+ative;"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mstyle[39m=[32m"position: absolute; inset: 0px; background: rgba(15, 23, 42, 0.3);"[39m
+        [36m/>[39m
+        [36m<div[39m
+          [33mstyle[39m=[32m"position: relative; z-index: 1; width: 100%; max-width: 1060px; border-radius: 24px; ov
+erflow: hidden; background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.2); box-shadow: 0 8px 48
+px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.15); display: flex; min-height: 78vh;"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mstyle[39m=[32m"flex: 1 1 0%; display: flex; flex-direction: column; justify-content: flex-start; pad
+ding: 60px 48px 48px; position: relative; background: rgba(255, 255, 255, 0.06); backdrop-filter: blur(32px) saturate(1
+.3); border-right: 1px solid rgba(255, 255, 255, 0.1);"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mstyle[39m=[32m"padding-top: 4px;"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mstyle[39m=[32m"margin-bottom: 36px;"[39m
+              [36m>[39m
+                [36m<span[39m
+                  [33mstyle[39m=[32m"font-size: 32px; font-weight: 800; color: rgb(255, 255, 255); letter-spacing: 2
+px;"[39m
+                [36m>[39m
+                  [0mCSERGY[0m
+                [36m</span>[39m
+                [36m<span[39m
+                  [33mstyle[39m=[32m"font-size: 32px; font-weight: 300; color: rgba(255, 255, 255, 0.3); margin: 0px
+ 8px;"[39m
+                [36m>[39m
+                  [0m|[0m
+                [36m</span>[39m
+                [36m<span[39m
+                  [33mstyle[39m=[32m"font-size: 32px; font-weight: 800; color: rgb(255, 255, 255);"[39m
+                [36m>[39m
+                  [0m辰烁科技[0m
+                [36m</span>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mstyle[39m=[32m"font-size: 42px; font-weight: 700; color: rgb(255, 255, 255); line-height: 1.25; 
+margin-bottom: 40px; letter-spacing: -0.5px; white-space: pre-line; text-shadow: 0 2px 12px rgba(0,0,0,0.15);"[39m
+              [36m>[39m
+                [0m光伏逆变器
+智能运维平台[0m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mstyle[39m=[32m"display: flex; flex-direction: column; gap: 22px; max-width: 400px; margin-bottom
+: 40px;"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mstyle[39m=[32m"display: flex; gap: 16px; align-items: flex-start;"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mstyle[39m=[32m"width: 42px; height: 42px; border-radius: 10px; flex-shrink: 0; background: r
+gba(255, 255, 255, 0.12); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; colo
+r: rgb(147, 197, 253); font-size: 20px; border: 1px solid rgba(255, 255, 255, 0.1);"[39m
+                  [36m>[39m
+                    [36m<span[39m
+                      [33maria-label[39m=[32m"cloud"[39m
+                      [33mclass[39m=[32m"anticon anticon-cloud"[39m
+                      [33mrole[39m=[32m"img"[39m
+                    [36m>[39m
+                      [36m<svg[39m
+                        [33maria-hidden[39m=[32m"true"[39m
+                        [33mdata-icon[39m=[32m"cloud"[39m
+                        [33mfill[39m=[32m"currentColor"[39m
+                        [33mfocusable[39m=[32m"false"[39m
+                        [33mheight[39m=[32m"1em"[39m
+                        [33mviewBox[39m=[32m"64 64 896 896"[39m
+                        [33mwidth[39m=[32m"1em"[39m
+                      [36m>[39m
+                        [36m<path[39m
+                          [33md[39m=[32m"M811.4 418.7C765.6 297.9 648.9 212 512.2 212S258.8 297.8 213 418.6C127.3 44
+1.1 64 519.1 64 612c0 110.5 89.5 200 199.9 200h496.2C870.5 812 960 722.5 960 612c0-92.7-63.1-170.7-148.6-193.3zm36.3 28
+1a123.07 123.07 0 01-87.6 36.3H263.9c-33.1 0-64.2-12.9-87.6-36.3A123.3 123.3 0 01140 612c0-28 9.1-54.3 26.2-76.3a125.7 
+125.7 0 0166.1-43.7l37.9-9.9 13.9-36.6c8.6-22.8 20.6-44.1 35.7-63.4a245.6 245.6 0 0152.4-49.9c41.1-28.9 89.5-44.2 140-4
+4.2s98.9 15.3 140 44.2c19.9 14 37.5 30.8 52.4 49.9 15.1 19.3 27.1 40.7 35.7 63.4l13.8 36.5 37.8 10c54.3 14.5 92.1 63.8 
+92.1 120 0 33.1-12.9 64.3-36.3 87.7z"[39m
+                        [36m/>[39m
+                      [36m</svg>[39m
+                    [36m</span>[39m
+                  [36m</div>[39m
+                  [36m<div>[39m
+                    [36m<div[39m
+                      [33mstyle[39m=[32m"font-size: 16px; font-weight: 600; color: rgb(255, 255, 255); margin-bottom
+: 4px;"[39m
+                    [36m>[39m
+                      [0m云端集中监控[0m
+                    [36m</div>[39m
+                    [36m<div[39m
+                      [33mstyle[39m=[32m"font-size: 13px; color: rgba(255, 255, 255, 0.5); line-height: 1.6;"[39m
+                    [36m>[39m
+                      [0m实时采集设备数据，多电站统一管理[0m
+                    [36m</div>[39m
+                  [36m</div>[39m
+                [36m</div>[39m
+                [36m<div[39m
+                  [33mstyle[39m=[32m"display: flex; gap: 16px; align-items: flex-start;"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mstyle[39m=[32m"width: 42px; height: 42px; border-radius: 10px; flex-shrink: 0; background: r
+gba(255, 255, 255, 0.12); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; colo
+r: rgb(134, 239, 172); font-size: 20px; border: 1px solid rgba(255, 255, 255, 0.1);"[39m
+                  [36m>[39m
+                    [36m<span[39m
+                      [33maria-label[39m=[32m"safety"[39m
+                      [33mclass[39m=[32m"anticon anticon-safety"[39m
+                      [33mrole[39m=[32m"img"[39m
+                    [36m>[39m
+                      [36m<svg[39m
+                        [33maria-hidden[39m=[32m"true"[39m
+
+[2m Test Files [22m [1m[31m4 failed[39m[22m[2m | [22m[1m[32m22 passed[39m[22m[90m (26)[39m
+[2m      Tests [22m [1m[31m5 failed[39m[22m[2m | [22m[1m[32m227 passed[39m[22m[90m (232)[39m
+[2m   Start at [22m 23:46:49
+[2m   Duration [22m 14.60s[2m (transform 5.63s, setup 11.35s, import 62.25s, tests 21.15s, environment 31.22s)[22m
+
+                        [33mdata-icon[39m=[32m"safety"[39m
+                        [33mfill[39m=[32m"currentColor"[39m
+                        [33mfocusable[39m=[32m"false"[39m
+                        [33mheight[39m=[32m"1em"[39m
+                        [33mviewBox[39m=[32m"0 0 1024 1024"[39m
+                      ...
+[90m [2m❯[22m Object.getElementError node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/pages/login/LoginPage.test.tsx:[2m58:19[22m[39m
+    [90m 56|[39m   [34mit[39m([32m'should show remember me checkbox'[39m[33m,[39m () [33m=>[39m {
+    [90m 57|[39m     [34mrenderWithProviders[39m([33m<[39m[33mLoginPage[39m [33m/[39m[33m>[39m)
+    [90m 58|[39m     [34mexpect[39m(screen[33m.[39m[34mgetByText[39m([32m'记住我'[39m))[33m.[39m[34mtoBeInThe
+Document[39m()
+    [90m   |[39m                   [31m^[39m
+    [90m 59|[39m   })
+    [90m 60|[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯[22m[39m
+

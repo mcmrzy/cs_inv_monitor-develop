@@ -1,0 +1,238 @@
+{
+    "metrics": {
+        "group_duration": {
+            "avg": 5.146882549999997,
+            "min": 0,
+            "med": 1.4997500000000001,
+            "max": 197.3555,
+            "p(90)": 7.660620000000014,
+            "p(95)": 14.999675
+        },
+        "vus": {
+            "value": 20,
+            "min": 20,
+            "max": 20
+        },
+        "iteration_duration": {
+            "avg": 3027.2393507500046,
+            "min": 3005.8299,
+            "med": 3014.14655,
+            "max": 3209.599,
+            "p(90)": 3065.3373,
+            "p(95)": 3153.939645
+        },
+        "http_req_receiving": {
+            "avg": 0.17723511488511498,
+            "min": 0,
+            "med": 0,
+            "max": 74.6387,
+            "p(90)": 0.4999,
+            "p(95)": 0.501895
+        },
+        "http_req_duration{expected_response:true}": {
+            "max": 197.3555,
+            "p(90)": 11.57275,
+            "p(95)": 34.103475,
+            "avg": 7.491884236947803,
+            "min": 0,
+            "med": 2.4997499999999997
+        },
+        "http_req_blocked": {
+            "max": 1.0044,
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 0.00424905094905095,
+            "min": 0,
+            "med": 0
+        },
+        "data_received": {
+            "rate": 91860.68860617589,
+            "count": 5573019
+        },
+        "device_list_duration": {
+            "max": 197.3555,
+            "p(90)": 33.29897000000002,
+            "p(95)": 43.8331799999999,
+            "avg": 12.129314249999988,
+            "min": 0.5007,
+            "med": 5.0031,
+            "thresholds": {
+                "p(95)<300": false
+            }
+        },
+        "data_sent": {
+            "count": 1058269,
+            "rate": 17443.564981667772
+        },
+        "iterations": {
+            "count": 400,
+            "rate": 6.593244243823744
+        },
+        "http_reqs": {
+            "count": 2002,
+            "rate": 32.999187440337835
+        },
+        "vus_max": {
+            "max": 20,
+            "value": 20,
+            "min": 20
+        },
+        "http_req_duration": {
+            "avg": 5.150684265734262,
+            "min": 0,
+            "med": 1.4993,
+            "max": 197.3555,
+            "p(90)": 7.74569000000001,
+            "p(95)": 15.002825,
+            "thresholds": {
+                "p(95)<500": false
+            }
+        },
+        "http_req_failed": {
+            "passes": 1006,
+            "fails": 996,
+            "thresholds": {
+                "rate<0.01": true
+            },
+            "value": 0.5024975024975025
+        },
+        "http_req_waiting": {
+            "avg": 4.972201848151846,
+            "min": 0,
+            "med": 1.4962,
+            "max": 197.3555,
+            "p(90)": 7.499759999999999,
+            "p(95)": 14.499495
+        },
+        "http_req_connecting": {
+            "avg": 0.003497752247752247,
+            "min": 0,
+            "med": 0,
+            "max": 1.0044,
+            "p(90)": 0,
+            "p(95)": 0
+        },
+        "http_req_tls_handshaking": {
+            "avg": 0,
+            "min": 0,
+            "med": 0,
+            "max": 0,
+            "p(90)": 0,
+            "p(95)": 0
+        },
+        "http_req_sending": {
+            "min": 0,
+            "med": 0,
+            "max": 0.5004,
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 0.0012473026973026972
+        },
+        "checks": {
+            "passes": 995,
+            "fails": 1006,
+            "value": 0.49725137431284355
+        }
+    },
+    "setup_data": {
+        "authToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl92ZXJzaW9uIjoyLCJ1c2VyX2lkIjoxMTY3LCJyb290X3RlbmFudF9pZCI6MTE2Nywib3JnYW5pemF0aW9uX2lkIjoxMTY3LCJtZW1iZXJzaGlwX2lkIjoxMTY3LCJtZW1iZXJzaGlwX3ZlcnNpb24iOjEsImF1dGhvcml6YXRpb25fdmVyc2lvbiI6MSwic2Vzc2lvbl92ZXJzaW9uIjoxLCJzZXNzaW9uX2lkIjoiOWY1NDY1ODliODU1Yjk2YjI0YThmNzYyNzlhYTJiN2IiLCJ0b2tlbl90eXBlIjoiYWNjZXNzIiwicGhvbmUiOiIxNzAxODc0MjY3NCIsImlzX3N5c3RlbV9hZG1pbiI6dHJ1ZSwiaXNzIjoiaW52LWFwaS1zZXJ2ZXIiLCJzdWIiOiIxMTY3IiwiYXVkIjpbImludi1wbGF0Zm9ybS1hcGkiXSwiZXhwIjoxNzg1NzIyNTA4LCJuYmYiOjE3ODU3MjE2MDgsImlhdCI6MTc4NTcyMTYwOCwianRpIjoiMmQ0ZGRjMGE4ZWFkYTgxNDg4OWNlYTMxMGYwNWJiNWQifQ.8p1obFkIRPBj4QvReKk4pK4aAtnUqdHloqaTxw1WiyQ"
+    },
+    "root_group": {
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {
+            "setup": {
+                "name": "setup",
+                "path": "::setup",
+                "id": "5c0f8025f7e0b6654089e5b00e950f1a",
+                "groups": {},
+                "checks": {
+                        "健康检查可达": {
+                            "name": "健康检查可达",
+                            "path": "::setup::健康检查可达",
+                            "id": "b71eba9c50a58c6a844d984535abd6b1",
+                            "passes": 1,
+                            "fails": 0
+                        }
+                    }
+            },
+            "01_健康检查": {
+                "checks": {
+                    "健康检查状态码 200": {
+                        "passes": 400,
+                        "fails": 0,
+                        "name": "健康检查状态码 200",
+                        "path": "::01_健康检查::健康检查状态码 200",
+                        "id": "75039b8ae440f69d119238f5f4c83840"
+                    }
+                },
+                "name": "01_健康检查",
+                "path": "::01_健康检查",
+                "id": "8dac2ae604527d2ca2a19851ee0643be",
+                "groups": {}
+            },
+            "02_设备列表": {
+                "name": "02_设备列表",
+                "path": "::02_设备列表",
+                "id": "14db04f95a91947090bd21c46662d51a",
+                "groups": {},
+                "checks": {
+                        "设备列表状态码 200": {
+                            "name": "设备列表状态码 200",
+                            "path": "::02_设备列表::设备列表状态码 200",
+                            "id": "5fe978e7a1d6d3b6cf5e0b1cfa8bb06a",
+                            "passes": 296,
+                            "fails": 104
+                        }
+                    }
+            },
+            "03_电站列表": {
+                "path": "::03_电站列表",
+                "id": "5c01f22b1e1d9d78470931096ac3c00a",
+                "groups": {},
+                "checks": {
+                        "电站列表状态码 200": {
+                            "passes": 100,
+                            "fails": 300,
+                            "name": "电站列表状态码 200",
+                            "path": "::03_电站列表::电站列表状态码 200",
+                            "id": "d64985a0ce2c1dbca674ab1f62ce2178"
+                        }
+                    },
+                "name": "03_电站列表"
+            },
+            "04_告警列表": {
+                "name": "04_告警列表",
+                "path": "::04_告警列表",
+                "id": "aa6b7e60cc4841550fb34d3edb1e89ff",
+                "groups": {},
+                "checks": {
+                        "告警列表状态码 200": {
+                            "name": "告警列表状态码 200",
+                            "path": "::04_告警列表::告警列表状态码 200",
+                            "id": "39e844bada63aa553aad12140be475fd",
+                            "passes": 101,
+                            "fails": 299
+                        }
+                    }
+            },
+            "05_时区列表(公开)": {
+                "name": "05_时区列表(公开)",
+                "path": "::05_时区列表(公开)",
+                "id": "8e69961af6b5ebedbd3cda62b45e6eb9",
+                "groups": {},
+                "checks": {
+                        "时区列表状态码 200": {
+                            "fails": 303,
+                            "name": "时区列表状态码 200",
+                            "path": "::05_时区列表(公开)::时区列表状态码 200",
+                            "id": "060e800a2fae675360e6eab8578295e7",
+                            "passes": 97
+                        }
+                    }
+            }
+        },
+        "checks": {},
+        "name": ""
+    }
+}

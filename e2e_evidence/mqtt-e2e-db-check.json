@@ -1,0 +1,506 @@
+{
+  "checked_at": "2026-08-03T01:38:55.240Z",
+  "device_count": 57,
+  "telemetry": {
+    "E2E-SN-MSCIU07M4NH": 1,
+    "E2E-SN2-MSCIU07M4NH": 1,
+    "E2EMQTT00154FB3769": 1,
+    "E2EMQTT01154FB3769": 1,
+    "E2EMQTT02154FB3769": 1,
+    "E2EMQTT03154FB3769": 1,
+    "E2EMQTT04154FB3769": 1,
+    "E2EMQTT05154FB3769": 1,
+    "E2EMQTT06154FB3769": 1,
+    "E2EMQTT07154FB3769": 1,
+    "E2EMQTT08154FB3769": 1,
+    "E2EMQTT09154FB3769": 1,
+    "E2EMQTT10154FB3769": 1,
+    "E2EMQTT11154FB3769": 1,
+    "E2EMQTT12154FB3769": 1,
+    "E2EMQTT13154FB3769": 1,
+    "E2EMQTT14154FB3769": 1,
+    "E2EMQTT15154FB3769": 1,
+    "E2EMQTT16154FB3769": 1,
+    "E2EMQTT17154FB3769": 1,
+    "E2EMQTT18154FB3769": 1,
+    "E2EMQTT19154FB3769": 1,
+    "E2EMQTT20154FB3769": 1,
+    "E2EMQTT21154FB3769": 1,
+    "E2EMQTT22154FB3769": 1,
+    "E2EMQTT23154FB3769": 1,
+    "E2EMQTT24154FB3769": 1,
+    "E2EMQTT25154FB3769": 1,
+    "E2EMQTT26154FB3769": 1,
+    "E2EMQTT27154FB3769": 1,
+    "E2EMQTT28154FB3769": 1,
+    "E2EMQTT29154FB3769": 1,
+    "E2EMQTT30154FB3769": 1,
+    "E2EMQTT31154FB3769": 1,
+    "E2EMQTT32154FB3769": 1,
+    "E2EMQTT33154FB3769": 1,
+    "E2EMQTT34154FB3769": 1,
+    "E2EMQTT35154FB3769": 1,
+    "E2EMQTT36154FB3769": 1,
+    "E2EMQTT37154FB3769": 1,
+    "E2EMQTT38154FB3769": 1,
+    "E2EMQTT39154FB3769": 1,
+    "E2EMQTT40154FB3769": 1,
+    "E2EMQTT41154FB3769": 1,
+    "E2EMQTT42154FB3769": 1,
+    "E2EMQTT43154FB3769": 1,
+    "E2EMQTT44154FB3769": 1,
+    "E2EMQTT45154FB3769": 1,
+    "E2EMQTT46154FB3769": 1,
+    "E2EMQTT47154FB3769": 1,
+    "E2EMQTT48154FB3769": 1,
+    "E2EMQTT49154FB3769": 1
+  },
+  "ingest_errors": {},
+  "latest_state": {
+    "E2E-SN-MSCIU07M4NH": {
+      "device_sn": "E2E-SN-MSCIU07M4NH",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 2360.1,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2E-SN2-MSCIU07M4NH": {
+      "device_sn": "E2E-SN2-MSCIU07M4NH",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 3105.4,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT00154FB3769": {
+      "device_sn": "E2EMQTT00154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 2306,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT01154FB3769": {
+      "device_sn": "E2EMQTT01154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 2045.1,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT02154FB3769": {
+      "device_sn": "E2EMQTT02154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 3146.1,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT03154FB3769": {
+      "device_sn": "E2EMQTT03154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 2314.9,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT04154FB3769": {
+      "device_sn": "E2EMQTT04154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 3455.4,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT05154FB3769": {
+      "device_sn": "E2EMQTT05154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 2301.6,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT06154FB3769": {
+      "device_sn": "E2EMQTT06154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 3091.7,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT07154FB3769": {
+      "device_sn": "E2EMQTT07154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 2301.3,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT08154FB3769": {
+      "device_sn": "E2EMQTT08154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 2434.3,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT09154FB3769": {
+      "device_sn": "E2EMQTT09154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 3529.3,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT10154FB3769": {
+      "device_sn": "E2EMQTT10154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 2447.3,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT11154FB3769": {
+      "device_sn": "E2EMQTT11154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 3341.2,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT12154FB3769": {
+      "device_sn": "E2EMQTT12154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 2240.3,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT13154FB3769": {
+      "device_sn": "E2EMQTT13154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 3465.4,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT14154FB3769": {
+      "device_sn": "E2EMQTT14154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 3638.9,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT15154FB3769": {
+      "device_sn": "E2EMQTT15154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 3324.1,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT16154FB3769": {
+      "device_sn": "E2EMQTT16154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 2349.2,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT17154FB3769": {
+      "device_sn": "E2EMQTT17154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 3947.8,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT18154FB3769": {
+      "device_sn": "E2EMQTT18154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 2742.9,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT19154FB3769": {
+      "device_sn": "E2EMQTT19154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 2658.6,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT20154FB3769": {
+      "device_sn": "E2EMQTT20154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 2486.3,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT21154FB3769": {
+      "device_sn": "E2EMQTT21154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 2171.3,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT22154FB3769": {
+      "device_sn": "E2EMQTT22154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 3075.9,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT23154FB3769": {
+      "device_sn": "E2EMQTT23154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 3916.8,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT24154FB3769": {
+      "device_sn": "E2EMQTT24154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 3829.7,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT25154FB3769": {
+      "device_sn": "E2EMQTT25154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 3689.4,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT26154FB3769": {
+      "device_sn": "E2EMQTT26154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 4183.9,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT27154FB3769": {
+      "device_sn": "E2EMQTT27154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 3145.3,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT28154FB3769": {
+      "device_sn": "E2EMQTT28154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 4094.2,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT29154FB3769": {
+      "device_sn": "E2EMQTT29154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 3833.2,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT30154FB3769": {
+      "device_sn": "E2EMQTT30154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 4139.6,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT31154FB3769": {
+      "device_sn": "E2EMQTT31154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 3386.7,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT32154FB3769": {
+      "device_sn": "E2EMQTT32154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 2138.6,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT33154FB3769": {
+      "device_sn": "E2EMQTT33154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 1961.8,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT34154FB3769": {
+      "device_sn": "E2EMQTT34154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 2277.1,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT35154FB3769": {
+      "device_sn": "E2EMQTT35154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 4079.9,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT36154FB3769": {
+      "device_sn": "E2EMQTT36154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 3945.6,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT37154FB3769": {
+      "device_sn": "E2EMQTT37154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 2910.3,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT38154FB3769": {
+      "device_sn": "E2EMQTT38154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 2107,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT39154FB3769": {
+      "device_sn": "E2EMQTT39154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 3525.7,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT40154FB3769": {
+      "device_sn": "E2EMQTT40154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 4131.3,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT41154FB3769": {
+      "device_sn": "E2EMQTT41154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 2684.2,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT42154FB3769": {
+      "device_sn": "E2EMQTT42154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 4032.8,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT43154FB3769": {
+      "device_sn": "E2EMQTT43154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 2588.2,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT44154FB3769": {
+      "device_sn": "E2EMQTT44154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 1837.4,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT45154FB3769": {
+      "device_sn": "E2EMQTT45154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 2158.7,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT46154FB3769": {
+      "device_sn": "E2EMQTT46154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 2758.2,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT47154FB3769": {
+      "device_sn": "E2EMQTT47154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 2653.1,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT48154FB3769": {
+      "device_sn": "E2EMQTT48154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 2957,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    },
+    "E2EMQTT49154FB3769": {
+      "device_sn": "E2EMQTT49154FB3769",
+      "work_state": 2,
+      "fault_code": "0",
+      "ac_active_power": 3875,
+      "daily_pv_energy": 12.5,
+      "event_time": "Mon Aug 03 2026 09:31:58 GMT+0800 (中国标准时间)"
+    }
+  },
+  "registered_devices": {
+    "E2E-SN2-MSCIU07M4NH": true,
+    "E2E-SN-MSCIU07M4NH": true
+  },
+  "alarms": {
+    "E2E-SN-MSCIU07M4NH": 5
+  },
+  "device_alarm_snapshots_rows": 5,
+  "alarms_rows": 2,
+  "redis_online": {
+    "E2E-SN-MSCIU07M4NH": true,
+    "E2E-SN2-MSCIU07M4NH": true,
+    "online_set_size": 108
+  },
+  "summary": {
+    "telemetry_rows": 52,
+    "ingest_errors": 0,
+    "devices_with_telemetry": 52,
+    "devices_with_errors": 0,
+    "bound_devices_persisted": [
+      "E2E-SN-MSCIU07M4NH",
+      "E2E-SN2-MSCIU07M4NH"
+    ],
+    "bound_devices_missing": [],
+    "alarm_rows": 5,
+    "alarm_devices": [
+      "E2E-SN-MSCIU07M4NH"
+    ]
+  }
+}
