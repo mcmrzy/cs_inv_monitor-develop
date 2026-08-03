@@ -368,7 +368,7 @@ class _StationDetailPageState extends State<StationDetailPage>
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(l10n.translateError(state.message)),
-                  backgroundColor: Colors.red,
+                  backgroundColor: AppColors.error,
                 ),
               );
             }
@@ -658,7 +658,7 @@ class _StationDetailPageState extends State<StationDetailPage>
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(
               l10n.delete,
-              style: const TextStyle(color: Colors.red),
+              style: const TextStyle(color: AppColors.error),
             ),
           ),
         ],
@@ -692,7 +692,7 @@ class _StationDetailPageState extends State<StationDetailPage>
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColor.surface(context),
         borderRadius: BorderRadius.circular(8.r),
         boxShadow: [
           BoxShadow(
@@ -733,7 +733,6 @@ class _StationDetailPageState extends State<StationDetailPage>
   Future<void> _showDeviceSelectSheet(List<dynamic> devices) async {
     final selected = await showModalBottomSheet<String>(
       context: context,
-      backgroundColor: Colors.transparent,
       builder: (ctx) => _DeviceSelectSheet(
         devices: devices,
         selectedSn: _selectedDeviceSn,
@@ -2326,10 +2325,12 @@ class _DeviceSelectSheetState extends State<_DeviceSelectSheet>
       );
     }
 
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1A1D24) : Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
       ),
       child: SafeArea(
         child: Padding(
@@ -2338,17 +2339,6 @@ class _DeviceSelectSheetState extends State<_DeviceSelectSheet>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Center(
-                child: Container(
-                  width: 40.w,
-                  height: 4.h,
-                  decoration: BoxDecoration(
-                    color: AppColors.divider,
-                    borderRadius: BorderRadius.circular(2.r),
-                  ),
-                ),
-              ),
-              SizedBox(height: 18.h),
               // 标题头：渐变图标 + 标题 + 设备数量
               Row(
                 children: [
@@ -2415,7 +2405,8 @@ class _DeviceSelectSheetState extends State<_DeviceSelectSheet>
               _animatedItem(
                 options.length,
                 Material(
-                  color: AppColors.surfaceHover,
+                  color:
+                      isDark ? const Color(0xFF252830) : AppColors.surfaceHover,
                   borderRadius: BorderRadius.circular(14.r),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(14.r),

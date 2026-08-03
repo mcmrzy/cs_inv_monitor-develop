@@ -254,10 +254,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
               ),
             ],
           ),
-          content: Text(
-            l10n.oldVersionWarning(version),
-            style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary),
-          ),
+          content: Text(l10n.oldVersionWarning(version)),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -290,19 +287,17 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(50.h),
         child: AppBar(
           title: Text(
             l10n.firmwareList,
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17.sp),
           ),
           centerTitle: true,
           elevation: 0,
           scrolledUnderElevation: 0.5,
-          backgroundColor: Colors.white,
-          foregroundColor: AppColors.textPrimary,
           leading: IconButton(
             icon: Icon(Icons.arrow_back_ios_new_rounded, size: 20.sp),
             onPressed: () => Navigator.pop(context),
@@ -528,7 +523,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
 
     final borderColor = isCurrent
         ? AppColors.successLight.withValues(alpha: 0.5)
-        : const Color(0xFFE5E7EB);
+        : AppColors.border;
 
     // 在 build 过程中触发异步状态恢复（仅执行一次）
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -544,7 +539,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
       margin: EdgeInsets.only(bottom: 12.h),
       padding: EdgeInsets.all(14.w),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColor.surface(context),
         borderRadius: BorderRadius.circular(14.r),
         border: Border.all(color: borderColor, width: isCurrent ? 1.5 : 1),
         boxShadow: [
@@ -866,10 +861,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          title: Text(
-            l10n.selectFirmware,
-            style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600),
-          ),
+          title: Text(l10n.selectFirmware),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: validChips.map((chip) {

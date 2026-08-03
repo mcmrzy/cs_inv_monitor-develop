@@ -241,8 +241,6 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
         title: Row(
           children: [
             Icon(
@@ -252,17 +250,11 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
             ),
             SizedBox(width: 8.w),
             Expanded(
-              child: Text(
-                l10n.settingForceConfirmTitle,
-                style: TextStyle(fontSize: 16.sp),
-              ),
+              child: Text(l10n.settingForceConfirmTitle),
             ),
           ],
         ),
-        content: Text(
-          l10n.str(confirmKey),
-          style: TextStyle(fontSize: 14.sp),
-        ),
+        content: Text(l10n.str(confirmKey)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -295,7 +287,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
     final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(
           l10n.paramSettings,
@@ -304,8 +296,6 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
         centerTitle: true,
         elevation: 0,
         scrolledUnderElevation: 0.5,
-        backgroundColor: Colors.white,
-        foregroundColor: AppColors.textPrimary,
         actions: [
           IconButton(
             icon: Icon(Icons.refresh_rounded, size: 22.sp),
@@ -754,8 +744,6 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
           title: Text(l10n.settingLabel(item.labelKey)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -882,7 +870,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.08),
@@ -907,9 +895,6 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
               onPressed: _isApplying ? null : _applyChanges,
               style: FilledButton.styleFrom(
                 padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 12.h),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8.r),
-                ),
               ),
               child: _isApplying
                   ? SizedBox(
