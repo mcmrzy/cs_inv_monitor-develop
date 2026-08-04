@@ -31,7 +31,7 @@ class _DashboardOverviewPageState extends State<DashboardOverviewPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: AppColor.surface(context),
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(50.h),
         child: AppBar(

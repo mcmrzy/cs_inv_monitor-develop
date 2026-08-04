@@ -6,6 +6,7 @@ import 'package:inv_app/core/config/app_config.dart';
 import 'package:inv_app/core/entities/organization.dart';
 import 'package:inv_app/core/stores/organization_context_store.dart';
 import 'package:inv_app/core/services/api_service.dart';
+import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:intl/intl.dart';
 
 /// 可邀请角色按邀请人所属组织类型受限（与后端 inviterAllowedRolesByOrgType 一致）：
@@ -523,9 +524,9 @@ class _InvitationCard extends StatelessWidget {
       case 'rejected':
         return (Colors.red, '已拒绝');
       case 'expired':
-        return (Colors.grey, '已过期');
+        return (AppColors.textHint, '已过期');
       case 'revoked':
-        return (Colors.grey, '已撤销');
+        return (AppColors.textHint, '已撤销');
       case 'pending':
       default:
         return (Colors.orange, '待接受');

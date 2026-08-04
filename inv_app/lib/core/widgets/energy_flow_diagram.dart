@@ -96,6 +96,7 @@ class _EnergyFlowDiagramState extends State<EnergyFlowDiagram>
                     batteryDischargeColor: Colors.blue,
                     loadColor: Colors.purple,
                     gridColor: Colors.blue,
+                    inactiveColor: AppColor.textHint(context),
                     inverterOutputLabel: l10n.inverterOutput,
                     batteryLabel: l10n.batteryLabel,
                     loadLabel: l10n.loadLabel,
@@ -172,6 +173,8 @@ class _EnergyFlowPainter extends CustomPainter {
   final Color batteryDischargeColor;
   final Color loadColor;
   final Color gridColor;
+  // 无功率/不活跃路径与文本颜色（由 widget 层按明暗模式传入）
+  final Color inactiveColor;
   final String inverterOutputLabel;
   final String batteryLabel;
   final String loadLabel;
@@ -193,6 +196,7 @@ class _EnergyFlowPainter extends CustomPainter {
     required this.batteryDischargeColor,
     required this.loadColor,
     required this.gridColor,
+    required this.inactiveColor,
     required this.inverterOutputLabel,
     required this.batteryLabel,
     required this.loadLabel,
@@ -398,7 +402,7 @@ class _EnergyFlowPainter extends CustomPainter {
     const pattern = dashW + dashGap;
 
     final paint = Paint()
-      ..color = Colors.grey.withValues(alpha: 0.3)
+      ..color = inactiveColor.withValues(alpha: 0.3)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5
       ..strokeCap = StrokeCap.round;
@@ -572,7 +576,7 @@ class _EnergyFlowPainter extends CustomPainter {
     final stateIcon = isCharging ? '↑' : (batteryPower < 0 ? '↓' : '-');
     final color = isCharging
         ? batteryChargeColor
-        : (batteryPower < 0 ? batteryDischargeColor : Colors.grey);
+        : (batteryPower < 0 ? batteryDischargeColor : inactiveColor);
 
     final paragraph = (ui.ParagraphBuilder(
       ui.ParagraphStyle(textAlign: TextAlign.center, fontSize: 10),

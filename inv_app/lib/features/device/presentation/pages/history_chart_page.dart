@@ -414,7 +414,10 @@ class _HistoryChartPageState extends State<HistoryChartPage>
           ],
           lineTouchData: LineTouchData(
             touchTooltipData: LineTouchTooltipData(
-              tooltipBgColor: Colors.grey.shade800,
+              // tooltip 保持深色底白字；暗色用浮层语义色
+              tooltipBgColor: Theme.of(context).brightness == Brightness.dark
+                  ? AppColor.surfaceContainer(context)
+                  : AppColors.textPrimary,
               tooltipRoundedRadius: 8,
               getTooltipItems: (touchedSpots) {
                 return touchedSpots.map((spot) {
