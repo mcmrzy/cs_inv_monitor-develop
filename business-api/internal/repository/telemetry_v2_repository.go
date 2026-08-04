@@ -135,7 +135,7 @@ func (r *DeviceRepository) SetDesiredControlState(ctx context.Context, sn, taskI
 
 func (r *StationRepository) GetStatistics(ctx context.Context, stationID int64, startDate, endDate, period, tz string) ([]map[string]interface{}, error) {
 	query := `SELECT h.bucket, SUM(h.avg_pv_power), SUM(h.avg_ac_power), SUM(h.avg_battery_power),
-		SUM(h.daily_pv_energy),
+		ROUND(COALESCE(SUM(h.daily_pv_energy),0)::numeric,2)::float8,
 		SUM(GREATEST(h.avg_battery_power, 0)) / 1000.0,
 		SUM(GREATEST(-h.avg_battery_power, 0)) / 1000.0,
 		SUM(h.avg_ac_power) / 1000.0
@@ -143,8 +143,8 @@ func (r *StationRepository) GetStatistics(ctx context.Context, stationID int64, 
 		WHERE d.station_id=$1 AND d.deleted_at IS NULL AND h.bucket >= ($2::date::timestamp AT TIME ZONE $4)
 		AND h.bucket < (($3::date+1)::timestamp AT TIME ZONE $4) GROUP BY h.bucket ORDER BY h.bucket`
 	if period != "hour" {
-		query = `SELECT e.stat_date::timestamptz, SUM(e.pv_energy), SUM(e.max_ac_power), NULL::double precision,
-			SUM(e.pv_energy),SUM(e.charge_energy),SUM(e.discharge_energy),SUM(e.load_energy)
+		query = `SELECT e.stat_date::timestamptz, ROUND(COALESCE(SUM(e.pv_energy),0)::numeric,2)::float8, SUM(e.max_ac_power), NULL::double precision,
+			ROUND(COALESCE(SUM(e.pv_energy),0)::numeric,2)::float8,ROUND(COALESCE(SUM(e.charge_energy),0)::numeric,2)::float8,ROUND(COALESCE(SUM(e.discharge_energy),0)::numeric,2)::float8,ROUND(COALESCE(SUM(e.load_energy),0)::numeric,2)::float8
 			FROM device_energy_day e JOIN devices d ON d.sn=e.device_sn
 			WHERE d.station_id=$1 AND d.deleted_at IS NULL AND e.stat_date >= $2::date AND e.stat_date <= $3::date
 			GROUP BY e.stat_date ORDER BY e.stat_date`
@@ -181,7 +181,7 @@ func (r *StationRepository) GetStatistics(ctx context.Context, stationID int64, 
 func (r *DeviceRepository) GetStationRealtimeSummary(ctx context.Context, stationID int64, tz string) (float64, float64, error) {
 	today := timezone.TodayInTimezone(tz)
 	var energy, power float64
-	err := r.db.QueryRow(ctx, `SELECT COALESCE(SUM(e.pv_energy),0),COALESCE(SUM(l.ac_active_power),0)
+	err := r.db.QueryRow(ctx, `SELECT ROUND(COALESCE(SUM(e.pv_energy),0)::numeric,2)::float8,COALESCE(SUM(l.ac_active_power),0)
 		FROM devices d LEFT JOIN device_energy_day e ON e.device_sn=d.sn AND e.stat_date=$2::date
 		LEFT JOIN device_latest_state l ON l.device_sn=d.sn
 		WHERE d.station_id=$1 AND d.deleted_at IS NULL`, stationID, today).Scan(&energy, &power)
@@ -201,9 +201,9 @@ func (r *DeviceRepository) GetStationEnergySummary(ctx context.Context, stationI
 	now := time.Now().In(loc)
 	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, loc).Format("2006-01-02")
 	var total, month float64
-	_ = r.db.QueryRow(ctx, `SELECT COALESCE(SUM(l.total_pv_energy),0),COALESCE((SELECT SUM(e.pv_energy)
+	_ = r.db.QueryRow(ctx, `SELECT ROUND(COALESCE(SUM(l.total_pv_energy),0)::numeric,2)::float8,ROUND(COALESCE((SELECT SUM(e.pv_energy)
 		FROM device_energy_day e JOIN devices d2 ON d2.sn=e.device_sn
-		WHERE d2.station_id=$1 AND d2.deleted_at IS NULL AND e.stat_date >= $2::date),0)
+		WHERE d2.station_id=$1 AND d2.deleted_at IS NULL AND e.stat_date >= $2::date),0)::numeric,2)::float8
 		FROM devices d LEFT JOIN device_latest_state l ON l.device_sn=d.sn
 		WHERE d.station_id=$1 AND d.deleted_at IS NULL`, stationID, monthStart).Scan(&total, &month)
 	return total, month
@@ -213,14 +213,14 @@ func (r *DeviceRepository) GetStationYearEnergy(ctx context.Context, stationID i
 	loc := timezone.LoadLocation(tz)
 	yearStart := time.Date(time.Now().In(loc).Year(), 1, 1, 0, 0, 0, 0, loc).Format("2006-01-02")
 	var value float64
-	_ = r.db.QueryRow(ctx, `SELECT COALESCE(SUM(e.pv_energy),0) FROM device_energy_day e
+	_ = r.db.QueryRow(ctx, `SELECT ROUND(COALESCE(SUM(e.pv_energy),0)::numeric,2)::float8 FROM device_energy_day e
 		JOIN devices d ON d.sn=e.device_sn WHERE d.station_id=$1 AND d.deleted_at IS NULL AND e.stat_date >= $2::date`, stationID, yearStart).Scan(&value)
 	return value
 }
 
 func (r *DeviceRepository) GetStationTodayEnergy(ctx context.Context, stationID int64, tz string) (float64, error) {
 	var value float64
-	err := r.db.QueryRow(ctx, `SELECT COALESCE(SUM(e.pv_energy),0) FROM device_energy_day e
+	err := r.db.QueryRow(ctx, `SELECT ROUND(COALESCE(SUM(e.pv_energy),0)::numeric,2)::float8 FROM device_energy_day e
 		JOIN devices d ON d.sn=e.device_sn WHERE d.station_id=$1 AND d.deleted_at IS NULL AND e.stat_date=$2::date`,
 		stationID, timezone.TodayInTimezone(tz)).Scan(&value)
 	return value, err
@@ -228,7 +228,7 @@ func (r *DeviceRepository) GetStationTodayEnergy(ctx context.Context, stationID 
 
 func (r *DeviceRepository) GetTrend(ctx context.Context, userID int64, period, tz string) ([]map[string]interface{}, error) {
 	today := timezone.TodayInTimezone(tz)
-	rows, err := r.db.Query(ctx, `SELECT e.stat_date,COALESCE(SUM(e.pv_energy),0) FROM device_energy_day e
+	rows, err := r.db.Query(ctx, `SELECT e.stat_date,ROUND(COALESCE(SUM(e.pv_energy),0)::numeric,2)::float8 FROM device_energy_day e
 		JOIN devices d ON d.sn=e.device_sn WHERE d.deleted_at IS NULL
 		AND d.sn IN (SELECT device_sn FROM v_user_device_access WHERE user_id=$1)
 		AND e.stat_date >= $2::date-30 GROUP BY e.stat_date ORDER BY e.stat_date`, userID, today)

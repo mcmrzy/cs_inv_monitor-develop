@@ -93,6 +93,8 @@ func isAuthenticatedSelfService(method, path string) bool {
 		return method == "POST"
 	case "/api/v1/auth/profile":
 		return method == "GET" || method == "PUT"
+	case "/api/v1/notify-settings":
+		return method == "GET" || method == "PUT"
 	default:
 		return false
 	}

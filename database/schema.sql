@@ -687,6 +687,31 @@ CREATE INDEX idx_notifications_sn ON notifications(device_sn);
 CREATE INDEX idx_notifications_type ON notifications(notify_type);
 CREATE INDEX idx_notifications_time ON notifications(created_at);
 
+-- 用户通知偏好表 (migration 094)
+-- 服务端存储用户通知设置，推送链路（JPush/邮件）发送前检查该表，
+-- 使「我的-消息通知设置」页面的开关真正生效。
+CREATE TABLE IF NOT EXISTS user_notify_prefs (
+    user_id BIGINT PRIMARY KEY REFERENCES users(id),
+    push_enabled BOOLEAN NOT NULL DEFAULT true,          -- 通知总开关
+    notify_online BOOLEAN NOT NULL DEFAULT true,         -- 设备上线通知
+    notify_offline BOOLEAN NOT NULL DEFAULT true,        -- 设备离线通知
+    notify_alarm BOOLEAN NOT NULL DEFAULT true,          -- 告警通知总开关
+    notify_alarm_fatal BOOLEAN NOT NULL DEFAULT true,    -- 严重告警
+    notify_alarm_warning BOOLEAN NOT NULL DEFAULT true,  -- 警告
+    notify_alarm_info BOOLEAN NOT NULL DEFAULT true,     -- 提示
+    notify_alarm_cleared BOOLEAN NOT NULL DEFAULT true,  -- 告警恢复通知
+    notify_ota BOOLEAN NOT NULL DEFAULT true,            -- OTA 升级提醒
+    notify_system BOOLEAN NOT NULL DEFAULT true,         -- 系统公告
+    notify_daily BOOLEAN NOT NULL DEFAULT false,         -- 每日发电统计报告
+    daily_report_time VARCHAR(5) NOT NULL DEFAULT '20:00', -- 报告推送时间（用户时区 HH:MM）
+    email_enabled BOOLEAN NOT NULL DEFAULT false,        -- 邮件通知渠道
+    dnd_enabled BOOLEAN NOT NULL DEFAULT false,          -- 免打扰模式
+    dnd_start VARCHAR(5) NOT NULL DEFAULT '22:00',
+    dnd_end VARCHAR(5) NOT NULL DEFAULT '07:00',
+    alarm_break_dnd BOOLEAN NOT NULL DEFAULT true,       -- 严重告警不受免打扰影响
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- 告警规则表 (migration 028)
 CREATE TABLE IF NOT EXISTS alert_rules (
     id BIGSERIAL PRIMARY KEY,
@@ -7014,5 +7039,8 @@ INSERT INTO schema_migrations (version, name) VALUES (88, '088_fix_member_identi
 INSERT INTO schema_migrations (version, name) VALUES (89, '089_add_org_admin_org_create_grant.up.sql') ON CONFLICT (version) DO NOTHING;
 INSERT INTO schema_migrations (version, name) VALUES (90, '090_revoke_org_create_customer_self_manage.up.sql') ON CONFLICT (version) DO NOTHING;
 INSERT INTO schema_migrations (version, name) VALUES (91, '091_add_model_csl10_6k2.up.sql') ON CONFLICT (version) DO NOTHING;
+INSERT INTO schema_migrations (version, name) VALUES (92, '092_add_devices_sort_order.up.sql') ON CONFLICT (version) DO NOTHING;
+INSERT INTO schema_migrations (version, name) VALUES (93, '093_add_station_country.up.sql') ON CONFLICT (version) DO NOTHING;
+INSERT INTO schema_migrations (version, name) VALUES (94, '094_user_notify_prefs.up.sql') ON CONFLICT (version) DO NOTHING;
 
--- Next migration version to use: 092
+-- Next migration version to use: 095

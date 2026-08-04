@@ -95,7 +95,7 @@ func (f *fakeProtocolV1Store) HasDeviceAccess(_ context.Context, _ int64, _ stri
 }
 
 func protocolV1TestRouter(store protocolV1Store) *gin.Engine {
-	h := NewInternalHandler(nil, nil, nil, nil, nil, nil)
+	h := NewInternalHandler(nil, nil, nil, nil, nil, nil, nil, nil)
 	h.protocolV1 = store
 	r := gin.New()
 	r.POST("/alarm", h.IngestAlarmV1)
@@ -228,7 +228,7 @@ func TestCanonicalJSONHashIgnoresObjectOrderAndEquivalentNumbers(t *testing.T) {
 
 func TestProtocolQueriesRejectCrossTenantDevice(t *testing.T) {
 	store := &fakeProtocolV1Store{allowAccess: false}
-	h := NewInternalHandler(nil, nil, nil, nil, nil, nil)
+	h := NewInternalHandler(nil, nil, nil, nil, nil, nil, nil, nil)
 	h.protocolV1 = store
 	r := gin.New()
 	r.Use(func(c *gin.Context) {
@@ -259,7 +259,7 @@ func TestProtocolQueriesRejectCrossTenantDevice(t *testing.T) {
 
 func TestProtocolQueryAccessDatabaseErrorIsExplicit(t *testing.T) {
 	store := &fakeProtocolV1Store{accessErr: errors.New("database unavailable")}
-	h := NewInternalHandler(nil, nil, nil, nil, nil, nil)
+	h := NewInternalHandler(nil, nil, nil, nil, nil, nil, nil, nil)
 	h.protocolV1 = store
 	r := gin.New()
 	r.Use(func(c *gin.Context) {
@@ -281,7 +281,7 @@ func TestProtocolQueryAccessDatabaseErrorIsExplicit(t *testing.T) {
 
 func TestProtocolQueryRoleZeroBypassesObjectAccessCheck(t *testing.T) {
 	store := &fakeProtocolV1Store{allowAccess: false}
-	h := NewInternalHandler(nil, nil, nil, nil, nil, nil)
+	h := NewInternalHandler(nil, nil, nil, nil, nil, nil, nil, nil)
 	h.protocolV1 = store
 	r := gin.New()
 	r.Use(func(c *gin.Context) {
@@ -376,7 +376,7 @@ func parallelQueryRouter(h *InternalHandler) *gin.Engine {
 }
 
 func TestGetParallelStateReturnsDatabaseError(t *testing.T) {
-	h := NewInternalHandler(nil, nil, nil, nil, nil, nil)
+	h := NewInternalHandler(nil, nil, nil, nil, nil, nil, nil, nil)
 	h.db = &stubHandlerDB{rows: []pgx.Row{
 		stubRow{scan: func(...any) error { return errors.New("database unavailable") }},
 	}}
@@ -389,7 +389,7 @@ func TestGetParallelStateReturnsDatabaseError(t *testing.T) {
 }
 
 func TestGetParallelStateDisabledDTO(t *testing.T) {
-	h := NewInternalHandler(nil, nil, nil, nil, nil, nil)
+	h := NewInternalHandler(nil, nil, nil, nil, nil, nil, nil, nil)
 	reportedAt := time.Date(2026, 7, 14, 10, 0, 0, 0, time.UTC)
 	h.db = &stubHandlerDB{rows: []pgx.Row{
 		stubRow{scan: func(dest ...any) error {
@@ -430,7 +430,7 @@ func TestGetParallelStateDisabledDTO(t *testing.T) {
 }
 
 func TestProtocolQueryRejectsInvalidRFC3339Range(t *testing.T) {
-	h := NewInternalHandler(nil, nil, nil, nil, nil, nil)
+	h := NewInternalHandler(nil, nil, nil, nil, nil, nil, nil, nil)
 	r := parallelQueryRouter(h)
 	for _, query := range []string{
 		"?start_time=not-a-time",

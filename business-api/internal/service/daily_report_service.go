@@ -1,0 +1,145 @@
+package service
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"inv-api-server/internal/repository"
+	"inv-api-server/pkg/logger"
+	"inv-api-server/pkg/timezone"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+	"go.uber.org/zap"
+)
+
+// DailyReportService 每日统计定时推送服务。
+// 每 60 秒轮询一次，向所有开启每日统计报告且到达报告推送时间（用户时区）的用户
+// 推送当日发电统计摘要：JPush 通知 + 可选邮件（email_enabled 时）。
+// 去重由 JPushService.SendDailyReportAsync 的 Redis SetNX（push:dedup:daily:{userID}:{date}）保证。
+type DailyReportService struct {
+	db              *pgxpool.Pool
+	notifyPrefsRepo *repository.NotifyPrefsRepository
+	jpushService    *JPushService
+	emailService    *EmailService
+}
+
+// DailyReportSummary 用户当日统计汇总（跨用户可见电站/设备聚合）。
+type DailyReportSummary struct {
+	DeviceCount     int
+	PVEnergy        float64
+	LoadEnergy      float64
+	ChargeEnergy    float64
+	DischargeEnergy float64
+	AlarmCount      int
+}
+
+func NewDailyReportService(db *pgxpool.Pool, notifyPrefsRepo *repository.NotifyPrefsRepository, jpushService *JPushService, emailService *EmailService) *DailyReportService {
+	return &DailyReportService{
+		db:              db,
+		notifyPrefsRepo: notifyPrefsRepo,
+		jpushService:    jpushService,
+		emailService:    emailService,
+	}
+}
+
+// Start 启动每日报告轮询，done 关闭时退出（参照 cmd/main.go 现有 ticker 模式）。
+func (s *DailyReportService) Start(done chan struct{}) {
+	ticker := time.NewTicker(60 * time.Second)
+	defer ticker.Stop()
+	logger.Info("Daily report service started")
+	for {
+		select {
+		case <-done:
+			logger.Info("Daily report service stopped")
+			return
+		case <-ticker.C:
+			s.runOnce()
+		}
+	}
+}
+
+// runOnce 查询所有开启每日报告的用户，为到达推送时间的用户生成并发送报告。
+func (s *DailyReportService) runOnce() {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	users, err := s.notifyPrefsRepo.ListDailyReportUsers(ctx)
+	if err != nil {
+		logger.Warn("Daily report: failed to list users", zap.Error(err))
+		return
+	}
+
+	nowUTC := time.Now().UTC()
+	for _, u := range users {
+		// 按用户时区判断是否到达报告推送时间（daily_report_time 为 HH:MM）
+		localNow := timezone.InTimezone(nowUTC, u.Timezone)
+		if localNow.Format("15:04") != u.ReportTime {
+			continue
+		}
+		s.sendReport(ctx, u)
+	}
+}
+
+// sendReport 聚合用户当日统计并推送（JPush + 可选邮件）。
+func (s *DailyReportService) sendReport(ctx context.Context, u repository.DailyReportUser) {
+	date := timezone.InTimezone(time.Now().UTC(), u.Timezone).Format("2006-01-02")
+
+	summary, err := s.aggregateDay(ctx, u.UserID, date)
+	if err != nil {
+		logger.Warn("Daily report: aggregate failed",
+			zap.Int64("user_id", u.UserID), zap.Error(err))
+		return
+	}
+
+	content := formatDailyReport(summary, date)
+
+	s.jpushService.SendDailyReportAsync(ctx, u.UserID, date, content)
+
+	if u.EmailEnabled && u.Email != "" {
+		username := u.Nickname
+		if username == "" {
+			username = fmt.Sprintf("user_%d", u.UserID)
+		}
+		if err := s.emailService.SendDailyReportEmail(u.Email, username, content); err != nil {
+			logger.Warn("Daily report email failed",
+				zap.Int64("user_id", u.UserID), zap.Error(err))
+		}
+	}
+}
+
+// aggregateDay 聚合用户可见设备（v_user_device_access 数据范围）在指定日期的能量统计。
+func (s *DailyReportService) aggregateDay(ctx context.Context, userID int64, date string) (*DailyReportSummary, error) {
+	query := `
+		SELECT COUNT(DISTINCT e.device_sn),
+		       ROUND(COALESCE(SUM(e.pv_energy), 0)::numeric, 2)::float8,
+		       ROUND(COALESCE(SUM(e.load_energy), 0)::numeric, 2)::float8,
+		       ROUND(COALESCE(SUM(e.charge_energy), 0)::numeric, 2)::float8,
+		       ROUND(COALESCE(SUM(e.discharge_energy), 0)::numeric, 2)::float8,
+		       COALESCE(SUM(e.alarm_count), 0)
+		FROM device_energy_day e
+		WHERE e.stat_date = $1::date
+		  AND e.device_sn IN (SELECT device_sn FROM v_user_device_access WHERE user_id = $2)
+	`
+	var summary DailyReportSummary
+	err := s.db.QueryRow(ctx, query, date, userID).Scan(
+		&summary.DeviceCount,
+		&summary.PVEnergy,
+		&summary.LoadEnergy,
+		&summary.ChargeEnergy,
+		&summary.DischargeEnergy,
+		&summary.AlarmCount,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &summary, nil
+}
+
+// formatDailyReport 生成用户粒度摘要文本（JPush 通知与邮件共用）。
+func formatDailyReport(s *DailyReportSummary, date string) string {
+	return fmt.Sprintf(
+		"%s 发电统计：光伏发电 %.1f kWh，负载用电 %.1f kWh，充电 %.1f kWh，放电 %.1f kWh，告警 %d 次（%d 台设备）",
+		date, s.PVEnergy, s.LoadEnergy, s.ChargeEnergy, s.DischargeEnergy, s.AlarmCount, s.DeviceCount,
+	)
+}
