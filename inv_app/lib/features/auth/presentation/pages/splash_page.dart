@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:inv_app/core/services/jverify_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
@@ -245,7 +244,7 @@ class _SplashPageState extends State<SplashPage> {
                         SizedBox(height: 10.h),
                         Text(
                           l10n.pvInverterMonitor,
-                          style: GoogleFonts.notoSansSc(
+                          style: TextStyle(
                             fontSize: 14.sp,
                             color: Colors.white.withValues(alpha: 0.85),
                           ),

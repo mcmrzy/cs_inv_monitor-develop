@@ -1,5 +1,5 @@
 import 'package:bloc_test/bloc_test.dart';
-import 'package:dartz/dartz.dart';
+import 'package:fpdart/fpdart.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inv_app/core/errors/failures.dart';
@@ -110,7 +110,7 @@ void main() {
 
       final result = await repository.getAlarmEvents('INV001');
 
-      expect(result.getOrElse(() => throw Exception()).value, hasLength(1));
+      expect(result.getOrElse((_) => throw Exception()).value, hasLength(1));
       verify(() => cache.save('protocol_alarm_events_INV001', page)).called(1);
     });
 
@@ -139,7 +139,7 @@ void main() {
           .thenReturn(1000);
 
       final result = await repository.getThreePhase('INV001');
-      final data = result.getOrElse(() => throw Exception());
+      final data = result.getOrElse((_) => throw Exception());
 
       expect(data.isFromCache, isTrue);
       expect(data.cachedAt, DateTime.fromMillisecondsSinceEpoch(1000));

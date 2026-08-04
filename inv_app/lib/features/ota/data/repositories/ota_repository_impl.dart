@@ -1,4 +1,4 @@
-import 'package:dartz/dartz.dart';
+import 'package:fpdart/fpdart.dart';
 import 'package:dio/dio.dart';
 import 'package:inv_app/core/errors/failures.dart';
 import 'package:inv_app/features/ota/data/datasources/ota_remote_data_source.dart';

@@ -1,4 +1,4 @@
-import 'package:dartz/dartz.dart';
+import 'package:fpdart/fpdart.dart';
 import 'package:inv_app/core/errors/failures.dart';
 import 'package:inv_app/features/device_protocol/domain/entities/device_protocol_entities.dart';
 

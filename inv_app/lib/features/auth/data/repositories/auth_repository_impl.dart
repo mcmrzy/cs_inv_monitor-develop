@@ -1,4 +1,4 @@
-import 'package:dartz/dartz.dart';
+import 'package:fpdart/fpdart.dart';
 import 'package:inv_app/core/errors/failures.dart';
 import 'package:inv_app/core/services/api_service.dart';
 import 'package:inv_app/core/services/storage_service.dart';
