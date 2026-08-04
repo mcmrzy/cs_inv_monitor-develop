@@ -450,12 +450,15 @@ class _StationDetailPageState extends State<StationDetailPage>
         Positioned.fill(
           top: 0,
           child: Container(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [Color(0xFF87CEEB), Colors.white],
+                // 浅色：天蓝渐变；暗色：深蓝灰渐变
+                colors: Theme.of(context).brightness == Brightness.dark
+                    ? [const Color(0xFF1B2A3A), AppColor.surface(context)]
+                    : const [Color(0xFF87CEEB), Colors.white],
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                stops: [0.0, 0.5],
+                stops: const [0.0, 0.5],
               ),
             ),
           ),
@@ -1478,7 +1481,7 @@ class _StationDetailPageState extends State<StationDetailPage>
     return Stack(
       children: [
         Positioned.fill(
-          child: Container(color: const Color(0xFFF5F7FA)),
+          child: Container(color: AppColor.surface(context)),
         ),
         Column(
           children: [
