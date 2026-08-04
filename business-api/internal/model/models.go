@@ -68,6 +68,8 @@ type Device struct {
 	CellCount      int        `json:"cell_count"`
 	StationID      *int64     `json:"station_id"`
 	StationName    string     `json:"station_name"`
+	Alias          string     `json:"alias"`
+	Remark         string     `json:"remark"`
 	UserID         int64      `json:"user_id"`
 	Timezone       string     `json:"timezone"`
 	Status         int        `json:"status"`

@@ -865,6 +865,8 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			auth.DELETE("/stations/:id", deps.StationHandler.Delete)
 			auth.GET("/stations/:id/statistics", deps.StationHandler.GetStatistics)
 			auth.PUT("/stations/:id/devices/reorder", deps.DeviceHandler.ReorderDevices)
+			// 电站排序：只能用 POST（PUT 树中 /stations/:id 通配符与静态段冲突）
+			auth.POST("/stations/reorder", deps.StationHandler.ReorderStations)
 
 			auth.GET("/geocode", deps.GeocodeHandler.Geocode)
 			auth.GET("/geocode/reverse", deps.GeocodeHandler.ReverseGeocode)
@@ -874,6 +876,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			// Gin wildcard-vs-static conflicts at the same path level.
 			auth.GET("/devices", deps.DeviceHandler.List)
 			auth.POST("/devices", deps.DeviceHandler.Create)
+			auth.PUT("/devices/reorder", deps.DeviceHandler.ReorderDevicesGlobal)
 			auth.POST("/devices/bind", deps.DeviceHandler.Bind)
 			auth.POST("/devices/batch/control", middleware.RequirePermission(deps.PermChecker, "devices", "control"), deps.DeviceHandler.BatchControl)
 			auth.POST("/devices/add-to-station", deps.DeviceHandler.AddToStation)

@@ -448,6 +448,11 @@ func (s *StationService) GetAll(ctx context.Context, page, pageSize int) ([]*mod
 	return s.repo.GetAll(ctx, page, pageSize)
 }
 
+// ReorderStations 持久化用户电站列表的展示顺序
+func (s *StationService) ReorderStations(ctx context.Context, userID int64, ids []int64, isAdmin bool) error {
+	return s.repo.ReorderStations(ctx, userID, ids, isAdmin)
+}
+
 func (s *StationService) GetDayData(ctx context.Context, stationID int64, date string) (*model.StationDayData, error) {
 	return s.repo.GetDayData(ctx, stationID, date)
 }
@@ -511,6 +516,16 @@ func (s *DeviceService) GetByStationID(ctx context.Context, stationID int64) ([]
 // ReorderDevices persists the display order of devices within a station.
 func (s *DeviceService) ReorderDevices(ctx context.Context, stationID int64, order []string) error {
 	return s.repo.ReorderDevices(ctx, stationID, order)
+}
+
+// ReorderDevicesGlobal 持久化全局设备列表（/devices）的展示顺序
+func (s *DeviceService) ReorderDevicesGlobal(ctx context.Context, userID int64, order []string) error {
+	return s.repo.ReorderDevicesGlobal(ctx, userID, order)
+}
+
+// UpdateAliasRemark 更新设备别名与备注；nil 表示保持原值
+func (s *DeviceService) UpdateAliasRemark(ctx context.Context, sn string, alias, remark *string) error {
+	return s.repo.UpdateAliasRemark(ctx, sn, alias, remark)
 }
 
 func (s *DeviceService) GetStationRealtimeSummary(ctx context.Context, stationID int64, tz string) (float64, float64, error) {

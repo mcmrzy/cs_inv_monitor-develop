@@ -633,7 +633,7 @@ func (r *StationRepository) GetByUserID(ctx context.Context, userID int64, page,
 
 	query := `SELECT ` + stationListSelectColumns + `
 			FROM stations WHERE user_id = $1 AND deleted_at IS NULL
-			ORDER BY created_at DESC
+			ORDER BY sort_order, created_at DESC, id
 			LIMIT $2 OFFSET $3
 		`
 
@@ -746,7 +746,8 @@ const deviceListSelectColumns = `d.id, d.sn, COALESCE(d.model, ''), COALESCE(d.m
 	COALESCE(d.battery_voltage,0), COALESCE(d.battery_type,''), COALESCE(d.cell_count,0),
 	d.station_id, d.user_id, d.status, COALESCE(d.timezone,'Asia/Shanghai'),
 	COALESCE(rd.total_active_power, 0), COALESCE(rd.daily_energy, 0),
-	d.last_online_at, d.created_at, d.updated_at, COALESCE(s.name, '') as station_name`
+	d.last_online_at, d.created_at, d.updated_at, COALESCE(s.name, '') as station_name,
+	COALESCE(d.alias, ''), COALESCE(d.remark, '')`
 
 func NewDeviceRepository(db *pgxpool.Pool, cache *redis.Client) *DeviceRepository {
 	return &DeviceRepository{db: db, cache: cache}
@@ -805,7 +806,8 @@ func (r *DeviceRepository) GetBySN(ctx context.Context, sn string) (*model.Devic
 			   COALESCE(d.battery_voltage,0), COALESCE(d.battery_type,''), COALESCE(d.cell_count,0),
 			   d.station_id, d.user_id, d.status, COALESCE(d.timezone,'Asia/Shanghai'),
 			   COALESCE(rd.total_active_power, 0), COALESCE(rd.daily_energy, 0),
-			   d.last_online_at, d.created_at, d.updated_at
+			   d.last_online_at, d.created_at, d.updated_at,
+			   COALESCE(d.alias, ''), COALESCE(d.remark, '')
 		FROM devices d
 		LEFT JOIN device_models dm ON d.model_id = dm.id
 		LEFT JOIN v_device_latest rd ON rd.device_sn = d.sn
@@ -827,6 +829,7 @@ func (r *DeviceRepository) GetBySN(ctx context.Context, sn string) (*model.Devic
 		&device.CurrentPower, &device.DailyEnergy,
 		&lastOnlineAt,
 		&device.CreatedAt, &device.UpdatedAt,
+		&device.Alias, &device.Remark,
 	)
 
 	if err != nil {
@@ -896,7 +899,7 @@ func (r *DeviceRepository) GetByUserID(ctx context.Context, userID int64, statio
 		return nil, 0, err
 	}
 
-	query := `SELECT ` + deviceListSelectColumns + baseQuery + ` ORDER BY d.created_at DESC LIMIT $` + fmt.Sprintf("%d", argIdx) + ` OFFSET $` + fmt.Sprintf("%d", argIdx+1)
+	query := `SELECT ` + deviceListSelectColumns + baseQuery + ` ORDER BY d.global_sort_order, d.created_at DESC, d.id LIMIT $` + fmt.Sprintf("%d", argIdx) + ` OFFSET $` + fmt.Sprintf("%d", argIdx+1)
 
 	args = append(args, pageSize, offset)
 
@@ -923,6 +926,7 @@ func (r *DeviceRepository) GetByUserID(ctx context.Context, userID int64, statio
 			&lastOnlineAt,
 			&device.CreatedAt, &device.UpdatedAt,
 			&device.StationName,
+			&device.Alias, &device.Remark,
 		); err != nil {
 			return nil, 0, err
 		}
@@ -1013,6 +1017,7 @@ func (r *DeviceRepository) GetAll(ctx context.Context, stationID int64, status i
 			&lastOnlineAt,
 			&device.CreatedAt, &device.UpdatedAt,
 			&device.StationName,
+			&device.Alias, &device.Remark,
 		); err != nil {
 			return nil, 0, err
 		}
@@ -1061,6 +1066,7 @@ func (r *DeviceRepository) GetByStationID(ctx context.Context, stationID int64) 
 			&lastOnlineAt,
 			&device.CreatedAt, &device.UpdatedAt,
 			&device.StationName,
+			&device.Alias, &device.Remark,
 		); err != nil {
 			return nil, err
 		}
@@ -1098,6 +1104,91 @@ func (r *DeviceRepository) ReorderDevices(ctx context.Context, stationID int64, 
 		if _, err := tx.Exec(ctx, `UPDATE devices SET sort_order = $1, updated_at = NOW()
 			WHERE station_id = $2 AND sn = $3 AND deleted_at IS NULL`, i+1, stationID, sn); err != nil {
 			return err
+		}
+	}
+	return tx.Commit(ctx)
+}
+
+// ReorderDevicesGlobal persists the display order of a user's devices in the
+// global /devices list. Semantics mirror ReorderDevices but write
+// global_sort_order so the per-station order is left untouched.
+func (r *DeviceRepository) ReorderDevicesGlobal(ctx context.Context, userID int64, order []string) error {
+	if len(order) == 0 {
+		return nil
+	}
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err := tx.Exec(ctx, `UPDATE devices SET global_sort_order = 0, updated_at = NOW()
+		WHERE user_id = $1 AND deleted_at IS NULL AND NOT (sn = ANY($2))`, userID, order); err != nil {
+		return err
+	}
+	for i, sn := range order {
+		if _, err := tx.Exec(ctx, `UPDATE devices SET global_sort_order = $1, updated_at = NOW()
+			WHERE user_id = $2 AND sn = $3 AND deleted_at IS NULL`, i+1, userID, sn); err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
+}
+
+// UpdateAliasRemark 更新设备别名与备注；nil 表示保持原值（App 设备编辑页可修改字段）。
+func (r *DeviceRepository) UpdateAliasRemark(ctx context.Context, sn string, alias, remark *string) error {
+	result, err := r.db.Exec(ctx, `
+		UPDATE devices SET
+			alias = COALESCE($2, alias),
+			remark = COALESCE($3, remark),
+			updated_at = NOW()
+		WHERE sn = $1 AND deleted_at IS NULL`,
+		sn, alias, remark)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("device not found: %s", sn)
+	}
+	r.invalidateDeviceCache(ctx, sn)
+	return nil
+}
+
+// ReorderStations persists the display order of a user's stations.
+// Stations outside the provided order are reset to sort_order 0, and the
+// provided IDs are assigned sequential sort_order values (1..N) in a single
+// transaction. Non-admin users can only reorder their own stations.
+func (r *StationRepository) ReorderStations(ctx context.Context, userID int64, ids []int64, isAdmin bool) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	if isAdmin {
+		if _, err := tx.Exec(ctx, `UPDATE stations SET sort_order = 0, updated_at = NOW()
+			WHERE deleted_at IS NULL AND NOT (id = ANY($1))`, ids); err != nil {
+			return err
+		}
+		for i, id := range ids {
+			if _, err := tx.Exec(ctx, `UPDATE stations SET sort_order = $1, updated_at = NOW()
+				WHERE id = $2 AND deleted_at IS NULL`, i+1, id); err != nil {
+				return err
+			}
+		}
+	} else {
+		if _, err := tx.Exec(ctx, `UPDATE stations SET sort_order = 0, updated_at = NOW()
+			WHERE user_id = $1 AND deleted_at IS NULL AND NOT (id = ANY($2))`, userID, ids); err != nil {
+			return err
+		}
+		for i, id := range ids {
+			if _, err := tx.Exec(ctx, `UPDATE stations SET sort_order = $1, updated_at = NOW()
+				WHERE id = $2 AND user_id = $3 AND deleted_at IS NULL`, i+1, id, userID); err != nil {
+				return err
+			}
 		}
 	}
 	return tx.Commit(ctx)
