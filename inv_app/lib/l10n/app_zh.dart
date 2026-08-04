@@ -609,6 +609,8 @@ const Map<String, String> zh = {
   'sort_mode_hint': '长按卡片拖动调整顺序',
   'station_order_saved': '电站排序已保存',
   'device_updated': '设备信息已保存',
+  'device_actions': '设备操作',
+  'delete_station': '删除电站',
   'address_not_found': '未找到该地址，请检查后重试',
   'other_group': '其他',
 

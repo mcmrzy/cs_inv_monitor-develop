@@ -669,6 +669,8 @@ class AppLocalizations {
   String get sortModeHint => _localizedStrings['sort_mode_hint']!;
   String get stationOrderSaved => _localizedStrings['station_order_saved']!;
   String get deviceUpdated => _localizedStrings['device_updated']!;
+    String get deviceActions => _localizedStrings['device_actions']!;
+    String get deleteStation => _localizedStrings['delete_station']!;
   String get addressNotFound => _localizedStrings['address_not_found']!;
   String get otherGroup => _localizedStrings['other_group']!;
 

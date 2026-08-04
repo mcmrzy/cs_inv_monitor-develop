@@ -49,6 +49,8 @@ class _StationDetailPageState extends State<StationDetailPage>
   double _mqttSoc = 0;
   bool _mqttActive = false;
   String _selectedDeviceSn = 'all';
+  // 设备拖动排序模式：由设备编辑页“设备排序”入口开启
+  bool _deviceSortMode = false;
 
   @override
   void initState() {
@@ -426,10 +428,11 @@ class _StationDetailPageState extends State<StationDetailPage>
       soc = (station['batt_soc'] as num?)?.toDouble() ?? 0;
     }
 
-    final displayPvW = _mqttActive ? _mqttPvW : pvW;
-    final displayLoadW = _mqttActive ? _mqttLoadW : loadW;
-    final displayBattW = _mqttActive ? _mqttBattW : battW;
-    final displaySoc = _mqttActive ? _mqttSoc : soc;
+    // 离线时功率/SOC 清零：能量流全零，动画自然停止
+    final displayPvW = online ? (_mqttActive ? _mqttPvW : pvW) : 0.0;
+    final displayLoadW = online ? (_mqttActive ? _mqttLoadW : loadW) : 0.0;
+    final displayBattW = online ? (_mqttActive ? _mqttBattW : battW) : 0.0;
+    final displaySoc = online ? (_mqttActive ? _mqttSoc : soc) : 0.0;
     const displayGridW = 0.0;
     final todayKwh = (station['today_energy'] ?? 0.0).toDouble();
     final totalKwh = (station['total_energy'] ?? 0.0).toDouble();
@@ -530,7 +533,25 @@ class _StationDetailPageState extends State<StationDetailPage>
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              // 右上角：在线状态
+              // 编辑电站入口（原三点菜单移除后的落点）
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () =>
+                      context.push('/station/${widget.stationId}/edit'),
+                  borderRadius: BorderRadius.circular(8.r),
+                  child: Padding(
+                    padding: EdgeInsets.all(6.w),
+                    child: const Icon(
+                      Icons.edit_outlined,
+                      size: 20,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(width: 8.w),
+              // 右上角：在线状态徽标（保持最右）
               Container(
                 padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
                 decoration: BoxDecoration(
@@ -573,44 +594,6 @@ class _StationDetailPageState extends State<StationDetailPage>
                   ],
                 ),
               ),
-              SizedBox(width: 8.w),
-              // 更多操作菜单
-              PopupMenuButton<String>(
-                icon: Icon(
-                  Icons.more_vert,
-                  size: 20,
-                  color: AppColors.textPrimary,
-                ),
-                onSelected: (val) async {
-                  if (val == 'edit') {
-                    context.push('/station/${widget.stationId}/edit');
-                  } else if (val == 'delete') {
-                    await _confirmDelete(l10n);
-                  }
-                },
-                itemBuilder: (_) => [
-                  PopupMenuItem(
-                    value: 'edit',
-                    child: Row(
-                      children: [
-                        Icon(Icons.edit_outlined, size: 18, color: AppColors.textSecondary),
-                        SizedBox(width: 8.w),
-                        Text(l10n.editStation),
-                      ],
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: 'delete',
-                    child: Row(
-                      children: [
-                        const Icon(Icons.delete_outline, size: 18, color: AppColors.error),
-                        SizedBox(width: 8.w),
-                        Text(l10n.delete, style: const TextStyle(color: AppColors.error)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
             ],
           ),
           SizedBox(height: 4.h),
@@ -636,37 +619,6 @@ class _StationDetailPageState extends State<StationDetailPage>
         ],
       ),
     );
-  }
-
-  Future<void> _confirmDelete(AppLocalizations l10n) async {
-    // Show confirmation dialog
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.delete),
-        content: Text(l10n.str('confirm_delete_station', {})),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(l10n.str('cancel', {})),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(
-              l10n.delete,
-              style: const TextStyle(color: AppColors.error),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true || !mounted) return;
-
-    // Dispatch delete request and listen for success/error
-    context
-        .read<StationBloc>()
-        .add(StationDeleteRequested(stationId: widget.stationId));
   }
 
   Widget _buildDeviceSelector() {
@@ -1532,36 +1484,49 @@ class _StationDetailPageState extends State<StationDetailPage>
           children: [
             SizedBox(height: MediaQuery.of(context).padding.top + 6.h),
             _devicesTopBar(name),
-            // 长按排序提示
-            Padding(
-              padding: EdgeInsets.fromLTRB(20.w, 10.h, 20.w, 2.h),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.swap_vert_rounded,
-                    size: 13.sp,
-                    color: AppColors.textHint,
-                  ),
-                  SizedBox(width: 4.w),
-                  Text(
-                    l10n.longPressSortHint,
-                    style: TextStyle(
-                      fontSize: 12.sp,
+            // 排序模式横条：拖动提示 + 完成按钮
+            if (_deviceSortMode)
+              Padding(
+                padding: EdgeInsets.fromLTRB(20.w, 10.h, 20.w, 2.h),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.swap_vert_rounded,
+                      size: 13.sp,
                       color: AppColors.textHint,
                     ),
-                  ),
-                ],
+                    SizedBox(width: 4.w),
+                    Expanded(
+                      child: Text(
+                        l10n.sortModeHint,
+                        style: TextStyle(
+                          fontSize: 12.sp,
+                          color: AppColors.textHint,
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () =>
+                          setState(() => _deviceSortMode = false),
+                      child: Text(
+                        l10n.finishSorting,
+                        style: TextStyle(
+                          fontSize: 13.sp,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            SizedBox(height: 0.h),
             Expanded(
               child: DeviceListView(
                 devices: devices,
                 showSearch: false,
                 whiteHeader: true,
                 bottomPadding: 100,
-                enableReordering: true,
+                sortMode: _deviceSortMode,
                 onDeviceChanged: (order) {
                   // 保存新的排序顺序到数据库（order 为拖动后的 SN 顺序）
                   context
@@ -1571,27 +1536,29 @@ class _StationDetailPageState extends State<StationDetailPage>
                         deviceOrder: order,
                       ));
                 },
-                onUnbind: (sn) {
-                  context
-                      .read<StationBloc>()
-                      .add(DeviceUnbindRequested(sn: sn));
-                },
-                onRebind: (sn) {
-                  // TODO: 实现换绑逻辑，需要选择新电站
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('换绑功能开发中')),
+                onLongPressDevice: (sn) {
+                  // 长按卡片弹出设备编辑页（携带电站上下文与排序入口回调）
+                  final device = devices.firstWhere(
+                    (d) => (d['sn'] ?? '').toString() == sn,
+                    orElse: () => <String, dynamic>{'sn': sn},
                   );
-                },
-                onBind: (sn) {
-                  // TODO: 实现绑定逻辑，需要选择电站
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('绑定功能开发中')),
-                  );
-                },
-                onDelete: (sn) {
-                  context
-                      .read<StationBloc>()
-                      .add(DeviceDeleteRequested(sn: sn));
+                  context.push('/device/$sn/edit', extra: {
+                    'device': device,
+                    'stationId': widget.stationId,
+                    'onEnterSortMode': () {
+                      if (mounted) {
+                        setState(() => _deviceSortMode = true);
+                      }
+                    },
+                  }).then((_) {
+                    // 编辑页返回后刷新设备列表（别名/备注可能已变更）
+                    if (mounted) {
+                      context.read<StationBloc>().add(
+                            StationDetailRequested(
+                                stationId: widget.stationId),
+                          );
+                    }
+                  });
                 },
               ),
             ),
