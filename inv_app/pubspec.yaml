@@ -35,7 +35,7 @@ dependencies:
   
   flutter_screenutil: ^5.9.0
   
-  go_router: ^13.0.0
+  go_router: ^17.3.0
   
   cached_network_image: ^3.3.1
   
@@ -48,7 +48,7 @@ dependencies:
   wifi_scan: ^0.4.1+2
   flutter_blue_ultra: ^2.2.0  # FBP 1.x 社区延续版（BSD 3-Clause，免费商用）；flutter_blue_plus 1.36+ 商用需付费
   
-  flutter_local_notifications: ^17.2.4
+  flutter_local_notifications: ^22.2.0
 
   jpush_flutter: ^3.4.6
   # JVerify SDK（极光统一应用）- 已集成在 pub.dev 上
@@ -68,7 +68,7 @@ dependencies:
   flutter_map: ^8.3.1
   latlong2: ^0.10.1
 
-  timezone: ^0.9.2
+  timezone: ^0.11.1
 
 dev_dependencies:
   flutter_test:
