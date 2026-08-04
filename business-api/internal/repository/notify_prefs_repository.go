@@ -1,0 +1,152 @@
+package repository
+
+import (
+	"context"
+	"errors"
+
+	"inv-api-server/internal/model"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+// NotifyPrefsRepository 用户通知偏好存取。
+// 推送链路发送前通过该仓库读取偏好，决定是否向用户推送。
+type NotifyPrefsRepository struct {
+	db *pgxpool.Pool
+}
+
+func NewNotifyPrefsRepository(db *pgxpool.Pool) *NotifyPrefsRepository {
+	return &NotifyPrefsRepository{db: db}
+}
+
+// GetPrefs 查询用户通知偏好；无记录时按默认值创建后返回。
+// 同时关联 users 表回显邮箱，供 App 展示邮件渠道绑定状态。
+func (r *NotifyPrefsRepository) GetPrefs(ctx context.Context, userID int64) (*model.NotifyPrefs, error) {
+	p := &model.NotifyPrefs{UserID: userID}
+	err := r.db.QueryRow(ctx, `
+		SELECT p.user_id, COALESCE(u.email, ''), p.push_enabled, p.notify_online, p.notify_offline,
+		p.notify_alarm, p.notify_alarm_fatal, p.notify_alarm_warning, p.notify_alarm_info,
+		p.notify_alarm_cleared, p.notify_ota, p.notify_system, p.notify_daily,
+		p.daily_report_time, p.email_enabled, p.dnd_enabled, p.dnd_start, p.dnd_end,
+		p.alarm_break_dnd, p.updated_at
+		FROM user_notify_prefs p
+		JOIN users u ON u.id = p.user_id
+		WHERE p.user_id = $1
+	`, userID).Scan(
+		&p.UserID, &p.Email, &p.PushEnabled, &p.NotifyOnline, &p.NotifyOffline,
+		&p.NotifyAlarm, &p.NotifyAlarmFatal, &p.NotifyAlarmWarn, &p.NotifyAlarmInfo,
+		&p.NotifyAlarmClear, &p.NotifyOTA, &p.NotifySystem, &p.NotifyDaily,
+		&p.DailyReportTime, &p.EmailEnabled, &p.DndEnabled, &p.DndStart, &p.DndEnd,
+		&p.AlarmBreakDnd, &p.UpdatedAt,
+	)
+	if err == nil {
+		return p, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
+
+	// 首次访问，插入默认偏好
+	_, err = r.db.Exec(ctx, `
+		INSERT INTO user_notify_prefs (user_id) VALUES ($1)
+		ON CONFLICT (user_id) DO NOTHING
+	`, userID)
+	if err != nil {
+		return nil, err
+	}
+	// 重新读取（处理并发下其他请求已插入的情况）
+	if err := r.db.QueryRow(ctx, `
+		SELECT p.user_id, COALESCE(u.email, ''), p.push_enabled, p.notify_online, p.notify_offline,
+		p.notify_alarm, p.notify_alarm_fatal, p.notify_alarm_warning, p.notify_alarm_info,
+		p.notify_alarm_cleared, p.notify_ota, p.notify_system, p.notify_daily,
+		p.daily_report_time, p.email_enabled, p.dnd_enabled, p.dnd_start, p.dnd_end,
+		p.alarm_break_dnd, p.updated_at
+		FROM user_notify_prefs p
+		JOIN users u ON u.id = p.user_id
+		WHERE p.user_id = $1
+	`, userID).Scan(
+		&p.UserID, &p.Email, &p.PushEnabled, &p.NotifyOnline, &p.NotifyOffline,
+		&p.NotifyAlarm, &p.NotifyAlarmFatal, &p.NotifyAlarmWarn, &p.NotifyAlarmInfo,
+		&p.NotifyAlarmClear, &p.NotifyOTA, &p.NotifySystem, &p.NotifyDaily,
+		&p.DailyReportTime, &p.EmailEnabled, &p.DndEnabled, &p.DndStart, &p.DndEnd,
+		&p.AlarmBreakDnd, &p.UpdatedAt,
+	); err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+// SavePrefs upsert 用户通知偏好。
+func (r *NotifyPrefsRepository) SavePrefs(ctx context.Context, p *model.NotifyPrefs) error {
+	_, err := r.db.Exec(ctx, `
+		INSERT INTO user_notify_prefs (
+			user_id, push_enabled, notify_online, notify_offline,
+			notify_alarm, notify_alarm_fatal, notify_alarm_warning, notify_alarm_info,
+			notify_alarm_cleared, notify_ota, notify_system, notify_daily,
+			daily_report_time, email_enabled, dnd_enabled, dnd_start, dnd_end,
+			alarm_break_dnd, updated_at
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,NOW())
+		ON CONFLICT (user_id) DO UPDATE SET
+			push_enabled = EXCLUDED.push_enabled,
+			notify_online = EXCLUDED.notify_online,
+			notify_offline = EXCLUDED.notify_offline,
+			notify_alarm = EXCLUDED.notify_alarm,
+			notify_alarm_fatal = EXCLUDED.notify_alarm_fatal,
+			notify_alarm_warning = EXCLUDED.notify_alarm_warning,
+			notify_alarm_info = EXCLUDED.notify_alarm_info,
+			notify_alarm_cleared = EXCLUDED.notify_alarm_cleared,
+			notify_ota = EXCLUDED.notify_ota,
+			notify_system = EXCLUDED.notify_system,
+			notify_daily = EXCLUDED.notify_daily,
+			daily_report_time = EXCLUDED.daily_report_time,
+			email_enabled = EXCLUDED.email_enabled,
+			dnd_enabled = EXCLUDED.dnd_enabled,
+			dnd_start = EXCLUDED.dnd_start,
+			dnd_end = EXCLUDED.dnd_end,
+			alarm_break_dnd = EXCLUDED.alarm_break_dnd,
+			updated_at = NOW()
+	`, p.UserID, p.PushEnabled, p.NotifyOnline, p.NotifyOffline,
+		p.NotifyAlarm, p.NotifyAlarmFatal, p.NotifyAlarmWarn, p.NotifyAlarmInfo,
+		p.NotifyAlarmClear, p.NotifyOTA, p.NotifySystem, p.NotifyDaily,
+		p.DailyReportTime, p.EmailEnabled, p.DndEnabled, p.DndStart, p.DndEnd,
+		p.AlarmBreakDnd,
+	)
+	return err
+}
+
+// ListDailyReportUsers 查询开启每日统计报告的用户及其报告时间、邮箱、昵称。
+// 供定时任务按用户时区匹配推送时间。
+type DailyReportUser struct {
+	UserID       int64
+	ReportTime   string
+	EmailEnabled bool
+	Email        string
+	Nickname     string
+	Timezone     string
+}
+
+// ListDailyReportUsers 查询所有开启每日报告的用户。
+func (r *NotifyPrefsRepository) ListDailyReportUsers(ctx context.Context) ([]DailyReportUser, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT p.user_id, p.daily_report_time, p.email_enabled,
+		       COALESCE(u.email, ''), COALESCE(u.nickname, ''), COALESCE(u.timezone, 'Asia/Shanghai')
+		FROM user_notify_prefs p
+		JOIN users u ON u.id = p.user_id
+		WHERE p.notify_daily = true AND u.status = 1
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make([]DailyReportUser, 0)
+	for rows.Next() {
+		var u DailyReportUser
+		if err := rows.Scan(&u.UserID, &u.ReportTime, &u.EmailEnabled, &u.Email, &u.Nickname, &u.Timezone); err != nil {
+			continue
+		}
+		result = append(result, u)
+	}
+	return result, rows.Err()
+}

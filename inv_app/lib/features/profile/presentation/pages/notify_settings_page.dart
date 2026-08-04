@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/services/service_locator.dart';
-import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/features/profile/data/notify_prefs_service.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
+/// 消息通知设置页：偏好存储于服务端（user_notify_prefs），
+/// 推送链路（JPush/邮件）发送前按此过滤。保存即调 API（乐观更新 + 失败回滚）。
 class NotifySettingsPage extends StatefulWidget {
   const NotifySettingsPage({super.key});
 
@@ -13,88 +16,51 @@ class NotifySettingsPage extends StatefulWidget {
 }
 
 class _NotifySettingsPageState extends State<NotifySettingsPage> {
-  final _storage = getIt<StorageService>();
+  final _service = getIt<NotifyPrefsService>();
 
-  bool _pushEnabled = true;
-  bool _alertEnabled = true;
-  bool _offlineEnabled = true;
-  bool _systemEnabled = true;
-  String _dndStart = '22:00';
-  String _dndEnd = '07:00';
-  bool _dndEnabled = false;
+  NotifyPrefs _prefs = NotifyPrefs.defaults;
   bool _loading = true;
 
-  static const String _keyPush = 'notify_push';
-  static const String _keyAlert = 'notify_alert';
-  static const String _keyOffline = 'notify_offline';
-  static const String _keySystem = 'notify_system';
-  static const String _keyDndStart = 'notify_dnd_start';
-  static const String _keyDndEnd = 'notify_dnd_end';
-  static const String _keyDndEnabled = 'notify_dnd_enabled';
+  AppLocalizations get _l10n => AppLocalizations.of(context)!;
 
   @override
   void initState() {
     super.initState();
-    _loadSettings();
+    _load();
   }
 
-  Future<void> _loadSettings() async {
-    final prefs = await _getSharedPrefs();
-    if (mounted) {
-      setState(() {
-        _pushEnabled = prefs[_keyPush] ?? true;
-        _alertEnabled = prefs[_keyAlert] ?? true;
-        _offlineEnabled = prefs[_keyOffline] ?? true;
-        _systemEnabled = prefs[_keySystem] ?? true;
-        _dndStart = prefs[_keyDndStart] ?? '22:00';
-        _dndEnd = prefs[_keyDndEnd] ?? '07:00';
-        _dndEnabled = prefs[_keyDndEnabled] ?? false;
-        _loading = false;
-      });
+  Future<void> _load() async {
+    final prefs = await _service.fetchPrefs();
+    if (!mounted) return;
+    setState(() {
+      _prefs = prefs;
+      _loading = false;
+    });
+  }
+
+  /// 乐观更新：先切换 UI，保存失败时回滚并提示。
+  Future<void> _update(NotifyPrefs updated) async {
+    final previous = _prefs;
+    setState(() => _prefs = updated);
+    try {
+      await _service.savePrefs(updated);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _prefs = previous);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_l10n.notifySettingsSaveFailed),
+          duration: const Duration(seconds: 2),
+        ),
+      );
     }
   }
 
-  Future<Map<String, dynamic>> _getSharedPrefs() async {
-    return {
-      _keyPush: await _storage.getNotifyPush(),
-      _keyAlert: await _storage.getNotifyAlert(),
-      _keyOffline: await _storage.getNotifyOffline(),
-      _keySystem: await _storage.getNotifySystem(),
-      _keyDndStart: await _storage.getNotifyDndStart(),
-      _keyDndEnd: await _storage.getNotifyDndEnd(),
-      _keyDndEnabled: await _storage.getNotifyDndEnabled(),
-    };
-  }
-
-  Future<void> _saveSetting(String key, dynamic value) async {
-    switch (key) {
-      case _keyPush:
-        await _storage.saveNotifyPush(value as bool);
-        break;
-      case _keyAlert:
-        await _storage.saveNotifyAlert(value as bool);
-        break;
-      case _keyOffline:
-        await _storage.saveNotifyOffline(value as bool);
-        break;
-      case _keySystem:
-        await _storage.saveNotifySystem(value as bool);
-        break;
-      case _keyDndStart:
-        await _storage.saveNotifyDndStart(value as String);
-        break;
-      case _keyDndEnd:
-        await _storage.saveNotifyDndEnd(value as String);
-        break;
-      case _keyDndEnabled:
-        await _storage.saveNotifyDndEnabled(value as bool);
-        break;
-    }
-  }
-
-  Future<void> _showTimePickerDialog(String type) async {
-    final initialTime = type == 'start' ? _dndStart : _dndEnd;
-    final parts = initialTime.split(':');
+  Future<void> _showTimePickerDialog({
+    required String current,
+    required ValueChanged<String> onPicked,
+  }) async {
+    final parts = current.split(':');
     final hour = int.tryParse(parts[0]) ?? 0;
     final minute = int.tryParse(parts[1]) ?? 0;
 
@@ -112,106 +78,202 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
     if (selected != null && mounted) {
       final timeStr =
           '${selected.hour.toString().padLeft(2, '0')}:${selected.minute.toString().padLeft(2, '0')}';
-      if (type == 'start') {
-        setState(() => _dndStart = timeStr);
-        await _saveSetting(_keyDndStart, timeStr);
-      } else {
-        setState(() => _dndEnd = timeStr);
-        await _saveSetting(_keyDndEnd, timeStr);
-      }
+      onPicked(timeStr);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-
     if (_loading) {
       return Scaffold(
-        appBar: AppBar(title: Text(l10n.messageNotifySettings)),
+        appBar: AppBar(title: Text(_l10n.messageNotifySettings)),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.messageNotifySettings)),
+      appBar: AppBar(title: Text(_l10n.messageNotifySettings)),
       body: ListView(
         children: [
-          _buildSectionTitle(l10n.notificationType),
+          _buildSectionTitle(_l10n.notificationType),
+          // 设备上下线（合并开关）
           SwitchListTile(
-            title: Text(l10n.pushNotification),
-            subtitle: Text(l10n.pushNotificationDesc),
-            value: _pushEnabled,
-            onChanged: (value) async {
-              setState(() => _pushEnabled = value);
-              await _saveSetting(_keyPush, value);
-            },
-            activeThumbColor: AppColors.primary,
-          ),
-          const Divider(height: 1),
-          SwitchListTile(
-            title: Text(l10n.alarmPush),
-            subtitle: Text(l10n.alarmPushDesc),
-            value: _alertEnabled,
-            onChanged: (value) async {
-              setState(() => _alertEnabled = value);
-              await _saveSetting(_keyAlert, value);
-            },
-            activeThumbColor: AppColors.primary,
-          ),
-          const Divider(height: 1),
-          SwitchListTile(
-            title: Text(l10n.offlinePush),
-            subtitle: Text(l10n.offlinePushDesc),
-            value: _offlineEnabled,
-            onChanged: (value) async {
-              setState(() => _offlineEnabled = value);
-              await _saveSetting(_keyOffline, value);
-            },
-            activeThumbColor: AppColors.primary,
-          ),
-          const Divider(height: 1),
-          SwitchListTile(
-            title: Text(l10n.systemMessage),
-            subtitle: Text(l10n.systemMessageDesc),
-            value: _systemEnabled,
-            onChanged: (value) async {
-              setState(() => _systemEnabled = value);
-              await _saveSetting(_keySystem, value);
-            },
-            activeThumbColor: AppColors.primary,
-          ),
-          _buildSectionTitle(l10n.dndSection),
-          SwitchListTile(
-            title: Text(l10n.dndMode),
-            subtitle: Text('$_dndStart - $_dndEnd'),
-            value: _dndEnabled,
-            onChanged: (value) async {
-              setState(() => _dndEnabled = value);
-              await _saveSetting(_keyDndEnabled, value);
-            },
-            activeThumbColor: AppColors.primary,
-          ),
-          if (_dndEnabled) ...[
-            const Divider(height: 1),
-            ListTile(
-              title: Text(l10n.startTime),
-              subtitle: Text(_dndStart),
-              trailing: const Icon(Icons.access_time),
-              onTap: () => _showTimePickerDialog('start'),
+            title: Text(_l10n.deviceStatusNotify),
+            subtitle: Text(_l10n.deviceStatusNotifyDesc),
+            value: _prefs.notifyOnline || _prefs.notifyOffline,
+            onChanged: (value) => _update(
+              _prefs.copyWith(notifyOnline: value, notifyOffline: value),
             ),
+            activeThumbColor: AppColors.primary,
+          ),
+          const Divider(height: 1),
+          // 告警通知（总开关 + 级别子开关）
+          SwitchListTile(
+            title: Text(_l10n.alarmNotify),
+            subtitle: Text(_l10n.alarmNotifyDesc),
+            value: _prefs.notifyAlarm,
+            onChanged: (value) => _update(_prefs.copyWith(notifyAlarm: value)),
+            activeThumbColor: AppColors.primary,
+          ),
+          ExpansionTile(
+            tilePadding: EdgeInsets.symmetric(horizontal: 16.w),
+            childrenPadding: EdgeInsets.only(bottom: 4.h),
+            shape: const Border(),
+            collapsedShape: const Border(),
+            title: Text(
+              _l10n.alarmLevel,
+              style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary),
+            ),
+            children: [
+              _buildLevelSwitch(
+                title: _l10n.alarmFatal,
+                value: _prefs.notifyAlarmFatal,
+                onChanged: (v) =>
+                    _update(_prefs.copyWith(notifyAlarmFatal: v)),
+              ),
+              _buildLevelSwitch(
+                title: _l10n.alarmWarning,
+                value: _prefs.notifyAlarmWarning,
+                onChanged: (v) =>
+                    _update(_prefs.copyWith(notifyAlarmWarning: v)),
+              ),
+              _buildLevelSwitch(
+                title: _l10n.alarmLevelInfo,
+                value: _prefs.notifyAlarmInfo,
+                onChanged: (v) => _update(_prefs.copyWith(notifyAlarmInfo: v)),
+              ),
+            ],
+          ),
+          const Divider(height: 1),
+          SwitchListTile(
+            title: Text(_l10n.alarmCleared),
+            value: _prefs.notifyAlarmCleared,
+            onChanged: (value) =>
+                _update(_prefs.copyWith(notifyAlarmCleared: value)),
+            activeThumbColor: AppColors.primary,
+          ),
+          const Divider(height: 1),
+          SwitchListTile(
+            title: Text(_l10n.otaNotify),
+            value: _prefs.notifyOta,
+            onChanged: (value) => _update(_prefs.copyWith(notifyOta: value)),
+            activeThumbColor: AppColors.primary,
+          ),
+          const Divider(height: 1),
+          SwitchListTile(
+            title: Text(_l10n.systemMessage),
+            subtitle: Text(_l10n.systemMessageDesc),
+            value: _prefs.notifySystem,
+            onChanged: (value) => _update(_prefs.copyWith(notifySystem: value)),
+            activeThumbColor: AppColors.primary,
+          ),
+          _buildSectionTitle(_l10n.dailyReportSection),
+          SwitchListTile(
+            title: Text(_l10n.dailyReport),
+            subtitle: Text(_l10n.dailyReportDesc),
+            value: _prefs.notifyDaily,
+            onChanged: (value) => _update(_prefs.copyWith(notifyDaily: value)),
+            activeThumbColor: AppColors.primary,
+          ),
+          if (_prefs.notifyDaily) ...[
             const Divider(height: 1),
             ListTile(
-              title: Text(l10n.endTime),
-              subtitle: Text(_dndEnd),
+              title: Text(_l10n.dailyReportTime),
+              subtitle: Text(_prefs.dailyReportTime),
               trailing: const Icon(Icons.access_time),
-              onTap: () => _showTimePickerDialog('end'),
+              onTap: () => _showTimePickerDialog(
+                current: _prefs.dailyReportTime,
+                onPicked: (time) =>
+                    _update(_prefs.copyWith(dailyReportTime: time)),
+              ),
             ),
           ],
-          _buildResetButton(l10n),
+          _buildSectionTitle(_l10n.notifyChannelSection),
+          SwitchListTile(
+            title: Text(_l10n.appPush),
+            subtitle: Text(_l10n.pushNotificationDesc),
+            value: _prefs.pushEnabled,
+            onChanged: (value) => _update(_prefs.copyWith(pushEnabled: value)),
+            activeThumbColor: AppColors.primary,
+          ),
+          const Divider(height: 1),
+          ListTile(
+            title: Text(_l10n.emailNotify),
+            subtitle: Text(_buildEmailSubtitle()),
+            trailing: Switch(
+              value: _prefs.emailEnabled,
+              activeThumbColor: AppColors.primary,
+              onChanged: (value) =>
+                  _update(_prefs.copyWith(emailEnabled: value)),
+            ),
+            onTap: () => context.push('/edit-profile'),
+          ),
+          _buildSectionTitle(_l10n.dndSection),
+          SwitchListTile(
+            title: Text(_l10n.dndMode),
+            subtitle: Text('${_prefs.dndStart} - ${_prefs.dndEnd}'),
+            value: _prefs.dndEnabled,
+            onChanged: (value) => _update(_prefs.copyWith(dndEnabled: value)),
+            activeThumbColor: AppColors.primary,
+          ),
+          if (_prefs.dndEnabled) ...[
+            const Divider(height: 1),
+            ListTile(
+              title: Text(_l10n.startTime),
+              subtitle: Text(_prefs.dndStart),
+              trailing: const Icon(Icons.access_time),
+              onTap: () => _showTimePickerDialog(
+                current: _prefs.dndStart,
+                onPicked: (time) => _update(_prefs.copyWith(dndStart: time)),
+              ),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              title: Text(_l10n.endTime),
+              subtitle: Text(_prefs.dndEnd),
+              trailing: const Icon(Icons.access_time),
+              onTap: () => _showTimePickerDialog(
+                current: _prefs.dndEnd,
+                onPicked: (time) => _update(_prefs.copyWith(dndEnd: time)),
+              ),
+            ),
+            const Divider(height: 1),
+            SwitchListTile(
+              title: Text(_l10n.alarmBreakDnd),
+              subtitle: Text(_l10n.alarmBreakDndDesc),
+              value: _prefs.alarmBreakDnd,
+              onChanged: (value) =>
+                  _update(_prefs.copyWith(alarmBreakDnd: value)),
+              activeThumbColor: AppColors.primary,
+            ),
+          ],
+          _buildResetButton(),
         ],
       ),
     );
+  }
+
+  /// 告警级别子开关（ExpansionTile 内）
+  Widget _buildLevelSwitch({
+    required String title,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return SwitchListTile(
+      dense: true,
+      contentPadding: EdgeInsets.symmetric(horizontal: 32.w),
+      title: Text(title, style: TextStyle(fontSize: 14.sp)),
+      value: value,
+      onChanged: onChanged,
+      activeThumbColor: AppColors.primary,
+    );
+  }
+
+  String _buildEmailSubtitle() {
+    if (_prefs.email.isNotEmpty) {
+      return _prefs.email;
+    }
+    return '${_l10n.emailNotBind} · ${_l10n.emailBindHint}';
   }
 
   Widget _buildSectionTitle(String title) {
@@ -228,7 +290,7 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
     );
   }
 
-  Widget _buildResetButton(AppLocalizations l10n) {
+  Widget _buildResetButton() {
     return Padding(
       padding: EdgeInsets.all(16.w),
       child: OutlinedButton(
@@ -236,44 +298,29 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
           final confirmed = await showDialog<bool>(
             context: context,
             builder: (context) => AlertDialog(
-              title: Text(l10n.resetNotifySettings),
-              content: Text(l10n.resetNotifyConfirm),
+              title: Text(_l10n.resetNotifySettings),
+              content: Text(_l10n.resetNotifyConfirm),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context, false),
-                  child: Text(l10n.cancel),
+                  child: Text(_l10n.cancel),
                 ),
                 FilledButton(
                   onPressed: () => Navigator.pop(context, true),
                   style:
                       FilledButton.styleFrom(backgroundColor: AppColors.error),
-                  child: Text(l10n.reset),
+                  child: Text(_l10n.reset),
                 ),
               ],
             ),
           );
 
           if (confirmed == true) {
-            await _storage.saveNotifyPush(true);
-            await _storage.saveNotifyAlert(true);
-            await _storage.saveNotifyOffline(true);
-            await _storage.saveNotifySystem(true);
-            await _storage.saveNotifyDndEnabled(false);
-            await _storage.saveNotifyDndStart('22:00');
-            await _storage.saveNotifyDndEnd('07:00');
+            await _update(NotifyPrefs.defaults);
             if (mounted) {
-              setState(() {
-                _pushEnabled = true;
-                _alertEnabled = true;
-                _offlineEnabled = true;
-                _systemEnabled = true;
-                _dndEnabled = false;
-                _dndStart = '22:00';
-                _dndEnd = '07:00';
-              });
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text(l10n.notifySettingsReset),
+                  content: Text(_l10n.notifySettingsReset),
                   duration: const Duration(seconds: 1),
                 ),
               );
@@ -287,7 +334,7 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
         ),
-        child: Text(l10n.resetAllNotify),
+        child: Text(_l10n.resetAllNotify),
       ),
     );
   }

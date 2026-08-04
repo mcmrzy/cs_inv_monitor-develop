@@ -229,6 +229,9 @@ class JPushService {
       case 'app_update':
         AppRouter.router.go('/settings');
         break;
+      case 'daily_report':
+        AppRouter.router.go('/statistics');
+        break;
       default:
         debugPrint(
           '[JPushService] Unknown notify_type: $notifyType, skip navigation',
