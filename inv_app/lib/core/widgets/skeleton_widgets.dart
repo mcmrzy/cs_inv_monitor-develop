@@ -20,8 +20,8 @@ class ShimmerSkeleton extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Shimmer.fromColors(
-      baseColor: baseColor ??
-          (isDark ? const Color(0xFF2A2D35) : const Color(0xFFE5E7EB)),
+      baseColor: baseColor ?? AppColor.border(context),
+      // highlight 无语义色对应项，按明暗模式分别给值
       highlightColor: highlightColor ??
           (isDark ? const Color(0xFF3A3D45) : const Color(0xFFF3F4F6)),
       child: child,
