@@ -1,6 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:inv_app/core/errors/failures.dart';
-import 'package:dartz/dartz.dart';
+import 'package:fpdart/fpdart.dart';
 import 'package:inv_app/core/entities/organization.dart';
 
 class ApiService {

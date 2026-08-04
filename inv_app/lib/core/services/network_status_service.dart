@@ -16,7 +16,7 @@ import 'package:flutter/foundation.dart';
 /// 并发/先后调用放大误判），离线确认仅由系统状态事件与定时重试驱动。
 class NetworkStatusService {
   final Connectivity _connectivity;
-  StreamSubscription<ConnectivityResult>? _subscription;
+  StreamSubscription<List<ConnectivityResult>>? _subscription;
   final _statusController = StreamController<bool>.broadcast();
 
   bool _isOnline = true;
@@ -56,8 +56,8 @@ class NetworkStatusService {
   /// 页面/Bloc 加载前探活可放心并发调用：检测结果不参与"离线确认"计数，
   /// 不会因启动瞬间网络栈未就绪误报 none 而把确认计数打满导致误判离线。
   Future<bool> checkConnectivity() async {
-    final result = await _connectivity.checkConnectivity();
-    if (result != ConnectivityResult.none) {
+    final results = await _connectivity.checkConnectivity();
+    if (!results.contains(ConnectivityResult.none)) {
       _handleOnline();
       return true;
     }
@@ -67,13 +67,13 @@ class NetworkStatusService {
   }
 
   /// 处理系统网络状态变化事件
-  void _onStatusChanged(ConnectivityResult result) {
-    _confirm(result);
+  void _onStatusChanged(List<ConnectivityResult> results) {
+    _confirm(results);
   }
 
   /// 确认检测结果：只有系统事件与定时重试参与，累计到阈值才判离线
-  void _confirm(ConnectivityResult result) {
-    if (result != ConnectivityResult.none) {
+  void _confirm(List<ConnectivityResult> results) {
+    if (!results.contains(ConnectivityResult.none)) {
       _handleOnline();
       return;
     }
@@ -97,8 +97,8 @@ class NetworkStatusService {
   void _scheduleRecheck() {
     _recheckTimer?.cancel();
     _recheckTimer = Timer(_recheckInterval, () async {
-      final result = await _connectivity.checkConnectivity();
-      _confirm(result);
+      final results = await _connectivity.checkConnectivity();
+      _confirm(results);
     });
   }
 

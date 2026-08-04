@@ -1,4 +1,4 @@
-import 'package:dartz/dartz.dart';
+import 'package:fpdart/fpdart.dart';
 import 'package:inv_app/core/errors/failures.dart';
 import 'package:inv_app/features/dashboard/domain/entities/trend_data_point.dart';
 import 'package:inv_app/features/dashboard/domain/entities/station_rank_item.dart';

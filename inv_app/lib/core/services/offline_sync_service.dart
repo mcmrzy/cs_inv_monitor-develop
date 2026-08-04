@@ -8,7 +8,7 @@ class OfflineSyncService {
   final OfflineCacheService _cacheService;
   final ApiService _apiService;
   final Connectivity _connectivity;
-  StreamSubscription<ConnectivityResult>? _connectivitySub;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
 
   OfflineSyncService({
     required OfflineCacheService cacheService,
@@ -19,8 +19,8 @@ class OfflineSyncService {
         _connectivity = connectivity;
 
   void init() {
-    _connectivitySub = _connectivity.onConnectivityChanged.listen((result) {
-      if (result != ConnectivityResult.none) {
+    _connectivitySub = _connectivity.onConnectivityChanged.listen((results) {
+      if (!results.contains(ConnectivityResult.none)) {
         syncAll();
       }
     });

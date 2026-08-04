@@ -25,7 +25,7 @@ val hasReleaseSigning = listOf(
 
 android {
     namespace = "com.csergy.app1"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 37  // permission_handler 13+ 要求 compileSdk 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

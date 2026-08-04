@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   static ThemeData get light {
-    final textTheme = GoogleFonts.notoSansScTextTheme();
+    final textTheme = Typography.material2021().black;
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
@@ -299,9 +298,7 @@ class AppTheme {
   }
 
   static ThemeData get dark {
-    final textTheme = GoogleFonts.notoSansScTextTheme(
-      ThemeData(brightness: Brightness.dark).textTheme,
-    );
+    final textTheme = Typography.material2021().white;
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
