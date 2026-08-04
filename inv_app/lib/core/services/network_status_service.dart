@@ -11,6 +11,9 @@ import 'package:flutter/foundation.dart';
 ///
 /// 默认乐观在线：单次检测到无网络不立即判离线，连续多次确认后才离线，
 /// 解决 App 启动瞬间系统网络栈未就绪导致 checkConnectivity() 误返回 none 的问题。
+///
+/// 注意：外部主动调用 [checkConnectivity] 不计入"离线确认"计数（避免多处
+/// 并发/先后调用放大误判），离线确认仅由系统状态事件与定时重试驱动。
 class NetworkStatusService {
   final Connectivity _connectivity;
   StreamSubscription<ConnectivityResult>? _subscription;
@@ -48,43 +51,54 @@ class NetworkStatusService {
         _connectivity.onConnectivityChanged.listen(_onStatusChanged);
   }
 
-  /// 检查当前网络状态（带连续确认：单次 none 不判离线）
+  /// 检查当前网络状态（乐观：单次 none 不判离线，仅安排延迟重试）
+  ///
+  /// 页面/Bloc 加载前探活可放心并发调用：检测结果不参与"离线确认"计数，
+  /// 不会因启动瞬间网络栈未就绪误报 none 而把确认计数打满导致误判离线。
   Future<bool> checkConnectivity() async {
     final result = await _connectivity.checkConnectivity();
-    return _handleResult(result);
+    if (result != ConnectivityResult.none) {
+      _handleOnline();
+      return true;
+    }
+    // 检测到无网络：保持乐观在线并安排一次延迟重试确认
+    _scheduleRecheck();
+    return _isOnline;
   }
 
   /// 处理系统网络状态变化事件
   void _onStatusChanged(ConnectivityResult result) {
-    _handleResult(result);
+    _confirm(result);
   }
 
-  /// 处理检测结果：检测到网络立即在线；无网络需连续确认才离线
-  bool _handleResult(ConnectivityResult result) {
+  /// 确认检测结果：只有系统事件与定时重试参与，累计到阈值才判离线
+  void _confirm(ConnectivityResult result) {
     if (result != ConnectivityResult.none) {
-      // 检测到网络：立即恢复在线并重置确认计数
-      _offlineStreak = 0;
-      _recheckTimer?.cancel();
-      _recheckTimer = null;
-      _setOnline(true);
-      return true;
+      _handleOnline();
+      return;
     }
-
-    // 检测到无网络：不立即判离线，累计次数并延迟重试确认
     _offlineStreak++;
+    // 无论是否达到阈值都继续重试：判离线后也能在网络恢复时自动回到在线
+    _scheduleRecheck();
     if (_offlineStreak >= _offlineConfirmThreshold) {
       _setOnline(false);
-    } else {
-      _scheduleRecheck();
     }
-    return _isOnline; // 确认期间保持乐观在线
   }
 
-  /// 延迟重试确认
+  /// 网络恢复：重置确认计数并广播在线
+  void _handleOnline() {
+    _offlineStreak = 0;
+    _recheckTimer?.cancel();
+    _recheckTimer = null;
+    _setOnline(true);
+  }
+
+  /// 延迟重试确认（重试结果参与离线确认）
   void _scheduleRecheck() {
     _recheckTimer?.cancel();
-    _recheckTimer = Timer(_recheckInterval, () {
-      checkConnectivity();
+    _recheckTimer = Timer(_recheckInterval, () async {
+      final result = await _connectivity.checkConnectivity();
+      _confirm(result);
     });
   }
 

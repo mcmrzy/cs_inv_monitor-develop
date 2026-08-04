@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/services/network_status_service.dart';
@@ -23,6 +25,7 @@ class OfflineBanner extends StatefulWidget {
 
 class _OfflineBannerState extends State<OfflineBanner> {
   late final NetworkStatusService _networkService;
+  StreamSubscription<bool>? _statusSubscription;
   bool _isOffline = false;
 
   @override
@@ -32,13 +35,19 @@ class _OfflineBannerState extends State<OfflineBanner> {
     _isOffline = _networkService.isOffline;
 
     // 监听网络状态变化
-    _networkService.statusStream.listen((isOnline) {
+    _statusSubscription = _networkService.statusStream.listen((isOnline) {
       if (mounted) {
         setState(() {
           _isOffline = !isOnline;
         });
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _statusSubscription?.cancel();
+    super.dispose();
   }
 
   @override
@@ -110,6 +119,7 @@ class OfflineIndicator extends StatefulWidget {
 
 class _OfflineIndicatorState extends State<OfflineIndicator> {
   late final NetworkStatusService _networkService;
+  StreamSubscription<bool>? _statusSubscription;
   bool _isOffline = false;
 
   @override
@@ -118,13 +128,19 @@ class _OfflineIndicatorState extends State<OfflineIndicator> {
     _networkService = getIt<NetworkStatusService>();
     _isOffline = _networkService.isOffline;
 
-    _networkService.statusStream.listen((isOnline) {
+    _statusSubscription = _networkService.statusStream.listen((isOnline) {
       if (mounted) {
         setState(() {
           _isOffline = !isOnline;
         });
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _statusSubscription?.cancel();
+    super.dispose();
   }
 
   @override
