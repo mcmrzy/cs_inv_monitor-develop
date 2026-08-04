@@ -341,7 +341,7 @@ func (h *DashboardHandler) GetTrend(c *gin.Context) {
 
 	userFilter, filterArgs := h.buildDeviceUserFilter(ctx, userID, role, 4)
 	query = fmt.Sprintf(`
-		SELECT TO_CHAR(e.stat_date,'YYYY-MM-DD'),ROUND(COALESCE(SUM(e.pv_energy),0),2),ROUND(COALESCE(SUM(e.load_energy),0),2),COALESCE(MAX(e.total_pv_energy),0)
+		SELECT TO_CHAR(e.stat_date,'YYYY-MM-DD'),ROUND(COALESCE(SUM(e.pv_energy),0)::numeric,2)::float8,ROUND(COALESCE(SUM(e.load_energy),0)::numeric,2)::float8,COALESCE(MAX(e.total_pv_energy),0)
 		FROM device_energy_day e JOIN devices d ON d.sn=e.device_sn
 		WHERE d.deleted_at IS NULL AND %s
 		AND e.stat_date >= ($1 AT TIME ZONE $3)::date
