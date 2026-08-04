@@ -8,6 +8,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/entities/inverter_data.dart';
 import 'package:inv_app/core/services/realtime_data_service.dart';
+import 'package:inv_app/core/services/network_status_service.dart';
 import 'package:inv_app/core/services/data_cache_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/utils/timezone_utils.dart';
@@ -192,7 +193,9 @@ class _StationDetailPageState extends State<StationDetailPage>
             stationId: widget.stationId,
             station: station,
             devices: devices,
-            isFromCache: true,
+            // 缓存仅用于快速渲染；只有当前已知离线时才提示“无网络，
+            // 显示缓存数据”，网络正常时等实时数据返回后自然覆盖
+            isFromCache: getIt<NetworkStatusService>().isOffline,
           );
         }
       }

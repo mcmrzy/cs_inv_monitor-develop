@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/services/realtime_data_service.dart';
+import 'package:inv_app/core/services/network_status_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
@@ -70,7 +71,9 @@ class _HomePageState extends State<HomePage> {
           _cachedState = StationSummaryLoaded(
             stations: stations,
             summary: summary,
-            isFromCache: true,
+            // 缓存仅用于快速渲染避免骨架屏闪烁；只有当前已知离线时才
+            // 提示“无网络，显示缓存数据”，网络正常时等实时数据返回后自然覆盖
+            isFromCache: getIt<NetworkStatusService>().isOffline,
           );
         }
       }
