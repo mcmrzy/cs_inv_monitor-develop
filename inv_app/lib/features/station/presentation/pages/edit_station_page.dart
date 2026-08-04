@@ -220,6 +220,9 @@ class _EditStationPageState extends State<EditStationPage> {
                 .read<StationBloc>()
                 .add(StationDetailRequested(stationId: widget.stationId));
             context.pop();
+          } else if (state is StationDeleteSuccess) {
+            // 详情页同时监听该状态并 pop 回首页（SnackBar 由其展示）
+            context.pop();
           } else if (state is StationError) {
             setState(() => _isSubmitting = false);
             ScaffoldMessenger.of(context).showSnackBar(
@@ -438,6 +441,27 @@ class _EditStationPageState extends State<EditStationPage> {
                       ),
                     ),
                   ),
+                  SizedBox(height: 8.h),
+                  // 删除电站入口（自详情页三点菜单迁入）
+                  Center(
+                    child: TextButton.icon(
+                      onPressed: _isSubmitting
+                          ? null
+                          : () => _confirmDelete(AppLocalizations.of(context)!),
+                      icon: const Icon(
+                        Icons.delete_outline_rounded,
+                        size: 18,
+                        color: AppColors.error,
+                      ),
+                      label: Text(
+                        AppLocalizations.of(context)!.deleteStation,
+                        style: TextStyle(
+                          fontSize: 14.sp,
+                          color: AppColors.error,
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -445,6 +469,35 @@ class _EditStationPageState extends State<EditStationPage> {
         },
       ),
     );
+  }
+
+  // 删除电站确认弹窗，确认后由 BlocListener 处理后续跳栈
+  Future<void> _confirmDelete(AppLocalizations l10n) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.delete),
+        content: Text(l10n.str('confirm_delete_station', {})),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              l10n.delete,
+              style: const TextStyle(color: AppColors.error),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+    context
+        .read<StationBloc>()
+        .add(StationDeleteRequested(stationId: widget.stationId));
   }
 
   /// 分区卡片：图标圆底 + 标题 + 副标题 + 内容（与创建电站页风格一致）

@@ -26,6 +26,10 @@ class _HomePageState extends State<HomePage> {
   StationSummaryLoaded? _cachedState;
   int _filterIndex = 0;
   bool _showSearch = false;
+  // 电站拖动排序模式：由长按面板“电站排序”入口开启
+  bool _stationSortMode = false;
+  // 排序模式下的本地电站顺序（完成时提交后端）
+  List<dynamic>? _sortStations;
   StreamSubscription<dynamic>? _statusSub;
   StreamSubscription<dynamic>? _alarmSub;
 
@@ -125,11 +129,51 @@ class _HomePageState extends State<HomePage> {
     return list;
   }
 
+  // 进入电站排序模式：清空过滤/搜索，基于全量列表拖动
+  void _enterStationSortMode() {
+    final ds = _cachedState;
+    if (ds == null) return;
+    setState(() {
+      _stationSortMode = true;
+      _filterIndex = 0;
+      _showSearch = false;
+      _searchCtl.clear();
+      _sortStations = List.of(ds.stations);
+    });
+  }
+
+  // 完成排序：提交电站 ID 顺序并退出排序模式
+  void _finishStationSortMode() {
+    final order = (_sortStations ?? [])
+        .map((s) => ((s['station_id'] ?? s['id'] ?? 0) as num).toInt())
+        .toList();
+    setState(() {
+      _stationSortMode = false;
+      _sortStations = null;
+    });
+    if (order.isNotEmpty) {
+      context
+          .read<StationBloc>()
+          .add(StationReorderRequested(stationOrder: order));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: BlocBuilder<StationBloc, StationState>(
+      body: BlocConsumer<StationBloc, StationState>(
+        listener: (context, state) {
+          if (state is StationReorderSuccess) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content:
+                    Text(AppLocalizations.of(context)!.stationOrderSaved),
+              ),
+            );
+            context.read<StationBloc>().add(StationSummaryRequested());
+          }
+        },
         builder: (context, state) {
           final l10n = AppLocalizations.of(context)!;
           if (state is StationSummaryLoaded) _cachedState = state;
@@ -172,39 +216,131 @@ class _HomePageState extends State<HomePage> {
                       _buildHeader(),
                       if (_showSearch) _buildSearchBar(),
                       _buildFilterCards(ds),
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: EdgeInsets.fromLTRB(20.w, 12.h, 20.w, 8.h),
-                          child: Row(
-                            children: [
-                              Text(
-                                l10n.str(
-                                  'station_count',
-                                  {'count': '${filtered.length}'},
+                      // 排序模式：提示 + 完成横条；否则电站数量行
+                      if (_stationSortMode)
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding:
+                                EdgeInsets.fromLTRB(20.w, 12.h, 20.w, 8.h),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.swap_vert_rounded,
+                                  size: 13.sp,
+                                  color: AppColors.textHint,
                                 ),
-                                style: TextStyle(
-                                  fontSize: 13.sp,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.textSecondary,
-                                ),
-                              ),
-                              const Spacer(),
-                              if (_filterIndex > 0)
-                                GestureDetector(
-                                  onTap: () => setState(() => _filterIndex = 0),
+                                SizedBox(width: 4.w),
+                                Expanded(
                                   child: Text(
-                                    l10n.clearFilter,
+                                    l10n.sortModeHint,
                                     style: TextStyle(
                                       fontSize: 12.sp,
+                                      color: AppColors.textHint,
+                                    ),
+                                  ),
+                                ),
+                                GestureDetector(
+                                  onTap: _finishStationSortMode,
+                                  child: Text(
+                                    l10n.finishSorting,
+                                    style: TextStyle(
+                                      fontSize: 13.sp,
+                                      fontWeight: FontWeight.w600,
                                       color: AppColors.primary,
                                     ),
                                   ),
                                 ),
-                            ],
+                              ],
+                            ),
+                          ),
+                        )
+                      else
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding:
+                                EdgeInsets.fromLTRB(20.w, 12.h, 20.w, 8.h),
+                            child: Row(
+                              children: [
+                                Text(
+                                  l10n.str(
+                                    'station_count',
+                                    {'count': '${filtered.length}'},
+                                  ),
+                                  style: TextStyle(
+                                    fontSize: 13.sp,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                                const Spacer(),
+                                if (_filterIndex > 0)
+                                  GestureDetector(
+                                    onTap: () =>
+                                        setState(() => _filterIndex = 0),
+                                    child: Text(
+                                      l10n.clearFilter,
+                                      style: TextStyle(
+                                        fontSize: 12.sp,
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                      if (filtered.isEmpty)
+                      if (_stationSortMode)
+                        // 排序模式：长按拖动电站卡片（浮起效果与设备一致）
+                        SliverPadding(
+                          padding: EdgeInsets.symmetric(horizontal: 16.w),
+                          sliver: SliverToBoxAdapter(
+                            child: ReorderableListView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              proxyDecorator: (child, index, animation) {
+                                final curved = CurvedAnimation(
+                                  parent: animation,
+                                  curve: Curves.easeInOut,
+                                );
+                                return AnimatedBuilder(
+                                  animation: curved,
+                                  builder: (_, __) => Transform.scale(
+                                    scale: 1 + 0.03 * curved.value,
+                                    child: Material(
+                                      color: AppColor.surfaceContainer(
+                                          context),
+                                      elevation: 6 * curved.value,
+                                      borderRadius:
+                                          BorderRadius.circular(16.r),
+                                      shadowColor: AppColors.primary
+                                          .withValues(alpha: 0.4),
+                                      child: child,
+                                    ),
+                                  ),
+                                );
+                              },
+                              onReorder: (oldIndex, newIndex) {
+                                setState(() {
+                                  if (newIndex > oldIndex) newIndex -= 1;
+                                  final item =
+                                      _sortStations!.removeAt(oldIndex);
+                                  _sortStations!.insert(newIndex, item);
+                                });
+                              },
+                              itemCount: _sortStations?.length ?? 0,
+                              itemBuilder: (_, i) {
+                                final s = _sortStations![i];
+                                final id =
+                                    s['station_id'] ?? s['id'] ?? i;
+                                return Container(
+                                  key: ValueKey(id),
+                                  child: _buildCard(s, sortMode: true),
+                                );
+                              },
+                            ),
+                          ),
+                        )
+                      else if (filtered.isEmpty)
                         SliverToBoxAdapter(child: _buildEmpty())
                       else
                         SliverPadding(
@@ -445,7 +581,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildCard(dynamic station) {
+  Widget _buildCard(dynamic station, {bool sortMode = false}) {
     final l10n = AppLocalizations.of(context)!;
     final name = station['station_name'] ?? station['name'] ?? '';
     final id = station['station_id'] ?? station['id'] ?? 0;
@@ -484,8 +620,9 @@ class _HomePageState extends State<HomePage> {
       badgeText: badgeText,
       badgeColor: badgeColor,
       badgeBg: badgeBg,
-      onTap: () => context.push('/station/$id'),
-      onLongPress: () => _showStationMenu(context, station),
+      onTap: sortMode ? () {} : () => context.push('/station/$id'),
+      onLongPress:
+          sortMode ? () {} : () => _showStationMenu(context, station),
     );
   }
 
@@ -514,6 +651,10 @@ class _HomePageState extends State<HomePage> {
         onAddDevice: () {
           Navigator.pop(ctx);
           context.push('/add-device?station_id=$id');
+        },
+        onSort: () {
+          Navigator.pop(ctx);
+          _enterStationSortMode();
         },
       ),
     );
@@ -656,12 +797,14 @@ class _StationActionSheet extends StatefulWidget {
   final String addressText;
   final VoidCallback onEdit;
   final VoidCallback onAddDevice;
+  final VoidCallback onSort;
 
   const _StationActionSheet({
     required this.name,
     required this.addressText,
     required this.onEdit,
     required this.onAddDevice,
+    required this.onSort,
   });
 
   @override
@@ -859,9 +1002,19 @@ class _StationActionSheetState extends State<_StationActionSheet>
                   onTap: widget.onAddDevice,
                 ),
               ),
-              SizedBox(height: 14.h),
               _animatedItem(
                 2,
+                _buildActionItem(
+                  icon: Icons.swap_vert_rounded,
+                  color: AppColors.primary,
+                  title: l10n.sortStations,
+                  subtitle: l10n.sortModeHint,
+                  onTap: widget.onSort,
+                ),
+              ),
+              SizedBox(height: 14.h),
+              _animatedItem(
+                3,
                 Material(
                   color: AppColor.surfaceHover(context),
                   borderRadius: BorderRadius.circular(14.r),

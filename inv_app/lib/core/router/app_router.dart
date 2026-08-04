@@ -68,6 +68,8 @@ import 'package:inv_app/features/profile/presentation/pages/notify_settings_page
 
 import 'package:inv_app/features/device/presentation/pages/device_control_page.dart';
 
+import 'package:inv_app/features/device/presentation/pages/device_edit_page.dart';
+
 import 'package:inv_app/features/device/presentation/pages/history_chart_page.dart';
 
 import 'package:inv_app/features/device/presentation/pages/device_settings_page.dart';
@@ -257,6 +259,30 @@ class AppRouter {
           final sn = state.pathParameters['sn']!;
 
           return _slidePage(state, DeviceSettingsPage(sn: sn));
+        },
+      ),
+      GoRoute(
+        path: '/device/:sn/edit',
+        name: 'deviceEdit',
+        pageBuilder: (context, state) {
+          final sn = state.pathParameters['sn']!;
+          // extra 传设备快照与电站上下文；深链接无 extra 时回退最小快照
+          final extra = state.extra as Map<String, dynamic>?;
+          final device =
+              (extra?['device'] as Map?)?.cast<String, dynamic>() ??
+                  <String, dynamic>{'sn': sn};
+          final stationId = extra?['stationId'] as int?;
+          final onEnterSortMode = extra?['onEnterSortMode'] as void Function()?;
+
+          return _slidePage(
+            state,
+            DeviceEditPage(
+              sn: sn,
+              device: device,
+              stationId: stationId,
+              onEnterSortMode: onEnterSortMode,
+            ),
+          );
         },
       ),
       GoRoute(
@@ -855,6 +881,11 @@ class DeviceListPage extends StatefulWidget {
 }
 
 class _DeviceListPageState extends State<DeviceListPage> {
+  // 全局设备拖动排序模式：由 AppBar 排序图标开启
+  bool _sortMode = false;
+  // 缓存最后一次列表数据：排序/更新产生其他状态时保持页面不闪 loading
+  DeviceListLoaded? _cachedList;
+
   @override
   void initState() {
     super.initState();
@@ -864,13 +895,14 @@ class _DeviceListPageState extends State<DeviceListPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(50.h),
         child: AppBar(
           title: Text(
-            AppLocalizations.of(context)!.deviceManagement,
+            l10n.deviceManagement,
             style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
           ),
           centerTitle: true,
@@ -878,17 +910,39 @@ class _DeviceListPageState extends State<DeviceListPage> {
           scrolledUnderElevation: 0.5,
           backgroundColor: Colors.white,
           foregroundColor: AppColors.textPrimary,
+          actions: [
+            if (_sortMode)
+              TextButton(
+                onPressed: () => setState(() => _sortMode = false),
+                child: Text(
+                  l10n.finishSorting,
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              )
+            else
+              IconButton(
+                icon: const Icon(Icons.swap_vert_rounded, size: 22),
+                tooltip: l10n.sortDevices,
+                onPressed: () => setState(() => _sortMode = true),
+              ),
+          ],
         ),
       ),
-      body: BlocBuilder<DeviceBloc, DeviceState>(
-        builder: (context, state) {
-          if (state is DeviceLoading) {
-            return const Center(
-              child: CircularProgressIndicator(strokeWidth: 3),
-            );
+      body: BlocConsumer<DeviceBloc, DeviceState>(
+        listener: (context, state) {
+          // 设备编辑页保存别名/备注后刷新列表
+          if (state is DeviceUpdateSuccess) {
+            context.read<DeviceBloc>().add(const DeviceListRequested());
           }
+        },
+        builder: (context, state) {
+          if (state is DeviceListLoaded) _cachedList = state;
+          final ds = _cachedList;
 
-          if (state is DeviceError) {
+          if (state is DeviceError && ds == null) {
             return Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -907,7 +961,7 @@ class _DeviceListPageState extends State<DeviceListPage> {
                   ),
                   SizedBox(height: 12.h),
                   Text(
-                    AppLocalizations.of(context)!.translateError(state.message),
+                    l10n.translateError(state.message),
                     style: TextStyle(
                       fontSize: 14.sp,
                       color: AppColors.textSecondary,
@@ -918,26 +972,38 @@ class _DeviceListPageState extends State<DeviceListPage> {
                     onPressed: () => context
                         .read<DeviceBloc>()
                         .add(const DeviceListRequested()),
-                    child: Text(AppLocalizations.of(context)!.retry),
+                    child: Text(l10n.retry),
                   ),
                 ],
               ),
             );
           }
 
-          if (state is DeviceListLoaded) {
-            // Global device list page - only read mode, no station context for unbind
-            return DeviceListView(
-              devices: state.devices,
-              whiteHeader: true,
-              showUnbindButton: false, // 禁用解绑功能，因为没有电站上下文
-              onDeviceChanged: (order) {
-                context.read<DeviceBloc>().add(const DeviceListRequested());
-              },
+          if (ds == null) {
+            return const Center(
+              child: CircularProgressIndicator(strokeWidth: 3),
             );
           }
 
-          return const Center(child: CircularProgressIndicator(strokeWidth: 3));
+          // 全局设备列表页：长按弹编辑页（无电站上下文，不显示排序入口项）
+          return DeviceListView(
+            devices: ds.devices,
+            whiteHeader: true,
+            sortMode: _sortMode,
+            onDeviceChanged: (order) {
+              // 拖动即持久化全局设备顺序
+              context
+                  .read<DeviceBloc>()
+                  .add(DeviceGlobalReorderRequested(deviceOrder: order));
+            },
+            onLongPressDevice: (sn) {
+              final device = ds.devices.firstWhere(
+                (d) => (d['sn'] ?? '').toString() == sn,
+                orElse: () => <String, dynamic>{'sn': sn},
+              );
+              context.push('/device/$sn/edit', extra: {'device': device});
+            },
+          );
         },
       ),
     );

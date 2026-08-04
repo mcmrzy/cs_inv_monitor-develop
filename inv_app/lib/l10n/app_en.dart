@@ -685,6 +685,8 @@ const Map<String, String> en = {
   'sort_mode_hint': 'Long press and drag to reorder',
   'station_order_saved': 'Station order saved',
   'device_updated': 'Device info saved',
+  'device_actions': 'Device Actions',
+  'delete_station': 'Delete Station',
   'address_not_found': 'Address not found, please check and retry',
   'other_group': 'Other',
 

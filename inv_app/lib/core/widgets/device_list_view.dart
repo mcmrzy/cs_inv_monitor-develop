@@ -135,22 +135,16 @@ class DeviceFilterBar extends StatelessWidget {
 
 class DeviceCard extends StatefulWidget {
   final Map<String, dynamic> device;
-  final ValueChanged<String>? onUnbind;
-  final ValueChanged<String>? onRebind;
-  final ValueChanged<String>? onBind;
-  final ValueChanged<String>? onDelete;
-  final bool showUnbindButton;
-  final bool enableReordering;
+  // 非排序模式下长按卡片：弹出设备编辑页
+  final ValueChanged<String>? onLongPressDevice;
+  // 排序模式：长按由 ReorderableListView 接管为拖动
+  final bool sortMode;
 
   const DeviceCard({
     super.key,
     required this.device,
-    this.onUnbind,
-    this.onRebind,
-    this.onBind,
-    this.onDelete,
-    this.showUnbindButton = true,
-    this.enableReordering = false,
+    this.onLongPressDevice,
+    this.sortMode = false,
   });
 
   @override
@@ -186,80 +180,6 @@ class _DeviceCardState extends State<DeviceCard>
     Navigator.pushNamed(context, '/device/$sn');
   }
 
-  // 显示设备动作菜单
-  void _showActions(BuildContext context, String sn) {
-    final l10n = AppLocalizations.of(context)!;
-    final isBound = widget.device['station_id'] != null && widget.device['station_id'] != 0;
-    
-    showModalBottomSheet(
-      context: context,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16.r)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40.w,
-              height: 4.h,
-              margin: EdgeInsets.only(top: 12.h),
-              decoration: BoxDecoration(
-                color: AppColors.divider,
-                borderRadius: BorderRadius.circular(2.r),
-              ),
-            ),
-            ListTile(
-              leading: Icon(Icons.info_outline, color: AppColors.primary),
-              title: Text(l10n.deviceDetail),
-              onTap: () {
-                Navigator.pop(ctx);
-                _showDetail(context);
-              },
-            ),
-            if (isBound && widget.onRebind != null)
-              ListTile(
-                leading: Icon(Icons.swap_horiz, color: AppColors.primary),
-                title: Text(l10n.rebindDevice),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  widget.onRebind?.call(sn);
-                },
-              ),
-            if (widget.showUnbindButton && widget.onUnbind != null)
-              ListTile(
-                leading: Icon(Icons.link_off, color: AppColors.error),
-                title: Text(l10n.unbind, style: TextStyle(color: AppColors.error)),
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  await _confirmUnbindDialog(context, sn);
-                },
-              ),
-            if (widget.onDelete != null)
-              ListTile(
-                leading: Icon(Icons.delete_outline, color: AppColors.error),
-                title: Text(l10n.deleteDevice, style: TextStyle(color: AppColors.error)),
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  await _confirmDeleteDialog(context, sn);
-                },
-              ),
-            if (!isBound && widget.onBind != null)
-              ListTile(
-                leading: Icon(Icons.link, color: AppColors.successLight),
-                title: Text(l10n.bindDevice),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  widget.onBind?.call(sn);
-                },
-              ),
-            SizedBox(height: MediaQuery.of(ctx).padding.bottom),
-          ],
-        ),
-      ),
-    );
-  }
-
   double _extractNum(String key) {
     final val = widget.device[key];
     return val is num ? val.toDouble() : 0.0;
@@ -289,6 +209,7 @@ class _DeviceCardState extends State<DeviceCard>
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final sn = widget.device['sn'] ?? '';
+    final alias = (widget.device['alias'] ?? '').toString();
     final status = widget.device['status'] ?? 0;
     final isOnline = status == 1;
     final isFault = status == 2;
@@ -317,10 +238,10 @@ class _DeviceCardState extends State<DeviceCard>
           _showDetail(context);
         },
         onTapCancel: () => _controller.reverse(),
-        // 拖动排序模式下长按由 ReorderableListView 接管；否则长按弹出操作菜单
-        onLongPress: widget.enableReordering || !widget.showUnbindButton
+        // 排序模式下长按由 ReorderableListView 接管为拖动；否则长按弹出编辑页
+        onLongPress: widget.sortMode
             ? null
-            : () => _showActions(context, sn),
+            : () => widget.onLongPressDevice?.call(sn),
         child: ScaleTransition(
           scale: _scaleAnimation,
           child: Container(
@@ -352,7 +273,8 @@ class _DeviceCardState extends State<DeviceCard>
                     ),
                   ),
                   SizedBox(width: 6.w),
-                  Text(sn,
+                  // 设备名称：优先别名，回退 SN
+                  Text(alias.isNotEmpty ? alias : sn,
                       style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
                   Spacer(),
                   Container(
@@ -361,23 +283,17 @@ class _DeviceCardState extends State<DeviceCard>
                     child: Text(badgeText,
                         style: TextStyle(fontSize: 11.sp, fontWeight: FontWeight.w600, color: badgeColor)),
                   ),
-                  // 拖动排序模式下长按被占用，提供菜单按钮入口
-                  if (widget.enableReordering)
-                    GestureDetector(
-                      onTap: () => _showActions(context, sn),
-                      child: Padding(
-                        padding: EdgeInsets.only(left: 6.w),
-                        child: Icon(Icons.more_horiz,
-                            size: 20, color: AppColors.textHint),
-                      ),
-                    ),
                 ],
               ),
               if (model != '--') ...[SizedBox(height: 4.h), Text(model, style: TextStyle(fontSize: 13.sp, color: AppColors.textSecondary))],
               SizedBox(height: 12.h),
               Row(children: [Text(l10n.deviceTypeLabelKey, style: TextStyle(fontSize: 13.sp, color: AppColors.textHint)), SizedBox(width: 12.w), Expanded(child: Text(_getDeviceTypeLabel(l10n), style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600), textAlign: TextAlign.right))]),
               if (ratedPower > 0)
-                Row(children: [Text('${ratedPower.toStringAsFixed(0)} W', style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600)), SizedBox(width: 12.w), Text(l10n.ratedPowerLabel, style: TextStyle(fontSize: 13.sp, color: AppColors.textHint))]),
+                // 信息行统一为“标签左、值右”
+                Padding(
+                  padding: EdgeInsets.only(top: 4.h),
+                  child: Row(children: [Text(l10n.ratedPowerLabel, style: TextStyle(fontSize: 13.sp, color: AppColors.textHint)), SizedBox(width: 12.w), Expanded(child: Text('${ratedPower.toStringAsFixed(0)} W', style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600), textAlign: TextAlign.right))]),
+                ),
               if (firmwareArm != '--')
                 Padding(
                   padding: EdgeInsets.only(top: 8.h),
@@ -402,58 +318,6 @@ class _DeviceCardState extends State<DeviceCard>
     final isFault = status == 2;
     return (isOnline || isFault) && alarmCode != 0 && alarmCode != '0' && alarmCode != '';
   }
-
-  // 解绑确认对话框
-  Future<void> _confirmUnbindDialog(BuildContext context, String sn) async {
-    final l10n = AppLocalizations.of(context)!;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.unbind),
-        content: Text('确认解绑该设备吗？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(l10n.cancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(l10n.unbind, style: TextStyle(color: AppColors.error)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true && widget.onUnbind != null) {
-      widget.onUnbind!(sn);
-    }
-  }
-
-  // 删除确认对话框
-  Future<void> _confirmDeleteDialog(BuildContext context, String sn) async {
-    final l10n = AppLocalizations.of(context)!;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.deleteDevice),
-        content: Text('确认删除该设备吗？删除后无法恢复。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(l10n.cancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(l10n.delete, style: TextStyle(color: AppColors.error)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true && widget.onDelete != null) {
-      widget.onDelete!(sn);
-    }
-  }
 }
 
 class DeviceListView extends StatefulWidget {
@@ -463,14 +327,12 @@ class DeviceListView extends StatefulWidget {
   final List<String>? filterLabels;
   final String? emptyText;
   final double? bottomPadding;
-  // 排序变化回调：传入新的 SN 顺序（仅 enableReordering 时触发）
+  // 排序变化回调：传入新的 SN 顺序（仅 sortMode 时触发）
   final ValueChanged<List<String>>? onDeviceChanged;
-  final ValueChanged<String>? onUnbind;
-  final ValueChanged<String>? onRebind;
-  final ValueChanged<String>? onBind;
-  final ValueChanged<String>? onDelete;
-  final bool showUnbindButton;
-  final bool enableReordering;
+  // 非排序模式下长按卡片：弹出设备编辑页
+  final ValueChanged<String>? onLongPressDevice;
+  // 排序模式：启用 ReorderableListView 长按拖动
+  final bool sortMode;
 
   const DeviceListView({
     super.key,
@@ -481,12 +343,8 @@ class DeviceListView extends StatefulWidget {
     this.emptyText,
     this.bottomPadding = 100,
     this.onDeviceChanged,
-    this.onUnbind,
-    this.onRebind,
-    this.onBind,
-    this.onDelete,
-    this.showUnbindButton = true,
-    this.enableReordering = false,
+    this.onLongPressDevice,
+    this.sortMode = false,
   });
 
   @override
@@ -604,7 +462,7 @@ class _DeviceListViewState extends State<DeviceListView> {
         Expanded(
           child: filtered.isEmpty
               ? Center(child: Text(widget.emptyText ?? AppLocalizations.of(context)!.noDevices, style: TextStyle(fontSize: 14.sp, color: AppColors.textHint)))
-              : widget.enableReordering
+              : widget.sortMode
                   ? ReorderableListView.builder(
                       physics: const BouncingScrollPhysics(),
                       padding: EdgeInsets.fromLTRB(16.w, 4.h, 16.w, (widget.bottomPadding ?? 100).h),
@@ -642,12 +500,8 @@ class _DeviceListViewState extends State<DeviceListView> {
                       itemBuilder: (_, i) => DeviceCard(
                         key: ValueKey(filtered[i]['sn'] ?? i),
                         device: filtered[i],
-                        onUnbind: widget.onUnbind,
-                        onRebind: widget.onRebind,
-                        onBind: widget.onBind,
-                        onDelete: widget.onDelete,
-                        showUnbindButton: widget.showUnbindButton,
-                        enableReordering: widget.enableReordering,
+                        onLongPressDevice: widget.onLongPressDevice,
+                        sortMode: widget.sortMode,
                       ),
                     )
                   : ListView.builder(
@@ -659,12 +513,8 @@ class _DeviceListViewState extends State<DeviceListView> {
                       itemBuilder: (_, i) => DeviceCard(
                         key: ValueKey(filtered[i]['sn'] ?? i),
                         device: filtered[i],
-                        onUnbind: widget.onUnbind,
-                        onRebind: widget.onRebind,
-                        onBind: widget.onBind,
-                        onDelete: widget.onDelete,
-                        showUnbindButton: widget.showUnbindButton,
-                        enableReordering: widget.enableReordering,
+                        onLongPressDevice: widget.onLongPressDevice,
+                        sortMode: widget.sortMode,
                       ),
                     ),
         ),
