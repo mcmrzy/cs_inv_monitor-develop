@@ -43,6 +43,10 @@ add_compile_definitions(_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
 function(APPLY_STANDARD_SETTINGS TARGET)
   target_compile_features(${TARGET} PUBLIC cxx_std_17)
   target_compile_options(${TARGET} PRIVATE /W4 /WX /wd"4100")
+  # Treat sources as UTF-8 regardless of system codepage (GBK). Avoids C4819
+  # warnings in plugin sources (e.g. connectivity_plus 7.x) being promoted to
+  # errors by /WX on Chinese-locale Windows.
+  target_compile_options(${TARGET} PRIVATE /utf-8)
   target_compile_options(${TARGET} PRIVATE /EHsc)
   target_compile_definitions(${TARGET} PRIVATE "_HAS_EXCEPTIONS=0")
   target_compile_definitions(${TARGET} PRIVATE "$<$<CONFIG:Debug>:_DEBUG>")
