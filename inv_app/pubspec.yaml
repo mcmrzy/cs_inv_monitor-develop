@@ -46,7 +46,7 @@ dependencies:
   mobile_scanner: ^7.2.0
   wifi_iot: ^0.3.19
   wifi_scan: ^0.4.1+2
-  flutter_blue_plus: ^1.31.13
+  flutter_blue_ultra: ^2.2.0  # FBP 1.x 社区延续版（BSD 3-Clause，免费商用）；flutter_blue_plus 1.36+ 商用需付费
   
   flutter_local_notifications: ^17.2.4
 
