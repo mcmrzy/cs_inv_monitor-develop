@@ -254,6 +254,8 @@ type UpdateDeviceRequest struct {
 	RatedPower      *float64 `json:"ratedPower"`
 	FirmwareVersion string   `json:"firmwareVersion"`
 	HardwareVersion string   `json:"hardwareVersion"`
+	Alias           *string  `json:"alias"`
+	Remark          *string  `json:"remark"`
 }
 
 func (h *DeviceHandler) Update(c *gin.Context) {
@@ -295,6 +297,14 @@ func (h *DeviceHandler) Update(c *gin.Context) {
 		}
 		response.SuccessWithMessage(c, "device updated", nil)
 		return
+	}
+
+	// 别名/备注：App 设备编辑页可修改字段（独立于型号参数）
+	if req.Alias != nil || req.Remark != nil {
+		if err := h.deviceService.UpdateAliasRemark(c.Request.Context(), sn, req.Alias, req.Remark); err != nil {
+			response.Error(c, 500, "failed to update device")
+			return
+		}
 	}
 
 	if err := h.deviceService.Update(c.Request.Context(), sn, req.Model, req.RatedPower, req.FirmwareVersion, req.HardwareVersion); err != nil {

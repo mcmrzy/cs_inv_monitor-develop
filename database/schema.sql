@@ -119,6 +119,7 @@ CREATE TABLE IF NOT EXISTS stations (
     longitude DECIMAL(10,7),
     timezone VARCHAR(50) NOT NULL DEFAULT 'Asia/Shanghai', -- 电站所在时区
     status SMALLINT NOT NULL DEFAULT 1, -- 1:正常 0:禁用
+    sort_order INTEGER NOT NULL DEFAULT 0, -- 电站排序（App 长按拖动排序, migration 095）
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMPTZ
@@ -129,6 +130,9 @@ CREATE INDEX idx_stations_location ON stations(province, city, district);
 CREATE INDEX idx_stations_timezone ON stations(timezone);
 CREATE INDEX IF NOT EXISTS idx_stations_user_deleted
     ON stations(user_id, deleted_at)
+    WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_stations_user_sort
+    ON stations(user_id, sort_order, id)
     WHERE deleted_at IS NULL;
 
 -- ============================================
@@ -297,6 +301,9 @@ CREATE TABLE IF NOT EXISTS devices (
     timezone VARCHAR(50) NOT NULL DEFAULT 'Asia/Shanghai', -- 设备所在时区, 继承自所属电站
     status SMALLINT NOT NULL DEFAULT 0, -- 0:离线 1:在线 2:故障
     sort_order INTEGER NOT NULL DEFAULT 0, -- 电站内设备排序（App 长按拖动排序）
+    global_sort_order INTEGER NOT NULL DEFAULT 0, -- 全局设备排序（/devices 列表, migration 095）
+    alias VARCHAR(100), -- 设备别名（App 可编辑, migration 095）
+    remark TEXT, -- 设备备注（App 可编辑, migration 095）
     last_online_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -318,6 +325,9 @@ CREATE INDEX IF NOT EXISTS idx_devices_status_online
     WHERE status = 1;
 CREATE INDEX IF NOT EXISTS idx_devices_station_sort
     ON devices(station_id, sort_order, id)
+    WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_devices_user_global_sort
+    ON devices(user_id, global_sort_order, id)
     WHERE deleted_at IS NULL;
 
 -- Canonical object-level device access (migration 041).
@@ -7042,5 +7052,6 @@ INSERT INTO schema_migrations (version, name) VALUES (91, '091_add_model_csl10_6
 INSERT INTO schema_migrations (version, name) VALUES (92, '092_add_devices_sort_order.up.sql') ON CONFLICT (version) DO NOTHING;
 INSERT INTO schema_migrations (version, name) VALUES (93, '093_add_station_country.up.sql') ON CONFLICT (version) DO NOTHING;
 INSERT INTO schema_migrations (version, name) VALUES (94, '094_user_notify_prefs.up.sql') ON CONFLICT (version) DO NOTHING;
+INSERT INTO schema_migrations (version, name) VALUES (95, '095_device_alias_station_sort.up.sql') ON CONFLICT (version) DO NOTHING;
 
--- Next migration version to use: 095
+-- Next migration version to use: 096

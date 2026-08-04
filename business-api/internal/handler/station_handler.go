@@ -708,3 +708,28 @@ func (h *StationHandler) GetStatistics(c *gin.Context) {
 
 	response.Success(c, data)
 }
+
+// ReorderStations updates the display order of the current user's stations.
+// Body: {"station_order": [id1, id2, ...]}
+// 注意：注册为 POST /stations/reorder，因为 PUT 路由树中已存在 /stations/:id 通配符，
+// 再注册静态段 /stations/reorder 会触发 Gin 路由冲突。
+func (h *StationHandler) ReorderStations(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+	isAdmin := middleware.GetIsSystemAdmin(c)
+
+	var req struct {
+		StationOrder []int64 `json:"station_order"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || len(req.StationOrder) == 0 {
+		response.Error(c, 400, "station_order is required")
+		return
+	}
+
+	if err := h.stationService.ReorderStations(c.Request.Context(), userID, req.StationOrder, isAdmin); err != nil {
+		log.Printf("ReorderStations failed: user_id=%d err=%v", userID, err)
+		response.Error(c, 500, "reorder stations failed")
+		return
+	}
+
+	response.SuccessWithMessage(c, "station order updated", nil)
+}

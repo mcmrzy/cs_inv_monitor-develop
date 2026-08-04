@@ -389,3 +389,25 @@ func (h *DeviceHandler) ReorderDevices(c *gin.Context) {
 
 	response.SuccessWithMessage(c, "device order updated", nil)
 }
+
+// ReorderDevicesGlobal updates the display order of the current user's devices
+// in the global /devices list. Body: {"device_order": ["SN1", "SN2", ...]}
+func (h *DeviceHandler) ReorderDevicesGlobal(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+
+	var req struct {
+		DeviceOrder []string `json:"device_order"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || len(req.DeviceOrder) == 0 {
+		response.Error(c, 400, "device_order is required")
+		return
+	}
+
+	if err := h.deviceService.ReorderDevicesGlobal(c.Request.Context(), userID, req.DeviceOrder); err != nil {
+		logger.Error("ReorderDevicesGlobal failed", zap.Int64("user_id", userID), zap.Error(err))
+		response.Error(c, 500, "reorder devices failed")
+		return
+	}
+
+	response.SuccessWithMessage(c, "device order updated", nil)
+}
