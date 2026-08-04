@@ -201,13 +201,7 @@ class _ProfilePageState extends State<ProfilePage> {
         l10n.messageNotifySettings,
         () => context.push('/notify-settings')
       ),
-      (
-        Icons.person_outline,
-        l10n.editProfile,
-        () => context.push('/edit-profile')
-      ),
-      (
-        Icons.settings_outlined,
+      (Icons.settings_outlined,
         l10n.systemSettings,
         () => context.push('/settings')
       ),
