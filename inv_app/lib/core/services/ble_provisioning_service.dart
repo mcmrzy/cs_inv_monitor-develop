@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:flutter_blue_ultra/flutter_blue_ultra.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 /// BLE配网状态枚举
@@ -151,7 +151,7 @@ class BleProvisioningService {
   /// 检查蓝牙是否可用
   Future<bool> isBluetoothAvailable() async {
     try {
-      final adapterState = await FlutterBluePlus.adapterState.first;
+      final adapterState = await FlutterBlueUltra.adapterState.first;
       return adapterState == BluetoothAdapterState.on;
     } catch (e) {
       return false;
@@ -187,13 +187,13 @@ class BleProvisioningService {
       }
 
       // 开始扫描，过滤服务UUID
-      await FlutterBluePlus.startScan(
+      await FlutterBlueUltra.startScan(
         withServices: [Guid(serviceUuid)],
         timeout: scanTimeout,
       );
 
       // 监听扫描结果
-      FlutterBluePlus.scanResults.listen((results) {
+      FlutterBlueUltra.scanResults.listen((results) {
         _discoveredDevices = results.map((result) {
           // 协议说明：广播名是 CS_INV_完整SN，GAP Device Name也是完整SN
           final advName = result.advertisementData.advName;
@@ -246,7 +246,7 @@ class BleProvisioningService {
 
   /// 停止扫描
   void stopScan() {
-    FlutterBluePlus.stopScan();
+    FlutterBlueUltra.stopScan();
     _scanTimer?.cancel();
     _running = false; // 重置运行标志
     if (_currentStatus == BleProvisioningStatus.scanning) {
