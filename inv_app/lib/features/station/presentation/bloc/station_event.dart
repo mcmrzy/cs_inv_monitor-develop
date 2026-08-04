@@ -109,3 +109,13 @@ class DeviceReorderRequested extends StationEvent {
   @override
   List<Object?> get props => [stationId, deviceOrder];
 }
+
+/// 电站列表拖动排序（首页电站卡片）
+class StationReorderRequested extends StationEvent {
+  final List<int> stationOrder;
+
+  const StationReorderRequested({required this.stationOrder});
+
+  @override
+  List<Object?> get props => [stationOrder];
+}

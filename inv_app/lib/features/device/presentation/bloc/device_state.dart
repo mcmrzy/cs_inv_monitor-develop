@@ -63,6 +63,19 @@ class DeviceBindSuccess extends DeviceState {}
 
 class DeviceUnbindSuccess extends DeviceState {}
 
+/// 设备别名/备注更新成功
+class DeviceUpdateSuccess extends DeviceState {
+  final String sn;
+
+  const DeviceUpdateSuccess({required this.sn});
+
+  @override
+  List<Object?> get props => [sn];
+}
+
+/// 全局设备排序保存成功
+class DeviceGlobalReorderSuccess extends DeviceState {}
+
 class DeviceError extends DeviceState {
   final String message;
 

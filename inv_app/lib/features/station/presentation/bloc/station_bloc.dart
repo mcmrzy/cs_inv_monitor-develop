@@ -31,6 +31,7 @@ class StationBloc extends Bloc<StationEvent, StationState> {
     on<DeviceBindRequested>(_onDeviceBindRequested);
     on<DeviceDeleteRequested>(_onDeleteDeviceRequested);
     on<DeviceReorderRequested>(_onDeviceReorderRequested);
+    on<StationReorderRequested>(_onStationReorderRequested);
   }
 
   /// 快速检查是否有网络连接（带连续确认，启动瞬间不误判离线）
@@ -293,6 +294,19 @@ class StationBloc extends Bloc<StationEvent, StationState> {
       (failure) => emit(StationError(message: failure.message)),
       (_) {
         emit(DeviceReorderSuccess(stationId: event.stationId));
+      },
+    );
+  }
+
+  Future<void> _onStationReorderRequested(
+    StationReorderRequested event,
+    Emitter<StationState> emit,
+  ) async {
+    final result = await repository.reorderStations(event.stationOrder);
+    result.fold(
+      (failure) => emit(StationError(message: failure.message)),
+      (_) {
+        emit(StationReorderSuccess());
       },
     );
   }

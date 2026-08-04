@@ -143,6 +143,42 @@ class DeviceRepositoryImpl implements DeviceRepository {
   }
 
   @override
+  Future<Either<Failure, void>> updateDevice(
+    String sn, {
+    String? alias,
+    String? remark,
+  }) async {
+    try {
+      final response = await remoteDataSource.updateDevice(
+        sn,
+        alias: alias,
+        remark: remark,
+      );
+      final parsed = _parseData(response, allowEmpty: true);
+      return parsed.fold((failure) => Left(failure), (_) => const Right(null));
+    } on DioException catch (e) {
+      return Left(_mapError(e));
+    } catch (e) {
+      return Left(UnknownFailure(e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> reorderDevicesGlobal(
+    List<String> deviceOrder,
+  ) async {
+    try {
+      final response = await remoteDataSource.reorderDevicesGlobal(deviceOrder);
+      final parsed = _parseData(response, allowEmpty: true);
+      return parsed.fold((failure) => Left(failure), (_) => const Right(null));
+    } on DioException catch (e) {
+      return Left(_mapError(e));
+    } catch (e) {
+      return Left(UnknownFailure(e.toString()));
+    }
+  }
+
+  @override
   Future<Either<Failure, void>> control(
     String sn,
     String cmdType,

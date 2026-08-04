@@ -655,6 +655,20 @@ class AppLocalizations {
   String get saveChanges => _localizedStrings['save_changes']!;
   String get editStationHint => _localizedStrings['edit_station_hint']!;
   String get longPressSortHint => _localizedStrings['long_press_sort_hint']!;
+  String get editDevice => _localizedStrings['edit_device']!;
+  String get deviceAlias => _localizedStrings['device_alias']!;
+  String get deviceAliasHint => _localizedStrings['device_alias_hint']!;
+  String get deviceRemark => _localizedStrings['device_remark']!;
+  String get deviceRemarkHint => _localizedStrings['device_remark_hint']!;
+  String get deviceBaseInfo => _localizedStrings['device_base_info']!;
+  String get autoParsedReadonly =>
+      _localizedStrings['auto_parsed_readonly']!;
+  String get sortDevices => _localizedStrings['sort_devices']!;
+  String get sortStations => _localizedStrings['sort_stations']!;
+  String get finishSorting => _localizedStrings['finish_sorting']!;
+  String get sortModeHint => _localizedStrings['sort_mode_hint']!;
+  String get stationOrderSaved => _localizedStrings['station_order_saved']!;
+  String get deviceUpdated => _localizedStrings['device_updated']!;
   String get addressNotFound => _localizedStrings['address_not_found']!;
   String get otherGroup => _localizedStrings['other_group']!;
 

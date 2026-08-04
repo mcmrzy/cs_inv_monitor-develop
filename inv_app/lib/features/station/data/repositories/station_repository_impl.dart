@@ -240,6 +240,22 @@ class StationRepositoryImpl implements StationRepository {
   }
 
   @override
+  Future<Either<Failure, void>> reorderStations(List<int> stationOrder) async {
+    try {
+      final response = await remoteDataSource.reorderStations(stationOrder);
+      final parsed = _parseData(response, allowEmpty: true);
+      return parsed.fold(
+        (failure) => Left(failure),
+        (_) => const Right(null),
+      );
+    } on DioException catch (e) {
+      return Left(_mapError(e));
+    } catch (e) {
+      return Left(UnknownFailure(e.toString()));
+    }
+  }
+
+  @override
   Future<Either<Failure, List<dynamic>>> getStatistics(
     int stationId,
     String startDate,

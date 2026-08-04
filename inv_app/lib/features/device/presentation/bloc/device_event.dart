@@ -83,6 +83,32 @@ class DeviceUnbindRequested extends DeviceEvent {
   List<Object?> get props => [sn];
 }
 
+/// 更新设备别名/备注（设备编辑页）
+class DeviceUpdateRequested extends DeviceEvent {
+  final String sn;
+  final String? alias;
+  final String? remark;
+
+  const DeviceUpdateRequested({
+    required this.sn,
+    this.alias,
+    this.remark,
+  });
+
+  @override
+  List<Object?> get props => [sn, alias, remark];
+}
+
+/// 全局设备列表（/devices）拖动排序持久化
+class DeviceGlobalReorderRequested extends DeviceEvent {
+  final List<String> deviceOrder;
+
+  const DeviceGlobalReorderRequested({required this.deviceOrder});
+
+  @override
+  List<Object?> get props => [deviceOrder];
+}
+
 class DeviceRealtimeWSUpdate extends DeviceEvent {
   final InverterRealtime data;
 
