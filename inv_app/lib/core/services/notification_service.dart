@@ -22,7 +22,7 @@ class NotificationService {
         InitializationSettings(android: androidSettings, iOS: iosSettings);
 
     await _plugin.initialize(
-      settings,
+      settings: settings,
       onDidReceiveNotificationResponse: _onNotificationTapped,
     );
 
@@ -68,10 +68,10 @@ class NotificationService {
         NotificationDetails(android: androidDetails, iOS: iosDetails);
 
     await _plugin.show(
-      0,
-      title,
-      body,
-      details,
+      id: 0,
+      title: title,
+      body: body,
+      notificationDetails: details,
       payload: payload,
     );
   }
