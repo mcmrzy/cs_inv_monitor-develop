@@ -44,6 +44,8 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     on<DeviceParamsUpdateRequested>(_onParamsUpdateRequested);
     on<DeviceBindRequested>(_onBindRequested);
     on<DeviceUnbindRequested>(_onUnbindRequested);
+    on<DeviceUpdateRequested>(_onUpdateRequested);
+    on<DeviceGlobalReorderRequested>(_onGlobalReorderRequested);
     on<DeviceUnsubscribeRealtime>(_onUnsubscribeRealtime);
     on<DeviceHistoryRequested>(_onHistoryRequested);
     on<DeviceStartLocalPoll>(_onStartLocalPoll);
@@ -288,6 +290,32 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     result.fold(
       (failure) => emit(DeviceError(message: failure.message)),
       (_) => emit(DeviceUnbindSuccess()),
+    );
+  }
+
+  Future<void> _onUpdateRequested(
+    DeviceUpdateRequested event,
+    Emitter<DeviceState> emit,
+  ) async {
+    final result = await repository.updateDevice(
+      event.sn,
+      alias: event.alias,
+      remark: event.remark,
+    );
+    result.fold(
+      (failure) => emit(DeviceError(message: failure.message)),
+      (_) => emit(DeviceUpdateSuccess(sn: event.sn)),
+    );
+  }
+
+  Future<void> _onGlobalReorderRequested(
+    DeviceGlobalReorderRequested event,
+    Emitter<DeviceState> emit,
+  ) async {
+    final result = await repository.reorderDevicesGlobal(event.deviceOrder);
+    result.fold(
+      (failure) => emit(DeviceError(message: failure.message)),
+      (_) => emit(DeviceGlobalReorderSuccess()),
     );
   }
 

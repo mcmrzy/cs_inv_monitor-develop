@@ -13,6 +13,12 @@ abstract class DeviceRepository {
   Future<Either<Failure, Map<String, dynamic>>> getRealtimeData(String sn);
   Future<Either<Failure, void>> bind(String sn, int? stationId);
   Future<Either<Failure, void>> unbind(String sn);
+  Future<Either<Failure, void>> updateDevice(
+    String sn, {
+    String? alias,
+    String? remark,
+  });
+  Future<Either<Failure, void>> reorderDevicesGlobal(List<String> deviceOrder);
   Future<Either<Failure, void>> control(
     String sn,
     String cmdType,

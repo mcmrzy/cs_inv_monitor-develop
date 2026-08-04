@@ -107,6 +107,9 @@ class DeviceReorderSuccess extends StationState {
   List<Object?> get props => [stationId];
 }
 
+/// 电站排序保存成功
+class StationReorderSuccess extends StationState {}
+
 class StationError extends StationState {
   final String message;
 

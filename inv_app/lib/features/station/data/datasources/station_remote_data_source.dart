@@ -55,6 +55,11 @@ class StationRemoteDataSource {
     return await dio.put('/stations/$stationId/devices/reorder', data: {'device_order': deviceOrder});
   }
 
+  /// 电站列表拖动排序持久化（后端注册为 POST，规避 PUT 路由通配符冲突）
+  Future<Response> reorderStations(List<int> stationOrder) async {
+    return await dio.post('/stations/reorder', data: {'station_order': stationOrder});
+  }
+
   Future<Response> getStatistics(
     int stationId,
     String startDate,

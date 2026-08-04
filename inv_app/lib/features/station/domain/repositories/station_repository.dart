@@ -19,6 +19,7 @@ abstract class StationRepository {
   Future<Either<Failure, void>> bindDevice(String sn, int stationId);
   Future<Either<Failure, void>> deleteDevice(String sn);
   Future<Either<Failure, void>> reorderDevices(int stationId, List<String> deviceOrder);
+  Future<Either<Failure, void>> reorderStations(List<int> stationOrder);
   Future<Either<Failure, List<dynamic>>> getStatistics(
     int stationId,
     String startDate,

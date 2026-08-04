@@ -42,6 +42,29 @@ class DeviceRemoteDataSource {
     return await dio.delete('/devices/by-sn/$sn/unbind');
   }
 
+  /// 更新设备别名/备注（型号、额定功率等由设备自动解析，不可手动修改）
+  Future<Response> updateDevice(
+    String sn, {
+    String? alias,
+    String? remark,
+  }) async {
+    return await dio.put(
+      '/devices/by-sn/$sn',
+      data: {
+        if (alias != null) 'alias': alias,
+        if (remark != null) 'remark': remark,
+      },
+    );
+  }
+
+  /// 全局设备列表（/devices）拖动排序持久化
+  Future<Response> reorderDevicesGlobal(List<String> deviceOrder) async {
+    return await dio.put(
+      '/devices/reorder',
+      data: {'device_order': deviceOrder},
+    );
+  }
+
   Future<Response> control(
     String sn,
     String cmdType,
