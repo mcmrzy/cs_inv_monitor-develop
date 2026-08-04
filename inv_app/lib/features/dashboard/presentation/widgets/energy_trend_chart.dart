@@ -350,8 +350,8 @@ class _EnergyTrendChartState extends State<EnergyTrendChart> {
           }
         },
         touchTooltipData: LineTouchTooltipData(
-          tooltipBgColor: AppColors.primary,
-          tooltipRoundedRadius: 10.r,
+          getTooltipColor: (spot) => AppColors.primary,
+          tooltipBorderRadius: BorderRadius.circular(10.r),
           getTooltipItems: (spots) {
             if (spots.isEmpty) return [];
             return spots.map((spot) {

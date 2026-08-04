@@ -415,10 +415,11 @@ class _HistoryChartPageState extends State<HistoryChartPage>
           lineTouchData: LineTouchData(
             touchTooltipData: LineTouchTooltipData(
               // tooltip 保持深色底白字；暗色用浮层语义色
-              tooltipBgColor: Theme.of(context).brightness == Brightness.dark
-                  ? AppColor.surfaceContainer(context)
-                  : AppColors.textPrimary,
-              tooltipRoundedRadius: 8,
+              getTooltipColor: (spot) =>
+                  Theme.of(context).brightness == Brightness.dark
+                      ? AppColor.surfaceContainer(context)
+                      : AppColors.textPrimary,
+              tooltipBorderRadius: BorderRadius.circular(8),
               getTooltipItems: (touchedSpots) {
                 return touchedSpots.map((spot) {
                   return LineTooltipItem(
@@ -460,7 +461,7 @@ class _HistoryChartPageState extends State<HistoryChartPage>
       text = '${value.toInt()}';
     }
     return SideTitleWidget(
-      axisSide: meta.axisSide,
+      meta: meta,
       child: Text(
         text,
         style: TextStyle(fontSize: 10.sp, color: AppColors.textHint),
