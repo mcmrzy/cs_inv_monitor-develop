@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
@@ -30,6 +31,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final JVerifyLoginUseCase jverifyLoginUseCase;
   final StorageService storageService;
   final JPushService jpushService;
+
+  /// 用户资料本地缓存 key（冷启动时先用缓存展示，后台刷新覆盖）
+  static const String _cachedUserKey = 'cached_user_profile';
 
   AuthBloc({
     required this.loginUseCase,
@@ -81,6 +85,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       bool isSystemAdmin = await storageService.getIsSystemAdmin() ?? false;
       List<String> permissions = await storageService.getPermissions();
 
+      // 先读取本地缓存的用户资料，网络未就绪时也能立即展示昵称/头像
+      final cachedUser = await _loadCachedUser();
+
       // 先用本地缓存立即进入首页（乐观进入，跳转不等网络）；
       // token 失效时由首页首个请求 401 触发刷新/登出兑底
       emit(
@@ -89,7 +96,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           phone: phone,
           isSystemAdmin: isSystemAdmin,
           permissions: permissions,
-          user: null,
+          user: cachedUser,
         ),
       );
 
@@ -109,23 +116,55 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     bool isSystemAdmin,
     List<String> permissions,
   ) async {
-    try {
-      final profileResult = await getProfileUseCase();
-      // 期间已登出则放弃更新，避免状态回退
-      if (state is AuthUnauthenticated) return;
-      profileResult.fold(
-        (_) {},
-        (u) {
+    // 启动/下拉刷新时网络可能未就绪，失败后延时重试，避免资料一直显示为空
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        final profileResult = await getProfileUseCase();
+        // 期间已登出则放弃更新，避免状态回退
+        if (state is AuthUnauthenticated) return;
+        final user = profileResult.fold<User?>((_) => null, (u) => u);
+        if (user != null) {
+          // 缓存最新资料，冷启动时优先展示本地缓存
+          await _cacheUser(user);
           emit(
             AuthAuthenticated(
               userId: userId,
-              phone: u.phone,
-              isSystemAdmin: u.isSystemAdmin,
-              permissions: u.permissions,
-              user: u,
+              phone: user.phone,
+              isSystemAdmin: user.isSystemAdmin,
+              permissions: user.permissions,
+              user: user,
             ),
           );
-        },
+          return;
+        }
+      } catch (_) {
+        if (state is AuthUnauthenticated) return;
+      }
+      if (attempt < 2) {
+        await Future.delayed(Duration(seconds: 2 * (attempt + 1)));
+      }
+    }
+  }
+
+  /// 读取本地缓存的用户资料（网络不可用时兜底展示）
+  Future<User?> _loadCachedUser() async {
+    try {
+      final raw = await storageService.getString(_cachedUserKey);
+      if (raw == null || raw.isEmpty) return null;
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) {
+        return User.fromJson(decoded);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// 缓存用户资料 JSON 到本地
+  Future<void> _cacheUser(User user) async {
+    try {
+      await storageService.saveString(
+        _cachedUserKey,
+        jsonEncode(user.toJson()),
       );
     } catch (_) {}
   }
@@ -235,6 +274,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     await storageService.deleteUserPhone();
     await storageService.deleteIsSystemAdmin();
     await storageService.deletePermissions();
+    // 清除本地缓存的用户资料
+    await storageService.saveString(_cachedUserKey, '');
 
     jpushService.unbindUser();
 
@@ -341,6 +382,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           (user) {
             // 使用最新的用户信息更新状态
             if (previousUserId != null) {
+              // 缓存最新资料，冷启动时优先展示本地缓存
+              unawaited(_cacheUser(user));
               emit(
                 AuthAuthenticated(
                   userId: previousUserId,

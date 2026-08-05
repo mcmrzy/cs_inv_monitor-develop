@@ -62,6 +62,11 @@ void main() {
         .thenAnswer((_) async {});
     when(() => mockStorageService.deletePermissions())
         .thenAnswer((_) async {});
+    // 用户资料本地缓存（冷启动展示 + 登出清除）
+    when(() => mockStorageService.getString(any()))
+        .thenAnswer((_) async => null);
+    when(() => mockStorageService.saveString(any(), any()))
+        .thenAnswer((_) async {});
 
     authBloc = AuthBloc(
       loginUseCase: mockLoginUseCase,
