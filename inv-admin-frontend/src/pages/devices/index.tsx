@@ -1520,7 +1520,8 @@ const DevicesPage: React.FC = () => {
     return {
       ...base,
       model: base.model || rtInfo?.model || rt.model || '',
-      rated_power: (base as any).rated_power || rtInfo?.rated_power || rt.rated_power || 0,
+      // 单位纪律（V2.1）：DB base.rated_power 为 kW（权威）；realtime info 组 rated_power 为协议 W 原值，需 ÷1000 换算 kW
+      rated_power: (base as any).rated_power || (rtInfo?.rated_power != null ? Number(rtInfo.rated_power) / 1000 : rt.rated_power || 0),
       firmware_version: (base as any).firmware_arm || rtInfo?.firmware_arm || (base as any).firmware_version || '',
       hardware_version: (base as any).firmware_esp || rtInfo?.firmware_esp || (base as any).hardware_version || '',
       manufacturer: (base as any).manufacturer || rtInfo?.manufacturer || '',

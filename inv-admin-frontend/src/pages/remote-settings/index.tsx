@@ -18,7 +18,7 @@ import DischargeSection from './components/DischargeSection'
 import OtherSection from './components/OtherSection'
 import BatterySection from './components/BatterySection'
 import ResetSection from './components/ResetSection'
-import ModelCommandsSection from './components/ModelCommandsSection'
+import SchemaGroupPanel from './components/SchemaGroupPanel'
 import { SECTION_COLORS } from './components/shared-styles'
 import type { DeviceItem } from './types'
 
@@ -92,7 +92,9 @@ const RemoteSettingsPage: React.FC = () => {
       {selectedSn ? (
         <div>
           {isDynamicModel && selectedDevice ? (
-            <ModelCommandsSection sn={selectedSn} modelId={selectedDevice.model_id} />
+            // CS-L10-6K2：V2.1 起弃用命令卡片平铺，改为 V1 风格 schema 驱动分组面板
+            // （通用/应用/混合/并联四分组，见 V2.1 文档 11.3 与 device_config_schema）
+            <SchemaGroupPanel sn={selectedSn} />
           ) : (
           <Collapse
             activeKey={activeKeys}
