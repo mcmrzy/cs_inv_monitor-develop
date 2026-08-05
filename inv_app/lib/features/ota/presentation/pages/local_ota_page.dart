@@ -955,7 +955,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         Container(
           padding: EdgeInsets.all(16.w),
           decoration: BoxDecoration(
-            color: AppColor.surface(context),
+            color: AppColor.surfaceContainer(context),
             borderRadius: BorderRadius.circular(14.r),
             boxShadow: [
               BoxShadow(
@@ -1322,7 +1322,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         Container(
           padding: EdgeInsets.all(20.w),
           decoration: BoxDecoration(
-            color: AppColor.surface(context),
+            color: AppColor.surfaceContainer(context),
             borderRadius: BorderRadius.circular(14.r),
             boxShadow: [
               BoxShadow(
@@ -1385,7 +1385,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         Container(
           padding: EdgeInsets.all(20.w),
           decoration: BoxDecoration(
-            color: AppColor.surface(context),
+            color: AppColor.surfaceContainer(context),
             borderRadius: BorderRadius.circular(14.r),
             boxShadow: [
               BoxShadow(
@@ -1452,7 +1452,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         Container(
           padding: EdgeInsets.all(24.w),
           decoration: BoxDecoration(
-            color: AppColor.surface(context),
+            color: AppColor.surfaceContainer(context),
             borderRadius: BorderRadius.circular(14.r),
             boxShadow: [
               BoxShadow(

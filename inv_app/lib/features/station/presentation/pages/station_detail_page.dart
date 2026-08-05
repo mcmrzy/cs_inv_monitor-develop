@@ -643,7 +643,7 @@ class _StationDetailPageState extends State<StationDetailPage>
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
       decoration: BoxDecoration(
-        color: AppColor.surface(context),
+        color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.circular(8.r),
         boxShadow: [
           BoxShadow(

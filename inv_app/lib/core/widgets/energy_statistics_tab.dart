@@ -517,7 +517,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
     return Container(
       padding: EdgeInsets.all(14.w),
       decoration: BoxDecoration(
-        color: AppColor.surface(context),
+        color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.circular(14.r),
         boxShadow: [
           BoxShadow(
