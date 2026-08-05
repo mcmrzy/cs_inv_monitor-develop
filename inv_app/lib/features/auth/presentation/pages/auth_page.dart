@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -22,24 +24,49 @@ class AuthPage extends StatefulWidget {
   State<AuthPage> createState() => _AuthPageState();
 }
 
-class _AuthPageState extends State<AuthPage> {
+class _AuthPageState extends State<AuthPage>
+    with SingleTickerProviderStateMixin {
   late AuthMode _mode;
+
+  /// 品牌区装饰呼吸动画控制器（圆环/光斑错相脉动）
+  late final AnimationController _decorController = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 4),
+  )..repeat();
 
   @override
   void initState() {
     super.initState();
     _mode = widget.initialMode;
+    // 初始即注册模式时品牌头收缩、装饰被裁剪：不启动呼吸动画
+    if (_mode == AuthMode.register) {
+      _decorController.stop();
+      _decorController.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _decorController.dispose();
+    super.dispose();
   }
 
   void _switchMode(AuthMode mode) {
     if (_mode == mode) return;
     setState(() => _mode = mode);
+    // 注册模式品牌头收缩后装饰被裁剪：暂停呼吸动画省电，切回登录恢复
+    if (mode == AuthMode.register) {
+      _decorController.stop();
+      _decorController.value = 0;
+    } else {
+      _decorController.repeat();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColor.surfaceContainer(context),
+      backgroundColor: Colors.white,
       body: BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {
           if (state is AuthError) {
@@ -48,6 +75,7 @@ class _AuthPageState extends State<AuthPage> {
                 content: Text(
                   AppLocalizations.of(context)!.translateError(state.message),
                 ),
+                backgroundColor: AppColors.error,
               ),
             );
           } else if (state is AuthAuthenticated) {
@@ -69,7 +97,7 @@ class _AuthPageState extends State<AuthPage> {
                     margin: const EdgeInsets.fromLTRB(24, 0, 24, 0),
                     padding: EdgeInsets.fromLTRB(24.w, 32.h, 24.w, 8.h),
                     decoration: BoxDecoration(
-                      color: AppColor.surfaceContainer(context),
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(20.r),
                       boxShadow: [
                         BoxShadow(
@@ -138,32 +166,53 @@ class _AuthPageState extends State<AuthPage> {
         bottom: false,
         child: Stack(
           children: [
-            // 装饰：右上大圆环
+            // 装饰：右上大圆环（缓慢呼吸：缩放 + 透明度脉动）
             Positioned(
               right: -70.w,
               top: -70.w,
-              child: Container(
-                width: 230.w,
-                height: 230.w,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.1),
-                    width: 26,
+              child: AnimatedBuilder(
+                animation: _decorController,
+                builder: (context, child) {
+                  final v = const _BreathingCurve().transform(_decorController.value);
+                  return Transform.scale(
+                    scale: 0.94 + 0.08 * v,
+                    child: Opacity(opacity: 0.7 + 0.3 * v, child: child),
+                  );
+                },
+                child: Container(
+                  width: 230.w,
+                  height: 230.w,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.1),
+                      width: 26,
+                    ),
                   ),
                 ),
               ),
             ),
-            // 装饰：左下光斑
+            // 装饰：左下光斑（与圆环错相呼吸：放大 + 变亮）
             Positioned(
               left: -50.w,
               bottom: -40.w,
-              child: Container(
-                width: 150.w,
-                height: 150.w,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: 0.06),
+              child: AnimatedBuilder(
+                animation: _decorController,
+                builder: (context, child) {
+                  final v = const _BreathingCurve(phase: 0.5)
+                      .transform(_decorController.value);
+                  return Transform.scale(
+                    scale: 1.0 + 0.22 * v,
+                    child: Opacity(opacity: 0.5 + 0.5 * v, child: child),
+                  );
+                },
+                child: Container(
+                  width: 150.w,
+                  height: 150.w,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withValues(alpha: 0.06),
+                  ),
                 ),
               ),
             ),
@@ -287,5 +336,17 @@ class _AuthPageState extends State<AuthPage> {
         ),
       ],
     );
+  }
+}
+
+/// 呼吸曲线：t∈[0,1] → 0→1→0 平滑正弦（phase 控制相位偏移，0.5 为反相）
+class _BreathingCurve extends Curve {
+  final double phase;
+  const _BreathingCurve({this.phase = 0});
+
+  @override
+  double transformInternal(double t) {
+    final v = (math.cos((t + phase) * 2 * math.pi) + 1) / 2;
+    return v.clamp(0.0, 1.0);
   }
 }
