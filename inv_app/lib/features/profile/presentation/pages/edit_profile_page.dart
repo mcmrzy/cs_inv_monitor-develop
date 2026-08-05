@@ -742,7 +742,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
     try {
       final apiClient = getIt<ApiClient>();
       final response = await apiClient.post(
-        '/auth/send-email-code',
+        '/auth/send-email-change-code',
         data: {'email': email},
       );
 
