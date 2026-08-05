@@ -493,7 +493,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
     try {
       final apiClient = getIt<ApiClient>();
       final response = await apiClient.post(
-        '/auth/send-sms-code',
+        '/auth/send-phone-code',
         data: {'phone': phone},
       );
 
