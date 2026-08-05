@@ -40,12 +40,18 @@ type internalDeviceInfoRequest struct {
 	FirmwareBMS     string  `json:"firmware_bms"`
 	Type            string  `json:"device_type"`
 	RatedPower      int     `json:"rated_power"`
+	RatedPowerW     int     `json:"rated_power_w"` // V2.1：协议原值 W（rated_power 列仅派生 kW）
 	RatedVoltage    int     `json:"rated_voltage"`
 	RatedFreq       float64 `json:"rated_frequency"`
 	BatteryVoltage  float64 `json:"battery_nominal_voltage"`
 	BatteryType     string  `json:"battery_type"`
 	CellCount       int     `json:"cell_count"`
 	TempSensorCount int     `json:"temp_sensor_count"`
+	// V2.1 新增只读字段（096 迁移落库列，见 V2.1 文档第 7 节）
+	Phase             string `json:"phase"`
+	InverterModule    string `json:"inverter_module"`
+	HardwareVersion   string `json:"hardware_version"`
+	BootloaderVersion string `json:"bootloader_version"`
 }
 
 type internalDeviceDataRequest struct {
@@ -435,10 +441,11 @@ func (h *InternalHandler) DeviceInfo(c *gin.Context) {
 	_, err := h.db.Exec(ctx, `
 		INSERT INTO devices (
 			sn, model, manufacturer, firmware_arm, firmware_esp, firmware_dsp, firmware_bms, device_type,
-			rated_power, rated_voltage, rated_freq, battery_voltage, battery_type, cell_count, temp_sensor_count,
+			rated_power, rated_power_w, rated_voltage, rated_freq, battery_voltage, battery_type, cell_count, temp_sensor_count,
+			phase, inverter_module, hardware_version, bootloader_version, info_reported_at,
 			user_id, status, last_online_at, created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 0, 1, NOW(), NOW(), NOW())
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, NOW(), 0, 1, NOW(), NOW(), NOW())
 		ON CONFLICT (sn) DO UPDATE SET
 			model = COALESCE(NULLIF(EXCLUDED.model, ''), devices.model),
 			manufacturer = COALESCE(NULLIF(EXCLUDED.manufacturer, ''), devices.manufacturer),
@@ -447,13 +454,23 @@ func (h *InternalHandler) DeviceInfo(c *gin.Context) {
 			firmware_dsp = COALESCE(NULLIF(EXCLUDED.firmware_dsp, ''), devices.firmware_dsp),
 			firmware_bms = COALESCE(NULLIF(EXCLUDED.firmware_bms, ''), devices.firmware_bms),
 			device_type = COALESCE(NULLIF(EXCLUDED.device_type, ''), devices.device_type),
-			rated_power = CASE WHEN EXCLUDED.rated_power > 0 THEN EXCLUDED.rated_power ELSE devices.rated_power END,
+			rated_power = CASE
+				WHEN devices.rated_power > 0 THEN devices.rated_power -- 已有值（含手工录入）：不覆盖
+				WHEN EXCLUDED.rated_power_w > 0 THEN EXCLUDED.rated_power_w / 1000.0 -- V2.1：协议 W 派生 kW
+				WHEN EXCLUDED.rated_power > 0 THEN EXCLUDED.rated_power -- 旧固件回退
+				ELSE devices.rated_power END,
+			rated_power_w = CASE WHEN EXCLUDED.rated_power_w > 0 THEN EXCLUDED.rated_power_w ELSE devices.rated_power_w END,
 			rated_voltage = CASE WHEN EXCLUDED.rated_voltage > 0 THEN EXCLUDED.rated_voltage ELSE devices.rated_voltage END,
 			rated_freq = CASE WHEN EXCLUDED.rated_freq > 0 THEN EXCLUDED.rated_freq ELSE devices.rated_freq END,
 			battery_voltage = CASE WHEN EXCLUDED.battery_voltage > 0 THEN EXCLUDED.battery_voltage ELSE devices.battery_voltage END,
 			battery_type = COALESCE(NULLIF(EXCLUDED.battery_type, ''), devices.battery_type),
 			cell_count = CASE WHEN EXCLUDED.cell_count > 0 THEN EXCLUDED.cell_count ELSE devices.cell_count END,
 			temp_sensor_count = CASE WHEN EXCLUDED.temp_sensor_count > 0 THEN EXCLUDED.temp_sensor_count ELSE devices.temp_sensor_count END,
+			phase = COALESCE(NULLIF(EXCLUDED.phase, ''), devices.phase),
+			inverter_module = COALESCE(NULLIF(EXCLUDED.inverter_module, ''), devices.inverter_module),
+			hardware_version = COALESCE(NULLIF(EXCLUDED.hardware_version, ''), devices.hardware_version),
+			bootloader_version = COALESCE(NULLIF(EXCLUDED.bootloader_version, ''), devices.bootloader_version),
+			info_reported_at = NOW(),
 			model_id = COALESCE(
 				devices.model_id,
 				(SELECT id FROM device_models WHERE model_code = EXCLUDED.model AND lifecycle_status != 'retired' LIMIT 1)
@@ -464,7 +481,8 @@ func (h *InternalHandler) DeviceInfo(c *gin.Context) {
 			last_online_at = NOW(),
 			updated_at = NOW()
 	`, req.SN, req.Model, req.Manufacturer, req.FirmwareARM, req.FirmwareESP, req.FirmwareDSP, req.FirmwareBMS, req.Type,
-		req.RatedPower, req.RatedVoltage, req.RatedFreq, req.BatteryVoltage, req.BatteryType, req.CellCount, req.TempSensorCount)
+		req.RatedPower, req.RatedPowerW, req.RatedVoltage, req.RatedFreq, req.BatteryVoltage, req.BatteryType, req.CellCount, req.TempSensorCount,
+		req.Phase, req.InverterModule, req.HardwareVersion, req.BootloaderVersion)
 	if err != nil {
 		logger.Error("InternalDeviceInfo failed", zap.String("sn", req.SN), zap.Error(err))
 		response.Error(c, 500, "upsert device info failed")
@@ -872,16 +890,19 @@ func (h *InternalHandler) DeviceCmdStatus(c *gin.Context) {
 
 // DeviceCmdResult 处理设备上报的命令执行结果 (cs_inv/{sn}/cmd_result)
 type internalDeviceCmdResultRequest struct {
-	SN        string          `json:"sn"`
-	TaskID    string          `json:"task_id"`
-	Cmd       string          `json:"cmd"`
-	Result    string          `json:"result"`
-	Success   bool            `json:"success"`
-	Stage     string          `json:"stage"`
-	Code      string          `json:"code"`
-	Message   string          `json:"message"`
-	Data      json.RawMessage `json:"data"`
-	Timestamp int64           `json:"timestamp"`
+	SN               string          `json:"sn"`
+	TaskID           string          `json:"task_id"`
+	Cmd              string          `json:"cmd"`
+	Result           string          `json:"result"`
+	Success          bool            `json:"success"`
+	Stage            string          `json:"stage"`
+	Code             string          `json:"code"`
+	Message          string          `json:"message"`
+	Data             json.RawMessage `json:"data"`
+	Timestamp        int64           `json:"timestamp"`
+	ResultCode       *int            `json:"result_code"`     // V2.1：拒绝码数值（err），见协议 11.4
+	AppliedArgs      json.RawMessage `json:"applied_args"`    // V2.1：ARM 实际采纳的参数值
+	ReportedRevision *uint64         `json:"reported_revision"` // V2.1：命令生效后最新 CtrlParamAlterTime
 }
 
 func (h *InternalHandler) DeviceCmdResult(c *gin.Context) {
@@ -910,13 +931,23 @@ func (h *InternalHandler) DeviceCmdResult(c *gin.Context) {
 		status = "failed"
 	}
 
+	// V2.1 命令闭环：result_code 数值优先于旧字符串 code；applied_args/reported_revision 合并进 response_data
+	resultCodeStr := req.Code
+	if req.ResultCode != nil {
+		resultCodeStr = strconv.Itoa(*req.ResultCode)
+	}
+	responseData := req.Data
+	if len(req.AppliedArgs) > 0 || req.ReportedRevision != nil {
+		responseData = mergeCmdResultData(req.Data, req.AppliedArgs, req.ReportedRevision)
+	}
+
 	// 更新命令日志（通过 task_id 匹配）
 	if req.TaskID != "" {
 		_, err := h.db.Exec(ctx, `
 			UPDATE device_cmd_logs
 			SET status = $2, result = $3, message = $4, data = $5::jsonb
 			WHERE task_id = $1
-		`, req.TaskID, status, req.Result, req.Message, req.Data)
+		`, req.TaskID, status, req.Result, req.Message, responseData)
 		if err != nil {
 			logger.Error("DeviceCmdResult update failed",
 				zap.String("sn", req.SN), zap.String("task_id", req.TaskID), zap.Error(err))
@@ -927,7 +958,7 @@ func (h *InternalHandler) DeviceCmdResult(c *gin.Context) {
 				acknowledged_at=CASE WHEN $2='acknowledged' THEN NOW() ELSE acknowledged_at END,
 				completed_at=CASE WHEN $2 IN ('success','failed') THEN NOW() ELSE completed_at END
 			WHERE task_id::text=$1
-		`, req.TaskID, status, req.Code, req.Message, req.Data)
+		`, req.TaskID, status, resultCodeStr, req.Message, responseData)
 		if err != nil {
 			logger.Error("Device command lifecycle update failed", zap.String("task_id", req.TaskID), zap.Error(err))
 		}
@@ -957,6 +988,29 @@ func (h *InternalHandler) DeviceCmdResult(c *gin.Context) {
 	}
 
 	response.Success(c, gin.H{"status": "ok"})
+}
+
+// mergeCmdResultData 将 V2.1 命令闭环扩展字段（applied_args / reported_revision）合并进响应 data
+// （data 为对象时原地合并；为数组/无效 JSON 时仅保留扩展字段）。
+func mergeCmdResultData(data json.RawMessage, appliedArgs json.RawMessage, reportedRevision *uint64) []byte {
+	merged := map[string]interface{}{}
+	if len(data) > 0 {
+		var asObj map[string]interface{}
+		if err := json.Unmarshal(data, &asObj); err == nil && asObj != nil {
+			merged = asObj
+		}
+	}
+	if len(appliedArgs) > 0 {
+		var args interface{}
+		if err := json.Unmarshal(appliedArgs, &args); err == nil {
+			merged["applied_args"] = args
+		}
+	}
+	if reportedRevision != nil {
+		merged["reported_revision"] = *reportedRevision
+	}
+	b, _ := json.Marshal(merged)
+	return b
 }
 
 // getDeviceOwner 查询设备所属用户和电站

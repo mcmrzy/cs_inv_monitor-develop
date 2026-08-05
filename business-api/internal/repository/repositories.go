@@ -807,7 +807,9 @@ func (r *DeviceRepository) GetBySN(ctx context.Context, sn string) (*model.Devic
 			   d.station_id, d.user_id, d.status, COALESCE(d.timezone,'Asia/Shanghai'),
 			   COALESCE(rd.total_active_power, 0), COALESCE(rd.daily_energy, 0),
 			   d.last_online_at, d.created_at, d.updated_at,
-			   COALESCE(d.alias, ''), COALESCE(d.remark, '')
+			   COALESCE(d.alias, ''), COALESCE(d.remark, ''),
+			   COALESCE(d.phase, ''), COALESCE(d.inverter_module, ''), COALESCE(d.hardware_version, ''), COALESCE(d.bootloader_version, ''),
+			   COALESCE(d.rated_power_w, 0), d.info_reported_at
 		FROM devices d
 		LEFT JOIN device_models dm ON d.model_id = dm.id
 		LEFT JOIN v_device_latest rd ON rd.device_sn = d.sn
@@ -817,6 +819,7 @@ func (r *DeviceRepository) GetBySN(ctx context.Context, sn string) (*model.Devic
 	var device model.Device
 	var stationID sql.NullInt64
 	var lastOnlineAt sql.NullTime
+	var infoReportedAt sql.NullTime
 
 	err := r.db.QueryRow(ctx, query, sn).Scan(
 		&device.ID, &device.SN, &device.Model, &device.ModelID, &device.ModelCategory, &device.Manufacturer,
@@ -830,6 +833,8 @@ func (r *DeviceRepository) GetBySN(ctx context.Context, sn string) (*model.Devic
 		&lastOnlineAt,
 		&device.CreatedAt, &device.UpdatedAt,
 		&device.Alias, &device.Remark,
+		&device.Phase, &device.InverterModule, &device.HardwareVersion, &device.BootloaderVersion,
+		&device.RatedPowerW, &infoReportedAt,
 	)
 
 	if err != nil {
@@ -844,6 +849,9 @@ func (r *DeviceRepository) GetBySN(ctx context.Context, sn string) (*model.Devic
 	}
 	if lastOnlineAt.Valid {
 		device.LastOnlineAt = &lastOnlineAt.Time
+	}
+	if infoReportedAt.Valid {
+		device.InfoReportedAt = &infoReportedAt.Time
 	}
 
 	return &device, nil

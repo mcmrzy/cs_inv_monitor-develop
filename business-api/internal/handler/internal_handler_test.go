@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/require"
 )
 
 // assertResponseCode checks JSON body "code" field instead of HTTP status,
@@ -192,4 +193,71 @@ func TestInternalDeviceCmdStatus_Validation(t *testing.T) {
 			assertResponseCode(t, w, tt.wantStatus)
 		})
 	}
+}
+
+// V2.1 命令闭环（文档 11.4）：applied_args / reported_revision 合并进 response data。
+func TestMergeCmdResultData(t *testing.T) {
+	rev := uint64(1783676800)
+
+	t.Run("merges into object data", func(t *testing.T) {
+		out := mergeCmdResultData(
+			json.RawMessage(`{"result":"ok","ts":1}`),
+			json.RawMessage(`{"set_max_charge_current":50}`),
+			&rev,
+		)
+		var m map[string]interface{}
+		require.NoError(t, json.Unmarshal(out, &m))
+		require.Equal(t, "ok", m["result"])
+		require.Equal(t, float64(1), m["ts"])
+		require.Equal(t, map[string]interface{}{"set_max_charge_current": float64(50)}, m["applied_args"])
+		require.Equal(t, float64(1783676800), m["reported_revision"])
+	})
+
+	t.Run("non-object data keeps extras only", func(t *testing.T) {
+		out := mergeCmdResultData(json.RawMessage(`"ok"`), json.RawMessage(`{}`), &rev)
+		var m map[string]interface{}
+		require.NoError(t, json.Unmarshal(out, &m))
+		require.NotContains(t, m, "data")
+		require.Equal(t, float64(1783676800), m["reported_revision"])
+	})
+
+	t.Run("empty data builds new object", func(t *testing.T) {
+		out := mergeCmdResultData(nil, nil, &rev)
+		var m map[string]interface{}
+		require.NoError(t, json.Unmarshal(out, &m))
+		require.Equal(t, float64(1783676800), m["reported_revision"])
+	})
+
+	t.Run("nil revision passes data through", func(t *testing.T) {
+		out := mergeCmdResultData(json.RawMessage(`{"result":"ok"}`), nil, nil)
+		var m map[string]interface{}
+		require.NoError(t, json.Unmarshal(out, &m))
+		require.Equal(t, "ok", m["result"])
+		require.NotContains(t, m, "reported_revision")
+	})
+}
+
+// V2.1 契约：业务侧 internalDeviceInfoRequest 必须接受 device-comm 上报的
+// rated_power_w 与 4 个新只读字段（与 device-comm 侧 / model.DeviceInfo 键对齐）。
+func TestInternalDeviceInfoRequestV21Contract(t *testing.T) {
+	payload := `{"sn":"L10TEST100","model":"CS-L10-6K2","rated_power":6000,"rated_power_w":6000,
+  "phase":"single","inverter_module":"L10-2026-0100","hardware_version":"HW-2.1","bootloader_version":"BL-1.0"}`
+	var req internalDeviceInfoRequest
+	require.NoError(t, json.Unmarshal([]byte(payload), &req))
+	require.Equal(t, "L10TEST100", req.SN)
+	require.Equal(t, 6000, req.RatedPowerW)
+	require.Equal(t, 6000, req.RatedPower)
+	require.Equal(t, "single", req.Phase)
+	require.Equal(t, "L10-2026-0100", req.InverterModule)
+	require.Equal(t, "HW-2.1", req.HardwareVersion)
+	require.Equal(t, "BL-1.0", req.BootloaderVersion)
+
+	// round-trip：重序列化后键名保持，保证 upsert 解析字段不变
+	b, err := json.Marshal(req)
+	require.NoError(t, err)
+	var raw map[string]interface{}
+	require.NoError(t, json.Unmarshal(b, &raw))
+	require.Equal(t, float64(6000), raw["rated_power_w"])
+	require.Equal(t, "single", raw["phase"])
+	require.Equal(t, "BL-1.0", raw["bootloader_version"])
 }
