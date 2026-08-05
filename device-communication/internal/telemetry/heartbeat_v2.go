@@ -10,14 +10,16 @@ import (
 	"time"
 )
 
-// V2 心跳协议（CS-L10-6K2）：位置数组 50 值，与 V1 同构校验。
-// 设计见 docs/CS-L10-6K2_MQTT_上报协议设计.md 第 4 节。
+// V2 心跳协议（CS-L10-6K2）：位置数组 57 值，与 V1 同构校验。
+// 设计见 docs/CS-L10-6K2_MQTT_上报协议设计_V2.1.md 第 6 节。
 //
 // 与 V1 的差异：
-//   - 组结构 sys[11]/pv[5]/ac[11]/chr[3]/bat[6]/eng[14]，无 cells 组；
+//   - 组结构 sys[11]/pv[5]/ac[11]/chr[3]/bat[5]/eng[14]/fan[2]/diag[3]/sock[3]；
 //   - 数组元素为采集器协议原始量纲（0.1/0.01 缩放），解析时按字段 scale
 //     还原为物理量，范围校验作用于还原后的物理量；
-//   - work_state / battery_power 由解析层推导（见 protocol_parser.go V2 分支）。
+//   - work_state / battery_power 由解析层推导（见 protocol_parser.go V2 分支）；
+//   - V2.1 新增 fan/diag/sock 三组（8 位置），49 值旧固件缺组时自适应（QualityPartial），
+//     六组位置与 V2.0 完全一致（bat 保持 5 值，battery_soc 为 1%）。
 
 type heartbeatEnvelopeV2 struct {
 	Version uint16          `json:"v"`
@@ -26,22 +28,29 @@ type heartbeatEnvelopeV2 struct {
 }
 
 type heartbeatDataV2 struct {
-	Sys []json.RawMessage `json:"sys"`
-	PV  []json.RawMessage `json:"pv"`
-	AC  []json.RawMessage `json:"ac"`
-	Chr []json.RawMessage `json:"chr"`
-	Bat []json.RawMessage `json:"bat"`
-	Eng []json.RawMessage `json:"eng"`
+	Sys  []json.RawMessage `json:"sys"`
+	PV   []json.RawMessage `json:"pv"`
+	AC   []json.RawMessage `json:"ac"`
+	Chr  []json.RawMessage `json:"chr"`
+	Bat  []json.RawMessage `json:"bat"`
+	Eng  []json.RawMessage `json:"eng"`
+	Fan  []json.RawMessage `json:"fan"`
+	Diag []json.RawMessage `json:"diag"`
+	Sock []json.RawMessage `json:"sock"`
 }
 
-// v2Scales 各组位置值的原始量纲 → 物理量 缩放系数（与迁移 091 device_protocol_fields.scale 一致）。
+// v2Scales 各组位置值的原始量纲 → 物理量 缩放系数（与迁移 096 device_protocol_fields.scale 一致；
+// bat[1] battery_soc 为 1%，已修正 091 的 0.1 错误）。
 var v2Scales = map[string][]float64{
-	"sys": {1, 1, 1, 1, 0.1, 0.1, 0.1, 0.1, 0.01, 0.1, 1},
-	"pv":  {0.1, 0.1, 0.1, 0.1, 0.1},
-	"ac":  {0.1, 0.01, 0.1, 0.1, 0.1, 0.1, 0.01, 0.1, 0.1, 0.1, 0.1},
-	"chr": {0.1, 0.1, 0.1},
-	"bat": {0.01, 0.1, 0.1, 0.1, 0.1, 1},
-	"eng": {0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1},
+	"sys":  {1, 1, 1, 1, 0.1, 0.1, 0.1, 0.1, 0.01, 0.1, 1},
+	"pv":   {0.1, 0.1, 0.1, 0.1, 0.1},
+	"ac":   {0.1, 0.01, 0.1, 0.1, 0.1, 0.1, 0.01, 0.1, 0.1, 0.1, 0.1},
+	"chr":  {0.1, 0.1, 0.1},
+	"bat":  {0.01, 1, 0.1, 0.1, 0.1},
+	"eng":  {0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1},
+	"fan":  {1, 1},
+	"diag": {0.1, 1, 1},
+	"sock": {1, 1, 1},
 }
 
 func ParseHeartbeatV2(deviceSN string, payload []byte, receivedAt time.Time) (*Sample, error) {
@@ -63,15 +72,6 @@ func ParseHeartbeatV2(deviceSN string, payload []byte, receivedAt time.Time) (*S
 	}
 
 	data := raw.Data
-	for name, pair := range map[string]struct{ got, want int }{
-		"sys": {len(data.Sys), 11}, "pv": {len(data.PV), 5}, "ac": {len(data.AC), 11},
-		"chr": {len(data.Chr), 3}, "bat": {len(data.Bat), 6}, "eng": {len(data.Eng), 14},
-	} {
-		if pair.got != pair.want {
-			return nil, fmt.Errorf("%w: %s length %d, want %d", ErrInvalidHeartbeat, name, pair.got, pair.want)
-		}
-	}
-
 	eventTime := time.Unix(raw.Time, 0).UTC()
 	normalizedData, _ := json.Marshal(data)
 	hash := sha256.Sum256(normalizedData)
@@ -79,6 +79,28 @@ func ParseHeartbeatV2(deviceSN string, payload []byte, receivedAt time.Time) (*S
 	if raw.Time <= 0 || eventTime.After(receivedAt.Add(5*time.Minute)) || eventTime.Before(receivedAt.Add(-24*time.Hour)) {
 		s.QualityFlags |= QualityClockInvalid
 		s.EventTime = receivedAt.UTC()
+	}
+
+	// 六组精确校验（V2.0 位置冻结）
+	for name, pair := range map[string]struct{ got, want int }{
+		"sys": {len(data.Sys), 11}, "pv": {len(data.PV), 5}, "ac": {len(data.AC), 11},
+		"chr": {len(data.Chr), 3}, "bat": {len(data.Bat), 5}, "eng": {len(data.Eng), 14},
+	} {
+		if pair.got != pair.want {
+			return nil, fmt.Errorf("%w: %s length %d, want %d", ErrInvalidHeartbeat, name, pair.got, pair.want)
+		}
+	}
+	// V2.1 新增组自适应：缺失或空组视为 49 值旧固件（QualityPartial）；存在则长度必须精确
+	for name, pair := range map[string]struct{ got, want int }{
+		"fan": {len(data.Fan), 2}, "diag": {len(data.Diag), 3}, "sock": {len(data.Sock), 3},
+	} {
+		if pair.got == 0 {
+			s.QualityFlags |= QualityPartial
+			continue
+		}
+		if pair.got != pair.want {
+			return nil, fmt.Errorf("%w: %s length %d, want %d", ErrInvalidHeartbeat, name, pair.got, pair.want)
+		}
 	}
 
 	vals := func(group string, in []json.RawMessage) ([]*float64, error) {
@@ -140,12 +162,27 @@ func ParseHeartbeatV2(deviceSN string, payload []byte, receivedAt time.Time) (*S
 	if err != nil {
 		return nil, err
 	}
+	rawFan, err := vals("fan", data.Fan)
+	if err != nil {
+		return nil, err
+	}
+	rawDiag, err := vals("diag", data.Diag)
+	if err != nil {
+		return nil, err
+	}
+	rawSock, err := vals("sock", data.Sock)
+	if err != nil {
+		return nil, err
+	}
 	sys := scaled("sys", rawSys)
 	pv := scaled("pv", rawPV)
 	ac := scaled("ac", rawAC)
 	chr := scaled("chr", rawChr)
 	bat := scaled("bat", rawBat)
 	eng := scaled("eng", rawEng)
+	fan := scaled("fan", rawFan)
+	diag := scaled("diag", rawDiag)
+	sock := scaled("sock", rawSock)
 
 	bounded := func(p *float64, min, max float64) *float64 {
 		if p != nil && (*p < min || *p > max) {
@@ -188,16 +225,16 @@ func ParseHeartbeatV2(deviceSN string, payload []byte, receivedAt time.Time) (*S
 	}
 
 	s.System = System{
-		SysStatus:             u32(sys[0]),
-		FaultCode:             u32(sys[1]),
-		Warning:               u64(sys[2]),
-		BmsWarning:            u32(sys[3]),
-		InverterTemperature:   bounded(sys[4], -40, 100),
-		BoostTemperature:      bounded(sys[5], -40, 120),
-		TransformerTemperature: bounded(sys[6], -40, 120),
-		PVTemperature:         bounded(sys[7], -40, 120),
-		DCBusVoltage:          bounded(sys[8], 0, 500),
-		BatteryOvercharge:     u8(sys[10], 1),
+		SysStatus:               u32(sys[0]),
+		FaultCode:               u32(sys[1]),
+		Warning:                 u64(sys[2]),
+		BmsWarning:              u32(sys[3]),
+		InverterTemperature:     bounded(sys[4], -40, 100),
+		BoostTemperature:        bounded(sys[5], -40, 120),
+		TransformerTemperature:  bounded(sys[6], -40, 120),
+		PVTemperature:           bounded(sys[7], -40, 120),
+		DCBusVoltage:            bounded(sys[8], 0, 500),
+		BatteryOvercharge:       u8(sys[10], 1),
 	}
 	s.PV = PV{
 		PV1Voltage:   bounded(pv[0], 0, 150),
@@ -231,11 +268,6 @@ func ParseHeartbeatV2(deviceSN string, payload []byte, receivedAt time.Time) (*S
 		ChargePower:    bounded(bat[3], 0, 7500),
 		DischargePower: bounded(bat[4], 0, 7500),
 	}
-	// bat[5] 与 sys[10] 同源（协议 BatOverCharge 仅一处）；bat[5] 可省略置 null，
-	// 若 sys 缺失则用 bat 侧补充。
-	if s.System.BatteryOvercharge == nil && bat[5] != nil {
-		s.System.BatteryOvercharge = u8(bat[5], 1)
-	}
 	s.Energy = Energy{
 		GenDaily:       bounded(eng[0], 0, 1e6),
 		GenTotal:       bounded(eng[1], 0, 1e12),
@@ -251,6 +283,28 @@ func ParseHeartbeatV2(deviceSN string, payload []byte, receivedAt time.Time) (*S
 		ACBypassTotal:  bounded(eng[11], 0, 1e12),
 		OutputDaily:    bounded(eng[12], 0, 1e6),
 		OutputTotal:    bounded(eng[13], 0, 1e12),
+	}
+	// V2.1 新增组（57 值扩展）：风扇 / 诊断量 / 插座状态
+	// 旧固件缺组时 len=0，保留零值结构（与 49 值自适应一致）
+	if len(fan) == 2 {
+		s.Fan = Fan{
+			MPPTSpeed: bounded(fan[0], 0, 100),
+			InvSpeed:  bounded(fan[1], 0, 100),
+		}
+	}
+	if len(diag) == 3 {
+		s.Diag = Diag{
+			InvCurrent:            bounded(diag[0], 0, 100),
+			ParallelChargeCurrent: bounded(diag[1], 0, 600),
+			WorkTimeTotal:         bounded(diag[2], 0, math.MaxUint32),
+		}
+	}
+	if len(sock) == 3 {
+		s.Sock = Sock{
+			PairedSocket: u32(sock[0]),
+			OnlineSocket: u32(sock[1]),
+			OnSocket:     u32(sock[2]),
+		}
 	}
 
 	return s, nil

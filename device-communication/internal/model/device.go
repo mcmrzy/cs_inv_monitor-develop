@@ -22,6 +22,11 @@ type DeviceInfo struct {
 	BatteryType     string  `json:"battery_type"`
 	CellCount       int     `json:"cell_count"`
 	TempSensorCount int     `json:"temp_sensor_count"`
+	// V2.1 新增只读字段（096 迁移落库列，见 CS-L10-6K2_MQTT_上报协议设计_V2.1.md 第 7 节）
+	Phase            string `json:"phase"`
+	InverterModule   string `json:"inverter_module"`
+	HardwareVersion  string `json:"hardware_version"`
+	BootloaderVersion string `json:"bootloader_version"`
 }
 
 // ==================== 在线状态 (cs_inv/{sn}/status) ====================

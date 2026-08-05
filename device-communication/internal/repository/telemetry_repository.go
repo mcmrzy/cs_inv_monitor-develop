@@ -156,5 +156,10 @@ func sampleRow(s *telemetry.Sample) map[string]any {
 		"ac_charge_energy_daily": s.Energy.ACChargeDaily, "ac_charge_energy_total": s.Energy.ACChargeTotal,
 		"ac_bypass_energy_daily": s.Energy.ACBypassDaily, "ac_bypass_energy_total": s.Energy.ACBypassTotal,
 		"output_energy_daily": s.Energy.OutputDaily, "output_energy_total": s.Energy.OutputTotal,
+		// V2.1（CS-L10-6K2）新增列（迁移 096）：fan/diag/sock 三组
+		"mppt_fan_speed": s.Fan.MPPTSpeed, "inv_fan_speed": s.Fan.InvSpeed,
+		"inv_current": s.Diag.InvCurrent, "parallel_charge_current": s.Diag.ParallelChargeCurrent,
+		"work_time_total": s.Diag.WorkTimeTotal,
+		"paired_socket": s.Sock.PairedSocket, "online_socket": s.Sock.OnlineSocket, "on_socket": s.Sock.OnSocket,
 	}
 }
