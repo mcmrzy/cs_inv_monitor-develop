@@ -90,6 +90,8 @@ import 'package:inv_app/core/router/guards/auth_guard.dart';
 
 import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
 
+import 'package:inv_app/features/profile/presentation/widgets/profile_setup_dialog.dart';
+
 import 'package:inv_app/core/services/service_locator.dart';
 
 import 'package:inv_app/core/widgets/device_list_view.dart';
@@ -461,6 +463,9 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   static bool _hasCheckedUpdate = false;
 
+  // 完善个人信息弹窗：本次启动仅提示一次（跳过或已设置后不再弹）
+  static bool _hasShownProfilePrompt = false;
+
   bool _downloading = false;
 
   double _downloadProgress = 0;
@@ -470,6 +475,14 @@ class _MainShellState extends State<MainShell> {
   @override
   void initState() {
     super.initState();
+
+    // 未设置昵称的一键登录新用户：进入主框架后弹出完善个人信息弹窗
+    if (!_hasShownProfilePrompt) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _maybeShowProfileSetup();
+      });
+    }
 
     if (!_hasCheckedUpdate) {
       _hasCheckedUpdate = true;
@@ -490,6 +503,17 @@ class _MainShellState extends State<MainShell> {
     _cancelToken?.cancel();
 
     super.dispose();
+  }
+
+  /// 一键登录自动注册用户（昵称为空）首次进入时弹出完善个人信息弹窗
+  void _maybeShowProfileSetup() {
+    if (_hasShownProfilePrompt) return;
+    final authState = context.read<AuthBloc>().state;
+    if (authState is! AuthAuthenticated) return;
+    final nickname = authState.nickname?.trim() ?? '';
+    if (nickname.isNotEmpty) return;
+    _hasShownProfilePrompt = true;
+    ProfileSetupDialog.show(context);
   }
 
   Future<void> _autoCheckUpdate() async {

@@ -48,6 +48,10 @@ class AppLocalizations {
   String get allDevices => _localizedStrings['all_devices'] ?? 'All';
   String get brandName => _localizedStrings['brand_name'] ?? 'CSERGY';
   String get save => _localizedStrings['save']!;
+  String get skip => _localizedStrings['skip']!;
+  String get completeProfileTitle => _localizedStrings['complete_profile_title']!;
+  String get completeProfileDesc => _localizedStrings['complete_profile_desc']!;
+  String get profileSaved => _localizedStrings['profile_saved']!;
   String get delete => _localizedStrings['delete']!;
   String get edit => _localizedStrings['edit']!;
   String get search => _localizedStrings['search']!;
