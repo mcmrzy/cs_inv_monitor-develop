@@ -34,6 +34,10 @@ type Sample struct {
 	System          System
 	Energy          Energy
 	Cells           Cells
+	// V2.1 (CS-L10-6K2) 新增：风扇 / 诊断量 / 插座状态（57 值扩展）
+	Fan             Fan
+	Diag            Diag
+	Sock            Sock
 }
 
 type AC struct {
@@ -108,4 +112,27 @@ type Energy struct {
 type Cells struct {
 	Voltages     []*float64
 	Temperatures []*float64
+}
+
+// Fan V2.1 (CS-L10-6K2) 风扇转速（%，0=停转 100=全速）。
+// 散热诊断输入（与温度组合判定风扇异常）与健康度扣分项。
+type Fan struct {
+	MPPTSpeed *float64 // mppt_fan_speed（%）
+	InvSpeed  *float64 // inv_fan_speed（%）
+}
+
+// Diag V2.1 (CS-L10-6K2) 诊断量。
+// work_time_total 跨过维护阈值触发 MAINTENANCE_DUE。
+type Diag struct {
+	InvCurrent            *float64 // inv_current（A，0.1 缩放）
+	ParallelChargeCurrent *float64 // parallel_charge_current（A）
+	WorkTimeTotal         *float64 // work_time_total（s，u32）
+}
+
+// Sock V2.1 (CS-L10-6K2) 插座状态（u16 位掩码，每 bit 一个并联从机）。
+// 并机拓扑诊断输入（paired/online/on）。
+type Sock struct {
+	PairedSocket *uint32 // paired_socket（已配对插座位掩码）
+	OnlineSocket *uint32 // online_socket（在线插座位掩码）
+	OnSocket     *uint32 // on_socket（运行中插座位掩码）
 }

@@ -44,6 +44,7 @@ type ProtocolParser struct {
 	wg           *sync.WaitGroup     // graceful shutdown WaitGroup
 	workerCount  int                 // number of concurrent Kafka consumers
 	registry     *DeviceRegistry     // async device registration queue
+	diagEngine   *DiagnosticEngine   // V2.1 诊断引擎（散热/并机/维护 + 健康度）
 
 }
 
@@ -66,15 +67,21 @@ type internalDeviceInfoRequest struct {
 	FirmwareESP     string  `json:"firmware_esp"`
 	FirmwareDSP     string  `json:"firmware_dsp"`
 	FirmwareBMS     string  `json:"firmware_bms"`
-	Type            string  `json:"type"`
+	Type            string  `json:"device_type"`
 	RatedPower      float64 `json:"rated_power"`
+	RatedPowerW     int     `json:"rated_power_w"` // V2.1：协议 W 原值（与 rated_power 语义隔离）
 	RatedVoltage    float64 `json:"rated_voltage"`
-	RatedFreq       float64 `json:"rated_freq"`
-	BatteryVoltage  float64 `json:"battery_voltage"`
+	RatedFreq       float64 `json:"rated_frequency"`
+	BatteryVoltage  float64 `json:"battery_nominal_voltage"`
 	BatteryType     string  `json:"battery_type"`
 	CellCount       int     `json:"cell_count"`
 	TempSensorCount int     `json:"temp_sensor_count"`
-	RetryCount      int     `json:"-"` // internal field for retry tracking
+	// V2.1 新增只读字段（096 迁移落库列，与 model.DeviceInfo 契约同步）
+	Phase             string `json:"phase"`
+	InverterModule    string `json:"inverter_module"`
+	HardwareVersion   string `json:"hardware_version"`
+	BootloaderVersion string `json:"bootloader_version"`
+	RetryCount        int    `json:"-"` // internal field for retry tracking
 }
 
 // NewDeviceRegistry creates a new async device registry with buffered channels.
@@ -243,6 +250,7 @@ func NewProtocolParserWithWorkers(
 		stateManager: NewDeviceStateManager(rdb, apiServer, internalKey),
 		workerCount:  workerCount,
 		registry:     NewDeviceRegistry(apiServer, internalKey),
+		diagEngine:   NewDiagnosticEngine(repo, rdb),
 	}
 	if repo != nil {
 		parser.ingestErrors = repo
@@ -400,6 +408,16 @@ func (p *ProtocolParser) processMessage(ctx context.Context, raw *RawMessage) er
 }
 
 func (p *ProtocolParser) handleReportedConfig(ctx context.Context, raw *RawMessage) error {
+	// 按信封 v 分派：v==1 走旧数组路径（V1 解析器），v==2 走语义键值对（V2.1 文档 9.1）。
+	var probe struct {
+		Version uint16 `json:"v"`
+	}
+	if err := json.Unmarshal(raw.Payload, &probe); err != nil {
+		return permanentMessage("INVALID_REPORTED_CONFIG", err)
+	}
+	if probe.Version == 2 {
+		return p.handleReportedConfigV2(ctx, raw)
+	}
 	cfg, err := telemetryv2.ParseReportedConfig(raw.Payload)
 	if err != nil {
 		return permanentMessage("INVALID_REPORTED_CONFIG", err)
@@ -407,13 +425,45 @@ func (p *ProtocolParser) handleReportedConfig(ctx context.Context, raw *RawMessa
 	if err := p.repo.SaveReportedConfig(ctx, raw.SN, cfg); err != nil {
 		return err
 	}
-	if p.rdb != nil {
-		encoded, err := json.Marshal(cfg.Values)
-		if err == nil {
-			_ = p.rdb.Set(ctx, "device:config:"+raw.SN, encoded, 24*time.Hour).Err()
-		}
-	}
+	p.cacheReportedConfig(ctx, raw.SN, cfg.Values)
 	return nil
+}
+
+// handleReportedConfigV2 处理 V2.1 config 语义键值对：
+// schema 校验（无效键剔除）→ device_control_state 闭环（rev 防回退/sync_status）→ 审计 + Redis 缓存。
+func (p *ProtocolParser) handleReportedConfigV2(ctx context.Context, raw *RawMessage) error {
+	cfg, err := telemetryv2.ParseReportedConfigV2(raw.Payload)
+	if err != nil {
+		return permanentMessage("INVALID_REPORTED_CONFIG", err)
+	}
+	schemas, sErr := p.repo.LoadConfigSchema(ctx)
+	if sErr != nil {
+		logger.Warn("Load config schema failed, skip v2 validation", zap.String("sn", raw.SN), zap.Error(sErr))
+	}
+	syncStatus, invalidKeys, err := p.repo.SaveReportedConfigV2(ctx, raw.SN, cfg, schemas)
+	if err != nil {
+		return err
+	}
+	if len(invalidKeys) > 0 {
+		logger.Warn("Reported config v2 params rejected by schema validation",
+			zap.String("sn", raw.SN), zap.Uint64("rev", cfg.Revision), zap.Strings("keys", invalidKeys))
+	}
+	logger.Info("Reported config v2 saved",
+		zap.String("sn", raw.SN), zap.Uint64("rev", cfg.Revision),
+		zap.Int("params", len(cfg.Values)), zap.String("sync_status", syncStatus))
+	p.cacheReportedConfig(ctx, raw.SN, cfg.Values)
+	return nil
+}
+
+// cacheReportedConfig 缓存 config 到 Redis（24h），供管理后台/App 快速读取。
+func (p *ProtocolParser) cacheReportedConfig(ctx context.Context, sn string, values map[string]any) {
+	if p.rdb == nil {
+		return
+	}
+	encoded, err := json.Marshal(values)
+	if err == nil {
+		_ = p.rdb.Set(ctx, "device:config:"+sn, encoded, 24*time.Hour).Err()
+	}
 }
 
 func (p *ProtocolParser) handleHeartbeat(ctx context.Context, raw *RawMessage) error {
@@ -424,7 +474,7 @@ func (p *ProtocolParser) handleHeartbeat(ctx context.Context, raw *RawMessage) e
 		}
 	}
 	// 按 payload 的 v 字段分派：v=1 走 V1 解析（CS-I10-6k2 等旧型号），
-	// v=2 走 V2 解析（CS-L10-6K2，位置数组 50 值，见 docs/CS-L10-6K2_MQTT_上报协议设计.md）。
+	// v=2 走 V2 解析（CS-L10-6K2，位置数组 57 值，见 docs/CS-L10-6K2_MQTT_上报协议设计_V2.1.md）。
 	var versionProbe struct {
 		Version uint16 `json:"v"`
 	}
@@ -585,27 +635,31 @@ func (p *ProtocolParser) handleHeartbeat(ctx context.Context, raw *RawMessage) e
 			_ = p.rdb.Set(ctx, "realtime:latest:"+raw.SN, rtBytes, 10*time.Minute).Err()
 		}
 	}
+
+	// V2.1 诊断引擎：V2 心跳落库 + realtime 写入后触发（独立写入，失败不阻塞主链路，见 V2.1 文档 12.3）。
+	// 回填数据不触发诊断（避免历史数据误判）。
+	if sample.ProtocolVersion == 2 && p.diagEngine != nil && sample.QualityFlags&telemetryv2.QualityBackfill == 0 {
+		p.diagEngine.Run(ctx, raw.SN, p.getModelID(ctx, raw.SN), sample)
+	}
 	return nil
 }
 
-// deriveV2WorkState 由 sys_status 位组合推导 work_state（与旧型号枚举兼容）：
-// Fault(bit1)→1、ACBypass(bit7)→4、Discharging(bit3)→3、
-// Charge/PVCharging/ACCharging/GenCharging(bit2/4/5/6)→2、其余→0(StandBy)。
+// deriveV2WorkState 由 sys_status 位组合推导 work_state（枚举与 V1.0.26.713 完全一致）：
+// Fault(bit1)→4、ACBypass(bit7)→2、StandBy(bit0)→0、其余→1(逆变)。
+// L10 无关机指示位，3(关机) 保留定义不使用。见 V2.1 文档 6.3。
 func deriveV2WorkState(s *telemetryv2.Sample) {
 	if s.System.SysStatus == nil {
 		return
 	}
 	st := *s.System.SysStatus
-	ws := uint8(0)
+	ws := uint8(1)
 	switch {
 	case st&(1<<1) != 0:
-		ws = 1
-	case st&(1<<7) != 0:
 		ws = 4
-	case st&(1<<3) != 0:
-		ws = 3
-	case st&(1<<2) != 0 || st&(1<<4) != 0 || st&(1<<5) != 0 || st&(1<<6) != 0:
+	case st&(1<<7) != 0:
 		ws = 2
+	case st&(1<<0) != 0:
+		ws = 0
 	}
 	s.System.WorkState = &ws
 }
@@ -626,9 +680,10 @@ func deriveV2BatteryPower(s *telemetryv2.Sample) {
 }
 
 // buildRealtimeV2 组装 V2 心跳的 realtime:latest 扩展结构（组结构与前端对齐）。
-// 组内 key 与 device_protocol_fields.field_key 一致，便于前端按字段能力配置动态取值。
+// 组内 key 与 device_protocol_fields.field_key 一致（096 迁移后的文档键名），便于前端按字段能力配置动态取值。
+// fan/diag/sock 为 V2.1 新增组；derived 组承载派生字段（parallel_role/parallel_health，见 V2.1 文档 6.3/12.4）。
 func buildRealtimeV2(s *telemetryv2.Sample, sn string, eventTimeUnix int64) map[string]interface{} {
-	return map[string]interface{}{
+	realtime := map[string]interface{}{
 		"sys": map[string]interface{}{
 			"data": map[string]interface{}{
 				"sys_status": s.System.SysStatus, "fault_code": s.System.FaultCode,
@@ -652,9 +707,9 @@ func buildRealtimeV2(s *telemetryv2.Sample, sn string, eventTimeUnix int64) map[
 		},
 		"ac": map[string]interface{}{
 			"data": map[string]interface{}{
-				"ac_voltage": s.AC.Voltage, "ac_frequency": s.AC.Frequency,
-				"ac_active_power": s.AC.ActivePower, "ac_apparent_power": s.AC.ApparentPower,
-				"ac_current": s.AC.Current, "grid_voltage": s.AC.GridVoltage,
+				"ac_output_voltage": s.AC.Voltage, "ac_output_frequency": s.AC.Frequency,
+				"output_power": s.AC.ActivePower, "output_apparent_power": s.AC.ApparentPower,
+				"output_current": s.AC.Current, "grid_voltage": s.AC.GridVoltage,
 				"grid_frequency": s.AC.GridFrequency, "ac_input_power": s.AC.ACInputPower,
 				"ac_input_apparent_power": s.AC.ACInputApparentPower,
 				"ac_bypass_power": s.AC.ACBypassPower, "ac_bypass_apparent_power": s.AC.ACBypassApparentPower,
@@ -689,10 +744,79 @@ func buildRealtimeV2(s *telemetryv2.Sample, sn string, eventTimeUnix int64) map[
 			},
 			"timestamp": eventTimeUnix,
 		},
-		"_sn": sn, "_msg_type": "heartbeat",
-		"_updated_at": time.Now().UTC().Format(time.RFC3339),
-		"_timestamp":  eventTimeUnix,
 	}
+	// V2.1 新增组：fan（风扇转速 %）、diag（诊断量）、sock（插座位掩码）
+	if s.Fan.MPPTSpeed != nil || s.Fan.InvSpeed != nil {
+		realtime["fan"] = map[string]interface{}{
+			"data": map[string]interface{}{
+				"mppt_fan_speed": s.Fan.MPPTSpeed, "inv_fan_speed": s.Fan.InvSpeed,
+			},
+			"timestamp": eventTimeUnix,
+		}
+	}
+	if s.Diag.InvCurrent != nil || s.Diag.ParallelChargeCurrent != nil || s.Diag.WorkTimeTotal != nil {
+		realtime["diag"] = map[string]interface{}{
+			"data": map[string]interface{}{
+				"inv_current": s.Diag.InvCurrent, "parallel_charge_current": s.Diag.ParallelChargeCurrent,
+				"work_time_total": s.Diag.WorkTimeTotal,
+			},
+			"timestamp": eventTimeUnix,
+		}
+	}
+	if s.Sock.PairedSocket != nil || s.Sock.OnlineSocket != nil || s.Sock.OnSocket != nil {
+		realtime["sock"] = map[string]interface{}{
+			"data": map[string]interface{}{
+				"paired_socket": s.Sock.PairedSocket, "online_socket": s.Sock.OnlineSocket,
+				"on_socket": s.Sock.OnSocket,
+			},
+			"timestamp": eventTimeUnix,
+		}
+	}
+	// derived 组：并机角色/健康（见 V2.1 文档 6.3）；thermal_status/health_score/health_level 由诊断引擎补充
+	realtime["derived"] = map[string]interface{}{
+		"data": map[string]interface{}{
+			"parallel_role":   deriveParallelRole(s),
+			"parallel_health": deriveParallelHealth(s),
+		},
+		"timestamp": eventTimeUnix,
+	}
+	realtime["_sn"] = sn
+	realtime["_msg_type"] = "heartbeat"
+	realtime["_updated_at"] = time.Now().UTC().Format(time.RFC3339)
+	realtime["_timestamp"] = eventTimeUnix
+	return realtime
+}
+
+// deriveParallelRole 由插座位掩码判定并机角色：
+// paired_socket>0 且 online_socket≥1 → master（主机）；仅自身在线 → standalone（单机）。
+func deriveParallelRole(s *telemetryv2.Sample) string {
+	if s.Sock.PairedSocket == nil {
+		return "n/a"
+	}
+	paired := *s.Sock.PairedSocket
+	if paired == 0 {
+		return "standalone"
+	}
+	if s.Sock.OnlineSocket != nil && *s.Sock.OnlineSocket >= 1 {
+		return "master"
+	}
+	return "standalone"
+}
+
+// deriveParallelHealth 并机健康状态：paired>0 且 online<paired → degraded；online≥paired → ok；无并机 → n/a。
+func deriveParallelHealth(s *telemetryv2.Sample) string {
+	if s.Sock.PairedSocket == nil || *s.Sock.PairedSocket == 0 {
+		return "n/a"
+	}
+	paired := *s.Sock.PairedSocket
+	online := uint32(0)
+	if s.Sock.OnlineSocket != nil {
+		online = *s.Sock.OnlineSocket
+	}
+	if online < paired {
+		return "degraded"
+	}
+	return "ok"
 }
 
 // unwrapPayload 处理 payload 可能是 JSON 字符串的情况
@@ -777,21 +901,26 @@ func (p *ProtocolParser) handleInfo(ctx context.Context, raw *RawMessage) error 
 	// Use async device registry for non-blocking registration
 	if p.registry != nil {
 		p.registry.Enqueue(&internalDeviceInfoRequest{
-			SN:              info.SN,
-			Model:           info.Model,
-			Manufacturer:    info.Manufacturer,
-			FirmwareARM:     info.FirmwareARM,
-			FirmwareESP:     info.FirmwareESP,
-			FirmwareDSP:     info.FirmwareDSP,
-			FirmwareBMS:     info.FirmwareBMS,
-			Type:            info.Type,
-			RatedPower:      float64(info.RatedPower),
-			RatedVoltage:    float64(info.RatedVoltage),
-			RatedFreq:       info.RatedFreq,
-			BatteryVoltage:  info.BatteryVoltage,
-			BatteryType:     info.BatteryType,
-			CellCount:       info.CellCount,
-			TempSensorCount: info.TempSensorCount,
+			SN:               info.SN,
+			Model:            info.Model,
+			Manufacturer:     info.Manufacturer,
+			FirmwareARM:      info.FirmwareARM,
+			FirmwareESP:      info.FirmwareESP,
+			FirmwareDSP:      info.FirmwareDSP,
+			FirmwareBMS:      info.FirmwareBMS,
+			Type:             info.Type,
+			RatedPower:       float64(info.RatedPower),
+			RatedPowerW:      info.RatedPower,
+			RatedVoltage:     float64(info.RatedVoltage),
+			RatedFreq:        info.RatedFreq,
+			BatteryVoltage:   info.BatteryVoltage,
+			BatteryType:      info.BatteryType,
+			CellCount:        info.CellCount,
+			TempSensorCount:  info.TempSensorCount,
+			Phase:            info.Phase,
+			InverterModule:   info.InverterModule,
+			HardwareVersion:  info.HardwareVersion,
+			BootloaderVersion: info.BootloaderVersion,
 		})
 	} else {
 		// Fallback to synchronous registration if registry not initialized
@@ -818,6 +947,10 @@ func (p *ProtocolParser) handleInfo(ctx context.Context, raw *RawMessage) error 
 				"battery_type":            info.BatteryType,
 				"cell_count":              info.CellCount,
 				"temp_sensor_count":       info.TempSensorCount,
+				"phase":                   info.Phase,
+				"inverter_module":         info.InverterModule,
+				"hardware_version":        info.HardwareVersion,
+				"bootloader_version":      info.BootloaderVersion,
 				"sn":                      info.SN,
 			},
 			"timestamp": time.Now().UTC().Unix(),
@@ -1083,6 +1216,9 @@ func (p *ProtocolParser) handleCommandResponse(ctx context.Context, raw *RawMess
 		}
 	}
 
+	// V2.1 命令闭环扩展（文档 11.4）：提取 applied_args / reported_revision / result_code
+	appliedArgs, reportedRevision, resultCode := extractCommandResultExtras(normalizedPayload)
+
 	// 优先使用新的 cmd_result 接口，回退到旧的 device-cmd-status
 	endpoint := "/api/v1/internal/device-cmd-result"
 	payload := map[string]interface{}{
@@ -1096,11 +1232,111 @@ func (p *ProtocolParser) handleCommandResponse(ctx context.Context, raw *RawMess
 		"message":   resp.Message,
 		"timestamp": resp.Timestamp,
 	}
+	if resultCode != nil {
+		payload["result_code"] = *resultCode
+	}
+	if len(appliedArgs) > 0 {
+		payload["applied_args"] = json.RawMessage(appliedArgs)
+	}
+	if reportedRevision != nil {
+		payload["reported_revision"] = *reportedRevision
+	}
 	if resp.Data != nil {
 		payload["data"] = json.RawMessage(resp.Data)
 	}
 
-	return p.postInternal(endpoint, payload)
+	if err := p.postInternal(endpoint, payload); err != nil {
+		return err
+	}
+
+	// 命令闭环（文档 11.4.1）：命令执行成功后立即下发 query_config 索取最新配置
+	if isCommandSuccess(result) && p.hub != nil {
+		select {
+		case p.hub.GetCmdChan() <- &mqtt.DeviceCommand{DeviceSN: raw.SN, CmdType: "query_config"}:
+			logger.Info("query_config queued after command", zap.String("sn", raw.SN), zap.String("cmd", resp.Cmd))
+		default:
+			logger.Warn("cmd channel full, skip query_config", zap.String("sn", raw.SN))
+		}
+	}
+
+	return nil
+}
+
+// extractCommandResultExtras 从归一化命令响应中提取 V2.1 扩展字段
+// （applied_args / reported_revision / err），兼容扁平与嵌套 data 两种位置
+// （normalizeCommandResultPayload 仅在 data 含 task_id 时提升到顶层）。
+func extractCommandResultExtras(normalized []byte) (appliedArgs json.RawMessage, reportedRevision *uint64, resultCode *int) {
+	var root map[string]json.RawMessage
+	if err := json.Unmarshal(normalized, &root); err != nil {
+		return nil, nil, nil
+	}
+	find := func(m map[string]json.RawMessage) {
+		if raw, ok := m["applied_args"]; ok && len(bytes.TrimSpace(raw)) > 0 && string(bytes.TrimSpace(raw)) != "null" {
+			appliedArgs = raw
+		}
+		if raw, ok := m["reported_revision"]; ok {
+			var rev uint64
+			if json.Unmarshal(raw, &rev) == nil && rev > 0 {
+				reportedRevision = &rev
+			}
+		}
+		if raw, ok := m["err"]; ok {
+			var code int
+			if json.Unmarshal(raw, &code) == nil {
+				resultCode = &code
+			}
+		}
+	}
+	find(root)
+	// 嵌套 data（旧格式：data 无 task_id 时 normalize 不提升）
+	if resultCode == nil && reportedRevision == nil && len(appliedArgs) == 0 {
+		if rawData, ok := root["data"]; ok {
+			var data map[string]json.RawMessage
+			if json.Unmarshal(rawData, &data) == nil {
+				find(data)
+			}
+		}
+	}
+	// err 缺失时按 result 字符串映射拒绝码（文档 11.4.3）
+	if resultCode == nil {
+		if raw, ok := root["result"]; ok {
+			var result string
+			if json.Unmarshal(raw, &result) == nil {
+				resultCode = mapCommandResultCode(result)
+			}
+		}
+	}
+	return appliedArgs, reportedRevision, resultCode
+}
+
+// mapCommandResultCode 拒绝码枚举映射（文档 11.4.3）：
+// OK=0 / INVALID_ARGS=-2 / NOT_SUPPORTED=-4 / BUSY=-3 / EXPIRED=-6 / EXEC_FAILED=-1。
+func mapCommandResultCode(result string) *int {
+	result = strings.ToUpper(strings.TrimSpace(result))
+	if result == "" || result == "FAILED" {
+		return nil
+	}
+	code, ok := map[string]int{
+		"OK":            0,
+		"INVALID_ARGS":  -2,
+		"NOT_SUPPORTED": -4,
+		"BUSY":          -3,
+		"EXPIRED":       -6,
+		"EXEC_FAILED":   -1,
+	}[result]
+	if !ok {
+		return nil
+	}
+	return &code
+}
+
+// isCommandSuccess 判断命令执行成功（OK/success，兼容大小写）。
+func isCommandSuccess(result string) bool {
+	switch strings.ToLower(strings.TrimSpace(result)) {
+	case "ok", "success":
+		return true
+	}
+	return false
 }
 
 const maxV1PayloadBytes = 16 * 1024
