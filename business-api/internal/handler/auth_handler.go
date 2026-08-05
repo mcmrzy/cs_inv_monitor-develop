@@ -331,6 +331,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	// 设置 httpOnly cookie（同时返回 body 保持兼容）
 	setAuthCookies(c, tokenResult.AccessToken, tokenResult.RefreshToken, accessTokenLifetime, refreshTokenLifetime)
 
+	user.HasPassword = user.PasswordHash != ""
 	user.PasswordHash = ""
 	response.Success(c, LoginResponse{
 		AccessToken:          tokenResult.AccessToken,
@@ -417,6 +418,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		h.cacheUserPermissions(ctx, user.ID)
 	}()
 
+	user.HasPassword = user.PasswordHash != ""
 	user.PasswordHash = ""
 	permissions := h.loadUserPermissions(c.Request.Context(), user.ID, tokenResult)
 	response.Success(c, LoginResponse{
@@ -602,7 +604,8 @@ func (h *AuthHandler) EmailResetPassword(c *gin.Context) {
 }
 
 type ChangePasswordRequest struct {
-	OldPassword string `json:"old_password" binding:"required"`
+	// 无密码账号（如手机号验证码一键登录注册）允许旧密码为空，直接设置新密码
+	OldPassword string `json:"old_password" binding:"omitempty"`
 	NewPassword string `json:"new_password" binding:"required,min=6,max=20"`
 }
 
@@ -621,9 +624,12 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 		return
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.OldPassword)); err != nil {
-		response.Error(c, 4007, "old password incorrect")
-		return
+	// 已设置密码的账号必须校验旧密码；无密码账号（一键登录注册）跳过旧密码校验
+	if user.PasswordHash != "" {
+		if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.OldPassword)); err != nil {
+			response.Error(c, 4007, "old password incorrect")
+			return
+		}
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
@@ -657,6 +663,7 @@ func (h *AuthHandler) GetProfile(c *gin.Context) {
 		return
 	}
 
+	user.HasPassword = user.PasswordHash != ""
 	user.PasswordHash = ""
 	response.Success(c, user)
 }
@@ -1064,6 +1071,7 @@ func (h *AuthHandler) EmailRegister(c *gin.Context) {
 		h.cacheUserPermissions(ctx, user.ID)
 	}()
 
+	user.HasPassword = user.PasswordHash != ""
 	user.PasswordHash = ""
 	permissions := h.loadUserPermissions(c.Request.Context(), user.ID, tokenResult)
 	response.Success(c, LoginResponse{
@@ -1153,6 +1161,7 @@ func (h *AuthHandler) EmailLogin(c *gin.Context) {
 		h.cacheUserPermissions(ctx, user.ID)
 	}()
 
+	user.HasPassword = user.PasswordHash != ""
 	user.PasswordHash = ""
 	permissions := h.loadUserPermissions(c.Request.Context(), user.ID, tokenResult)
 	response.Success(c, LoginResponse{
@@ -1233,6 +1242,7 @@ func (h *AuthHandler) PhoneCodeLogin(c *gin.Context) {
 
 	setAuthCookies(c, tokenResult.AccessToken, tokenResult.RefreshToken, accessTokenLifetime, refreshTokenLifetime)
 
+	user.HasPassword = user.PasswordHash != ""
 	user.PasswordHash = ""
 	response.Success(c, LoginResponse{
 		AccessToken:          tokenResult.AccessToken,
@@ -1328,6 +1338,7 @@ func (h *AuthHandler) JVerifyLogin(c *gin.Context) {
 
 	setAuthCookies(c, tokenResult.AccessToken, tokenResult.RefreshToken, accessTokenLifetime, refreshTokenLifetime)
 
+	user.HasPassword = user.PasswordHash != ""
 	user.PasswordHash = ""
 	response.Success(c, LoginResponse{
 		AccessToken:          tokenResult.AccessToken,
@@ -1411,6 +1422,7 @@ func (h *AuthHandler) EmailCodeLogin(c *gin.Context) {
 
 	setAuthCookies(c, tokenResult.AccessToken, tokenResult.RefreshToken, accessTokenLifetime, refreshTokenLifetime)
 
+	user.HasPassword = user.PasswordHash != ""
 	user.PasswordHash = ""
 	response.Success(c, LoginResponse{
 		AccessToken:          tokenResult.AccessToken,

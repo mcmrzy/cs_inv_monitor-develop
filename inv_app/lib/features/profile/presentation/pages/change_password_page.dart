@@ -20,6 +20,16 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
   bool _obscureOld = true;
   bool _obscureNew = true;
   bool _obscureConfirm = true;
+  /// 无密码账号（手机号一键登录注册）为 true 时隐藏原密码输入，直接设置新密码
+  late bool _setPasswordMode;
+
+  @override
+  void initState() {
+    super.initState();
+    final authState = context.read<AuthBloc>().state;
+    final user = authState is AuthAuthenticated ? authState.user : null;
+    _setPasswordMode = user != null && !user.hasPassword;
+  }
 
   @override
   void dispose() {
@@ -33,7 +43,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
     if (_formKey.currentState!.validate()) {
       context.read<AuthBloc>().add(
             AuthChangePasswordRequested(
-              oldPassword: _oldPasswordController.text,
+              oldPassword: _setPasswordMode ? '' : _oldPasswordController.text,
               newPassword: _newPasswordController.text,
             ),
           );
@@ -44,7 +54,9 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.changePassword)),
+      appBar: AppBar(
+        title: Text(_setPasswordMode ? l10n.setPassword : l10n.changePassword),
+      ),
       body: BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {
           if (state is AuthPasswordResetSuccess) {
@@ -69,6 +81,23 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
               key: _formKey,
               child: Column(
                 children: [
+                  if (_setPasswordMode)
+                    Padding(
+                      padding: EdgeInsets.only(bottom: 16.h),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline, size: 18.w, color: Theme.of(context).colorScheme.primary),
+                          SizedBox(width: 8.w),
+                          Expanded(
+                            child: Text(
+                              l10n.setPasswordDesc,
+                              style: TextStyle(fontSize: 13.sp, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (!_setPasswordMode)
                   TextFormField(
                     controller: _oldPasswordController,
                     obscureText: _obscureOld,
@@ -159,7 +188,11 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                               strokeWidth: 2,
                               color: Colors.white,
                             )
-                          : Text(l10n.confirmChange),
+                          : Text(
+                              _setPasswordMode
+                                  ? l10n.setPassword
+                                  : l10n.confirmChange,
+                            ),
                     ),
                   ),
                 ],
