@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -465,6 +466,9 @@ class _MainShellState extends State<MainShell> {
 
   // 完善个人信息弹窗：本次启动仅提示一次（跳过或已设置后不再弹）
   static bool _hasShownProfilePrompt = false;
+  
+  // 等待 profile 刷新完成后再判断是否弹出完善资料弹窗的订阅
+  StreamSubscription<AuthState>? _profileSetupSubscription;
 
   bool _downloading = false;
 
@@ -500,6 +504,7 @@ class _MainShellState extends State<MainShell> {
 
   @override
   void dispose() {
+    _profileSetupSubscription?.cancel();
     _cancelToken?.cancel();
 
     super.dispose();
@@ -510,6 +515,21 @@ class _MainShellState extends State<MainShell> {
     if (_hasShownProfilePrompt) return;
     final authState = context.read<AuthBloc>().state;
     if (authState is! AuthAuthenticated) return;
+
+    // 乐观进入时 user 尚未加载（后台刷新中），等待刷新完成后再判断，
+    // 避免资料已存在却因未加载完成而重复弹出完善资料弹窗
+    if (authState.user == null) {
+      _profileSetupSubscription?.cancel();
+      _profileSetupSubscription = context.read<AuthBloc>().stream.listen((state) {
+        if (state is AuthAuthenticated && state.user != null) {
+          _profileSetupSubscription?.cancel();
+          _profileSetupSubscription = null;
+          if (mounted) _maybeShowProfileSetup();
+        }
+      });
+      return;
+    }
+
     final nickname = authState.nickname?.trim() ?? '';
     if (nickname.isNotEmpty) return;
     _hasShownProfilePrompt = true;

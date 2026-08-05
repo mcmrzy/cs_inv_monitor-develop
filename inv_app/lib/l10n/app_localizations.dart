@@ -1395,6 +1395,8 @@ class AppLocalizations {
       _localizedStrings['email_changed'] ?? 'Email changed';
   String get emailRequired =>
       _localizedStrings['email_required'] ?? 'Email required';
+  String get errInvalidEmail =>
+      _localizedStrings['err_invalid_email'] ?? 'Invalid email format';
   String get phoneRequired =>
       _localizedStrings['phone_required'] ?? 'Phone required';
   // 编辑个人资料页面 - 空值提示

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:inv_app/core/config/app_config.dart';
 import 'package:inv_app/core/data/china_regions.dart';
@@ -108,12 +109,36 @@ class _EditProfilePageState extends State<EditProfilePage> {
     try {
       final XFile? image = await _picker.pickImage(
         source: ImageSource.gallery,
-        maxWidth: 512,
-        maxHeight: 512,
-        imageQuality: 85,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 90,
       );
 
       if (image == null) return;
+
+      // 圆形裁剪后再上传
+      final CroppedFile? cropped = await ImageCropper().cropImage(
+        sourcePath: image.path,
+        maxWidth: 512,
+        maxHeight: 512,
+        compressFormat: ImageCompressFormat.jpg,
+        compressQuality: 85,
+        uiSettings: [
+          AndroidUiSettings(
+            cropStyle: CropStyle.circle,
+            lockAspectRatio: true,
+            initAspectRatio: CropAspectRatioPreset.square,
+            hideBottomControls: false,
+          ),
+          IOSUiSettings(
+            cropStyle: CropStyle.circle,
+            aspectRatioLockEnabled: true,
+            aspectRatioPresets: [CropAspectRatioPreset.square],
+          ),
+        ],
+      );
+
+      if (cropped == null) return;
 
       setState(() {
         _isUploadingAvatar = true;
@@ -121,7 +146,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
       final apiClient = getIt<ApiClient>();
       final avatarService = AvatarUploadService(apiClient);
-      final url = await avatarService.uploadAvatar(File(image.path));
+      final url = await avatarService.uploadAvatar(File(cropped.path));
 
       setState(() {
         _avatarUrl = url;
@@ -862,28 +887,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
         centerTitle: true,
         elevation: 0,
         scrolledUnderElevation: 0.5,
-        actions: [
-          TextButton(
-            onPressed: _isLoading ? null : _saveProfile,
-            child: _isLoading
-                ? SizedBox(
-                    width: 20.w,
-                    height: 20.w,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.w,
-                      valueColor:
-                          AlwaysStoppedAnimation<Color>(AppColors.primary),
-                    ),
-                  )
-                : Text(
-                    l10n.save,
-                    style: TextStyle(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-          ),
-        ],
       ),
       body: Form(
         key: _formKey,
