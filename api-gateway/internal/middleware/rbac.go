@@ -263,6 +263,12 @@ var authenticatedOnlyPaths = map[string]struct{}{
 	// Self-service avatar upload: any authenticated user may update only
 	// their own avatar; ownership is enforced by business-api.
 	"/api/v1/upload/avatar": {},
+	// Self-service profile change endpoints (email/phone change with code):
+	// ownership and code verification are enforced by business-api.
+	"/api/v1/auth/send-email-change-code": {},
+	"/api/v1/auth/change-email":           {},
+	"/api/v1/auth/send-phone-code":        {},
+	"/api/v1/auth/change-phone":           {},
 }
 
 func isAuthenticatedOnlyPath(path string) bool {
