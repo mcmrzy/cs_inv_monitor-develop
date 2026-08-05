@@ -8,6 +8,7 @@ class AuthGuard {
   static final List<String> _publicRoutes = [
     '/splash',
     '/login',
+    '/jverify-login',
     '/register',
     '/forgot-password',
   ];

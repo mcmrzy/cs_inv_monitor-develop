@@ -194,12 +194,13 @@ class JVerifyService {
       }
     }
 
-    // 设置超时（8 秒，给运营商预取号充分时间）
+    // 设置超时（20 秒，给运营商校验充分时间；弱网下运营商回调可能超过 8 秒，
+    // 过短会误报失败——实测电信回调 8.4s 到达，8s 超时误触发）
     try {
       return await completer.future.timeout(
-        const Duration(seconds: 8),
+        const Duration(seconds: 20),
         onTimeout: () {
-          debugPrint('[JVerifyService] loginAuth timed out after 8s');
+          debugPrint('[JVerifyService] loginAuth timed out after 20s');
           // 超时说明运营商网络无响应，抛异常释放 UI 并引导降级
           throw JVerifyCarrierException(2005, 'One-click auth timed out');
         },
@@ -211,6 +212,11 @@ class JVerifyService {
   }
 
   /// 配置自绘授权页 UI：品牌区（自定义控件）+ 脱敏号码 + 同意并登录 + 协议行
+  ///
+  /// 坐标单位均为 dp（插件内部按 dp2Pix 换算），参考机型 360dp 宽 × ~800dp 高
+  /// （1080px @3x，底部含系统手势条）。布局采用官方推荐的"相对顶部偏移"
+  /// 定位方式，显式指定号码/按钮/协议位置，避免 SDK 默认居中布局在异形屏上
+  /// 把按钮挤到屏幕边缘；品牌控件与按钮无重叠，防止自定义 View 拦截点击。
   void _applyAuthPageUIConfig() {
     final uiConfig = JVUIConfig();
 
@@ -218,7 +224,7 @@ class JVerifyService {
     uiConfig.navHidden = false;
     uiConfig.navColor = 0xFFFFFFFF;
     uiConfig.navText = '辰烁科技';
-    uiConfig.navTextColor = 0xFF333333;
+    uiConfig.navTextColor = 0xFF1F2937;
     uiConfig.navTextBold = true;
     uiConfig.navTransparent = false;
     uiConfig.statusBarDarkMode = true;
@@ -228,21 +234,27 @@ class JVerifyService {
 
     // 脱敏号码：居中大字加粗（号码内容由 SDK 注入，如 138****1234）
     uiConfig.numberColor = 0xFF1F2937;
-    uiConfig.numberSize = 26;
+    uiConfig.numberSize = 28;
     uiConfig.numberTextBold = true;
+    uiConfig.numFieldOffsetY = 320; // 号码区距屏幕顶部（导航栏下方）
 
     // 副标语（SDK 默认文案，仅配置样式）
     uiConfig.sloganHidden = false;
     uiConfig.sloganTextColor = 0xFF9CA3AF;
     uiConfig.sloganTextSize = 14;
+    uiConfig.sloganOffsetY = 388; // 号码区正下方
 
-    // 登录按钮：同意并登录（背景图暂无资源，使用 SDK 默认按钮样式）
+    // 登录按钮：大尺寸居中，避开底部手势条与品牌控件
     uiConfig.logBtnText = '同意并登录';
     uiConfig.logBtnTextColor = 0xFFFFFFFF;
-    uiConfig.logBtnTextSize = 16;
+    uiConfig.logBtnTextSize = 17;
     uiConfig.logBtnTextBold = true;
+    uiConfig.logBtnWidth = 312; // 屏宽 360dp - 左右边距 24dp
+    uiConfig.logBtnHeight = 50;
+    uiConfig.logBtnOffsetY = 470; // 按钮顶部距屏幕顶部
 
-    // 隐私协议
+    // 隐私协议：贴近屏幕底部，避开系统手势条；勾选框换自定义图标并调大，
+    // 文字居中避免贴屏幕左缘
     uiConfig.privacyState = false;
     uiConfig.privacyHintToast = true;
     uiConfig.clauseName = '用户协议';
@@ -252,25 +264,30 @@ class JVerifyService {
     uiConfig.clauseColor = 0xFF1565C0;
     uiConfig.clauseBaseColor = 0xFF6B7280;
     uiConfig.privacyTextSize = 12;
+    uiConfig.privacyOffsetY = 72; // 协议行距屏幕底部
+    uiConfig.privacyCheckboxSize = 16; // 默认 9dp 过小，调大便于点击
+    uiConfig.uncheckedImgPath = 'jverify_checkbox_unchecked'; // res/drawable-xxhdpi
+    uiConfig.checkedImgPath = 'jverify_checkbox_checked';
+    uiConfig.privacyTextCenterGravity = true; // 协议文字居中，避免贴左缘
 
-    // 品牌区自定义控件（Android 坐标以屏幕左上为原点，px 基准 1080 宽）
+    // 品牌区自定义控件：屏宽 360dp 内居中，完整显示不裁剪
     final title = JVCustomWidget('brand_title', JVCustomWidgetType.textView)
-      ..left = 240
-      ..top = 400
-      ..width = 600
-      ..height = 64
+      ..left = 70 // (360 - 220) / 2，水平居中
+      ..top = 150 // 导航栏下方留白
+      ..width = 220
+      ..height = 44
       ..title = '辰烁科技'
-      ..titleFont = 30
+      ..titleFont = 26
       ..titleColor = 0xFF1F2937
       ..textAlignment = JVTextAlignmentType.center;
 
     final subtitle = JVCustomWidget('brand_subtitle', JVCustomWidgetType.textView)
-      ..left = 240
-      ..top = 480
-      ..width = 600
-      ..height = 40
+      ..left = 70
+      ..top = 204
+      ..width = 220
+      ..height = 30
       ..title = '光伏逆变器智能监控平台'
-      ..titleFont = 16
+      ..titleFont = 14
       ..titleColor = 0xFF6B7280
       ..textAlignment = JVTextAlignmentType.center;
 

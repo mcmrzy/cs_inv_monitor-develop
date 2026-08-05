@@ -1116,7 +1116,7 @@ class _StationCardState extends State<_StationCard>
           child: Hero(
             tag: 'station_${widget.id}',
             child: Material(
-              color: AppColor.surface(context),
+              color: AppColor.surfaceContainer(context),
               borderRadius: BorderRadius.circular(16.r),
               // 注意：不使用 InkWell（空 onTap 会赢得手势竞技场，
               // 导致外层 GestureDetector 的 onTapUp 被取消、点击跳转失效）

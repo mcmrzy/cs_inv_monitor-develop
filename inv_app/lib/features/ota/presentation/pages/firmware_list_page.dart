@@ -539,7 +539,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
       margin: EdgeInsets.only(bottom: 12.h),
       padding: EdgeInsets.all(14.w),
       decoration: BoxDecoration(
-        color: AppColor.surface(context),
+        color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.circular(14.r),
         border: Border.all(color: borderColor, width: isCurrent ? 1.5 : 1),
         boxShadow: [
