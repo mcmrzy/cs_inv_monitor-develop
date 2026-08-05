@@ -10,6 +10,8 @@ type User struct {
 	Phone        string     `json:"phone"`
 	Email        string     `json:"email"`
 	PasswordHash string     `json:"-"`
+	// HasPassword 表示账号是否已设置密码（无密码账号可通过修改密码接口直接设置）
+	HasPassword bool       `json:"has_password"`
 	Nickname     string     `json:"nickname"`
 	Avatar       string     `json:"avatar"`
 	IsSystemAdmin  bool       `json:"is_system_admin"`
@@ -61,11 +63,18 @@ type Device struct {
 	MainVersion    string     `json:"main_version"`
 	DeviceType     string     `json:"device_type"`
 	RatedPower     float64    `json:"rated_power"`
+	RatedPowerW    int        `json:"rated_power_w"` // V2.1：协议原值 W（rated_power 为派生 kW）
 	RatedVoltage   float64    `json:"rated_voltage"`
 	RatedFreq      float64    `json:"rated_freq"`
 	BatteryVoltage float64    `json:"battery_voltage"`
 	BatteryType    string     `json:"battery_type"`
 	CellCount      int        `json:"cell_count"`
+	// V2.1 只读信息扩展（096 迁移列）
+	Phase             string     `json:"phase"`
+	InverterModule    string     `json:"inverter_module"`
+	HardwareVersion   string     `json:"hardware_version"`
+	BootloaderVersion string     `json:"bootloader_version"`
+	InfoReportedAt    *time.Time `json:"info_reported_at"`
 	StationID      *int64     `json:"station_id"`
 	StationName    string     `json:"station_name"`
 	Alias          string     `json:"alias"`

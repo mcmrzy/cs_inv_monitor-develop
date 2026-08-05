@@ -7,6 +7,8 @@ class User {
   final String? country;
   final String? region;
   final String? bio;
+  /// 是否已设置密码（false 表示一键登录注册的无密码账号）
+  final bool hasPassword;
   final bool isSystemAdmin;
   final List<String> permissions;
   final int status;
@@ -23,6 +25,7 @@ class User {
     this.country,
     this.region,
     this.bio,
+    this.hasPassword = true,
     this.isSystemAdmin = false,
     this.permissions = const [],
     required this.status,
@@ -63,6 +66,7 @@ class User {
       country: json['country'] as String?,
       region: (json['region'] ?? json['region_name']) as String?,
       bio: json['bio'] as String?,
+      hasPassword: json['has_password'] != false,
       isSystemAdmin: isSystemAdmin,
       permissions: perms,
       status: statusVal,
@@ -88,6 +92,7 @@ class User {
       'country': country,
       'region': region,
       'bio': bio,
+      'has_password': hasPassword,
       'is_system_admin': isSystemAdmin,
       'permissions': permissions,
       'status': status,

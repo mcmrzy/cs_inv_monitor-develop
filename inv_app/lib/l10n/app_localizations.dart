@@ -905,6 +905,8 @@ class AppLocalizations {
   String get controllableLabel => _localizedStrings['controllable']!;
   String get confirmShare => _localizedStrings['confirm_share']!;
   String get currentPassword => _localizedStrings['current_password']!;
+  String get setPassword => _localizedStrings['set_password']!;
+  String get setPasswordDesc => _localizedStrings['set_password_desc']!;
   String get newPasswordLabel => _localizedStrings['new_password_label']!;
   String get confirmPasswordLabel =>
       _localizedStrings['confirm_password_label']!;
