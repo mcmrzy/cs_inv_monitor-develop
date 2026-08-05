@@ -364,8 +364,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       (_) async {
         // 更新成功后，重新获取用户信息
         final profileResult = await getProfileUseCase();
-        profileResult.fold(
-          (failure) {
+        final refreshed = profileResult.fold<User?>(
+          (_) {
             // 如果获取用户信息失败，仍然保持当前状态
             if (previousUserId != null) {
               emit(
@@ -378,24 +378,25 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                 ),
               );
             }
+            return null;
           },
-          (user) {
-            // 使用最新的用户信息更新状态
-            if (previousUserId != null) {
-              // 缓存最新资料，冷启动时优先展示本地缓存
-              unawaited(_cacheUser(user));
-              emit(
-                AuthAuthenticated(
-                  userId: previousUserId,
-                  phone: previousPhone ?? user.phone,
-                  isSystemAdmin: user.isSystemAdmin,
-                  permissions: user.permissions,
-                  user: user,
-                ),
-              );
-            }
-          },
+          (user) => user,
         );
+        // 使用最新的用户信息更新状态
+        if (refreshed != null && previousUserId != null) {
+          // 缓存最新资料，冷启动时优先展示本地缓存；
+          // 等待写入完成，避免保存后立即重启导致缓存未落盘
+          await _cacheUser(refreshed);
+          emit(
+            AuthAuthenticated(
+              userId: previousUserId,
+              phone: previousPhone ?? refreshed.phone,
+              isSystemAdmin: refreshed.isSystemAdmin,
+              permissions: refreshed.permissions,
+              user: refreshed,
+            ),
+          );
+        }
       },
     );
   }
