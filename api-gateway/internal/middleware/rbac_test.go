@@ -583,6 +583,8 @@ func TestAuthenticatedOnlyPaths_AreExact(t *testing.T) {
 	assert.True(t, isAuthenticatedOnlyPath("/api/v1/auth/logout"))
 	assert.True(t, isAuthenticatedOnlyPath("/api/v1/auth/change-password"))
 	assert.True(t, isAuthenticatedOnlyPath("/api/v1/auth/profile"))
+	assert.True(t, isAuthenticatedOnlyPath("/api/v1/upload/avatar"))
 	assert.False(t, isAuthenticatedOnlyPath("/api/v1/auth/profile/export"))
 	assert.False(t, isAuthenticatedOnlyPath("/api/v1/auth/unknown"))
+	assert.False(t, isAuthenticatedOnlyPath("/api/v1/upload/avatar/extra"))
 }
