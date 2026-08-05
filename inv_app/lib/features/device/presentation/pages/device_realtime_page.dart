@@ -756,6 +756,9 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
           // 顶部状态卡片
           _buildStatusCard(),
           SizedBox(height: 12.h),
+          // V2.1 健康卡片（服务器 derived 组；MQTT 直连时无数据则不渲染）
+          _buildHealthCard(),
+          SizedBox(height: 12.h),
           _buildTelemetryMetadataCard(),
           SizedBox(height: 12.h),
           // 参数设置入口
@@ -856,6 +859,187 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
                 fontSize: 12.sp,
                 fontWeight: FontWeight.w500,
                 color: Colors.white,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// V2.1 健康卡片：健康度评分 + 散热状态 + 并机角色 + 维护提醒
+  /// 数据源为服务器 realtime 的 derived 组（展平键 derived_*）；MQTT 直连时无此数据 → 不渲染。
+  Widget _buildHealthCard() {
+    final l10n = AppLocalizations.of(context)!;
+    final score = _realtimeData['derived_health_score'];
+    if (score == null) return const SizedBox.shrink();
+    final level = (_realtimeData['derived_health_level'] as String?) ?? 'good';
+    final thermal =
+        (_realtimeData['derived_thermal_status'] as String?) ?? 'normal';
+    final role =
+        (_realtimeData['derived_parallel_role'] as String?) ?? 'n/a';
+    final workTimeTotal = _realtimeData['diag_work_time_total']; // 秒
+
+    final levelColor = switch (level) {
+      'healthy' => AppColors.success,
+      'attention' => AppColors.warning,
+      'maintenance' => AppColors.error,
+      _ => AppColors.blue,
+    };
+    final thermalColor = switch (thermal) {
+      'fault' => AppColors.error,
+      'warning' => AppColors.warning,
+      _ => AppColors.success,
+    };
+    final thermalText = switch (thermal) {
+      'fault' => l10n.str('health_thermal_fault'),
+      'warning' => l10n.str('health_thermal_warning'),
+      'normal' => l10n.str('health_thermal_normal'),
+      _ => l10n.str('unknown'),
+    };
+    final roleText = switch (role) {
+      'master' => l10n.str('health_role_master'),
+      'slave' => l10n.str('health_role_slave'),
+      'standalone' => l10n.str('health_role_standalone'),
+      _ => l10n.str('unknown'),
+    };
+    final maintenanceDue =
+        workTimeTotal is num && workTimeTotal >= 5000 * 3600;
+    final workHours =
+        workTimeTotal is num ? (workTimeTotal / 3600).toStringAsFixed(0) : null;
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(16.w),
+      decoration: AppColor.card(context),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.favorite_rounded,
+                size: 18.sp,
+                color: levelColor,
+              ),
+              SizedBox(width: 8.w),
+              Text(
+                l10n.str('health_score'),
+                style: TextStyle(
+                  fontSize: 14.sp,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${score.round()}',
+                style: TextStyle(
+                  fontSize: 22.sp,
+                  fontWeight: FontWeight.w700,
+                  color: levelColor,
+                ),
+              ),
+              SizedBox(width: 4.w),
+              Text(
+                '/100',
+                style: TextStyle(fontSize: 12.sp, color: AppColors.textHint),
+              ),
+              SizedBox(width: 8.w),
+              _healthChip(
+                l10n.str('health_level_$level'),
+                levelColor,
+              ),
+            ],
+          ),
+          SizedBox(height: 12.h),
+          Row(
+            children: [
+              Expanded(
+                child: _healthChip(
+                  '${l10n.str('health_thermal')}: $thermalText',
+                  thermalColor,
+                  icon: Icons.thermostat_rounded,
+                ),
+              ),
+              SizedBox(width: 8.w),
+              Expanded(
+                child: _healthChip(
+                  '${l10n.str('health_parallel_role')}: $roleText',
+                  AppColors.blue,
+                  icon: Icons.account_tree_outlined,
+                ),
+              ),
+              if (workHours != null) ...[
+                SizedBox(width: 8.w),
+                Expanded(
+                  child: _healthChip(
+                    '${l10n.str('health_work_time')}: $workHours${l10n.str('health_hours')}',
+                    AppColors.textSecondary,
+                    icon: Icons.schedule_rounded,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          if (maintenanceDue) ...[
+            SizedBox(height: 10.h),
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 8.h),
+              decoration: BoxDecoration(
+                color: AppColors.warning.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8.r),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.build_circle_outlined,
+                    size: 16.sp,
+                    color: AppColors.warning,
+                  ),
+                  SizedBox(width: 6.w),
+                  Expanded(
+                    child: Text(
+                      l10n.str('health_maintenance_due_hint'),
+                      style: TextStyle(
+                        fontSize: 12.sp,
+                        color: AppColors.warning,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// 健康卡片内的状态小胶囊（标签 + 可选图标）
+  Widget _healthChip(String text, Color color, {IconData? icon}) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 6.h),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8.r),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 14.sp, color: color),
+            SizedBox(width: 4.w),
+          ],
+          Flexible(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11.sp,
+                fontWeight: FontWeight.w500,
+                color: color,
               ),
             ),
           ),
