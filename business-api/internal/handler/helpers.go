@@ -215,3 +215,20 @@ func toFloat64(v interface{}) (float64, bool) {
 		return 0, false
 	}
 }
+
+// extractOutputPower 从实时数据中提取输出功率（W），兼容 V2 组结构（ac.output_power）
+// 与 V1 平铺结构（output_power），供负载率等业务派生使用。
+func extractOutputPower(rt map[string]interface{}) (float64, bool) {
+	if rt == nil {
+		return 0, false
+	}
+	if ac, ok := rt["ac"].(map[string]interface{}); ok {
+		if v, ok := ac["output_power"]; ok && v != nil {
+			return toFloat64(v)
+		}
+	}
+	if v, ok := rt["output_power"]; ok && v != nil {
+		return toFloat64(v)
+	}
+	return 0, false
+}

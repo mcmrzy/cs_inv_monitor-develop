@@ -23,15 +23,17 @@ type DeviceHandler struct {
 	alarmService   *service.AlarmService
 	stationService *service.StationService
 	modelService   *service.ModelService
+	otaService     *service.OTAService
 	db             *pgxpool.Pool
 }
 
-func NewDeviceHandler(deviceService *service.DeviceService, alarmService *service.AlarmService, stationService *service.StationService, modelService *service.ModelService, db *pgxpool.Pool) *DeviceHandler {
+func NewDeviceHandler(deviceService *service.DeviceService, alarmService *service.AlarmService, stationService *service.StationService, modelService *service.ModelService, otaService *service.OTAService, db *pgxpool.Pool) *DeviceHandler {
 	return &DeviceHandler{
 		deviceService:  deviceService,
 		alarmService:   alarmService,
 		stationService: stationService,
 		modelService:   modelService,
+		otaService:     otaService,
 		db:             db,
 	}
 }
@@ -161,17 +163,64 @@ func (h *DeviceHandler) GetDetail(c *gin.Context) {
 					device.FirmwareEsp = s
 				}
 			}
+			if v, ok := info["phase"]; ok && v != nil {
+				if s, ok := v.(string); ok && s != "" && device.Phase == "" {
+					device.Phase = s
+				}
+			}
+			if v, ok := info["inverter_module"]; ok && v != nil {
+				if s, ok := v.(string); ok && s != "" && device.InverterModule == "" {
+					device.InverterModule = s
+				}
+			}
+			if v, ok := info["hardware_version"]; ok && v != nil {
+				if s, ok := v.(string); ok && s != "" && device.HardwareVersion == "" {
+					device.HardwareVersion = s
+				}
+			}
+			if v, ok := info["bootloader_version"]; ok && v != nil {
+				if s, ok := v.(string); ok && s != "" && device.BootloaderVersion == "" {
+					device.BootloaderVersion = s
+				}
+			}
 			if v, ok := info["rated_power"]; ok && v != nil {
 				if f, ok := toFloat64(v); ok && f > 0 && device.RatedPower == 0 {
 					device.RatedPower = f
 				}
 			}
+			if v, ok := info["rated_power_w"]; ok && v != nil {
+				if f, ok := toFloat64(v); ok && f > 0 && device.RatedPowerW == 0 {
+					device.RatedPowerW = int(f)
+				}
+			}
+		}
+	}
+
+	// V2.1 业务派生（见 V2.1 文档 7.2）：负载率 = 实时输出功率 ÷ 额定功率(协议 W)
+	var loadPercent *float64
+	if device.RatedPowerW > 0 {
+		if outPower, ok := extractOutputPower(realtimeData); ok {
+			lp := outPower / float64(device.RatedPowerW) * 100
+			if lp > 100 {
+				lp = 100
+			}
+			loadPercent = &lp
+		}
+	}
+
+	// V2.1 业务派生：OTA 可用性（该型号存在已发布升级包，复用餐 ota_service）
+	otaAvailable := false
+	if h.otaService != nil {
+		if packages, pkgErr := h.otaService.GetAvailablePackagesForDevice(c.Request.Context(), sn, 0); pkgErr == nil && len(packages) > 0 {
+			otaAvailable = true
 		}
 	}
 
 	result := map[string]interface{}{
-		"device":        device,
-		"realtime_data": realtimeData,
+		"device":         device,
+		"realtime_data":  realtimeData,
+		"load_percent":   loadPercent,
+		"ota_available":  otaAvailable,
 		"online_status": map[string]interface{}{
 			"online": online,
 		},
