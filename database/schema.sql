@@ -7053,5 +7053,6 @@ INSERT INTO schema_migrations (version, name) VALUES (92, '092_add_devices_sort_
 INSERT INTO schema_migrations (version, name) VALUES (93, '093_add_station_country.up.sql') ON CONFLICT (version) DO NOTHING;
 INSERT INTO schema_migrations (version, name) VALUES (94, '094_user_notify_prefs.up.sql') ON CONFLICT (version) DO NOTHING;
 INSERT INTO schema_migrations (version, name) VALUES (95, '095_device_alias_station_sort.up.sql') ON CONFLICT (version) DO NOTHING;
+INSERT INTO schema_migrations (version, name) VALUES (96, '096_add_csl10_6k2_v21.up.sql') ON CONFLICT (version) DO NOTHING;
 
--- Next migration version to use: 096
+-- Next migration version to use: 097
