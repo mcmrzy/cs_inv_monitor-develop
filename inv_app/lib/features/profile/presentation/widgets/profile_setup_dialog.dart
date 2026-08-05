@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'package:inv_app/core/config/app_config.dart';
@@ -35,11 +36,28 @@ class ProfileSetupDialog extends StatefulWidget {
 class _ProfileSetupDialogState extends State<ProfileSetupDialog> {
   final _nicknameController = TextEditingController();
   final _emailController = TextEditingController();
+  final _emailCodeController = TextEditingController();
   final ImagePicker _picker = ImagePicker();
 
   String? _avatarUrl;
   bool _isUploadingAvatar = false;
   bool _isSaving = false;
+
+  // 邮箱验证码倒计时
+  int _emailCountdown = 0;
+  Timer? _emailTimer;
+
+  static final RegExp _emailRegExp =
+      RegExp(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$');
+
+  bool _isValidEmail(String email) => _emailRegExp.hasMatch(email);
+
+  void _showSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
 
   @override
   void initState() {
@@ -56,6 +74,8 @@ class _ProfileSetupDialogState extends State<ProfileSetupDialog> {
   void dispose() {
     _nicknameController.dispose();
     _emailController.dispose();
+    _emailCodeController.dispose();
+    _emailTimer?.cancel();
     super.dispose();
   }
 
@@ -76,17 +96,40 @@ class _ProfileSetupDialogState extends State<ProfileSetupDialog> {
     try {
       final XFile? image = await _picker.pickImage(
         source: ImageSource.gallery,
-        maxWidth: 512,
-        maxHeight: 512,
-        imageQuality: 85,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 90,
       );
       if (image == null || !mounted) return;
+
+      // 圆形裁剪后再上传
+      final CroppedFile? cropped = await ImageCropper().cropImage(
+        sourcePath: image.path,
+        maxWidth: 512,
+        maxHeight: 512,
+        compressFormat: ImageCompressFormat.jpg,
+        compressQuality: 85,
+        uiSettings: [
+          AndroidUiSettings(
+            cropStyle: CropStyle.circle,
+            lockAspectRatio: true,
+            initAspectRatio: CropAspectRatioPreset.square,
+            hideBottomControls: false,
+          ),
+          IOSUiSettings(
+            cropStyle: CropStyle.circle,
+            aspectRatioLockEnabled: true,
+            aspectRatioPresets: [CropAspectRatioPreset.square],
+          ),
+        ],
+      );
+      if (cropped == null || !mounted) return;
 
       setState(() => _isUploadingAvatar = true);
 
       final apiClient = getIt<ApiClient>();
       final avatarService = AvatarUploadService(apiClient);
-      final url = await avatarService.uploadAvatar(File(image.path));
+      final url = await avatarService.uploadAvatar(File(cropped.path));
 
       if (!mounted) return;
       setState(() {
@@ -96,14 +139,99 @@ class _ProfileSetupDialogState extends State<ProfileSetupDialog> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _isUploadingAvatar = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
+      _showSnack(e.toString());
+    }
+  }
+
+  /// 发送邮箱变更验证码
+  Future<void> _sendEmailCode() async {
+    final email = _emailController.text.trim();
+    final l10n = AppLocalizations.of(context)!;
+    if (email.isEmpty) {
+      _showSnack(l10n.emailRequired);
+      return;
+    }
+    if (!_isValidEmail(email)) {
+      _showSnack(l10n.errInvalidEmail);
+      return;
+    }
+
+    try {
+      final apiClient = getIt<ApiClient>();
+      final response = await apiClient.post(
+        '/auth/send-email-change-code',
+        data: {'email': email},
       );
+      final data = response.data is Map ? response.data as Map : null;
+      if (response.statusCode == 200 && data != null && data['code'] == 0) {
+        if (!mounted) return;
+        setState(() => _emailCountdown = 60);
+        _emailTimer?.cancel();
+        _emailTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+          if (!mounted) {
+            timer.cancel();
+            return;
+          }
+          if (_emailCountdown > 0) {
+            setState(() => _emailCountdown--);
+          } else {
+            timer.cancel();
+          }
+        });
+        _showSnack(l10n.codeSent);
+      } else {
+        throw Exception(data?['message'] ?? '发送失败');
+      }
+    } catch (e) {
+      _showSnack(e.toString());
     }
   }
 
   Future<void> _save() async {
     if (_isSaving) return;
+
+    final l10n = AppLocalizations.of(context)!;
+    final nickname = _nicknameController.text.trim();
+    final email = _emailController.text.trim();
+    final currentState = context.read<AuthBloc>().state;
+    final previousEmail =
+        currentState is AuthAuthenticated ? (currentState.email ?? '') : '';
+
+    // 邮箱格式校验（填写时）
+    if (email.isNotEmpty && !_isValidEmail(email)) {
+      _showSnack(l10n.errInvalidEmail);
+      return;
+    }
+
+    // 邮箱变更时需通过验证码校验：/auth/profile 不接收邮箱字段，
+    // 必须走独立的 change-email 接口（带验证码）
+    final emailChanged = email.isNotEmpty && email != previousEmail;
+    if (emailChanged) {
+      final code = _emailCodeController.text.trim();
+      if (code.isEmpty) {
+        _showSnack(l10n.fillAllFields);
+        return;
+      }
+      setState(() => _isSaving = true);
+      try {
+        final apiClient = getIt<ApiClient>();
+        final resp = await apiClient.put(
+          '/auth/change-email',
+          data: {'new_email': email, 'code': code},
+        );
+        final data = resp.data is Map ? resp.data as Map : null;
+        if (resp.statusCode != 200 || data == null || data['code'] != 0) {
+          throw Exception(data?['message'] ?? '验证失败');
+        }
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _isSaving = false);
+        _showSnack(e.toString());
+        return;
+      }
+    }
+
+    if (!mounted) return;
     setState(() => _isSaving = true);
 
     try {
@@ -117,8 +245,7 @@ class _ProfileSetupDialogState extends State<ProfileSetupDialog> {
 
       context.read<AuthBloc>().add(
             AuthUpdateProfileRequested(
-              nickname: _nicknameController.text.trim(),
-              email: _emailController.text.trim(),
+              nickname: nickname,
               avatar: _avatarUrl,
             ),
           );
@@ -130,31 +257,19 @@ class _ProfileSetupDialogState extends State<ProfileSetupDialog> {
       await subscription.cancel();
 
       if (!mounted) return;
-      final currentState = context.read<AuthBloc>().state;
-      if (currentState is AuthError) {
+      final updatedState = context.read<AuthBloc>().state;
+      if (updatedState is AuthError) {
         setState(() => _isSaving = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              AppLocalizations.of(context)!.translateError(
-                currentState.message,
-              ),
-            ),
-          ),
-        );
+        _showSnack(l10n.translateError(updatedState.message));
         return;
       }
 
       Navigator.of(context).pop(true);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context)!.profileSaved)),
-      );
+      _showSnack(l10n.profileSaved);
     } catch (e) {
       if (!mounted) return;
       setState(() => _isSaving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
+      _showSnack(e.toString());
     }
   }
 
@@ -259,6 +374,40 @@ class _ProfileSetupDialogState extends State<ProfileSetupDialog> {
                   ),
                   prefixIcon: const Icon(Icons.mail_outline_rounded, size: 20),
                 ),
+              ),
+              SizedBox(height: 12.h),
+              // 邮箱验证码（修改邮箱时需验证）
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _emailCodeController,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: l10n.verificationCode,
+                        hintText: l10n.codeHint,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10.r),
+                        ),
+                        prefixIcon:
+                            const Icon(Icons.lock_outline_rounded, size: 20),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 10.w),
+                  SizedBox(
+                    height: 50.h,
+                    child: FilledButton.tonal(
+                      onPressed:
+                          _emailCountdown > 0 ? null : _sendEmailCode,
+                      child: Text(
+                        _emailCountdown > 0
+                            ? '${_emailCountdown}s'
+                            : l10n.sendCode,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

@@ -69,6 +69,7 @@ dependencies:
   latlong2: ^0.10.1
 
   timezone: ^0.11.1
+  image_cropper: ^12.2.1
 
 dev_dependencies:
   flutter_test:
