@@ -19,6 +19,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type fakeAuthorizationContextResolver struct {
@@ -40,6 +41,15 @@ func (f fakeAuthorizationContextResolver) ResolveDefaultSessionContext(context.C
 
 func (f fakeAuthorizationContextResolver) LoadAllPermissionCodes(context.Context, model.ActorContext) ([]string, error) {
 	return []string{}, nil
+}
+
+func TestHasUsablePassword(t *testing.T) {
+	require.False(t, hasUsablePassword(""))
+	require.False(t, hasUsablePassword("\\"))   // 历史一键登录占位符
+	require.False(t, hasUsablePassword("plaintext")) // 非 bcrypt
+	valid, err := bcrypt.GenerateFromPassword([]byte("secret123"), bcrypt.DefaultCost)
+	require.NoError(t, err)
+	require.True(t, hasUsablePassword(string(valid)))
 }
 
 func TestRequireRefreshSwapRejectsReplay(t *testing.T) {
