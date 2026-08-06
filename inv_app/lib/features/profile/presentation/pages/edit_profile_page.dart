@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:inv_app/core/config/app_config.dart';
@@ -12,6 +13,7 @@ import 'package:inv_app/core/data/regions_data.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/network/api_client.dart';
 import 'package:inv_app/core/services/service_locator.dart';
+import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:inv_app/features/profile/data/avatar_upload_service.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
@@ -106,6 +108,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
   }
 
   Future<void> _pickAndUploadAvatar() async {
+    if (!await _ensureAuthenticated()) return;
     try {
       final XFile? image = await _picker.pickImage(
         source: ImageSource.gallery,
@@ -173,6 +176,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
   }
 
   Future<void> _saveProfile() async {
+    if (!await _ensureAuthenticated()) return;
     if (!_formKey.currentState!.validate()) return;
 
     setState(() {
@@ -478,9 +482,30 @@ class _EditProfilePageState extends State<EditProfilePage> {
     );
   }
 
+  /// 检查登录态；未登录时提示并跳转登录页，返回 false 阻止操作
+  Future<bool> _ensureAuthenticated() async {
+    final token = await getIt<StorageService>().getToken();
+    if (token != null && token.isNotEmpty) return true;
+
+    if (mounted) {
+      // 关闭可能残留的弹窗，避免跳转后被遮挡
+      Navigator.of(context, rootNavigator: true)
+          .popUntil((route) => route.isFirst);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('登录已过期，请重新登录'),
+        ),
+      );
+      context.go('/login');
+    }
+    return false;
+  }
+
   /// 发送手机验证码（弹窗内使用）
   Future<void> _sendPhoneCodeForDialog(
       String phone, StateSetter setDialogState) async {
+    if (!await _ensureAuthenticated()) return;
+    if (!mounted) return;
     if (phone.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -535,6 +560,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
   /// 验证手机验证码
   Future<void> _verifyPhoneCode(String newPhone, String code) async {
+    if (!await _ensureAuthenticated()) return;
+    if (!mounted) return;
     if (newPhone.isEmpty || code.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
