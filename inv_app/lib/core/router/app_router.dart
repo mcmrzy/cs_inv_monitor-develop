@@ -9,6 +9,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
+import 'package:flutter_svg/flutter_svg.dart';
+
 import 'package:go_router/go_router.dart';
 
 import 'package:url_launcher/url_launcher.dart';
@@ -20,6 +22,10 @@ import 'package:inv_app/core/services/app_update_service.dart';
 import 'package:inv_app/core/services/role_service.dart';
 
 import 'package:inv_app/core/theme/app_theme.dart';
+
+import 'package:inv_app/core/theme/csergy_assets.dart';
+
+import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 
@@ -840,56 +846,74 @@ class BottomNavBar extends StatelessWidget {
 
     final currentPath = GoRouterState.of(context).matchedLocation;
 
-    int currentIndex = 0;
-
-    for (int i = 0; i < navItems.length; i++) {
-      if (currentPath == navItems[i].path) {
-        currentIndex = i;
-
-        break;
-      }
-    }
+    final currentIndex = _selectedNavIndex(currentPath, navItems);
+    final colorScheme = Theme.of(context).colorScheme;
+    final selectedColor = colorScheme.primary;
+    final unselectedColor = colorScheme.onSurfaceVariant;
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colorScheme.surface,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
+            color: colorScheme.shadow.withValues(alpha: 0.08),
             blurRadius: 8,
             offset: const Offset(0, -2),
           ),
         ],
       ),
-      child: BottomNavigationBar(
-        currentIndex: currentIndex,
-        onTap: (index) {
-          if (index < navItems.length) {
-            context.go(navItems[index].path);
-          }
-        },
-        type: BottomNavigationBarType.fixed,
-        backgroundColor: Colors.white,
-        selectedItemColor: AppColors.primary,
-        unselectedItemColor: AppColors.textHint,
-        selectedLabelStyle:
-            const TextStyle(fontWeight: FontWeight.w600, fontSize: 11),
-        unselectedLabelStyle:
-            const TextStyle(fontWeight: FontWeight.w400, fontSize: 11),
-        elevation: 0,
-        items: navItems
-            .map(
-              (item) => BottomNavigationBarItem(
-                icon: Icon(item.icon, size: 22),
-                activeIcon: Icon(item.activeIcon, size: 22),
-                label: _translateNavLabel(context, item.label),
+      child: SafeArea(
+        top: false,
+        child: BottomNavigationBar(
+          currentIndex: currentIndex,
+          onTap: (index) {
+            if (index >= 0 && index < navItems.length) {
+              context.go(navItems[index].path);
+            }
+          },
+          type: BottomNavigationBarType.fixed,
+          backgroundColor: colorScheme.surface,
+          selectedItemColor: selectedColor,
+          unselectedItemColor: unselectedColor,
+          selectedLabelStyle:
+              const TextStyle(fontWeight: FontWeight.w600, fontSize: 11),
+          unselectedLabelStyle:
+              const TextStyle(fontWeight: FontWeight.w400, fontSize: 11),
+          elevation: 0,
+          items: navItems.map((item) {
+            final label = _translateNavLabel(context, item.label);
+            return BottomNavigationBarItem(
+              icon: _CsergyNavigationIcon(
+                item: item,
+                label: label,
+                selected: false,
+                color: unselectedColor,
               ),
-            )
-            .toList(),
+              activeIcon: _CsergyNavigationIcon(
+                item: item,
+                label: label,
+                selected: true,
+                color: selectedColor,
+              ),
+              label: label,
+              tooltip: label,
+            );
+          }).toList(),
+        ),
       ),
     );
   }
 
+  int _selectedNavIndex(String currentPath, List<NavItem> navItems) {
+    for (int i = 0; i < navItems.length; i++) {
+      final path = navItems[i].path;
+      if (currentPath == path || currentPath.startsWith('$path/')) {
+        return i;
+      }
+    }
+
+    return 0;
+  }
   String _translateNavLabel(BuildContext context, String label) {
     final l10n = AppLocalizations.of(context);
 
@@ -917,6 +941,100 @@ class BottomNavBar extends StatelessWidget {
   }
 }
 
+class _CsergyNavigationIcon extends StatefulWidget {
+  final NavItem item;
+  final String label;
+  final bool selected;
+  final Color color;
+
+  const _CsergyNavigationIcon({
+    required this.item,
+    required this.label,
+    required this.selected,
+    required this.color,
+  });
+
+  String get asset => selected ? item.activeIconAsset : item.iconAsset;
+
+  IconData get fallbackIcon =>
+      selected ? item.activeFallbackIcon : item.fallbackIcon;
+
+  @override
+  State<_CsergyNavigationIcon> createState() => _CsergyNavigationIconState();
+}
+
+class _CsergyNavigationIconState extends State<_CsergyNavigationIcon> {
+  late Future<void> _assetCheck;
+  String? _checkedAsset;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _ensureAssetCheck();
+  }
+
+  @override
+  void didUpdateWidget(covariant _CsergyNavigationIcon oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.asset != widget.asset) {
+      _checkedAsset = null;
+      _ensureAssetCheck();
+    }
+  }
+
+  void _ensureAssetCheck() {
+    if (_checkedAsset == widget.asset) return;
+
+    _checkedAsset = widget.asset;
+    _assetCheck = _verifyAsset(widget.asset);
+  }
+
+  Future<void> _verifyAsset(String asset) async {
+    await DefaultAssetBundle.of(context).load(asset);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<void>(
+      future: _assetCheck,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done ||
+            snapshot.hasError) {
+          return _buildAccessibleIcon(_buildFallbackIcon());
+        }
+
+        return _buildAccessibleIcon(
+          SvgPicture.asset(
+            widget.asset,
+            width: CsergyAssets.navigationIconSize,
+            height: CsergyAssets.navigationIconSize,
+            fit: BoxFit.contain,
+            colorFilter: ColorFilter.mode(widget.color, BlendMode.srcIn),
+            excludeFromSemantics: true,
+            placeholderBuilder: (_) => _buildFallbackIcon(),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildAccessibleIcon(Widget child) {
+    return Semantics(
+      label: widget.label,
+      image: true,
+      child: child,
+    );
+  }
+
+  Widget _buildFallbackIcon() {
+    return Icon(
+      widget.fallbackIcon,
+      size: CsergyAssets.navigationIconSize,
+      color: widget.color,
+      semanticLabel: widget.label,
+    );
+  }
+}
 class DeviceListPage extends StatefulWidget {
   const DeviceListPage({super.key});
 
@@ -941,7 +1059,7 @@ class _DeviceListPageState extends State<DeviceListPage> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColor.surface(context),
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(50.h),
         child: AppBar(
@@ -952,8 +1070,8 @@ class _DeviceListPageState extends State<DeviceListPage> {
           centerTitle: true,
           elevation: 0,
           scrolledUnderElevation: 0.5,
-          backgroundColor: Colors.white,
-          foregroundColor: AppColors.textPrimary,
+          backgroundColor: AppColor.surfaceContainer(context),
+          foregroundColor: AppColor.textPrimary(context),
           actions: [
             if (_sortMode)
               TextButton(
@@ -987,38 +1105,17 @@ class _DeviceListPageState extends State<DeviceListPage> {
           final ds = _cachedList;
 
           if (state is DeviceError && ds == null) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: EdgeInsets.all(20.w),
-                    decoration: BoxDecoration(
-                      color: AppColors.error.withValues(alpha: 0.08),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.error_outline_rounded,
-                      size: 40.sp,
-                      color: AppColors.error,
-                    ),
-                  ),
-                  SizedBox(height: 12.h),
-                  Text(
-                    l10n.translateError(state.message),
-                    style: TextStyle(
-                      fontSize: 14.sp,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  SizedBox(height: 16.h),
-                  OutlinedButton(
-                    onPressed: () => context
-                        .read<DeviceBloc>()
-                        .add(const DeviceListRequested()),
-                    child: Text(l10n.retry),
-                  ),
-                ],
+            // 小烁展示设备插画：加载失败/断网态（美术路由 C3/offline）
+            return XiaoshuoStatePanel(
+              asset: CsergyAssets.xiaoshuoDevice,
+              title: l10n.translateError(state.message),
+              message: l10n.loadFailed,
+              size: 176,
+              action: OutlinedButton(
+                onPressed: () => context
+                    .read<DeviceBloc>()
+                    .add(const DeviceListRequested()),
+                child: Text(l10n.retry),
               ),
             );
           }

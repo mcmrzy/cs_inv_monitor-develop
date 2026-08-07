@@ -6,7 +6,9 @@ import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/services/firmware_download_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
+import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 import 'package:inv_app/features/ota/presentation/bloc/ota_bloc.dart';
 import 'package:inv_app/features/ota/presentation/pages/firmware_list_page.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
@@ -174,37 +176,23 @@ class _OTAPageState extends State<OTAPage> {
             return _buildUpToDate(_cachedState as OTAUpToDate);
           }
           if (state is OTAError) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.error_outline_rounded,
-                    size: 48.sp,
-                    color: AppColors.error,
-                  ),
-                  SizedBox(height: 12.h),
-                  Text(
-                    AppLocalizations.of(context)!.translateError(state.message),
-                    style: TextStyle(
-                      fontSize: 14.sp,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  SizedBox(height: 20.h),
-                  ElevatedButton(
-                    onPressed: () {
-                      context
-                          .read<OtaBloc>()
-                          .add(OTACheckRequested(sn: widget.deviceSN));
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                    ),
-                    child: Text(l10n.retry),
-                  ),
-                ],
+            // 小烁警告动作插画：升级查询失败/离线态（美术路由 C6/ota-failure）
+            return XiaoshuoStatePanel(
+              asset: CsergyAssets.xiaoshuoWarning,
+              title: AppLocalizations.of(context)!.translateError(state.message),
+              message: l10n.loadFailed,
+              size: 176,
+              action: ElevatedButton(
+                onPressed: () {
+                  context
+                      .read<OtaBloc>()
+                      .add(OTACheckRequested(sn: widget.deviceSN));
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                ),
+                child: Text(l10n.retry),
               ),
             );
           }
@@ -1395,41 +1383,25 @@ class _OTAPageState extends State<OTAPage> {
 
   Widget _buildComplete() {
     final l10n = AppLocalizations.of(context)!;
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.check_circle_rounded,
-            size: 64.sp,
-            color: AppColors.successLight,
+    // 小烁成功动作插画：升级完成态（美术路由 C5/ota-success）
+    return XiaoshuoStatePanel(
+      asset: CsergyAssets.xiaoshuoSuccess,
+      title: l10n.upgradeComplete,
+      size: 184,
+      action: ElevatedButton(
+        onPressed: () {
+          context
+              .read<OtaBloc>()
+              .add(OTACheckRequested(sn: widget.deviceSN));
+        },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12.r),
           ),
-          SizedBox(height: 16.h),
-          Text(
-            l10n.upgradeComplete,
-            style: TextStyle(
-              fontSize: 18.sp,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          SizedBox(height: 24.h),
-          ElevatedButton(
-            onPressed: () {
-              context
-                  .read<OtaBloc>()
-                  .add(OTACheckRequested(sn: widget.deviceSN));
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12.r),
-              ),
-            ),
-            child: Text(l10n.back),
-          ),
-        ],
+        ),
+        child: Text(l10n.back),
       ),
     );
   }

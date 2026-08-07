@@ -3,11 +3,13 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/entities/device_model_field.dart';
 import 'package:inv_app/core/utils/api_response.dart';
 import 'package:inv_app/core/utils/energy_schedule.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
+import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 
 import 'package:inv_app/l10n/app_localizations.dart';
 
@@ -118,8 +120,8 @@ class _DeviceControlPageState extends State<DeviceControlPage>
     }
 
     try {
-      final capsRes =
-          await dio.get('/devices/by-sn/${widget.deviceSN}/control-capabilities');
+      final capsRes = await dio
+          .get('/devices/by-sn/${widget.deviceSN}/control-capabilities');
       final capsData = unwrapApiResponse<List<dynamic>>(
         capsRes.data,
         validate: (data) => data is List,
@@ -190,7 +192,8 @@ class _DeviceControlPageState extends State<DeviceControlPage>
     final dio = getIt<Dio>();
     var success = true;
     try {
-      final res = await dio.get('/devices/by-sn/${widget.deviceSN}/energy-schedule');
+      final res =
+          await dio.get('/devices/by-sn/${widget.deviceSN}/energy-schedule');
       final data = unwrapApiResponse<Map<String, dynamic>>(
         res.data,
         validate: isEnergySchedulePayload,
@@ -233,7 +236,8 @@ class _DeviceControlPageState extends State<DeviceControlPage>
   Future<bool> _fetchControlState() async {
     final dio = getIt<Dio>();
     try {
-      final res = await dio.get('/devices/by-sn/${widget.deviceSN}/control-state');
+      final res =
+          await dio.get('/devices/by-sn/${widget.deviceSN}/control-state');
       final data = unwrapApiResponse<Map<String, dynamic>>(
         res.data,
         validate: (value) => value is Map<String, dynamic>,
@@ -529,58 +533,70 @@ class _DeviceControlPageState extends State<DeviceControlPage>
       ),
       body: _loading
           ? const SkeletonDeviceControl()
-          : Column(
-              children: [
-                if (_failedSectionCount > 0)
-                  Material(
-                    color: _failedSectionCount == 5
-                        ? AppColors.error.withValues(alpha: 0.1)
-                        : AppColors.warning.withValues(alpha: 0.12),
-                    child: Padding(
-                      padding:
-                          EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
-                      child: Row(
+          : _failedSectionCount == 5
+              // 小烁警示动作插画：控制页全部数据加载失败（美术路由 C5/failure）
+              ? XiaoshuoStatePanel(
+                  asset: CsergyAssets.xiaoshuoWarning,
+                  title: l10n.str('control_load_failed'),
+                  message: l10n.loadFailed,
+                  size: 184,
+                  action: OutlinedButton(
+                    onPressed: _fetchAllData,
+                    child: Text(l10n.retry),
+                  ),
+                )
+              : Column(
+                  children: [
+                    if (_failedSectionCount > 0)
+                      Material(
+                        color: _failedSectionCount == 5
+                            ? AppColors.error.withValues(alpha: 0.1)
+                            : AppColors.warning.withValues(alpha: 0.12),
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                              horizontal: 16.w, vertical: 8.h),
+                          child: Row(
+                            children: [
+                              Icon(
+                                _failedSectionCount == 5
+                                    ? Icons.error_outline
+                                    : Icons.warning_amber_rounded,
+                                color: _failedSectionCount == 5
+                                    ? AppColors.error
+                                    : AppColors.warning,
+                              ),
+                              SizedBox(width: 8.w),
+                              Expanded(
+                                child: Text(
+                                  _failedSectionCount == 5
+                                      ? l10n.str('control_load_failed')
+                                      : l10n.str('control_partial_failed', {
+                                          'count': '$_failedSectionCount',
+                                        }),
+                                  style: TextStyle(fontSize: 13.sp),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: _fetchAllData,
+                                child: Text(l10n.retry),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    Expanded(
+                      child: TabBarView(
+                        controller: _tabController,
                         children: [
-                          Icon(
-                            _failedSectionCount == 5
-                                ? Icons.error_outline
-                                : Icons.warning_amber_rounded,
-                            color: _failedSectionCount == 5
-                                ? AppColors.error
-                                : AppColors.warning,
-                          ),
-                          SizedBox(width: 8.w),
-                          Expanded(
-                            child: Text(
-                              _failedSectionCount == 5
-                                  ? l10n.str('control_load_failed')
-                                  : l10n.str('control_partial_failed', {
-                                      'count': '$_failedSectionCount',
-                                    }),
-                              style: TextStyle(fontSize: 13.sp),
-                            ),
-                          ),
-                          TextButton(
-                            onPressed: _fetchAllData,
-                            child: Text(l10n.retry),
-                          ),
+                          _buildRunningTab(),
+                          _buildBatteryProtectionTab(),
+                          _buildEnergyScheduleTab(),
+                          _buildDeviceInfoTab(),
                         ],
                       ),
                     ),
-                  ),
-                Expanded(
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _buildRunningTab(),
-                      _buildBatteryProtectionTab(),
-                      _buildEnergyScheduleTab(),
-                      _buildDeviceInfoTab(),
-                    ],
-                  ),
+                  ],
                 ),
-              ],
-            ),
     );
   }
 
@@ -1219,7 +1235,8 @@ class _DeviceControlPageState extends State<DeviceControlPage>
                       decoration: BoxDecoration(
                         color: isSelected
                             ? color.withValues(alpha: 0.1)
-                            : AppColor.surfaceHover(context).withValues(alpha: 0.5),
+                            : AppColor.surfaceHover(context)
+                                .withValues(alpha: 0.5),
                         borderRadius: BorderRadius.circular(10.r),
                         border: Border.all(
                           color: isSelected ? color : Colors.transparent,

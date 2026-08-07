@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/theme/csergy_assets.dart';
+import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 // 搜索栏组件
@@ -461,7 +463,13 @@ class _DeviceListViewState extends State<DeviceListView> {
         ),
         Expanded(
           child: filtered.isEmpty
-              ? Center(child: Text(widget.emptyText ?? AppLocalizations.of(context)!.noDevices, style: TextStyle(fontSize: 14.sp, color: AppColors.textHint)))
+              // 空设备插画：无设备引导态（美术路由 empty-devices）
+              ? XiaoshuoStatePanel(
+                  asset: CsergyAssets.emptyDevice,
+                  title: widget.emptyText ??
+                      AppLocalizations.of(context)!.noDevices,
+                  size: 168,
+                )
               : widget.sortMode
                   ? ReorderableListView.builder(
                       physics: const BouncingScrollPhysics(),
