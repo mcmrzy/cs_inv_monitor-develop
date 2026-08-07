@@ -4,6 +4,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/config/app_config.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
@@ -128,10 +129,10 @@ class _ProfilePageState extends State<ProfilePage> {
                     : null,
               ),
               child: avatarUrl == null
-                  ? Icon(
-                      Icons.person_rounded,
-                      size: 28.sp,
-                      color: AppColors.primary,
+                  // 默认头像插画：未设置头像时的品牌兜底（美术路由 avatar-default）
+                  ? Image.asset(
+                      CsergyAssets.avatarDefault,
+                      fit: BoxFit.cover,
                     )
                   : null,
             ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:inv_app/core/theme/app_theme.dart';
 
 class StatusIndicator extends StatefulWidget {
   final int status;
@@ -61,11 +62,11 @@ class _StatusIndicatorState extends State<StatusIndicator>
   Color _getStatusColor(int status) {
     switch (status) {
       case 1:
-        return const Color(0xFF4CAF50);
+        return AppColors.online;
       case 2:
-        return const Color(0xFFF44336);
+        return AppColors.fault;
       default:
-        return const Color(0xFF9E9E9E);
+        return AppColors.offline;
     }
   }
 

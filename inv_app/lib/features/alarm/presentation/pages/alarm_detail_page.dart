@@ -4,7 +4,9 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/data/alarm_code_mapping.dart';
 import 'package:inv_app/core/services/contact_service.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
+import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 import 'package:inv_app/features/alarm/presentation/bloc/alarm_bloc.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
@@ -93,7 +95,12 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
           if (_cachedState is AlarmDetailLoaded) {
             final alarm = (_cachedState as AlarmDetailLoaded).alarm;
             if (alarm == null) {
-              return Center(child: Text(l10n.alarmNotFound));
+              // 小烁提醒动作插画：告警不存在空态（美术路由 C3/reminder）
+              return XiaoshuoStatePanel(
+                asset: CsergyAssets.xiaoshuoReminder,
+                title: l10n.alarmNotFound,
+                size: 168,
+              );
             }
 
             final faultCode = _parseFaultCode(alarm['fault_code']);
@@ -115,7 +122,19 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
           }
 
           if (state is AlarmError) {
-            return Center(child: Text(l10n.translateError(state.message)));
+            // 小烁离线动作插画：告警详情加载失败（美术路由 C4/offline）
+            return XiaoshuoStatePanel(
+              asset: CsergyAssets.xiaoshuoOffline,
+              title: l10n.translateError(state.message),
+              message: l10n.loadFailed,
+              size: 176,
+              action: OutlinedButton(
+                onPressed: () => context
+                    .read<AlarmBloc>()
+                    .add(AlarmDetailRequested(alarmId: widget.alarmId)),
+                child: Text(l10n.retry),
+              ),
+            );
           }
 
           return _buildSkeletonBody();
@@ -692,7 +711,8 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
 
                       await Future.microtask(() {});
                       if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar( // ignore: use_build_context_synchronously
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        // ignore: use_build_context_synchronously
                         SnackBar(
                           content: Row(
                             children: [
@@ -722,13 +742,14 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
                     } catch (e) {
                       await Future.microtask(() {});
                       if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar( // ignore: use_build_context_synchronously
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        // ignore: use_build_context_synchronously
                         SnackBar(
                           content: Text(l10n.translateError(e.toString())),
                           backgroundColor: AppColors.error,
-                          ),
-                        );
-                      }
+                        ),
+                      );
+                    }
                   },
             icon: isLoading
                 ? SizedBox(
@@ -800,7 +821,8 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
       padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 16.h),
       decoration: BoxDecoration(
         color: AppColor.surfaceContainer(context),
-        border: Border(top: BorderSide(color: AppColor.border(context), width: 1)),
+        border:
+            Border(top: BorderSide(color: AppColor.border(context), width: 1)),
       ),
       child: SafeArea(
         top: false,

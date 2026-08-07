@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
@@ -88,7 +89,18 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: BlocConsumer<AuthBloc, AuthState>(
+      body: Stack(
+        children: [
+          // 认证背景图（品牌蓝抽象场景，铺满）
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Image.asset(
+                CsergyAssets.bgAuth,
+                fit: BoxFit.cover,
+              ),
+            ),
+          ),
+          BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {
           if (state is AuthError) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -146,6 +158,8 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
           );
         },
       ),
+        ],
+      ),
     );
   }
 
@@ -153,12 +167,14 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
     final l10n = AppLocalizations.of(context)!;
     return Column(
       children: [
-        Icon(
-          Icons.lock_reset,
-          size: 64.sp,
-          color: AppColors.primary,
+        // 吉祥物小烁提醒动作（透明底 WebP）
+        Image.asset(
+          CsergyAssets.xiaoshuoReminder,
+          width: 108.w,
+          height: 108.w,
+          fit: BoxFit.contain,
         ),
-        SizedBox(height: 16.h),
+        SizedBox(height: 8.h),
         Text(
           l10n.forgotPassword,
           style: TextStyle(

@@ -10,6 +10,7 @@ import 'package:inv_app/core/services/local_firmware_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/wifi_scan_service.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -1125,6 +1126,17 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // 小烁 OTA 引导插画（横版）：设备连接步骤引导（美术路由 C7/guide-ota）
+        ClipRRect(
+          borderRadius: BorderRadius.circular(14.r),
+          child: Image.asset(
+            CsergyAssets.xiaoshuoOtaGuide,
+            width: double.infinity,
+            height: 150.h,
+            fit: BoxFit.cover,
+          ),
+        ),
+        SizedBox(height: 16.h),
         _buildDeviceInfoCard(),
         SizedBox(height: 16.h),
         Center(
@@ -1465,10 +1477,12 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
           child: Column(
             children: [
               if (_result == LocalOTAResult.success) ...[
-                Icon(
-                  Icons.check_circle_rounded,
-                  size: 64.sp,
-                  color: AppColors.successLight,
+                // 小烁成功动作插画：本地 OTA 升级成功（美术路由 C2/success）
+                Image.asset(
+                  CsergyAssets.xiaoshuoSuccess,
+                  width: 108.w,
+                  height: 108.w,
+                  fit: BoxFit.contain,
                 ),
                 SizedBox(height: 16.h),
                 Text(
@@ -1514,7 +1528,13 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                 ),
               ],
               if (_result == LocalOTAResult.failed) ...[
-                Icon(Icons.cancel_rounded, size: 64.sp, color: AppColors.error),
+                // 小烁警示动作插画：本地 OTA 升级失败（美术路由 C5/failure）
+                Image.asset(
+                  CsergyAssets.xiaoshuoWarning,
+                  width: 108.w,
+                  height: 108.w,
+                  fit: BoxFit.contain,
+                ),
                 SizedBox(height: 16.h),
                 Text(
                   l10n.upgradeFailed,

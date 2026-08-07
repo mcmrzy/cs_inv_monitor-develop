@@ -104,7 +104,7 @@ class _DataCard extends StatelessWidget {
           border: Border.all(
             color: isSelected
                 ? AppColors.primary.withValues(alpha: 0.3)
-                : AppColors.divider,
+                : AppColor.outline(context),
             width: 1,
           ),
         ),
@@ -117,7 +117,9 @@ class _DataCard extends StatelessWidget {
               style: TextStyle(
                 fontSize: 11.sp,
                 fontWeight: FontWeight.w500,
-                color: isSelected ? AppColors.primary : AppColors.textSecondary,
+                color: isSelected
+                    ? AppColors.primary
+                    : AppColor.textSecondary(context),
               ),
             ),
             Column(
@@ -128,15 +130,18 @@ class _DataCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 20.sp,
                     fontWeight: FontWeight.w800,
-                    color:
-                        isSelected ? AppColors.primary : AppColors.textPrimary,
+                    color: isSelected
+                        ? AppColors.primary
+                        : AppColor.textPrimary(context),
                   ),
                 ),
                 Text(
                   unit,
                   style: TextStyle(
                     fontSize: 10.sp,
-                    color: isSelected ? AppColors.primary : AppColors.textHint,
+                    color: isSelected
+                        ? AppColors.primary
+                        : AppColor.textHint(context),
                   ),
                 ),
               ],

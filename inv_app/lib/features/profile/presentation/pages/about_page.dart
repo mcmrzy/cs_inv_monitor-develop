@@ -6,6 +6,8 @@ import 'package:inv_app/core/config/app_config.dart';
 import 'package:inv_app/core/services/app_update_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/theme/csergy_assets.dart';
+import 'package:inv_app/core/widgets/csergy_product_card.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -153,10 +155,12 @@ class _AboutPageState extends State<AboutPage> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.check_circle_outline,
-              size: 48.sp,
-              color: AppColors.success,
+            // 小烁成功动作插画：已是最新版本（美术路由 C2/success）
+            Image.asset(
+              CsergyAssets.xiaoshuoSuccess,
+              width: 72.w,
+              height: 72.w,
+              fit: BoxFit.contain,
             ),
             SizedBox(height: 12.h),
             Text(
@@ -411,18 +415,13 @@ class _AboutPageState extends State<AboutPage> {
       body: ListView(
         children: [
           const SizedBox(height: 40),
-          Container(
-            width: 80.w,
-            height: 80.w,
-            margin: EdgeInsets.symmetric(
-              horizontal: (MediaQuery.of(context).size.width - 80.w) / 2,
+          // 逆变器产品卡：关于页品牌产品展示（美术路由 P2/inverter-card）
+          Center(
+            child: CsergyProductCard(
+              asset: CsergyAssets.inverterCard,
+              name: l10n.brandName,
+              size: 96,
             ),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withAlpha(25),
-              borderRadius: BorderRadius.circular(20.r),
-            ),
-            child:
-                Icon(Icons.solar_power, size: 44.sp, color: AppColors.primary),
           ),
           SizedBox(height: 16.h),
           Center(
@@ -435,14 +434,16 @@ class _AboutPageState extends State<AboutPage> {
           Center(
             child: Text(
               '${l10n.appVersion}: ${AppConfig.version}',
-              style: TextStyle(fontSize: 14, color: AppColor.onSurfaceVariant(context)),
+              style: TextStyle(
+                  fontSize: 14, color: AppColor.onSurfaceVariant(context)),
             ),
           ),
           SizedBox(height: 8.h),
           Center(
             child: Text(
               l10n.brandName,
-              style: TextStyle(fontSize: 13, color: AppColor.onSurfaceVariant(context)),
+              style: TextStyle(
+                  fontSize: 13, color: AppColor.onSurfaceVariant(context)),
             ),
           ),
           SizedBox(height: 40.h),
