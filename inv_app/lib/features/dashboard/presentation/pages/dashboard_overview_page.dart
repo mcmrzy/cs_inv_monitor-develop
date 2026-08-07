@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
+import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 import 'package:inv_app/features/dashboard/presentation/bloc/dashboard_bloc.dart';
 import 'package:inv_app/features/dashboard/presentation/widgets/hero_energy_card.dart';
 import 'package:inv_app/features/dashboard/presentation/widgets/quick_stats_row.dart';
@@ -42,8 +44,8 @@ class _DashboardOverviewPageState extends State<DashboardOverviewPage> {
           centerTitle: true,
           elevation: 0,
           scrolledUnderElevation: 0.5,
-          backgroundColor: Colors.white,
-          foregroundColor: AppColors.textPrimary,
+          backgroundColor: AppColor.surfaceContainer(context),
+          foregroundColor: AppColor.textPrimary(context),
         ),
       ),
       body: BlocConsumer<DashboardBloc, DashboardState>(
@@ -215,34 +217,19 @@ class _DashboardOverviewPageState extends State<DashboardOverviewPage> {
 
   Widget _buildError(BuildContext context, String message) {
     final l10n = AppLocalizations.of(context)!;
-    return Center(
-      child: Padding(
-        padding: EdgeInsets.all(40.w),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.cloud_off_rounded,
-              size: 44.sp,
-              color: AppColors.textHint,
-            ),
-            SizedBox(height: 12.h),
-            Text(
-              l10n.translateError(message),
-              style: TextStyle(fontSize: 13.sp, color: AppColors.textSecondary),
-              textAlign: TextAlign.center,
-            ),
-            SizedBox(height: 16.h),
-            OutlinedButton(
-              onPressed: () {
-                context
-                    .read<DashboardBloc>()
-                    .add(const DashboardLoadRequested());
-              },
-              child: Text(l10n.retry),
-            ),
-          ],
-        ),
+    // 小烁离线动作插画：加载失败/断网态（美术路由 C4/offline）
+    return XiaoshuoStatePanel(
+      asset: CsergyAssets.xiaoshuoOffline,
+      title: l10n.translateError(message),
+      message: l10n.loadFailed,
+      size: 176,
+      action: OutlinedButton(
+        onPressed: () {
+          context
+              .read<DashboardBloc>()
+              .add(const DashboardLoadRequested());
+        },
+        child: Text(l10n.retry),
       ),
     );
   }

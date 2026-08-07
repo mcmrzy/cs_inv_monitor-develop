@@ -198,7 +198,7 @@ class _CreateStationPageState extends State<CreateStationPage> {
         elevation: 0,
         scrolledUnderElevation: 0.5,
         backgroundColor: AppColor.surfaceContainer(context),
-        foregroundColor: AppColors.textPrimary,
+        foregroundColor: AppColor.textPrimary(context),
       ),
       body: BlocConsumer<StationBloc, StationState>(
         listener: (context, state) {

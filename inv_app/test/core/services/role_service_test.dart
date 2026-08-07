@@ -7,9 +7,9 @@ void main() {
       expect(RoleService.permDevicesView, 'devices:view');
       expect(RoleService.permDevicesManage, 'devices:manage');
       expect(RoleService.permDeviceControl, 'device_control:basic');
-      expect(RoleService.permOtaManage, 'ota:manage');
-      expect(RoleService.permStatisticsView, 'statistics:view');
-      expect(RoleService.permAlarmsView, 'alarms:view');
+      expect(RoleService.permOtaView, 'ota:view');
+      expect(RoleService.permStatisticsView, 'dashboard:view');
+      expect(RoleService.permAlarmsView, 'alerts:view');
       expect(RoleService.permAdminManage, 'admin:manage');
     });
   });
@@ -68,13 +68,13 @@ void main() {
   });
 
   group('RoleService convenience methods', () {
-    test('hasOtaAccess checks ota:manage or devices:manage', () {
+    test('hasOtaAccess checks ota:view or devices:manage', () {
       expect(
         RoleService.hasOtaAccess(true, []),
         isTrue,
       );
       expect(
-        RoleService.hasOtaAccess(false, ['ota:manage']),
+        RoleService.hasOtaAccess(false, ['ota:view']),
         isTrue,
       );
       expect(
@@ -87,13 +87,13 @@ void main() {
       );
     });
 
-    test('hasStatisticsAccess checks statistics:view', () {
+    test('hasStatisticsAccess checks dashboard:view', () {
       expect(
         RoleService.hasStatisticsAccess(true, []),
         isTrue,
       );
       expect(
-        RoleService.hasStatisticsAccess(false, ['statistics:view']),
+        RoleService.hasStatisticsAccess(false, ['dashboard:view']),
         isTrue,
       );
       expect(
@@ -151,6 +151,25 @@ void main() {
       );
       expect(items[0].label, '首页');
       expect(items[4].label, '我的');
+    });
+
+    test('filters nav items by permission grants', () {
+      final items = RoleService.getNavItems(
+        false,
+        permissions: ['devices:view', 'alerts:view'],
+      );
+      expect(items.map((e) => e.path).toList(), [
+        '/home',
+        '/devices',
+        '/alarms',
+        '/profile',
+      ]);
+    });
+
+    test('system admin always sees all nav items', () {
+      final items = RoleService.getNavItems(true, permissions: []);
+      expect(items.length, 5);
+      expect(items[1].path, '/statistics');
     });
   });
 }

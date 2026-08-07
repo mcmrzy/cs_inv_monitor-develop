@@ -11,6 +11,7 @@ import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/widgets/wifi_switch_dialog.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 enum _ProvisionMode { softap, ble }
@@ -866,6 +867,17 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         ]),
         SizedBox(height: 24.h),
         if (isStep0) ...[
+          // 小烁配网引导插画：连接设备热点前的流程引导（美术路由 C7/guide-wifi）
+          ClipRRect(
+            borderRadius: BorderRadius.circular(14.r),
+            child: Image.asset(
+              CsergyAssets.xiaoshuoWifiGuide,
+              width: double.infinity,
+              height: 150.h,
+              fit: BoxFit.cover,
+            ),
+          ),
+          SizedBox(height: 16.h),
           SizedBox(
             width: double.infinity,
             height: 46.h,
@@ -1317,6 +1329,20 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
           ),
         ]),
         SizedBox(height: 24.h),
+
+        // 小烁配网引导插画：BLE 扫描阶段流程引导（美术路由 C7/guide-wifi）
+        if (showScanPhase) ...[
+          ClipRRect(
+            borderRadius: BorderRadius.circular(14.r),
+            child: Image.asset(
+              CsergyAssets.xiaoshuoWifiGuide,
+              width: double.infinity,
+              height: 150.h,
+              fit: BoxFit.cover,
+            ),
+          ),
+          SizedBox(height: 16.h),
+        ],
 
         // 配网成功显示
         if (showSuccessPhase) ...[

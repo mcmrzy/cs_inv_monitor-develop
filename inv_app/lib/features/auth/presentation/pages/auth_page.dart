@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:inv_app/features/auth/presentation/widgets/login_form.dart';
 import 'package:inv_app/features/auth/presentation/widgets/register_form.dart';
@@ -66,7 +67,7 @@ class _AuthPageState extends State<AuthPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColor.surface(context),
       body: BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {
           if (state is AuthError) {
@@ -97,7 +98,7 @@ class _AuthPageState extends State<AuthPage>
                     margin: const EdgeInsets.fromLTRB(24, 0, 24, 0),
                     padding: EdgeInsets.fromLTRB(24.w, 32.h, 24.w, 8.h),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: AppColor.surfaceContainer(context),
                       borderRadius: BorderRadius.circular(20.r),
                       boxShadow: [
                         BoxShadow(
@@ -166,6 +167,15 @@ class _AuthPageState extends State<AuthPage>
         bottom: false,
         child: Stack(
           children: [
+            // 认证背景图（品牌蓝抽象场景，铺满不裁切）
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Image.asset(
+                  CsergyAssets.bgAuth,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
             // 装饰：右上大圆环（缓慢呼吸：缩放 + 透明度脉动）
             Positioned(
               right: -70.w,
@@ -266,6 +276,26 @@ class _AuthPageState extends State<AuthPage>
                     ),
                   ),
                 ],
+              ),
+            ),
+            // 吉祥物小烁：登录模式浮于右上角（顶部小全身，注册模式收缩后隐藏）
+            Positioned(
+              right: 6.w,
+              top: 6.h,
+              child: AnimatedOpacity(
+                opacity: isRegister ? 0 : 1,
+                duration: const Duration(milliseconds: 250),
+                child: Visibility(
+                  visible: !isRegister,
+                  maintainState: true,
+                  maintainAnimation: true,
+                  child: Image.asset(
+                    CsergyAssets.xiaoshuoWelcome,
+                    width: 92.w,
+                    height: 92.w,
+                    fit: BoxFit.contain,
+                  ),
+                ),
               ),
             ),
             // 卖点胶囊：沉到品牌头底部，与上方文字拉开距离（注册模式隐藏）

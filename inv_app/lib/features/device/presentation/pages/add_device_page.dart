@@ -8,9 +8,11 @@ import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
-import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart' hide DeviceBindRequested, DeviceBindSuccess;
+import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart'
+    hide DeviceBindRequested, DeviceBindSuccess;
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/utils/sn_utils.dart';
 import 'package:inv_app/core/utils/api_response.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
@@ -700,6 +702,17 @@ class _AddDevicePageState extends State<AddDevicePage>
     return ListView(
       padding: EdgeInsets.all(20.w),
       children: [
+        // 小烁配网引导插画：手动绑定后引导设备配网（美术路由 C7/guide-wifi）
+        ClipRRect(
+          borderRadius: BorderRadius.circular(14.r),
+          child: Image.asset(
+            CsergyAssets.xiaoshuoWifiGuide,
+            width: double.infinity,
+            height: 150.h,
+            fit: BoxFit.cover,
+          ),
+        ),
+        SizedBox(height: 16.h),
         Text(
           AppLocalizations.of(context)!.manualInputSn,
           style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600),
