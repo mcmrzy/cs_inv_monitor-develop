@@ -63,8 +63,8 @@ func (p *AliyunSMSProvider) Send(ctx context.Context, phone, code string) error 
 		PhoneNumber:  tea.String(phone),
 		SignName:     tea.String(p.signName),
 		TemplateCode: tea.String(p.template),
-		// {"code":"##code##"} 让系统自动生成验证码
-		TemplateParam: tea.String(`{"code":"##code##"}`),
+		// {"code":"##code##"} 让系统自动生成验证码；min 对应模板 ${min} 分钟变量（与 ValidTime 一致）
+		TemplateParam: tea.String(`{"code":"##code##","min":"5"}`),
 		CodeType:      tea.Int64(1), // 纯数字验证码
 		CodeLength:    tea.Int64(6), // 6位验证码
 		ValidTime:     tea.Int64(300), // 5分钟有效

@@ -9,6 +9,8 @@ import 'package:inv_app/core/services/mdns_discovery_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/theme/csergy_assets.dart';
+import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 class LocalModePage extends StatefulWidget {
@@ -353,27 +355,12 @@ class _LocalModePageState extends State<LocalModePage> {
 
   Widget _buildDeviceList() {
     if (_apDevices.isEmpty && _mdnsDevices.isEmpty && !_isScanning) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.wifi_off_rounded,
-              size: 56.sp,
-              color: AppColors.textHint,
-            ),
-            SizedBox(height: 12.h),
-            Text(
-              AppLocalizations.of(context)!.noDeviceFound,
-              style: TextStyle(fontSize: 15.sp, color: AppColors.textHint),
-            ),
-            SizedBox(height: 4.h),
-            Text(
-              AppLocalizations.of(context)!.ensureDeviceApMode,
-              style: TextStyle(fontSize: 12.sp, color: AppColors.textHint),
-            ),
-          ],
-        ),
+      // 小烁提醒动作插画：本地模式未发现设备空态（美术路由 C3/reminder）
+      return XiaoshuoStatePanel(
+        asset: CsergyAssets.xiaoshuoReminder,
+        title: AppLocalizations.of(context)!.noDeviceFound,
+        message: AppLocalizations.of(context)!.ensureDeviceApMode,
+        size: 176,
       );
     }
 
@@ -605,9 +592,7 @@ class _LocalModePageState extends State<LocalModePage> {
           margin: EdgeInsets.only(right: 1.w),
           decoration: BoxDecoration(
             color: active
-                ? (level >= 3
-                    ? AppColors.successLight
-                    : AppColors.orange)
+                ? (level >= 3 ? AppColors.successLight : AppColors.orange)
                 : AppColor.border(context),
             borderRadius: BorderRadius.circular(1.r),
           ),

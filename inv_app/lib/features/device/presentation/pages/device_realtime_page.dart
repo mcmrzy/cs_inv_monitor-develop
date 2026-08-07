@@ -5,6 +5,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/theme/csergy_assets.dart';
+import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/realtime_data_service.dart';
 import 'package:inv_app/core/services/connection_mode_service.dart';
@@ -718,28 +720,21 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
 
   Widget _buildError() {
     final l10n = AppLocalizations.of(context)!;
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.cloud_off_rounded, size: 44.sp, color: AppColors.textHint),
-          SizedBox(height: 12.h),
-          Text(
-            _error!,
-            style: TextStyle(fontSize: 13.sp, color: AppColors.textSecondary),
-          ),
-          SizedBox(height: 16.h),
-          OutlinedButton(
-            onPressed: () {
-              setState(() {
-                _loading = true;
-                _error = null;
-              });
-              _fetchDeviceDetail();
-            },
-            child: Text(l10n.retry),
-          ),
-        ],
+    // 小烁离线动作插画：设备详情加载失败/断网态（美术路由 C4/offline）
+    return XiaoshuoStatePanel(
+      asset: CsergyAssets.xiaoshuoOffline,
+      title: _error!,
+      message: l10n.loadFailed,
+      size: 176,
+      action: OutlinedButton(
+        onPressed: () {
+          setState(() {
+            _loading = true;
+            _error = null;
+          });
+          _fetchDeviceDetail();
+        },
+        child: Text(l10n.retry),
       ),
     );
   }

@@ -88,6 +88,9 @@ inv_app/android/.gradle/
 inv_app/android/app/build/
 inv_app/doc/
 
+# CSERGY reference 素材（仅设计核对，禁止进入发布包与仓库）
+inv_app/assets/reference/
+
 # AI/IDE tools
 .claude/
 .qoder/*

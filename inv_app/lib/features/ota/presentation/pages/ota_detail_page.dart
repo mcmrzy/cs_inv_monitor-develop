@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/features/ota/presentation/bloc/ota_bloc.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
@@ -396,12 +397,14 @@ class _OTADetailPageState extends State<OTADetailPage> {
       ),
       child: Column(
         children: [
-          Icon(
-            Icons.check_circle_rounded,
-            size: 64.sp,
-            color: AppColors.successLight,
+          // 小烁成功动作插画：升级完成态（美术路由 C5/ota-success）
+          Image.asset(
+            CsergyAssets.xiaoshuoSuccess,
+            width: 108.w,
+            height: 108.w,
+            fit: BoxFit.contain,
           ),
-          SizedBox(height: 16.h),
+          SizedBox(height: 12.h),
           Text(
             l10n.upgradeCompleted,
             style: TextStyle(
@@ -456,8 +459,14 @@ class _OTADetailPageState extends State<OTADetailPage> {
       ),
       child: Column(
         children: [
-          Icon(Icons.error_rounded, size: 64.sp, color: AppColors.error),
-          SizedBox(height: 16.h),
+          // 小烁警告动作插画：升级失败态（美术路由 C6/ota-failure）
+          Image.asset(
+            CsergyAssets.xiaoshuoWarning,
+            width: 108.w,
+            height: 108.w,
+            fit: BoxFit.contain,
+          ),
+          SizedBox(height: 12.h),
           Text(
             l10n.upgradeFailedTitle,
             style: TextStyle(

@@ -7,10 +7,12 @@ import 'package:inv_app/core/services/realtime_data_service.dart';
 import 'package:inv_app/core/services/network_status_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
-import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
-import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
-import 'package:inv_app/core/widgets/skeleton_widgets.dart';
+import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/widgets/offline_banner.dart';
+import 'package:inv_app/core/widgets/skeleton_widgets.dart';
+import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
+import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
+import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
 import 'package:inv_app/core/services/data_cache_service.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
@@ -662,71 +664,29 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildEmpty() {
     final l10n = AppLocalizations.of(context)!;
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: 60.h),
-      child: Column(
-        children: [
-          Container(
-            width: 80.w,
-            height: 80.w,
-            decoration: BoxDecoration(
-              color: AppColors.surfaceHover,
-              borderRadius: BorderRadius.circular(20.r),
-            ),
-            child: Icon(
-              Icons.add_home_work_outlined,
-              size: 36.sp,
-              color: AppColors.textHint,
-            ),
-          ),
-          SizedBox(height: 18.h),
-          Text(
-            l10n.noStations,
-            style: TextStyle(
-              fontSize: 16.sp,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textSecondary,
-            ),
-          ),
-          SizedBox(height: 6.h),
-          Text(
-            l10n.tapPlusToCreate,
-            style: TextStyle(fontSize: 13.sp, color: AppColors.textHint),
-          ),
-        ],
-      ),
+    // 小烁展示光伏模型插画：无电站引导态（美术路由 C2/empty-stations）
+    return XiaoshuoStatePanel(
+      asset: CsergyAssets.xiaoshuoStation,
+      title: l10n.noStations,
+      message: l10n.tapPlusToCreate,
+      size: 180,
+      padding: EdgeInsets.symmetric(vertical: 48.h),
     );
   }
 
   Widget _buildError(String msg) {
     final l10n = AppLocalizations.of(context)!;
-    return Center(
-      child: Padding(
-        padding: EdgeInsets.all(32.w),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.cloud_off_rounded,
-              size: 44.sp,
-              color: AppColors.textHint,
-            ),
-            SizedBox(height: 14.h),
-            Text(
-              l10n.translateError(msg),
-              style: TextStyle(fontSize: 13.sp, color: AppColors.textHint),
-              textAlign: TextAlign.center,
-            ),
-            SizedBox(height: 16.h),
-            OutlinedButton(
-              onPressed: () =>
-                  context.read<StationBloc>().add(StationSummaryRequested()),
-              style:
-                  OutlinedButton.styleFrom(foregroundColor: AppColors.primary),
-              child: Text(l10n.retry),
-            ),
-          ],
-        ),
+    // 小烁离线动作插画：加载失败/断网态（美术路由 C4/offline）
+    return XiaoshuoStatePanel(
+      asset: CsergyAssets.xiaoshuoOffline,
+      title: l10n.translateError(msg),
+      message: l10n.loadFailed,
+      size: 176,
+      action: OutlinedButton(
+        onPressed: () =>
+            context.read<StationBloc>().add(StationSummaryRequested()),
+        style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary),
+        child: Text(l10n.retry),
       ),
     );
   }

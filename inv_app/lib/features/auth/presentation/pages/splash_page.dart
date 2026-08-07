@@ -6,6 +6,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/services/jverify_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
+import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
@@ -98,6 +99,15 @@ class _SplashPageState extends State<SplashPage> {
           ),
           child: Stack(
             children: [
+              // 开屏背景图（AI 生成：品牌蓝场景 + 小烁，铺满不裁切主体）
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Image.asset(
+                    CsergyAssets.bgSplash,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
               // 左上太阳放射光线（光伏主题装饰）
               const Positioned.fill(
                 child: IgnorePointer(
@@ -203,34 +213,7 @@ class _SplashPageState extends State<SplashPage> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // 太阳能板图标（白色光晕圆底）
-                        Container(
-                          width: 112.w,
-                          height: 112.w,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.white.withValues(alpha: 0.12),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.3),
-                              width: 1.5,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.white.withValues(alpha: 0.22),
-                                blurRadius: 36,
-                                spreadRadius: 6,
-                              ),
-                            ],
-                          ),
-                          child: Padding(
-                            padding: EdgeInsets.all(22.w),
-                            child: Image.asset(
-                              'assets/images/solar_panel.png',
-                              fit: BoxFit.contain,
-                            ),
-                          ),
-                        ),
-                        SizedBox(height: 26.h),
+                        SizedBox(height: 112.h),
                         // 品牌名文字（随语言切换：辰烁科技 / CSERGY）
                         Text(
                           l10n.brandName,
@@ -248,6 +231,14 @@ class _SplashPageState extends State<SplashPage> {
                             fontSize: 14.sp,
                             color: Colors.white.withValues(alpha: 0.85),
                           ),
+                        ),
+                        // 小烁欢迎挥手（透明底 WebP，浮在背景场景上方）
+                        SizedBox(height: 18.h),
+                        Image.asset(
+                          CsergyAssets.xiaoshuoWelcome,
+                          width: 220.w,
+                          height: 200.w,
+                          fit: BoxFit.contain,
                         ),
                       ],
                     ),

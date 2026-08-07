@@ -4,9 +4,11 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/data/alarm_code_mapping.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
+import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 import 'package:inv_app/core/services/notification_stream_service.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
@@ -127,7 +129,6 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
 
                 if (items.isEmpty) {
                   return _buildEmptyState(
-                    Icons.notifications_none,
                     l10n.noNotifications,
                   );
                 }
@@ -215,21 +216,15 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
 
   // ==================== 通用组件 ====================
 
-  Widget _buildEmptyState(IconData icon, String message) {
+  Widget _buildEmptyState(String message) {
+    // 空告警插画：无通知引导态（美术路由 empty-alarms）
     return ListView(
       children: [
-        SizedBox(height: 120.h),
-        Center(
-          child: Column(
-            children: [
-              Icon(icon, size: 64.sp, color: AppColors.textHint),
-              SizedBox(height: 16.h),
-              Text(
-                message,
-                style: TextStyle(color: AppColors.textHint, fontSize: 16.sp),
-              ),
-            ],
-          ),
+        SizedBox(height: 48.h),
+        XiaoshuoStatePanel(
+          asset: CsergyAssets.emptyAlarm,
+          title: message,
+          size: 176,
         ),
       ],
     );
@@ -240,20 +235,16 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
     VoidCallback onRetry,
     AppLocalizations l10n,
   ) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.error_outline, size: 48.sp, color: AppColors.textHint),
-          SizedBox(height: 12.h),
-          Text(message, style: const TextStyle(color: AppColors.textSecondary)),
-          SizedBox(height: 12.h),
-          FilledButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.refresh),
-            label: Text(l10n.retry),
-          ),
-        ],
+    // 小烁警告动作插画：加载失败态（美术路由 C6/network-error）
+    return XiaoshuoStatePanel(
+      asset: CsergyAssets.xiaoshuoWarning,
+      title: message,
+      message: l10n.loadFailed,
+      size: 176,
+      action: FilledButton.icon(
+        onPressed: onRetry,
+        icon: const Icon(Icons.refresh),
+        label: Text(l10n.retry),
       ),
     );
   }

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/services/jverify_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
@@ -82,29 +83,42 @@ class _JVerifyAuthPageState extends State<JVerifyAuthPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColor.surfaceContainer(context),
-      body: BlocConsumer<AuthBloc, AuthState>(
-        listener: (context, state) {
-          if (state is AuthAuthenticated) {
-            debugPrint('[JVerifyAuthPage] Login success, navigate to /home');
-            context.go('/home');
-          } else if (state is AuthError) {
-            // 后端登录失败：切失败视图
-            if (mounted) {
-              setState(() {
-                _stage = _AuthStage.failed;
-                _failReason =
-                    AppLocalizations.of(context)!.translateError(state.message);
-              });
-            }
-          }
-        },
-        builder: (context, state) {
-          return SafeArea(
-            child: _stage == _AuthStage.launching
-                ? _buildLaunching()
-                : _buildFailed(state),
-          );
-        },
+      body: Stack(
+        children: [
+          // 一键登录背景图（品牌蓝场景，铺满）
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Image.asset(
+                CsergyAssets.bgJverify,
+                fit: BoxFit.cover,
+              ),
+            ),
+          ),
+          BlocConsumer<AuthBloc, AuthState>(
+            listener: (context, state) {
+              if (state is AuthAuthenticated) {
+                debugPrint('[JVerifyAuthPage] Login success, navigate to /home');
+                context.go('/home');
+              } else if (state is AuthError) {
+                // 后端登录失败：切失败视图
+                if (mounted) {
+                  setState(() {
+                    _stage = _AuthStage.failed;
+                    _failReason =
+                        AppLocalizations.of(context)!.translateError(state.message);
+                  });
+                }
+              }
+            },
+            builder: (context, state) {
+              return SafeArea(
+                child: _stage == _AuthStage.launching
+                    ? _buildLaunching()
+                    : _buildFailed(state),
+              );
+            },
+          ),
+        ],
       ),
     );
   }
@@ -116,20 +130,14 @@ class _JVerifyAuthPageState extends State<JVerifyAuthPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            width: 72.w,
-            height: 72.w,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF1565C0), Color(0xFF2196F3)],
-              ),
-              borderRadius: BorderRadius.circular(20.r),
-            ),
-            child: const Icon(Icons.solar_power, size: 36, color: Colors.white),
+          // 吉祥物小烁欢迎（透明底 WebP）
+          Image.asset(
+            CsergyAssets.xiaoshuoWelcome,
+            width: 110.w,
+            height: 110.w,
+            fit: BoxFit.contain,
           ),
-          SizedBox(height: 20.h),
+          SizedBox(height: 16.h),
           Text(
             l10n?.str('brand_name') ?? '辰烁科技',
             style: TextStyle(
@@ -166,8 +174,14 @@ class _JVerifyAuthPageState extends State<JVerifyAuthPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_outline, size: 48.sp, color: AppColors.error),
-            SizedBox(height: 16.h),
+            // 吉祥物小烁警告动作（透明底 WebP）
+            Image.asset(
+              CsergyAssets.xiaoshuoWarning,
+              width: 96.w,
+              height: 96.w,
+              fit: BoxFit.contain,
+            ),
+            SizedBox(height: 12.h),
             Text(
               _failReason,
               textAlign: TextAlign.center,

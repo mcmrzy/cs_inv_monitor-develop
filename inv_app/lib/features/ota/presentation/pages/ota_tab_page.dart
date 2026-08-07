@@ -3,8 +3,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
+import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
@@ -54,38 +56,17 @@ class _OtaTabPageState extends State<OtaTabPage> {
           }
 
           if (state is DeviceError) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: EdgeInsets.all(20.w),
-                    decoration: BoxDecoration(
-                      color: AppColors.error.withAlpha(20),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.error_outline_rounded,
-                      size: 40.sp,
-                      color: AppColors.error,
-                    ),
-                  ),
-                  SizedBox(height: 12.h),
-                  Text(
-                    l10n.translateError(state.message),
-                    style: TextStyle(
-                      fontSize: 14.sp,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  SizedBox(height: 16.h),
-                  OutlinedButton(
-                    onPressed: () => context
-                        .read<DeviceBloc>()
-                        .add(const DeviceListRequested()),
-                    child: Text(l10n.retry),
-                  ),
-                ],
+            // 小烁离线动作插画：设备列表加载失败态（美术路由 C4/offline）
+            return XiaoshuoStatePanel(
+              asset: CsergyAssets.xiaoshuoOffline,
+              title: l10n.translateError(state.message),
+              message: l10n.loadFailed,
+              size: 176,
+              action: OutlinedButton(
+                onPressed: () => context
+                    .read<DeviceBloc>()
+                    .add(const DeviceListRequested()),
+                child: Text(l10n.retry),
               ),
             );
           }
@@ -102,22 +83,11 @@ class _OtaTabPageState extends State<OtaTabPage> {
     AppLocalizations l10n,
   ) {
     if (state.devices.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.system_update_outlined,
-              size: 64.sp,
-              color: AppColors.textHint,
-            ),
-            SizedBox(height: 16.h),
-            Text(
-              l10n.noUpgradableDevices,
-              style: TextStyle(fontSize: 16.sp, color: AppColors.textSecondary),
-            ),
-          ],
-        ),
+      // 空设备插画：无可升级设备引导态（美术路由 empty-devices）
+      return XiaoshuoStatePanel(
+        asset: CsergyAssets.emptyDevice,
+        title: l10n.noUpgradableDevices,
+        size: 176,
       );
     }
     return StyledRefreshIndicator(

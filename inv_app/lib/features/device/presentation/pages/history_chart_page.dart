@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/theme/csergy_assets.dart';
+import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
@@ -275,25 +277,16 @@ class _HistoryChartPageState extends State<HistoryChartPage>
                   return const Center(child: CircularProgressIndicator());
                 }
                 if (state is DeviceError) {
-                  return Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.error_outline,
-                          size: 40.sp,
-                          color: AppColors.error,
-                        ),
-                        SizedBox(height: 8.h),
-                        Text(
-                          AppLocalizations.of(context)!
-                              .translateError(state.message),
-                          style: TextStyle(
-                            fontSize: 14.sp,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
+                  // 小烁离线动作插画：历史数据加载失败（美术路由 C4/offline）
+                  return XiaoshuoStatePanel(
+                    asset: CsergyAssets.xiaoshuoOffline,
+                    title: AppLocalizations.of(context)!
+                        .translateError(state.message),
+                    message: l10n.loadFailed,
+                    size: 168,
+                    action: OutlinedButton(
+                      onPressed: _requestData,
+                      child: Text(l10n.retry),
                     ),
                   );
                 }
@@ -302,14 +295,11 @@ class _HistoryChartPageState extends State<HistoryChartPage>
                   final metricColor = _metricColors[_selectedMetricIndex];
                   return _buildChart(spots, metricColor);
                 }
-                return Center(
-                  child: Text(
-                    l10n.noData,
-                    style: TextStyle(
-                      fontSize: 14.sp,
-                      color: AppColors.textHint,
-                    ),
-                  ),
+                // 小烁查询空态插画：历史数据为空（美术路由 S4/empty-record）
+                return XiaoshuoStatePanel(
+                  asset: CsergyAssets.emptyRecord,
+                  title: l10n.noData,
+                  size: 160,
                 );
               },
             ),

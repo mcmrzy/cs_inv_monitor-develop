@@ -243,29 +243,6 @@ class AppTheme {
         textStyle: TextStyle(fontSize: 12.sp, color: Colors.white),
         waitDuration: const Duration(milliseconds: 400),
       ),
-      navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        indicatorColor: AppColors.primary.withValues(alpha: 0.1),
-        iconTheme: WidgetStateProperty.resolveWith(
-          (states) => IconThemeData(
-            color: states.contains(WidgetState.selected)
-                ? AppColors.primary
-                : AppColors.textSecondary,
-          ),
-        ),
-        labelTextStyle: WidgetStateProperty.resolveWith(
-          (states) => TextStyle(
-            fontSize: 12.sp,
-            fontWeight: states.contains(WidgetState.selected)
-                ? FontWeight.w600
-                : FontWeight.w400,
-            color: states.contains(WidgetState.selected)
-                ? AppColors.primary
-                : AppColors.textSecondary,
-          ),
-        ),
-      ),
       badgeTheme: BadgeThemeData(
         backgroundColor: AppColors.error,
         textColor: Colors.white,
@@ -538,29 +515,6 @@ class AppTheme {
         ),
         textStyle: TextStyle(fontSize: 12.sp, color: Colors.white),
         waitDuration: const Duration(milliseconds: 400),
-      ),
-      navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: const Color(0xFF1A1D24),
-        surfaceTintColor: Colors.transparent,
-        indicatorColor: const Color(0xFF42A5F5).withValues(alpha: 0.2),
-        iconTheme: WidgetStateProperty.resolveWith(
-          (states) => IconThemeData(
-            color: states.contains(WidgetState.selected)
-                ? const Color(0xFF42A5F5)
-                : const Color(0xFF9CA3AF),
-          ),
-        ),
-        labelTextStyle: WidgetStateProperty.resolveWith(
-          (states) => TextStyle(
-            fontSize: 12.sp,
-            fontWeight: states.contains(WidgetState.selected)
-                ? FontWeight.w600
-                : FontWeight.w400,
-            color: states.contains(WidgetState.selected)
-                ? const Color(0xFF42A5F5)
-                : const Color(0xFF9CA3AF),
-          ),
-        ),
       ),
       badgeTheme: BadgeThemeData(
         backgroundColor: const Color(0xFFEF5350),
