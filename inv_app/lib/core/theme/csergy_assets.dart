@@ -55,7 +55,7 @@ abstract final class CsergyAssets {
 
   // ============ 产品图 ============
   static const String productDirectory = 'assets/products';
-  static const String inverterMaster = '$productDirectory/csergy_inverter_product_master_2048.png';
+  static const String inverterMaster = '$productDirectory/csergy_inverter_product_master_2048.webp';
   static const String inverterCard = '$productDirectory/csergy_inverter_product_card_800.webp';
 
   // ============ 品牌与头像 ============
