@@ -458,6 +458,7 @@ class BleProvisioningService {
         message: 'ble_device_not_connected',
       );
     }
+    StreamSubscription<List<int>>? sub;
     try {
       final services = await _connectedDevice!.discoverServices();
       final authService = services.firstWhere(
@@ -474,7 +475,6 @@ class BleProvisioningService {
       if (authCharacteristic == null) throw Exception('未找到 AUTH 特征');
 
       final completer = Completer<BleProvisioningResult>();
-      late StreamSubscription<List<int>> sub;
       sub = authCharacteristic.lastValueStream.listen((value) {
         if (value.isEmpty) return;
         final resp = jsonDecode(utf8.decode(value)) as Map<String, dynamic>;
@@ -490,7 +490,7 @@ class BleProvisioningService {
               ),
             );
           }
-          sub.cancel();
+          sub?.cancel();
         }
       });
       await authCharacteristic.setNotifyValue(true);
@@ -501,7 +501,7 @@ class BleProvisioningService {
       return await completer.future.timeout(
         BleCtProtocol.authTimeout,
         onTimeout: () {
-          sub.cancel();
+          sub?.cancel();
           return BleProvisioningResult(
             success: false,
             message: 'pin_check_failed',
@@ -509,6 +509,7 @@ class BleProvisioningService {
         },
       );
     } catch (_) {
+      sub?.cancel();
       return BleProvisioningResult(
         success: false,
         message: 'pin_check_failed',

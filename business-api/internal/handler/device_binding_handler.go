@@ -1,11 +1,13 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 
 	"inv-api-server/internal/middleware"
+	"inv-api-server/pkg/apperr"
 	"inv-api-server/pkg/logger"
 	"inv-api-server/pkg/response"
 
@@ -64,8 +66,10 @@ func (h *DeviceHandler) Bind(c *gin.Context) {
 	}
 
 	if err := h.deviceService.Bind(c.Request.Context(), req.SN, userID, req.StationID, req.DeviceKey); err != nil {
-		if err.Error() == "invalid device_key" {
-			response.Error(c, 400, "invalid device_key")
+		var appErr *apperr.AppError
+		if errors.As(err, &appErr) {
+			// 业务错误（如 invalid device_key）按自身 HTTP/业务码返回
+			response.HandleError(c, err)
 			return
 		}
 		if err.Error() == "device already bound" {
