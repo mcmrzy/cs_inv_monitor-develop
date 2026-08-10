@@ -50,6 +50,8 @@ import 'package:inv_app/features/station/presentation/pages/edit_station_page.da
 
 import 'package:inv_app/features/device/presentation/pages/device_realtime_page.dart';
 
+import 'package:inv_app/features/device/presentation/pages/device_op_logs_page.dart';
+
 import 'package:inv_app/features/device_protocol/presentation/pages/device_protocol_page.dart';
 
 import 'package:inv_app/features/device/presentation/pages/wifi_config_page.dart';
@@ -270,6 +272,14 @@ class AppRouter {
 
           return _slidePage(state, DeviceSettingsPage(sn: sn));
         },
+      ),
+      GoRoute(
+        path: '/device/op-logs/:sn',
+        name: 'deviceOpLogs',
+        pageBuilder: (context, state) => _slidePage(
+          state,
+          DeviceOpLogsPage(sn: state.pathParameters['sn']!),
+        ),
       ),
       GoRoute(
         path: '/device/:sn/edit',
