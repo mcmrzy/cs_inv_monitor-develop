@@ -96,4 +96,13 @@ abstract final class CsergyAssets {
     normalFallbackIcon: Icons.person_outline,
     activeFallbackIcon: Icons.person,
   );
+
+  /// 底部导航全部图标资产（预加载用：切换 tab 时避免异步校验导致图标闪现）
+  static const List<CsergyNavAsset> navAssets = [
+    home,
+    statistics,
+    devices,
+    alarms,
+    profile,
+  ];
 }

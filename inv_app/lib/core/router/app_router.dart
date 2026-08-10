@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -816,8 +817,25 @@ class _MainShellState extends State<MainShell> {
   }
 }
 
-class BottomNavBar extends StatelessWidget {
+class BottomNavBar extends StatefulWidget {
   const BottomNavBar({super.key});
+
+  @override
+  State<BottomNavBar> createState() => _BottomNavBarState();
+}
+
+class _BottomNavBarState extends State<BottomNavBar> {
+  bool _assetsPreloaded = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_assetsPreloaded) {
+      _assetsPreloaded = true;
+      // 预加载全部导航图标资产：切换 tab 时资产校验命中缓存同步完成，避免闪现 fallback 图标
+      _CsergyNavigationIconState.preloadAll();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -964,6 +982,27 @@ class _CsergyNavigationIcon extends StatefulWidget {
 }
 
 class _CsergyNavigationIconState extends State<_CsergyNavigationIcon> {
+  /// 全局资产校验缓存：已确认存在的导航 SVG 不再重复异步加载，
+  /// 避免切换 tab（normal/active 资产互换）时 FutureBuilder 等待期间闪现 fallback 图标。
+  static final Set<String> _verifiedAssets = <String>{};
+
+  /// 预加载全部导航图标资产到全局缓存（fire-and-forget）。
+  /// 资产缺失时不缓存，保持 FutureBuilder 回退 fallback 的兜底行为。
+  static Future<void> preloadAll() async {
+    final bundle = rootBundle;
+    for (final nav in CsergyAssets.navAssets) {
+      for (final asset in [nav.normalAsset, nav.activeAsset]) {
+        if (_verifiedAssets.contains(asset)) continue;
+        try {
+          await bundle.load(asset);
+          _verifiedAssets.add(asset);
+        } catch (_) {
+          // 资产缺失：不缓存，由 _verifyAsset 继续走 fallback 兜底
+        }
+      }
+    }
+  }
+
   late Future<void> _assetCheck;
   String? _checkedAsset;
 
@@ -990,7 +1029,9 @@ class _CsergyNavigationIconState extends State<_CsergyNavigationIcon> {
   }
 
   Future<void> _verifyAsset(String asset) async {
+    if (_verifiedAssets.contains(asset)) return;
     await DefaultAssetBundle.of(context).load(asset);
+    _verifiedAssets.add(asset);
   }
 
   @override
