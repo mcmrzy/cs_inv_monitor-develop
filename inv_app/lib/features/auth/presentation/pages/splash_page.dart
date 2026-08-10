@@ -78,9 +78,8 @@ class _SplashPageState extends State<SplashPage> {
         }
       },
       child: Scaffold(
-        // 底色取开屏图顶部主色（#6EABE4 浅蓝）：图片解码完成前与系统启动屏同色，
-        // 冷启动全程只见开屏图，无深蓝渐变突兀
-        backgroundColor: const Color(0xFF6EABE4),
+        // 底色纯白与系统启动屏（白底+CSERGY logo）无缝衔接；开屏图解码完成即覆盖
+        backgroundColor: const Color(0xFFFFFFFF),
         body: Stack(
           children: [
             // 品牌开屏完整图（用户设计稿：品牌字标/小烁/底座一体画面，全屏展示）
@@ -102,7 +101,7 @@ class _SplashPageState extends State<SplashPage> {
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 12.sp,
-                    color: Colors.white.withValues(alpha: 0.4),
+                    color: const Color(0xFF10284D).withValues(alpha: 0.4),
                     letterSpacing: 1.2,
                   ),
                 ),

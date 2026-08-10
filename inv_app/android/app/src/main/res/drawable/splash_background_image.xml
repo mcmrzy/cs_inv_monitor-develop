@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Android 12+ 系统启动屏背景：开屏图 bitmap 全屏拉伸（gravity=fill），
-     与 Flutter SplashPage 同一张图无缝衔接 -->
-<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
-    android:gravity="fill"
-    android:src="@drawable/launch_splash" />
