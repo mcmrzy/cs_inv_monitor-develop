@@ -2,8 +2,8 @@
 
 > 日期：2026-08-10
 > 状态：待评审
-> 关联协议：《BLE_Local_Communication_Protocol.md V1.0》（本文档含 2 处协议修订）
-> 关联固件计划：《BLE 本地模式实现方案（修订版 V2）》（含本文档 §5 的 11 条修订）
+> 关联协议：《BLE_Local_Communication_Protocol.md V1.0》（本文档含 3 处协议修订）
+> 关联固件计划：《BLE 本地模式实现方案（修订版 V2）》（含本文档 §5 的 12 条修订）
 
 ---
 
@@ -32,6 +32,8 @@
 | 8 | 控制页 | 不新建独立 BLE 控制页；现有设备控制页数据源/命令通道透明切换 |
 | 9 | 日志入口 | 设备详情页 |
 | 10 | 解绑 | 云端解绑 + 清除本地 device_key；设备端 key 由固件"重绑窗口"机制覆盖（App 引导，无需用户手动恢复出厂） |
+| 11 | PIN 校验 | **产品线共享密钥 + SN 派生 PIN**（HMAC-SHA256(PRODUCT_SECRET, SN) mod 1e6），设备端本地校验；**配网与绑定双入口**均需 PIN；按 MAC 失败计数，5 次错误锁定 30 分钟；已绑定设备不再校验 |
+| 12 | device_key 生成 | **App 本地生成**（32B 随机 Base64），后端只存 SHA-256 摘要（登记制）——支撑绑定完全离网可用 |
 
 ### 1.3 现状基础（复用不重复建设）
 
@@ -58,8 +60,8 @@
 └──────────────┬──────────────────────────────┬──────────────────────────────┘
                │ HTTPS                          │ BLE（CSIV-CT）
 ┌──────────────▼──────────────┐  ┌──────────────▼──────────────────────────────┐
-│ 后端 business-api            │  │ 固件 ESP32（ble_ct 组件，V2 计划+11条修订）   │
-│ ├─ bind 扩展返回 device_key  │  │ ├─ AUTH（bind/auth + 时钟校准）              │
+│ 后端 business-api            │  │ 固件 ESP32（ble_ct 组件，V2 计划+12条修订）   │
+│ ├─ bind 登记 device_key 摘要 │  │ ├─ AUTH（pin_check/bind/auth + 时钟校准）    │
 │ ├─ POST /devices/offline-logs│  │ ├─ TELEMETRY（Read+Notify，分帧）            │
 │ └─ device_offline_op_logs 表 │  │ ├─ COMMAND/CMD_RESULT（幂等）                │
 │                              │  │ └─ INFO（bound/proto_ver）                  │
@@ -79,7 +81,7 @@
 2. 启动 BLE 扫描（CSIV-CT 服务 UUID）
 3. 识别结果分三类：
    - **已绑定设备**（本地有 device_key）：后台自动连接 + 鉴权，进入轮询
-   - **未绑定设备**（bound=false 且绑定窗口内）：列表提示"可绑定"
+   - **未绑定设备**（bound=false 且绑定窗口内）：列表提示"可绑定（需 PIN）"
    - **其他蓝牙设备**：忽略
 4. 已绑定设备在 BLE 范围内时，设备列表/详情页数据源切换为本地轮询，显示「BLE」徽标
 
@@ -89,36 +91,35 @@
 
 ### 3.2 自动绑定
 
-#### 场景 A：配网成功后全自动绑定（零操作）
+#### 场景 A：配网成功后全自动绑定（零操作，离线可用）
 
-WiFi 配网流程结束时（BLE 连接仍存活），自动执行：
+WiFi 配网流程结束时（BLE 连接仍存活），自动执行。**配网阶段用户已输入 PIN（§5.4 配网入口），绑定不再重复输入**：
 
 ```
 读 SN（CSIV-PR SN 特征，回退 INFO）
 → 读 INFO 检查 bound
    ├─ bound=true → 跳过（已有绑定）
-   └─ bound=false → 检查登录态
-       ├─ 未登录 → 配网成功页提示"登录后自动绑定"，登录后补绑（设备仍在窗口期则自动执行）
-       └─ 已登录 → POST /devices/bind（后端返回 device_key）
-          → 写 AUTH {"mode":"bind","device_key":...,"issued_at":...}
-          → 设备 notify {"mode":"bind","result":"ok"}
-          → 存 flutter_secure_storage
-          → 记录绑定日志（action=bind）
-          → 配网成功页追加一行提示"设备已绑定到您的账号"
+   └─ bound=false → App 本地生成 device_key（32B 随机 Base64）
+       → 写 AUTH {"mode":"bind","device_key":...,"issued_at":...}
+       → 设备校验 bound 状态 → NVS 持久化 → notify {"result":"ok"}
+       → 存 flutter_secure_storage
+       → 记本地日志（action=bind, channel=ble）
+       → 联网后（若已在线则立即）POST /devices/bind{sn, device_key} 补登记
+       → 配网成功页追加一行提示"设备已绑定到您的账号"
 ```
 
-失败处理：绑定失败不阻塞配网成功流程，仅提示；用户可在设备详情页手动补绑（绑定窗口内）。
+失败处理：绑定失败不阻塞配网成功流程，仅提示；用户可在设备详情页手动补绑（绑定窗口内，需 PIN）。
 
-#### 场景 B：扫描发现未绑定设备（一键确认，防抢绑）
+#### 场景 B：扫描发现未绑定设备（PIN 确认，防抢绑）
 
-打开开关扫描到 bound=false 的设备时，弹轻量确认对话框：
+打开开关扫描到 bound=false 的设备时，弹确认对话框（**含 PIN 输入框**）：
 
-> "发现附近设备 CS-XXXX（未绑定），是否绑定？"
+> "发现附近设备 CS-XXXX（未绑定），请输入设备 PIN 码（见设备铭牌）"
 
-- 确认 → 走场景 A 的 ④~⑧（需已登录；未登录先引导登录）
+- 确认 → 设备端校验 PIN（AUTH `{mode:"pin_check", pin}` 或 bind 消息内带 pin）→ 生成 device_key → 走场景 A 绑定步骤（无需登录态，离网可用）
 - 取消 → 设备从列表隐藏（本次会话内）
 
-**不自动绑定的原因**：绑定建立"账号-设备"信任关系，任意已登录用户靠近即可抢绑未保护设备；绑定窗口机制（§协议 4.3）的防护意义正在于此。场景 A 之所以自动，是因为用户正处于自己设备的配网流程中。
+**不自动绑定的原因**：绑定建立"账号-设备"信任关系，任意已登录用户靠近即可抢绑未保护设备；PIN 码（铭牌持有）是物理所有权证明，比绑定窗口更强的防护。场景 A 之所以自动，是因为配网时用户已输入 PIN（所有权已验证）。
 
 ### 3.3 数据轮询（180s）
 
@@ -178,11 +179,12 @@ WiFi 配网流程结束时（BLE 连接仍存活），自动执行：
 | 页面 | 改动 |
 |------|------|
 | 设置页 | 新增「通过 BLE 直连设备」开关 + 轮询周期选项（60/180/300s） |
-| 配网成功页 | 自动绑定结果提示（"设备已绑定到您的账号" / "登录后自动绑定"） |
+| 配网成功页 | 自动绑定结果提示（"设备已绑定到您的账号"） |
+| 配网页（BLE 配网流程） | 写 WiFi 凭据前新增 PIN 输入框（6 位数字键盘） |
 | 设备列表/详情页 | BLE 可用时显示「BLE」数据源徽标；数据混合展示（本地轮询优先，HTTP 兜底）；详情页新增日志入口 |
 | 设备控制页 | 命令通道透明切换（HTTP 优先 / BLE 兜底），无需新页面 |
 | 操作日志页（新） | 见 §3.5 |
-| 绑定确认对话框（新） | 场景 B 一键确认 |
+| 绑定确认对话框（新） | 场景 B：确认 + PIN 输入框 |
 
 ### 3.7 解绑流程
 
@@ -201,14 +203,15 @@ WiFi 配网流程结束时（BLE 连接仍存活），自动执行：
 
 ## 4. 后端扩展（business-api）
 
-### 4.1 绑定接口扩展（返回 device_key）
+### 4.1 绑定登记接口（接收 App 生成的 device_key）
 
 `POST /api/v1/devices/bind`（现有 `DeviceHandler.Bind`）：
 
-- 响应增加 `device_key`（32 字节随机数 Base64）与 `expires`（过期时间，用于提示绑定窗口）
-- 生成：`crypto/rand` 32 字节 → Base64
-- 落库：`devices` 表新增列 `device_key`（加密存储或哈希存储，**禁止明文**；与 SN 一对一）——建议存 device_key 的 SHA-256 摘要用于校验，原始 key 仅下发一次（与协议 §4.1"云端可吊销并重发"一致：重新绑定时重新生成覆盖）
-- 迁移：新增 migration（devices 表加列 + 索引）
+- **device_key 由 App 生成**（32B 随机 Base64，`crypto/rand` 在 App 端），本接口不再生成/下发 key（支持绑定完全离网可用）
+- 请求：`{"SN": "H1CNA...", "station_id": 1, "device_key": "<base64 32B>"}`（新增 `device_key` 字段，可选——离线绑定后补报场景必带；老客户端不带则后端生成兼容）
+- 处理：校验 `device_key` 格式（Base64 解码后长度 32）→ 存 `devices.device_key_hash = SHA-256(device_key)`（**禁止明文**，原始 key 仅 App 与设备持有）→ 登记 user_id 绑定关系
+- 响应：`{"code": 0, ...}`（不再返回 device_key/expires）
+- 迁移：新增 migration（devices 表加 `device_key_hash` 列 + 索引）
 
 ### 4.2 新表 `device_offline_op_logs`
 
@@ -286,6 +289,7 @@ CREATE INDEX idx_offline_logs_sn ON device_offline_op_logs(device_sn);
 | P2 | ⑨ action 映射核对 | `power_on/power_off/set_power/set_param/get_param` 与 cmd_handler 46 命令名逐一核对，禁止臆造映射 |
 | P2 | ⑩ 遥测裁剪核心子集 | BLE 通道推送 §6.1 核心子集（6 组字段），降低分帧与带宽 |
 | P2 | ⑪ 绑定窗口守卫 | 已绑定设备上 `open_bind_window()` 无效（防配网成功后误开重绑窗口） |
+| P0 | ⑫ PIN 校验机制 | 见 §5.4：产品线共享密钥 + SN 派生 PIN；配网/绑定双入口本地校验；按 MAC 失败计数，5 次错误锁定 30 分钟 |
 
 ### 5.3 时钟校准机制（P0-① 方案定稿）
 
@@ -303,6 +307,41 @@ CREATE INDEX idx_offline_logs_sn ON device_offline_op_logs(device_sn);
 - 安全：仅鉴权/绑定成功触发校准，而成功前提是持有 device_key → 只有合法绑定方能校准；恶意伪造 ts 无法通过 HMAC，不会污染时钟
 - 实现：ble_ct_auth.c 增加时钟模块（`ble_ct_now()` / `ble_ct_calibrate(ts)`，约 30 行）
 
+### 5.4 PIN 校验机制（P0-⑫ 方案定稿）
+
+**目标**：只有 PIN 码对上才能配网/绑定；PIN 为设备物理所有权证明（铭牌持有），设备端本地校验、完全离网可用。
+
+#### 算法（产品线共享密钥 + SN 派生）
+
+```c
+// 编译时嵌入固件（每个产品线不同，保密；Secure Boot + Flash Encryption 缓解提取）
+static const char PRODUCT_SECRET[] = "CS_INV_L10_2026_SECRET";
+
+uint32_t compute_pin(const char *sn) {
+    uint8_t digest[32];
+    mbedtls_md_hmac(MBEDTLS_MD_SHA256,
+                    (const uint8_t *)PRODUCT_SECRET, strlen(PRODUCT_SECRET),
+                    (const uint8_t *)sn, strlen(sn),
+                    digest);
+    // 取前 3 字节 → 6 位十进制（0~999999），偏差 <0.07% 可忽略
+    return ((digest[0] << 16) | (digest[1] << 8) | digest[2]) % 1000000;
+}
+```
+
+- SN 变化 → PIN 自动跟着变；设备端与工厂软件用**同一算法**（工厂软件持 PRODUCT_SECRET，输入 SN → 输出 PIN → 铭牌 `%06u` 打印，前导零必须保留）
+- 安全：即使 SN 泄露（铭牌/广播可见），无 PRODUCT_SECRET 无法计算 PIN；密钥泄露影响范围为**同产品线所有设备**，缓解：Secure Boot + Flash Encryption + 锁定机制兜底
+
+#### 双入口校验
+
+| 入口 | 时机 | 消息 | 备注 |
+|------|------|------|------|
+| 配网（CSIV-PR 流程） | 写 WiFi 凭据**前** | AUTH `{mode:"pin_check", pin}` → notify `{result:"ok"/"rejected"}` | 防恶意配网（设备被配入攻击者网络） |
+| 绑定（CSIV-CT） | AUTH bind 消息内带 pin | `{mode:"bind", device_key, pin, issued_at}` | 场景 B；场景 A 配网已验 PIN 不再重复 |
+
+- 校验：`compute_pin(SN) == 输入 pin`（本地计算，无需联网）
+- 失败计数：**按对端 MAC 记录**（与修订⑧一致），失败 +1，**5 次错误锁定 30 分钟**（RAM 状态，重启可解除——攻击者需物理断电，门槛足够）；锁定期间返回 `{result:"rejected", reason:"locked"}`
+- 成功后清零计数；**已绑定设备不再校验 PIN**（bind 被拒 already_bound，配网入口被修订⑪守卫拦截）
+
 ---
 
 ## 6. 协议文档修订（BLE_Local_Communication_Protocol.md）
@@ -311,20 +350,24 @@ CREATE INDEX idx_offline_logs_sn ON device_offline_op_logs(device_sn);
 |---|------|----------|
 | 修订① | §2.2 TELEMETRY 行 | 权限从"通知"改为"**读 + 通知**"：Read 返回最近一次遥测快照（App 轮询用）；数据突变仍即时 Notify |
 | 修订② | §5.1 | 增加时间校准约定：*"设备无 RTC 时，以最近一次成功鉴权（auth/bind）消息中的 `ts` 作为时间基准，配合 uptime 推算本地时钟；NVS 持久化基准值；NTP 可用时优先 NTP。只有鉴权/绑定成功才触发校准。"* |
+| 修订③ | §5.x（新增） | 增加 PIN 校验约定：*"配网写 WiFi 凭据前与绑定（bind）时需校验 PIN；PIN = HMAC-SHA256(PRODUCT_SECRET, SN) 取前 3 字节 mod 1000000（6 位十进制）；设备端本地计算校验，无需联网；按对端 MAC 失败计数，5 次错误锁定 30 分钟；已绑定设备不再校验。PRODUCT_SECRET 为产品线共享编译期常量，工厂端持同一密钥打印铭牌。"* |
 
 ---
 
 ## 7. 数据流时序
 
-### 7.1 自动绑定（场景 A，配网成功后）
+### 7.1 自动绑定（场景 A，配网成功后，离线可用）
 
 ```
 App(BLE配网连接中) ──read SN──▶ 设备
+用户输入 PIN → App ──write AUTH{pin_check, pin}──▶ 设备 → notify {result:"ok"}（锁定计数清零）
+App ──写 WiFi 凭据──▶ 设备 → 配网成功
 App ──read INFO──▶ 设备 → {bound:false}
-App ──POST /devices/bind──▶ 后端 → {device_key, expires}
-App ──write AUTH{bind,device_key,issued_at}──▶ 设备 → NVS 持久化
-设备 ──notify AUTH──▶ App {result:"ok"}
-App 存 secure_storage → 记日志(bind, cloud) → 配网成功页提示
+App 本地生成 device_key（32B Base64）
+App ──write AUTH{bind,device_key,issued_at}──▶ 设备 → NVS 持久化 → notify {result:"ok"}
+App 存 secure_storage → 记日志(bind, ble)
+联网后（若已在线则立即）──POST /devices/bind{sn, device_key}──▶ 后端 → 登记哈希
+配网成功页提示"设备已绑定到您的账号"
 ```
 
 ### 7.2 轮询（设置开 + 已绑定 + ready）
@@ -361,17 +404,19 @@ App ──POST /devices/offline-logs(≤50条)──▶ 后端（log_id 幂等�
 
 - `OfflineOpLogStore`：CRUD、容量滚动清理（500 条/30 天）、状态机迁移（pending→syncing→synced/failed）
 - `OfflineLogSyncService`：批处理（≤50）、退避时序（mock 时间）、幂等（重复 log_id 不再上传）、未登录跳过
-- `BleBindingService`：编排状态机（读 SN 失败 / bound=true 跳过 / 未登录分支 / bind 写入失败重试）
+- `BleBindingService`：编排状态机（读 SN 失败 / bound=true 跳过 / PIN 错误分支 / bind 写入失败重试 / 离网生成 device_key 本地绑定）
 - `BlePollingService`：周期调度、READ 失败降级（不影响 HTTP 数据源）
+- PIN：固件与工厂工具 `compute_pin` 测试向量一致性；**App 端不持有 PRODUCT_SECRET**（仅透传用户输入，防 App 反编译泄露），PIN 校验权威在设备端
 
 ### 8.2 后端集成测试
 
-- `POST /devices/bind`：返回 device_key 格式（Base64 32B）；重复绑定 5002
+- `POST /devices/bind`：接收 App 生成的 device_key → 存 SHA-256 摘要；格式非法（非 32B Base64）400；重复绑定 5002；老客户端无 device_key 时后端生成兼容
 - `POST /devices/offline-logs`：幂等（同 log_id 重复上报 duplicates 计数）；action 白名单；未登录 401；批量 >50 拒绝
 
 ### 8.3 真机联调（固件 + App）
 
-- 绑定：配网后自动绑定（bound false→true）；未绑定设备随时可绑（窗口对未绑定设备始终开放）；**已绑定设备重绑被拒**（already_bound，需恢复出厂/重绑窗口）
+- 绑定：配网后自动绑定（bound false→true，离线可用）；**PIN 正确绑定成功 / PIN 错误拒绝（invalid_pin）/ 5 次错误锁定 30 分钟 / 锁定期间 rejected:locked**；未绑定设备随时可绑（需 PIN）；**已绑定设备重绑被拒**（already_bound，需恢复出厂/重绑窗口）
+- 配网：**无 PIN 写 WiFi 凭据被拒（pin_check 拦截）/ PIN 正确后配网成功 / 已绑定设备无法再进配网流程**
 - 鉴权：成功 / 3 次失败锁定 60s / 时间戳偏差 >300s 拒绝
 - 轮询：180s 读快照；设备重启后 NVS 时钟基准仍有效
 - 控制：命令执行 + 幂等（同 command_id 重发返回首次结果）
@@ -382,12 +427,14 @@ App ──POST /devices/offline-logs(≤50条)──▶ 后端（log_id 幂等�
 
 ## 9. 假设与约束
 
-1. 固件按 V2 计划 + §5.2 修订实现 CSIV-CT（含 TELEMETRY Read）
-2. 绑定必须联网且已登录（device_key 云端生成，协议硬约束）
+1. 固件按 V2 计划 + §5.2 修订实现 CSIV-CT（含 TELEMETRY Read、PIN 校验）
+2. 绑定**无需联网/登录**（device_key App 本地生成，设备端写 key 即绑定成功）；云端登记延迟到联网后补报
 3. BLE 单中心连接（协议 §1），App 连接期间设备本地通信由该 App 独占
 4. 手机需授予蓝牙权限（Android 13+ 为 Nearby Devices 权限）
 5. 设备端时钟校准依赖 App ts，App 时间异常（用户篡改）仅影响自身会话，无安全影响
 6. 管理后台离线日志查询页为后续扩展，本期仅落库
+7. PIN 安全性依赖 PRODUCT_SECRET 保密（编译期常量 + Secure Boot + Flash Encryption 缓解）；工厂软件持同一密钥
+8. PIN 锁定为 RAM 状态，设备断电重启解除锁定（攻击者需物理断电，门槛足够）
 
 ---
 
