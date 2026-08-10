@@ -213,7 +213,7 @@ type DeviceRepo interface {
 	GetAll(ctx context.Context, stationID int64, status, page, pageSize int) ([]*model.Device, int64, error)
 	GetByStationID(ctx context.Context, stationID int64) ([]*model.Device, error)
 	EnsureDevice(ctx context.Context, sn string) error
-	Bind(ctx context.Context, sn string, userID, stationID int64) error
+	Bind(ctx context.Context, sn string, userID, stationID int64, deviceKeyHash string) error
 	HasDataPermission(ctx context.Context, userID int64, sn string) bool
 	GetAllowedDeviceSNs(ctx context.Context, userID int64) ([]string, error)
 	GetRealtimeData(ctx context.Context, sn string) (map[string]interface{}, error)
