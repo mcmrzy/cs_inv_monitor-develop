@@ -123,73 +123,55 @@ class _JVerifyAuthPageState extends State<JVerifyAuthPage> {
     );
   }
 
-  /// 拉起授权页前的过渡态：品牌 + loading
+  /// 拉起授权页前的过渡态：loading + 提示（背景图内已含吉祥物，不再叠加图形）
+  /// 内容置于底部，避开图内吉祥物所在的中部区域
   Widget _buildLaunching() {
     final l10n = _l10n;
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          // 吉祥物小烁欢迎（透明底 WebP）
-          Image.asset(
-            CsergyAssets.xiaoshuoWelcome,
-            width: 110.w,
-            height: 110.w,
-            fit: BoxFit.contain,
-          ),
-          SizedBox(height: 16.h),
-          Text(
-            l10n?.str('brand_name') ?? '辰烁科技',
-            style: TextStyle(
-              fontSize: 20.sp,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: Padding(
+        padding: EdgeInsets.only(bottom: 72.h),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+              ),
             ),
-          ),
-          SizedBox(height: 28.h),
-          const SizedBox(
-            width: 24,
-            height: 24,
-            child: CircularProgressIndicator(
-              strokeWidth: 2.5,
-              valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+            SizedBox(height: 14.h),
+            Text(
+              l10n?.jverifyLaunching ?? '正在拉起运营商认证...',
+              style: TextStyle(fontSize: 13.sp, color: AppColors.textSecondary),
             ),
-          ),
-          SizedBox(height: 14.h),
-          Text(
-            l10n?.jverifyLaunching ?? '正在拉起运营商认证...',
-            style: TextStyle(fontSize: 13.sp, color: AppColors.textSecondary),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
   /// 取消/失败后的极简兜底视图：可重试或使用其他方式登录
+  /// 内容置于底部，避开背景图内的吉祥物（不叠加图形）
   Widget _buildFailed(AuthState state) {
     final l10n = _l10n;
-    return Center(
+    return Align(
+      alignment: Alignment.bottomCenter,
       child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: 48.w),
+        padding: EdgeInsets.fromLTRB(48.w, 0, 48.w, 72.h),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // 吉祥物小烁警告动作（透明底 WebP）
-            Image.asset(
-              CsergyAssets.xiaoshuoWarning,
-              width: 96.w,
-              height: 96.w,
-              fit: BoxFit.contain,
-            ),
-            SizedBox(height: 12.h),
             Text(
               _failReason,
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 15.sp, color: AppColors.textPrimary),
             ),
-            SizedBox(height: 32.h),
+            SizedBox(height: 28.h),
             SizedBox(
-              width: double.infinity,
               height: 48.h,
               child: ElevatedButton(
                 onPressed: state is AuthLoading ? null : _startAuth,

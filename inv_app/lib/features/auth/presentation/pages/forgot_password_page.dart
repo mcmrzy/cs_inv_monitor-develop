@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -131,28 +132,63 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
         builder: (context, state) {
           return SafeArea(
             child: SingleChildScrollView(
-              padding: EdgeInsets.all(24.w),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    SizedBox(height: 40.h),
-                    _buildHeader(),
-                    SizedBox(height: 40.h),
-                    _buildPhoneField(),
-                    SizedBox(height: 16.h),
-                    _buildCodeField(state),
-                    SizedBox(height: 16.h),
-                    _buildPasswordField(),
-                    SizedBox(height: 16.h),
-                    _buildConfirmPasswordField(),
-                    SizedBox(height: 32.h),
-                    _buildResetButton(state),
-                    SizedBox(height: 24.h),
-                    _buildLoginRow(),
-                  ],
-                ),
+              padding: EdgeInsets.fromLTRB(24.w, 0, 24.w, 24.h),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(height: 56.h),
+                  _buildHeader(),
+                  SizedBox(height: 32.h),
+                  // 毛玻璃表单卡片：半透明白底 + 背景模糊，浮于整页背景图上
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(24.r),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF0D47A1).withValues(alpha: 0.14),
+                          blurRadius: 24,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(24.r),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                        child: Container(
+                          padding: EdgeInsets.fromLTRB(24.w, 28.h, 24.w, 24.h),
+                          decoration: BoxDecoration(
+                            color: AppColor.surfaceContainer(context)
+                                .withValues(alpha: 0.82),
+                            borderRadius: BorderRadius.circular(24.r),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.4),
+                            ),
+                          ),
+                          child: Form(
+                            key: _formKey,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _buildPhoneField(),
+                                SizedBox(height: 16.h),
+                                _buildCodeField(state),
+                                SizedBox(height: 16.h),
+                                _buildPasswordField(),
+                                SizedBox(height: 16.h),
+                                _buildConfirmPasswordField(),
+                                SizedBox(height: 28.h),
+                                _buildResetButton(state),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 20.h),
+                  _buildLoginRow(),
+                ],
               ),
             ),
           );
@@ -167,20 +203,19 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
     final l10n = AppLocalizations.of(context)!;
     return Column(
       children: [
-        // 吉祥物小烁提醒动作（透明底 WebP）
-        Image.asset(
-          CsergyAssets.xiaoshuoReminder,
-          width: 108.w,
-          height: 108.w,
-          fit: BoxFit.contain,
-        ),
-        SizedBox(height: 8.h),
         Text(
           l10n.forgotPassword,
           style: TextStyle(
             fontSize: 28.sp,
             fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
+            color: Colors.white,
+            shadows: const [
+              Shadow(
+                color: Colors.black26,
+                blurRadius: 8,
+                offset: Offset(0, 2),
+              ),
+            ],
           ),
         ),
         SizedBox(height: 8.h),
@@ -188,7 +223,14 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
           l10n.pleaseInputRegisterPhone,
           style: TextStyle(
             fontSize: 14.sp,
-            color: AppColors.textSecondary,
+            color: Colors.white.withValues(alpha: 0.9),
+            shadows: const [
+              Shadow(
+                color: Colors.black26,
+                blurRadius: 8,
+                offset: Offset(0, 2),
+              ),
+            ],
           ),
         ),
       ],
