@@ -259,6 +259,7 @@ var authenticatedOnlyPaths = map[string]struct{}{
 	"/api/v1/auth/logout":          {},
 	"/api/v1/auth/change-password": {},
 	"/api/v1/auth/profile":         {},
+	"/api/v1/notify-settings":      {},
 	"/api/v1/my/organizations":     {},
 	// Self-service avatar upload: any authenticated user may update only
 	// their own avatar; ownership is enforced by business-api.
