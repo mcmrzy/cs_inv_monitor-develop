@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 系统启动屏图标：白底 + 辰烁科技 CSERGY 深蓝 logo，
+     adaptive icon 保证圆形/圆角方形 mask 下 logo 完整可见 -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@android:color/white" />
+    <foreground android:drawable="@drawable/splash_logo_fg" />
+</adaptive-icon>
