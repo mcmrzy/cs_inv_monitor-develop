@@ -1,0 +1,65 @@
+package service
+
+import (
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
+	"strings"
+	"testing"
+)
+
+func TestGenerateDeviceKey(t *testing.T) {
+	key, hash, err := generateDeviceKey()
+	if err != nil {
+		t.Fatalf("generateDeviceKey returned error: %v", err)
+	}
+	// key: 32 字节随机数 Base64
+	raw, err := base64.StdEncoding.DecodeString(key)
+	if err != nil {
+		t.Fatalf("device_key is not valid base64: %v", err)
+	}
+	if len(raw) != 32 {
+		t.Fatalf("device_key decoded length = %d, want 32", len(raw))
+	}
+	// hash: 对应原始密钥的 SHA-256 hex（64 字符）
+	if len(hash) != 64 {
+		t.Fatalf("device_key_hash length = %d, want 64", len(hash))
+	}
+	if !strings.EqualFold(hash, hex.EncodeToString(sha256Sum(raw))) {
+		t.Fatalf("device_key_hash does not match the raw key")
+	}
+	// 随机性：两次生成不同
+	key2, _, err := generateDeviceKey()
+	if err != nil {
+		t.Fatalf("generateDeviceKey second call returned error: %v", err)
+	}
+	if key == key2 {
+		t.Fatalf("generateDeviceKey produced identical keys")
+	}
+}
+
+func TestValidDeviceKey(t *testing.T) {
+	// 合法：32 字节随机数 Base64
+	raw := make([]byte, 32)
+	valid := base64.StdEncoding.EncodeToString(raw)
+	if !validDeviceKey(valid) {
+		t.Fatal("valid 32-byte base64 key rejected")
+	}
+	cases := []string{
+		"",                       // 空串
+		"abc",                    // 非 base64 / 长度不足
+		base64.StdEncoding.EncodeToString(make([]byte, 16)), // 16B 不足
+		base64.StdEncoding.EncodeToString(make([]byte, 64)), // 64B 过长
+		"!!!not-base64!!!",
+	}
+	for _, tc := range cases {
+		if validDeviceKey(tc) {
+			t.Fatalf("invalid key accepted: %q", tc)
+		}
+	}
+}
+
+func sha256Sum(b []byte) []byte {
+	s := sha256.Sum256(b)
+	return s[:]
+}

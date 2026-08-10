@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 
 	"inv-api-server/internal/model"
 	"inv-api-server/internal/repository"
+	"inv-api-server/pkg/apperr"
 	"inv-api-server/pkg/jwt"
 	"inv-api-server/pkg/logger"
 
@@ -567,8 +569,60 @@ func (s *DeviceService) Create(ctx context.Context, sn, model string, ratedPower
 	return s.repo.Create(ctx, sn, model, ratedPower, firmwareArm, firmwareEsp)
 }
 
-func (s *DeviceService) Bind(ctx context.Context, sn string, userID, stationID int64) error {
-	return s.repo.Bind(ctx, sn, userID, stationID)
+// Bind binds a device, registering an optional App-generated device_key
+// (design doc §4.1). The raw key is never stored — only its SHA-256 hash.
+// deviceKeyRaw is optional: empty means a legacy client, in which case a
+// key is generated server-side as a compatibility fallback.
+func (s *DeviceService) Bind(ctx context.Context, sn string, userID, stationID int64, deviceKeyRaw string) error {
+	var hash string
+	if deviceKeyRaw != "" {
+		if !validDeviceKey(deviceKeyRaw) {
+			return apperr.BadRequest("invalid device_key")
+		}
+		raw, err := base64.StdEncoding.DecodeString(deviceKeyRaw)
+		if err != nil {
+			return apperr.BadRequest("invalid device_key")
+		}
+		sum := sha256.Sum256(raw)
+		hash = hex.EncodeToString(sum[:])
+	} else {
+		// 兼容：老客户端不带 device_key，后端生成并只存摘要
+		_, h, err := generateDeviceKey()
+		if err != nil {
+			return err
+		}
+		hash = h
+	}
+	return s.repo.Bind(ctx, sn, userID, stationID, hash)
+}
+
+// SaveOfflineLogs persists offline operation logs uploaded by the App.
+func (s *DeviceService) SaveOfflineLogs(ctx context.Context, userID int64, logs []model.OfflineOpLog) (int, int, error) {
+	return s.repo.SaveOfflineLogs(ctx, userID, logs)
+}
+
+// validDeviceKey reports whether raw is a base64-encoded 32-byte key
+// (the App-generated BLE device_key format).
+func validDeviceKey(raw string) bool {
+	if raw == "" {
+		return false
+	}
+	decoded, err := base64.StdEncoding.DecodeString(raw)
+	if err != nil || len(decoded) != 32 {
+		return false
+	}
+	return true
+}
+
+// generateDeviceKey returns (base64 raw key, sha256 hex hash) for a 32-byte
+// random key. The raw key is only ever returned to the binding client.
+func generateDeviceKey() (string, string, error) {
+	keyBytes := make([]byte, 32)
+	if _, err := rand.Read(keyBytes); err != nil {
+		return "", "", fmt.Errorf("generate device key: %w", err)
+	}
+	sum := sha256.Sum256(keyBytes)
+	return base64.StdEncoding.EncodeToString(keyBytes), hex.EncodeToString(sum[:]), nil
 }
 
 func (s *DeviceService) Unbind(ctx context.Context, sn string) error {
