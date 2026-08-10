@@ -1410,6 +1410,69 @@ class AppLocalizations {
       _localizedStrings['click_to_set_phone'] ?? 'Click to set phone';
   String get clickToSetRegion =>
       _localizedStrings['click_to_set_region'] ?? 'Click to set region';
+
+  // BLE 直连
+  String get bleDirectEnabled => _localizedStrings['ble_direct_enabled']!;
+  String get bleDirectEnabledDesc => _localizedStrings['ble_direct_enabled_desc']!;
+  String get bleDirectOn => _localizedStrings['ble_direct_on']!;
+  String get bleDirectOff => _localizedStrings['ble_direct_off']!;
+  String get blePollInterval => _localizedStrings['ble_poll_interval']!;
+  String get blePollIntervalDesc => _localizedStrings['ble_poll_interval_desc']!;
+  String get pollIntervalSaved => _localizedStrings['poll_interval_saved']!;
+
+  // 绑定提示
+  String get bleBindingInProgress => _localizedStrings['ble_binding_in_progress']!;
+  String get bleBindingSuccess => _localizedStrings['ble_binding_success']!;
+  String get bleBindingAlreadyBound => _localizedStrings['ble_binding_already_bound']!;
+  String get bleBindingNeedLogin => _localizedStrings['ble_binding_need_login']!;
+  String get bleBindingFailed => _localizedStrings['ble_binding_failed']!;
+  String get bleBindConfirmTitle => _localizedStrings['ble_bind_confirm_title']!;
+  String get bleBindConfirmDesc => _localizedStrings['ble_bind_confirm_desc']!;
+  String get bleBindConfirmAction => _localizedStrings['ble_bind_confirm_action']!;
+
+  // 操作日志页
+  String get opLogs => _localizedStrings['op_logs']!;
+  String get opLogsSubtitle => _localizedStrings['op_logs_subtitle']!;
+  String get opLogsEmpty => _localizedStrings['op_logs_empty']!;
+  String get opLogSyncNow => _localizedStrings['op_log_sync_now']!;
+  String get opLogSyncedToast => _localizedStrings['op_log_synced_toast']!;
+  String get opLogSyncFailedToast => _localizedStrings['op_log_sync_failed_toast']!;
+  String get opLogCreatedAt => _localizedStrings['op_log_created_at']!;
+
+  // 状态映射（供日志页复用）
+  String opLogSyncStatus(String status) {
+    switch (status) {
+      case 'synced': return _localizedStrings['op_log_sync_status_synced']!;
+      case 'syncing': return _localizedStrings['op_log_sync_status_syncing']!;
+      case 'failed': return _localizedStrings['op_log_sync_status_failed']!;
+      default: return _localizedStrings['op_log_sync_status_pending']!;
+    }
+  }
+
+  String opLogAction(String action) {
+    switch (action) {
+      case 'bind': return _localizedStrings['op_log_action_bind']!;
+      case 'unbind': return _localizedStrings['op_log_action_unbind']!;
+      case 'control': return _localizedStrings['op_log_action_control']!;
+      case 'set_param': return _localizedStrings['op_log_action_set_param']!;
+      case 'ota': return _localizedStrings['op_log_action_ota']!;
+      default: return action;
+    }
+  }
+
+  String opLogChannel(String channel) => channel == 'ble'
+      ? _localizedStrings['op_log_channel_ble']!
+      : _localizedStrings['op_log_channel_cloud']!;
+
+  // PIN 校验（附录 B）
+  String get pinInputTitle => _localizedStrings['pin_input_title']!;
+  String get pinInputHint => _localizedStrings['pin_input_hint']!;
+  String get pinInputConfirm => _localizedStrings['pin_input_confirm']!;
+  String get pinInvalid => _localizedStrings['pin_invalid']!;
+  String get pinLocked => _localizedStrings['pin_locked']!;
+  String get pinCheckFailed => _localizedStrings['pin_check_failed']!;
+  String get bindRegisteredLater => _localizedStrings['bind_registered_later']!;
+  String get pinRequired => _localizedStrings['pin_required']!;
 }
 
 class _AppLocalizationsDelegate
