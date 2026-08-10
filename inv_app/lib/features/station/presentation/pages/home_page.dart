@@ -182,12 +182,14 @@ class _HomePageState extends State<HomePage> {
           final ds = _cachedState;
 
           if (ds == null) {
-            if (state is StationError) return _buildError(state.message);
+            if (state is StationError) {
+              return _buildOfflineFallback();
+            }
             return const SkeletonHomePage();
           }
 
           if (state is StationError && ds.stations.isEmpty) {
-            return _buildError(state.message);
+            return _buildOfflineFallback();
           }
 
           final filtered = _filterStations(ds.stations);
@@ -674,20 +676,44 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildError(String msg) {
-    final l10n = AppLocalizations.of(context)!;
-    // 小烁离线动作插画：加载失败/断网态（美术路由 C4/offline）
-    return XiaoshuoStatePanel(
-      asset: CsergyAssets.xiaoshuoOffline,
-      title: l10n.translateError(msg),
-      message: l10n.loadFailed,
-      size: 176,
-      action: OutlinedButton(
-        onPressed: () =>
-            context.read<StationBloc>().add(StationSummaryRequested()),
-        style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary),
-        child: Text(l10n.retry),
-      ),
+  /// 无可用数据（无缓存且请求失败）时的离线兜底：仍渲染完整页面框架，
+  /// 数据区展示空态引导 + 离线横幅提示，避免整页“网络加载失败”错误页
+  Widget _buildOfflineFallback() {
+    final empty = const StationSummaryLoaded(
+      stations: [],
+      summary: {},
+      isFromCache: true,
+    );
+    return Column(
+      children: [
+        const OfflineBanner(),
+        Expanded(
+          child: StyledRefreshIndicator(
+            onRefresh: () async => context
+                .read<StationBloc>()
+                .add(StationSummaryRequested()),
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverToBoxAdapter(
+                  child: SafeArea(
+                    bottom: false,
+                    child: OfflineDataBanner(
+                      onRetry: () => context
+                          .read<StationBloc>()
+                          .add(StationSummaryRequested()),
+                    ),
+                  ),
+                ),
+                _buildHeader(),
+                _buildFilterCards(empty),
+                SliverToBoxAdapter(child: _buildEmpty()),
+                const SliverToBoxAdapter(child: SizedBox(height: 100)),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
