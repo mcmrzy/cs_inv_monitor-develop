@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_ultra/flutter_blue_ultra.dart';
+import 'package:inv_app/core/services/ble/ble_device_manager.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 /// BLE配网状态枚举
@@ -444,6 +446,73 @@ class BleProvisioningService {
       }
     } else {
       debugPrint('[BLE] Result stream closed, ignoring status update');
+    }
+  }
+
+  /// 校验设备 PIN（附录 B：配网写 WiFi 凭据前 pin_check，AUTH 特征在 CSIV-CT 服务）
+  /// 设备 notify 返回 {mode:'pin_check', result:'ok'} 或 {mode:'pin_check', result:'rejected', error:'invalid_pin'|'locked'}
+  Future<BleProvisioningResult> verifyPin(String pin) async {
+    if (_connectedDevice == null) {
+      return BleProvisioningResult(
+        success: false,
+        message: 'ble_device_not_connected',
+      );
+    }
+    try {
+      final services = await _connectedDevice!.discoverServices();
+      final authService = services.firstWhere(
+        (service) => service.uuid == Guid(BleCtProtocol.serviceUuid),
+        orElse: () => throw Exception('未找到 AUTH 服务'),
+      );
+      BluetoothCharacteristic? authCharacteristic;
+      for (final characteristic in authService.characteristics) {
+        if (characteristic.uuid == Guid(BleCtProtocol.authCharUuid)) {
+          authCharacteristic = characteristic;
+          break;
+        }
+      }
+      if (authCharacteristic == null) throw Exception('未找到 AUTH 特征');
+
+      final completer = Completer<BleProvisioningResult>();
+      late StreamSubscription<List<int>> sub;
+      sub = authCharacteristic.lastValueStream.listen((value) {
+        if (value.isEmpty) return;
+        final resp = jsonDecode(utf8.decode(value)) as Map<String, dynamic>;
+        if (resp['mode'] == 'pin_check') {
+          if (resp['result'] == 'ok') {
+            completer.complete(BleProvisioningResult(success: true));
+          } else {
+            final error = resp['error'] as String?;
+            completer.complete(
+              BleProvisioningResult(
+                success: false,
+                message: error == 'locked' ? 'pin_locked' : 'pin_invalid',
+              ),
+            );
+          }
+          sub.cancel();
+        }
+      });
+      await authCharacteristic.setNotifyValue(true);
+      await authCharacteristic.write(
+        utf8.encode(jsonEncode({'mode': 'pin_check', 'pin': pin})),
+        withoutResponse: false,
+      );
+      return await completer.future.timeout(
+        BleCtProtocol.authTimeout,
+        onTimeout: () {
+          sub.cancel();
+          return BleProvisioningResult(
+            success: false,
+            message: 'pin_check_failed',
+          );
+        },
+      );
+    } catch (_) {
+      return BleProvisioningResult(
+        success: false,
+        message: 'pin_check_failed',
+      );
     }
   }
 

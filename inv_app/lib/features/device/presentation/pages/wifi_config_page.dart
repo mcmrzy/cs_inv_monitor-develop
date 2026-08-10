@@ -5,6 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:wifi_iot/wifi_iot.dart';
 import 'package:inv_app/core/services/provision_service.dart';
 import 'package:inv_app/core/services/ble_provisioning_service.dart';
+import 'package:inv_app/core/services/ble/ble_binding_service.dart';
 import 'package:inv_app/core/services/connection_mode_service.dart';
 import 'package:inv_app/core/services/wifi_scan_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
@@ -45,6 +46,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
 
   final _workingSsidController = TextEditingController();
   final _workingPasswordController = TextEditingController();
+  final _pinController = TextEditingController();
   bool _showPassword = false;
 
   final _scSsidController = TextEditingController();
@@ -134,6 +136,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
   void dispose() {
     _workingSsidController.dispose();
     _workingPasswordController.dispose();
+    _pinController.dispose();
     _scSsidController.dispose();
     _scPasswordController.dispose();
     _bleStatusSub?.cancel();
@@ -604,9 +607,32 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       return;
     }
 
+    // 配网写 WiFi 凭据前先校验 PIN（附录 B）
+    final pin = _pinController.text.trim();
+    if (pin.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppLocalizations.of(context)!.pinRequired)),
+      );
+      return;
+    }
+
     setState(() {
       _provisioning = true;
     });
+
+    final pinResult = await _bleProvisioningService.verifyPin(pin);
+    if (!pinResult.success && mounted) {
+      setState(() {
+        _provisioning = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_localizePinMessage(pinResult.message)),
+          backgroundColor: AppColors.errorLight,
+        ),
+      );
+      return;
+    }
 
     final result = await _bleProvisioningService.writeWiFiCredentials(
       ssid: ssid,
@@ -634,6 +660,34 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       _provisionSuccess = true; // 设置配网成功状态
       _bleErrorMessage = null; // 清除错误消息
     });
+
+    // 场景 A：配网成功后自动绑定（零操作，附录 B）
+    _triggerAutoBind();
+  }
+
+  /// 场景 A：配网成功后自动绑定（零操作，附录 B：离网可用，PIN 配网阶段已验证）
+  Future<void> _triggerAutoBind() async {
+    final device = _selectedBleDevice;
+    if (device == null) return;
+    if (!await getIt<StorageService>().getIsBleDirectEnabled()) return;
+    final binding = getIt<BleBindingService>();
+    final outcome = await binding.bindAfterProvision(
+      macAddress: device.macAddress,
+      knownSn: device.sn,
+    );
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
+    final message = switch (outcome) {
+      BindOutcome.bound => l10n.bleBindingSuccess,
+      BindOutcome.alreadyBound => l10n.bleBindingAlreadyBound,
+      BindOutcome.invalidPin => l10n.pinInvalid,
+      BindOutcome.locked => l10n.pinLocked,
+      BindOutcome.needLoginForSync => l10n.bleBindingNeedLogin,
+      BindOutcome.failed => l10n.bleBindingFailed,
+    };
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   String _localizeBleMessage(String? code) {
@@ -663,6 +717,20 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         return l10n.bleError;
       default:
         return l10n.translateError(code);
+    }
+  }
+
+  String _localizePinMessage(String? code) {
+    final l10n = AppLocalizations.of(context)!;
+    switch (code) {
+      case 'pin_invalid':
+        return l10n.pinInvalid;
+      case 'pin_locked':
+        return l10n.pinLocked;
+      case 'pin_check_failed':
+        return l10n.pinCheckFailed;
+      default:
+        return l10n.pinCheckFailed;
     }
   }
 
@@ -1938,6 +2006,25 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                 ),
                 onPressed: () => setState(() => _showPassword = !_showPassword),
               ),
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(12.r)),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12.r),
+                borderSide:
+                    const BorderSide(color: AppColors.primary, width: 1.5),
+              ),
+            ),
+          ),
+          SizedBox(height: 12.h),
+          TextField(
+            controller: _pinController,
+            keyboardType: TextInputType.number,
+            maxLength: 6,
+            decoration: InputDecoration(
+              labelText: l10n.pinInputTitle,
+              hintText: l10n.pinInputHint,
+              prefixIcon:
+                  const Icon(Icons.password, color: AppColors.primary),
               border:
                   OutlineInputBorder(borderRadius: BorderRadius.circular(12.r)),
               focusedBorder: OutlineInputBorder(
