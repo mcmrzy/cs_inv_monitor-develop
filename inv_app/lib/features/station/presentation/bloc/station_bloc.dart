@@ -6,6 +6,9 @@ import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/features/station/domain/repositories/station_repository.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/services/data_cache_service.dart';
+import 'package:inv_app/core/services/ble/ble_device_manager.dart';
+import 'package:inv_app/core/services/offline/offline_op_log_store.dart';
+import 'package:inv_app/core/utils/offline_log_id.dart';
 
 part 'station_event.dart';
 part 'station_state.dart';
@@ -14,11 +17,15 @@ class StationBloc extends Bloc<StationEvent, StationState> {
   final StationRepository repository;
   final StorageService? storageService;
   final DataCacheService? dataCacheService;
+  final BleDeviceKeyStore? bleKeyStore;
+  final OfflineOpLogStore? offlineLogStore;
 
   StationBloc({
     required this.repository,
     this.storageService,
     this.dataCacheService,
+    this.bleKeyStore,
+    this.offlineLogStore,
   }) : super(StationInitial()) {
     on<StationSummaryRequested>(_onSummaryRequested);
     on<StationListRequested>(_onListRequested);
@@ -240,7 +247,24 @@ class StationBloc extends Bloc<StationEvent, StationState> {
     final result = await repository.unbindDevice(event.sn);
     result.fold(
       (failure) => emit(StationError(message: failure.message)),
-      (_) {
+      (_) async {
+        // 解绑副作用：清本地 BLE 凭证 + 记录解绑操作日志（本地完成，失败不影响解绑结果）
+        try {
+          final keyStore = bleKeyStore ?? getIt<BleDeviceKeyStore>();
+          await keyStore.delete(event.sn);
+          final logStore = offlineLogStore ?? getIt<OfflineOpLogStore>();
+          await logStore.add(
+            OfflineOpLog(
+              logId: newOfflineLogId(),
+              deviceSn: event.sn,
+              action: 'unbind',
+              channel: 'cloud',
+              opTime: DateTime.now(),
+            ),
+          );
+        } catch (_) {
+          // 本地副作用失败不阻塞解绑结果
+        }
         emit(DeviceUnbindSuccess(sn: event.sn));
       },
     );
