@@ -10,6 +10,10 @@ import 'package:inv_app/core/services/data_cache_service.dart';
 import 'package:inv_app/core/services/inverter_connection_monitor.dart';
 import 'package:inv_app/core/entities/inverter_data.dart';
 import 'package:inv_app/core/entities/offline_action.dart';
+import 'package:inv_app/core/services/ble/ble_device_manager.dart';
+import 'package:inv_app/core/services/offline/offline_op_log_store.dart';
+import 'package:inv_app/core/services/service_locator.dart';
+import 'package:inv_app/core/utils/offline_log_id.dart';
 import 'package:inv_app/features/device/domain/repositories/device_repository.dart';
 
 part 'device_event.dart';
@@ -22,6 +26,8 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
   final ConnectionModeService? connectionModeService;
   final OfflineCacheService? offlineCacheService;
   final DataCacheService? dataCacheService;
+  final BleDeviceKeyStore? bleKeyStore;
+  final OfflineOpLogStore? offlineLogStore;
   StreamSubscription<InverterRealtime>? _mqttSub;
   String? _activeSN;
   Timer? _localPollTimer;
@@ -36,6 +42,8 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     this.connectionModeService,
     this.offlineCacheService,
     this.dataCacheService,
+    this.bleKeyStore,
+    this.offlineLogStore,
   }) : super(DeviceInitial()) {
     on<DeviceListRequested>(_onListRequested);
     on<DeviceDetailRequested>(_onDetailRequested);
@@ -289,7 +297,26 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     final result = await repository.unbind(event.sn);
     result.fold(
       (failure) => emit(DeviceError(message: failure.message)),
-      (_) => emit(DeviceUnbindSuccess()),
+      (_) async {
+        // 解绑副作用：清本地 BLE 凭证 + 记录解绑操作日志（本地完成，失败不影响解绑结果）
+        try {
+          final keyStore = bleKeyStore ?? getIt<BleDeviceKeyStore>();
+          await keyStore.delete(event.sn);
+          final logStore = offlineLogStore ?? getIt<OfflineOpLogStore>();
+          await logStore.add(
+            OfflineOpLog(
+              logId: newOfflineLogId(),
+              deviceSn: event.sn,
+              action: 'unbind',
+              channel: 'cloud',
+              opTime: DateTime.now(),
+            ),
+          );
+        } catch (_) {
+          // 本地副作用失败不阻塞解绑结果
+        }
+        emit(DeviceUnbindSuccess());
+      },
     );
   }
 

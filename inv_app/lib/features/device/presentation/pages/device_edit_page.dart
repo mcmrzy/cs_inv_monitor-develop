@@ -291,6 +291,14 @@ class _DeviceEditPageState extends State<DeviceEditPage> {
       subtitle: '',
       child: Column(
         children: [
+          // 操作日志入口（路由在后续 Task 注册，运行时解析）
+          ListTile(
+            leading: const Icon(Icons.history),
+            title: Text(l10n.opLogs),
+            subtitle: Text(l10n.opLogsSubtitle),
+            onTap: () => context.push('/device/op-logs/${widget.sn}'),
+          ),
+          Divider(height: 1, color: AppColor.border(context)),
           _buildActionTile(
             icon: Icons.swap_vert_rounded,
             color: AppColors.primary,
