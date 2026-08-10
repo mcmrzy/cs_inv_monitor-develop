@@ -122,6 +122,21 @@ class OfflineOpLogStore {
     return rows.map(OfflineOpLog.fromMap).toList(growable: false);
   }
 
+  /// 某设备全部操作日志（按时间倒序，最新在前，[limit] 条）。
+  ///
+  /// 不过滤 sync_status，页面需展示 pending/syncing/synced/failed 全状态。
+  Future<List<OfflineOpLog>> listBySn(String sn, {int limit = 200}) async {
+    final db = await _database;
+    final rows = await db.query(
+      'local_op_logs',
+      where: 'device_sn = ?',
+      whereArgs: [sn],
+      orderBy: 'op_time DESC',
+      limit: limit,
+    );
+    return rows.map(OfflineOpLog.fromMap).toList(growable: false);
+  }
+
   Future<int> pendingCount() async {
     final db = await _database;
     final rows = await db.rawQuery(
