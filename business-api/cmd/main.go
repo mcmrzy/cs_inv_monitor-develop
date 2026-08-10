@@ -878,6 +878,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			auth.POST("/devices", deps.DeviceHandler.Create)
 			auth.PUT("/devices/reorder", deps.DeviceHandler.ReorderDevicesGlobal)
 			auth.POST("/devices/bind", deps.DeviceHandler.Bind)
+			auth.POST("/devices/offline-logs", deps.DeviceHandler.UploadOfflineLogs)
 			auth.POST("/devices/batch/control", middleware.RequirePermission(deps.PermChecker, "devices", "control"), deps.DeviceHandler.BatchControl)
 			auth.POST("/devices/add-to-station", deps.DeviceHandler.AddToStation)
 			auth.GET("/devices/scan/local", deps.DeviceHandler.ScanLocal)
