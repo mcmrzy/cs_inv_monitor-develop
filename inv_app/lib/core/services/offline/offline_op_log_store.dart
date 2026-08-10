@@ -199,7 +199,7 @@ class OfflineOpLogStore {
     await db.rawDelete('''
       DELETE FROM local_op_logs
       WHERE sync_status = 'synced' AND (
-        op_time < datetime('now', '-30 days')
+        julianday(op_time) < julianday('now', '-30 days')
         OR rowid NOT IN (
           SELECT rowid FROM local_op_logs
           WHERE sync_status = 'synced'

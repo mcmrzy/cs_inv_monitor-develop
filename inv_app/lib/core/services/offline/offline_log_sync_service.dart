@@ -36,6 +36,7 @@ class OfflineLogSyncService {
   Timer? _retryTimer;
   StreamSubscription<bool>? _netSub;
   bool _started = false;
+  bool _syncing = false; // 同步互斥：多触发源并发时仅执行一轮
 
   /// 是否有退避重试在等待（测试断言用）
   bool get hasPendingRetry => _retryTimer?.isActive ?? false;
@@ -54,7 +55,20 @@ class OfflineLogSyncService {
   }
 
   /// 立即同步一轮（可手动触发）
+  ///
+  /// 互斥：网络恢复事件 / 退避重试 / 手动触发 / 启动可能并发，
+  /// 重叠时直接跳过本轮，避免重复上传与状态回滚。
   Future<void> syncNow() async {
+    if (_syncing) return;
+    _syncing = true;
+    try {
+      await _syncOnce();
+    } finally {
+      _syncing = false;
+    }
+  }
+
+  Future<void> _syncOnce() async {
     _retryTimer?.cancel();
     final pending = await store.pending(limit: batchSize);
     if (pending.isEmpty) return;
@@ -78,17 +92,20 @@ class OfflineLogSyncService {
       if (kDebugMode) {
         debugPrint('[OfflineLogSync] upload failed: $e');
       }
-      await store.bumpAttempts(pending.map((log) => log.logId).toList());
-      final attempts = (await store.pending(limit: batchSize))
-          .fold<int>(
+      // 用内存批次计算（先算再加）：bump 后 attempts >= max 的日志
+      // 会被 pending() 过滤，重查数据库会导致 markFailed 不可达
+      final ids = pending.map((log) => log.logId).toList();
+      final attempts = pending.fold<int>(
             0,
             (max, log) =>
                 log.syncAttempts > max ? log.syncAttempts : max,
-          );
+          ) +
+          1;
       if (attempts >= maxAttempts) {
-        await store.markFailed(pending.map((log) => log.logId).toList());
+        await store.markFailed(ids);
         return;
       }
+      await store.bumpAttempts(ids);
       _scheduleRetry(attempts);
     }
   }

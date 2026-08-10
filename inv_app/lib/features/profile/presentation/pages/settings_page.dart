@@ -78,9 +78,21 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _toggleBleDirect(bool value) async {
+    try {
+      // 打开/关闭聚合服务（校验蓝牙权限 → 自动连接 → 轮询；关闭 → 断开全部）
+      await getIt<BleDirectService>().setEnabled(value);
+    } catch (_) {
+      // 蓝牙未开启等异常：不持久化、开关保持原状
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.str('ble_bluetooth_off')),
+          duration: const Duration(seconds: 1),
+        ),
+      );
+      return;
+    }
     await _storage.saveIsBleDirectEnabled(value);
-    // 打开/关闭聚合服务（校验蓝牙权限 → 自动连接 → 轮询；关闭 → 断开全部）
-    await getIt<BleDirectService>().setEnabled(value);
     if (!mounted) return;
     setState(() => _isBleDirectEnabled = value);
     ScaffoldMessenger.of(context).showSnackBar(
