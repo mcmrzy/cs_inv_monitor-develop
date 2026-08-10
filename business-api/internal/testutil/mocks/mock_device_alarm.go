@@ -18,7 +18,7 @@ type MockDeviceRepo struct {
 	GetAllFunc             func(ctx context.Context, stationID int64, status, page, pageSize int) ([]*model.Device, int64, error)
 	GetByStationIDFunc     func(ctx context.Context, stationID int64) ([]*model.Device, error)
 	EnsureDeviceFunc       func(ctx context.Context, sn string) error
-	BindFunc               func(ctx context.Context, sn string, userID, stationID int64) error
+	BindFunc               func(ctx context.Context, sn string, userID, stationID int64, deviceKeyHash string) error
 	HasDataPermissionFunc  func(ctx context.Context, userID int64, sn string) bool
 	GetAllowedDeviceSNsFunc func(ctx context.Context, userID int64) ([]string, error)
 	GetRealtimeDataFunc    func(ctx context.Context, sn string) (map[string]interface{}, error)
@@ -85,10 +85,10 @@ func (m *MockDeviceRepo) EnsureDevice(ctx context.Context, sn string) error {
 	return nil
 }
 
-func (m *MockDeviceRepo) Bind(ctx context.Context, sn string, userID, stationID int64) error {
+func (m *MockDeviceRepo) Bind(ctx context.Context, sn string, userID, stationID int64, deviceKeyHash string) error {
 	m.record("Bind", sn, userID, stationID)
 	if m.BindFunc != nil {
-		return m.BindFunc(ctx, sn, userID, stationID)
+		return m.BindFunc(ctx, sn, userID, stationID, deviceKeyHash)
 	}
 	return nil
 }

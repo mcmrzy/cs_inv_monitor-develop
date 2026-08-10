@@ -1614,14 +1614,17 @@ func (r *DeviceRepository) Create(ctx context.Context, sn, model string, ratedPo
 	return nil
 }
 
-func (r *DeviceRepository) Bind(ctx context.Context, sn string, userID, stationID int64) error {
+// Bind binds a device to the current user, storing the SHA-256 hash of its
+// device_key (the raw key is returned to the client only once).
+func (r *DeviceRepository) Bind(ctx context.Context, sn string, userID, stationID int64, deviceKeyHash string) error {
 	query := `UPDATE devices
 		SET user_id = $1,
 			station_id = NULLIF($2::bigint, 0),
 			timezone = COALESCE((SELECT timezone FROM stations WHERE id = NULLIF($2::bigint, 0)), 'Asia/Shanghai'),
+			device_key_hash = $3,
 			updated_at = NOW()
-		WHERE sn = $3 AND user_id = 0`
-	tag, err := r.db.Exec(ctx, query, userID, stationID, sn)
+		WHERE sn = $4 AND user_id = 0`
+	tag, err := r.db.Exec(ctx, query, userID, stationID, deviceKeyHash, sn)
 	if err != nil {
 		return err
 	}
@@ -1637,7 +1640,7 @@ func (r *DeviceRepository) Unbind(ctx context.Context, sn string) error {
 	var stationID int64
 	_ = r.db.QueryRow(ctx, `SELECT COALESCE(station_id, 0) FROM devices WHERE sn = $1`, sn).Scan(&stationID)
 
-	query := `UPDATE devices SET user_id = 0, station_id = NULL, timezone = 'Asia/Shanghai', updated_at = NOW() WHERE sn = $1`
+	query := `UPDATE devices SET user_id = 0, station_id = NULL, timezone = 'Asia/Shanghai', device_key_hash = NULL, updated_at = NOW() WHERE sn = $1`
 	_, err := r.db.Exec(ctx, query, sn)
 	if err == nil {
 		r.invalidateDeviceCache(ctx, sn)
@@ -1647,6 +1650,29 @@ func (r *DeviceRepository) Unbind(ctx context.Context, sn string) error {
 		}
 	}
 	return err
+}
+
+// SaveOfflineLogs batch-inserts offline operation logs uploaded by the App.
+// Idempotency: (user_id, log_id) unique constraint; duplicates are skipped.
+// Returns (accepted, duplicates, err).
+func (r *DeviceRepository) SaveOfflineLogs(ctx context.Context, userID int64, logs []model.OfflineOpLog) (int, int, error) {
+	accepted := 0
+	for _, log := range logs {
+		params, err := json.Marshal(log.Params)
+		if err != nil {
+			return accepted, 0, fmt.Errorf("marshal params: %w", err)
+		}
+		tag, err := r.db.Exec(ctx, `
+			INSERT INTO device_offline_op_logs (log_id, user_id, device_sn, action, params, result, channel, op_time)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			ON CONFLICT (user_id, log_id) DO NOTHING`,
+			log.LogID, userID, log.DeviceSN, log.Action, params, log.Result, log.Channel, log.OpTime)
+		if err != nil {
+			return accepted, 0, err
+		}
+		accepted += int(tag.RowsAffected())
+	}
+	return accepted, len(logs) - accepted, nil
 }
 
 func (r *DeviceRepository) AddToStation(ctx context.Context, sn string, stationID int64) error {

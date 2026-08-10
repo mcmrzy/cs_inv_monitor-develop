@@ -89,6 +89,18 @@ type Device struct {
 	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
+// OfflineOpLog represents one local operation log uploaded by the App
+// (BLE local mode, design doc §4.2).
+type OfflineOpLog struct {
+	LogID    string                 `json:"log_id"`
+	DeviceSN string                 `json:"device_sn"`
+	Action   string                 `json:"action"`
+	Params   map[string]interface{} `json:"params"`
+	Result   string                 `json:"result"`
+	Channel  string                 `json:"channel"`
+	OpTime   time.Time              `json:"op_time"`
+}
+
 type DeviceRealtimeData struct {
 	DeviceSN              string    `json:"device_sn"`
 	DataTime              time.Time `json:"data_time"`
