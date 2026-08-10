@@ -150,6 +150,17 @@ class AuthSendEmailCodeRequested extends AuthEvent {
   List<Object?> get props => [email, type];
 }
 
+/// 修改手机号/邮箱成功后，同步更新 AuthBloc 状态与本地缓存（无需重新请求服务器）
+class AuthContactChanged extends AuthEvent {
+  final String? newPhone;
+  final String? newEmail;
+
+  const AuthContactChanged({this.newPhone, this.newEmail});
+
+  @override
+  List<Object?> get props => [newPhone, newEmail];
+}
+
 class AuthTokenRefreshed extends AuthEvent {
   final String token;
   final String? refreshToken;
