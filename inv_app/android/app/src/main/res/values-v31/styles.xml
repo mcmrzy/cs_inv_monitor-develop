@@ -4,9 +4,9 @@
          品牌渐变背景（与 SplashPage 一致）+ 透明图标，
          原生屏无缝衔接 SplashPage，感知为一段开屏画面 -->
     <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
-        <!-- 系统启动屏直接绘制品牌开屏完整图（全屏拉伸），透明图标不叠加；
-             与 Flutter SplashPage 同一张图，启动全程只见开屏图 -->
-        <item name="android:windowSplashScreenBackground">@drawable/splash_background_image</item>
+        <!-- Android 12+ 平台强制系统启动屏且仅支持纯色背景（全屏图被忽略），
+             取开屏图顶部主色（#6EABE4 浅蓝）与 Flutter 开屏页无缝衔接；透明图标不叠加 -->
+        <item name="android:windowSplashScreenBackground">#6EABE4</item>
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon_transparent</item>
         <item name="android:windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
     </style>

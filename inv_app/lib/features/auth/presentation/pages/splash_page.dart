@@ -78,35 +78,22 @@ class _SplashPageState extends State<SplashPage> {
         }
       },
       child: Scaffold(
-        // 底色与原生启动屏渐变起始色一致：淡入动画期间不闪白，无缝衔接成一段开屏画面
-        backgroundColor: const Color(0xFF0D47A1),
-        body: Container(
-          width: double.infinity,
-          height: double.infinity,
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color(0xFF0D47A1),
-                Color(0xFF1565C0),
-                Color(0xFF42A5F5),
-              ],
-            ),
-          ),
-          child: Stack(
-            children: [
-              // 品牌开屏完整图（用户设计稿：品牌字标/小烁/底座一体画面，全屏展示）
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: Image.asset(
-                    CsergyAssets.bgSplash,
-                    fit: BoxFit.cover,
-                  ),
+        // 底色取开屏图顶部主色（#6EABE4 浅蓝）：图片解码完成前与系统启动屏同色，
+        // 冷启动全程只见开屏图，无深蓝渐变突兀
+        backgroundColor: const Color(0xFF6EABE4),
+        body: Stack(
+          children: [
+            // 品牌开屏完整图（用户设计稿：品牌字标/小烁/底座一体画面，全屏展示）
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Image.asset(
+                  CsergyAssets.bgSplash,
+                  fit: BoxFit.cover,
                 ),
               ),
-              // 底部版本号（动态读取 AppConfig.version，避免硬编码）
-              Positioned(
+            ),
+            // 底部版本号（动态读取 AppConfig.version，避免硬编码）
+            Positioned(
                 left: 0,
                 right: 0,
                 bottom: 48.h,
@@ -120,8 +107,7 @@ class _SplashPageState extends State<SplashPage> {
                   ),
                 ),
               ),
-            ],
-          ),
+          ],
         ),
       ),
     );
