@@ -1,9 +1,8 @@
-import 'dart:math' as math;
-
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
+import 'package:inv_app/core/config/app_config.dart';
 import 'package:inv_app/core/services/jverify_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
@@ -72,6 +71,8 @@ class _SplashPageState extends State<SplashPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final topPadding = MediaQuery.of(context).padding.top;
+    final xiaoshuoHeight = MediaQuery.of(context).size.height * 0.52;
     return BlocListener<AuthBloc, AuthState>(
       listener: (context, state) {
         if (state is AuthAuthenticated) {
@@ -99,7 +100,7 @@ class _SplashPageState extends State<SplashPage> {
           ),
           child: Stack(
             children: [
-              // 开屏背景图（AI 生成：品牌蓝场景 + 小烁，铺满不裁切主体）
+              // 开屏背景图（纯净品牌蓝渐变 + 细腻磨砂光感，无主体，与前景小烁不重复）
               Positioned.fill(
                 child: IgnorePointer(
                   child: Image.asset(
@@ -108,13 +109,7 @@ class _SplashPageState extends State<SplashPage> {
                   ),
                 ),
               ),
-              // 左上太阳放射光线（光伏主题装饰）
-              const Positioned.fill(
-                child: IgnorePointer(
-                  child: CustomPaint(painter: _SunRayPainter()),
-                ),
-              ),
-              // 右上双圆环装饰
+              // 右上双圆环装饰（克制几何元素 1）
               Positioned(
                 right: -70.w,
                 top: -70.w,
@@ -145,7 +140,7 @@ class _SplashPageState extends State<SplashPage> {
                   ),
                 ),
               ),
-              // 左下光斑
+              // 左下光斑（克制几何元素 2）
               Positioned(
                 left: -50.w,
                 bottom: -50.w,
@@ -158,7 +153,7 @@ class _SplashPageState extends State<SplashPage> {
                   ),
                 ),
               ),
-              // 中右小光斑
+              // 中右小光斑（克制几何元素 3）
               Positioned(
                 right: -30.w,
                 bottom: 220.h,
@@ -171,87 +166,113 @@ class _SplashPageState extends State<SplashPage> {
                   ),
                 ),
               ),
-              // 底部斜切渐变带
+              // 顶部品牌字标 CSERGY（白色细光晕，规范预留位）
               Positioned(
-                left: -80.w,
-                right: -80.w,
-                bottom: -70.h,
-                child: Transform.rotate(
-                  angle: -0.1,
-                  child: Container(
-                    height: 150.h,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.white.withValues(alpha: 0.05),
-                          Colors.transparent,
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              // 中心品牌内容：太阳能板图标 + 品牌名 + 副标语（淡入上浮）
-              Transform.translate(
-                offset: Offset(0, -20.h),
-                child: Center(
-                  child: TweenAnimationBuilder<double>(
-                    tween: Tween<double>(begin: 0, end: 1),
-                    duration: const Duration(milliseconds: 650),
-                    curve: Curves.easeOutCubic,
-                    builder: (context, value, child) {
-                      return Opacity(
-                        opacity: value,
-                        child: Transform.translate(
-                          offset: Offset(0, (1 - value) * 18.h),
-                          child: child,
+                top: topPadding + 64.h,
+                left: 0,
+                right: 0,
+                child: _FadeInUp(
+                  duration: const Duration(milliseconds: 650),
+                  child: Text(
+                    'CSERGY',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 26.sp,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 8,
+                      color: Colors.white,
+                      shadows: [
+                        Shadow(
+                          color: Colors.white.withValues(alpha: 0.9),
+                          blurRadius: 6,
                         ),
-                      );
-                    },
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        SizedBox(height: 112.h),
-                        // 品牌名文字（随语言切换：辰烁科技 / CSERGY）
-                        Text(
-                          l10n.brandName,
-                          style: TextStyle(
-                            fontSize: 24.sp,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
-                            letterSpacing: 1.5,
-                          ),
+                        Shadow(
+                          color: Colors.white.withValues(alpha: 0.45),
+                          blurRadius: 14,
                         ),
-                        SizedBox(height: 10.h),
-                        Text(
-                          l10n.pvInverterMonitor,
-                          style: TextStyle(
-                            fontSize: 14.sp,
-                            color: Colors.white.withValues(alpha: 0.85),
-                          ),
-                        ),
-                        // 小烁欢迎挥手（透明底 WebP，浮在背景场景上方）
-                        SizedBox(height: 18.h),
-                        Image.asset(
-                          CsergyAssets.xiaoshuoWelcome,
-                          width: 220.w,
-                          height: 200.w,
-                          fit: BoxFit.contain,
+                        Shadow(
+                          color: const Color(0xFF90CAF9)
+                              .withValues(alpha: 0.55),
+                          blurRadius: 24,
                         ),
                       ],
                     ),
                   ),
                 ),
               ),
-              // 底部版本号
+              // 中部副标语
+              Positioned(
+                top: topPadding + 122.h,
+                left: 0,
+                right: 0,
+                child: _FadeInUp(
+                  duration: const Duration(milliseconds: 650),
+                  child: Text(
+                    l10n.pvInverterMonitor,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 13.sp,
+                      letterSpacing: 2.5,
+                      color: Colors.white.withValues(alpha: 0.78),
+                    ),
+                  ),
+                ),
+              ),
+              // 主体：小烁（居中偏下，占屏高约 52%）+ 透明泛蓝光亚克力底座
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 128.h,
+                child: _FadeInUp(
+                  duration: const Duration(milliseconds: 650),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Image.asset(
+                        CsergyAssets.xiaoshuoWelcome,
+                        height: xiaoshuoHeight,
+                        fit: BoxFit.contain,
+                      ),
+                      // 亚克力底座：透明泛蓝光椭圆，营造悬浮陈列感
+                      Container(
+                        margin: EdgeInsets.only(top: -22.h),
+                        width: 320.w,
+                        height: 46.h,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(23.h),
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.white.withValues(alpha: 0.30),
+                              Colors.white.withValues(alpha: 0.10),
+                              Colors.white.withValues(alpha: 0.03),
+                            ],
+                          ),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.28),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF64B5F6)
+                                  .withValues(alpha: 0.38),
+                              blurRadius: 30,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              // 底部版本号（动态读取 AppConfig.version，避免硬编码）
               Positioned(
                 left: 0,
                 right: 0,
                 bottom: 48.h,
                 child: Text(
-                  'V1.0.0',
+                  'V${AppConfig.version}',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 12.sp,
@@ -268,29 +289,29 @@ class _SplashPageState extends State<SplashPage> {
   }
 }
 
-/// 左上角太阳放射光线装饰（光伏主题）
-class _SunRayPainter extends CustomPainter {
-  const _SunRayPainter();
+/// 品牌开屏统一动效：650ms 淡入上浮（easeOutCubic）
+class _FadeInUp extends StatelessWidget {
+  const _FadeInUp({required this.duration, required this.child});
+
+  final Duration duration;
+  final Widget child;
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.05)
-      ..strokeWidth = 1.2;
-    // 光源在屏幕左上角外，向中上区域放射
-    const origin = Offset(-50, -50);
-    const sector = math.pi / 2.6;
-    for (int i = 0; i < 20; i++) {
-      final angle = (i / 19) * sector;
-      final length = size.width * 0.62;
-      canvas.drawLine(
-        origin,
-        origin + Offset(math.cos(angle), math.sin(angle)) * length,
-        paint,
-      );
-    }
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: duration,
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, (1 - value) * 18.h),
+            child: child,
+          ),
+        );
+      },
+      child: child,
+    );
   }
-
-  @override
-  bool shouldRepaint(covariant _SunRayPainter oldDelegate) => false;
 }
