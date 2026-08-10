@@ -7,7 +7,6 @@ import 'package:inv_app/core/services/jverify_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
-import 'package:inv_app/l10n/app_localizations.dart';
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -70,9 +69,6 @@ class _SplashPageState extends State<SplashPage> {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final topPadding = MediaQuery.of(context).padding.top;
-    final xiaoshuoHeight = MediaQuery.of(context).size.height * 0.52;
     return BlocListener<AuthBloc, AuthState>(
       listener: (context, state) {
         if (state is AuthAuthenticated) {
@@ -100,172 +96,12 @@ class _SplashPageState extends State<SplashPage> {
           ),
           child: Stack(
             children: [
-              // 开屏背景图（纯净品牌蓝渐变 + 细腻磨砂光感，无主体，与前景小烁不重复）
+              // 品牌开屏完整图（用户设计稿：品牌字标/小烁/底座一体画面，全屏展示）
               Positioned.fill(
                 child: IgnorePointer(
                   child: Image.asset(
                     CsergyAssets.bgSplash,
                     fit: BoxFit.cover,
-                  ),
-                ),
-              ),
-              // 右上双圆环装饰（克制几何元素 1）
-              Positioned(
-                right: -70.w,
-                top: -70.w,
-                child: Container(
-                  width: 230.w,
-                  height: 230.w,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.1),
-                      width: 26,
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                right: -16.w,
-                top: 96.h,
-                child: Container(
-                  width: 96.w,
-                  height: 96.w,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.08),
-                      width: 10,
-                    ),
-                  ),
-                ),
-              ),
-              // 左下光斑（克制几何元素 2）
-              Positioned(
-                left: -50.w,
-                bottom: -50.w,
-                child: Container(
-                  width: 150.w,
-                  height: 150.w,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withValues(alpha: 0.06),
-                  ),
-                ),
-              ),
-              // 中右小光斑（克制几何元素 3）
-              Positioned(
-                right: -30.w,
-                bottom: 220.h,
-                child: Container(
-                  width: 110.w,
-                  height: 110.w,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withValues(alpha: 0.05),
-                  ),
-                ),
-              ),
-              // 顶部品牌字标 CSERGY（白色细光晕，规范预留位）
-              Positioned(
-                top: topPadding + 64.h,
-                left: 0,
-                right: 0,
-                child: _FadeInUp(
-                  duration: const Duration(milliseconds: 650),
-                  child: Text(
-                    'CSERGY',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 26.sp,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 8,
-                      color: Colors.white,
-                      shadows: [
-                        Shadow(
-                          color: Colors.white.withValues(alpha: 0.9),
-                          blurRadius: 6,
-                        ),
-                        Shadow(
-                          color: Colors.white.withValues(alpha: 0.45),
-                          blurRadius: 14,
-                        ),
-                        Shadow(
-                          color: const Color(0xFF90CAF9)
-                              .withValues(alpha: 0.55),
-                          blurRadius: 24,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              // 中部副标语
-              Positioned(
-                top: topPadding + 122.h,
-                left: 0,
-                right: 0,
-                child: _FadeInUp(
-                  duration: const Duration(milliseconds: 650),
-                  child: Text(
-                    l10n.pvInverterMonitor,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 13.sp,
-                      letterSpacing: 2.5,
-                      color: Colors.white.withValues(alpha: 0.78),
-                    ),
-                  ),
-                ),
-              ),
-              // 主体：小烁（居中偏下，占屏高约 52%）+ 透明泛蓝光亚克力底座
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 128.h,
-                child: _FadeInUp(
-                  duration: const Duration(milliseconds: 650),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Image.asset(
-                        CsergyAssets.xiaoshuoWelcome,
-                        height: xiaoshuoHeight,
-                        fit: BoxFit.contain,
-                      ),
-                      // 亚克力底座：透明泛蓝光椭圆，营造悬浮陈列感
-                      // 用 Transform.translate 上移实现与上方小烁重叠（Container.margin 不允许负值）
-                      Transform.translate(
-                        offset: Offset(0, -22.h),
-                        child: Container(
-                          width: 320.w,
-                          height: 46.h,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(23.h),
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                Colors.white.withValues(alpha: 0.30),
-                                Colors.white.withValues(alpha: 0.10),
-                                Colors.white.withValues(alpha: 0.03),
-                              ],
-                            ),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.28),
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFF64B5F6)
-                                    .withValues(alpha: 0.38),
-                                blurRadius: 30,
-                                spreadRadius: 2,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
                   ),
                 ),
               ),
@@ -292,29 +128,3 @@ class _SplashPageState extends State<SplashPage> {
   }
 }
 
-/// 品牌开屏统一动效：650ms 淡入上浮（easeOutCubic）
-class _FadeInUp extends StatelessWidget {
-  const _FadeInUp({required this.duration, required this.child});
-
-  final Duration duration;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: 0, end: 1),
-      duration: duration,
-      curve: Curves.easeOutCubic,
-      builder: (context, value, child) {
-        return Opacity(
-          opacity: value,
-          child: Transform.translate(
-            offset: Offset(0, (1 - value) * 18.h),
-            child: child,
-          ),
-        );
-      },
-      child: child,
-    );
-  }
-}
