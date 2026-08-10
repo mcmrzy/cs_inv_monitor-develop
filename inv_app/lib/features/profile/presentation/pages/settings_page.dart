@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:dio/dio.dart';
+import 'package:inv_app/core/services/ble/ble_direct_service.dart';
+import 'package:inv_app/core/services/ble/ble_polling_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/services/locale_service.dart';
@@ -22,6 +24,8 @@ class _SettingsPageState extends State<SettingsPage> {
   final _localeService = getIt<LocaleService>();
 
   bool _isLocalMode = false;
+  bool _isBleDirectEnabled = false;
+  int _blePollInterval = 180;
   bool _isDarkMode = false;
   String _unitType = 'kW';
   String _serverUrl = '';
@@ -41,10 +45,14 @@ class _SettingsPageState extends State<SettingsPage> {
     final serverUrl = await _storage.getServerUrl();
     final locale = await _storage.getLocale();
     final timezone = await _storage.getTimezone();
+    final bleDirect = await _storage.getIsBleDirectEnabled();
+    final pollInterval = await _storage.getBlePollInterval();
 
     if (mounted) {
       setState(() {
         _isLocalMode = localMode;
+        _isBleDirectEnabled = bleDirect;
+        _blePollInterval = pollInterval;
         _isDarkMode = darkMode;
         _serverUrl = serverUrl ?? AppConfig.apiBaseUrl;
         _currentLocale = locale ?? 'zh';
@@ -67,6 +75,53 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
       );
     }
+  }
+
+  Future<void> _toggleBleDirect(bool value) async {
+    await _storage.saveIsBleDirectEnabled(value);
+    // 打开/关闭聚合服务（校验蓝牙权限 → 自动连接 → 轮询；关闭 → 断开全部）
+    await getIt<BleDirectService>().setEnabled(value);
+    if (!mounted) return;
+    setState(() => _isBleDirectEnabled = value);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(value ? l10n.bleDirectOn : l10n.bleDirectOff),
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  }
+
+  Future<void> _showPollIntervalDialog() async {
+    final options = [60, 180, 300];
+    final selected = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: Text(l10n.blePollInterval),
+        children: options.map((seconds) {
+          return SimpleDialogOption(
+            onPressed: () => Navigator.pop(dialogContext, seconds),
+            child: Text(
+              seconds == 60
+                  ? l10n.str('poll_interval_60s')
+                  : seconds == 180
+                      ? l10n.str('poll_interval_180s')
+                      : l10n.str('poll_interval_300s'),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+    if (selected == null) return;
+    await _storage.saveBlePollInterval(selected);
+    getIt<BlePollingService>().setInterval(Duration(seconds: selected));
+    if (!mounted) return;
+    setState(() => _blePollInterval = selected);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(l10n.pollIntervalSaved),
+        duration: const Duration(seconds: 1),
+      ),
+    );
   }
 
   Future<void> _toggleDarkMode(bool value) async {
@@ -306,6 +361,22 @@ class _SettingsPageState extends State<SettingsPage> {
             onChanged: _toggleLocalMode,
             activeThumbColor: AppColors.primary,
           ),
+          SwitchListTile(
+            title: Text(l10n.bleDirectEnabled),
+            subtitle: Text(l10n.bleDirectEnabledDesc),
+            value: _isBleDirectEnabled,
+            onChanged: _toggleBleDirect,
+            activeThumbColor: AppColors.primary,
+          ),
+          ListTile(
+            title: Text(l10n.blePollInterval),
+            subtitle: Text(l10n.blePollIntervalDesc),
+            trailing: Text(
+              '$_blePollInterval s',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            onTap: _showPollIntervalDialog,
+          ),
           const Divider(height: 1),
           ListTile(
             title: Text(l10n.customServer),
@@ -402,12 +473,17 @@ class _SettingsPageState extends State<SettingsPage> {
 
           if (confirmed == true) {
             await _storage.saveIsLocalMode(false);
+            await _storage.saveIsBleDirectEnabled(false);
+            await _storage.saveBlePollInterval(180);
+            await getIt<BleDirectService>().setEnabled(false);
             await _storage.saveIsDarkMode(false);
             await _storage.saveServerUrl(AppConfig.apiBaseUrl);
             await _storage.saveTimezone(TimezoneUtils.defaultTimezone);
             if (mounted) {
               setState(() {
                 _isLocalMode = false;
+                _isBleDirectEnabled = false;
+                _blePollInterval = 180;
                 _isDarkMode = false;
                 _serverUrl = AppConfig.apiBaseUrl;
                 _currentTimezone = TimezoneUtils.defaultTimezone;
