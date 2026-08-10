@@ -6,6 +6,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:inv_app/core/config/app_config.dart';
 import 'package:inv_app/core/services/api_service.dart';
+import 'package:inv_app/core/services/ble/ble_adapter.dart';
+import 'package:inv_app/core/services/ble/ble_binding_service.dart';
+import 'package:inv_app/core/services/ble/ble_device_manager.dart';
+import 'package:inv_app/core/services/ble/ble_direct_service.dart';
+import 'package:inv_app/core/services/ble/ble_polling_service.dart';
 import 'package:inv_app/core/network/api_client.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/services/realtime_data_service.dart';
@@ -14,6 +19,9 @@ import 'package:inv_app/features/profile/data/notify_prefs_service.dart';
 import 'package:inv_app/core/services/local_communication_service.dart';
 import 'package:inv_app/core/services/connection_mode_service.dart';
 import 'package:inv_app/core/services/offline_cache_service.dart';
+import 'package:inv_app/core/services/offline/offline_log_api.dart';
+import 'package:inv_app/core/services/offline/offline_log_sync_service.dart';
+import 'package:inv_app/core/services/offline/offline_op_log_store.dart';
 import 'package:inv_app/core/services/offline_sync_service.dart';
 import 'package:inv_app/core/services/network_status_service.dart';
 import 'package:inv_app/core/services/locale_service.dart';
@@ -293,6 +301,64 @@ getIt.registerLazySingleton<NotifyPrefsService>(
     getIt.registerLazySingleton<NetworkStatusService>(
       () => NetworkStatusService(connectivity: Connectivity()),
       dispose: (service) => service.dispose(),
+    );
+
+    // ---- BLE 直连设备模式：基础设施（适配器 / key 存储 / 设备管理器）----
+    getIt.registerLazySingleton<BleDeviceKeyStore>(
+      () => SecureStorageBleDeviceKeyStore(getIt<FlutterSecureStorage>()),
+    );
+
+    getIt.registerLazySingleton<BleAdapter>(() => FlutterBlueUltraAdapter());
+
+    // 注意：BleDeviceManager 实际无 dispose() 方法，注册不带 dispose 回调；
+    // 会话清理由 BleDirectService.dispose → manager.disconnectAll() 负责。
+    getIt.registerLazySingleton<BleDeviceManager>(
+      () => BleDeviceManager(
+        adapter: getIt<BleAdapter>(),
+        keyStore: getIt<BleDeviceKeyStore>(),
+      ),
+    );
+
+    // ---- BLE 直连设备模式：离线操作日志（存储 / API / 同步）----
+    getIt.registerLazySingleton<OfflineOpLogStore>(
+      () => OfflineOpLogStore(),
+    );
+
+    getIt.registerLazySingleton<OfflineLogApi>(
+      () => DioOfflineLogApi(getIt<Dio>()),
+    );
+
+    getIt.registerLazySingleton<OfflineLogSyncService>(
+      () => OfflineLogSyncService(
+        store: getIt<OfflineOpLogStore>(),
+        api: getIt<OfflineLogApi>(),
+        networkStatus: getIt<NetworkStatusService>(),
+      ),
+      dispose: (service) => service.dispose(),
+    );
+
+    // ---- BLE 直连设备模式：绑定 / 轮询 / 直连总开关 ----
+    getIt.registerLazySingleton<BleBindingService>(
+      () => BleBindingService(
+        manager: getIt<BleDeviceManager>(),
+        dio: getIt<Dio>(),
+        keyStore: getIt<BleDeviceKeyStore>(),
+        logStore: getIt<OfflineOpLogStore>(),
+      ),
+    );
+
+    getIt.registerLazySingleton<BlePollingService>(
+      () => BlePollingService(manager: getIt<BleDeviceManager>()),
+      dispose: (service) => service.dispose(),
+    );
+
+    getIt.registerLazySingleton<BleDirectService>(
+      () => BleDirectService(
+        adapter: getIt<BleAdapter>(),
+        manager: getIt<BleDeviceManager>(),
+        polling: getIt<BlePollingService>(),
+        storage: getIt<StorageService>(),
+      ),
     );
 
     getIt.registerLazySingleton<OfflineCacheService>(
