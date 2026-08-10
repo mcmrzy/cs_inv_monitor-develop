@@ -54,6 +54,9 @@ abstract class StorageService implements StorageServiceLike {
   Future<bool> getIsLocalMode();
   Future<void> saveIsLocalMode(bool value);
 
+  Future<int> getBlePollInterval();
+  Future<void> saveBlePollInterval(int seconds);
+
   Future<String?> getLocale();
   Future<void> saveLocale(String locale);
   String? getLocaleSync();
@@ -127,6 +130,7 @@ class StorageServiceImpl implements StorageService {
   static const String _keyActiveOrgId = 'active_org_id';
   static const String _keyActiveOrgName = 'active_org_name';
   static const String _kBleDirectEnabled = 'ble_direct_enabled';
+  static const String _kBlePollInterval = 'ble_poll_interval';
 
   @override
   Future<bool> getIsBleDirectEnabled() async {
@@ -136,6 +140,16 @@ class StorageServiceImpl implements StorageService {
   @override
   Future<void> saveIsBleDirectEnabled(bool value) async {
     await _sharedPreferences.setBool(_kBleDirectEnabled, value);
+  }
+
+  @override
+  Future<int> getBlePollInterval() async {
+    return _sharedPreferences.getInt(_kBlePollInterval) ?? 180;
+  }
+
+  @override
+  Future<void> saveBlePollInterval(int seconds) async {
+    await _sharedPreferences.setInt(_kBlePollInterval, seconds);
   }
 
   @override
