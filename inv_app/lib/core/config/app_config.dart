@@ -8,7 +8,7 @@ class AppConfig {
 
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://localhost:8888/api/v1',
+    defaultValue: 'http://192.168.8.57:8888/api/v1',
   );
   static const int connectTimeout = 30000;
   static const int receiveTimeout = 30000;
