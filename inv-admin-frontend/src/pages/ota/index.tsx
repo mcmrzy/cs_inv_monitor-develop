@@ -969,10 +969,10 @@ const FirmwareTab: React.FC = () => {
       },
     },
     { title: t('ota.subVersion'), dataIndex: 'version', key: 'version', width: 100 },
-    { title: t('ota.fileSize'), dataIndex: 'file_size', key: 'file_size', width: 100, render: (_: any, record: Firmware) => formatFileSize(record.fileSize) },
-    { title: 'MD5', dataIndex: 'file_md5', key: 'file_md5', width: 180, ellipsis: true, render: (_: any, record: Firmware) => <Tooltip title={record.fileMd5}><span style={{ fontFamily: 'monospace', fontSize: 12 }}>{record.fileMd5}</span></Tooltip> },
+    { title: t('ota.fileSize'), dataIndex: 'file_size', key: 'file_size', width: 100, render: (_: any, record: Firmware) => formatFileSize(record.file_size) },
+    { title: 'MD5', dataIndex: 'file_md5', key: 'file_md5', width: 180, ellipsis: true, render: (_: any, record: Firmware) => <Tooltip title={record.file_md5}><span style={{ fontFamily: 'monospace', fontSize: 12 }}>{record.file_md5}</span></Tooltip> },
     { title: t('ota.changelog'), dataIndex: 'changelog', key: 'changelog', ellipsis: true, render: (_, record: Firmware) => <Tooltip title={record.changelog}><span>{record.changelog || '-'}</span></Tooltip> },
-    { title: t('ota.uploadTime'), dataIndex: 'created_at', key: 'created_at', width: 170, render: (_: any, record: Firmware) => formatInTimezone(record.createdAt, timezone, 'YYYY-MM-DD HH:mm:ss') },
+    { title: t('ota.uploadTime'), dataIndex: 'created_at', key: 'created_at', width: 170, render: (_: any, record: Firmware) => formatInTimezone(record.created_at, timezone, 'YYYY-MM-DD HH:mm:ss') },
     {
       title: t('common.operation'), key: 'action', width: 140,
       render: (_: any, record: Firmware) => (

@@ -133,15 +133,15 @@ export const mockArmFirmware: Firmware = {
   version: '2.0.0',
   main_version: '2.0.0',
   target_chip: 'arm',
-  fileUrl: '/firmwares/arm-2.0.0.bin',
-  fileSize: 1024000,
-  fileMd5: 'd41d8cd98f00b204e9800998ecf8427e',
-  fileSha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+  file_url: '/firmwares/arm-2.0.0.bin',
+  file_size: 1024000,
+  file_md5: 'd41d8cd98f00b204e9800998ecf8427e',
+  file_sha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
   security_version: 2,
   release_signature: 'mock-ed25519-signature',
   changelog: '修复了通信模块的稳定性问题',
-  forceUpdate: false,
-  createdAt: '2026-01-01T00:00:00Z',
+  is_force: false,
+  created_at: '2026-01-01T00:00:00Z',
 }
 
 /** ESP 固件 */
@@ -151,15 +151,15 @@ export const mockEspFirmware: Firmware = {
   version: '1.5.0',
   main_version: '1.5.0',
   target_chip: 'esp',
-  fileUrl: '/firmwares/esp-1.5.0.bin',
-  fileSize: 512000,
-  fileMd5: '098f6bcd4621d373cade4e832627b4f6',
-  fileSha256: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+  file_url: '/firmwares/esp-1.5.0.bin',
+  file_size: 512000,
+  file_md5: '098f6bcd4621d373cade4e832627b4f6',
+  file_sha256: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
   security_version: 2,
   release_signature: 'mock-ed25519-signature',
   changelog: '新增 Wi-Fi 配网功能',
-  forceUpdate: false,
-  createdAt: '2026-01-02T00:00:00Z',
+  is_force: false,
+  created_at: '2026-01-02T00:00:00Z',
 }
 
 /** 固件列表 */
