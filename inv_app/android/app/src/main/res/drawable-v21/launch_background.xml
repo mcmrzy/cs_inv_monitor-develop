@@ -1,22 +1,15 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<!-- Modify this file to customize your launch splash screen -->
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 原生启动屏直接显示品牌开屏完整图（与 Flutter SplashPage 同一张图，无缝衔接）；
+     底层深蓝纯色兜底，图加载前不闪白 -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- 品牌渐变背景：与 SplashPage 一致（45° 三阶渐变），冷启动无缝衔接为一段开屏画面 -->
     <item>
         <shape android:shape="rectangle">
             <solid android:color="#0D47A1" />
         </shape>
     </item>
     <item>
-        <shape android:shape="rectangle">
-            <gradient
-                android:type="linear"
-                android:angle="45"
-                android:startColor="#0D47A1"
-                android:centerColor="#1565C0"
-                android:endColor="#42A5F5"
-                android:centerX="0.5"
-                android:centerY="0.5" />
-        </shape>
+        <bitmap
+            android:gravity="fill"
+            android:src="@drawable/launch_splash" />
     </item>
 </layer-list>

@@ -14,9 +14,21 @@
                         <viewControllerLayoutGuide type="bottom" id="xbc-2k-c8Z"/>
                     </layoutGuides>
                     <view key="view" contentMode="scaleToFill" id="Ze5-6b-2t3">
+                        <rect key="frame" x="0.0" y="0.0" width="375" height="667"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
-                        <!-- 品牌深蓝背景：与 SplashPage 渐变起始色一致，冷启动无缝衔接（原 LaunchImage 已移除） -->
+                        <subviews>
+                            <!-- 原生启动屏直接显示品牌开屏完整图（与 Flutter SplashPage 同一张图，无缝衔接） -->
+                            <imageView userInteractionEnabled="NO" contentMode="scaleAspectFill" image="LaunchImage" translatesAutoresizingMaskIntoConstraints="NO" id="spl-IMG-001">
+                                <rect key="frame" x="0.0" y="0.0" width="375" height="667"/>
+                            </imageView>
+                        </subviews>
                         <color key="backgroundColor" red="0.05098039216" green="0.2784313725" blue="0.631372549" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                        <constraints>
+                            <constraint firstItem="spl-IMG-001" firstAttribute="leading" secondItem="Ze5-6b-2t3" secondAttribute="leading" id="spl-c-001"/>
+                            <constraint firstItem="spl-IMG-001" firstAttribute="top" secondItem="Ze5-6b-2t3" secondAttribute="top" id="spl-c-002"/>
+                            <constraint firstAttribute="trailing" secondItem="spl-IMG-001" secondAttribute="trailing" id="spl-c-003"/>
+                            <constraint firstAttribute="bottom" secondItem="spl-IMG-001" secondAttribute="bottom" id="spl-c-004"/>
+                        </constraints>
                     </view>
                 </viewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="iYj-Kq-Ea1" userLabel="First Responder" sceneMemberID="firstResponder"/>
@@ -25,5 +37,6 @@
         </scene>
     </scenes>
     <resources>
+        <image name="LaunchImage" width="1440" height="3200"/>
     </resources>
 </document>
