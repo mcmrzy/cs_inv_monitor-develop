@@ -180,9 +180,10 @@ func ValidateFirmwareRequest(req *CreateFirmwareReq) error {
 	if !(strings.HasPrefix(req.FileURL, "/firmware/") || strings.HasPrefix(req.FileURL, "https://")) {
 		return fmt.Errorf("固件地址必须是 /firmware/ 路径或 HTTPS URL")
 	}
-	if req.TargetChip == "esp" || req.TargetChip == "arm" {
-		if req.SecurityVersion == 0 || !verifyFirmwareReleaseSignature(req) {
-			return fmt.Errorf("ESP/ARM 固件缺少有效的 Ed25519 发布签名或安全版本")
+	// 签名可选：仅当提供了安全版本或签名时才要求校验通过（管理后台上传固件不再强制填写）
+	if req.SecurityVersion > 0 || req.ReleaseSignature != "" {
+		if !verifyFirmwareReleaseSignature(req) {
+			return fmt.Errorf("固件 Ed25519 发布签名或安全版本无效")
 		}
 	}
 	return nil
