@@ -1,7 +1,13 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-abstract class StorageService {
+/// 存储抽象的最小接口（BLE 直连开关），便于单元测试 mock
+abstract class StorageServiceLike {
+  Future<bool> getIsBleDirectEnabled();
+  Future<void> saveIsBleDirectEnabled(bool value);
+}
+
+abstract class StorageService implements StorageServiceLike {
   Future<String?> getToken();
   Future<void> saveToken(String token);
   Future<void> deleteToken();
@@ -120,6 +126,17 @@ class StorageServiceImpl implements StorageService {
   static const String _keyNotifyDndEnabled = 'notify_dnd_enabled';
   static const String _keyActiveOrgId = 'active_org_id';
   static const String _keyActiveOrgName = 'active_org_name';
+  static const String _kBleDirectEnabled = 'ble_direct_enabled';
+
+  @override
+  Future<bool> getIsBleDirectEnabled() async {
+    return _sharedPreferences.getBool(_kBleDirectEnabled) ?? false;
+  }
+
+  @override
+  Future<void> saveIsBleDirectEnabled(bool value) async {
+    await _sharedPreferences.setBool(_kBleDirectEnabled, value);
+  }
 
   @override
   Future<String?> getToken() async {
