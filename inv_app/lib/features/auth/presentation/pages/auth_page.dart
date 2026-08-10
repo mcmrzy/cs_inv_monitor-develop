@@ -1,4 +1,4 @@
-import 'dart:math' as math;
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -14,8 +14,8 @@ import 'package:inv_app/l10n/app_localizations.dart';
 /// 登录/注册模式
 enum AuthMode { login, register }
 
-/// 登录注册页：品牌头 + 表单卡片
-/// 登录/注册表单通过 AnimatedSwitcher 做组件级切换动画（滑动 + 淡入）
+/// 登录注册页：整页品牌背景图（右上角吉祥物为图内元素）+ 毛玻璃表单卡片
+/// 背景图全屏铺满，表单卡片悬浮于中下部；登录/注册通过 AnimatedSwitcher 组件级切换
 class AuthPage extends StatefulWidget {
   final AuthMode initialMode;
 
@@ -25,43 +25,18 @@ class AuthPage extends StatefulWidget {
   State<AuthPage> createState() => _AuthPageState();
 }
 
-class _AuthPageState extends State<AuthPage>
-    with SingleTickerProviderStateMixin {
+class _AuthPageState extends State<AuthPage> {
   late AuthMode _mode;
-
-  /// 品牌区装饰呼吸动画控制器（圆环/光斑错相脉动）
-  late final AnimationController _decorController = AnimationController(
-    vsync: this,
-    duration: const Duration(seconds: 4),
-  )..repeat();
 
   @override
   void initState() {
     super.initState();
     _mode = widget.initialMode;
-    // 初始即注册模式时品牌头收缩、装饰被裁剪：不启动呼吸动画
-    if (_mode == AuthMode.register) {
-      _decorController.stop();
-      _decorController.value = 0;
-    }
-  }
-
-  @override
-  void dispose() {
-    _decorController.dispose();
-    super.dispose();
   }
 
   void _switchMode(AuthMode mode) {
     if (_mode == mode) return;
     setState(() => _mode = mode);
-    // 注册模式品牌头收缩后装饰被裁剪：暂停呼吸动画省电，切回登录恢复
-    if (mode == AuthMode.register) {
-      _decorController.stop();
-      _decorController.value = 0;
-    } else {
-      _decorController.repeat();
-    }
   }
 
   @override
@@ -84,49 +59,34 @@ class _AuthPageState extends State<AuthPage>
           }
         },
         builder: (context, state) {
-          // 顶部品牌渐变区 + 悬浮表单卡片，键盘弹出仍可滚动
-          return SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _buildBrandHeader(),
-                SizedBox(height: 10.h),
-                // 悬浮卡片：表单上叠盖住品牌区底部一块（Transform 视觉上叠，负 margin 会触发运行时断言崩溃）
-                Transform.translate(
-                  offset: Offset(0, -30.h),
-                  child: Container(
-                    margin: const EdgeInsets.fromLTRB(24, 0, 24, 0),
-                    padding: EdgeInsets.fromLTRB(24.w, 32.h, 24.w, 8.h),
-                    decoration: BoxDecoration(
-                      color: AppColor.surfaceContainer(context),
-                      borderRadius: BorderRadius.circular(20.r),
-                      boxShadow: [
-                        BoxShadow(
-                          color:
-                              const Color(0xFF1565C0).withValues(alpha: 0.12),
-                          blurRadius: 20,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    // 登录/注册表单组件级切换动画
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 350),
-                      switchInCurve: Curves.easeOutCubic,
-                      switchOutCurve: Curves.easeInCubic,
-                      transitionBuilder: _buildSwitchTransition,
-                      child: _mode == AuthMode.login
-                          ? const LoginForm(key: ValueKey('login-form'))
-                          : const RegisterForm(
-                              key: ValueKey('register-form'),
-                            ),
-                    ),
+          return Stack(
+            children: [
+              // 整页品牌背景图：右上角吉祥物/装饰均为图内元素，不叠加任何图形
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Image.asset(
+                    CsergyAssets.bgAuth,
+                    fit: BoxFit.cover,
                   ),
                 ),
-                _buildSwitchRow(),
-                SizedBox(height: 32.h),
-              ],
-            ),
+              ),
+              // 前景：品牌名 + 毛玻璃表单卡片 + 切换行（键盘弹出可滚动）
+              SafeArea(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(24.w, 0, 24.w, 24.h),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildBrandArea(),
+                      SizedBox(height: 36.h),
+                      _buildFormCard(),
+                      SizedBox(height: 24.h),
+                      _buildSwitchRow(),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           );
         },
       ),
@@ -145,207 +105,108 @@ class _AuthPageState extends State<AuthPage>
     );
   }
 
-  /// 品牌区：渐变头部 + 品牌名 + 副标语（无 CSERGY）
-  /// 卖点胶囊沉在头部底部与文字分层；表单卡片上叠盖住头部底部一块
-  /// 注册模式向上缩小收起（高度 260→110、品牌名/副标语/胶囊淡出且不占位），只留渐变条
-  Widget _buildBrandHeader() {
+  /// 品牌区：品牌名 + 副标语（白字带阴影，浮于深蓝渐变背景上；无任何图形叠加）
+  /// 注册模式副标语淡出且不占位，品牌名缩小，给表单留出滚动空间
+  Widget _buildBrandArea() {
     final l10n = AppLocalizations.of(context)!;
     final isRegister = _mode == AuthMode.register;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 350),
-      curve: Curves.easeInOutCubic,
-      height: isRegister ? 110.h : 260.h,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF0D47A1), Color(0xFF1565C0), Color(0xFF42A5F5)],
+    return Column(
+      children: [
+        SizedBox(height: 64.h),
+        AnimatedDefaultTextStyle(
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeInOutCubic,
+          style: TextStyle(
+            fontSize: isRegister ? 22.sp : 30.sp,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+            letterSpacing: 1.5,
+            shadows: const [
+              Shadow(
+                color: Colors.black26,
+                blurRadius: 8,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Text(l10n.brandName, textAlign: TextAlign.center),
         ),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(36.r)),
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Stack(
-          children: [
-            // 认证背景图（品牌蓝抽象场景，铺满不裁切）
-            Positioned.fill(
-              child: IgnorePointer(
-                child: Image.asset(
-                  CsergyAssets.bgAuth,
-                  fit: BoxFit.cover,
-                ),
-              ),
-            ),
-            // 装饰：右上大圆环（缓慢呼吸：缩放 + 透明度脉动）
-            Positioned(
-              right: -70.w,
-              top: -70.w,
-              child: AnimatedBuilder(
-                animation: _decorController,
-                builder: (context, child) {
-                  final v = const _BreathingCurve().transform(_decorController.value);
-                  return Transform.scale(
-                    scale: 0.94 + 0.08 * v,
-                    child: Opacity(opacity: 0.7 + 0.3 * v, child: child),
-                  );
-                },
-                child: Container(
-                  width: 230.w,
-                  height: 230.w,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.1),
-                      width: 26,
+        // 副标语：光伏逆变器智能监控（注册模式淡出且不占位）
+        AnimatedOpacity(
+          opacity: isRegister ? 0 : 1,
+          duration: const Duration(milliseconds: 250),
+          child: Visibility(
+            visible: !isRegister,
+            maintainState: true,
+            maintainAnimation: true,
+            child: Padding(
+              padding: EdgeInsets.only(top: 10.h),
+              child: Text(
+                l10n.pvInverterMonitor,
+                style: TextStyle(
+                  fontSize: 14.sp,
+                  color: Colors.white.withValues(alpha: 0.9),
+                  shadows: const [
+                    Shadow(
+                      color: Colors.black26,
+                      blurRadius: 8,
+                      offset: Offset(0, 2),
                     ),
-                  ),
+                  ],
                 ),
               ),
             ),
-            // 装饰：左下光斑（与圆环错相呼吸：放大 + 变亮）
-            Positioned(
-              left: -50.w,
-              bottom: -40.w,
-              child: AnimatedBuilder(
-                animation: _decorController,
-                builder: (context, child) {
-                  final v = const _BreathingCurve(phase: 0.5)
-                      .transform(_decorController.value);
-                  return Transform.scale(
-                    scale: 1.0 + 0.22 * v,
-                    child: Opacity(opacity: 0.5 + 0.5 * v, child: child),
-                  );
-                },
-                child: Container(
-                  width: 150.w,
-                  height: 150.w,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withValues(alpha: 0.06),
-                  ),
-                ),
-              ),
-            ),
-            // 品牌内容：品牌名 + 副标语（注册模式隐藏副标语，只保留品牌名）
-            Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // 品牌名（随语言切换：辰烁科技 / CSERGY；注册模式淡出且不占位）
-                  AnimatedOpacity(
-                    opacity: isRegister ? 0 : 1,
-                    duration: const Duration(milliseconds: 250),
-                    child: Visibility(
-                      visible: !isRegister,
-                      maintainState: true,
-                      maintainAnimation: true,
-                      child: AnimatedDefaultTextStyle(
-                        duration: const Duration(milliseconds: 350),
-                        curve: Curves.easeInOutCubic,
-                        style: TextStyle(
-                          fontSize: isRegister ? 22.sp : 28.sp,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                          letterSpacing: 1.5,
-                        ),
-                        child: Text(l10n.brandName),
-                      ),
-                    ),
-                  ),
-                  // 副标语：光伏逆变器智能监控（注册模式淡出且不占位）
-                  AnimatedOpacity(
-                    opacity: isRegister ? 0 : 1,
-                    duration: const Duration(milliseconds: 250),
-                    child: Visibility(
-                      visible: !isRegister,
-                      maintainState: true,
-                      maintainAnimation: true,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          SizedBox(height: 8.h),
-                          Text(
-                            l10n.pvInverterMonitor,
-                            style: TextStyle(
-                              fontSize: 14.sp,
-                              color: Colors.white.withValues(alpha: 0.85),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // 吉祥物小烁：登录模式浮于右上角（顶部小全身，注册模式收缩后隐藏）
-            Positioned(
-              right: 6.w,
-              top: 6.h,
-              child: AnimatedOpacity(
-                opacity: isRegister ? 0 : 1,
-                duration: const Duration(milliseconds: 250),
-                child: Visibility(
-                  visible: !isRegister,
-                  maintainState: true,
-                  maintainAnimation: true,
-                  child: Image.asset(
-                    CsergyAssets.xiaoshuoWelcome,
-                    width: 92.w,
-                    height: 92.w,
-                    fit: BoxFit.contain,
-                  ),
-                ),
-              ),
-            ),
-            // 卖点胶囊：沉到品牌头底部，与上方文字拉开距离（注册模式隐藏）
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 36.h,
-              child: AnimatedOpacity(
-                opacity: isRegister ? 0 : 1,
-                duration: const Duration(milliseconds: 250),
-                child: Visibility(
-                  visible: !isRegister,
-                  maintainState: true,
-                  maintainAnimation: true,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _buildFeatureChip(l10n.realtimeData),
-                      SizedBox(width: 10.w),
-                      _buildFeatureChip(l10n.alarmPush),
-                      SizedBox(width: 10.w),
-                      _buildFeatureChip(l10n.otaTitle),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
-      ),
+      ],
     );
   }
 
-  /// 卖点胶囊（渐变品牌头样式：半透明白底 + 白字）
-  Widget _buildFeatureChip(String label) {
+  /// 毛玻璃表单卡片：白底半透明 + 背景模糊，浮于背景图上，保证输入区可读性
+  Widget _buildFormCard() {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 6.h),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(20.r),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
+        borderRadius: BorderRadius.circular(24.r),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0D47A1).withValues(alpha: 0.14),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
-      child: Text(
-        label,
-        style: TextStyle(fontSize: 11.sp, color: Colors.white),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24.r),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: Container(
+            padding: EdgeInsets.fromLTRB(24.w, 30.h, 24.w, 10.h),
+            decoration: BoxDecoration(
+              color: AppColor.surfaceContainer(context).withValues(alpha: 0.82),
+              borderRadius: BorderRadius.circular(24.r),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.4),
+              ),
+            ),
+            // 登录/注册表单组件级切换动画
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 350),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: _buildSwitchTransition,
+              child: _mode == AuthMode.login
+                  ? const LoginForm(key: ValueKey('login-form'))
+                  : const RegisterForm(
+                      key: ValueKey('register-form'),
+                    ),
+            ),
+          ),
+        ),
       ),
     );
   }
 
-  /// 底部切换行：登录 ⇄ 注册（点击后表单组件动画切换）
+  /// 底部切换行：登录 ⇄ 注册（背景图下部为浅色，用常规深色文字保证对比度）
   Widget _buildSwitchRow() {
     final l10n = AppLocalizations.of(context)!;
     final isLogin = _mode == AuthMode.login;
@@ -366,17 +227,5 @@ class _AuthPageState extends State<AuthPage>
         ),
       ],
     );
-  }
-}
-
-/// 呼吸曲线：t∈[0,1] → 0→1→0 平滑正弦（phase 控制相位偏移，0.5 为反相）
-class _BreathingCurve extends Curve {
-  final double phase;
-  const _BreathingCurve({this.phase = 0});
-
-  @override
-  double transformInternal(double t) {
-    final v = (math.cos((t + phase) * 2 * math.pi) + 1) / 2;
-    return v.clamp(0.0, 1.0);
   }
 }
