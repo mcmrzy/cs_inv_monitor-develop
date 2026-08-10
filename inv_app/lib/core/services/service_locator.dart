@@ -24,6 +24,7 @@ import 'package:inv_app/core/services/offline/offline_log_sync_service.dart';
 import 'package:inv_app/core/services/offline/offline_op_log_store.dart';
 import 'package:inv_app/core/services/offline_sync_service.dart';
 import 'package:inv_app/core/services/network_status_service.dart';
+import 'package:inv_app/core/services/deep_link_service.dart';
 import 'package:inv_app/core/services/locale_service.dart';
 import 'package:inv_app/core/services/data_cache_service.dart';
 import 'package:inv_app/core/services/app_update_service.dart';
@@ -393,6 +394,10 @@ getIt.registerLazySingleton<NotifyPrefsService>(
 
     getIt.registerLazySingleton<JVerifyService>(
       () => JVerifyService(),
+    );
+
+    getIt.registerLazySingleton<DeepLinkService>(
+      () => DeepLinkService(),
     );
   }
 

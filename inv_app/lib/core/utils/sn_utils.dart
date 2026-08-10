@@ -374,5 +374,15 @@ QRScanResult? parseQRCode(String raw) {
     return QRScanResult(sn: trimmed.toUpperCase());
   }
 
+  // 智能链接：https://<host>/bind?sn=xxx&pin=yyy（host 不做白名单限制，仅校验路径 + SN 格式）
+  final uri = Uri.tryParse(trimmed);
+  if (uri != null && uri.hasScheme && uri.path == '/bind') {
+    final sn = uri.queryParameters['sn'];
+    final pin = uri.queryParameters['pin'];
+    if (sn != null && RegExp(r'^[A-Za-z0-9]{16}$').hasMatch(sn)) {
+      return QRScanResult(sn: sn.toUpperCase(), pin: pin);
+    }
+  }
+
   return null;
 }

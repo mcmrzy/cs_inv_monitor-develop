@@ -22,6 +22,7 @@ import 'package:inv_app/features/dashboard/presentation/bloc/dashboard_bloc.dart
 import 'package:inv_app/core/router/app_router.dart';
 import 'package:inv_app/core/services/jpush_service.dart';
 import 'package:inv_app/core/services/jverify_service.dart';
+import 'package:inv_app/core/services/deep_link_service.dart';
 import 'package:inv_app/core/services/network_status_service.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 import 'package:inv_app/core/data/china_regions.dart';
@@ -73,6 +74,9 @@ void main() async {
 
   // BLE 直连恢复 + 离线日志同步（首帧渲染后异步执行，不阻塞冷启动）
   unawaited(_restoreBleServices());
+
+  // 智能链接 Deep Link：冷启动 + 热启动接收 csinv://bind
+  unawaited(_initDeepLinks());
 }
 
 Future<void> _restoreBleServices() async {
@@ -87,6 +91,29 @@ Future<void> _restoreBleServices() async {
   } catch (e) {
     debugPrint('BLE restore failed: $e');
   }
+}
+
+/// 最近一次已处理的绑定链接去重键（app_links 冷启动/热启动可能重复投递同一链接）
+String? _lastHandledLinkKey;
+
+Future<void> _initDeepLinks() async {
+  final service = getIt<DeepLinkService>();
+
+  void handle(BindLink? link) {
+    if (link == null) return;
+    // 同一链接（sn|pin）只触发一次跳转，避免冷启动/热启动重复 push
+    if (_lastHandledLinkKey == link.dedupeKey) return;
+    _lastHandledLinkKey = link.dedupeKey;
+    AppRouter.router.push('/device/qr-bind?sn=${link.sn}&pin=${link.pin}');
+  }
+
+  // 冷启动：等首帧后再跳转，避免路由未就绪
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    handle(await service.getInitialLink());
+  });
+
+  // 热启动：运行中收到链接立即处理
+  service.linkStream.listen(handle);
 }
 
 Future<void> _initPushSdks() async {

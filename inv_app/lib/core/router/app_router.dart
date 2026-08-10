@@ -52,6 +52,8 @@ import 'package:inv_app/features/device/presentation/pages/device_realtime_page.
 
 import 'package:inv_app/features/device/presentation/pages/device_op_logs_page.dart';
 
+import 'package:inv_app/features/device/presentation/pages/device_qr_bind_page.dart';
+
 import 'package:inv_app/features/device_protocol/presentation/pages/device_protocol_page.dart';
 
 import 'package:inv_app/features/device/presentation/pages/wifi_config_page.dart';
@@ -279,6 +281,17 @@ class AppRouter {
         pageBuilder: (context, state) => _slidePage(
           state,
           DeviceOpLogsPage(sn: state.pathParameters['sn']!),
+        ),
+      ),
+      GoRoute(
+        path: '/device/qr-bind',
+        name: 'deviceQrBind',
+        pageBuilder: (context, state) => _slidePage(
+          state,
+          DeviceQrBindPage(
+            sn: state.uri.queryParameters['sn'] ?? '',
+            pin: state.uri.queryParameters['pin'] ?? '',
+          ),
         ),
       ),
       GoRoute(
