@@ -58,15 +58,15 @@ export interface Firmware {
   version: string
   main_version: string
   target_chip: string
-  fileUrl: string
-  fileSize: number
-  fileMd5: string
-  fileSha256: string
+  file_url: string
+  file_size: number
+  file_md5: string
+  file_sha256: string
   security_version: number
   release_signature: string
   changelog: string
-  forceUpdate: boolean
-  createdAt: string
+  is_force: boolean
+  created_at: string
 }
 
 export interface DeviceUpgrade {
