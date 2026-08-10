@@ -297,6 +297,7 @@ CREATE TABLE IF NOT EXISTS devices (
     mac_address VARCHAR(17),
     station_id BIGINT,
     user_id BIGINT NOT NULL,
+    device_key_hash VARCHAR(64),                  -- BLE 绑定密钥 SHA-256 摘要 (migration 098)
     installer_id BIGINT,                                  -- 安装商ID (migration 019/043)
     timezone VARCHAR(50) NOT NULL DEFAULT 'Asia/Shanghai', -- 设备所在时区, 继承自所属电站
     status SMALLINT NOT NULL DEFAULT 0, -- 0:离线 1:在线 2:故障
@@ -315,6 +316,24 @@ CREATE INDEX idx_devices_station ON devices(station_id);
 CREATE INDEX idx_devices_user ON devices(user_id);
 CREATE INDEX idx_devices_status ON devices(status);
 CREATE INDEX idx_devices_timezone ON devices(timezone);
+
+CREATE TABLE IF NOT EXISTS device_offline_op_logs (
+    id BIGSERIAL PRIMARY KEY,
+    log_id VARCHAR(64) NOT NULL,                 -- App 本地 UUID，同步幂等键
+    user_id BIGINT NOT NULL,                     -- 同步时归属用户
+    device_sn VARCHAR(50) NOT NULL,
+    action VARCHAR(50) NOT NULL,                 -- bind/unbind/power_on/power_off/set_power/set_param/ota
+    params JSONB DEFAULT '{}',
+    result VARCHAR(50) DEFAULT 'ok',
+    channel VARCHAR(10) DEFAULT 'ble',           -- cloud/ble
+    op_time TIMESTAMPTZ NOT NULL,                -- App 上报的本地操作时间
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (user_id, log_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_offline_logs_user_time ON device_offline_op_logs(user_id, op_time DESC);
+CREATE INDEX IF NOT EXISTS idx_offline_logs_sn ON device_offline_op_logs(device_sn);
+
 CREATE INDEX IF NOT EXISTS idx_devices_installer ON devices(installer_id);
 CREATE INDEX IF NOT EXISTS idx_devices_model_id ON devices(model_id) WHERE model_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_devices_user_station_deleted
