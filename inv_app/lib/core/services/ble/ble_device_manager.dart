@@ -267,6 +267,85 @@ class BleDeviceSession {
     }
   }
 
+  /// 读取 INFO 特征（协议 §8：{sn,model,firmware,mac,bound,proto_ver}）
+  Future<Map<String, dynamic>> readInfo() async {
+    final connection = _connection;
+    if (connection == null) {
+      throw const BleCommandException('UNAUTHENTICATED', 'not connected');
+    }
+    final bytes = await connection.read(
+      BleCtProtocol.serviceUuid,
+      BleCtProtocol.infoCharUuid,
+    );
+    return jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
+  }
+
+  /// 读取最新遥测快照（协议修订①：TELEMETRY 支持 Read，App 轮询用）
+  Future<Map<String, dynamic>> readTelemetrySnapshot() async {
+    final connection = _connection;
+    if (connection == null) {
+      throw const BleCommandException('UNAUTHENTICATED', 'not connected');
+    }
+    final bytes = await connection.read(
+      BleCtProtocol.serviceUuid,
+      BleCtProtocol.telemetryCharUuid,
+    );
+    return jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
+  }
+
+  /// 校验设备 PIN（附录 B：配网写凭据前 pin_check）。
+  /// 设备 notify 返回 {mode:'pin_check', result:'ok'|'rejected', error?:'invalid_pin'|'locked'}。
+  Future<void> checkPin(String pin) async {
+    final connection = _connection;
+    if (connection == null) {
+      throw const BleCommandException('UNAUTHENTICATED', 'not connected');
+    }
+    final completer = Completer<Map<String, dynamic>>();
+    _authCompleter = completer;
+    await connection.write(
+      BleCtProtocol.serviceUuid,
+      BleCtProtocol.authCharUuid,
+      utf8.encode(jsonEncode({'mode': 'pin_check', 'pin': pin})),
+    );
+    final resp = await completer.future.timeout(BleCtProtocol.authTimeout);
+    if (resp['mode'] != 'pin_check' || resp['result'] != 'ok') {
+      final err = (resp['error'] as String?) ?? 'pin rejected';
+      throw BleCommandException(err == 'locked' ? 'PIN_LOCKED' : 'PIN_REJECTED', err);
+    }
+  }
+
+  /// 绑定（协议 §4.1 + 附录 B）：设备未绑定时写入 bind 消息，设备 notify 返回结果。
+  /// [deviceKeyBase64] App 本地生成的 32B Base64 key；[pin] 场景 B 必传（设备端校验），
+  /// 场景 A 配网已验证可不传；[issuedAt] 设备时钟校准用（缺省当前时间）。
+  Future<void> bind(String deviceKeyBase64, {String? pin, DateTime? issuedAt}) async {
+    final connection = _connection;
+    if (connection == null) {
+      throw const BleCommandException('UNAUTHENTICATED', 'not connected');
+    }
+    final ts = (issuedAt ?? DateTime.now()).millisecondsSinceEpoch ~/ 1000;
+    final completer = Completer<Map<String, dynamic>>();
+    _authCompleter = completer;
+    await connection.write(
+      BleCtProtocol.serviceUuid,
+      BleCtProtocol.authCharUuid,
+      utf8.encode(
+        jsonEncode({
+          'mode': 'bind',
+          'device_key': deviceKeyBase64,
+          'issued_at': ts,
+          if (pin != null) 'pin': pin,
+        }),
+      ),
+    );
+    final resp = await completer.future.timeout(BleCtProtocol.authTimeout);
+    if (resp['mode'] != 'bind' || resp['result'] != 'ok') {
+      throw BleCommandException(
+        'BIND_REJECTED',
+        (resp['error'] as String?) ?? 'bind rejected',
+      );
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // 鉴权（协议 §5：HMAC-SHA256(nonce:ts, device_key) challenge-response）
   // ---------------------------------------------------------------------------
@@ -320,7 +399,7 @@ class BleDeviceSession {
     if (completer == null || completer.isCompleted) return;
     try {
       final json = jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
-      if (json['mode'] == 'auth') {
+      if (json['mode'] == 'auth' || json['mode'] == 'bind' || json['mode'] == 'pin_check') {
         completer.complete(json);
       }
     } catch (e) {
