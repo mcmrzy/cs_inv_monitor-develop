@@ -64,6 +64,13 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- 智能链接二维码：csinv://bind?sn=xxx&pin=xxx -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="csinv" android:host="bind"/>
+            </intent-filter>
         </activity>
         <!-- uCrop 裁剪 Activity（image_cropper 要求 targetSdk>=30 时显式声明） -->
         <activity

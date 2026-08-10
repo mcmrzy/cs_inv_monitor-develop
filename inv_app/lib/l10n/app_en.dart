@@ -1239,6 +1239,15 @@ const Map<String, String> en = {
   'ble_bind_confirm_desc': 'An unbound inverter is detected. Bind it?',
   'ble_bind_confirm_action': 'Bind',
 
+  // === Smart-link QR bind (nameplate QR csinv://bind) ===
+  'qr_bind_title': 'Scan & bind device',
+  'qr_bind_checking': 'Checking Bluetooth…',
+  'qr_bind_scanning': 'Scanning nearby devices…',
+  'qr_bind_matching': 'Matching device {name}…',
+  'qr_bind_binding': 'Writing binding info…',
+  'qr_bind_not_found': 'No matching Bluetooth device found nearby. Move closer and retry',
+  'qr_bind_done': 'Done',
+
   // === Operation logs page ===
   'op_logs': 'Operation logs',
   'op_logs_subtitle': 'Bind, control, parameter and upgrade history',

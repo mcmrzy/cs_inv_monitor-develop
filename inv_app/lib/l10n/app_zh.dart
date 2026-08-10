@@ -1196,6 +1196,15 @@ const Map<String, String> zh = {
   'ble_bind_confirm_desc': '检测到未绑定的逆变器设备，是否绑定？',
   'ble_bind_confirm_action': '绑定',
 
+  // === 智能链接扫码绑定（铭牌二维码 csinv://bind）===
+  'qr_bind_title': '扫码绑定设备',
+  'qr_bind_checking': '正在检查蓝牙…',
+  'qr_bind_scanning': '正在扫描附近设备…',
+  'qr_bind_matching': '正在匹配设备 {name}…',
+  'qr_bind_binding': '正在写入绑定信息…',
+  'qr_bind_not_found': '附近未找到 SN 匹配的蓝牙设备，请靠近设备后重试',
+  'qr_bind_done': '完成',
+
   // === 操作日志页 ===
   'op_logs': '操作日志',
   'op_logs_subtitle': '绑定、控制、参数与升级记录',
