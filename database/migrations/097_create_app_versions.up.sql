@@ -40,9 +40,13 @@ ALTER SEQUENCE app_versions_id_seq OWNED BY app_versions.id;
 
 ALTER TABLE ONLY app_versions ALTER COLUMN id SET DEFAULT nextval('app_versions_id_seq'::regclass);
 
--- 主键
-ALTER TABLE ONLY app_versions
-    ADD CONSTRAINT app_versions_pkey PRIMARY KEY (id);
+-- 主键（幂等：表已存在且已有主键时跳过，避免容器启动迁移重放时重复建主键报错）
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'app_versions_pkey' AND conrelid = 'app_versions'::regclass) THEN
+        ALTER TABLE ONLY app_versions ADD CONSTRAINT app_versions_pkey PRIMARY KEY (id);
+    END IF;
+END $$;
 
 -- 索引（按平台+状态+时间倒序查询，与 ListAppVersions 查询匹配）
 CREATE INDEX IF NOT EXISTS idx_app_versions_platform_status ON app_versions USING btree (platform, status, created_at DESC);
