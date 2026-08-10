@@ -154,3 +154,6 @@ artifacts/admin-login-page.png
 
 # 开屏/认证背景统一使用 WebP（PNG 为旧格式残留，禁止提交）
 inv_app/assets/images/backgrounds/*.png
+
+# 本地 AI 模型缓存（rembg u2net 等，不入库）
+.model_cache/

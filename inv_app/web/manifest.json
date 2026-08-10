@@ -1,11 +1,11 @@
 {
-    "name": "inv_app",
-    "short_name": "inv_app",
+    "name": "CSERGY 光伏监控",
+    "short_name": "CSERGY",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#0D47A1",
+    "theme_color": "#1565C0",
+    "description": "光伏逆变器智能监控系统",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
