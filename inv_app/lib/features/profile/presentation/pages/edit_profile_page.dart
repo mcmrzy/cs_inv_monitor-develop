@@ -336,11 +336,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
   }
 
   /// 显示修改手机号弹窗（现代化UI）
-  void _showChangePhoneDialog(AppLocalizations l10n) {
+  Future<void> _showChangePhoneDialog(AppLocalizations l10n) async {
     final newPhoneController = TextEditingController();
     final codeController = TextEditingController();
 
-    showDialog(
+    await showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => Dialog(
@@ -480,6 +480,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
         ),
       ),
     );
+    // 弹窗关闭（确认/取消/返回键/遮罩）后取消倒计时，避免定时器对已销毁弹窗调用 setState
+    _phoneTimer?.cancel();
+    _phoneCountdown = 0;
   }
 
   /// 检查登录态；未登录时提示并跳转登录页，返回 false 阻止操作
@@ -582,11 +585,20 @@ class _EditProfilePageState extends State<EditProfilePage> {
       );
 
       if (response.statusCode == 200 && response.data['code'] == 0) {
+        // 关闭弹窗并取消倒计时，避免弹窗销毁后定时器回调报错
+        _phoneTimer?.cancel();
+        _phoneCountdown = 0;
+
         if (mounted) {
           Navigator.pop(context);
           setState(() {
             _phoneController.text = newPhone;
           });
+          // 同步 AuthBloc 状态与本地缓存，重新打开设置页显示新手机号
+          context.read<AuthBloc>().add(AuthContactChanged(newPhone: newPhone));
+        }
+
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(AppLocalizations.of(context)!.phoneChanged),
@@ -608,11 +620,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
   }
 
   /// 显示修改邮箱弹窗（现代化UI）
-  void _showChangeEmailDialog(AppLocalizations l10n) {
+  Future<void> _showChangeEmailDialog(AppLocalizations l10n) async {
     final newEmailController = TextEditingController();
     final codeController = TextEditingController();
 
-    showDialog(
+    await showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => Dialog(
@@ -752,6 +764,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
         ),
       ),
     );
+    // 弹窗关闭（确认/取消/返回键/遮罩）后取消倒计时，避免定时器对已销毁弹窗调用 setState
+    _emailTimer?.cancel();
+    _emailCountdown = 0;
   }
 
   /// 发送邮箱验证码（弹窗内使用）
@@ -831,11 +846,20 @@ class _EditProfilePageState extends State<EditProfilePage> {
       );
 
       if (response.statusCode == 200 && response.data['code'] == 0) {
+        // 关闭弹窗并取消倒计时，避免弹窗销毁后定时器回调报错
+        _emailTimer?.cancel();
+        _emailCountdown = 0;
+
         if (mounted) {
           Navigator.pop(context);
           setState(() {
             _emailController.text = newEmail;
           });
+          // 同步 AuthBloc 状态与本地缓存，重新打开设置页显示新邮箱
+          context.read<AuthBloc>().add(AuthContactChanged(newEmail: newEmail));
+        }
+
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(AppLocalizations.of(context)!.emailChanged),

@@ -65,6 +65,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthEmailLoginRequested>(_onEmailLoginRequested);
     on<AuthEmailRegisterRequested>(_onEmailRegisterRequested);
     on<AuthSendEmailCodeRequested>(_onSendEmailCodeRequested);
+    on<AuthContactChanged>(_onContactChanged);
     on<AuthTokenRefreshed>(_onTokenRefreshed);
     on<AuthWechatLoginRequested>(_onWechatLoginRequested);
     on<AuthGoogleLoginRequested>(_onGoogleLoginRequested);
@@ -398,6 +399,55 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           );
         }
       },
+    );
+  }
+
+  /// 手机号/邮箱修改成功后，同步更新 AuthBloc 状态与本地缓存；
+  /// 避免重新进入设置页时仍显示旧值
+  Future<void> _onContactChanged(
+    AuthContactChanged event,
+    Emitter<AuthState> emit,
+  ) async {
+    final current = state;
+    if (current is! AuthAuthenticated) return;
+
+    final newPhone = event.newPhone ?? current.phone;
+    if (event.newPhone != null) {
+      await storageService.saveUserPhone(event.newPhone!);
+    }
+
+    final oldUser = current.user;
+    User? updatedUser;
+    if (oldUser != null) {
+      updatedUser = User(
+        id: oldUser.id,
+        phone: newPhone,
+        email: event.newEmail ?? oldUser.email,
+        nickname: oldUser.nickname,
+        avatar: oldUser.avatar,
+        country: oldUser.country,
+        region: oldUser.region,
+        bio: oldUser.bio,
+        hasPassword: oldUser.hasPassword,
+        isSystemAdmin: oldUser.isSystemAdmin,
+        permissions: oldUser.permissions,
+        status: oldUser.status,
+        lastLoginAt: oldUser.lastLoginAt,
+        createdAt: oldUser.createdAt,
+        updatedAt: oldUser.updatedAt,
+      );
+      // 同步更新本地缓存的用户资料，冷启动时也能展示新手机号/邮箱
+      await _cacheUser(updatedUser);
+    }
+
+    emit(
+      AuthAuthenticated(
+        userId: current.userId,
+        phone: newPhone,
+        isSystemAdmin: current.isSystemAdmin,
+        permissions: current.permissions,
+        user: updatedUser,
+      ),
     );
   }
 
