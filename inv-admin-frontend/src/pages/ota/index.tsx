@@ -93,8 +93,6 @@ interface FirmwareFormValues {
   targetChip: string
   version: string
   changelog: string
-  securityVersion: number
-  releaseSignature: string
 }
 
 // =================== 任务状态映射 ===================
@@ -917,8 +915,6 @@ const FirmwareTab: React.FC = () => {
       formData.append('model', modelValue)
       formData.append('target_chip', values.targetChip)
       formData.append('version', values.version)
-      formData.append('security_version', String(values.securityVersion))
-      formData.append('release_signature', values.releaseSignature.trim())
       formData.append('changelog', values.changelog || '')
       uploadMutation.mutate(formData)
     } catch { setUploading(false) }
@@ -973,7 +969,6 @@ const FirmwareTab: React.FC = () => {
       },
     },
     { title: t('ota.subVersion'), dataIndex: 'version', key: 'version', width: 100 },
-    { title: t('ota.securityVersion'), dataIndex: 'security_version', key: 'security_version', width: 90 },
     { title: t('ota.fileSize'), dataIndex: 'file_size', key: 'file_size', width: 100, render: (_: any, record: Firmware) => formatFileSize(record.fileSize) },
     { title: 'MD5', dataIndex: 'file_md5', key: 'file_md5', width: 180, ellipsis: true, render: (_: any, record: Firmware) => <Tooltip title={record.fileMd5}><span style={{ fontFamily: 'monospace', fontSize: 12 }}>{record.fileMd5}</span></Tooltip> },
     { title: t('ota.changelog'), dataIndex: 'changelog', key: 'changelog', ellipsis: true, render: (_, record: Firmware) => <Tooltip title={record.changelog}><span>{record.changelog || '-'}</span></Tooltip> },
@@ -1044,15 +1039,6 @@ const FirmwareTab: React.FC = () => {
           </Form.Item>
           <Form.Item name="version" label={t('ota.subVersion')} rules={[{ required: true, message: t('ota.inputSubVersion') }]}>
             <Input placeholder={t('ota.autoFillVersion')} />
-          </Form.Item>
-          <Form.Item name="securityVersion" label={t('ota.securityVersion')} rules={[{ required: true, message: t('ota.inputSecurityVersion') }]}>
-            <InputNumber min={1} max={4294967295} precision={0} style={{ width: '100%' }} placeholder={t('ota.securityVersionPlaceholder')} />
-          </Form.Item>
-          <Form.Item name="releaseSignature" label={t('ota.releaseSignature')} rules={[
-            { required: true, message: t('ota.inputReleaseSignature') },
-            { pattern: /^[A-Za-z0-9+/]{86}==$/, message: t('ota.signatureFormatError') },
-          ]}>
-            <TextArea rows={3} placeholder={t('ota.releaseSignaturePlaceholder')} />
           </Form.Item>
           <Form.Item name="changelog" label={t('ota.changelog')}><TextArea rows={3} placeholder={t('ota.inputChangelog')} /></Form.Item>
           <Form.Item label={t('ota.firmwareFile')}>
