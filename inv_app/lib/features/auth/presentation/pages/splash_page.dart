@@ -234,32 +234,35 @@ class _SplashPageState extends State<SplashPage> {
                         fit: BoxFit.contain,
                       ),
                       // 亚克力底座：透明泛蓝光椭圆，营造悬浮陈列感
-                      Container(
-                        margin: EdgeInsets.only(top: -22.h),
-                        width: 320.w,
-                        height: 46.h,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(23.h),
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.white.withValues(alpha: 0.30),
-                              Colors.white.withValues(alpha: 0.10),
-                              Colors.white.withValues(alpha: 0.03),
+                      // 用 Transform.translate 上移实现与上方小烁重叠（Container.margin 不允许负值）
+                      Transform.translate(
+                        offset: Offset(0, -22.h),
+                        child: Container(
+                          width: 320.w,
+                          height: 46.h,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(23.h),
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.white.withValues(alpha: 0.30),
+                                Colors.white.withValues(alpha: 0.10),
+                                Colors.white.withValues(alpha: 0.03),
+                              ],
+                            ),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.28),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF64B5F6)
+                                    .withValues(alpha: 0.38),
+                                blurRadius: 30,
+                                spreadRadius: 2,
+                              ),
                             ],
                           ),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.28),
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFF64B5F6)
-                                  .withValues(alpha: 0.38),
-                              blurRadius: 30,
-                              spreadRadius: 2,
-                            ),
-                          ],
                         ),
                       ),
                     ],
