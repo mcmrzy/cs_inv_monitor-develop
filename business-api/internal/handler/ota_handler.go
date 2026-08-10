@@ -1,11 +1,13 @@
 package handler
 
 import (
+	"context"
 	"crypto/md5"
 	"crypto/sha256"
 	"fmt"
 	"inv-api-server/internal/middleware"
 	"inv-api-server/internal/model"
+	"inv-api-server/internal/repository"
 	"inv-api-server/internal/service"
 	"inv-api-server/pkg/response"
 	"io"
@@ -26,6 +28,8 @@ type OTAHandler struct {
 	otaService   *service.OTAService
 	db           *pgxpool.Pool
 	jpushService *service.JPushService
+	notifyPrefs  *repository.NotifyPrefsRepository
+	emailService *service.EmailService
 }
 
 // toUserVersion 将 main_version (V1.0.0.20260703) 转换为 user_version 格式 (V1.0.0)
@@ -38,8 +42,8 @@ func toUserVersion(mainVersion string) string {
 	return mainVersion
 }
 
-func NewOTAHandler(otaService *service.OTAService, db *pgxpool.Pool, jpushService *service.JPushService) *OTAHandler {
-	return &OTAHandler{otaService: otaService, db: db, jpushService: jpushService}
+func NewOTAHandler(otaService *service.OTAService, db *pgxpool.Pool, jpushService *service.JPushService, notifyPrefs *repository.NotifyPrefsRepository, emailService *service.EmailService) *OTAHandler {
+	return &OTAHandler{otaService: otaService, db: db, jpushService: jpushService, notifyPrefs: notifyPrefs, emailService: emailService}
 }
 
 type CreateFirmwareRequest struct {
@@ -267,6 +271,8 @@ func (h *OTAHandler) PushUpgrade(c *gin.Context) {
 		response.Error(c, 500, "推送升级失败: "+err.Error())
 		return
 	}
+	// 通知设备所属用户（按通知偏好过滤：notify_ota / 勿扰 / 邮件渠道）
+	h.notifyDevicesUpgrade(c.Request.Context(), req.DeviceSNs)
 	response.SuccessWithMessage(c, "升级已推送", nil)
 }
 
@@ -982,6 +988,8 @@ func (h *OTAHandler) PushPackageUpgrade(c *gin.Context) {
 		response.Error(c, 500, "推送升级包失败: "+err.Error())
 		return
 	}
+	// 通知设备所属用户（按通知偏好过滤：notify_ota / 勿扰 / 邮件渠道）
+	h.notifyDevicesUpgrade(c.Request.Context(), req.DeviceSNs)
 	response.SuccessWithMessage(c, "升级包已推送", nil)
 }
 
@@ -1603,4 +1611,51 @@ func (h *OTAHandler) RollbackToPublishedVersion(c *gin.Context) {
 		return
 	}
 	response.Success(c, gin.H{"task_id": taskID, "message": "已回滚到最新发布版本"})
+}
+
+
+// notifyDevicesUpgrade 固件升级任务下发后，按用户通知偏好（notify_ota / 勿扰 / 邮件渠道）
+// 通知设备所属用户；未设置偏好的用户按默认全开处理。
+func (h *OTAHandler) notifyDevicesUpgrade(ctx context.Context, deviceSNs []string) {
+	if h.jpushService == nil || len(deviceSNs) == 0 {
+		return
+	}
+	userIDs, err := h.deviceOwnerUserIDs(ctx, deviceSNs)
+	if err != nil || len(userIDs) == 0 {
+		return
+	}
+	jpushIDs, emailTargets := filterPushUsersByPrefs(ctx, h.db, h.notifyPrefs, userIDs, "device_ota", 0)
+	if len(jpushIDs) > 0 {
+		h.jpushService.SendNotificationAsync(ctx, jpushIDs, "device_ota", "", "固件升级任务已下发", "您的设备有新固件升级任务，请打开 App 查看详情")
+	}
+	if h.emailService == nil || len(emailTargets) == 0 {
+		return
+	}
+	for _, target := range emailTargets {
+		go func(uid int64, email string) {
+			if err := h.emailService.SendNotificationEmail(email, "固件升级任务已下发", "您的设备有新固件升级任务，请打开 App 查看详情", ""); err != nil {
+				log.Printf("[OTA] upgrade notification email failed: user=%d, err=%v", uid, err)
+			}
+		}(target.UserID, target.Email)
+	}
+}
+
+// deviceOwnerUserIDs 查询这些设备绑定的用户（user_id > 0 且未删除）。
+func (h *OTAHandler) deviceOwnerUserIDs(ctx context.Context, deviceSNs []string) ([]int64, error) {
+	rows, err := h.db.Query(ctx, `
+		SELECT DISTINCT user_id FROM devices
+		WHERE sn = ANY($1) AND user_id > 0 AND deleted_at IS NULL`, deviceSNs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var userIDs []int64
+	for rows.Next() {
+		var uid int64
+		if err := rows.Scan(&uid); err != nil {
+			continue
+		}
+		userIDs = append(userIDs, uid)
+	}
+	return userIDs, rows.Err()
 }

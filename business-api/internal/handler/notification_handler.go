@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"inv-api-server/internal/middleware"
+	"inv-api-server/internal/repository"
 	"inv-api-server/internal/service"
 	"inv-api-server/pkg/response"
 
@@ -18,10 +19,11 @@ import (
 type NotificationHandler struct {
 	db           *pgxpool.Pool
 	jpushService *service.JPushService
+	notifyPrefs  *repository.NotifyPrefsRepository
 }
 
-func NewNotificationHandler(db *pgxpool.Pool, jpushService *service.JPushService) *NotificationHandler {
-	return &NotificationHandler{db: db, jpushService: jpushService}
+func NewNotificationHandler(db *pgxpool.Pool, jpushService *service.JPushService, notifyPrefs *repository.NotifyPrefsRepository) *NotificationHandler {
+	return &NotificationHandler{db: db, jpushService: jpushService, notifyPrefs: notifyPrefs}
 }
 
 func notificationDataScope(alias string, isSystemAdmin bool, userIDArg int) string {
@@ -289,9 +291,20 @@ func (h *NotificationHandler) PushAnnouncement(c *gin.Context) {
 			response.Error(c, 500, "failed to save announcement")
 			return
 		}
-		h.jpushService.SendBroadcastAsync(ctx, req.Title, req.Content, map[string]string{
-			"notify_type": "system_announcement",
-		})
+		// 按用户通知偏好过滤后逐用户推送（notify_system + push_enabled + 勿扰）
+		userIDs, err := h.allActiveUserIDs(ctx)
+		if err != nil {
+			response.Error(c, 500, "failed to query target users")
+			return
+		}
+		if len(userIDs) == 0 {
+			response.SuccessWithMessage(c, "announcement pushed", nil)
+			return
+		}
+		jpushIDs, _ := filterPushUsersByPrefs(ctx, h.db, h.notifyPrefs, userIDs, notifyType, 0)
+		if len(jpushIDs) > 0 {
+			h.jpushService.SendNotificationAsync(ctx, jpushIDs, notifyType, deviceSN, req.Title, req.Content)
+		}
 
 	case strings.HasPrefix(req.Target, "station_"):
 		stationIDStr := strings.TrimPrefix(req.Target, "station_")
@@ -336,7 +349,10 @@ func (h *NotificationHandler) PushAnnouncement(c *gin.Context) {
 			response.Error(c, 500, "failed to save announcement")
 			return
 		}
-		h.jpushService.SendNotificationAsync(ctx, userIDs, notifyType, deviceSN, req.Title, req.Content)
+		jpushIDs, _ := filterPushUsersByPrefs(ctx, h.db, h.notifyPrefs, userIDs, notifyType, 0)
+		if len(jpushIDs) > 0 {
+			h.jpushService.SendNotificationAsync(ctx, jpushIDs, notifyType, deviceSN, req.Title, req.Content)
+		}
 
 	case strings.HasPrefix(req.Target, "user_"):
 		userIDStr := strings.TrimPrefix(req.Target, "user_")
@@ -377,7 +393,10 @@ func (h *NotificationHandler) PushAnnouncement(c *gin.Context) {
 			response.Error(c, 500, "failed to save announcement")
 			return
 		}
-		h.jpushService.SendNotificationAsync(ctx, []int64{userID}, notifyType, deviceSN, req.Title, req.Content)
+		jpushIDs, _ := filterPushUsersByPrefs(ctx, h.db, h.notifyPrefs, []int64{userID}, notifyType, 0)
+		if len(jpushIDs) > 0 {
+			h.jpushService.SendNotificationAsync(ctx, jpushIDs, notifyType, deviceSN, req.Title, req.Content)
+		}
 
 	default:
 		response.Error(c, 400, "invalid target")
@@ -385,6 +404,24 @@ func (h *NotificationHandler) PushAnnouncement(c *gin.Context) {
 	}
 
 	response.SuccessWithMessage(c, "announcement pushed", nil)
+}
+
+// allActiveUserIDs 查询所有启用且未删除的用户（系统公告广播推送目标）。
+func (h *NotificationHandler) allActiveUserIDs(ctx context.Context) ([]int64, error) {
+	rows, err := h.db.Query(ctx, `SELECT id FROM users WHERE status = 1 AND deleted_at IS NULL`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var userIDs []int64
+	for rows.Next() {
+		var uid int64
+		if err := rows.Scan(&uid); err != nil {
+			return nil, err
+		}
+		userIDs = append(userIDs, uid)
+	}
+	return userIDs, rows.Err()
 }
 
 func (h *NotificationHandler) getUserIDsByStation(ctx context.Context, stationID int64) ([]int64, error) {
