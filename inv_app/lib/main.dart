@@ -7,8 +7,11 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/config/app_config.dart';
+import 'package:inv_app/core/services/ble/ble_direct_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/locale_service.dart';
+import 'package:inv_app/core/services/offline/offline_log_sync_service.dart';
+import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
@@ -67,6 +70,23 @@ void main() async {
   // 极光推送/认证 SDK 初始化改为首帧渲染后异步执行，
   // 不阻塞冷启动（一键登录的完整性由 SplashPage 的轮询兑底保证）
   unawaited(_initPushSdks());
+
+  // BLE 直连恢复 + 离线日志同步（首帧渲染后异步执行，不阻塞冷启动）
+  unawaited(_restoreBleServices());
+}
+
+Future<void> _restoreBleServices() async {
+  try {
+    // 恢复 BLE 直连模式（设置开关为开时）
+    final storage = getIt<StorageService>();
+    if (await storage.getIsBleDirectEnabled()) {
+      await getIt<BleDirectService>().restore();
+    }
+    // 启动离线操作日志同步（监听网络状态，自动退避重试）
+    await getIt<OfflineLogSyncService>().start();
+  } catch (e) {
+    debugPrint('BLE restore failed: $e');
+  }
 }
 
 Future<void> _initPushSdks() async {
