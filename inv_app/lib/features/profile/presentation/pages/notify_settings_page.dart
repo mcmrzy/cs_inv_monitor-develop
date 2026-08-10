@@ -319,6 +319,30 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
     );
   }
 
+  /// 精致开关：打开态淡蓝轨道 + 品牌深蓝圆点（轻盈不厚重），
+  /// 关闭态浅灰轨道 + 白圆点 + 细描边；整体缩放 0.9 更纤细耐看
+  Widget _buildSwitch({
+    required bool value,
+    required ValueChanged<bool>? onChanged,
+  }) {
+    return Transform.scale(
+      scale: 0.9,
+      child: Switch(
+        value: value,
+        onChanged: onChanged,
+        activeTrackColor: AppColors.primary.withValues(alpha: 0.15),
+        activeThumbColor: AppColors.primary,
+        inactiveTrackColor: AppColor.outline(context).withValues(alpha: 0.25),
+        inactiveThumbColor: Colors.white,
+        trackOutlineColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? Colors.transparent
+              : AppColor.outline(context).withValues(alpha: 0.2),
+        ),
+      ),
+    );
+  }
+
   /// 开关行：品牌蓝图标 + 标题 + 可选副标题
   Widget _buildSwitchRow({
     required IconData icon,
@@ -327,9 +351,9 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
     required bool value,
     required ValueChanged<bool> onChanged,
   }) {
-    return SwitchListTile(
+    return ListTile(
       contentPadding: EdgeInsets.symmetric(horizontal: 16.w),
-      secondary: Icon(icon, color: AppColors.primary),
+      leading: Icon(icon, color: AppColors.primary),
       title: Text(title, style: TextStyle(fontSize: 15.sp)),
       subtitle: subtitle == null
           ? null
@@ -337,9 +361,8 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
               subtitle,
               style: TextStyle(fontSize: 12.sp, color: AppColors.textSecondary),
             ),
-      value: value,
-      onChanged: onChanged,
-      activeThumbColor: AppColors.primary,
+      onTap: () => onChanged(!value),
+      trailing: _buildSwitch(value: value, onChanged: onChanged),
     );
   }
 
@@ -350,10 +373,10 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
     required Color dotColor,
     required ValueChanged<bool> onChanged,
   }) {
-    return SwitchListTile(
+    return ListTile(
       dense: true,
       contentPadding: EdgeInsets.only(left: 56.w, right: 16.w),
-      secondary: Container(
+      leading: Container(
         width: 8.w,
         height: 8.w,
         decoration: BoxDecoration(
@@ -362,9 +385,8 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
         ),
       ),
       title: Text(title, style: TextStyle(fontSize: 14.sp)),
-      value: value,
-      onChanged: onChanged,
-      activeThumbColor: AppColors.primary,
+      onTap: () => onChanged(!value),
+      trailing: _buildSwitch(value: value, onChanged: onChanged),
     );
   }
 
@@ -408,9 +430,8 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
         _buildEmailSubtitle(),
         style: TextStyle(fontSize: 12.sp, color: AppColors.textSecondary),
       ),
-      trailing: Switch(
+      trailing: _buildSwitch(
         value: bound ? _prefs.emailEnabled : false,
-        activeThumbColor: AppColors.primary,
         onChanged: bound
             ? (value) => _update(_prefs.copyWith(emailEnabled: value))
             : null,
