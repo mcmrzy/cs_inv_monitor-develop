@@ -162,6 +162,7 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 	userGroup.Any("/api/v1/alerts", p.RewriteHandler("/api/v1/alarms"))
 	userGroup.Any("/api/v1/notifications/*action", p.Handler())
 	userGroup.Any("/api/v1/notifications", p.Handler())
+	userGroup.Any("/api/v1/notify-settings", p.Handler())
 	userGroup.Any("/api/v1/alert-rules/*action", p.Handler())
 	userGroup.Any("/api/v1/alert-rules", p.Handler())
 	userGroup.Any("/api/v1/models/*action", p.Handler())
@@ -286,6 +287,8 @@ func buildAPIDoc() APIDoc {
 			{Path: "/api/v1/auth/change-password", Method: "POST", Description: "修改密码", Auth: true, Role: "user", Backend: "api-server"},
 			{Path: "/api/v1/auth/profile", Method: "GET", Description: "获取用户资料", Auth: true, Role: "user", Backend: "api-server"},
 			{Path: "/api/v1/auth/profile", Method: "PUT", Description: "更新用户资料", Auth: true, Role: "user", Backend: "api-server"},
+			{Path: "/api/v1/notify-settings", Method: "GET", Description: "获取用户通知偏好", Auth: true, Role: "user", Backend: "api-server"},
+			{Path: "/api/v1/notify-settings", Method: "PUT", Description: "保存用户通知偏好", Auth: true, Role: "user", Backend: "api-server"},
 
 			{Path: "/api/v1/stations", Method: "GET", Description: "获取电站列表", Auth: true, Role: "user", Backend: "api-server"},
 			{Path: "/api/v1/stations", Method: "POST", Description: "创建电站", Auth: true, Role: "user", Backend: "api-server"},
@@ -366,6 +369,7 @@ func buildRouteGroups() map[string][]RouteGroup {
 					{Path: "/api/v1/auth/logout", Method: "ALL", Description: "用户登出", Backend: "api-server"},
 					{Path: "/api/v1/auth/change-password", Method: "ALL", Description: "修改密码", Backend: "api-server"},
 					{Path: "/api/v1/auth/profile", Method: "ALL", Description: "用户资料", Backend: "api-server"},
+					{Path: "/api/v1/notify-settings", Method: "ALL", Description: "用户通知偏好", Backend: "api-server"},
 					{Path: "/api/v1/stations", Method: "ALL", Description: "电站管理", Backend: "api-server"},
 					{Path: "/api/v1/devices", Method: "ALL", Description: "设备管理", Backend: "api-server"},
 					{Path: "/api/v1/alarms", Method: "ALL", Description: "告警管理", Backend: "api-server"},
