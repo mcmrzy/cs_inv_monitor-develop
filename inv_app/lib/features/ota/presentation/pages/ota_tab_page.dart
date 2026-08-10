@@ -124,7 +124,8 @@ class _OtaTabPageState extends State<OtaTabPage> {
             if (firmwareEsp.isNotEmpty) parts.add(firmwareEsp);
             return parts.isNotEmpty ? parts.join('-') : l10n.firmwareUnknown;
           })();
-    final isOnline = status == 1;
+    // 在线判定：status=1 正常在线、status=2 故障（故障仅指运行异常，MQTT 通信仍在线，可执行 OTA 升级）；仅 status=0 为离线
+    final isOnline = status == 1 || status == 2;
 
     return Container(
       margin: EdgeInsets.only(bottom: 10.h),
