@@ -3,6 +3,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/widgets/settings_widgets.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/features/profile/data/notify_prefs_service.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
@@ -143,11 +144,16 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
     return ListView(
       padding: EdgeInsets.only(bottom: 24.h),
       children: [
-        // ===== 通知类型 =====
-        _buildSectionTitle(_l10n.notificationType),
-        _buildCard([
-          _buildSwitchRow(
+        // ===== 通知类型（橙） =====
+        SettingsSectionTitle(
+          icon: Icons.notifications_outlined,
+          title: _l10n.notificationType,
+          accent: AppColors.orange,
+        ),
+        SettingsCard([
+          SettingsSwitchRow(
             icon: Icons.sensors_outlined,
+            accent: AppColors.orange,
             title: _l10n.deviceStatusNotify,
             subtitle: _l10n.deviceStatusNotifyDesc,
             value: _prefs.notifyOnline || _prefs.notifyOffline,
@@ -155,67 +161,77 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
               _prefs.copyWith(notifyOnline: value, notifyOffline: value),
             ),
           ),
-          _buildSwitchRow(
+          SettingsSwitchRow(
             icon: Icons.notification_important_outlined,
+            accent: AppColors.orange,
             title: _l10n.alarmNotify,
             subtitle: _l10n.alarmNotifyDesc,
             value: _prefs.notifyAlarm,
             onChanged: (value) => _update(_prefs.copyWith(notifyAlarm: value)),
           ),
           // 告警级别子开关（红/橙/蓝圆点区分级别）
-          _buildLevelSwitch(
+          SettingsLevelRow(
             title: _l10n.alarmFatal,
             value: _prefs.notifyAlarmFatal,
             dotColor: AppColors.error,
             onChanged: (v) => _update(_prefs.copyWith(notifyAlarmFatal: v)),
           ),
-          _buildLevelSwitch(
+          SettingsLevelRow(
             title: _l10n.alarmWarning,
             value: _prefs.notifyAlarmWarning,
-            dotColor: const Color(0xFFF57C00),
+            dotColor: AppColors.warning,
             onChanged: (v) => _update(_prefs.copyWith(notifyAlarmWarning: v)),
           ),
-          _buildLevelSwitch(
+          SettingsLevelRow(
             title: _l10n.alarmLevelInfo,
             value: _prefs.notifyAlarmInfo,
             dotColor: AppColors.primary,
             onChanged: (v) => _update(_prefs.copyWith(notifyAlarmInfo: v)),
           ),
-          _buildSwitchRow(
+          SettingsSwitchRow(
             icon: Icons.done_all_outlined,
+            accent: AppColors.orange,
             title: _l10n.alarmCleared,
             value: _prefs.notifyAlarmCleared,
             onChanged: (value) =>
                 _update(_prefs.copyWith(notifyAlarmCleared: value)),
           ),
-          _buildSwitchRow(
+          SettingsSwitchRow(
             icon: Icons.system_update_alt_outlined,
+            accent: AppColors.orange,
             title: _l10n.otaNotify,
             value: _prefs.notifyOta,
             onChanged: (value) => _update(_prefs.copyWith(notifyOta: value)),
           ),
-          _buildSwitchRow(
+          SettingsSwitchRow(
             icon: Icons.campaign_outlined,
+            accent: AppColors.orange,
             title: _l10n.systemMessage,
             subtitle: _l10n.systemMessageDesc,
             value: _prefs.notifySystem,
             onChanged: (value) => _update(_prefs.copyWith(notifySystem: value)),
           ),
         ]),
-        // ===== 日报 =====
-        _buildSectionTitle(_l10n.dailyReportSection),
-        _buildCard([
-          _buildSwitchRow(
+        // ===== 日报（绿） =====
+        SettingsSectionTitle(
+          icon: Icons.bar_chart_outlined,
+          title: _l10n.dailyReportSection,
+          accent: AppColors.successLight,
+        ),
+        SettingsCard([
+          SettingsSwitchRow(
             icon: Icons.bar_chart_outlined,
+            accent: AppColors.successLight,
             title: _l10n.dailyReport,
             subtitle: _l10n.dailyReportDesc,
             value: _prefs.notifyDaily,
             onChanged: (value) => _update(_prefs.copyWith(notifyDaily: value)),
           ),
           if (_prefs.notifyDaily)
-            _buildTimeRow(
+            SettingsTimeRow(
               title: _l10n.dailyReportTime,
               time: _prefs.dailyReportTime,
+              accent: AppColors.successLight,
               onTap: () => _showTimePickerDialog(
                 current: _prefs.dailyReportTime,
                 onPicked: (time) =>
@@ -223,11 +239,16 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
               ),
             ),
         ]),
-        // ===== 通知渠道 =====
-        _buildSectionTitle(_l10n.notifyChannelSection),
-        _buildCard([
-          _buildSwitchRow(
+        // ===== 通知渠道（青绿） =====
+        SettingsSectionTitle(
+          icon: Icons.notifications_active_outlined,
+          title: _l10n.notifyChannelSection,
+          accent: AppColors.teal,
+        ),
+        SettingsCard([
+          SettingsSwitchRow(
             icon: Icons.notifications_active_outlined,
+            accent: AppColors.teal,
             title: _l10n.appPush,
             subtitle: _l10n.pushNotificationDesc,
             value: _prefs.pushEnabled,
@@ -236,35 +257,43 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
           ),
           _buildEmailRow(),
         ]),
-        // ===== 勿扰模式 =====
-        _buildSectionTitle(_l10n.dndSection),
-        _buildCard([
-          _buildSwitchRow(
+        // ===== 勿扰模式（靛蓝） =====
+        SettingsSectionTitle(
+          icon: Icons.bedtime_outlined,
+          title: _l10n.dndSection,
+          accent: AppColors.indigo,
+        ),
+        SettingsCard([
+          SettingsSwitchRow(
             icon: Icons.bedtime_outlined,
+            accent: AppColors.indigo,
             title: _l10n.dndMode,
             subtitle: '${_prefs.dndStart} - ${_prefs.dndEnd}',
             value: _prefs.dndEnabled,
             onChanged: (value) => _update(_prefs.copyWith(dndEnabled: value)),
           ),
           if (_prefs.dndEnabled) ...[
-            _buildTimeRow(
+            SettingsTimeRow(
               title: _l10n.startTime,
               time: _prefs.dndStart,
+              accent: AppColors.indigo,
               onTap: () => _showTimePickerDialog(
                 current: _prefs.dndStart,
                 onPicked: (time) => _update(_prefs.copyWith(dndStart: time)),
               ),
             ),
-            _buildTimeRow(
+            SettingsTimeRow(
               title: _l10n.endTime,
               time: _prefs.dndEnd,
+              accent: AppColors.indigo,
               onTap: () => _showTimePickerDialog(
                 current: _prefs.dndEnd,
                 onPicked: (time) => _update(_prefs.copyWith(dndEnd: time)),
               ),
             ),
-            _buildSwitchRow(
+            SettingsSwitchRow(
               icon: Icons.notifications_active_outlined,
+              accent: AppColors.indigo,
               title: _l10n.alarmBreakDnd,
               subtitle: _l10n.alarmBreakDndDesc,
               value: _prefs.alarmBreakDnd,
@@ -278,164 +307,19 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
     );
   }
 
-  /// 分组卡片：圆角白卡 + 细边框，行间细分隔线（缩进避开图标）
-  Widget _buildCard(List<Widget> rows) {
-    return Container(
-      margin: EdgeInsets.symmetric(horizontal: 16.w),
-      decoration: BoxDecoration(
-        color: AppColor.surfaceContainer(context),
-        borderRadius: BorderRadius.circular(16.r),
-        border: Border.all(
-          color: AppColor.outline(context).withValues(alpha: 0.6),
-        ),
-      ),
-      child: Column(
-        children: [
-          for (var i = 0; i < rows.length; i++) ...[
-            if (i > 0)
-              Divider(
-                height: 1,
-                indent: 56.w,
-                color: AppColor.outline(context).withValues(alpha: 0.5),
-              ),
-            rows[i],
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSectionTitle(String title) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(20.w, 20.h, 20.w, 8.h),
-      child: Text(
-        title,
-        style: TextStyle(
-          fontSize: 13.sp,
-          fontWeight: FontWeight.w600,
-          color: AppColors.textHint,
-        ),
-      ),
-    );
-  }
-
-  /// 精致开关：打开态淡蓝轨道 + 品牌深蓝圆点（轻盈不厚重），
-  /// 关闭态浅灰轨道 + 白圆点 + 细描边；整体缩放 0.9 更纤细耐看
-  Widget _buildSwitch({
-    required bool value,
-    required ValueChanged<bool>? onChanged,
-  }) {
-    return Transform.scale(
-      scale: 0.9,
-      child: Switch(
-        value: value,
-        onChanged: onChanged,
-        activeTrackColor: AppColors.primary.withValues(alpha: 0.15),
-        activeThumbColor: AppColors.primary,
-        inactiveTrackColor: AppColor.outline(context).withValues(alpha: 0.25),
-        inactiveThumbColor: Colors.white,
-        trackOutlineColor: WidgetStateProperty.resolveWith(
-          (states) => states.contains(WidgetState.selected)
-              ? Colors.transparent
-              : AppColor.outline(context).withValues(alpha: 0.2),
-        ),
-      ),
-    );
-  }
-
-  /// 开关行：品牌蓝图标 + 标题 + 可选副标题
-  Widget _buildSwitchRow({
-    required IconData icon,
-    required String title,
-    String? subtitle,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-  }) {
-    return ListTile(
-      contentPadding: EdgeInsets.symmetric(horizontal: 16.w),
-      leading: Icon(icon, color: AppColors.primary),
-      title: Text(title, style: TextStyle(fontSize: 15.sp)),
-      subtitle: subtitle == null
-          ? null
-          : Text(
-              subtitle,
-              style: TextStyle(fontSize: 12.sp, color: AppColors.textSecondary),
-            ),
-      onTap: () => onChanged(!value),
-      trailing: _buildSwitch(value: value, onChanged: onChanged),
-    );
-  }
-
-  /// 告警级别子开关：彩色圆点标识级别，缩进于告警通知行之下
-  Widget _buildLevelSwitch({
-    required String title,
-    required bool value,
-    required Color dotColor,
-    required ValueChanged<bool> onChanged,
-  }) {
-    return ListTile(
-      dense: true,
-      contentPadding: EdgeInsets.only(left: 56.w, right: 16.w),
-      leading: Container(
-        width: 8.w,
-        height: 8.w,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: dotColor,
-        ),
-      ),
-      title: Text(title, style: TextStyle(fontSize: 14.sp)),
-      onTap: () => onChanged(!value),
-      trailing: _buildSwitch(value: value, onChanged: onChanged),
-    );
-  }
-
-  /// 时间选择行：当前时间主色展示 + 右箭头
-  Widget _buildTimeRow({
-    required String title,
-    required String time,
-    required VoidCallback onTap,
-  }) {
-    return ListTile(
-      contentPadding: EdgeInsets.symmetric(horizontal: 16.w),
-      leading: const Icon(Icons.schedule, color: AppColors.primary),
-      title: Text(title, style: TextStyle(fontSize: 15.sp)),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            time,
-            style: TextStyle(
-              fontSize: 15.sp,
-              fontWeight: FontWeight.w500,
-              color: AppColors.primary,
-            ),
-          ),
-          SizedBox(width: 2.w),
-          const Icon(Icons.chevron_right, size: 20, color: AppColors.textHint),
-        ],
-      ),
-      onTap: onTap,
-    );
-  }
-
   /// 邮件通知行：未绑定邮箱时禁用开关，点击引导去绑定
   Widget _buildEmailRow() {
     final bound = _prefs.email.isNotEmpty;
-    return ListTile(
-      contentPadding: EdgeInsets.symmetric(horizontal: 16.w),
-      leading: const Icon(Icons.mail_outline, color: AppColors.primary),
-      title: Text(_l10n.emailNotify, style: TextStyle(fontSize: 15.sp)),
-      subtitle: Text(
-        _buildEmailSubtitle(),
-        style: TextStyle(fontSize: 12.sp, color: AppColors.textSecondary),
-      ),
-      trailing: _buildSwitch(
-        value: bound ? _prefs.emailEnabled : false,
-        onChanged: bound
-            ? (value) => _update(_prefs.copyWith(emailEnabled: value))
-            : null,
-      ),
+    return SettingsSwitchRow(
+      icon: Icons.mail_outline,
+      accent: AppColors.teal,
+      title: _l10n.emailNotify,
+      subtitle: _buildEmailSubtitle(),
+      value: bound ? _prefs.emailEnabled : false,
+      onChanged: bound
+          ? (value) => _update(_prefs.copyWith(emailEnabled: value))
+          : null,
+      // 点击整行引导去绑定邮箱（未绑定或已绑定均可修改）
       onTap: () => context.push('/edit-profile'),
     );
   }

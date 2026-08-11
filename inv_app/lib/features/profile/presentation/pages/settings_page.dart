@@ -13,6 +13,7 @@ import 'package:inv_app/core/services/locale_service.dart';
 import 'package:inv_app/core/config/app_config.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/utils/timezone_utils.dart';
+import 'package:inv_app/core/widgets/settings_widgets.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
@@ -497,38 +498,38 @@ class _SettingsPageState extends State<SettingsPage> {
       body: ListView(
         padding: EdgeInsets.only(bottom: 24.h),
         children: [
-          _buildSectionTitle(
-            Icons.wifi_tethering,
-            l10n.connectionSettings,
+          SettingsSectionTitle(
+            icon: Icons.wifi_tethering,
+            title: l10n.connectionSettings,
+            accent: AppColors.blue,
           ),
-          _buildCard([
-            SwitchListTile(
-              secondary: _leadingIcon(Icons.cloud_off),
-              title: Text(l10n.localMode),
-              subtitle: Text(l10n.localModeDesc),
+          SettingsCard([
+            SettingsSwitchRow(
+              icon: Icons.cloud_off,
+              accent: AppColors.blue,
+              title: l10n.localMode,
+              subtitle: l10n.localModeDesc,
               value: _isLocalMode,
               onChanged: _toggleLocalMode,
-              activeThumbColor: AppColors.primary,
             ),
-            _tileDivider(),
-            SwitchListTile(
-              secondary: _leadingIcon(Icons.bluetooth),
-              title: Text(l10n.bleDirectEnabled),
-              subtitle: Text(l10n.bleDirectEnabledDesc),
+            SettingsSwitchRow(
+              icon: Icons.bluetooth,
+              accent: AppColors.blue,
+              title: l10n.bleDirectEnabled,
+              subtitle: l10n.bleDirectEnabledDesc,
               value: _isBleDirectEnabled,
               onChanged: _toggleBleDirect,
-              activeThumbColor: AppColors.primary,
             ),
-            _tileDivider(),
-            ListTile(
-              leading: _leadingIcon(Icons.speed),
-              title: Text(l10n.blePollInterval),
-              subtitle: Text(l10n.blePollIntervalDesc),
+            SettingsValueRow(
+              icon: Icons.speed,
+              accent: AppColors.blue,
+              title: l10n.blePollInterval,
+              subtitle: l10n.blePollIntervalDesc,
               trailing: Container(
                 padding:
                     EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.1),
+                  color: AppColors.blue.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10.r),
                 ),
                 child: Text(
@@ -536,141 +537,68 @@ class _SettingsPageState extends State<SettingsPage> {
                   style: TextStyle(
                     fontSize: 12.sp,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.primary,
+                    color: AppColors.blue,
                   ),
                 ),
               ),
               onTap: _showPollIntervalDialog,
             ),
-            _tileDivider(),
-            ListTile(
-              leading: _leadingIcon(Icons.dns),
-              title: Text(l10n.customServer),
-              subtitle: Text(
-                _serverUrl,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 12.sp, color: AppColors.textHint),
-              ),
-              trailing: const Icon(
-                Icons.chevron_right,
-                color: AppColors.textHint,
-              ),
+            SettingsValueRow(
+              icon: Icons.dns,
+              accent: AppColors.blue,
+              title: l10n.customServer,
+              subtitle: _serverUrl,
               onTap: _showServerUrlDialog,
             ),
           ]),
-          _buildSectionTitle(Icons.palette_outlined, l10n.displaySettings),
-          _buildCard([
-            SwitchListTile(
-              secondary: _leadingIcon(Icons.dark_mode),
-              title: Text(l10n.darkMode),
+          SettingsSectionTitle(
+            icon: Icons.palette_outlined,
+            title: l10n.displaySettings,
+            accent: AppColors.purple,
+          ),
+          SettingsCard([
+            SettingsSwitchRow(
+              icon: Icons.dark_mode,
+              accent: AppColors.purple,
+              title: l10n.darkMode,
               value: _isDarkMode,
               onChanged: _toggleDarkMode,
-              activeThumbColor: AppColors.primary,
             ),
-            _tileDivider(),
-            ListTile(
-              leading: _leadingIcon(Icons.electric_bolt),
-              title: Text(l10n.unitSwitch),
-              subtitle: Text(_unitType),
-              trailing: const Icon(
-                Icons.chevron_right,
-                color: AppColors.textHint,
-              ),
+            SettingsValueRow(
+              icon: Icons.electric_bolt,
+              accent: AppColors.purple,
+              title: l10n.unitSwitch,
+              subtitle: _unitType,
               onTap: _showUnitDialog,
             ),
-            _tileDivider(),
-            ListTile(
-              leading: _leadingIcon(Icons.public),
-              title: Text(l10n.timezone),
-              subtitle: Text(
-                TimezoneUtils.getLabel(
-                  _currentTimezone,
-                  langCode: _currentLocale,
-                ),
-              ),
-              trailing: const Icon(
-                Icons.chevron_right,
-                color: AppColors.textHint,
+            SettingsValueRow(
+              icon: Icons.public,
+              accent: AppColors.purple,
+              title: l10n.timezone,
+              subtitle: TimezoneUtils.getLabel(
+                _currentTimezone,
+                langCode: _currentLocale,
               ),
               onTap: _showTimezoneDialog,
             ),
           ]),
-          _buildSectionTitle(Icons.language, l10n.generalSettings),
-          _buildCard([
-            ListTile(
-              leading: _leadingIcon(Icons.translate),
-              title: Text(l10n.languageSwitch),
-              subtitle: Text(
-                _currentLocale == 'zh'
-                    ? l10n.str('language_chinese')
-                    : l10n.str('language_english'),
-              ),
-              trailing: const Icon(
-                Icons.chevron_right,
-                color: AppColors.textHint,
-              ),
+          SettingsSectionTitle(
+            icon: Icons.language,
+            title: l10n.generalSettings,
+            accent: AppColors.teal,
+          ),
+          SettingsCard([
+            SettingsValueRow(
+              icon: Icons.translate,
+              accent: AppColors.teal,
+              title: l10n.languageSwitch,
+              subtitle: _currentLocale == 'zh'
+                  ? l10n.str('language_chinese')
+                  : l10n.str('language_english'),
               onTap: _showLanguageDialog,
             ),
           ]),
           _buildResetButton(),
-        ],
-      ),
-    );
-  }
-
-  /// 分组卡片（圆角 + 表面色容器）
-  Widget _buildCard(List<Widget> children) {
-    return Container(
-      margin: EdgeInsets.symmetric(horizontal: 16.w),
-      decoration: BoxDecoration(
-        color: AppColor.surfaceContainer(context),
-        borderRadius: BorderRadius.circular(14.r),
-      ),
-      child: Column(children: children),
-    );
-  }
-
-  /// 卡片内条目分隔线（缩进避开 leading 图标）
-  Widget _tileDivider() {
-    return Padding(
-      padding: EdgeInsets.only(left: 56.w),
-      child: const Divider(
-        height: 1,
-        thickness: 0.5,
-        color: AppColors.divider,
-      ),
-    );
-  }
-
-  /// 主题色圆角图标容器（列表项视觉锚点）
-  Widget _leadingIcon(IconData icon, {Color? color}) {
-    return Container(
-      width: 36.w,
-      height: 36.w,
-      decoration: BoxDecoration(
-        color: (color ?? AppColors.primary).withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(10.r),
-      ),
-      child: Icon(icon, size: 20.sp, color: color ?? AppColors.primary),
-    );
-  }
-
-  Widget _buildSectionTitle(IconData icon, String title) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(20.w, 20.h, 20.w, 10.h),
-      child: Row(
-        children: [
-          Icon(icon, size: 16.sp, color: AppColors.primary),
-          SizedBox(width: 6.w),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 13.sp,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
-            ),
-          ),
         ],
       ),
     );
