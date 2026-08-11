@@ -274,6 +274,7 @@ func TestDeviceManagementFlow(t *testing.T) {
 	bindPayload := map[string]interface{}{
 		"sn":         testSN,
 		"station_id": 0,
+		"pin":        devicePIN(testSN),
 	}
 	resp, status := doJSON(t, client, "POST", cfg.APIBaseURL+"/api/v1/devices/bind", bindPayload, token)
 	t.Logf("bind: status=%d code=%d msg=%s", status, resp.Code, resp.Message)
@@ -344,7 +345,7 @@ func TestDataIsolation(t *testing.T) {
 
 	// User A binds a device
 	snA := fmt.Sprintf("ISO-A-%d", time.Now().UnixNano())
-	bindPayload := map[string]interface{}{"sn": snA, "station_id": 0}
+	bindPayload := map[string]interface{}{"sn": snA, "station_id": 0, "pin": devicePIN(snA)}
 	resp, status := doJSON(t, client, "POST", cfg.APIBaseURL+"/api/v1/devices/bind", bindPayload, tokenA)
 	t.Logf("userA bind: status=%d code=%d msg=%s", status, resp.Code, resp.Message)
 	require.Equal(t, http.StatusOK, status, "user A bind HTTP status")

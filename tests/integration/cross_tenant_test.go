@@ -96,7 +96,7 @@ func TestCrossTenant_TransferDeviceNonAdmin(t *testing.T) {
 
 	// User A binds device
 	doJSONWithRetry(t, ctx.Client, "POST", ctx.BaseURL+"/api/v1/devices/bind",
-		map[string]interface{}{"sn": sn, "station_id": 0}, ctx.Token, 5)
+		map[string]interface{}{"sn": sn, "station_id": 0, "pin": devicePIN(sn)}, ctx.Token, 5)
 
 	// User B tries to transfer the device
 	resp, status := doJSONWithRetry(t, ctx.Client, "POST",
@@ -186,7 +186,7 @@ func TestCrossTenant_GenerateClaimCodeForOtherTenantDevice(t *testing.T) {
 
 	// User A binds device
 	doJSONWithRetry(t, ctx.Client, "POST", ctx.BaseURL+"/api/v1/devices/bind",
-		map[string]interface{}{"sn": sn, "station_id": 0}, ctx.Token, 5)
+		map[string]interface{}{"sn": sn, "station_id": 0, "pin": devicePIN(sn)}, ctx.Token, 5)
 
 	// User B tries to generate claim code for A's device
 	resp, status := doJSONWithRetry(t, ctx.Client, "POST",

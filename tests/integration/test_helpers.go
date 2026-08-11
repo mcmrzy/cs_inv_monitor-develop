@@ -4,6 +4,8 @@ package integration
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"fmt"
 	"net"
 	"net/url"
@@ -102,6 +104,18 @@ func ConnectRedis(t *testing.T, cfg EnvConfig) *redis.Client {
 	}
 
 	return rdb
+}
+
+// devicePIN derives the 6-digit nameplate PIN for sn using the same
+// HMAC-SHA256(PRODUCT_SECRET, SN) mod 1000000 algorithm as the backend
+// (verifyDevicePIN). The test stack runs inv-api-server with
+// PRODUCT_SECRET=CS_INV_L10_2026_SECRET, matching the backend unit vectors.
+func devicePIN(sn string) string {
+	mac := hmac.New(sha256.New, []byte("CS_INV_L10_2026_SECRET"))
+	_, _ = mac.Write([]byte(sn))
+	d := mac.Sum(nil)
+	pin := (int(d[0]) << 16) | (int(d[1]) << 8) | int(d[2])
+	return fmt.Sprintf("%06d", pin%1000000)
 }
 
 // CleanupTable truncates a table for test isolation.
