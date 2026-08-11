@@ -49,8 +49,18 @@ class _SplashPageState extends State<SplashPage> {
         if (initOk && DateTime.now().isBefore(deadline)) {
           final enabled = await jverifyService.checkVerifyEnable();
           if (enabled) {
-            // 预取号成功即"获取手机号成功"，随后可拉起展示脱敏号码的自绘授权页
-            canOneClick = await jverifyService.preLogin(timeoutMs: 800);
+            // 预取号：5s 原生超时（插件合法范围下限 3000ms），外层用剩余 deadline 截断，
+            // 不阻塞启动跳转；未等到的结果由 JVerifyService 缓存，供一键登录页复用
+            final remaining = deadline.difference(DateTime.now());
+            if (!remaining.isNegative) {
+              try {
+                canOneClick = await jverifyService
+                    .preLogin(timeoutMs: 5000)
+                    .timeout(remaining, onTimeout: () => false);
+              } catch (_) {
+                canOneClick = false;
+              }
+            }
           }
         }
       }
