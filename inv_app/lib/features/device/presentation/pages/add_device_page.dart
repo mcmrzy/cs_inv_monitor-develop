@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
@@ -29,6 +30,7 @@ class AddDevicePage extends StatefulWidget {
 class _AddDevicePageState extends State<AddDevicePage>
     with SingleTickerProviderStateMixin {
   final _snController = TextEditingController();
+  final _pinController = TextEditingController();
 
   late TabController _tabController;
   bool _scanning = false;
@@ -83,6 +85,7 @@ class _AddDevicePageState extends State<AddDevicePage>
   @override
   void dispose() {
     _snController.dispose();
+    _pinController.dispose();
     _tabController.dispose();
     _cameraController?.dispose();
     super.dispose();
@@ -167,6 +170,14 @@ class _AddDevicePageState extends State<AddDevicePage>
 
     _lastScanned = sn;
     _scannedPin = pin;
+    if (pin.isNotEmpty) {
+      // 二维码带 PIN → 跳 BLE 直连绑定页（扫描匹配 SN，离网可用）
+      if (!mounted) return;
+      context.push(
+        '/device/qr-bind?sn=${Uri.encodeQueryComponent(sn)}&pin=${Uri.encodeQueryComponent(pin)}',
+      );
+      return;
+    }
     _bindDevice(sn);
   }
 
@@ -228,6 +239,8 @@ class _AddDevicePageState extends State<AddDevicePage>
 
     final qr = parseQRCode(raw);
     final sn = qr != null ? qr.sn.toUpperCase() : raw.toUpperCase();
+    // 支持整串输入（SN:xxxxxxx PIN:xxxxx）自动带出 PIN；否则取 PIN 输入框
+    final pin = qr?.pin ?? _pinController.text.trim();
 
     if (!validateSNFormat(sn)) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -269,6 +282,14 @@ class _AddDevicePageState extends State<AddDevicePage>
       }
     }
 
+    if (pin.isNotEmpty) {
+      // 填了 PIN → BLE 直连绑定（扫描附近设备匹配 SN，离网可用）
+      if (!mounted) return;
+      context.push(
+        '/device/qr-bind?sn=${Uri.encodeQueryComponent(sn)}&pin=${Uri.encodeQueryComponent(pin)}',
+      );
+      return;
+    }
     _bindDevice(sn);
   }
 
@@ -741,6 +762,34 @@ class _AddDevicePageState extends State<AddDevicePage>
               borderSide:
                   const BorderSide(color: AppColors.primary, width: 1.5),
             ),
+          ),
+        ),
+        SizedBox(height: 12.h),
+        TextField(
+          controller: _pinController,
+          keyboardType: TextInputType.number,
+          maxLength: 6,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          decoration: InputDecoration(
+            labelText: AppLocalizations.of(context)!.manualPinLabel,
+            hintText: AppLocalizations.of(context)!.pinInputHint,
+            prefixIcon: const Icon(Icons.pin_outlined, color: AppColors.textHint),
+            counterText: '',
+            border:
+                OutlineInputBorder(borderRadius: BorderRadius.circular(12.r)),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12.r),
+              borderSide:
+                  const BorderSide(color: AppColors.primary, width: 1.5),
+            ),
+          ),
+        ),
+        SizedBox(height: 6.h),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            AppLocalizations.of(context)!.manualPinDesc,
+            style: TextStyle(fontSize: 11.sp, color: AppColors.textHint),
           ),
         ),
         SizedBox(height: 20.h),

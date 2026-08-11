@@ -1473,6 +1473,10 @@ class AppLocalizations {
   String get pinCheckFailed => _localizedStrings['pin_check_failed']!;
   String get bindRegisteredLater => _localizedStrings['bind_registered_later']!;
   String get pinRequired => _localizedStrings['pin_required']!;
+  String get manualPinLabel => _localizedStrings['manual_pin_label']!;
+  String get manualPinDesc => _localizedStrings['manual_pin_desc']!;
+  String get qrBindPinRequired => _localizedStrings['qr_bind_pin_required']!;
+  String get qrBindBack => _localizedStrings['qr_bind_back']!;
 }
 
 class _AppLocalizationsDelegate
