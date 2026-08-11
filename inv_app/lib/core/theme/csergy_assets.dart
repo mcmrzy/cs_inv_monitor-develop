@@ -18,28 +18,28 @@ abstract final class CsergyAssets {
   static const String iconDirectory = 'assets/icons/csergy';
   static const double navigationIconSize = 24;
 
-  // ============ 小烁角色动作（透明底 WebP） ============
+  // ============ 小烁角色动作（透明底 PNG） ============
   static const String characterDirectory = 'assets/character/xiaoshuo';
   /// 欢迎/挥手（开屏、登录、首页）
-  static const String xiaoshuoWelcome = '$characterDirectory/xiaoshuo_welcome_1024.webp';
+  static const String xiaoshuoWelcome = '$characterDirectory/xiaoshuo_welcome_1024.png';
   /// 展示光伏模型（电站、新建电站）
-  static const String xiaoshuoStation = '$characterDirectory/xiaoshuo_station_1024.webp';
+  static const String xiaoshuoStation = '$characterDirectory/xiaoshuo_station_1024.png';
   /// 展示设备（设备列表、设备详情）
-  static const String xiaoshuoDevice = '$characterDirectory/xiaoshuo_device_1024.webp';
+  static const String xiaoshuoDevice = '$characterDirectory/xiaoshuo_device_1024.png';
   /// 离线/断线
-  static const String xiaoshuoOffline = '$characterDirectory/xiaoshuo_offline_1024.webp';
+  static const String xiaoshuoOffline = '$characterDirectory/xiaoshuo_offline_1024.png';
   /// 成功
-  static const String xiaoshuoSuccess = '$characterDirectory/xiaoshuo_success_1024.webp';
+  static const String xiaoshuoSuccess = '$characterDirectory/xiaoshuo_success_1024.png';
   /// 警告/失败
-  static const String xiaoshuoWarning = '$characterDirectory/xiaoshuo_warning_1024.webp';
+  static const String xiaoshuoWarning = '$characterDirectory/xiaoshuo_warning_1024.png';
   /// 空状态
-  static const String xiaoshuoEmpty = '$characterDirectory/xiaoshuo_empty_1024.webp';
+  static const String xiaoshuoEmpty = '$characterDirectory/xiaoshuo_empty_1024.png';
   /// 提醒
-  static const String xiaoshuoReminder = '$characterDirectory/xiaoshuo_reminder_1024.webp';
+  static const String xiaoshuoReminder = '$characterDirectory/xiaoshuo_reminder_1024.png';
   /// WiFi 配网引导（横版 1536x1024）
-  static const String xiaoshuoWifiGuide = '$characterDirectory/xiaoshuo_wifi_1536x1024.webp';
+  static const String xiaoshuoWifiGuide = '$characterDirectory/xiaoshuo_wifi_1536x1024.png';
   /// OTA 升级引导（横版 1536x1024）
-  static const String xiaoshuoOtaGuide = '$characterDirectory/xiaoshuo_ota_1536x1024.webp';
+  static const String xiaoshuoOtaGuide = '$characterDirectory/xiaoshuo_ota_1536x1024.png';
 
   // ============ 空状态插画 ============
   static const String illustrationDirectory = 'assets/illustrations/states';

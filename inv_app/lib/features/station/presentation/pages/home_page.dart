@@ -8,6 +8,7 @@ import 'package:inv_app/core/services/network_status_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
+import 'package:inv_app/core/widgets/jiggle_once.dart';
 import 'package:inv_app/core/widgets/offline_banner.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
@@ -342,8 +343,14 @@ class _HomePageState extends State<HomePage> {
                                   // key 必须挂在 itemBuilder 返回的顶层 widget 上（SDK 断言）
                                   key: ValueKey(id),
                                   index: i,
-                                  child: Container(
-                                    child: _buildCard(s, sortMode: true),
+                                  // 进入排序模式：错相位摇晃入场动画，
+                                  // 拖动/重排不重复触发（JiggleOnce 仅 active 变 true 时播放一次）
+                                  child: JiggleOnce(
+                                    active: _stationSortMode,
+                                    index: i,
+                                    child: Container(
+                                      child: _buildCard(s, sortMode: true),
+                                    ),
                                   ),
                                 );
                               },

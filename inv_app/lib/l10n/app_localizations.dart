@@ -491,6 +491,34 @@ class AppLocalizations {
   String get goToUpdate => _localizedStrings['go_to_update']!;
   String get downloadProgress => _localizedStrings['download_progress']!;
 
+  // 引导页（首次安装 / 版本升级）
+  String get onboardingPage1Title =>
+      _localizedStrings['onboarding_page1_title']!;
+  String get onboardingPage1Desc =>
+      _localizedStrings['onboarding_page1_desc']!;
+  String get onboardingPage2Title =>
+      _localizedStrings['onboarding_page2_title']!;
+  String get onboardingPage2Desc =>
+      _localizedStrings['onboarding_page2_desc']!;
+  String get onboardingPage3Title =>
+      _localizedStrings['onboarding_page3_title']!;
+  String get onboardingPage3Desc =>
+      _localizedStrings['onboarding_page3_desc']!;
+  String get onboardingStart => _localizedStrings['onboarding_start']!;
+
+  // 关于页（品牌区）
+  String get aboutSlogan => _localizedStrings['about_slogan']!;
+
+  // 修改密码（密码强度）
+  String get passwordStrengthLabel =>
+      _localizedStrings['password_strength_label']!;
+  String get passwordStrengthWeak =>
+      _localizedStrings['password_strength_weak']!;
+  String get passwordStrengthMedium =>
+      _localizedStrings['password_strength_medium']!;
+  String get passwordStrengthStrong =>
+      _localizedStrings['password_strength_strong']!;
+
   // 新增 getter
   String get myProfile => _localizedStrings['my_profile']!;
   String roleLabel(String role) => str('role_label', {'role': role});

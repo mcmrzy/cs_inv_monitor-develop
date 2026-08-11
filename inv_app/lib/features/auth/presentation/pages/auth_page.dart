@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
@@ -25,18 +26,44 @@ class AuthPage extends StatefulWidget {
   State<AuthPage> createState() => _AuthPageState();
 }
 
-class _AuthPageState extends State<AuthPage> {
+class _AuthPageState extends State<AuthPage>
+    with SingleTickerProviderStateMixin {
   late AuthMode _mode;
+
+  /// 品牌区装饰呼吸动画控制器（右上圆环/左下光斑错相脉动，4s 周期）
+  /// 仅登录模式运行；注册模式品牌头收缩后装饰被裁剪，暂停动画省电
+  late final AnimationController _decorController = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 4),
+  )..repeat();
 
   @override
   void initState() {
     super.initState();
     _mode = widget.initialMode;
+    // 初始即注册模式时品牌头收缩、装饰被裁剪：不启动呼吸动画
+    if (_mode == AuthMode.register) {
+      _decorController.stop();
+      _decorController.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _decorController.dispose();
+    super.dispose();
   }
 
   void _switchMode(AuthMode mode) {
     if (_mode == mode) return;
     setState(() => _mode = mode);
+    // 注册模式品牌头收缩后装饰被裁剪：暂停呼吸动画省电，切回登录恢复
+    if (mode == AuthMode.register) {
+      _decorController.stop();
+      _decorController.value = 0;
+    } else {
+      _decorController.repeat();
+    }
   }
 
   @override
@@ -70,6 +97,8 @@ class _AuthPageState extends State<AuthPage> {
                   ),
                 ),
               ),
+              // 品牌区装饰呼吸动画：右上大圆环 + 左下光斑（浮于背景图之上、表单之下）
+              _buildDecorLayer(),
               // 前景：品牌名 + 毛玻璃表单卡片 + 切换行（键盘弹出可滚动）
               SafeArea(
                 child: SingleChildScrollView(
@@ -102,6 +131,72 @@ class _AuthPageState extends State<AuthPage> {
     return FadeTransition(
       opacity: animation,
       child: SlideTransition(position: slide, child: child),
+    );
+  }
+
+  /// 品牌区装饰层：右上大圆环（缩放 + 透明度呼吸）+ 左下光斑（错相呼吸）
+  ///
+  /// 动画参数移植自历史提交 eb75752be：4s 周期正弦呼吸曲线，圆环
+  /// 缩放 0.94→1.02 + 透明度 70%→100%，光斑放大 1.0→1.22 并错相半个周期。
+  /// 当前页面为深蓝背景图版本，白色装饰透明度小幅上调以与背景和谐共存；
+  /// IgnorePointer 包裹保证不拦截表单交互，位置置于右上/左下不遮挡表单卡片。
+  Widget _buildDecorLayer() {
+    return IgnorePointer(
+      child: Stack(
+        children: [
+          // 右上大圆环：缓慢呼吸（缩放 + 透明度脉动）
+          Positioned(
+            right: -70.w,
+            top: -70.w,
+            child: AnimatedBuilder(
+              animation: _decorController,
+              builder: (context, child) {
+                final v =
+                    const _BreathingCurve().transform(_decorController.value);
+                return Transform.scale(
+                  scale: 0.94 + 0.08 * v,
+                  child: Opacity(opacity: 0.7 + 0.3 * v, child: child),
+                );
+              },
+              child: Container(
+                width: 230.w,
+                height: 230.w,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.12),
+                    width: 26,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // 左下光斑：与圆环错相呼吸（放大 + 亮度脉动）
+          Positioned(
+            left: -50.w,
+            bottom: -40.w,
+            child: AnimatedBuilder(
+              animation: _decorController,
+              builder: (context, child) {
+                final v = const _BreathingCurve(phase: 0.5)
+                    .transform(_decorController.value);
+                return Transform.scale(
+                  scale: 1.0 + 0.22 * v,
+                  child: Opacity(opacity: 0.5 + 0.5 * v, child: child),
+                );
+              },
+              child: Container(
+                width: 150.w,
+                height: 150.w,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.09),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -227,5 +322,18 @@ class _AuthPageState extends State<AuthPage> {
         ),
       ],
     );
+  }
+}
+
+/// 呼吸曲线：t∈[0,1] → 0→1→0 平滑正弦（phase 控制相位偏移，0.5 为反相）
+/// 移植自历史提交 eb75752be，用于品牌区圆环/光斑的柔和呼吸动画
+class _BreathingCurve extends Curve {
+  final double phase;
+  const _BreathingCurve({this.phase = 0});
+
+  @override
+  double transformInternal(double t) {
+    final v = (math.cos((t + phase) * 2 * math.pi) + 1) / 2;
+    return v.clamp(0.0, 1.0);
   }
 }

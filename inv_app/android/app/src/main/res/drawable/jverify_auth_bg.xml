@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 一键登录授权页背景：品牌浅蓝 → 白渐变
+     （与 App 登录页浅色表单卡片风格协调，深色文字/图标对比度良好）
+     由 jverify_service.dart 中 uiConfig.authBackgroundImage 引用 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <gradient
+        android:angle="270"
+        android:startColor="#FFEAF2FB"
+        android:centerColor="#FFF5F9FF"
+        android:endColor="#FFFFFFFF" />
+</shape>

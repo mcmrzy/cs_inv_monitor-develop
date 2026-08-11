@@ -3,6 +3,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
+import 'package:inv_app/core/widgets/jiggle_once.dart';
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
@@ -513,10 +514,16 @@ class _DeviceListViewState extends State<DeviceListView> {
                         // key 必须挂在 itemBuilder 返回的顶层 widget 上（SDK 断言）
                         key: ValueKey(filtered[i]['sn'] ?? i),
                         index: i,
-                        child: DeviceCard(
-                          device: filtered[i],
-                          onLongPressDevice: widget.onLongPressDevice,
-                          sortMode: widget.sortMode,
+                        // 进入排序模式：错相位摇晃入场动画，
+                        // 拖动/重排不重复触发（JiggleOnce 仅 active 变 true 时播放一次）
+                        child: JiggleOnce(
+                          active: widget.sortMode,
+                          index: i,
+                          child: DeviceCard(
+                            device: filtered[i],
+                            onLongPressDevice: widget.onLongPressDevice,
+                            sortMode: widget.sortMode,
+                          ),
                         ),
                       ),
                     )

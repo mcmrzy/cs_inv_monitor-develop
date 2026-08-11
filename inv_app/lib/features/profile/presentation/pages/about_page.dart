@@ -7,7 +7,6 @@ import 'package:inv_app/core/services/app_update_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
-import 'package:inv_app/core/widgets/csergy_product_card.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -414,39 +413,78 @@ class _AboutPageState extends State<AboutPage> {
       appBar: AppBar(title: Text(l10n.aboutUs)),
       body: ListView(
         children: [
-          const SizedBox(height: 40),
-          // 逆变器产品卡：关于页品牌产品展示（美术路由 P2/inverter-card）
-          Center(
-            child: CsergyProductCard(
-              asset: CsergyAssets.inverterCard,
-              name: l10n.brandName,
-              size: 96,
+          const SizedBox(height: 8),
+          // 品牌区：渐变背景 + 小烁吉祥物 + 品牌名 + slogan + 版本号卡片
+          // （美术路由 P2/brand-hero，替换原逆变器产品卡）
+          Container(
+            margin: EdgeInsets.symmetric(horizontal: 20.w),
+            padding: EdgeInsets.fromLTRB(20.w, 26.h, 20.w, 24.h),
+            decoration: AppColor.heroCard(context),
+            child: Column(
+              children: [
+                // 吉祥物小烁（欢迎姿态，透明底 WebP）
+                Image.asset(
+                  CsergyAssets.xiaoshuoWelcome,
+                  width: 128.w,
+                  height: 128.w,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) => Icon(
+                    Icons.bolt,
+                    size: 72.w,
+                    color: Colors.white.withValues(alpha: 0.8),
+                  ),
+                ),
+                SizedBox(height: 12.h),
+                // 品牌名：辰烁科技
+                Text(
+                  l10n.brandName,
+                  style: TextStyle(
+                    fontSize: 22.sp,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: 1,
+                  ),
+                ),
+                SizedBox(height: 6.h),
+                // slogan
+                Text(
+                  l10n.aboutSlogan,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13.sp,
+                    color: Colors.white.withValues(alpha: 0.92),
+                    height: 1.4,
+                  ),
+                ),
+                SizedBox(height: 16.h),
+                // 版本号卡片式排版
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 7.h),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(20.r),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.info_outline, size: 14.w, color: Colors.white),
+                      SizedBox(width: 6.w),
+                      Text(
+                        'V${AppConfig.version}',
+                        style: TextStyle(
+                          fontSize: 12.sp,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
-          SizedBox(height: 16.h),
-          Center(
-            child: Text(
-              l10n.pvInverterSmartMonitor,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-          ),
-          SizedBox(height: 4.h),
-          Center(
-            child: Text(
-              '${l10n.appVersion}: ${AppConfig.version}',
-              style: TextStyle(
-                  fontSize: 14, color: AppColor.onSurfaceVariant(context)),
-            ),
-          ),
-          SizedBox(height: 8.h),
-          Center(
-            child: Text(
-              l10n.brandName,
-              style: TextStyle(
-                  fontSize: 13, color: AppColor.onSurfaceVariant(context)),
-            ),
-          ),
-          SizedBox(height: 40.h),
+          SizedBox(height: 24.h),
           _buildMenuItem(
             Icons.description_outlined,
             l10n.userAgreement,

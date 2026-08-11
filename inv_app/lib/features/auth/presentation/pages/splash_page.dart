@@ -7,6 +7,7 @@ import 'package:inv_app/core/services/jverify_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:inv_app/features/onboarding/data/onboarding_storage.dart';
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -70,11 +71,23 @@ class _SplashPageState extends State<SplashPage> {
     _canOneClick = canOneClick;
   }
 
+  /// 登录分流前统一收口：首次安装/版本升级需先展示引导页，
+  /// 通过 extra 将登录分流目标传给 /onboarding，完成后原路返回
+  Future<void> _continueAfterSplash(String target) async {
+    final needsOnboarding = await OnboardingStorage().needsOnboarding();
+    if (!mounted) return;
+    if (needsOnboarding) {
+      context.go('/onboarding', extra: target);
+    } else {
+      context.go(target);
+    }
+  }
+
   /// 未登录分流：等待并行中的预检查收尾（≤1.2s），完成后跳转
   Future<void> _redirectUnauthenticated() async {
     await _jverifyPrefetch;
     if (!mounted) return;
-    context.go(_canOneClick ? '/jverify-login' : '/login');
+    await _continueAfterSplash(_canOneClick ? '/jverify-login' : '/login');
   }
 
   @override
@@ -82,7 +95,7 @@ class _SplashPageState extends State<SplashPage> {
     return BlocListener<AuthBloc, AuthState>(
       listener: (context, state) {
         if (state is AuthAuthenticated) {
-          context.go('/home');
+          _continueAfterSplash('/home');
         } else if (state is AuthUnauthenticated) {
           _redirectUnauthenticated();
         }

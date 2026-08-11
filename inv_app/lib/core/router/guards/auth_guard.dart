@@ -7,6 +7,7 @@ class AuthGuard {
   /// 公开路由 - 无需认证即可访问
   static final List<String> _publicRoutes = [
     '/splash',
+    '/onboarding',
     '/login',
     '/jverify-login',
     '/register',
