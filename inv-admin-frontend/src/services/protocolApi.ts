@@ -149,3 +149,50 @@ export const protocolApi = {
   getAlarmEventDetail: async (id: number): Promise<AlarmEventDetail> =>
     unwrap(await api.get<ApiResponse<AlarmEventDetail>>(`/alarm-events/${id}`, { expectedDataShape: 'object' })),
 }
+
+export interface ParallelGroup {
+  id: number
+  name: string
+  description?: string
+  station_id?: number
+  master_sn?: string
+  phase_config?: string
+  device_sns: string[]
+  status?: string
+  created_at?: string
+  updated_at?: string
+}
+
+export interface ParallelGroupPayload {
+  name: string
+  description?: string
+  station_id?: number | null
+  master_sn?: string
+  phase_config?: 'single_phase' | 'three_phase'
+  device_sns?: string[]
+}
+
+export interface ParallelSyncResult {
+  sn: string
+  role: 'master' | 'slave' | string
+  task_id?: string
+  error?: string
+}
+
+// 并机组管理（CRUD 仅管理员；sync 按 V2.1 协议批量下发 set_master_slave）
+export const parallelApi = {
+  listGroups: async (params: ProtocolQueryParams & { search?: string; station_id?: number } = {}): Promise<PaginatedResponse<ParallelGroup>> =>
+    unwrap(await api.get<ApiResponse<PaginatedResponse<ParallelGroup>>>('/parallel-groups', { params, expectedDataShape: 'page' })),
+
+  createGroup: async (payload: ParallelGroupPayload): Promise<ParallelGroup> =>
+    unwrap(await api.post<ApiResponse<ParallelGroup>>('/parallel-groups', payload)),
+
+  updateGroup: async (id: number, payload: Partial<ParallelGroupPayload>): Promise<{ id: number }> =>
+    unwrap(await api.put<ApiResponse<{ id: number }>>(`/parallel-groups/${id}`, payload)),
+
+  deleteGroup: async (id: number): Promise<{ id: number }> =>
+    unwrap(await api.delete<ApiResponse<{ id: number }>>(`/parallel-groups/${id}`)),
+
+  syncGroup: async (id: number): Promise<{ group_id: number; results: ParallelSyncResult[] }> =>
+    unwrap(await api.post<ApiResponse<{ group_id: number; results: ParallelSyncResult[] }>>(`/parallel-groups/${id}/sync`)),
+}

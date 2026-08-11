@@ -12,6 +12,7 @@ import 'package:inv_app/core/data/country_name_mapping.dart';
 import 'package:inv_app/core/data/province_name_mapping.dart';
 import 'package:inv_app/core/data/regions_data.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/core/network/api_client.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/storage_service.dart';
@@ -154,8 +155,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppLocalizations.of(context)!.uploadSuccess)),
+        AppToast.show(
+          context,
+          AppLocalizations.of(context)!.uploadSuccess,
+          type: ToastType.success,
         );
       }
 
@@ -166,11 +169,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
         _isUploadingAvatar = false;
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString()),
-          ),
-        );
+        AppToast.show(context, e.toString(), type: ToastType.error);
       }
     }
   }
@@ -214,23 +213,21 @@ class _EditProfilePageState extends State<EditProfilePage> {
       final currentState = context.read<AuthBloc>().state;
       if (currentState is AuthAuthenticated) {
         // 更新成功：即时确认（不关闭页面）
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.success)),
-        );
+        AppToast.show(context, l10n.success, type: ToastType.success);
         return true;
       }
       if (currentState is AuthError) {
         // 更新失败：提示原因，输入保留可重试
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(currentState.message)),
+        AppToast.show(
+          context,
+          currentState.message,
+          type: ToastType.error,
         );
       }
       return false;
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
-        );
+        AppToast.show(context, e.toString(), type: ToastType.error);
       }
       return false;
     }
@@ -495,14 +492,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
     if (token != null && token.isNotEmpty) return true;
 
     if (mounted) {
+      final l10n = AppLocalizations.of(context)!;
       // 关闭可能残留的弹窗，避免跳转后被遮挡
       Navigator.of(context, rootNavigator: true)
           .popUntil((route) => route.isFirst);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('登录已过期，请重新登录'),
-        ),
-      );
+      AppToast.show(context, l10n.unauthorized, type: ToastType.error);
       context.go('/login');
     }
     return false;
@@ -516,10 +510,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
     if (!await _ensureAuthenticated()) return;
     if (!mounted) return;
     if (phone.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context)!.phoneRequired),
-        ),
+      AppToast.show(
+        context,
+        AppLocalizations.of(context)!.phoneRequired,
+        type: ToastType.info,
       );
       return;
     }
@@ -533,10 +527,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
       if (response.statusCode == 200 && response.data['code'] == 0) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(AppLocalizations.of(context)!.codeSent),
-            ),
+          AppToast.show(
+            context,
+            AppLocalizations.of(context)!.codeSent,
+            type: ToastType.success,
           );
         }
 
@@ -558,11 +552,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString()),
-          ),
-        );
+        AppToast.show(context, e.toString(), type: ToastType.error);
       }
     }
   }
@@ -572,10 +562,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
     if (!await _ensureAuthenticated()) return;
     if (!mounted) return;
     if (newPhone.isEmpty || code.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context)!.fillAllFields),
-        ),
+      AppToast.show(
+        context,
+        AppLocalizations.of(context)!.fillAllFields,
+        type: ToastType.info,
       );
       return;
     }
@@ -605,10 +595,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
         }
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(AppLocalizations.of(context)!.phoneChanged),
-            ),
+          AppToast.show(
+            context,
+            AppLocalizations.of(context)!.phoneChanged,
+            type: ToastType.success,
           );
         }
       } else {
@@ -616,11 +606,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString()),
-          ),
-        );
+        AppToast.show(context, e.toString(), type: ToastType.error);
       }
     }
   }
@@ -789,10 +775,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
     StateSetter setDialogState,
   ) async {
     if (email.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context)!.emailRequired),
-        ),
+      AppToast.show(
+        context,
+        AppLocalizations.of(context)!.emailRequired,
+        type: ToastType.info,
       );
       return;
     }
@@ -806,10 +792,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
       if (response.statusCode == 200 && response.data['code'] == 0) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(AppLocalizations.of(context)!.codeSent),
-            ),
+          AppToast.show(
+            context,
+            AppLocalizations.of(context)!.codeSent,
+            type: ToastType.success,
           );
         }
 
@@ -831,11 +817,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString()),
-          ),
-        );
+        AppToast.show(context, e.toString(), type: ToastType.error);
       }
     }
   }
@@ -843,10 +825,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
   /// 验证邮箱验证码
   Future<void> _verifyEmailCode(String newEmail, String code) async {
     if (newEmail.isEmpty || code.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context)!.fillAllFields),
-        ),
+      AppToast.show(
+        context,
+        AppLocalizations.of(context)!.fillAllFields,
+        type: ToastType.info,
       );
       return;
     }
@@ -876,10 +858,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
         }
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(AppLocalizations.of(context)!.emailChanged),
-            ),
+          AppToast.show(
+            context,
+            AppLocalizations.of(context)!.emailChanged,
+            type: ToastType.success,
           );
         }
       } else {
@@ -887,11 +869,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString()),
-          ),
-        );
+        AppToast.show(context, e.toString(), type: ToastType.error);
       }
     }
   }
@@ -907,11 +885,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
     final selectedCountry = countryResult['country'] ?? '中国';
 
-    // 第二步：选择省/市/区（三级选择器，与电站地址选择一致）
+    // 第二步：选择省份（个人信息页地址到省即可；电站页保持省/市/区三级）
     final regionResult = await Navigator.push<Map<String, String>>(
       context,
       RegionPickerRoute(
         provinces: _provincesFor(selectedCountry),
+        provinceOnly: true,
         citiesFn: (p) {
           if (selectedCountry != '中国') return [];
           final m = chinaRegions[p];

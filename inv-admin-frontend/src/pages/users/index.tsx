@@ -93,13 +93,13 @@ const UsersPage: React.FC = () => {
   const createMutation = useMutation({
     mutationFn: (data: any) => userApi.create(data),
     onSuccess: () => { message.success(t('user.createSuccess')); setModalOpen(false); form.resetFields(); invalidate() },
-    onError: () => { message.error(t('user.createFailed')) },
+    onError: (err: any) => message.error(err?.response?.data?.message || t('user.createFailed')),
   })
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: any }) => userApi.update(id, data),
     onSuccess: () => { message.success(t('user.updateSuccess')); setModalOpen(false); form.resetFields(); invalidate() },
-    onError: () => { message.error(t('user.updateFailed')) },
+    onError: (err: any) => message.error(err?.response?.data?.message || t('user.updateFailed')),
   })
 
   const deleteMutation = useMutation({

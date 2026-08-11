@@ -92,6 +92,7 @@ export default {
     'dash.entryAnalyticsDesc': '深度数据分析与导出',
     'dash.entryAlerts': '通知中心',
     'dash.entryAlertsDesc': '查看所有告警信息',
+    'dash.openBigScreen': '大屏监控',
   },
   en: {
     'dash.title': 'Dashboard',
@@ -186,5 +187,6 @@ export default {
     'dash.entryAnalyticsDesc': 'Deep analysis and data export',
     'dash.entryAlerts': 'Notification Center',
     'dash.entryAlertsDesc': 'View all alert messages',
+    'dash.openBigScreen': 'Big Screen',
   },
 }

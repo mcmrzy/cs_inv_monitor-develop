@@ -66,6 +66,10 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   double _downloadProgress = 0.0;
   bool _isDownloading = false;
 
+  // 已下载固件列表（离线选择用）
+  List<DownloadedFirmwareInfo> _downloadedFirmwares = [];
+  bool _firmwareListLoading = true;
+
   double _uploadProgress = 0.0;
   double _upgradeProgress = 0.0;
   String _upgradeStatus = '';
@@ -100,6 +104,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     });
 
     _initFirmware();
+    _loadDownloadedFirmwares();
   }
 
   Future<void> _initFirmware() async {
@@ -116,6 +121,16 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         }
       }
     }
+  }
+
+  /// 加载本地已下载固件列表（无网时也可选择已预下载的固件）
+  Future<void> _loadDownloadedFirmwares() async {
+    final items = await _downloadService.listDownloadedFirmwares();
+    if (!mounted) return;
+    setState(() {
+      _downloadedFirmwares = items;
+      _firmwareListLoading = false;
+    });
   }
 
   @override
@@ -982,6 +997,10 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                 _buildSelectedFirmwareInfo()
               else if (_isDownloading)
                 _buildDownloadingProgress()
+              else if (_firmwareListLoading)
+                _buildFirmwareListLoading()
+              else if (_downloadedFirmwares.isNotEmpty)
+                _buildDownloadedFirmwareList()
               else
                 Text(
                   l10n.firmwareDownloadHint,
@@ -1101,7 +1120,9 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                 ),
                 SizedBox(height: 2.h),
                 Text(
-                  widget.firmwareFileName ?? _selectedFilePath!.split('/').last,
+                  _selectedFileName() ??
+                      widget.firmwareFileName ??
+                      _selectedFilePath!.split('/').last,
                   style: TextStyle(
                     fontSize: 11.sp,
                     color: AppColors.textSecondary,
@@ -1115,6 +1136,137 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         ],
       ),
     );
+  }
+
+  /// 当前选中文件在已下载列表中的文件名（离线选择场景优先展示所选条目文件名）
+  String? _selectedFileName() {
+    final path = _selectedFilePath;
+    if (path == null) return null;
+    for (final item in _downloadedFirmwares) {
+      if (item.filePath == path) return item.fileName;
+    }
+    return null;
+  }
+
+  Widget _buildFirmwareListLoading() {
+    final l10n = AppLocalizations.of(context)!;
+    return Row(
+      children: [
+        SizedBox(
+          width: 14.w,
+          height: 14.w,
+          child: const CircularProgressIndicator(
+            strokeWidth: 2,
+            color: AppColors.primary,
+          ),
+        ),
+        SizedBox(width: 8.w),
+        Text(
+          l10n.loading,
+          style: TextStyle(fontSize: 13.sp, color: AppColors.textHint),
+        ),
+      ],
+    );
+  }
+
+  /// 已下载固件列表（点击条目即可选中，无需联网）
+  Widget _buildDownloadedFirmwareList() {
+    final l10n = AppLocalizations.of(context)!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          l10n.downloadedFirmwareList,
+          style: TextStyle(
+            fontSize: 13.sp,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        SizedBox(height: 8.h),
+        ..._downloadedFirmwares.map(
+          (item) => _buildDownloadedFirmwareTile(item),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDownloadedFirmwareTile(DownloadedFirmwareInfo item) {
+    final selected = _selectedFilePath == item.filePath;
+    return Container(
+      margin: EdgeInsets.only(bottom: 8.h),
+      decoration: BoxDecoration(
+        color: selected
+            ? AppColors.primary.withValues(alpha: 0.06)
+            : AppColors.badgeNormalBg,
+        borderRadius: BorderRadius.circular(10.r),
+        border: Border.all(
+          color: selected ? AppColors.primary : AppColor.border(context),
+        ),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10.r),
+        onTap: () => setState(() {
+          _selectedFilePath = item.filePath;
+          _errorMessage = null;
+        }),
+        child: Padding(
+          padding: EdgeInsets.all(10.w),
+          child: Row(
+            children: [
+              Icon(
+                Icons.memory_rounded,
+                size: 18.sp,
+                color: selected ? AppColors.primary : AppColors.textHint,
+              ),
+              SizedBox(width: 8.w),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.fileName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12.sp,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    SizedBox(height: 2.h),
+                    Text(
+                      _formatFirmwareSize(item.fileSize),
+                      style: TextStyle(
+                        fontSize: 11.sp,
+                        color: AppColors.textHint,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (selected)
+                Icon(
+                  Icons.check_circle_rounded,
+                  size: 18.sp,
+                  color: AppColors.primary,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatFirmwareSize(int size) {
+    if (size <= 0) return '';
+    if (size >= 1024 * 1024) {
+      return '${(size / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
+    if (size >= 1024) {
+      return '${(size / 1024).toStringAsFixed(1)} KB';
+    }
+    return '$size B';
   }
 
   Widget _buildConnectDeviceStep() {

@@ -189,7 +189,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	workOrderHandler := handler.NewWorkOrderHandler(db)
 	parallelRepo := repository.NewParallelRepository(db)
 	parallelService := service.NewParallelService(parallelRepo)
-	parallelHandler := handler.NewParallelHandler(parallelService)
+	parallelHandler := handler.NewParallelHandler(parallelService, deviceService)
 
 	// Initialize invitation handler with email service
 	organizationRepo := repository.NewOrganizationRepository(db)
@@ -1031,8 +1031,10 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		usersGroup := api.Group("/users").Use(middleware.Auth(deps.JWTService, deps.AuthorizationContextValidator))
 		{
 			usersGroup.GET("", middleware.RequirePermission(deps.PermChecker, "users", "view"), deps.AdminHandler.ListUsers)
+			usersGroup.POST("", middleware.RequirePermission(deps.PermChecker, "users", "create"), deps.AdminHandler.CreateUser)
 			usersGroup.GET("/:id", deps.AdminHandler.GetUser)
 			usersGroup.PATCH("/:id", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.UpdateUser)
+			usersGroup.DELETE("/:id", middleware.RequirePermission(deps.PermChecker, "users", "delete"), deps.AdminHandler.DeleteUser)
 			usersGroup.PUT("/:id/toggle", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.ToggleUserStatus)
 			usersGroup.PUT("/:id/password", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.ResetUserPassword)
 		}
@@ -1045,6 +1047,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			parallelGroup.PUT("/:id", deps.ParallelHandler.Update)
 			parallelGroup.PATCH("/:id", deps.ParallelHandler.Update)
 			parallelGroup.DELETE("/:id", deps.ParallelHandler.Delete)
+			parallelGroup.POST("/:id/sync", deps.ParallelHandler.Sync)
 		}
 
 		orgGroup := api.Group("/organizations").Use(middleware.Auth(deps.JWTService, deps.AuthorizationContextValidator))

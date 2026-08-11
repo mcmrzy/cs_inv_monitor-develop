@@ -142,7 +142,9 @@ var expectedFrontendRoutes = []struct {
 
 	// ---- Users ----
 	{"GET", "/api/v1/users"},
+	{"POST", "/api/v1/users"},
 	{"PATCH", "/api/v1/users/:id"},
+	{"DELETE", "/api/v1/users/:id"},
 	{"PUT", "/api/v1/users/:id/password"},
 
 	// ---- Dashboard ----
@@ -189,8 +191,8 @@ func TestAPIContract_RoutesRegistered(t *testing.T) {
 //  1. The route is registered (not 404)
 //  2. The handler is implemented (not 501)
 func TestAPIContract_ParallelHandlerNo501(t *testing.T) {
-	// nil service is safe: non-admin role short-circuits before any service call.
-	h := handler.NewParallelHandler(nil)
+	// nil services are safe: non-admin role short-circuits before any service call.
+	h := handler.NewParallelHandler(nil, nil)
 
 	r := gin.New()
 	r.Use(gin.Recovery())

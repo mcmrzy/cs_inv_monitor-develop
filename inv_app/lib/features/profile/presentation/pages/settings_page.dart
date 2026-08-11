@@ -12,6 +12,7 @@ import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/services/locale_service.dart';
 import 'package:inv_app/core/config/app_config.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/core/utils/timezone_utils.dart';
 import 'package:inv_app/core/widgets/settings_widgets.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
@@ -87,11 +88,10 @@ class _SettingsPageState extends State<SettingsPage> {
     await _storage.saveIsLocalMode(value);
     if (mounted) {
       setState(() => _isLocalMode = value);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(value ? l10n.localModeOn : l10n.localModeOff),
-          duration: const Duration(seconds: 1),
-        ),
+      AppToast.show(
+        context,
+        value ? l10n.localModeOn : l10n.localModeOff,
+        type: ToastType.success,
       );
     }
   }
@@ -103,11 +103,10 @@ class _SettingsPageState extends State<SettingsPage> {
     } catch (_) {
       // 蓝牙未开启等异常：不持久化、开关保持原状
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.str('ble_bluetooth_off')),
-          duration: const Duration(seconds: 1),
-        ),
+      AppToast.show(
+        context,
+        l10n.str('ble_bluetooth_off'),
+        type: ToastType.error,
       );
       return;
     }
@@ -121,11 +120,10 @@ class _SettingsPageState extends State<SettingsPage> {
       _unboundSub = null;
     }
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(value ? l10n.bleDirectOn : l10n.bleDirectOff),
-        duration: const Duration(seconds: 1),
-      ),
+    AppToast.show(
+      context,
+      value ? l10n.bleDirectOn : l10n.bleDirectOff,
+      type: ToastType.success,
     );
   }
 
@@ -188,8 +186,10 @@ class _SettingsPageState extends State<SettingsPage> {
             onPressed: () {
               enteredPin = pinController.text.trim();
               if (enteredPin.isEmpty) {
-                ScaffoldMessenger.of(dialogContext).showSnackBar(
-                  SnackBar(content: Text(l10n.pinRequired)),
+                AppToast.show(
+                  dialogContext,
+                  l10n.pinRequired,
+                  type: ToastType.info,
                 );
                 return;
               }
@@ -261,11 +261,10 @@ class _SettingsPageState extends State<SettingsPage> {
     getIt<BlePollingService>().setInterval(Duration(seconds: selected));
     if (!mounted) return;
     setState(() => _blePollInterval = selected);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(l10n.pollIntervalSaved),
-        duration: const Duration(seconds: 1),
-      ),
+    AppToast.show(
+      context,
+      l10n.pollIntervalSaved,
+      type: ToastType.success,
     );
   }
 
@@ -273,11 +272,10 @@ class _SettingsPageState extends State<SettingsPage> {
     await _storage.saveIsDarkMode(value);
     if (mounted) {
       setState(() => _isDarkMode = value);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(value ? l10n.darkModeOn : l10n.darkModeOff),
-          duration: const Duration(seconds: 1),
-        ),
+      AppToast.show(
+        context,
+        value ? l10n.darkModeOn : l10n.darkModeOff,
+        type: ToastType.success,
       );
     }
   }
@@ -292,11 +290,10 @@ class _SettingsPageState extends State<SettingsPage> {
             onPressed: () {
               setState(() => _unitType = 'kW');
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(l10n.str('unit_changed', {'unit': 'kW'})),
-                  duration: const Duration(seconds: 1),
-                ),
+              AppToast.show(
+                context,
+                l10n.str('unit_changed', {'unit': 'kW'}),
+                type: ToastType.success,
               );
             },
             child: Padding(
@@ -316,11 +313,10 @@ class _SettingsPageState extends State<SettingsPage> {
             onPressed: () {
               setState(() => _unitType = 'W');
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(l10n.str('unit_changed', {'unit': 'W'})),
-                  duration: const Duration(seconds: 1),
-                ),
+              AppToast.show(
+                context,
+                l10n.str('unit_changed', {'unit': 'W'}),
+                type: ToastType.success,
               );
             },
             child: Padding(
@@ -368,11 +364,10 @@ class _SettingsPageState extends State<SettingsPage> {
                 if (!mounted) return;
                 setState(() => _serverUrl = url); // ignore: use_build_context_synchronously
                 Navigator.pop(context); // ignore: use_build_context_synchronously
-                ScaffoldMessenger.of(context).showSnackBar( // ignore: use_build_context_synchronously
-                  SnackBar(
-                    content: Text(l10n.serverSaved),
-                    duration: const Duration(seconds: 2),
-                  ),
+                AppToast.show(
+                  context, // ignore: use_build_context_synchronously
+                  l10n.serverSaved,
+                  type: ToastType.success,
                 );
               }
             },
@@ -403,13 +398,10 @@ class _SettingsPageState extends State<SettingsPage> {
               if (!mounted) return;
               setState(() => _currentTimezone = id); // ignore: use_build_context_synchronously
               Navigator.pop(context); // ignore: use_build_context_synchronously
-              ScaffoldMessenger.of(context).showSnackBar( // ignore: use_build_context_synchronously
-                SnackBar(
-                  content: Text(
-                    l10n.str('timezone_changed', {'timezone': label}),
-                  ),
-                  duration: const Duration(seconds: 1),
-                ),
+              AppToast.show(
+                context, // ignore: use_build_context_synchronously
+                l10n.str('timezone_changed', {'timezone': label}),
+                type: ToastType.success,
               );
             },
             child: Padding(
@@ -650,11 +642,10 @@ class _SettingsPageState extends State<SettingsPage> {
                 _serverUrl = AppConfig.apiBaseUrl;
                 _currentTimezone = TimezoneUtils.defaultTimezone;
               });
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(l10n.settingsReset),
-                  duration: const Duration(seconds: 1),
-                ),
+              AppToast.show(
+                context,
+                l10n.settingsReset,
+                type: ToastType.success,
               );
             }
           }

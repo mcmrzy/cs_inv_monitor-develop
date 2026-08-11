@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
+import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
@@ -60,17 +61,17 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
       body: BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {
           if (state is AuthPasswordResetSuccess) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(l10n.passwordChanged),
-              ),
+            AppToast.show(
+              context,
+              l10n.passwordChanged,
+              type: ToastType.success,
             );
             context.pop();
           } else if (state is AuthError) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(l10n.translateError(state.message)),
-              ),
+            AppToast.show(
+              context,
+              l10n.translateError(state.message),
+              type: ToastType.error,
             );
           }
         },

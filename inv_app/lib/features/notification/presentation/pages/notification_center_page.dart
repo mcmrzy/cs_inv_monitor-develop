@@ -345,6 +345,10 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(12.r),
+        // 透明水波纹：避免点击时蓝色闪烁
+        highlightColor: Colors.transparent,
+        splashColor: Colors.transparent,
+        hoverColor: Colors.transparent,
         onTap: onTap,
         child: Padding(
           padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 14.h),
@@ -354,8 +358,22 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
                 width: 40.w,
                 height: 40.w,
                 decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(11.r),
+                  borderRadius: BorderRadius.circular(12.r),
+                  gradient: LinearGradient(
+                    colors: [
+                      color.withValues(alpha: 0.08),
+                      color.withValues(alpha: 0.18),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
                 child: Icon(icon, color: color, size: 20.sp),
               ),
@@ -377,30 +395,34 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
     );
   }
 
-  Widget _buildBottomSheet(List<Widget> tiles) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColor.surfaceContainer(context),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
-      ),
-      child: SafeArea(
-        // 小屏/大字体下可滚动，避免操作项溢出（内容不超限时视觉不变）
-        child: SingleChildScrollView(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.8,
+  Widget _buildBottomSheet({
+    Widget? header,
+    required List<Widget Function(int)> tileBuilders,
+  }) {
+    return _AnimatedMenuSheet(header: header, tileBuilders: tileBuilders);
+  }
+
+  /// 弹窗顶部消息标题 + 分隔线（与设备弹窗 Divider 样式一致）
+  Widget _buildSheetHeader(String title) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: EdgeInsets.fromLTRB(20.w, 14.h, 20.w, 10.h),
+          child: Text(
+            title,
+            style: TextStyle(
+              fontSize: 16.sp,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
             ),
-            child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 8.h),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: tiles,
-              ),
-            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
-      ),
+        const Divider(height: 1, color: AppColors.divider),
+        SizedBox(height: 6.h),
+      ],
     );
   }
 
@@ -409,35 +431,38 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
     final l10n = AppLocalizations.of(context)!;
     showModalBottomSheet(
       context: context,
-      builder: (ctx) => _buildBottomSheet([
-        _buildMenuTile(
-          icon: Icons.delete_outline,
-          color: AppColors.error,
-          title: l10n.str('notif_delete'),
-          onTap: () {
-            Navigator.pop(ctx);
-            _confirmDeleteNotification(notification);
-          },
-        ),
-        _buildMenuTile(
-          icon: Icons.delete_sweep_outlined,
-          color: AppColors.error,
-          title: l10n.str('notif_clear_all'),
-          onTap: () {
-            Navigator.pop(ctx);
-            _confirmClearAll();
-          },
-        ),
-        _buildMenuTile(
-          icon: Icons.delete_sweep_outlined,
-          color: AppColors.error,
-          title: l10n.str('notif_batch_manage'),
-          onTap: () {
-            Navigator.pop(ctx);
-            _enterBatchMode();
-          },
-        ),
-      ]),
+      builder: (ctx) => _buildBottomSheet(
+        header: _buildSheetHeader(_notificationTitle(notification, l10n)),
+        tileBuilders: [
+          (_) => _buildMenuTile(
+            icon: Icons.delete_outline,
+            color: AppColors.error,
+            title: l10n.str('notif_delete'),
+            onTap: () {
+              Navigator.pop(ctx);
+              _confirmDeleteNotification(notification);
+            },
+          ),
+          (_) => _buildMenuTile(
+            icon: Icons.delete_sweep_outlined,
+            color: AppColors.error,
+            title: l10n.str('notif_clear_all'),
+            onTap: () {
+              Navigator.pop(ctx);
+              _confirmClearAll();
+            },
+          ),
+          (_) => _buildMenuTile(
+            icon: Icons.delete_sweep_outlined,
+            color: AppColors.error,
+            title: l10n.str('notif_batch_manage'),
+            onTap: () {
+              Navigator.pop(ctx);
+              _enterBatchMode();
+            },
+          ),
+        ],
+      ),
     );
   }
 
@@ -446,30 +471,34 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
     final l10n = AppLocalizations.of(context)!;
     final alarmId = alarm['id'];
     if (alarmId is! int) return;
+    final alarmTitle = (alarm['fault_message'] ?? l10n.alarm).toString();
     showModalBottomSheet(
       context: context,
-      builder: (ctx) => _buildBottomSheet([
-        _buildMenuTile(
-          icon: Icons.done_all,
-          color: AppColors.success,
-          title: l10n.str('notif_mark_handled'),
-          onTap: () {
-            Navigator.pop(ctx);
-            context.read<AlarmBloc>().add(
-                  AlarmMarkReadRequested(alarmIds: [alarmId]),
-                );
-          },
-        ),
-        _buildMenuTile(
-          icon: Icons.delete_outline,
-          color: AppColors.error,
-          title: l10n.str('notif_delete'),
-          onTap: () {
-            Navigator.pop(ctx);
-            _confirmDeleteAlarm(alarmId);
-          },
-        ),
-      ]),
+      builder: (ctx) => _buildBottomSheet(
+        header: _buildSheetHeader(alarmTitle),
+        tileBuilders: [
+          (_) => _buildMenuTile(
+            icon: Icons.done_all,
+            color: AppColors.success,
+            title: l10n.str('notif_mark_handled'),
+            onTap: () {
+              Navigator.pop(ctx);
+              context.read<AlarmBloc>().add(
+                    AlarmMarkReadRequested(alarmIds: [alarmId]),
+                  );
+            },
+          ),
+          (_) => _buildMenuTile(
+            icon: Icons.delete_outline,
+            color: AppColors.error,
+            title: l10n.str('notif_delete'),
+            onTap: () {
+              Navigator.pop(ctx);
+              _confirmDeleteAlarm(alarmId);
+            },
+          ),
+        ],
+      ),
     );
   }
 
@@ -1071,4 +1100,92 @@ class _NotificationItem {
     required this.timestamp,
     required this.data,
   });
+}
+
+// ==================== 弹窗逐项入场动画 ====================
+//
+// 长按菜单底部弹窗：操作项逐项淡入 + 上移（与设备弹窗动画一致）
+
+class _AnimatedMenuSheet extends StatefulWidget {
+  final Widget? header;
+  final List<Widget Function(int)> tileBuilders;
+
+  const _AnimatedMenuSheet({this.header, required this.tileBuilders});
+
+  @override
+  State<_AnimatedMenuSheet> createState() => _AnimatedMenuSheetState();
+}
+
+class _AnimatedMenuSheetState extends State<_AnimatedMenuSheet>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+    )..forward();
+  }
+
+  @override
+  void dispose() {
+    _ctl.dispose();
+    super.dispose();
+  }
+
+  // 逐项入场动画（淡入 + 上移），间隔 0.15
+  Widget _animatedItem(int i, Widget child) {
+    final start = i * 0.15;
+    final end = (start + 0.7).clamp(0.0, 1.0);
+    final animation = CurvedAnimation(
+      parent: _ctl,
+      curve: Interval(start, end, curve: Curves.easeOutCubic),
+    );
+    return FadeTransition(
+      opacity: animation,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, 0.2),
+          end: Offset.zero,
+        ).animate(animation),
+        child: child,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColor.surfaceContainer(context),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
+      ),
+      child: SafeArea(
+        // 小屏/大字体下可滚动，避免操作项溢出（内容不超限时视觉不变）
+        child: SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.8,
+            ),
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 8.h),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (widget.header != null) widget.header!,
+                  ...List.generate(
+                    widget.tileBuilders.length,
+                    (i) => _animatedItem(i, widget.tileBuilders[i](i)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

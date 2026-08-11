@@ -671,7 +671,7 @@ func (r *StationRepository) GetAll(ctx context.Context, page, pageSize int) ([]*
 
 	query := `SELECT ` + stationListSelectColumns + `
 			FROM stations WHERE deleted_at IS NULL
-			ORDER BY created_at DESC
+			ORDER BY sort_order, created_at DESC, id
 			LIMIT $1 OFFSET $2
 		`
 

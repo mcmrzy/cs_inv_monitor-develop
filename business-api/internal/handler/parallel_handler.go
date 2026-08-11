@@ -6,19 +6,22 @@ import (
 
 	"inv-api-server/internal/middleware"
 	"inv-api-server/internal/service"
+	"inv-api-server/pkg/logger"
 	"inv-api-server/pkg/response"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
+	"go.uber.org/zap"
 )
 
-// ParallelHandler 处理并联组（parallel-groups）的 CRUD 请求。
+// ParallelHandler 处理并联组（parallel-groups）的 CRUD 与设备并机命令。
 type ParallelHandler struct {
 	parallelService *service.ParallelService
+	deviceService   *service.DeviceService
 }
 
-func NewParallelHandler(parallelService *service.ParallelService) *ParallelHandler {
-	return &ParallelHandler{parallelService: parallelService}
+func NewParallelHandler(parallelService *service.ParallelService, deviceService *service.DeviceService) *ParallelHandler {
+	return &ParallelHandler{parallelService: parallelService, deviceService: deviceService}
 }
 
 // List 返回分页的并联组列表（仅管理员可查看）
@@ -156,6 +159,77 @@ func (h *ParallelHandler) Delete(c *gin.Context) {
 		return
 	}
 	response.SuccessWithMessage(c, "并联组已删除", gin.H{"id": id})
+}
+
+// Sync 向并联组内设备批量下发并机配置命令（协议驱动：V2.1 控制参数 set_master_slave）。
+// 主机 → set_master_slave=1；组内其余成员 → set_master_slave=0。
+// 逐台复用 SendCommand 通道（含 command_logs 审计 + desired 状态闭环 + 离线队列）。
+func (h *ParallelHandler) Sync(c *gin.Context) {
+	if !middleware.GetIsSystemAdmin(c) {
+		response.Error(c, 403, "仅管理员可操作")
+		return
+	}
+
+	id, ok := parseParallelGroupID(c)
+	if !ok {
+		return
+	}
+
+	group, err := h.parallelService.GetByID(c.Request.Context(), id)
+	if err != nil {
+		response.Error(c, 500, "查询并联组失败")
+		return
+	}
+	if group == nil {
+		response.Error(c, 404, "并联组不存在")
+		return
+	}
+
+	// 校验：组必须包含主机且主机在成员列表内，成员非空
+	if group.MasterSN == "" {
+		response.Error(c, 400, "并联组未配置主机，无法同步")
+		return
+	}
+	members := append([]string{}, group.DeviceSNs...)
+	if len(members) == 0 {
+		response.Error(c, 400, "并联组没有成员设备，无法同步")
+		return
+	}
+
+	type result struct {
+		SN      string `json:"sn"`
+		Role    string `json:"role"`
+		TaskID  string `json:"task_id,omitempty"`
+		Error   string `json:"error,omitempty"`
+		Queued  bool   `json:"queued,omitempty"`
+	}
+	results := make([]result, 0, len(members))
+
+	for _, sn := range members {
+		setMaster := sn == group.MasterSN
+		res := result{SN: sn, Role: "slave"}
+		if setMaster {
+			res.Role = "master"
+		}
+
+		value := 0
+		if setMaster {
+			value = 1
+		}
+		taskID, err := h.deviceService.SendCommand(c.Request.Context(), sn, "set_master_slave", map[string]interface{}{"value": value})
+		if err != nil {
+			res.Error = err.Error()
+		} else {
+			res.TaskID = taskID
+		}
+		results = append(results, res)
+	}
+
+	logger.Info("Parallel group sync dispatched",
+		zap.Int64("group_id", id),
+		zap.String("master_sn", group.MasterSN),
+		zap.Int("members", len(members)))
+	response.Success(c, gin.H{"group_id": id, "results": results})
 }
 
 // parseParallelGroupID extracts and validates the group ID from the URL path.

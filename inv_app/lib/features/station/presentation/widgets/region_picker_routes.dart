@@ -415,22 +415,27 @@ class _ContinentCountryPickerPageState
   }
 }
 
-/// 第二步：省/市/区选择器（底部弹出，三列滚轮）
+/// 第二步：省/市/区选择器（底部弹出，三列滚轮；provinceOnly 时仅显示省份列）
 class RegionPickerRoute extends PageRouteBuilder<Map<String, String>> {
   final List<String> provinces;
   final List<String> Function(String province) citiesFn;
   final List<String> Function(String province, String city) districtsFn;
 
+  /// 仅选省份模式（个人信息页地址到省即可）；默认 false 保持省/市/区三级（电站页）
+  final bool provinceOnly;
+
   RegionPickerRoute({
     required this.provinces,
     required this.citiesFn,
     required this.districtsFn,
+    this.provinceOnly = false,
   }) : super(
           pageBuilder: (context, animation, secondaryAnimation) =>
               RegionPickerPage(
             provinces: provinces,
             citiesFn: citiesFn,
             districtsFn: districtsFn,
+            provinceOnly: provinceOnly,
           ),
           opaque: false,
           barrierColor: Colors.black54,
@@ -457,11 +462,15 @@ class RegionPickerPage extends StatefulWidget {
   final List<String> Function(String province) citiesFn;
   final List<String> Function(String province, String city) districtsFn;
 
+  /// 仅选省份模式：只渲染省份列，选中省份后直接返回，市/区留空
+  final bool provinceOnly;
+
   const RegionPickerPage({
     super.key,
     required this.provinces,
     required this.citiesFn,
     required this.districtsFn,
+    this.provinceOnly = false,
   });
 
   @override
@@ -485,7 +494,8 @@ class _RegionPickerPageState extends State<RegionPickerPage> {
   @override
   void initState() {
     super.initState();
-    if (widget.provinces.isEmpty) {
+    if (widget.provinceOnly || widget.provinces.isEmpty) {
+      // 仅省份模式（或数据缺失）：不计算市/区列表
       _cities = [];
       _districts = [];
     } else {
@@ -545,6 +555,12 @@ class _RegionPickerPageState extends State<RegionPickerPage> {
   void _confirm() {
     if (widget.provinces.isEmpty) return;
     final prov = widget.provinces[_provIdx];
+    // 仅省份模式：选中省份后直接返回，市/区留空
+    if (widget.provinceOnly) {
+      Navigator.of(context)
+          .pop({'province': prov, 'city': '', 'district': ''});
+      return;
+    }
     String? city;
     String? dist;
     if (_cities.isNotEmpty && _cityIdx < _cities.length) {
@@ -619,16 +635,19 @@ class _RegionPickerPageState extends State<RegionPickerPage> {
                   height: _itemH * 7,
                   child: Row(
                     children: [
-                      Expanded(
-                        flex: 3,
-                        child: _buildColumn(
-                          widget.provinces,
-                          _provCtrl,
-                          _provIdx,
-                          _onProvChanged,
-                          colLabel: AppLocalizations.of(context)!.localProvince,
+                      if (widget.provinceOnly) ...[
+                        // 仅省份模式：单列铺满，不渲染市/区列
+                        Expanded(
+                          child: _buildColumn(
+                            widget.provinces,
+                            _provCtrl,
+                            _provIdx,
+                            _onProvChanged,
+                            colLabel:
+                                AppLocalizations.of(context)!.localProvince,
+                          ),
                         ),
-                      ),
+                      ] else ...[
                       Container(width: 1, color: AppColors.surfaceHover),
                       Expanded(
                         flex: 3,
@@ -651,6 +670,7 @@ class _RegionPickerPageState extends State<RegionPickerPage> {
                           colLabel: AppLocalizations.of(context)!.localDistrict,
                         ),
                       ),
+                      ],
                     ],
                   ),
                 ),

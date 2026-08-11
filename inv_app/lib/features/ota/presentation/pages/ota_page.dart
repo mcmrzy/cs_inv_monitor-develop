@@ -52,6 +52,47 @@ class _OTAPageState extends State<OTAPage> {
     }
   }
 
+  /// 恢复升级包模式的下载状态（遍历包内所有芯片固件，全部已下载才标记已下载）。
+  /// 与单固件模式共用 [_checkedDownloadIds] 防重复检查。
+  Future<void> _restorePackageDownloadState(Map<String, dynamic> info) async {
+    final firmwareId = info['firmware_id'] as int? ?? 0;
+    if (firmwareId <= 0) return;
+    if (_checkedDownloadIds.contains(firmwareId)) return;
+    _checkedDownloadIds.add(firmwareId);
+
+    // 兼容后端字段：chips_to_upgrade（check-update 返回）/ chips / items
+    final chips = (info['chips_to_upgrade'] is List)
+        ? (info['chips_to_upgrade'] as List)
+        : (info['chips'] is List)
+            ? (info['chips'] as List)
+            : (info['items'] is List)
+                ? (info['items'] as List)
+                : <dynamic>[];
+
+    if (chips.isEmpty) return;
+
+    bool allDownloaded = true;
+    for (final chip in chips) {
+      if (chip is Map) {
+        final chipFirmwareId = chip['firmware_id'] as int? ?? 0;
+        if (chipFirmwareId > 0) {
+          final downloaded =
+              await _downloadService.isFirmwareDownloaded(chipFirmwareId);
+          if (!downloaded) {
+            allDownloaded = false;
+            break;
+          }
+        }
+      }
+    }
+
+    if (allDownloaded && mounted) {
+      setState(() {
+        _downloadedCache[firmwareId] = true;
+      });
+    }
+  }
+
   @override
   void dispose() {
     _downloadService.dispose();
@@ -511,6 +552,8 @@ class _OTAPageState extends State<OTAPage> {
     final mainVersion = info['main_version'] as String? ?? l10n.unknown;
     final currentMainVersion = info['current_main_version'] as String? ?? '';
     final firmwareId = info['firmware_id'] as int? ?? 0;
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _restorePackageDownloadState(info));
     final chipsToUpgrade = (info['chips_to_upgrade'] as List?) ?? [];
     final changelog = info['changelog'] as String? ?? '';
 

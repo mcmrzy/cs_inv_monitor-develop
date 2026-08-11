@@ -61,7 +61,8 @@ class AppTheme {
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: const Color(0xFF1F2937),
+        // 柔和中性深灰蓝：避免纯蓝黑"一坨"观感（与 AppToast info 背景一致）
+        backgroundColor: const Color(0xFF374151),
         contentTextStyle: TextStyle(fontSize: 14.sp, color: Colors.white),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16.r),

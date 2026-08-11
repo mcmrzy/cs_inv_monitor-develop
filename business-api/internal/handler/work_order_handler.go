@@ -58,10 +58,12 @@ const workOrderJSON = `jsonb_build_object(
 	'escalatedCount',w.escalated_count,'lockVersion',w.lock_version,'createdAt',w.created_at,'updatedAt',w.updated_at)`
 
 func workOrderDataScope(alias string, isSystemAdmin bool, userArg int) string {
-	userParam := "$" + strconv.Itoa(userArg)
 	if isSystemAdmin {
-		return userParam + " = " + userParam
+		// 系统管理员可见全部工单，直接放行；
+		// 不能返回 "$N = $N" 自比较（参数类型无法推断，且无意义）。
+		return "TRUE"
 	}
+	userParam := "$" + strconv.Itoa(userArg)
 	return "(" + alias + ".creator_id=" + userParam + " OR " + alias + ".assigned_to=" + userParam + ")"
 }
 

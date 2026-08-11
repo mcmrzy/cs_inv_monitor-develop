@@ -9,7 +9,7 @@ import type { ProColumns } from '@ant-design/pro-components'
 import {
   DashboardOutlined, WifiOutlined, ExclamationCircleOutlined, ThunderboltOutlined,
   LineChartOutlined, PercentageOutlined, BarChartOutlined,
-  DesktopOutlined,
+  DesktopOutlined, FundViewOutlined,
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import ReactECharts from '@/lib/echarts'
@@ -509,6 +509,15 @@ const DashboardPage: React.FC = () => {
       <Title level={4} style={{ marginBottom: 16 }}>
         {t('dash.title')}
       </Title>
+      {/* 大屏监控独立入口：新窗口打开全屏页面（已从左侧菜单移除） */}
+      <Button
+        type="primary"
+        icon={<FundViewOutlined />}
+        onClick={() => window.open('/big-screen', '_blank')}
+        style={{ marginBottom: 16 }}
+      >
+        {t('dash.openBigScreen')}
+      </Button>
       {queryError && (
         <QueryErrorAlert
           error={queryError}
