@@ -99,6 +99,8 @@ const Map<String, String> zh = {
   'device_bound': '设备已绑定',
   'device_order_saved': '设备排序已保存',
   'unbind': '解绑',
+  'device_action_unbind_hint': '从当前电站解绑该设备',
+  'device_action_delete_hint': '删除后无法恢复',
 
   // 设备
   'device_management': '设备管理',
@@ -266,6 +268,9 @@ const Map<String, String> zh = {
 
   // 设置
   'language_switch': '语言',
+  // 语言名用自称（endonym），不随 UI 语言翻译
+  'language_chinese': '中文',
+  'language_english': 'English',
   'dark_mode': '深色模式',
   'system_settings': '系统设置',
   'connection_settings': '连接设置',
@@ -1024,6 +1029,17 @@ const Map<String, String> zh = {
   'notify_ota_available': '{device} 有新固件可升级',
   'notify_app_update': '发现新版本 v{version}',
   'update_details_hint': '点击查看详情并更新',
+  // 通知长按操作
+  'notif_delete': '删除此通知',
+  'notif_clear_all': '清空全部',
+  'notif_batch_manage': '批量管理',
+  'notif_delete_selected': '删除所选({count})',
+  'notif_mark_handled': '标记已处理',
+  'notif_batch_select': '选择通知',
+  'notif_done': '完成',
+  'notif_delete_confirm': '确认删除该通知吗？',
+  'notif_delete_selected_confirm': '确认删除选中的({count})条通知吗？',
+  'notif_clear_all_confirm': '确认清空全部通知吗？',
 
   // 其他
   'search_alarm_hint': '搜索告警设备/SN',

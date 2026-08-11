@@ -99,6 +99,8 @@ const Map<String, String> en = {
   'device_bound': 'Device bound successfully',
   'device_order_saved': 'Device order saved',
   'unbind': 'Unbind',
+  'device_action_unbind_hint': 'Unbind this device from the current station',
+  'device_action_delete_hint': 'This action cannot be undone',
 
   // Device
   'device_management': 'Device Management',
@@ -266,6 +268,9 @@ const Map<String, String> en = {
 
   // Settings
   'language_switch': 'Language',
+  // Language names use endonyms (self-names), not translated by UI language
+  'language_chinese': '中文',
+  'language_english': 'English',
   'dark_mode': 'Dark Mode',
   'system_settings': 'Settings',
   'connection_settings': 'Connection',
@@ -1055,6 +1060,17 @@ const Map<String, String> en = {
   'notify_ota_available': '{device} has new firmware available',
   'notify_app_update': 'New version v{version} available',
   'update_details_hint': 'Tap to view details and update',
+  // Notification long-press actions
+  'notif_delete': 'Delete this notification',
+  'notif_clear_all': 'Clear all',
+  'notif_batch_manage': 'Batch manage',
+  'notif_delete_selected': 'Delete selected ({count})',
+  'notif_mark_handled': 'Mark as handled',
+  'notif_batch_select': 'Select notifications',
+  'notif_done': 'Done',
+  'notif_delete_confirm': 'Delete this notification?',
+  'notif_delete_selected_confirm': 'Delete the {count} selected notifications?',
+  'notif_clear_all_confirm': 'Clear all notifications?',
 
   // Other
   'search_alarm_hint': 'Search alarm device/SN',

@@ -28,6 +28,9 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
   AlarmState? _cachedAlarmState;
   final NotificationStreamService _streamService = NotificationStreamService();
   StreamSubscription<Map<String, dynamic>>? _sseSubscription;
+  // 系统通知批量管理模式（长按菜单进入）：按后端通知 id 勾选
+  bool _batchMode = false;
+  final Set<int> _selectedIds = {};
 
   @override
   void initState() {
@@ -81,7 +84,22 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       appBar: AppBar(
-        title: Text(l10n.notificationCenter),
+        title: Text(
+          _batchMode ? l10n.str('notif_batch_select') : l10n.notificationCenter,
+        ),
+        actions: [
+          if (_batchMode)
+            TextButton(
+              onPressed: _exitBatchMode,
+              child: Text(
+                l10n.str('notif_done'),
+                style: const TextStyle(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+        ],
       ),
       body: MultiBlocListener(
         listeners: [
@@ -149,6 +167,29 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
                         ),
                       ),
                     ),
+                    if (_batchMode)
+                      SafeArea(
+                        top: false,
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(16.w, 8.h, 16.w, 12.h),
+                          child: FilledButton.icon(
+                            onPressed: _selectedIds.isEmpty
+                                ? null
+                                : () => _deleteSelected(notifState),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.error,
+                              minimumSize: Size.fromHeight(48.h),
+                            ),
+                            icon: const Icon(Icons.delete_outline, size: 18),
+                            label: Text(
+                              l10n.str('notif_delete_selected',
+                                  {'count': '${_selectedIds.length}'}),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ),
+                      ),
                   ],
                 );
               },
@@ -257,6 +298,246 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
     );
   }
 
+  // ==================== 长按操作菜单 ====================
+
+  /// 进入批量管理模式：清空勾选，AppBar 显示完成按钮
+  void _enterBatchMode() {
+    setState(() {
+      _batchMode = true;
+      _selectedIds.clear();
+    });
+  }
+
+  void _exitBatchMode() {
+    setState(() {
+      _batchMode = false;
+      _selectedIds.clear();
+    });
+  }
+
+  void _toggleSelect(int id) {
+    setState(() {
+      if (!_selectedIds.add(id)) _selectedIds.remove(id);
+    });
+  }
+
+  Widget _buildMenuTile({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12.r),
+        onTap: onTap,
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 14.h),
+          child: Row(
+            children: [
+              Container(
+                width: 40.w,
+                height: 40.w,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(11.r),
+                ),
+                child: Icon(icon, color: color, size: 20.sp),
+              ),
+              SizedBox(width: 14.w),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 15.sp,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomSheet(List<Widget> tiles) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColor.surfaceContainer(context),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 8.h),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: tiles,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 系统通知长按菜单：删除单条 / 清空全部 / 批量管理
+  void _showSystemNotificationMenu(SystemNotification notification) {
+    final l10n = AppLocalizations.of(context)!;
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => _buildBottomSheet([
+        _buildMenuTile(
+          icon: Icons.delete_outline,
+          color: AppColors.error,
+          title: l10n.str('notif_delete'),
+          onTap: () {
+            Navigator.pop(ctx);
+            _confirmDeleteNotification(notification);
+          },
+        ),
+        _buildMenuTile(
+          icon: Icons.delete_sweep_outlined,
+          color: AppColors.error,
+          title: l10n.str('notif_clear_all'),
+          onTap: () {
+            Navigator.pop(ctx);
+            _confirmClearAll();
+          },
+        ),
+        _buildMenuTile(
+          icon: Icons.checklist_rounded,
+          color: AppColors.primary,
+          title: l10n.str('notif_batch_manage'),
+          onTap: () {
+            Navigator.pop(ctx);
+            _enterBatchMode();
+          },
+        ),
+      ]),
+    );
+  }
+
+  /// 告警长按菜单：仅标记已处理（后端无 DELETE /alarms/:id，不提供删除）
+  void _showAlarmMenu(dynamic alarm) {
+    final l10n = AppLocalizations.of(context)!;
+    final alarmId = alarm['id'];
+    if (alarmId is! int) return;
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => _buildBottomSheet([
+        _buildMenuTile(
+          icon: Icons.done_all,
+          color: AppColors.success,
+          title: l10n.str('notif_mark_handled'),
+          onTap: () {
+            Navigator.pop(ctx);
+            context.read<AlarmBloc>().add(
+                  AlarmMarkReadRequested(alarmIds: [alarmId]),
+                );
+          },
+        ),
+      ]),
+    );
+  }
+
+  Future<void> _confirmDeleteNotification(
+    SystemNotification notification,
+  ) async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.str('notif_delete')),
+        content: Text(l10n.str('notif_delete_confirm')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l10n.delete,
+                style: const TextStyle(color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      context.read<NotificationBloc>().add(
+            SystemNotificationDeleteRequested(notification: notification),
+          );
+    }
+  }
+
+  Future<void> _confirmClearAll() async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.str('notif_clear_all')),
+        content: Text(l10n.str('notif_clear_all_confirm')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l10n.str('notif_clear_all'),
+                style: const TextStyle(color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      context
+          .read<NotificationBloc>()
+          .add(const SystemNotificationsClearRequested());
+    }
+  }
+
+  /// 批量删除所选：逐条调删除事件（通知量小，pageSize 50 内可接受）
+  Future<void> _deleteSelected(NotificationState notifState) async {
+    // 批量勾选仅针对后端通知（本地通知无 id），此处必须已加载完成
+    if (notifState is! SystemNotificationsLoaded) return;
+    final l10n = AppLocalizations.of(context)!;
+    final count = _selectedIds.length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.str('notif_delete_selected', {'count': '$count'})),
+        content: Text(l10n.str('notif_delete_selected_confirm',
+            {'count': '$count'})),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l10n.delete,
+                style: const TextStyle(color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      for (final id in _selectedIds) {
+        final matches =
+            notifState.notifications.where((n) => n.id == id).toList();
+        if (matches.isNotEmpty) {
+          context.read<NotificationBloc>().add(
+                SystemNotificationDeleteRequested(
+                    notification: matches.first),
+              );
+        }
+      }
+      _exitBatchMode();
+    }
+  }
+
   // ==================== 统一卡片 ====================
 
   String _levelToSeverity(dynamic level) {
@@ -357,6 +638,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
       ),
       child: InkWell(
         onTap: () => context.push('/alarm/${alarm['id']}'),
+        onLongPress: () => _showAlarmMenu(alarm),
         borderRadius: BorderRadius.circular(14.r),
         child: Padding(
           padding: EdgeInsets.all(14.w),
@@ -490,60 +772,87 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
       decoration: BoxDecoration(
         color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.circular(14.r),
+        // 批量模式：选中项描边高亮
+        border: _batchMode &&
+                notification.id != null &&
+                _selectedIds.contains(notification.id)
+            ? Border.all(color: AppColors.primary, width: 1.5)
+            : null,
       ),
-      child: Padding(
-        padding: EdgeInsets.all(14.w),
-        child: Row(
-          children: [
-            Container(
-              width: 32.w,
-              height: 32.w,
-              decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8.r),
+      child: GestureDetector(
+        // 批量模式：点击切换勾选（仅后端通知可勾选）；长按弹操作菜单
+        onTap: _batchMode && notification.id != null
+            ? () => _toggleSelect(notification.id!)
+            : null,
+        onLongPress: () => _showSystemNotificationMenu(notification),
+        child: Padding(
+          padding: EdgeInsets.all(14.w),
+          child: Row(
+            children: [
+              Container(
+                width: 32.w,
+                height: 32.w,
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8.r),
+                ),
+                child: Icon(icon, size: 18.sp, color: iconColor),
               ),
-              child: Icon(icon, size: 18.sp, color: iconColor),
-            ),
-            SizedBox(width: 12.w),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _notificationTitle(notification, l10n),
-                    style: TextStyle(
-                      fontSize: 14.sp,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
+              SizedBox(width: 12.w),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _notificationTitle(notification, l10n),
+                      style: TextStyle(
+                        fontSize: 14.sp,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  SizedBox(height: 4.h),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          _notificationSubtitle(notification, l10n),
+                    SizedBox(height: 4.h),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _notificationSubtitle(notification, l10n),
+                            style: TextStyle(
+                              fontSize: 12.sp,
+                              color: AppColors.textHint,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          _formatTime(timestamp, l10n),
                           style: TextStyle(
-                            fontSize: 12.sp,
+                            fontSize: 11.sp,
                             color: AppColors.textHint,
                           ),
                         ),
-                      ),
-                      Text(
-                        _formatTime(timestamp, l10n),
-                        style: TextStyle(
-                          fontSize: 11.sp,
-                          color: AppColors.textHint,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+              // 批量模式：勾选态圆圈
+              if (_batchMode && notification.id != null)
+                Padding(
+                  padding: EdgeInsets.only(left: 8.w),
+                  child: Icon(
+                    _selectedIds.contains(notification.id)
+                        ? Icons.check_circle
+                        : Icons.radio_button_unchecked,
+                    size: 20.sp,
+                    color: _selectedIds.contains(notification.id)
+                        ? AppColors.primary
+                        : AppColors.textHint,
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

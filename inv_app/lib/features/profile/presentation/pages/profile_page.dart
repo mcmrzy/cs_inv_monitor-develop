@@ -118,9 +118,11 @@ class _ProfilePageState extends State<ProfilePage> {
             Container(
               width: 56.w,
               height: 56.w,
+              clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
                 color: AppColors.primary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(16.r),
+                // 圆形头像：与编辑页保持一致
+                shape: BoxShape.circle,
                 image: avatarUrl != null
                     ? DecorationImage(
                         image: NetworkImage(avatarUrl),

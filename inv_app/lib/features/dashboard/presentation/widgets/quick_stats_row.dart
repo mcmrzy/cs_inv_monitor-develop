@@ -319,9 +319,13 @@ class _AnimatedCountState extends State<_AnimatedCount>
     return AnimatedBuilder(
       animation: _animation,
       builder: (context, child) {
-        return Text(
-          _animation.value.round().toString(),
-          style: widget.style,
+        // FittedBox(scaleDown)：大数字自动缩小，防 chip 宽度溢出
+        return FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            _animation.value.round().toString(),
+            style: widget.style,
+          ),
         );
       },
     );

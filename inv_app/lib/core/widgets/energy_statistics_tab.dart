@@ -325,9 +325,9 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
         // 时间选择器（用于电量概览）
         _buildTimeSelector(l10n),
         SizedBox(height: 12.h),
-        // 内容区
+        // 内容区：首载无数据时展示骨架；刷新/切日期/切周期时保留旧数据，仅顶部细进度条提示
         Expanded(
-          child: _loading
+          child: _loading && _dataPoints.isEmpty
               ? _buildSkeleton()
               : RefreshIndicator(
                   onRefresh: () async {
@@ -338,6 +338,12 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
                   child: ListView(
                     padding: EdgeInsets.symmetric(horizontal: 16.w),
                     children: [
+                      // 刷新中且已有旧数据：不闪骨架，顶部细进度条双反馈
+                      if (_loading && _dataPoints.isNotEmpty)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 8),
+                          child: LinearProgressIndicator(minHeight: 2),
+                        ),
                       _buildEnergyCards(l10n),
                       SizedBox(height: 16.h),
                       // 功率趋势（只在日模式下显示）
@@ -1158,6 +1164,9 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
 
   /// 统一功率标签格式（Y 轴）
   String _formatPowerLabel(double value) {
+    if (value >= 1000000) {
+      return '${(value / 1000000).toStringAsFixed(1)}MW';
+    }
     if (value >= 1000) {
       return '${(value / 1000).toStringAsFixed(1)}kW';
     }

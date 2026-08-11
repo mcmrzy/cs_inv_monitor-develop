@@ -114,7 +114,8 @@ class _ProfileSetupDialogState extends State<ProfileSetupDialog> {
             cropStyle: CropStyle.circle,
             lockAspectRatio: true,
             initAspectRatio: CropAspectRatioPreset.square,
-            hideBottomControls: false,
+            // 隐藏比例工具栏：固定方形裁剪，避免用户改比例破坏圆形头像
+            hideBottomControls: true,
           ),
           IOSUiSettings(
             cropStyle: CropStyle.circle,

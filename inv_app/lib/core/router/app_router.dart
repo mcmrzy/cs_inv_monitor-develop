@@ -27,6 +27,7 @@ import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
+import 'package:inv_app/core/widgets/device_action_sheet.dart';
 
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 
@@ -1157,12 +1158,6 @@ class _DeviceListPageState extends State<DeviceListPage> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-              )
-            else
-              IconButton(
-                icon: const Icon(Icons.swap_vert_rounded, size: 22),
-                tooltip: l10n.sortDevices,
-                onPressed: () => setState(() => _sortMode = true),
               ),
           ],
         ),
@@ -1200,7 +1195,7 @@ class _DeviceListPageState extends State<DeviceListPage> {
             );
           }
 
-          // 全局设备列表页：长按弹编辑页（无电站上下文，不显示排序入口项）
+          // 全局设备列表页：长按弹设备操作菜单（无电站上下文，仅编辑/排序）
           return DeviceListView(
             devices: ds.devices,
             whiteHeader: true,
@@ -1216,7 +1211,16 @@ class _DeviceListPageState extends State<DeviceListPage> {
                 (d) => (d['sn'] ?? '').toString() == sn,
                 orElse: () => <String, dynamic>{'sn': sn},
               );
-              context.push('/device/$sn/edit', extra: {'device': device});
+              // 全局设备页无电站上下文：菜单仅编辑/排序（排序入口原在 AppBar 图标）
+              showModalBottomSheet(
+                context: context,
+                builder: (ctx) => DeviceActionSheet(
+                  device: device,
+                  onEnterSortMode: () {
+                    if (mounted) setState(() => _sortMode = true);
+                  },
+                ),
+              );
             },
           );
         },

@@ -35,26 +35,32 @@ class HeroEnergyCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _bannerItem(
-                todayEnergy,
-                'kWh',
-                l10n.todayGeneration,
-                previousValue: yesterdayEnergy,
+              Expanded(
+                child: _bannerItem(
+                  todayEnergy,
+                  'kWh',
+                  l10n.todayGeneration,
+                  previousValue: yesterdayEnergy,
+                ),
               ),
               Container(width: 1, height: 50.h, color: Colors.white24),
-              _bannerItem(
-                totalEnergy,
-                'kWh',
-                l10n.totalGeneration,
-                previousValue: lastMonthEnergy,
+              Expanded(
+                child: _bannerItem(
+                  totalEnergy,
+                  'kWh',
+                  l10n.totalGeneration,
+                  previousValue: lastMonthEnergy,
+                ),
               ),
               Container(width: 1, height: 50.h, color: Colors.white24),
-              _bannerItem(
-                deviceCount.toDouble(),
-                l10n.unitDevices,
-                l10n.totalDevices,
-                previousValue: yesterdayDeviceCount?.toDouble(),
-                isDeviceCount: true,
+              Expanded(
+                child: _bannerItem(
+                  deviceCount.toDouble(),
+                  l10n.unitDevices,
+                  l10n.totalDevices,
+                  previousValue: yesterdayDeviceCount?.toDouble(),
+                  isDeviceCount: true,
+                ),
               ),
             ],
           ),
@@ -219,29 +225,34 @@ class _AnimatedEnergyValueState extends State<_AnimatedEnergyValue>
     return AnimatedBuilder(
       animation: _animation,
       builder: (context, child) {
-        return RichText(
-          text: TextSpan(
-            children: [
-              TextSpan(
-                text: _formatEnergy(
-                  widget.isDeviceCount
-                      ? _animation.value.roundToDouble()
-                      : _animation.value,
-                  l10n.wan,
-                ),
-                style: TextStyle(
-                  fontSize: 24.sp,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              if (widget.unit.isNotEmpty)
+        // FittedBox(scaleDown)：大数值自动缩小，防三列布局溢出
+        return FittedBox(
+          fit: BoxFit.scaleDown,
+          child: RichText(
+            text: TextSpan(
+              children: [
                 TextSpan(
-                  text: ' ${widget.unit}',
-                  style: TextStyle(fontSize: 12.sp, color: Colors.white70),
+                  text: _formatEnergy(
+                    widget.isDeviceCount
+                        ? _animation.value.roundToDouble()
+                        : _animation.value,
+                    l10n.wan,
+                  ),
+                  style: TextStyle(
+                    fontSize: 24.sp,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                    letterSpacing: -0.5,
+                  ),
                 ),
-            ],
+                if (widget.unit.isNotEmpty)
+                  TextSpan(
+                    text: ' ${widget.unit}',
+                    style:
+                        TextStyle(fontSize: 12.sp, color: Colors.white70),
+                  ),
+              ],
+            ),
           ),
         );
       },

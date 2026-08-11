@@ -9,7 +9,7 @@
     </item>
     <item>
         <bitmap
-            android:gravity="fill"
+            android:gravity="center"
             android:src="@drawable/launch_splash" />
     </item>
 </layer-list>

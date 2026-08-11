@@ -125,6 +125,8 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     this.notificationDataSource,
   }) : super(NotificationInitial()) {
     on<SystemNotificationsRequested>(_onSystemNotificationsRequested);
+    on<SystemNotificationDeleteRequested>(_onSystemNotificationDeleteRequested);
+    on<SystemNotificationsClearRequested>(_onSystemNotificationsClearRequested);
     on<_MqttStatusUpdate>(_onMqttStatusUpdate);
     on<JPushNotificationReceived>(_onJPushNotificationReceived);
     on<JPushNotificationTapped>(_onJPushNotificationTapped);
@@ -265,6 +267,53 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     allNotifications.addAll(localStored);
 
     emit(SystemNotificationsLoaded(notifications: allNotifications));
+  }
+
+  /// 删除单条通知：后端通知调 DELETE /notifications/:id，本地通知直接从存储移除
+  Future<void> _onSystemNotificationDeleteRequested(
+    SystemNotificationDeleteRequested event,
+    Emitter<NotificationState> emit,
+  ) async {
+    if (event.notification.fromBackend && event.notification.id != null) {
+      try {
+        await notificationDataSource?.delete(event.notification.id!);
+      } catch (_) {
+        // 删除失败不阻断本地刷新（列表会重新拉取真实状态）
+      }
+    } else {
+      // 本地通知（OTA/APP 更新）：按类型+标题+时间戳从存储中移除
+      final storage = getIt<StorageService>();
+      final storedJson = await storage.getString(_localNotifKey);
+      if (storedJson != null && storedJson.isNotEmpty) {
+        try {
+          final decoded = json.decode(storedJson) as List;
+          final remaining = decoded.where((e) {
+            final n = SystemNotification.fromJson(e as Map<String, dynamic>);
+            return !(n.type == event.notification.type &&
+                n.title == event.notification.title &&
+                n.timestamp == event.notification.timestamp);
+          }).toList();
+          await storage.saveString(_localNotifKey, json.encode(remaining));
+        } catch (_) {}
+      }
+    }
+    // 重发加载，刷新列表
+    add(const SystemNotificationsRequested());
+  }
+
+  /// 清空全部通知：后端调 DELETE /notifications/clear-all，本地通知直接清存储
+  Future<void> _onSystemNotificationsClearRequested(
+    SystemNotificationsClearRequested event,
+    Emitter<NotificationState> emit,
+  ) async {
+    try {
+      await notificationDataSource?.clearAll();
+    } catch (_) {
+      // 清空失败不阻断本地清空
+    }
+    final storage = getIt<StorageService>();
+    await storage.saveString(_localNotifKey, '[]');
+    add(const SystemNotificationsRequested());
   }
 
   @override
