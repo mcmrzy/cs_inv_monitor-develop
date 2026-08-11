@@ -1046,7 +1046,6 @@ const Map<String, String> zh = {
   'notif_delete_confirm': '确认删除该通知吗？',
   'notif_delete_selected_confirm': '确认删除选中的({count})条通知吗？',
   'notif_clear_all_confirm': '确认清空全部通知吗？',
-  'notif_alarm_no_batch_delete': '告警不支持批量删除',
 
   // 其他
   'search_alarm_hint': '搜索告警设备/SN',

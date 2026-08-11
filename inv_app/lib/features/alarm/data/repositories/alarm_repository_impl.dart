@@ -110,4 +110,17 @@ class AlarmRepositoryImpl implements AlarmRepository {
       return Left(UnknownFailure(e.toString()));
     }
   }
+
+  @override
+  Future<Either<Failure, void>> delete(int alarmId) async {
+    try {
+      final response = await remoteDataSource.delete(alarmId);
+      final parsed = _parseData(response, allowEmpty: true);
+      return parsed.fold((failure) => Left(failure), (_) => const Right(null));
+    } on DioException catch (e) {
+      return Left(_mapError(e));
+    } catch (e) {
+      return Left(UnknownFailure(e.toString()));
+    }
+  }
 }

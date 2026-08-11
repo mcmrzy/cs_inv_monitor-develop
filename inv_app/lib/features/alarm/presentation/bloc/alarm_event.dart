@@ -42,6 +42,15 @@ class AlarmMarkReadRequested extends AlarmEvent {
   List<Object?> get props => [alarmIds];
 }
 
+class AlarmDeleteRequested extends AlarmEvent {
+  final int alarmId;
+
+  const AlarmDeleteRequested({required this.alarmId});
+
+  @override
+  List<Object?> get props => [alarmId];
+}
+
 class AlarmMqttReceived extends AlarmEvent {
   const AlarmMqttReceived();
 
