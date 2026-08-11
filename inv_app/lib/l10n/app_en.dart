@@ -1277,8 +1277,10 @@ const Map<String, String> en = {
   'pin_check_failed': 'PIN verification failed',
   'bind_registered_later': 'Bound offline, will sync when online',
   'pin_required': 'PIN required, try again',
-  'manual_pin_label': 'Device PIN (optional)',
-  'manual_pin_desc': 'Enter PIN for BLE direct binding (works offline); leave empty for cloud binding only',
+  'manual_pin_label': 'Device PIN',
+  'manual_pin_desc': 'PIN (on the device nameplate) is verified for both BLE and cloud binding',
   'qr_bind_pin_required': 'Enter the device PIN to start binding',
   'qr_bind_back': 'Back',
+  'err_invalid_pin': 'Invalid PIN, check the device nameplate',
+  'cloud_bind_fallback': 'Bind via cloud',
 };

@@ -144,15 +144,17 @@ class BleBindingService {
     );
 
     // 8. 联网补登记（尽力而为：失败不影响绑定结果，重试由 Task 15 负责）
-    return _registerToCloud(sn, deviceKey);
+    return _registerToCloud(sn, deviceKey, pin);
   }
 
   /// 联网补登记 POST /devices/bind，仅返回是否需登录，其余结果归并为成功。
-  Future<BindOutcome> _registerToCloud(String sn, String deviceKey) async {
+  /// pin 可空：旧流程未持 PIN 时登记会被后端拒绝（严格模式），
+  /// 本地绑定不受影响，按现有“其余 code 不视为失败”语义归并。
+  Future<BindOutcome> _registerToCloud(String sn, String deviceKey, String? pin) async {
     try {
       final resp = await dio.post(
         '/devices/bind',
-        data: {'sn': sn, 'device_key': deviceKey},
+        data: {'sn': sn, 'device_key': deviceKey, 'pin': pin},
       );
       final body = resp.data;
       if (body is Map) {

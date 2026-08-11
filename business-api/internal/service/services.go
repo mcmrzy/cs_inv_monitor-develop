@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -15,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"inv-api-server/internal/config"
 	"inv-api-server/internal/model"
 	"inv-api-server/internal/repository"
 	"inv-api-server/pkg/apperr"
@@ -573,7 +575,25 @@ func (s *DeviceService) Create(ctx context.Context, sn, model string, ratedPower
 // (design doc §4.1). The raw key is never stored — only its SHA-256 hash.
 // deviceKeyRaw is optional: empty means a legacy client, in which case a
 // key is generated server-side as a compatibility fallback.
-func (s *DeviceService) Bind(ctx context.Context, sn string, userID, stationID int64, deviceKeyRaw string) error {
+//
+// PIN verification is mandatory (strict mode): the nameplate PIN must match
+// HMAC-SHA256(PRODUCT_SECRET, SN) mod 1000000, the same algorithm as the
+// firmware (ble_ct_pin.c) and factory nameplate tools. Legacy clients
+// without pin are rejected with biz code 5010.
+func (s *DeviceService) Bind(ctx context.Context, sn string, userID, stationID int64, deviceKeyRaw, pin string) error {
+	if err := verifyDevicePIN(sn, pin); err != nil {
+		return err
+	}
+	return s.bind(ctx, sn, userID, stationID, deviceKeyRaw)
+}
+
+// BindDirect binds a device without PIN verification — privileged path for
+// admin bulk import (ImportExcel) only, never user-facing bind endpoints.
+func (s *DeviceService) BindDirect(ctx context.Context, sn string, userID, stationID int64, deviceKeyRaw string) error {
+	return s.bind(ctx, sn, userID, stationID, deviceKeyRaw)
+}
+
+func (s *DeviceService) bind(ctx context.Context, sn string, userID, stationID int64, deviceKeyRaw string) error {
 	var hash string
 	if deviceKeyRaw != "" {
 		if !validDeviceKey(deviceKeyRaw) {
@@ -594,6 +614,35 @@ func (s *DeviceService) Bind(ctx context.Context, sn string, userID, stationID i
 		hash = h
 	}
 	return s.repo.Bind(ctx, sn, userID, stationID, hash)
+}
+
+// verifyDevicePIN validates the nameplate PIN against the SN-derived value.
+// It fails closed: an empty pin is rejected, and a missing PRODUCT_SECRET
+// configuration is a server error (no binds silently succeed without
+// ownership proof).
+func verifyDevicePIN(sn, pin string) error {
+	secret := config.ProductSecret()
+	if secret == "" {
+		return apperr.Internal("product secret not configured", nil)
+	}
+	if pin == "" {
+		return apperr.BadRequest("invalid pin").WithBizCode(5010)
+	}
+	if got := computeDevicePIN(secret, sn); got != pin {
+		return apperr.BadRequest("invalid pin").WithBizCode(5010)
+	}
+	return nil
+}
+
+// computeDevicePIN derives the 6-digit device PIN (leading zeros preserved):
+// HMAC-SHA256(secret, sn), first 3 bytes mod 1000000. Firmware-identical
+// algorithm — keep in sync with ble_ct_pin.c and tools/pin_test_vectors.py.
+func computeDevicePIN(secret, sn string) string {
+	mac := hmac.New(sha256.New, []byte(secret))
+	_, _ = mac.Write([]byte(sn))
+	d := mac.Sum(nil)
+	pin := (int(d[0]) << 16) | (int(d[1]) << 8) | int(d[2])
+	return fmt.Sprintf("%06d", pin%1000000)
 }
 
 // SaveOfflineLogs persists offline operation logs uploaded by the App.

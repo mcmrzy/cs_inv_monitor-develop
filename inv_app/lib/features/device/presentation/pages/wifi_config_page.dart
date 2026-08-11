@@ -674,6 +674,8 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
     final outcome = await binding.bindAfterProvision(
       macAddress: device.macAddress,
       knownSn: device.sn,
+      // 补登记同样携带 PIN（后端严格模式：无 PIN 拒绝登记）
+      pin: _pinController.text.trim(),
     );
     if (!mounted) return;
     final l10n = AppLocalizations.of(context)!;

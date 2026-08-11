@@ -28,12 +28,13 @@ class DeviceRemoteDataSource {
     return await dio.get('/devices/by-sn/$sn/realtime');
   }
 
-  Future<Response> bind(String sn, int? stationId) async {
+  Future<Response> bind(String sn, int? stationId, {String? pin}) async {
     return await dio.post(
       '/devices/bind',
       data: {
         'sn': sn,
         'station_id': stationId,
+        'pin': pin,
       },
     );
   }

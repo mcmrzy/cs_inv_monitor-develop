@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:inv_app/core/services/ble/ble_adapter.dart';
 import 'package:inv_app/core/services/ble/ble_binding_service.dart';
 import 'package:inv_app/core/services/ble/ble_device_manager.dart';
 import 'package:inv_app/core/services/service_locator.dart';
+import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 /// 智能链接二维码 BLE 扫码绑定页
@@ -12,9 +14,11 @@ import 'package:inv_app/l10n/app_localizations.dart';
 /// 深链接 `csinv://bind?sn=&pin=` 或 App 内扫码（URL 格式）进入：
 /// 二维码只有 SN+PIN 没有 MAC → 扫描蓝牙设备 → 连接读 INFO 匹配 SN →
 /// 调 [BleBindingService.bindAfterProvision] 完成绑定（离网可用）。
+/// BLE 不可达时提供云端兑底（带 PIN，由后端校验所有权）。
 class DeviceQrBindPage extends StatefulWidget {
   final String sn;
   final String pin;
+  final int? stationId;
   final BleAdapter? adapter;
   final BleDeviceManager? manager;
   final BleBindingService? bindingService;
@@ -23,6 +27,7 @@ class DeviceQrBindPage extends StatefulWidget {
     super.key,
     required this.sn,
     required this.pin,
+    this.stationId,
     this.adapter,
     this.manager,
     this.bindingService,
@@ -73,6 +78,9 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
 
   /// 失败原因 l10n 键（蓝牙关闭 / 未找到匹配设备）
   String? _failKey;
+
+  /// 云端兑底绑定进行中（防重复点击）
+  bool _cloudBinding = false;
 
   @override
   void initState() {
@@ -209,9 +217,26 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return Scaffold(
-      appBar: AppBar(title: Text(l10n.str('qr_bind_title'))),
-      body: Center(child: _buildBody(l10n)),
+    // 监听云端兑底绑定结果：成功直接返回（入口页的 DeviceBindSuccess
+    // 监听负责刷新列表/提示）；失败留在本页展示错误。
+    return BlocConsumer<DeviceBloc, DeviceState>(
+      listener: (context, state) {
+        if (!_cloudBinding) return;
+        if (state is DeviceBindSuccess) {
+          _cloudBinding = false;
+          Navigator.of(context).pop();
+        } else if (state is DeviceError) {
+          _cloudBinding = false;
+          setState(() {});
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(l10n.translateError(state.message))),
+          );
+        }
+      },
+      builder: (context, state) => Scaffold(
+        appBar: AppBar(title: Text(l10n.str('qr_bind_title'))),
+        body: Center(child: _buildBody(l10n)),
+      ),
     );
   }
 
@@ -344,8 +369,38 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
           onPressed: () => Navigator.of(context).pop(),
           child: Text(l10n.qrBindBack),
         ),
+        const SizedBox(height: 12),
+        // 云端兑底：带 PIN 由后端校验所有权（无蓝牙/未找到设备时仍可绑定）
+        if (_cloudBinding)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(strokeWidth: 2.5),
+            ),
+          )
+        else
+          TextButton.icon(
+            onPressed: _cloudBinding ? null : () => _cloudBindFallback(),
+            icon: const Icon(Icons.cloud_outlined, size: 18),
+            label: Text(l10n.cloudBindFallback),
+          ),
       ],
     );
+  }
+
+  /// BLE 不可达时的云端绑定兑底：POST /devices/bind 带 PIN，
+  /// 后端按 HMAC-SHA256(PRODUCT_SECRET, SN) 校验设备所有权。
+  Future<void> _cloudBindFallback() async {
+    setState(() => _cloudBinding = true);
+    context.read<DeviceBloc>().add(
+          DeviceBindRequested(
+            sn: widget.sn,
+            stationId: widget.stationId,
+            pin: _pin,
+          ),
+        );
   }
 
   Widget _doneBody(AppLocalizations l10n) {
