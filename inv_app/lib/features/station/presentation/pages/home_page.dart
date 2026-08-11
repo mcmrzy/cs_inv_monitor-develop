@@ -294,13 +294,14 @@ class _HomePageState extends State<HomePage> {
                           ),
                         ),
                       if (_stationSortMode)
-                        // 排序模式：长按拖动电站卡片（浮起效果与设备一致）
+                        // 排序模式：直接拖动电站卡片（关闭长按起拖，按下即拖）
                         SliverPadding(
                           padding: EdgeInsets.symmetric(horizontal: 16.w),
                           sliver: SliverToBoxAdapter(
                             child: ReorderableListView.builder(
                               shrinkWrap: true,
                               physics: const NeverScrollableScrollPhysics(),
+                              buildDefaultDragHandles: false,
                               proxyDecorator: (child, index, animation) {
                                 final curved = CurvedAnimation(
                                   parent: animation,
@@ -336,9 +337,12 @@ class _HomePageState extends State<HomePage> {
                                 final s = _sortStations![i];
                                 final id =
                                     s['station_id'] ?? s['id'] ?? i;
-                                return Container(
-                                  key: ValueKey(id),
-                                  child: _buildCard(s, sortMode: true),
+                                return ReorderableDragStartListener(
+                                  index: i,
+                                  child: Container(
+                                    key: ValueKey(id),
+                                    child: _buildCard(s, sortMode: true),
+                                  ),
                                 );
                               },
                             ),

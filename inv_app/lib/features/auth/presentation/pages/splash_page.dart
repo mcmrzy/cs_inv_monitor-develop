@@ -83,11 +83,12 @@ class _SplashPageState extends State<SplashPage> {
         body: Stack(
           children: [
             // 品牌开屏完整图（用户设计稿：品牌字标/小烁/底座一体画面，全屏展示）
+            // contain：横幅图（1441×513 超宽）竖屏完整显示、上下留白，不裁切
             Positioned.fill(
               child: IgnorePointer(
                 child: Image.asset(
                   CsergyAssets.bgSplash,
-                  fit: BoxFit.cover,
+                  fit: BoxFit.contain,
                 ),
               ),
             ),

@@ -71,7 +71,8 @@ class _SettingsPageState extends State<SettingsPage> {
         _blePollInterval = pollInterval;
         _isDarkMode = darkMode;
         _serverUrl = serverUrl ?? AppConfig.apiBaseUrl;
-        _currentLocale = locale ?? 'zh';
+        _currentLocale = locale ??
+            _localeService.currentLocale.languageCode; // 未保存时跟随系统
         _currentTimezone = timezone ?? TimezoneUtils.defaultTimezone;
         _loading = false;
       });

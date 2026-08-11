@@ -8,7 +8,8 @@ import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:inv_app/core/config/app_config.dart';
 import 'package:inv_app/core/data/china_regions.dart';
-import 'package:inv_app/core/data/continents_data.dart';
+import 'package:inv_app/core/data/country_name_mapping.dart';
+import 'package:inv_app/core/data/province_name_mapping.dart';
 import 'package:inv_app/core/data/regions_data.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/network/api_client.dart';
@@ -16,6 +17,7 @@ import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:inv_app/features/profile/data/avatar_upload_service.dart';
+import 'package:inv_app/features/station/presentation/widgets/region_picker_routes.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 class EditProfilePage extends StatefulWidget {
@@ -131,7 +133,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
             cropStyle: CropStyle.circle,
             lockAspectRatio: true,
             initAspectRatio: CropAspectRatioPreset.square,
-            hideBottomControls: false,
+            // 隐藏比例工具栏：固定方形裁剪，避免用户改比例破坏圆形头像
+            hideBottomControls: true,
           ),
           IOSUiSettings(
             cropStyle: CropStyle.circle,
@@ -880,22 +883,32 @@ class _EditProfilePageState extends State<EditProfilePage> {
     }
   }
 
-  /// 显示地区选择器（两步选择流程：洲+国家 -> 省/市）
+  /// 显示地区选择器（两步流程：洲+国家 -> 省/市/区，与电站地址选择共用组件）
   Future<void> _showRegionPicker(AppLocalizations l10n) async {
     // 第一步：选择洲+国家
     final countryResult = await Navigator.push<Map<String, String>>(
       context,
-      _ContinentCountryPickerRoute(),
+      ContinentCountryPickerRoute(),
     );
     if (countryResult == null || !mounted) return;
 
     final selectedCountry = countryResult['country'] ?? '中国';
 
-    // 第二步：选择省/市（两级选择器，顶部有"不限"选项）
+    // 第二步：选择省/市/区（三级选择器，与电站地址选择一致）
     final regionResult = await Navigator.push<Map<String, String>>(
       context,
-      _ProfileRegionPickerRoute(
-        country: selectedCountry,
+      RegionPickerRoute(
+        provinces: _provincesFor(selectedCountry),
+        citiesFn: (p) {
+          if (selectedCountry != '中国') return [];
+          final m = chinaRegions[p];
+          if (m == null) return [];
+          return m.keys.toList();
+        },
+        districtsFn: (p, c) {
+          if (selectedCountry != '中国') return [];
+          return chinaRegions[p]?[c] ?? [];
+        },
       ),
     );
 
@@ -903,11 +916,14 @@ class _EditProfilePageState extends State<EditProfilePage> {
       setState(() {
         _countryController.text = selectedCountry;
         final regionParts = <String>[];
-        if (regionResult['province'] != null && regionResult['province']!.isNotEmpty) {
+        if (regionResult['province']?.isNotEmpty == true) {
           regionParts.add(regionResult['province']!);
         }
-        if (regionResult['city'] != null && regionResult['city']!.isNotEmpty) {
+        if (regionResult['city']?.isNotEmpty == true) {
           regionParts.add(regionResult['city']!);
+        }
+        if (regionResult['district']?.isNotEmpty == true) {
+          regionParts.add(regionResult['district']!);
         }
         _regionController.text = regionParts.join(' ');
       });
@@ -918,6 +934,20 @@ class _EditProfilePageState extends State<EditProfilePage> {
         _regionController.text = '';
       });
     }
+  }
+
+  /// 按国家返回省份列表：中国取内置三级数据，其他国家映射英文名后取全球数据
+  List<String> _provincesFor(String country) {
+    if (country == '中国') {
+      return chinaRegions.keys.toList();
+    }
+    // 将中文国家名映射到英文名，然后从 globalRegions 获取省份数据
+    final englishName = getEnglishCountryName(country);
+    final provincesList = globalRegions[englishName] ?? [];
+    // 将英文省份名翻译为中文
+    return provincesList
+        .map((p) => getLocalizedProvinceName(englishName, p))
+        .toList();
   }
 
   @override
@@ -1190,7 +1220,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
     final country = _countryController.text;
     final region = _regionController.text;
     final displayText = country.isNotEmpty
-        ? (region.isNotEmpty ? '$country - $region' : country)
+        ? (region.isNotEmpty ? '$country $region' : country)
         : l10n.selectRegion;
 
     return Padding(
@@ -1241,627 +1271,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _ContinentCountryPickerRoute extends PageRouteBuilder<Map<String, String>> {
-  _ContinentCountryPickerRoute()
-      : super(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              const _ContinentCountryPickerPage(),
-          opaque: false,
-          barrierColor: Colors.black54,
-          transitionDuration: const Duration(milliseconds: 250),
-          reverseTransitionDuration: const Duration(milliseconds: 200),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return SlideTransition(
-              position:
-                  Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero)
-                      .animate(
-                CurvedAnimation(
-                  parent: animation,
-                  curve: Curves.easeOutCubic,
-                ),
-              ),
-              child: child,
-            );
-          },
-        );
-}
-
-class _ContinentCountryPickerPage extends StatefulWidget {
-  const _ContinentCountryPickerPage();
-
-  @override
-  State<_ContinentCountryPickerPage> createState() =>
-      _ContinentCountryPickerPageState();
-}
-
-class _ContinentCountryPickerPageState
-    extends State<_ContinentCountryPickerPage> {
-  late FixedExtentScrollController _continentCtrl;
-  late FixedExtentScrollController _countryCtrl;
-  int _continentIdx = 0;
-  int _countryIdx = 0;
-
-  static const _itemH = 44.0;
-
-  @override
-  void initState() {
-    super.initState();
-    _continentCtrl = FixedExtentScrollController();
-    _countryCtrl = FixedExtentScrollController();
-  }
-
-  @override
-  void dispose() {
-    _continentCtrl.dispose();
-    _countryCtrl.dispose();
-    super.dispose();
-  }
-
-  List<Map<String, String>> get _currentCountries {
-    if (continents.isEmpty) return [];
-    return List<Map<String, String>>.from(
-        continents[_continentIdx]['countries'] as List,
-    );
-  }
-
-  void _onContinentChanged(int idx) {
-    if (idx == _continentIdx) return;
-    setState(() {
-      _continentIdx = idx;
-      _countryIdx = 0;
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _countryCtrl.jumpToItem(0);
-    });
-  }
-
-  void _onCountryChanged(int idx) {
-    setState(() => _countryIdx = idx);
-  }
-
-  void _confirm() {
-    final countries = _currentCountries;
-    if (countries.isEmpty) return;
-    final country = countries[_countryIdx];
-    Navigator.of(context).pop({'country': country['name']!});
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Column(
-        children: [
-          const Spacer(),
-          Container(
-            decoration: BoxDecoration(
-              color: AppColor.surfaceContainer(context),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
-            ),
-            child: Column(
-              children: [
-                Container(
-                  padding:
-                      EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
-                  decoration: BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(
-                        color: Theme.of(context).dividerTheme.color ??
-                            AppColors.divider,
-                      ),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: Text(
-                          AppLocalizations.of(context)!.cancel,
-                          style: TextStyle(
-                            fontSize: 15.sp,
-                            color: AppColors.textHint,
-                          ),
-                        ),
-                      ),
-                      Text(
-                        AppLocalizations.of(context)!.selectRegion,
-                        style: TextStyle(
-                          fontSize: 16.sp,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: _confirm,
-                        child: Text(
-                          AppLocalizations.of(context)!.confirm,
-                          style: TextStyle(
-                            fontSize: 15.sp,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(
-                  height: _itemH * 7,
-                  child: Row(
-                    children: [
-                      // 左列：洲列表
-                      Expanded(
-                        flex: 3,
-                        child: _buildColumn(
-                          continents.map((c) => c['name'] as String).toList(),
-                          _continentCtrl,
-                          _continentIdx,
-                          _onContinentChanged,
-                          colLabel: '洲',
-                        ),
-                      ),
-                      Container(width: 1, color: AppColors.surfaceHover),
-                      // 右列：国家列表
-                      Expanded(
-                        flex: 4,
-                        child: _buildColumn(
-                          _currentCountries
-                              .map((c) => c['name']!)
-                              .toList(),
-                          _countryCtrl,
-                          _countryIdx,
-                          _onCountryChanged,
-                          colLabel: AppLocalizations.of(context)!.country,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildColumn(
-    List<String> items,
-    FixedExtentScrollController ctrl,
-    int idx,
-    ValueChanged<int> onChange, {
-    String colLabel = '',
-  }) {
-    return Column(
-      children: [
-        Container(
-          height: _itemH,
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          alignment: Alignment.center,
-          child: Text(
-            colLabel,
-            style: TextStyle(
-              fontSize: 12.sp,
-              color: AppColors.textHint,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
-        Expanded(
-          child: items.isEmpty
-              ? Center(
-                  child: Text(
-                    '—',
-                    style: TextStyle(
-                      fontSize: 14.sp,
-                      color: AppColors.textHint,
-                    ),
-                  ),
-                )
-              : Stack(
-                  children: [
-                    Positioned.fill(
-                      child: Column(
-                        children: [
-                          const Spacer(),
-                          Container(
-                            height: _itemH,
-                            decoration: BoxDecoration(
-                              color: AppColors.primary.withValues(alpha: 0.06),
-                              border: Border.symmetric(
-                                horizontal: BorderSide(
-                                  color: Theme.of(context).dividerTheme.color ??
-                                      AppColors.divider,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const Spacer(),
-                        ],
-                      ),
-                    ),
-                    ListWheelScrollView.useDelegate(
-                      controller: ctrl,
-                      itemExtent: _itemH,
-                      diameterRatio: 1.2,
-                      overAndUnderCenterOpacity: 0.4,
-                      onSelectedItemChanged: onChange,
-                      childDelegate: ListWheelChildBuilderDelegate(
-                        builder: (_, i) {
-                          if (i < 0 || i >= items.length) {
-                            return const SizedBox();
-                          }
-                          final selected = i == idx;
-                          return Center(
-                            child: Text(
-                              items[i],
-                              style: TextStyle(
-                                fontSize: 15.sp,
-                                fontWeight: selected
-                                    ? FontWeight.w600
-                                    : FontWeight.normal,
-                                color: selected
-                                    ? AppColors.textPrimary
-                                    : AppColors.textHint,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          );
-                        },
-                        childCount: items.length,
-                      ),
-                    ),
-                  ],
-                ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ProfileRegionPickerRoute extends PageRouteBuilder<Map<String, String>> {
-  final String country;
-
-  _ProfileRegionPickerRoute({
-    required this.country,
-  }) : super(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              _ProfileRegionPickerPage(
-            country: country,
-          ),
-          opaque: false,
-          barrierColor: Colors.black54,
-          transitionDuration: const Duration(milliseconds: 250),
-          reverseTransitionDuration: const Duration(milliseconds: 200),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return SlideTransition(
-              position:
-                  Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero)
-                      .animate(
-                CurvedAnimation(
-                  parent: animation,
-                  curve: Curves.easeOutCubic,
-                ),
-              ),
-              child: child,
-            );
-          },
-        );
-}
-
-class _ProfileRegionPickerPage extends StatefulWidget {
-  final String country;
-
-  const _ProfileRegionPickerPage({
-    required this.country,
-  });
-
-  @override
-  State<_ProfileRegionPickerPage> createState() => _ProfileRegionPickerPageState();
-}
-
-class _ProfileRegionPickerPageState extends State<_ProfileRegionPickerPage> {
-  late FixedExtentScrollController _provCtrl;
-  late FixedExtentScrollController _cityCtrl;
-
-  int _provIdx = 0;
-  int _cityIdx = 0;
-
-  bool _isNavigating = false;
-
-  late List<String> _provinces;
-  late List<String> _cities;
-
-  static const _itemH = 44.0;
-
-  @override
-  void initState() {
-    super.initState();
-    
-    // 初始化省份列表
-    if (widget.country == '中国') {
-      _provinces = ['不限', ...chinaRegions.keys.toList()..sort()];
-    } else {
-      _provinces = ['不限', ...(globalRegions[widget.country] ?? [])];
-    }
-    
-    // 初始化城市/区列表
-    _cities = _getDistrictsForProvince(
-        widget.country, _provinces.length > 1 ? _provinces[1] : null);
-    
-    _provCtrl = FixedExtentScrollController(initialItem: _provIdx);
-    _cityCtrl = FixedExtentScrollController(initialItem: _cityIdx);
-  }
-
-  @override
-  void dispose() {
-    _provCtrl.dispose();
-    _cityCtrl.dispose();
-    super.dispose();
-  }
-
-  void _onProvChanged(int idx) {
-    if (idx == _provIdx) return;
-    setState(() {
-      _provIdx = idx;
-      if (idx == 0) {
-        // 选择"不限"，清空城市列表
-        _cities = [];
-        _cityIdx = 0;
-      } else {
-        _cities = _getDistrictsForProvince(widget.country, _provinces[idx]);
-        _cityIdx = 0;
-      }
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _cityCtrl.jumpToItem(0);
-    });
-  }
-
-  void _onCityChanged(int idx) {
-    setState(() => _cityIdx = idx);
-  }
-
-  List<String> _getDistrictsForProvince(String? countryName, String? province) {
-    if (province == null || countryName == null || province == '不限') return [];
-    if (countryName == '中国') {
-      final cityMap = chinaRegions[province];
-      if (cityMap == null) return [];
-      // 直辖市：只有一个子键（如"市辖区"），展开其区县列表
-      if (cityMap.length == 1) {
-        return cityMap.values.first;
-      }
-      // 普通省份：返回城市列表
-      return cityMap.keys.toList()..sort();
-    }
-    return [];
-  }
-
-  void _confirm() {
-    if (_isNavigating) return;
-    _isNavigating = true;
-    
-    String? province;
-    String? city;
-    
-    // 如果选择"不限"，返回空字符串
-    if (_provIdx == 0) {
-      province = '';
-      city = '';
-    } else {
-      if (_provinces.isNotEmpty && _provIdx < _provinces.length) {
-        province = _provinces[_provIdx];
-      }
-      if (_cities.isNotEmpty && _cityIdx < _cities.length) {
-        city = _cities[_cityIdx];
-      }
-    }
-    
-    Navigator.of(context).pop({
-      'province': province ?? '',
-      'city': city ?? '',
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Column(
-        children: [
-          const Spacer(),
-          Container(
-            decoration: BoxDecoration(
-              color: AppColor.surfaceContainer(context),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
-            ),
-            child: Column(
-              children: [
-                Container(
-                  padding:
-                      EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
-                  decoration: BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(
-                        color: Theme.of(context).dividerTheme.color ??
-                            AppColors.divider,
-                      ),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      TextButton(
-                        onPressed: _isNavigating
-                            ? null
-                            : () {
-                                _isNavigating = true;
-                                Navigator.of(context).pop();
-                              },
-                        child: Text(
-                          l10n.cancel,
-                          style: TextStyle(
-                            fontSize: 15.sp,
-                            color: AppColors.textHint,
-                          ),
-                        ),
-                      ),
-                      Text(
-                        l10n.selectRegion,
-                        style: TextStyle(
-                          fontSize: 16.sp,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: _confirm,
-                        child: Text(
-                          l10n.confirm,
-                          style: TextStyle(
-                            fontSize: 15.sp,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(
-                  height: _itemH * 7,
-                  child: Row(
-                    children: [
-                      Expanded(
-                        flex: 3,
-                        child: _buildColumn(
-                          _provinces,
-                          _provCtrl,
-                          _provIdx,
-                          _onProvChanged,
-                          colLabel: '省份/州',
-                        ),
-                      ),
-                      Container(width: 1, color: AppColors.surfaceHover),
-                      Expanded(
-                        flex: 3,
-                        child: _buildColumn(
-                          _cities,
-                          _cityCtrl,
-                          _cityIdx,
-                          _onCityChanged,
-                          colLabel: '区/市',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildColumn(
-    List<String> items,
-    FixedExtentScrollController ctrl,
-    int idx,
-    ValueChanged<int> onChange, {
-    String colLabel = '',
-  }) {
-    return Column(
-      children: [
-        Container(
-          height: _itemH,
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          alignment: Alignment.center,
-          child: Text(
-            colLabel,
-            style: TextStyle(
-              fontSize: 12.sp,
-              color: AppColors.textHint,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
-        Expanded(
-          child: items.isEmpty
-              ? Center(
-                  child: Text(
-                    '—',
-                    style: TextStyle(
-                      fontSize: 14.sp,
-                      color: AppColors.textHint,
-                    ),
-                  ),
-                )
-              : Stack(
-                  children: [
-                    Positioned.fill(
-                      child: Column(
-                        children: [
-                          const Spacer(),
-                          Container(
-                            height: _itemH,
-                            decoration: BoxDecoration(
-                              color: AppColors.primary.withValues(alpha: 0.06),
-                              border: Border.symmetric(
-                                horizontal: BorderSide(
-                                  color: Theme.of(context).dividerTheme.color ??
-                                      AppColors.divider,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const Spacer(),
-                        ],
-                      ),
-                    ),
-                    ListWheelScrollView.useDelegate(
-                      controller: ctrl,
-                      itemExtent: _itemH,
-                      diameterRatio: 1.2,
-                      overAndUnderCenterOpacity: 0.4,
-                      onSelectedItemChanged: onChange,
-                      childDelegate: ListWheelChildBuilderDelegate(
-                        builder: (_, i) {
-                          if (i < 0 || i >= items.length) {
-                            return const SizedBox();
-                          }
-                          final selected = i == idx;
-                          return Center(
-                            child: Text(
-                              items[i],
-                              style: TextStyle(
-                                fontSize: 15.sp,
-                                fontWeight: selected
-                                    ? FontWeight.w600
-                                    : FontWeight.normal,
-                                color: selected
-                                    ? AppColors.textPrimary
-                                    : AppColors.textHint,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          );
-                        },
-                        childCount: items.length,
-                      ),
-                    ),
-                  ],
-                ),
-        ),
-      ],
     );
   }
 }

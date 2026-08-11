@@ -24,6 +24,7 @@ class NotificationRemoteDataSource {
   }
 
   Future<Response> clearAll() async {
-    return await dio.delete('/notifications/clear');
+    // 后端端点实测为 /notifications/clear-all（main.go）
+    return await dio.delete('/notifications/clear-all');
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
@@ -179,7 +180,8 @@ class _DeviceCardState extends State<DeviceCard>
 
   void _showDetail(BuildContext context) {
     final sn = widget.device['sn'] ?? '';
-    Navigator.pushNamed(context, '/device/$sn');
+    // 项目为 go_router（MaterialApp.router），必须用 context.push 而非 Navigator.pushNamed
+    context.push('/device/$sn');
   }
 
   double _extractNum(String key) {
@@ -308,8 +310,8 @@ class _DeviceCardState extends State<DeviceCard>
     ),
     );
 
-    // ReorderableListView 在移动端默认用 ReorderableDelayedDragStartListener
-    // 包裹整个 item（长按即拖动），无需额外的 LongPressDraggable。
+    // 排序模式：buildDefaultDragHandles=false + ReorderableDragStartListener，
+    // 按下即拖（无需长按），卡片 onTap 在排序模式下已为空操作，无手势冲突。
     return cardContent;
   }
 
@@ -473,6 +475,7 @@ class _DeviceListViewState extends State<DeviceListView> {
               : widget.sortMode
                   ? ReorderableListView.builder(
                       physics: const BouncingScrollPhysics(),
+                      buildDefaultDragHandles: false,
                       padding: EdgeInsets.fromLTRB(16.w, 4.h, 16.w, (widget.bottomPadding ?? 100).h),
                       // 拖起时卡片浮起放大，让用户明确感知正在拖动排序
                       proxyDecorator: (child, index, animation) {
@@ -505,11 +508,14 @@ class _DeviceListViewState extends State<DeviceListView> {
                         );
                       },
                       itemCount: filtered.length,
-                      itemBuilder: (_, i) => DeviceCard(
-                        key: ValueKey(filtered[i]['sn'] ?? i),
-                        device: filtered[i],
-                        onLongPressDevice: widget.onLongPressDevice,
-                        sortMode: widget.sortMode,
+                      itemBuilder: (_, i) => ReorderableDragStartListener(
+                        index: i,
+                        child: DeviceCard(
+                          key: ValueKey(filtered[i]['sn'] ?? i),
+                          device: filtered[i],
+                          onLongPressDevice: widget.onLongPressDevice,
+                          sortMode: widget.sortMode,
+                        ),
                       ),
                     )
                   : ListView.builder(

@@ -58,26 +58,38 @@ class _EnergyTrendChartState extends State<EnergyTrendChart> {
                 ),
               ),
               SizedBox(width: 10.w),
-              Text(
-                widget.data.length > 14
-                    ? l10n.recent30DayTrend
-                    : l10n.recent7DayTrend,
-                style: TextStyle(
-                  fontSize: 15.sp,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
+              // 标题：Flexible 防英文长文本溢出，超长省略
+              Flexible(
+                child: Text(
+                  widget.data.length > 14
+                      ? l10n.recent30DayTrend
+                      : l10n.recent7DayTrend,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 15.sp,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
               ),
-              const Spacer(),
-              // 图例
-              _buildLegendItem(AppColors.primary, l10n.powerGeneration),
-              if (hasLoadData) ...[
-                SizedBox(width: 12.w),
-                _buildLegendItem(
-                  const Color(0xFFF5A623),
-                  l10n.powerConsumption,
+              SizedBox(width: 8.w),
+              // 图例：Wrap 允许压缩换行，避免与标题抢空间
+              Flexible(
+                child: Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: 12.w,
+                  runSpacing: 4.h,
+                  children: [
+                    _buildLegendItem(AppColors.primary, l10n.powerGeneration),
+                    if (hasLoadData)
+                      _buildLegendItem(
+                        const Color(0xFFF5A623),
+                        l10n.powerConsumption,
+                      ),
+                  ],
                 ),
-              ],
+              ),
             ],
           ),
           SizedBox(height: 20.h),
@@ -287,11 +299,13 @@ class _EnergyTrendChartState extends State<EnergyTrendChart> {
         leftTitles: AxisTitles(
           sideTitles: SideTitles(
             showTitles: true,
-            reservedSize: 40.w,
+            // 动态宽度：随最大刻度位数增长，防大数值轴标溢出
+            reservedSize: 40.w + 8.w * _axisLabelWidth(maxY),
             getTitlesWidget: (value, meta) {
               return Text(
-                value.toStringAsFixed(0),
-                style: TextStyle(fontSize: 10.sp, color: AppColors.textHint),
+                _formatAxisValue(value),
+                style:
+                    TextStyle(fontSize: 10.sp, color: AppColors.textHint),
               );
             },
           ),
@@ -378,6 +392,20 @@ class _EnergyTrendChartState extends State<EnergyTrendChart> {
         handleBuiltInTouches: true,
       ),
     );
+  }
+
+  /// 左轴刻度缩写：≥10000 显示 12.3k（风格对齐 energy_statistics_tab 的 _formatPowerLabel）
+  String _formatAxisValue(double value) {
+    if (value >= 10000) {
+      return '${(value / 1000).toStringAsFixed(1)}k';
+    }
+    return value.toStringAsFixed(0);
+  }
+
+  /// 左轴最大刻度字符数（决定 reservedSize 增量，基础 40.w 覆盖 3 字符）
+  double _axisLabelWidth(double maxY) {
+    final label = _formatAxisValue(maxY);
+    return (label.length - 3).clamp(0, 6).toDouble();
   }
 
   String _formatDate(String date) {

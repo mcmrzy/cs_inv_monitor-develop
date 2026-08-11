@@ -16,6 +16,7 @@ import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/widgets/device_list_view.dart';
+import 'package:inv_app/core/widgets/device_action_sheet.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/core/widgets/energy_statistics_tab.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
@@ -536,25 +537,7 @@ class _StationDetailPageState extends State<StationDetailPage>
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              // 编辑电站入口（原三点菜单移除后的落点）
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () =>
-                      context.push('/station/${widget.stationId}/edit'),
-                  borderRadius: BorderRadius.circular(8.r),
-                  child: Padding(
-                    padding: EdgeInsets.all(6.w),
-                    child: const Icon(
-                      Icons.edit_outlined,
-                      size: 20,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                ),
-              ),
-              SizedBox(width: 8.w),
-              // 右上角：在线状态徽标（保持最右）
+              // 右上角：在线状态徽标（保持最右；编辑入口已移除，首页长按菜单可编辑）
               Container(
                 padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
                 decoration: BoxDecoration(
@@ -1540,28 +1523,32 @@ class _StationDetailPageState extends State<StationDetailPage>
                       ));
                 },
                 onLongPressDevice: (sn) {
-                  // 长按卡片弹出设备编辑页（携带电站上下文与排序入口回调）
+                  // 长按卡片弹出设备操作菜单（编辑/排序/解绑/删除，携带电站上下文）
                   final device = devices.firstWhere(
                     (d) => (d['sn'] ?? '').toString() == sn,
                     orElse: () => <String, dynamic>{'sn': sn},
                   );
-                  context.push('/device/$sn/edit', extra: {
-                    'device': device,
-                    'stationId': widget.stationId,
-                    'onEnterSortMode': () {
-                      if (mounted) {
-                        setState(() => _deviceSortMode = true);
-                      }
-                    },
-                  }).then((_) {
-                    // 编辑页返回后刷新设备列表（别名/备注可能已变更）
-                    if (mounted) {
-                      context.read<StationBloc>().add(
-                            StationDetailRequested(
-                                stationId: widget.stationId),
-                          );
-                    }
-                  });
+                  showModalBottomSheet(
+                    context: context,
+                    builder: (ctx) => DeviceActionSheet(
+                      device: device,
+                      stationId: widget.stationId,
+                      onEnterSortMode: () {
+                        if (mounted) {
+                          setState(() => _deviceSortMode = true);
+                        }
+                      },
+                      onEditClosed: () {
+                        // 编辑页返回后刷新设备列表（别名/备注可能已变更）
+                        if (mounted) {
+                          context.read<StationBloc>().add(
+                                StationDetailRequested(
+                                    stationId: widget.stationId),
+                              );
+                        }
+                      },
+                    ),
+                  );
                 },
               ),
             ),
