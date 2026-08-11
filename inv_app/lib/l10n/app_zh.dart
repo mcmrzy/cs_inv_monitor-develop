@@ -12,6 +12,7 @@ const Map<String, String> zh = {
   'search': '搜索',
   'loading': '加载中',
   'retry': '重试',
+  'profile_auto_save_hint': '修改即时保存，无需手动提交',
   'success': '成功',
   'failure': '失败',
   'back': '返回',

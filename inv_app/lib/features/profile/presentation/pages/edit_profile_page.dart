@@ -33,9 +33,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
   late TextEditingController _emailController;
   late TextEditingController _countryController;
   late TextEditingController _regionController;
-  late TextEditingController _bioController;
   late TextEditingController _phoneController;
-  bool _isLoading = false;
   bool _isUploadingAvatar = false;
   String? _avatarUrl;
   final ImagePicker _picker = ImagePicker();
@@ -75,7 +73,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
     String email = '';
     String country = '';
     String region = '';
-    String bio = '';
     String phone = '';
 
     if (state is AuthAuthenticated) {
@@ -83,7 +80,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
       email = state.email ?? '';
       country = state.country ?? '';
       region = state.regionName ?? '';
-      bio = state.bio ?? '';
       phone = state.phone;
       _avatarUrl = state.avatar;
     }
@@ -92,7 +88,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
     _emailController = TextEditingController(text: email);
     _countryController = TextEditingController(text: country);
     _regionController = TextEditingController(text: region);
-    _bioController = TextEditingController(text: bio);
     _phoneController = TextEditingController(text: phone);
   }
 
@@ -102,7 +97,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
     _emailController.dispose();
     _countryController.dispose();
     _regionController.dispose();
-    _bioController.dispose();
     _phoneController.dispose();
     _emailTimer?.cancel();
     _phoneTimer?.cancel();
@@ -164,6 +158,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
           SnackBar(content: Text(AppLocalizations.of(context)!.uploadSuccess)),
         );
       }
+
+      // 单步保存：头像上传成功后立即提交 profile
+      await _submitPartial(avatar: url);
     } catch (e) {
       setState(() {
         _isUploadingAvatar = false;
@@ -178,17 +175,21 @@ class _EditProfilePageState extends State<EditProfilePage> {
     }
   }
 
-  Future<void> _saveProfile() async {
-    if (!await _ensureAuthenticated()) return;
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() {
-      _isLoading = true;
-    });
+  /// 单步保存：只提交非空字段（昵称/地区/头像任一修改后即时保存）。
+  /// 成功返回 true（SnackBar 即时确认），失败返回 false——不关闭页面、不清空输入，可重试。
+  Future<bool> _submitPartial({
+    String? nickname,
+    String? country,
+    String? regionName,
+    String? avatar,
+  }) async {
+    if (!await _ensureAuthenticated()) return false;
+    if (!mounted) return false;
+    final l10n = AppLocalizations.of(context)!;
 
     try {
       final completer = Completer<void>();
-      
+
       // 创建一个临时的监听器来等待状态变化
       final subscription = context.read<AuthBloc>().stream.listen((state) {
         if (state is AuthAuthenticated || state is AuthError) {
@@ -198,12 +199,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
       context.read<AuthBloc>().add(
             AuthUpdateProfileRequested(
-              nickname: _nicknameController.text,
-              email: _emailController.text,
-              country: _countryController.text,
-              regionName: _regionController.text,
-              bio: _bioController.text,
-              avatar: _avatarUrl,
+              nickname: nickname,
+              country: country,
+              regionName: regionName,
+              avatar: avatar,
             ),
           );
 
@@ -211,39 +210,29 @@ class _EditProfilePageState extends State<EditProfilePage> {
       await completer.future;
       await subscription.cancel();
 
-      if (mounted) {
-        final currentState = context.read<AuthBloc>().state;
-        if (currentState is AuthAuthenticated) {
-          // 更新成功
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(AppLocalizations.of(context)!.success),
-            ),
-          );
-          Navigator.pop(context);
-        } else if (currentState is AuthError) {
-          // 更新失败
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(currentState.message),
-            ),
-          );
-        }
+      if (!mounted) return false;
+      final currentState = context.read<AuthBloc>().state;
+      if (currentState is AuthAuthenticated) {
+        // 更新成功：即时确认（不关闭页面）
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.success)),
+        );
+        return true;
       }
+      if (currentState is AuthError) {
+        // 更新失败：提示原因，输入保留可重试
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(currentState.message)),
+        );
+      }
+      return false;
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString()),
-          ),
+          SnackBar(content: Text(e.toString())),
         );
       }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      return false;
     }
   }
 
@@ -290,7 +279,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
                   hintText: l10n.nickname,
                   prefixIcon: Icon(Icons.person, size: 20.sp),
                   contentPadding: EdgeInsets.symmetric(
-                      horizontal: 16.w, vertical: 14.h),
+                    horizontal: 16.w,
+                    vertical: 14.h,
+                  ),
                 ),
               ),
               SizedBox(height: 24.h),
@@ -317,6 +308,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
                           _nicknameController.text = nicknameController.text;
                         });
                         Navigator.pop(context);
+                        // 单步保存：昵称修改后立即提交
+                        _submitPartial(nickname: nicknameController.text);
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
@@ -395,7 +388,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     hintText: l10n.phoneHint,
                     prefixIcon: Icon(Icons.phone, size: 20.sp),
                     contentPadding: EdgeInsets.symmetric(
-                        horizontal: 16.w, vertical: 14.h),
+                      horizontal: 16.w,
+                      vertical: 14.h,
+                    ),
                   ),
                 ),
                 SizedBox(height: 16.h),
@@ -411,18 +406,22 @@ class _EditProfilePageState extends State<EditProfilePage> {
                           hintText: l10n.codeHint,
                           prefixIcon: Icon(Icons.lock_outline, size: 20.sp),
                           contentPadding: EdgeInsets.symmetric(
-                              horizontal: 16.w, vertical: 14.h),
+                            horizontal: 16.w,
+                            vertical: 14.h,
+                          ),
                         ),
                       ),
                     ),
                     SizedBox(width: 12.w),
-                    Container(
+                    SizedBox(
                       height: 52.h,
                       child: ElevatedButton(
                         onPressed: _phoneCountdown > 0
                             ? null
                             : () => _sendPhoneCodeForDialog(
-                                newPhoneController.text, setDialogState),
+                                  newPhoneController.text,
+                                  setDialogState,
+                                ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _phoneCountdown > 0
                               ? AppColors.offline
@@ -463,7 +462,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     Expanded(
                       child: ElevatedButton(
                         onPressed: () => _verifyPhoneCode(
-                            newPhoneController.text, codeController.text),
+                              newPhoneController.text,
+                              codeController.text,
+                            ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
                           foregroundColor: Colors.white,
@@ -498,7 +499,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
       Navigator.of(context, rootNavigator: true)
           .popUntil((route) => route.isFirst);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('登录已过期，请重新登录'),
         ),
       );
@@ -509,7 +510,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
   /// 发送手机验证码（弹窗内使用）
   Future<void> _sendPhoneCodeForDialog(
-      String phone, StateSetter setDialogState) async {
+    String phone,
+    StateSetter setDialogState,
+  ) async {
     if (!await _ensureAuthenticated()) return;
     if (!mounted) return;
     if (phone.isEmpty) {
@@ -679,7 +682,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     hintText: l10n.emailHint,
                     prefixIcon: Icon(Icons.email, size: 20.sp),
                     contentPadding: EdgeInsets.symmetric(
-                        horizontal: 16.w, vertical: 14.h),
+                      horizontal: 16.w,
+                      vertical: 14.h,
+                    ),
                   ),
                 ),
                 SizedBox(height: 16.h),
@@ -695,18 +700,22 @@ class _EditProfilePageState extends State<EditProfilePage> {
                           hintText: l10n.codeHint,
                           prefixIcon: Icon(Icons.lock_outline, size: 20.sp),
                           contentPadding: EdgeInsets.symmetric(
-                              horizontal: 16.w, vertical: 14.h),
+                            horizontal: 16.w,
+                            vertical: 14.h,
+                          ),
                         ),
                       ),
                     ),
                     SizedBox(width: 12.w),
-                    Container(
+                    SizedBox(
                       height: 52.h,
                       child: ElevatedButton(
                         onPressed: _emailCountdown > 0
                             ? null
                             : () => _sendEmailCodeForDialog(
-                                newEmailController.text, setDialogState),
+                                  newEmailController.text,
+                                  setDialogState,
+                                ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _emailCountdown > 0
                               ? AppColors.offline
@@ -747,7 +756,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     Expanded(
                       child: ElevatedButton(
                         onPressed: () => _verifyEmailCode(
-                            newEmailController.text, codeController.text),
+                              newEmailController.text,
+                              codeController.text,
+                            ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
                           foregroundColor: Colors.white,
@@ -774,7 +785,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
   /// 发送邮箱验证码（弹窗内使用）
   Future<void> _sendEmailCodeForDialog(
-      String email, StateSetter setDialogState) async {
+    String email,
+    StateSetter setDialogState,
+  ) async {
     if (email.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -927,12 +940,19 @@ class _EditProfilePageState extends State<EditProfilePage> {
         }
         _regionController.text = regionParts.join(' ');
       });
+      // 单步保存：地区修改后立即提交
+      await _submitPartial(
+        country: selectedCountry,
+        regionName: _regionController.text,
+      );
     } else {
       // 用户在第二步取消，只设置国家
       setState(() {
         _countryController.text = selectedCountry;
         _regionController.text = '';
       });
+      // 单步保存：仅国家变更，立即提交
+      await _submitPartial(country: selectedCountry, regionName: '');
     }
   }
 
@@ -974,6 +994,17 @@ class _EditProfilePageState extends State<EditProfilePage> {
         child: ListView(
           padding: EdgeInsets.all(16.w),
           children: [
+            // 即时保存提示
+            Padding(
+              padding: EdgeInsets.only(bottom: 12.h),
+              child: Text(
+                l10n.str('profile_auto_save_hint'),
+                style: TextStyle(
+                  fontSize: 13.sp,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
             _buildAvatarSection(l10n),
             SizedBox(height: 16.h),
             // 所有字段放在一个卡片中
@@ -1011,35 +1042,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
                   _buildRegionSelector(l10n),
                 ],
               ),
-            ),
-            SizedBox(height: 32.h),
-            ElevatedButton(
-              onPressed: _isLoading ? null : _saveProfile,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                padding: EdgeInsets.symmetric(vertical: 16.h),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12.r),
-                ),
-              ),
-              child: _isLoading
-                  ? SizedBox(
-                      width: 24.w,
-                      height: 24.w,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.w,
-                        valueColor:
-                            AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    )
-                  : Text(
-                      l10n.save,
-                      style: TextStyle(
-                        fontSize: 16.sp,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
             ),
           ],
         ),
@@ -1100,7 +1102,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                           child: CircularProgressIndicator(
                             strokeWidth: 2.w,
                             valueColor:
-                                AlwaysStoppedAnimation<Color>(Colors.white),
+                                const AlwaysStoppedAnimation<Color>(Colors.white),
                           ),
                         ),
                       ),
@@ -1233,8 +1235,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
         ),
         child: Row(
           children: [
-            Icon(Icons.location_on_outlined,
-                size: 20.sp, color: AppColors.textSecondary),
+            Icon(
+              Icons.location_on_outlined,
+              size: 20.sp,
+              color: AppColors.textSecondary,
+            ),
             SizedBox(width: 12.w),
             Expanded(
               child: Column(

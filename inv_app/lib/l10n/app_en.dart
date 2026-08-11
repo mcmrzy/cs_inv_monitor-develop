@@ -12,6 +12,7 @@ const Map<String, String> en = {
   'search': 'Search',
   'loading': 'Loading',
   'retry': 'Retry',
+  'profile_auto_save_hint': 'Changes are saved automatically',
   'success': 'Success',
   'failure': 'Failure',
   'back': 'Back',
