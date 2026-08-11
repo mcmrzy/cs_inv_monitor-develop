@@ -33,7 +33,7 @@ func TestDeviceClaimCode_Generate_AlreadyClaimed(t *testing.T) {
 
 	// First bind the device so it exists
 	doJSONWithRetry(t, ctx.Client, "POST", ctx.BaseURL+"/api/v1/devices/bind",
-		map[string]interface{}{"sn": sn, "station_id": 0}, ctx.Token, 5)
+		map[string]interface{}{"sn": sn, "station_id": 0, "pin": devicePIN(sn)}, ctx.Token, 5)
 
 	// Generate first claim code
 	ctx.generateClaimCode(t, sn, 24)
@@ -92,7 +92,7 @@ func TestDeviceClaim_WithValidCode(t *testing.T) {
 
 	// Bind device first
 	bindResp, bindStatus := doJSONWithRetry(t, ctx.Client, "POST", ctx.BaseURL+"/api/v1/devices/bind",
-		map[string]interface{}{"sn": sn, "station_id": 0}, ctx.Token, 5)
+		map[string]interface{}{"sn": sn, "station_id": 0, "pin": devicePIN(sn)}, ctx.Token, 5)
 	t.Logf("bind: status=%d code=%d msg=%s", bindStatus, bindResp.Code, bindResp.Message)
 
 	// Generate claim code
@@ -115,7 +115,7 @@ func TestDeviceClaim_WithWrongCode(t *testing.T) {
 
 	// Bind device
 	doJSONWithRetry(t, ctx.Client, "POST", ctx.BaseURL+"/api/v1/devices/bind",
-		map[string]interface{}{"sn": sn, "station_id": 0}, ctx.Token, 5)
+		map[string]interface{}{"sn": sn, "station_id": 0, "pin": devicePIN(sn)}, ctx.Token, 5)
 
 	resp, status := doJSONWithRetry(t, ctx.Client, "POST",
 		fmt.Sprintf("%s/api/v1/devices/by-sn/%s/claim", ctx.BaseURL, sn),
@@ -145,7 +145,7 @@ func TestDeviceTransfer_RequestTransfer(t *testing.T) {
 
 	// Bind device
 	doJSONWithRetry(t, ctx.Client, "POST", ctx.BaseURL+"/api/v1/devices/bind",
-		map[string]interface{}{"sn": sn, "station_id": 0}, ctx.Token, 5)
+		map[string]interface{}{"sn": sn, "station_id": 0, "pin": devicePIN(sn)}, ctx.Token, 5)
 
 	// Request transfer to another tenant
 	resp, status := doJSONWithRetry(t, ctx.Client, "POST",
@@ -204,7 +204,7 @@ func TestDeviceTransfer_FullLifecycle(t *testing.T) {
 
 	// Bind device
 	bindResp, _ := doJSONWithRetry(t, ctx.Client, "POST", ctx.BaseURL+"/api/v1/devices/bind",
-		map[string]interface{}{"sn": sn, "station_id": 0}, ctx.Token, 5)
+		map[string]interface{}{"sn": sn, "station_id": 0, "pin": devicePIN(sn)}, ctx.Token, 5)
 	if bindResp.Code != 0 {
 		t.Skipf("device bind failed: %s", bindResp.Message)
 		return
