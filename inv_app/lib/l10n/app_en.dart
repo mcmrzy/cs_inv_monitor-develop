@@ -101,6 +101,11 @@ const Map<String, String> en = {
   'unbind': 'Unbind',
   'device_action_unbind_hint': 'Unbind this device from the current station',
   'device_action_delete_hint': 'This action cannot be undone',
+  'remove_device': 'Remove Device',
+  'bind_to_station': 'Bind to Station',
+  'device_action_bind_hint': 'Bind this device to a station',
+  'device_action_rebind_hint': 'Move the device to another station',
+  'rebind_station_hint': 'After rebinding, the device will no longer appear in the current station. Continue?',
 
   // Device
   'device_management': 'Device Management',

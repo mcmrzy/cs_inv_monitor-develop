@@ -101,6 +101,11 @@ const Map<String, String> zh = {
   'unbind': '解绑',
   'device_action_unbind_hint': '从当前电站解绑该设备',
   'device_action_delete_hint': '删除后无法恢复',
+  'remove_device': '移除设备',
+  'bind_to_station': '绑定电站',
+  'device_action_bind_hint': '将设备绑定到指定电站',
+  'device_action_rebind_hint': '更换设备所属电站',
+  'rebind_station_hint': '换绑后原电站将不再显示该设备，确定换绑？',
 
   // 设备
   'device_management': '设备管理',

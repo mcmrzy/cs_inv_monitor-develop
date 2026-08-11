@@ -651,6 +651,7 @@ class _HomePageState extends State<HomePage> {
 
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       builder: (ctx) => _StationActionSheet(
         name: name,
         addressText: addressText,
@@ -665,6 +666,11 @@ class _HomePageState extends State<HomePage> {
         onSort: () {
           Navigator.pop(ctx);
           _enterStationSortMode();
+        },
+        onManageDevices: () {
+          Navigator.pop(ctx);
+          // 直达电站详情页设备管理 Tab
+          context.push('/station/$id?tab=devices');
         },
       ),
     );
@@ -790,6 +796,7 @@ class _StationActionSheet extends StatefulWidget {
   final VoidCallback onEdit;
   final VoidCallback onAddDevice;
   final VoidCallback onSort;
+  final VoidCallback onManageDevices;
 
   const _StationActionSheet({
     required this.name,
@@ -797,6 +804,7 @@ class _StationActionSheet extends StatefulWidget {
     required this.onEdit,
     required this.onAddDevice,
     required this.onSort,
+    required this.onManageDevices,
   });
 
   @override
@@ -912,12 +920,18 @@ class _StationActionSheetState extends State<_StationActionSheet>
         borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
       ),
       child: SafeArea(
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(20.w, 8.h, 20.w, 20.h),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+        // 小屏/大字体下可滚动，避免取消按钮溢出（内容不超限时视觉不变）
+        child: SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.8,
+            ),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(20.w, 8.h, 20.w, 20.h),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
               // 电站信息头
               Row(
                 children: [
@@ -1004,9 +1018,19 @@ class _StationActionSheetState extends State<_StationActionSheet>
                   onTap: widget.onSort,
                 ),
               ),
-              SizedBox(height: 14.h),
               _animatedItem(
                 3,
+                _buildActionItem(
+                  icon: Icons.link_off_rounded,
+                  color: AppColors.error,
+                  title: l10n.str('remove_device'),
+                  subtitle: l10n.deviceManagement,
+                  onTap: widget.onManageDevices,
+                ),
+              ),
+              SizedBox(height: 14.h),
+              _animatedItem(
+                4,
                 Material(
                   color: AppColor.surfaceHover(context),
                   borderRadius: BorderRadius.circular(14.r),
@@ -1030,6 +1054,8 @@ class _StationActionSheetState extends State<_StationActionSheet>
               ),
             ],
           ),
+        ),
+        ),
         ),
       ),
     );

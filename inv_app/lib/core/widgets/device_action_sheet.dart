@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -6,13 +8,14 @@ import 'package:inv_app/core/theme/app_theme.dart';
 // StationBloc 与 DeviceBloc 存在同名事件/状态（DeviceUnbindRequested 等），加前缀消歧
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart'
     as station_bloc;
+import 'package:inv_app/core/widgets/station_selector_sheet.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 /// 长按设备卡片弹出的操作菜单（交互与长按电站一致）：
 /// 设备信息头 + 操作项（逐项入场动画）。
-/// 电站上下文（stationId 非空）显示：编辑/排序/解绑/删除；
-/// 全局设备页（无电站上下文）仅显示：编辑/排序（无电站上下文不做解绑/删除）。
-/// 换绑在 device_edit_page 中本就是 TODO 占位，不放入菜单（避免半成品入口）。
+/// 操作项：编辑/排序/绑定或换绑/解绑/删除；
+/// 全局设备页（无电站上下文）同样显示解绑/删除，并可绑定电站。
+/// 绑定/换绑复用共享的 StationSelectorSheet 选择目标电站（事件只依赖 sn）。
 class DeviceActionSheet extends StatefulWidget {
   final Map<String, dynamic> device;
   // 电站上下文：非空时显示解绑/删除
@@ -139,10 +142,13 @@ class _DeviceActionSheetState extends State<DeviceActionSheet>
   // 编辑：关闭菜单后进入设备编辑页（沿用现有 extra 契约）
   void _edit() {
     Navigator.pop(context);
-    context.push('/device/$_sn/edit', extra: {
-      'device': widget.device,
-      'stationId': widget.stationId,
-    }).then((_) => widget.onEditClosed?.call());
+    context.push(
+      '/device/$_sn/edit',
+      extra: {
+        'device': widget.device,
+        'stationId': widget.stationId,
+      },
+    ).then((_) => widget.onEditClosed?.call());
   }
 
   // 排序：关闭菜单后由外层进入拖动排序模式
@@ -151,7 +157,7 @@ class _DeviceActionSheetState extends State<DeviceActionSheet>
     widget.onEnterSortMode?.call();
   }
 
-  // 解绑确认后走 StationBloc（操作结果由电站详情页监听并刷新）
+  // 解绑确认后走 StationBloc（操作结果由电站详情页/全局设备页监听并刷新）
   Future<void> _confirmUnbind(AppLocalizations l10n) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -165,8 +171,10 @@ class _DeviceActionSheetState extends State<DeviceActionSheet>
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(l10n.unbind,
-                style: const TextStyle(color: AppColors.error)),
+            child: Text(
+              l10n.unbind,
+              style: const TextStyle(color: AppColors.error),
+            ),
           ),
         ],
       ),
@@ -193,8 +201,10 @@ class _DeviceActionSheetState extends State<DeviceActionSheet>
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(l10n.delete,
-                style: const TextStyle(color: AppColors.error)),
+            child: Text(
+              l10n.delete,
+              style: const TextStyle(color: AppColors.error),
+            ),
           ),
         ],
       ),
@@ -205,6 +215,80 @@ class _DeviceActionSheetState extends State<DeviceActionSheet>
           .add(station_bloc.DeviceDeleteRequested(sn: _sn));
       Navigator.pop(context);
     }
+  }
+
+  // 绑定/换绑：打开电站选择器，选中后走 StationBloc（结果由外层监听刷新）
+  Future<void> _bindOrRebind(AppLocalizations l10n) async {
+    final hasStation = widget.stationId != null;
+    final selected = await _showStationSelector();
+    if (selected == null || !mounted) return;
+    final (stationId, _) = selected;
+    if (hasStation) {
+      // 换绑确认：提示原电站将不再显示该设备
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(l10n.rebindDevice),
+          content: Text(l10n.str('rebind_station_hint')),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(l10n.cancel),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(l10n.confirm),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+      context
+          .read<station_bloc.StationBloc>()
+          .add(
+            station_bloc.DeviceRebindRequested(
+              sn: _sn,
+              newStationId: stationId,
+            ),
+          );
+    } else {
+      context
+          .read<station_bloc.StationBloc>()
+          .add(
+            station_bloc.DeviceBindRequested(
+              sn: _sn,
+              stationId: stationId,
+            ),
+          );
+    }
+    Navigator.pop(context);
+  }
+
+  // 电站选择器（复用 add_device_page 提取的共享组件 StationSelectorSheet）
+  Future<(int, String)?> _showStationSelector() async {
+    final completer = Completer<(int, String)?>();
+    if (!mounted) {
+      completer.complete(null);
+      return completer.future;
+    }
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20.r)),
+      ),
+      builder: (ctx) => StationSelectorSheet(
+        onSelected: (id, name) {
+          Navigator.pop(ctx);
+          completer.complete((id, name));
+        },
+        onCancel: () {
+          Navigator.pop(ctx);
+          completer.complete(null);
+        },
+      ),
+    );
+    return completer.future;
   }
 
   @override
@@ -220,12 +304,18 @@ class _DeviceActionSheetState extends State<DeviceActionSheet>
         borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
       ),
       child: SafeArea(
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(20.w, 8.h, 20.w, 20.h),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+        // 小屏/大字体下可滚动，避免取消按钮溢出（内容不超限时视觉不变）
+        child: SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.8,
+            ),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(20.w, 8.h, 20.w, 20.h),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
               // 设备信息头
               Row(
                 children: [
@@ -302,31 +392,45 @@ class _DeviceActionSheetState extends State<DeviceActionSheet>
                   onTap: _sort,
                 ),
               ),
-              if (hasStation) ...[
-                _animatedItem(
-                  2,
-                  _buildActionItem(
-                    icon: Icons.link_off_rounded,
-                    color: AppColors.error,
-                    title: l10n.unbind,
-                    subtitle: l10n.str('device_action_unbind_hint'),
-                    onTap: () => _confirmUnbind(l10n),
-                  ),
+              _animatedItem(
+                2,
+                _buildActionItem(
+                  icon: hasStation
+                      ? Icons.swap_horiz_rounded
+                      : Icons.link_rounded,
+                  color: AppColors.primary,
+                  title: hasStation
+                      ? l10n.rebindDevice
+                      : l10n.str('bind_to_station'),
+                  subtitle: hasStation
+                      ? l10n.str('device_action_rebind_hint')
+                      : l10n.str('device_action_bind_hint'),
+                  onTap: () => _bindOrRebind(l10n),
                 ),
-                _animatedItem(
-                  3,
-                  _buildActionItem(
-                    icon: Icons.delete_outline_rounded,
-                    color: AppColors.error,
-                    title: l10n.deleteDevice,
-                    subtitle: l10n.str('device_action_delete_hint'),
-                    onTap: () => _confirmDelete(l10n),
-                  ),
+              ),
+              _animatedItem(
+                3,
+                _buildActionItem(
+                  icon: Icons.link_off_rounded,
+                  color: AppColors.error,
+                  title: l10n.unbind,
+                  subtitle: l10n.str('device_action_unbind_hint'),
+                  onTap: () => _confirmUnbind(l10n),
                 ),
-              ],
+              ),
+              _animatedItem(
+                4,
+                _buildActionItem(
+                  icon: Icons.delete_outline_rounded,
+                  color: AppColors.error,
+                  title: l10n.deleteDevice,
+                  subtitle: l10n.str('device_action_delete_hint'),
+                  onTap: () => _confirmDelete(l10n),
+                ),
+              ),
               SizedBox(height: 14.h),
               _animatedItem(
-                hasStation ? 4 : 2,
+                5,
                 Material(
                   color: AppColor.surfaceHover(context),
                   borderRadius: BorderRadius.circular(14.r),
@@ -350,6 +454,8 @@ class _DeviceActionSheetState extends State<DeviceActionSheet>
               ),
             ],
           ),
+        ),
+        ),
         ),
       ),
     );
