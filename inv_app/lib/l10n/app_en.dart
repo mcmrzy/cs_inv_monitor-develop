@@ -1077,7 +1077,6 @@ const Map<String, String> en = {
   'notif_delete_confirm': 'Delete this notification?',
   'notif_delete_selected_confirm': 'Delete the {count} selected notifications?',
   'notif_clear_all_confirm': 'Clear all notifications?',
-  'notif_alarm_no_batch_delete': 'Alarms cannot be batch deleted',
 
   // Other
   'search_alarm_hint': 'Search alarm device/SN',

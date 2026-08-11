@@ -36,6 +36,10 @@ class AlarmRemoteDataSource {
       },
     );
   }
+
+  Future<Response> delete(int alarmId) async {
+    return await dio.delete('/alarms/$alarmId');
+  }
 }
 
 class AlarmRemoteDataSourceImpl extends AlarmRemoteDataSource {

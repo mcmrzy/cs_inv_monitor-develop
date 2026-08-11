@@ -26,6 +26,7 @@ class AlarmBloc extends Bloc<AlarmEvent, AlarmState> {
     on<AlarmListRequested>(_onListRequested);
     on<AlarmDetailRequested>(_onDetailRequested);
     on<AlarmMarkReadRequested>(_onMarkReadRequested);
+    on<AlarmDeleteRequested>(_onDeleteRequested);
     on<AlarmMqttReceived>(_onMqttAlarmReceived);
     _subscribeToAlarms();
   }
@@ -144,6 +145,20 @@ class AlarmBloc extends Bloc<AlarmEvent, AlarmState> {
     result.fold(
       (failure) => emit(AlarmError(message: failure.message)),
       (_) => emit(AlarmMarkReadSuccess()),
+    );
+  }
+
+  Future<void> _onDeleteRequested(
+    AlarmDeleteRequested event,
+    Emitter<AlarmState> emit,
+  ) async {
+    final result = await repository.delete(event.alarmId);
+    result.fold(
+      (failure) => emit(AlarmError(message: failure.message)),
+      (_) {
+        // 删除成功后刷新列表，保持与通知中心展示一致
+        add(const AlarmListRequested());
+      },
     );
   }
 }

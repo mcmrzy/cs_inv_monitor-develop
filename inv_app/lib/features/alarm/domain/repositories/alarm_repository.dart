@@ -11,4 +11,5 @@ abstract class AlarmRepository {
   Future<Either<Failure, Map<String, dynamic>>> getDetail(int alarmId);
   Future<Either<Failure, void>> markHandled(int alarmId);
   Future<Either<Failure, void>> markRead(List<int> alarmIds);
+  Future<Either<Failure, void>> delete(int alarmId);
 }
