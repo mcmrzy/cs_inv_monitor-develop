@@ -41,6 +41,8 @@ import 'package:inv_app/features/auth/presentation/pages/jverify_auth_page.dart'
 
 import 'package:inv_app/features/auth/presentation/pages/forgot_password_page.dart';
 
+import 'package:inv_app/features/onboarding/presentation/pages/onboarding_page.dart';
+
 import 'package:inv_app/features/station/presentation/pages/home_page.dart';
 
 import 'package:inv_app/features/station/presentation/pages/station_detail_page.dart';
@@ -152,6 +154,12 @@ class AppRouter {
         path: '/splash',
         name: 'splash',
         pageBuilder: (context, state) => _fadePage(state, const SplashPage()),
+      ),
+      GoRoute(
+        path: '/onboarding',
+        name: 'onboarding',
+        pageBuilder: (context, state) =>
+            _fadePage(state, const OnboardingPage()),
       ),
       GoRoute(
         path: '/login',

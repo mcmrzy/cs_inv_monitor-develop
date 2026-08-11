@@ -269,7 +269,11 @@ class JVerifyService {
     uiConfig.navTransparent = false;
     uiConfig.statusBarDarkMode = true;
 
-    // Logo：品牌区由自定义控件实现，隐藏 SDK 默认 logo
+    // 背景：品牌浅蓝→白渐变（res/drawable/jverify_auth_bg.xml，Android 生效；
+    // iOS 同名资源未配置时 imageNamed 返回 nil 安全降级为默认白底）
+    uiConfig.authBackgroundImage = 'jverify_auth_bg';
+
+    // Logo：品牌区由自定义控件实现（圆形渐变图标 + 文字），隐藏 SDK 默认 logo
     uiConfig.logoHidden = true;
 
     // 脱敏号码：居中大字加粗（号码内容由 SDK 注入，如 138****1234）
@@ -284,7 +288,9 @@ class JVerifyService {
     uiConfig.sloganTextSize = 14;
     uiConfig.sloganOffsetY = 388; // 号码区正下方
 
-    // 登录按钮：大尺寸居中，避开底部手势条与品牌控件
+    // 登录按钮：大尺寸居中，避开底部手势条与品牌控件；背景为品牌蓝圆角
+    // （res/drawable/jverify_login_btn_bg.xml，颜色与 AppColors.primary 对齐）；
+    // iOS 端忽略 logBtnBackgroundPath，使用系统默认圆角按钮
     uiConfig.logBtnText = '同意并登录';
     uiConfig.logBtnTextColor = 0xFFFFFFFF;
     uiConfig.logBtnTextSize = 17;
@@ -292,15 +298,20 @@ class JVerifyService {
     uiConfig.logBtnWidth = 312; // 屏宽 360dp - 左右边距 24dp
     uiConfig.logBtnHeight = 50;
     uiConfig.logBtnOffsetY = 470; // 按钮顶部距屏幕顶部
+    uiConfig.logBtnBackgroundPath = 'jverify_login_btn_bg';
 
-    // 隐私协议：贴近屏幕底部，避开系统手势条；勾选框换自定义图标并调大，
-    // 文字居中避免贴屏幕左缘
-    uiConfig.privacyState = false;
+    // 隐私协议：默认勾选（合规做法——极光要求隐私协议栏常显不可隐藏，默认勾选即可），
+    // 贴近屏幕底部避开手势条；勾选框换自定义图标并调大，文字居中避免贴左缘。
+    // 协议名/链接使用 privacyItem（jiguang_auth 3.0.3 双端生效）：Android 端
+    // clauseName/clauseUrl 在插件中被注释不生效，必须走 privacyItem 才真正渲染链接。
+    uiConfig.privacyState = true; // 默认勾选隐私协议（合规）
     uiConfig.privacyHintToast = true;
-    uiConfig.clauseName = '用户协议';
-    uiConfig.clauseUrl = 'https://www.csinv.com/terms';
-    uiConfig.clauseNameTwo = '隐私政策';
-    uiConfig.clauseUrlTwo = 'https://www.csinv.com/privacy';
+    // 自定义协议栏文案前缀/后缀：渲染为「登录即代表同意《用户协议》《隐私政策》并同意」
+    uiConfig.privacyText = const ['登录即代表同意', '并同意'];
+    uiConfig.privacyItem = [
+      JVPrivacy('用户协议', 'https://www.csinv.com/terms'),
+      JVPrivacy('隐私政策', 'https://www.csinv.com/privacy'),
+    ];
     uiConfig.clauseColor = 0xFF1565C0;
     uiConfig.clauseBaseColor = 0xFF6B7280;
     uiConfig.privacyTextSize = 12;
@@ -311,9 +322,20 @@ class JVerifyService {
     uiConfig.privacyTextCenterGravity = true; // 协议文字居中，避免贴左缘
 
     // 品牌区自定义控件：屏宽 360dp 内居中，完整显示不裁剪
+    // logo：圆形品牌渐变图标（res/drawable-xxhdpi/jverify_brand_logo.png，
+    // 圆角/阴影已预置在 PNG 中）；button 类型仅用于加载图片背景
+    final logo = JVCustomWidget('brand_logo', JVCustomWidgetType.button)
+      ..left = 148 // (360 - 64) / 2，水平居中
+      ..top = 110 // 导航栏下方留白
+      ..width = 64
+      ..height = 64
+      ..btnNormalImageName = 'jverify_brand_logo'
+      ..btnPressedImageName = 'jverify_brand_logo'
+      ..isClickEnable = false; // 仅展示，不响应点击
+
     final title = JVCustomWidget('brand_title', JVCustomWidgetType.textView)
       ..left = 70 // (360 - 220) / 2，水平居中
-      ..top = 150 // 导航栏下方留白
+      ..top = 186 // logo 下方
       ..width = 220
       ..height = 44
       ..title = '辰烁科技'
@@ -323,7 +345,7 @@ class JVerifyService {
 
     final subtitle = JVCustomWidget('brand_subtitle', JVCustomWidgetType.textView)
       ..left = 70
-      ..top = 204
+      ..top = 240
       ..width = 220
       ..height = 30
       ..title = '光伏逆变器智能监控平台'
@@ -334,7 +356,7 @@ class JVerifyService {
     _jverify.setCustomAuthorizationView(
       false, // 仅竖屏
       uiConfig,
-      widgets: [title, subtitle],
+      widgets: [logo, title, subtitle],
     );
   }
 }

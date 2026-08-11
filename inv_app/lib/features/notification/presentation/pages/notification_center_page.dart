@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/data/alarm_code_mapping.dart';
+import 'package:inv_app/core/widgets/jiggle_once.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
@@ -24,7 +25,8 @@ class NotificationCenterPage extends StatefulWidget {
   State<NotificationCenterPage> createState() => _NotificationCenterPageState();
 }
 
-class _NotificationCenterPageState extends State<NotificationCenterPage> {
+class _NotificationCenterPageState extends State<NotificationCenterPage>
+    with SingleTickerProviderStateMixin {
   AlarmState? _cachedAlarmState;
   final NotificationStreamService _streamService = NotificationStreamService();
   StreamSubscription<Map<String, dynamic>>? _sseSubscription;
@@ -32,10 +34,20 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
   bool _batchMode = false;
   final Set<int> _selectedNotifIds = {};
   final Set<int> _selectedAlarmIds = {};
+  // t02 批量删除动画：缩小淡出驱动 + 正在移除的条目 key（'alarm:<id>' / 'notif:<id>'）
+  late final AnimationController _removeCtl;
+  final Set<String> _removingKeys = {};
+  // 待删除快照（缩小淡出动画结束后再发删除请求）：告警 id + 系统通知实体
+  List<int> _pendingDeleteAlarmIds = const [];
+  List<SystemNotification> _pendingDeleteNotifications = const [];
 
   @override
   void initState() {
     super.initState();
+    _removeCtl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 260),
+    )..addStatusListener(_handleRemoveStatus);
     context.read<AlarmBloc>().add(const AlarmListRequested());
     context.read<NotificationBloc>().add(const SystemNotificationsRequested());
 
@@ -72,6 +84,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
   void dispose() {
     _sseSubscription?.cancel();
     _streamService.stop();
+    _removeCtl.dispose();
     super.dispose();
   }
 
@@ -163,8 +176,13 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
                         child: ListView.builder(
                           padding: EdgeInsets.all(12.w),
                           itemCount: items.length,
-                          itemBuilder: (context, index) =>
-                              _buildItemCard(context, items[index], l10n),
+                          itemBuilder: (context, index) => _buildItemCard(
+                            context,
+                            items[index],
+                            l10n,
+                            index: index,
+                            batchMode: _batchMode,
+                          ),
                         ),
                       ),
                     ),
@@ -589,7 +607,8 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
     }
   }
 
-  /// 批量删除所选：告警与通知分别逐条删除（量小，pageSize 50 内可接受）
+  /// 批量删除所选：先播放卡片缩小淡出动画，动画结束后再逐条删除
+  /// （告警与通知分别删除，量小，pageSize 50 内可接受）
   Future<void> _deleteSelected(NotificationState notifState) async {
     final l10n = AppLocalizations.of(context)!;
     final count = _selectedNotifIds.length + _selectedAlarmIds.length;
@@ -620,26 +639,50 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
       ),
     );
     if (confirmed == true && mounted) {
-      // 告警逐条删除（按 id，无需完整实体）
-      for (final id in _selectedAlarmIds) {
-        context.read<AlarmBloc>().add(AlarmDeleteRequested(alarmId: id));
-      }
-      // 通知逐条删除（需从已加载列表取完整实体）
-      if (notifState is SystemNotificationsLoaded) {
-        for (final id in _selectedNotifIds) {
-          final matches =
-              notifState.notifications.where((n) => n.id == id).toList();
-          if (matches.isNotEmpty) {
-            context.read<NotificationBloc>().add(
-                  SystemNotificationDeleteRequested(
-                    notification: matches.first,
-                  ),
-                );
-          }
+      // 动画前快照：防止动画期间退出批量模式导致待删集合被清空
+      _pendingDeleteAlarmIds = List<int>.of(_selectedAlarmIds);
+      _pendingDeleteNotifications = notifState is SystemNotificationsLoaded
+          ? notifState.notifications
+              .where((n) => _selectedNotifIds.contains(n.id))
+              .toList()
+          : const [];
+      setState(() {
+        for (final id in _pendingDeleteAlarmIds) {
+          _removingKeys.add('alarm:$id');
         }
-      }
-      _exitBatchMode();
+        for (final n in _pendingDeleteNotifications) {
+          _removingKeys.add('notif:${n.id}');
+        }
+      });
+      // 卡片缩小淡出移除动画，结束后在 _finishRemoveAnimation 里发删除请求
+      _removeCtl.forward(from: 0);
     }
+  }
+
+  /// 缩小淡出动画结束：清空移除标记、退出批量模式并真正发送删除请求
+  void _finishRemoveAnimation() {
+    if (!mounted) return;
+    final alarmIds = _pendingDeleteAlarmIds;
+    final notifications = _pendingDeleteNotifications;
+    _pendingDeleteAlarmIds = const [];
+    _pendingDeleteNotifications = const [];
+    setState(() => _removingKeys.clear());
+    _exitBatchMode();
+    // 告警逐条删除（按 id，无需完整实体）
+    for (final id in alarmIds) {
+      context.read<AlarmBloc>().add(AlarmDeleteRequested(alarmId: id));
+    }
+    // 通知逐条删除（从动画前快照取完整实体）
+    for (final n in notifications) {
+      context.read<NotificationBloc>().add(
+            SystemNotificationDeleteRequested(notification: n),
+          );
+    }
+  }
+
+  /// 缩小淡出动画结束回调
+  void _handleRemoveStatus(AnimationStatus status) {
+    if (status == AnimationStatus.completed) _finishRemoveAnimation();
   }
 
   // ==================== 统一卡片 ====================
@@ -660,23 +703,53 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
   Widget _buildItemCard(
     BuildContext context,
     _NotificationItem item,
-    AppLocalizations l10n,
-  ) {
+    AppLocalizations l10n, {
+    required int index,
+    required bool batchMode,
+  }) {
+    Widget card;
     if (item.type == _ItemType.alarm) {
-      return _buildAlarmCard(
+      card = _buildAlarmCard(
         context,
         item.data as Map<String, dynamic>,
         l10n,
         item.timestamp,
       );
     } else {
-      return _buildSystemCard(
+      card = _buildSystemCard(
         context,
         item.data as SystemNotification,
         l10n,
         item.timestamp,
       );
     }
+    // 进入批量模式：卡片错相位摇晃，提示可多选（JiggleOnce 仅进入时播放一次）
+    if (batchMode) {
+      card = JiggleOnce(active: batchMode, index: index, child: card);
+    }
+    // 批量删除：卡片缩小 + 淡出移除动画
+    if (_removingKeys.contains(_itemKey(item))) {
+      card = AnimatedBuilder(
+        animation: _removeCtl,
+        builder: (context, child) => Opacity(
+          opacity: 1 - _removeCtl.value,
+          child: Transform.scale(
+            scale: 1 - 0.2 * _removeCtl.value,
+            child: child,
+          ),
+        ),
+        child: card,
+      );
+    }
+    return card;
+  }
+
+  /// 条目唯一 key：告警/通知 id 类型不同可能冲突，加前缀区分
+  String _itemKey(_NotificationItem item) {
+    if (item.type == _ItemType.alarm) {
+      return 'alarm:${(item.data as Map<String, dynamic>)['id']}';
+    }
+    return 'notif:${(item.data as SystemNotification).id}';
   }
 
   Widget _buildAlarmCard(

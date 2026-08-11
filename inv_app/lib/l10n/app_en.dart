@@ -1309,4 +1309,22 @@ const Map<String, String> en = {
   'qr_bind_back': 'Back',
   'err_invalid_pin': 'Invalid PIN, check the device nameplate',
   'cloud_bind_fallback': 'Bind via cloud',
+
+  // === Onboarding (first install / version upgrade) ===
+  'onboarding_page1_title': 'Smart Monitoring',
+  'onboarding_page1_desc': 'Monitor plant generation anytime, anywhere',
+  'onboarding_page2_title': 'Instant Alerts',
+  'onboarding_page2_desc': 'Real-time anomaly push notifications',
+  'onboarding_page3_title': 'Local Upgrade',
+  'onboarding_page3_desc': 'OTA works even without internet',
+  'onboarding_start': 'Get Started',
+
+  // === About page (brand section) ===
+  'about_slogan': 'Smart solar, smarter energy',
+
+  // === Change password (strength indicator) ===
+  'password_strength_label': 'Password strength',
+  'password_strength_weak': 'Weak',
+  'password_strength_medium': 'Medium',
+  'password_strength_strong': 'Strong',
 };

@@ -1266,4 +1266,22 @@ const Map<String, String> zh = {
   'qr_bind_back': '返回',
   'err_invalid_pin': 'PIN 码不正确，请核对设备铭牌',
   'cloud_bind_fallback': '改用云端绑定',
+
+  // === 引导页（首次安装 / 版本升级）===
+  'onboarding_page1_title': '智能监控',
+  'onboarding_page1_desc': '随时随地掌握电站发电',
+  'onboarding_page2_title': '极速告警',
+  'onboarding_page2_desc': '异常实时推送',
+  'onboarding_page3_title': '本地升级',
+  'onboarding_page3_desc': 'OTA 无网也能升',
+  'onboarding_start': '立即体验',
+
+  // === 关于页（品牌区）===
+  'about_slogan': '智能光伏，让能源更智慧',
+
+  // === 修改密码（密码强度）===
+  'password_strength_label': '密码强度',
+  'password_strength_weak': '弱',
+  'password_strength_medium': '中',
+  'password_strength_strong': '强',
 };

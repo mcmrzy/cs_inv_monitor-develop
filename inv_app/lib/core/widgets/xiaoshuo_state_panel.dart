@@ -14,6 +14,10 @@ class XiaoshuoStatePanel extends StatelessWidget {
   final double size;
   final EdgeInsetsGeometry padding;
 
+  /// 插图显示放大系数：配合 t15 资源重做（内容占画布提升 + 无边缘残留），
+  /// 统一放大插图渲染尺寸，解决设备页/通知页等插图偏小的问题。
+  static const double _imageScale = 1.08;
+
   const XiaoshuoStatePanel({
     super.key,
     required this.asset,
@@ -27,6 +31,7 @@ class XiaoshuoStatePanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final renderSize = size * _imageScale;
     return Center(
       child: Padding(
         padding: padding,
@@ -35,8 +40,8 @@ class XiaoshuoStatePanel extends StatelessWidget {
           children: [
             Image.asset(
               asset,
-              width: size.w,
-              height: size.w,
+              width: renderSize.w,
+              height: renderSize.w,
               fit: BoxFit.contain,
               errorBuilder: (context, error, stackTrace) => Icon(
                 Icons.image_not_supported_outlined,
