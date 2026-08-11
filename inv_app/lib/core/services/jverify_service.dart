@@ -25,6 +25,8 @@ class JVerifyService {
   final Jverify _jverify = Jverify();
   bool _initialized = false;
   int _loginAttemptCounter = 0; // 记录登录尝试次数，防止重复初始化
+  Future<bool>? _preLoginFuture; // 预取号进行中/成功缓存（复用同一运营商 token，避免重复取号）
+  DateTime? _preLoginAt; // 预取号发起时间（运营商 token 有效期约 30s，缓存 20s）
 
   /// 检查当前平台是否支持 JVerify
   bool get isSupported {
@@ -86,16 +88,44 @@ class JVerifyService {
   /// 预取号（静默获取运营商 token，等价于"获取手机号成功"）
   ///
   /// code == 7000 表示预取号成功，随后拉起授权页可立即展示脱敏手机号。
-  Future<bool> preLogin({int timeoutMs = 5000}) async {
+  /// 带缓存复用：20s 内进行中/成功的请求直接复用；失败不缓存，便于快速重试重新取号。
+  /// [timeoutMs] 会被钳制到插件合法范围 [3000, 10000]：越界参数会被插件层静默丢弃，
+  /// 原生回落默认 5s，造成"以为 800ms 超时、实际干等 5s"的隐蔽卡顿。
+  Future<bool> preLogin({int timeoutMs = 5000}) {
+    final now = DateTime.now();
+    final cached = _preLoginFuture;
+    if (cached != null &&
+        now.difference(_preLoginAt ?? now) < const Duration(seconds: 20)) {
+      return cached;
+    }
+    final safeTimeout = timeoutMs.clamp(3000, 10000).toInt();
+    _preLoginAt = now;
+    final future = _doPreLogin(timeoutMs: safeTimeout);
+    // 失败不缓存（重试重新取号）；成功缓存 20s（运营商 token 有效期约 30s）
+    _preLoginFuture = future.then<bool>((ok) {
+      if (!ok) _preLoginFuture = null;
+      return ok;
+    });
+    return _preLoginFuture!;
+  }
+
+  Future<bool> _doPreLogin({required int timeoutMs}) async {
     if (!isSupported || !_initialized) return false;
     try {
       final map = await _jverify.preLogin(timeOut: timeoutMs);
-      return map['code'] == 7000;
+      final ok = map['code'] == 7000;
+      debugPrint(
+          '[JVerifyService] preLogin result: code=${map['code']} msg=${map['message']} (ok=$ok)',
+      );
+      return ok;
     } catch (e) {
       debugPrint('[JVerifyService] preLogin error: $e');
       return false;
     }
   }
+
+  /// 确保预取号 token 就绪：已缓存且未过期直接复用，否则重新预取号
+  Future<bool> ensurePreLogin() => preLogin(timeoutMs: 5000);
 
   /// 拉起自绘授权页，执行一键登录
   ///
@@ -142,6 +172,15 @@ class JVerifyService {
       throw JVerifyCarrierException(6012, 'SDK init not ready');
     }
 
+    // 拉起授权页前确保预取号成功：token 就绪则授权页立即显示脱敏号码、点击即秒回；
+    // 预取号失败说明运营商通道不可用，快速降级提示，避免授权页内取号超时（2005）
+    if (!await ensurePreLogin()) {
+      debugPrint(
+          '[JVerifyService] Session #$_loginAttemptCounter: preLogin failed, degrade to other login',
+      );
+      throw JVerifyCarrierException(2005, 'Carrier preLogin failed');
+    }
+
     // 配置自绘授权页 UI（品牌区 + 脱敏号码 + 同意并登录 + 协议）
     _applyAuthPageUIConfig();
 
@@ -151,6 +190,7 @@ class JVerifyService {
       // 使用同步接口 (loginAuthSyncApi2)
       _jverify.loginAuthSyncApi2(
         autoDismiss: false, // 登录成功后手动关闭，避免授权页残留
+        timeout: 10000, // 授权页内登录取号超时 10s（与原生 LoginSettings.setTimeout 对齐）
         // 关闭 SDK 原生短信页跳转：其结果 Dart 侧无法获取，会导致 UI 卡死；
         // 失败统一由 App 页面降级到账号密码/其他登录方式
         enableSms: false,
