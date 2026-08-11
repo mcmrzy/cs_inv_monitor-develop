@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:dio/dio.dart';
+import 'package:inv_app/core/services/ble/ble_binding_service.dart';
 import 'package:inv_app/core/services/ble/ble_direct_service.dart';
 import 'package:inv_app/core/services/ble/ble_polling_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
@@ -33,10 +37,21 @@ class _SettingsPageState extends State<SettingsPage> {
   String _currentTimezone = TimezoneUtils.defaultTimezone;
   bool _loading = true;
 
+  /// 场景 B：未绑定设备发现流订阅（打开 BLE 开关时监听）
+  StreamSubscription<BleDiscoveredDevice>? _unboundSub;
+  bool _unboundDialogShowing = false;
+  final Set<String> _dismissedMacs = {};
+
   @override
   void initState() {
     super.initState();
     _loadSettings();
+  }
+
+  @override
+  void dispose() {
+    _unboundSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadSettings() async {
@@ -59,6 +74,8 @@ class _SettingsPageState extends State<SettingsPage> {
         _currentTimezone = timezone ?? TimezoneUtils.defaultTimezone;
         _loading = false;
       });
+      // 开关已打开（上次会话恢复）：继续监听未绑定设备发现
+      if (bleDirect) _subscribeUnboundDevices();
     }
   }
 
@@ -95,10 +112,124 @@ class _SettingsPageState extends State<SettingsPage> {
     await _storage.saveIsBleDirectEnabled(value);
     if (!mounted) return;
     setState(() => _isBleDirectEnabled = value);
+    if (value) {
+      _subscribeUnboundDevices();
+    } else {
+      await _unboundSub?.cancel();
+      _unboundSub = null;
+    }
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(value ? l10n.bleDirectOn : l10n.bleDirectOff),
         duration: const Duration(seconds: 1),
+      ),
+    );
+  }
+
+  /// 订阅场景 B 发现流：扫描到未绑定设备时弹确认框（含 PIN 输入，防抢绑）
+  void _subscribeUnboundDevices() {
+    _unboundSub?.cancel();
+    _unboundSub = getIt<BleDirectService>().unboundDevices.listen(
+      (device) {
+        if (!mounted || _unboundDialogShowing) return;
+        if (_dismissedMacs.contains(device.macAddress)) return;
+        _unboundDialogShowing = true;
+        _showUnboundBindDialog(device);
+      },
+    );
+  }
+
+  /// 场景 B 确认对话框：设备名 + PIN 输入 → BLE 绑定（设备端校验 PIN）
+  Future<void> _showUnboundBindDialog(BleDiscoveredDevice device) async {
+    final pinController = TextEditingController();
+    var enteredPin = '';
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l10n.str('ble_bind_confirm_title')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(l10n.str('ble_bind_confirm_desc')),
+            SizedBox(height: 8.h),
+            Text(
+              device.name.isEmpty ? device.macAddress : device.name,
+              style: TextStyle(
+                fontSize: 14.sp,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            SizedBox(height: 16.h),
+            TextField(
+              controller: pinController,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              maxLength: 6,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: InputDecoration(
+                labelText: l10n.pinInputTitle,
+                hintText: l10n.pinInputHint,
+                counterText: '',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () {
+              enteredPin = pinController.text.trim();
+              if (enteredPin.isEmpty) {
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  SnackBar(content: Text(l10n.pinRequired)),
+                );
+                return;
+              }
+              Navigator.pop(dialogContext, true);
+            },
+            child: Text(l10n.pinInputConfirm),
+          ),
+        ],
+      ),
+    );
+    pinController.dispose();
+    _unboundDialogShowing = false;
+    // 无论结果如何，本会话内不再提示该设备（防重复弹窗）
+    _dismissedMacs.add(device.macAddress);
+    if (proceed != true || !mounted) return;
+
+    // 绑定中
+    final outcome = await getIt<BleBindingService>().bindAfterProvision(
+      macAddress: device.macAddress,
+      pin: enteredPin,
+    );
+    if (!mounted) return;
+    final (icon, text) = switch (outcome) {
+      BindOutcome.bound =>
+        (Icons.check_circle, l10n.str('ble_binding_success')),
+      BindOutcome.alreadyBound =>
+        (Icons.info, l10n.str('ble_binding_already_bound')),
+      BindOutcome.invalidPin => (Icons.lock, l10n.pinInvalid),
+      BindOutcome.locked => (Icons.lock, l10n.pinLocked),
+      BindOutcome.needLoginForSync =>
+        (Icons.cloud_sync, l10n.str('ble_binding_need_login')),
+      _ => (Icons.error_outline, l10n.str('ble_binding_failed')),
+    };
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(icon, color: Colors.white, size: 18),
+            SizedBox(width: 8.w),
+            Expanded(child: Text(text)),
+          ],
+        ),
       ),
     );
   }
@@ -364,96 +495,183 @@ class _SettingsPageState extends State<SettingsPage> {
     return Scaffold(
       appBar: AppBar(title: Text(l10n.systemSettings)),
       body: ListView(
+        padding: EdgeInsets.only(bottom: 24.h),
         children: [
-          _buildSectionTitle(l10n.connectionSettings),
-          SwitchListTile(
-            title: Text(l10n.localMode),
-            subtitle: Text(l10n.localModeDesc),
-            value: _isLocalMode,
-            onChanged: _toggleLocalMode,
-            activeThumbColor: AppColors.primary,
+          _buildSectionTitle(
+            Icons.wifi_tethering,
+            l10n.connectionSettings,
           ),
-          SwitchListTile(
-            title: Text(l10n.bleDirectEnabled),
-            subtitle: Text(l10n.bleDirectEnabledDesc),
-            value: _isBleDirectEnabled,
-            onChanged: _toggleBleDirect,
-            activeThumbColor: AppColors.primary,
-          ),
-          ListTile(
-            title: Text(l10n.blePollInterval),
-            subtitle: Text(l10n.blePollIntervalDesc),
-            trailing: Text(
-              '$_blePollInterval s',
-              style: Theme.of(context).textTheme.bodyMedium,
+          _buildCard([
+            SwitchListTile(
+              secondary: _leadingIcon(Icons.cloud_off),
+              title: Text(l10n.localMode),
+              subtitle: Text(l10n.localModeDesc),
+              value: _isLocalMode,
+              onChanged: _toggleLocalMode,
+              activeThumbColor: AppColors.primary,
             ),
-            onTap: _showPollIntervalDialog,
-          ),
-          const Divider(height: 1),
-          ListTile(
-            title: Text(l10n.customServer),
-            subtitle: Text(
-              _serverUrl,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 12.sp, color: AppColors.textHint),
+            _tileDivider(),
+            SwitchListTile(
+              secondary: _leadingIcon(Icons.bluetooth),
+              title: Text(l10n.bleDirectEnabled),
+              subtitle: Text(l10n.bleDirectEnabledDesc),
+              value: _isBleDirectEnabled,
+              onChanged: _toggleBleDirect,
+              activeThumbColor: AppColors.primary,
             ),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: _showServerUrlDialog,
-          ),
-          _buildSectionTitle(l10n.displaySettings),
-          SwitchListTile(
-            title: Text(l10n.darkMode),
-            value: _isDarkMode,
-            onChanged: _toggleDarkMode,
-            activeThumbColor: AppColors.primary,
-          ),
-          const Divider(height: 1),
-          ListTile(
-            title: Text(l10n.unitSwitch),
-            subtitle: Text(_unitType),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: _showUnitDialog,
-          ),
-          const Divider(height: 1),
-          ListTile(
-            title: Text(l10n.timezone),
-            subtitle: Text(
-              TimezoneUtils.getLabel(
-                _currentTimezone,
-                langCode: _currentLocale,
+            _tileDivider(),
+            ListTile(
+              leading: _leadingIcon(Icons.speed),
+              title: Text(l10n.blePollInterval),
+              subtitle: Text(l10n.blePollIntervalDesc),
+              trailing: Container(
+                padding:
+                    EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10.r),
+                ),
+                child: Text(
+                  '$_blePollInterval s',
+                  style: TextStyle(
+                    fontSize: 12.sp,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primary,
+                  ),
+                ),
               ),
+              onTap: _showPollIntervalDialog,
             ),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: _showTimezoneDialog,
-          ),
-          _buildSectionTitle(l10n.generalSettings),
-          ListTile(
-            title: Text(l10n.languageSwitch),
-            subtitle: Text(
-              _currentLocale == 'zh'
-                  ? l10n.str('language_chinese')
-                  : l10n.str('language_english'),
+            _tileDivider(),
+            ListTile(
+              leading: _leadingIcon(Icons.dns),
+              title: Text(l10n.customServer),
+              subtitle: Text(
+                _serverUrl,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 12.sp, color: AppColors.textHint),
+              ),
+              trailing: const Icon(
+                Icons.chevron_right,
+                color: AppColors.textHint,
+              ),
+              onTap: _showServerUrlDialog,
             ),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: _showLanguageDialog,
-          ),
+          ]),
+          _buildSectionTitle(Icons.palette_outlined, l10n.displaySettings),
+          _buildCard([
+            SwitchListTile(
+              secondary: _leadingIcon(Icons.dark_mode),
+              title: Text(l10n.darkMode),
+              value: _isDarkMode,
+              onChanged: _toggleDarkMode,
+              activeThumbColor: AppColors.primary,
+            ),
+            _tileDivider(),
+            ListTile(
+              leading: _leadingIcon(Icons.electric_bolt),
+              title: Text(l10n.unitSwitch),
+              subtitle: Text(_unitType),
+              trailing: const Icon(
+                Icons.chevron_right,
+                color: AppColors.textHint,
+              ),
+              onTap: _showUnitDialog,
+            ),
+            _tileDivider(),
+            ListTile(
+              leading: _leadingIcon(Icons.public),
+              title: Text(l10n.timezone),
+              subtitle: Text(
+                TimezoneUtils.getLabel(
+                  _currentTimezone,
+                  langCode: _currentLocale,
+                ),
+              ),
+              trailing: const Icon(
+                Icons.chevron_right,
+                color: AppColors.textHint,
+              ),
+              onTap: _showTimezoneDialog,
+            ),
+          ]),
+          _buildSectionTitle(Icons.language, l10n.generalSettings),
+          _buildCard([
+            ListTile(
+              leading: _leadingIcon(Icons.translate),
+              title: Text(l10n.languageSwitch),
+              subtitle: Text(
+                _currentLocale == 'zh'
+                    ? l10n.str('language_chinese')
+                    : l10n.str('language_english'),
+              ),
+              trailing: const Icon(
+                Icons.chevron_right,
+                color: AppColors.textHint,
+              ),
+              onTap: _showLanguageDialog,
+            ),
+          ]),
           _buildResetButton(),
         ],
       ),
     );
   }
 
-  Widget _buildSectionTitle(String title) {
+  /// 分组卡片（圆角 + 表面色容器）
+  Widget _buildCard(List<Widget> children) {
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: 16.w),
+      decoration: BoxDecoration(
+        color: AppColor.surfaceContainer(context),
+        borderRadius: BorderRadius.circular(14.r),
+      ),
+      child: Column(children: children),
+    );
+  }
+
+  /// 卡片内条目分隔线（缩进避开 leading 图标）
+  Widget _tileDivider() {
     return Padding(
-      padding: EdgeInsets.fromLTRB(16.w, 16.h, 16.w, 8.h),
-      child: Text(
-        title,
-        style: TextStyle(
-          fontSize: 13.sp,
-          fontWeight: FontWeight.w600,
-          color: AppColors.textHint,
-        ),
+      padding: EdgeInsets.only(left: 56.w),
+      child: const Divider(
+        height: 1,
+        thickness: 0.5,
+        color: AppColors.divider,
+      ),
+    );
+  }
+
+  /// 主题色圆角图标容器（列表项视觉锚点）
+  Widget _leadingIcon(IconData icon, {Color? color}) {
+    return Container(
+      width: 36.w,
+      height: 36.w,
+      decoration: BoxDecoration(
+        color: (color ?? AppColors.primary).withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(10.r),
+      ),
+      child: Icon(icon, size: 20.sp, color: color ?? AppColors.primary),
+    );
+  }
+
+  Widget _buildSectionTitle(IconData icon, String title) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20.w, 20.h, 20.w, 10.h),
+      child: Row(
+        children: [
+          Icon(icon, size: 16.sp, color: AppColors.primary),
+          SizedBox(width: 6.w),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 13.sp,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -484,6 +702,9 @@ class _SettingsPageState extends State<SettingsPage> {
           );
 
           if (confirmed == true) {
+            await _unboundSub?.cancel();
+            _unboundSub = null;
+            _dismissedMacs.clear();
             await _storage.saveIsLocalMode(false);
             await _storage.saveIsBleDirectEnabled(false);
             await _storage.saveBlePollInterval(180);

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'package:inv_app/core/services/ble/ble_adapter.dart';
 import 'package:inv_app/core/services/ble/ble_binding_service.dart';
@@ -33,6 +34,9 @@ class DeviceQrBindPage extends StatefulWidget {
 
 /// 绑定流程阶段
 enum _QrBindPhase {
+  /// 深链接/二维码未带 PIN：等待用户输入
+  pinInput,
+
   /// 检查蓝牙状态
   checking,
 
@@ -57,6 +61,10 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
   late final BleDeviceManager _manager;
   late final BleBindingService _bindingService;
 
+  /// 当前使用的 PIN（空时需用户输入，见 [_QrBindPhase.pinInput]）
+  late String _pin;
+  final _pinController = TextEditingController();
+
   _QrBindPhase _phase = _QrBindPhase.checking;
   BindOutcome? _doneOutcome;
 
@@ -69,6 +77,7 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
   @override
   void initState() {
     super.initState();
+    _pin = widget.pin;
     _adapter = widget.adapter ?? getIt<BleAdapter>();
     _manager = widget.manager ?? getIt<BleDeviceManager>();
     _bindingService = widget.bindingService ?? getIt<BleBindingService>();
@@ -76,6 +85,12 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _start();
     });
+  }
+
+  @override
+  void dispose() {
+    _pinController.dispose();
+    super.dispose();
   }
 
   Future<void> _start() async {
@@ -87,6 +102,16 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
       _matchName = null;
       _failKey = null;
     });
+
+    // 深链接/二维码未带 PIN：先让用户输入（6 位数字，见设计文档 §5.4）
+    if (_pin.trim().isEmpty) {
+      setState(() => _phase = _QrBindPhase.pinInput);
+      return;
+    }
+    await _bindFlow(l10n);
+  }
+
+  Future<void> _bindFlow(AppLocalizations l10n) async {
 
     // 1. 检查蓝牙状态
     BleAdapterStatus status;
@@ -172,7 +197,7 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
     final outcome = await _bindingService.bindAfterProvision(
       macAddress: matchedMac,
       knownSn: widget.sn,
-      pin: widget.pin,
+      pin: _pin,
     );
     if (!mounted) return;
     setState(() {
@@ -192,6 +217,8 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
 
   Widget _buildBody(AppLocalizations l10n) {
     switch (_phase) {
+      case _QrBindPhase.pinInput:
+        return _pinInputBody(l10n);
       case _QrBindPhase.checking:
         return _progressBody(l10n.str('qr_bind_checking'), Icons.bluetooth_searching);
       case _QrBindPhase.scanning:
@@ -208,6 +235,72 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
       case _QrBindPhase.done:
         return _doneBody(l10n);
     }
+  }
+
+  /// 深链接未带 PIN 时的输入页（6 位数字键盘）
+  Widget _pinInputBody(AppLocalizations l10n) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Icon(
+            Icons.pin_outlined,
+            size: 56,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            l10n.qrBindPinRequired,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            l10n.pinInputHint,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 20),
+          TextField(
+            controller: _pinController,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            maxLength: 6,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 24, letterSpacing: 8),
+            decoration: InputDecoration(
+              hintText: '••••••',
+              counterText: '',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          FilledButton.icon(
+            onPressed: () {
+              final pin = _pinController.text.trim();
+              if (pin.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(l10n.pinRequired)),
+                );
+                return;
+              }
+              _pin = pin;
+              _start();
+            },
+            icon: const Icon(Icons.lock_open),
+            label: Text(l10n.pinInputConfirm),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _progressBody(String message, IconData icon) {
@@ -245,6 +338,11 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
           onPressed: _start,
           icon: const Icon(Icons.refresh),
           label: Text(l10n.str('ble_retry')),
+        ),
+        const SizedBox(height: 12),
+        OutlinedButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(l10n.qrBindBack),
         ),
       ],
     );

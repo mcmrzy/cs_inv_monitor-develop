@@ -1234,4 +1234,8 @@ const Map<String, String> zh = {
   'pin_check_failed': 'PIN 校验失败',
   'bind_registered_later': '绑定成功，联网后自动同步',
   'pin_required': '请输入 PIN 码后再试',
+  'manual_pin_label': '设备 PIN 码（选填）',
+  'manual_pin_desc': '填写 PIN 可进行蓝牙直连绑定（离网可用）；留空则仅云端绑定',
+  'qr_bind_pin_required': '请输入设备 PIN 码后开始绑定',
+  'qr_bind_back': '返回',
 };
