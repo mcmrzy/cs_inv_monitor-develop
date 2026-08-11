@@ -1068,7 +1068,7 @@ const Map<String, String> en = {
   // Notification long-press actions
   'notif_delete': 'Delete this notification',
   'notif_clear_all': 'Clear all',
-  'notif_batch_manage': 'Batch manage',
+  'notif_batch_manage': 'Batch delete',
   'notif_delete_selected': 'Delete selected ({count})',
   'notif_mark_handled': 'Mark as handled',
   'notif_batch_select': 'Select notifications',
@@ -1076,6 +1076,7 @@ const Map<String, String> en = {
   'notif_delete_confirm': 'Delete this notification?',
   'notif_delete_selected_confirm': 'Delete the {count} selected notifications?',
   'notif_clear_all_confirm': 'Clear all notifications?',
+  'notif_alarm_no_batch_delete': 'Alarms cannot be batch deleted',
 
   // Other
   'search_alarm_hint': 'Search alarm device/SN',
