@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:inv_app/core/entities/inverter_data.dart';
 import 'package:inv_app/core/services/ble/ble_adapter.dart';
 import 'package:inv_app/core/services/ble/ble_binding_service.dart';
 import 'package:inv_app/core/services/ble/ble_device_manager.dart';
+import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
 import 'package:inv_app/features/device/presentation/pages/device_qr_bind_page.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 import 'package:mocktail/mocktail.dart';
 
+import '../../helpers/mock_providers.dart';
 import '../../helpers/pump_app.dart';
 
 class MockBleAdapter extends Mock implements BleAdapter {}
@@ -24,6 +28,7 @@ void main() {
   late MockBleDeviceManager manager;
   late MockBleBindingService bindingService;
   late MockBleDeviceSession session;
+  late DeviceBloc deviceBloc;
 
   // 16 位字母数字 SN（页面仅做长度/字符集与 INFO 对比，无需通过 parseSN 语义校验）
   const testSn = 'TESTSN1234567890';
@@ -67,6 +72,22 @@ void main() {
         pin: any(named: 'pin'),
       ),
     ).thenAnswer((_) async => BindOutcome.bound);
+
+    // 页面顶层 BlocConsumer<DeviceBloc> 需要真实 bloc（构造时依赖实时数据流）
+    final mockRepository = MockDeviceRepository();
+    final mockRealtime = MockRealtimeDataService();
+    final mockCache = MockDataCacheService();
+    when(() => mockRealtime.realtimeDataStream)
+        .thenAnswer((_) => const Stream<InverterRealtime>.empty());
+    deviceBloc = DeviceBloc(
+      repository: mockRepository,
+      realtimeDataService: mockRealtime,
+      dataCacheService: mockCache,
+    );
+  });
+
+  tearDown(() {
+    deviceBloc.close();
   });
 
   Widget buildPage() => DeviceQrBindPage(
@@ -81,7 +102,7 @@ void main() {
     final l10n = await AppLocalizations.delegate.load(const Locale('zh', 'CN'));
     when(() => adapter.status).thenAnswer((_) async => BleAdapterStatus.off);
 
-    await pumpMinimalApp(tester, buildPage());
+    await pumpApp(tester, buildPage(), deviceBloc: deviceBloc);
 
     // SnackBar 提示蓝牙未开启（失败态页面同样展示该文案，共 2 处）
     expect(
@@ -103,7 +124,7 @@ void main() {
   testWidgets('扫描匹配成功 → 绑定成功文案', (tester) async {
     final l10n = await AppLocalizations.delegate.load(const Locale('zh', 'CN'));
 
-    await pumpMinimalApp(tester, buildPage());
+    await pumpApp(tester, buildPage(), deviceBloc: deviceBloc);
 
     expect(find.text(l10n.str('qr_bind_title')), findsOneWidget);
     expect(find.text(l10n.str('ble_binding_success')), findsOneWidget);
@@ -138,7 +159,7 @@ void main() {
       ),
     ).thenAnswer((_) => const Stream<BleScanResult>.empty());
 
-    await pumpMinimalApp(tester, buildPage());
+    await pumpApp(tester, buildPage(), deviceBloc: deviceBloc);
 
     expect(find.text(l10n.str('qr_bind_not_found')), findsOneWidget);
     expect(find.text(l10n.str('ble_retry')), findsOneWidget);
@@ -157,7 +178,7 @@ void main() {
       (_) async => <String, dynamic>{'bound': false},
     );
 
-    await pumpMinimalApp(tester, buildPage());
+    await pumpApp(tester, buildPage(), deviceBloc: deviceBloc);
 
     expect(find.text(l10n.str('qr_bind_not_found')), findsOneWidget);
     verify(() => manager.connectDevice(any())).called(1);
@@ -173,7 +194,7 @@ void main() {
       ),
     ).thenAnswer((_) async => BindOutcome.failed);
 
-    await pumpMinimalApp(tester, buildPage());
+    await pumpApp(tester, buildPage(), deviceBloc: deviceBloc);
 
     expect(find.text(l10n.str('ble_binding_failed')), findsOneWidget);
     expect(find.text(l10n.str('qr_bind_done')), findsOneWidget);
@@ -184,24 +205,27 @@ void main() {
 
     // 宿主页 push 目标页，验证 pop 回到宿主
     await tester.pumpWidget(
-      MaterialApp(
-        locale: const Locale('zh', 'CN'),
-        theme: ThemeData.light(useMaterial3: true),
-        localizationsDelegates: const [
-          AppLocalizations.delegate,
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: Scaffold(
-          body: Builder(
-            builder: (context) => Center(
-              child: TextButton(
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(builder: (_) => buildPage()),
+      BlocProvider<DeviceBloc>.value(
+        value: deviceBloc,
+        child: MaterialApp(
+          locale: const Locale('zh', 'CN'),
+          theme: ThemeData.light(useMaterial3: true),
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => Center(
+                child: TextButton(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(builder: (_) => buildPage()),
+                  ),
+                  child: const Text('host'),
                 ),
-                child: const Text('host'),
               ),
             ),
           ),
