@@ -313,7 +313,8 @@ class _HomePageState extends State<HomePage> {
                                     scale: 1 + 0.03 * curved.value,
                                     child: Material(
                                       color: AppColor.surfaceContainer(
-                                          context),
+                                        context,
+                                      ),
                                       elevation: 6 * curved.value,
                                       borderRadius:
                                           BorderRadius.circular(16.r),
@@ -324,9 +325,9 @@ class _HomePageState extends State<HomePage> {
                                   ),
                                 );
                               },
-                              onReorder: (oldIndex, newIndex) {
+                              onReorderItem: (oldIndex, newIndex) {
+                                // onReorderItem 的 newIndex 已自动排除移动项，无需手动 -1
                                 setState(() {
-                                  if (newIndex > oldIndex) newIndex -= 1;
                                   final item =
                                       _sortStations!.removeAt(oldIndex);
                                   _sortStations!.insert(newIndex, item);
@@ -338,9 +339,10 @@ class _HomePageState extends State<HomePage> {
                                 final id =
                                     s['station_id'] ?? s['id'] ?? i;
                                 return ReorderableDragStartListener(
+                                  // key 必须挂在 itemBuilder 返回的顶层 widget 上（SDK 断言）
+                                  key: ValueKey(id),
                                   index: i,
                                   child: Container(
-                                    key: ValueKey(id),
                                     child: _buildCard(s, sortMode: true),
                                   ),
                                 );

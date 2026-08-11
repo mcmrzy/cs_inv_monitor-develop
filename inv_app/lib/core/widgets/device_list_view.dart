@@ -239,7 +239,8 @@ class _DeviceCardState extends State<DeviceCard>
         onTapDown: (_) => _controller.forward(),
         onTapUp: (_) {
           _controller.reverse();
-          _showDetail(context);
+          // 排序模式下点击不跳详情（拖动手势由 ReorderableListView 接管）
+          if (!widget.sortMode) _showDetail(context);
         },
         onTapCancel: () => _controller.reverse(),
         // 排序模式下长按由 ReorderableListView 接管为拖动；否则长按弹出编辑页
@@ -509,9 +510,10 @@ class _DeviceListViewState extends State<DeviceListView> {
                       },
                       itemCount: filtered.length,
                       itemBuilder: (_, i) => ReorderableDragStartListener(
+                        // key 必须挂在 itemBuilder 返回的顶层 widget 上（SDK 断言）
+                        key: ValueKey(filtered[i]['sn'] ?? i),
                         index: i,
                         child: DeviceCard(
-                          key: ValueKey(filtered[i]['sn'] ?? i),
                           device: filtered[i],
                           onLongPressDevice: widget.onLongPressDevice,
                           sortMode: widget.sortMode,
