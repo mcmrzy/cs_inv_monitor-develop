@@ -373,12 +373,20 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
       ),
       child: SafeArea(
-        child: Padding(
-          padding: EdgeInsets.symmetric(vertical: 8.h),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: tiles,
+        // 小屏/大字体下可滚动，避免操作项溢出（内容不超限时视觉不变）
+        child: SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.8,
+            ),
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 8.h),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: tiles,
+              ),
+            ),
           ),
         ),
       ),
@@ -410,8 +418,8 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
           },
         ),
         _buildMenuTile(
-          icon: Icons.checklist_rounded,
-          color: AppColors.primary,
+          icon: Icons.delete_sweep_outlined,
+          color: AppColors.error,
           title: l10n.str('notif_batch_manage'),
           onTap: () {
             Navigator.pop(ctx);
@@ -644,97 +652,113 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
 
     final isRead = alarm['status'] == 1;
 
-    return _LongPressFeedbackCard(
-      margin: EdgeInsets.only(bottom: 8.h),
-      baseColor: AppColor.surfaceContainer(context),
-      borderRadius: BorderRadius.circular(14.r),
-      onTap: () => context.push('/alarm/${alarm['id']}'),
-      onLongPress: () => _showAlarmMenu(alarm),
-      child: Padding(
-        padding: EdgeInsets.all(14.w),
-        child: Row(
-          children: [
-            Container(
-              width: 32.w,
-              height: 32.w,
-              decoration: BoxDecoration(
-                color: (isRead ? AppColors.textHint : levelColor)
-                    .withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8.r),
+    return Opacity(
+      // 批量删除模式：告警不支持批量删除，置灰并提示
+      opacity: _batchMode ? 0.45 : 1,
+      child: _LongPressFeedbackCard(
+        margin: EdgeInsets.only(bottom: 8.h),
+        baseColor: AppColor.surfaceContainer(context),
+        borderRadius: BorderRadius.circular(14.r),
+        onTap: () {
+          if (_batchMode) {
+            // 告警不支持批量删除，点击仅提示
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(l10n.str('notif_alarm_no_batch_delete')),
+                duration: const Duration(seconds: 2),
               ),
-              child: Icon(
-                isRead ? Icons.notifications_none : iconData,
-                size: 18.sp,
-                color: isRead ? AppColors.textHint : levelColor,
+            );
+            return;
+          }
+          context.push('/alarm/${alarm['id']}');
+        },
+        onLongPress: () => _showAlarmMenu(alarm),
+        child: Padding(
+          padding: EdgeInsets.all(14.w),
+          child: Row(
+            children: [
+              Container(
+                width: 32.w,
+                height: 32.w,
+                decoration: BoxDecoration(
+                  color: (isRead ? AppColors.textHint : levelColor)
+                      .withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8.r),
+                ),
+                child: Icon(
+                  isRead ? Icons.notifications_none : iconData,
+                  size: 18.sp,
+                  color: isRead ? AppColors.textHint : levelColor,
+                ),
               ),
-            ),
-            SizedBox(width: 12.w),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          alarm['fault_message'] ?? l10n.alarm,
-                          style: TextStyle(
-                            fontSize: 14.sp,
-                            fontWeight:
-                                isRead ? FontWeight.w500 : FontWeight.w600,
-                            color: AppColors.textPrimary,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      SizedBox(width: 8.w),
-                      Container(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: 6.w,
-                          vertical: 2.h,
-                        ),
-                        decoration: BoxDecoration(
-                          color: levelColor.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(4.r),
-                        ),
-                        child: Text(
-                          levelText,
-                          style: TextStyle(
-                            fontSize: 10.sp,
-                            fontWeight: FontWeight.w600,
-                            color: levelColor,
+              SizedBox(width: 12.w),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            alarm['fault_message'] ?? l10n.alarm,
+                            style: TextStyle(
+                              fontSize: 14.sp,
+                              fontWeight:
+                                  isRead ? FontWeight.w500 : FontWeight.w600,
+                              color: AppColors.textPrimary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 4.h),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '${l10n.deviceLabel}: ${alarm['device_sn'] ?? '-'}  ${l10n.faultCodeLabel}: ${alarm['fault_code'] ?? '-'}',
+                        SizedBox(width: 8.w),
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 6.w,
+                            vertical: 2.h,
+                          ),
+                          decoration: BoxDecoration(
+                            color: levelColor.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(4.r),
+                          ),
+                          child: Text(
+                            levelText,
+                            style: TextStyle(
+                              fontSize: 10.sp,
+                              fontWeight: FontWeight.w600,
+                              color: levelColor,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 4.h),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '${l10n.deviceLabel}: ${alarm['device_sn'] ?? '-'}  ${l10n.faultCodeLabel}: ${alarm['fault_code'] ?? '-'}',
+                            style: TextStyle(
+                              fontSize: 12.sp,
+                              color: AppColors.textHint,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          _formatTime(timestamp, l10n),
                           style: TextStyle(
-                            fontSize: 12.sp,
+                            fontSize: 11.sp,
                             color: AppColors.textHint,
                           ),
                         ),
-                      ),
-                      Text(
-                        _formatTime(timestamp, l10n),
-                        style: TextStyle(
-                          fontSize: 11.sp,
-                          color: AppColors.textHint,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Icon(Icons.chevron_right, color: AppColors.textHint, size: 20.sp),
-          ],
+              Icon(Icons.chevron_right, color: AppColors.textHint, size: 20.sp),
+            ],
+          ),
         ),
       ),
     );
@@ -780,12 +804,10 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
       margin: EdgeInsets.only(bottom: 8.h),
       baseColor: AppColor.surfaceContainer(context),
       borderRadius: BorderRadius.circular(14.r),
-      // 批量模式：选中项描边高亮
-      border: _batchMode &&
-              notification.id != null &&
-              _selectedIds.contains(notification.id)
-          ? Border.all(color: AppColors.primary, width: 1.5)
-          : null,
+      // 批量模式：选中整卡高亮（背景过渡 + 主色描边，替代右侧勾选圆圈）
+      selected: _batchMode &&
+          notification.id != null &&
+          _selectedIds.contains(notification.id),
       // 批量模式：点击切换勾选（仅后端通知可勾选）；长按弹操作菜单
       onTap: _batchMode && notification.id != null
           ? () => _toggleSelect(notification.id!)
@@ -843,20 +865,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
                 ],
               ),
             ),
-            // 批量模式：勾选态圆圈
-            if (_batchMode && notification.id != null)
-              Padding(
-                padding: EdgeInsets.only(left: 8.w),
-                child: Icon(
-                  _selectedIds.contains(notification.id)
-                      ? Icons.check_circle
-                      : Icons.radio_button_unchecked,
-                  size: 20.sp,
-                  color: _selectedIds.contains(notification.id)
-                      ? AppColors.primary
-                      : AppColors.textHint,
-                ),
-              ),
+            // 批量模式选中态已由整卡高亮表达，右侧不再显示勾选圆圈
           ],
         ),
       ),
@@ -914,7 +923,7 @@ class _LongPressFeedbackCard extends StatefulWidget {
     this.onLongPress,
     this.baseColor,
     this.margin,
-    this.border,
+    this.selected = false,
     this.borderRadius = const BorderRadius.all(Radius.circular(14)),
   });
 
@@ -923,7 +932,8 @@ class _LongPressFeedbackCard extends StatefulWidget {
   final VoidCallback? onLongPress;
   final Color? baseColor;
   final EdgeInsetsGeometry? margin;
-  final BoxBorder? border;
+  /// 批量选中态：整卡主色背景 + 描边高亮（优先于按压高亮）
+  final bool selected;
   final BorderRadiusGeometry borderRadius;
 
   @override
@@ -980,13 +990,19 @@ class _LongPressFeedbackCardState extends State<_LongPressFeedbackCard> {
           duration: const Duration(milliseconds: 150),
           margin: widget.margin,
           decoration: BoxDecoration(
+            // 选中态优先于按压高亮；长按达成提示保留最高优先级
             color: _confirmed
                 ? AppColors.primary.withValues(alpha: 0.12)
-                : (_pressed
-                    ? AppColors.primary.withValues(alpha: 0.06)
-                    : baseColor),
+                : (widget.selected
+                    ? AppColors.primary.withValues(alpha: 0.08)
+                    : (_pressed
+                        ? AppColors.primary.withValues(alpha: 0.06)
+                        : baseColor)),
             borderRadius: widget.borderRadius,
-            border: widget.border,
+            // 选中态整卡主色描边 1.5px
+            border: widget.selected
+                ? Border.all(color: AppColors.primary, width: 1.5)
+                : null,
           ),
           child: widget.child,
         ),
