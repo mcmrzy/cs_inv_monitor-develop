@@ -157,3 +157,6 @@ inv_app/assets/images/backgrounds/*.png
 
 # 本地 AI 模型缓存（rembg u2net 等，不入库）
 .model_cache/
+
+# 智能链接下载目录（App 安装包体积大，不入库；bind.html 正常提交）
+deploy/web/apk/
