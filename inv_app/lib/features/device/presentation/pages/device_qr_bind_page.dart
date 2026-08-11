@@ -6,6 +6,7 @@ import 'package:inv_app/core/services/ble/ble_adapter.dart';
 import 'package:inv_app/core/services/ble/ble_binding_service.dart';
 import 'package:inv_app/core/services/ble/ble_device_manager.dart';
 import 'package:inv_app/core/services/service_locator.dart';
+import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
@@ -458,13 +459,13 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
       case BindOutcome.bound:
         return (
           Icons.check_circle,
-          Colors.green,
+          AppColors.successLight,
           l10n.str('ble_binding_success'),
         );
       case BindOutcome.alreadyBound:
         return (
           Icons.info,
-          Colors.orange,
+          AppColors.warning,
           l10n.str('ble_binding_already_bound'),
         );
       case BindOutcome.invalidPin:
@@ -474,7 +475,7 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
       case BindOutcome.needLoginForSync:
         return (
           Icons.cloud_sync,
-          Colors.orange,
+          AppColors.warning,
           l10n.str('ble_binding_need_login'),
         );
       case BindOutcome.failed:

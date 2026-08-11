@@ -49,9 +49,11 @@ abstract final class CsergyAssets {
   static const String emptyRecord = '$illustrationDirectory/empty_record_720.webp';
 
   // ============ 页面背景（WebP，控制包体积） ============
+  /// 登录页背景：品牌深蓝渐变 + 抽象光伏/能量元素（上部深色放品牌区，下部浅色放表单）
   static const String bgAuth = 'assets/images/backgrounds/bg_auth_abstract.webp';
   static const String bgSplash = 'assets/images/backgrounds/bg_splash_xiaoshuo.webp';
-  static const String bgJverify = 'assets/images/backgrounds/bg_jverify_xiaoshuo.webp';
+  /// 一键登录页背景：深蓝科技网格 + 能量粒子（底部浅色区放操作按钮）
+  static const String bgJverify = 'assets/images/backgrounds/bg_jverify_abstract.webp';
 
   // ============ 产品图 ============
   static const String productDirectory = 'assets/products';
