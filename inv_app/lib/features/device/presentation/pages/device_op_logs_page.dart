@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:inv_app/core/services/offline/offline_log_sync_service.dart';
 import 'package:inv_app/core/services/offline/offline_op_log_store.dart';
 import 'package:inv_app/core/services/service_locator.dart';
+import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 /// 设备本地操作日志页（BLE 直连模式，设计文档 §3.5）
@@ -149,10 +150,10 @@ class _StatusChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final (color, label) = switch (status) {
-      'synced' => (Colors.green, l10n.opLogSyncStatus('synced')),
-      'syncing' => (Colors.blue, l10n.opLogSyncStatus('syncing')),
-      'failed' => (Colors.red, l10n.opLogSyncStatus('failed')),
-      _ => (Colors.orange, l10n.opLogSyncStatus('pending')),
+      'synced' => (AppColors.successLight, l10n.opLogSyncStatus('synced')),
+      'syncing' => (AppColors.primary, l10n.opLogSyncStatus('syncing')),
+      'failed' => (AppColors.errorLight, l10n.opLogSyncStatus('failed')),
+      _ => (AppColors.warning, l10n.opLogSyncStatus('pending')),
     };
     return Chip(
       label: Text(

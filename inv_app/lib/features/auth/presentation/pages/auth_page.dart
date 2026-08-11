@@ -14,8 +14,8 @@ import 'package:inv_app/l10n/app_localizations.dart';
 /// 登录/注册模式
 enum AuthMode { login, register }
 
-/// 登录注册页：整页品牌背景图（右上角吉祥物为图内元素）+ 毛玻璃表单卡片
-/// 背景图全屏铺满，表单卡片悬浮于中下部；登录/注册通过 AnimatedSwitcher 组件级切换
+/// 登录注册页：品牌深蓝渐变背景图 + 毛玻璃表单卡片
+/// 背景图全屏铺满（上部深色放品牌名，下部浅色放表单），表单卡片悬浮于中下部；登录/注册通过 AnimatedSwitcher 组件级切换
 class AuthPage extends StatefulWidget {
   final AuthMode initialMode;
 
@@ -61,7 +61,7 @@ class _AuthPageState extends State<AuthPage> {
         builder: (context, state) {
           return Stack(
             children: [
-              // 整页品牌背景图：右上角吉祥物/装饰均为图内元素，不叠加任何图形
+              // 整页品牌背景图：深蓝渐变 + 抽象光伏/能量元素，无图形叠加
               Positioned.fill(
                 child: IgnorePointer(
                   child: Image.asset(

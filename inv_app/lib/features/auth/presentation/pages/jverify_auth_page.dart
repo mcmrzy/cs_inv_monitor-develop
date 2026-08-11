@@ -85,7 +85,7 @@ class _JVerifyAuthPageState extends State<JVerifyAuthPage> {
       backgroundColor: AppColor.surfaceContainer(context),
       body: Stack(
         children: [
-          // 一键登录背景图（品牌蓝场景，铺满）
+          // 一键登录背景图（品牌深蓝科技渐变，铺满；底部浅色区放操作内容）
           Positioned.fill(
             child: IgnorePointer(
               child: Image.asset(
@@ -123,8 +123,8 @@ class _JVerifyAuthPageState extends State<JVerifyAuthPage> {
     );
   }
 
-  /// 拉起授权页前的过渡态：loading + 提示（背景图内已含吉祥物，不再叠加图形）
-  /// 内容置于底部，避开图内吉祥物所在的中部区域
+  /// 拉起授权页前的过渡态：loading + 提示
+  /// 内容置于底部浅色区，避开深色渐变区
   Widget _buildLaunching() {
     final l10n = _l10n;
     return Align(
@@ -154,7 +154,7 @@ class _JVerifyAuthPageState extends State<JVerifyAuthPage> {
   }
 
   /// 取消/失败后的极简兜底视图：可重试或使用其他方式登录
-  /// 内容置于底部，避开背景图内的吉祥物（不叠加图形）
+  /// 内容置于底部浅色区，保证文字/按钮对比度
   Widget _buildFailed(AuthState state) {
     final l10n = _l10n;
     return Align(
