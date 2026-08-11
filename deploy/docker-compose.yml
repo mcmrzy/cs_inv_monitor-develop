@@ -220,6 +220,19 @@ services:
     networks:
       - inv-net
 
+  # 智能链接绑定中间页 + App 安装包下载（deploy/web/）
+  nginx:
+    image: nginx:alpine
+    container_name: inv-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./web:/usr/share/nginx/html:ro
+    networks:
+      - inv-net
+
 networks:
   inv-net:
     driver: bridge
