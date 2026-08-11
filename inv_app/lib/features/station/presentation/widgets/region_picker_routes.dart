@@ -378,7 +378,8 @@ class _ContinentCountryPickerPageState
                       overAndUnderCenterOpacity: 0.4,
                       // 显式吸附物理：甩动后自动停在 item 正中
                       physics: const FixedExtentScrollPhysics(
-                          parent: BouncingScrollPhysics()),
+                        parent: BouncingScrollPhysics(),
+                      ),
                       onSelectedItemChanged: onChange,
                       childDelegate: ListWheelChildBuilderDelegate(
                         builder: (_, i) {
@@ -721,7 +722,8 @@ class _RegionPickerPageState extends State<RegionPickerPage> {
                       overAndUnderCenterOpacity: 0.4,
                       // 显式吸附物理：甩动后自动停在 item 正中
                       physics: const FixedExtentScrollPhysics(
-                          parent: BouncingScrollPhysics()),
+                        parent: BouncingScrollPhysics(),
+                      ),
                       onSelectedItemChanged: onChange,
                       childDelegate: ListWheelChildBuilderDelegate(
                         builder: (_, i) {
