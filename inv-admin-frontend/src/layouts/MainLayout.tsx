@@ -9,7 +9,7 @@ import type { ProLayoutProps } from '@ant-design/pro-components'
 import {
   DashboardOutlined, DesktopOutlined, CloudUploadOutlined, AlertOutlined,
   TeamOutlined, SettingOutlined, LogoutOutlined, UserOutlined,
-  ClusterOutlined, FundViewOutlined, ThunderboltOutlined,
+  ClusterOutlined, ThunderboltOutlined,
   EnvironmentOutlined, LockOutlined, FileTextOutlined,
   HeartOutlined, ControlOutlined, UnorderedListOutlined,
   EditOutlined, ExperimentOutlined, GlobalOutlined, ClockCircleOutlined,
@@ -35,7 +35,6 @@ interface RouteMenuItem {
 
 const getAdminRoutes = (t: (key: string) => string): RouteMenuItem[] => [
   { path: '/dashboard', name: t('menu.dashboard'), icon: <DashboardOutlined />, permission: 'dashboard:view' },
-  { path: '/big-screen', name: t('menu.bigScreen'), icon: <FundViewOutlined />, permission: 'dashboard:view' },
   { path: '/monitoring', name: t('menu.stationMonitor'), icon: <ThunderboltOutlined />, permission: 'devices:view' },
   { path: '/stations', name: t('menu.stationManage'), icon: <EnvironmentOutlined />, permission: 'stations:view' },
   { path: '/devices', name: t('menu.deviceManage'), icon: <DesktopOutlined />, permission: 'devices:view' },

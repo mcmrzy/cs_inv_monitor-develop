@@ -38,7 +38,8 @@ const DeviceSelector: React.FC<DeviceSelectorProps> = ({ selectedSn, onDeviceCha
     queryFn: () =>
       api.get('/stations', { params: { all: true } }).then((r) => {
         const d = r.data?.data ?? r.data
-        return (d?.items ?? (Array.isArray(d) ? d : [])) as StationItem[]
+        // items 可能缺失或非数组（如接口异常），一律降级为空列表，避免 options 处 d.map 崩溃
+        return (Array.isArray(d?.items) ? d.items : (Array.isArray(d) ? d : [])) as StationItem[]
       }),
     staleTime: 120_000,
   })
@@ -54,7 +55,7 @@ const DeviceSelector: React.FC<DeviceSelectorProps> = ({ selectedSn, onDeviceCha
         ...(selectedStationId ? { station_id: selectedStationId } : {}),
       }).then((r) => {
         const d = (r as any).data?.data ?? (r as any).data
-        return (d?.items ?? (Array.isArray(d) ? d : [])) as DeviceItem[]
+        return (Array.isArray(d?.items) ? d.items : (Array.isArray(d) ? d : [])) as DeviceItem[]
       }),
     staleTime: 60_000,
     enabled: selectedStationId !== null,

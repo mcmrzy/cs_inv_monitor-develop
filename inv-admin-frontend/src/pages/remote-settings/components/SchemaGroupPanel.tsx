@@ -105,7 +105,12 @@ const SchemaGroupPanel: React.FC<SchemaGroupPanelProps> = ({ sn }) => {
 
   const { data: schema, isLoading: schemaLoading, error: schemaError, refetch: refetchSchema } = useQuery({
     queryKey: ['config-schema', sn],
-    queryFn: () => deviceApi.getConfigSchema(sn).then((r) => (r.data?.data ?? r.data ?? []) as ConfigSchemaItem[]),
+    queryFn: () =>
+      deviceApi.getConfigSchema(sn).then((r) => {
+        const d = (r as any).data?.data ?? (r as any).data
+        // 兼容直接数组 / {items:[...]} 两种形状，非数组一律降级为空列表，避免渲染期 .map / for...of 崩溃
+        return (Array.isArray(d) ? d : (Array.isArray((d as any)?.items) ? (d as any).items : [])) as ConfigSchemaItem[]
+      }),
     staleTime: 300_000,
   })
 
@@ -267,7 +272,7 @@ const SchemaGroupPanel: React.FC<SchemaGroupPanelProps> = ({ sn }) => {
       groups[g] = { direct: [], subs: {} }
       for (const s of SUBGROUP_ORDER) groups[g].subs[s] = []
     }
-    for (const item of schema ?? []) {
+    for (const item of Array.isArray(schema) ? schema : []) {
       if (!groups[item.group_code]) continue
       if (item.sub_group) {
         groups[item.group_code].subs[item.sub_group]?.push(item)

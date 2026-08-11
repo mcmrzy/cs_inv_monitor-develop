@@ -296,6 +296,8 @@ class AppLocalizations {
   String get firmwareCorruptedHint =>
       _localizedStrings['firmware_corrupted_hint']!;
   String get redownload => _localizedStrings['redownload']!;
+  String get downloadedFirmwareList =>
+      _localizedStrings['downloaded_firmware_list'] ?? 'Downloaded Firmware';
   String get configureControlFieldsHint =>
       _localizedStrings['configure_control_fields_hint']!;
   String get deviceOfflineWarning =>
@@ -1092,6 +1094,8 @@ class AppLocalizations {
       _localizedStrings['privacy_policy_content'] ?? '';
   String get searchDeviceHint =>
       _localizedStrings['search_device_hint'] ?? 'Search device name/SN';
+  String get noSearchResults =>
+      _localizedStrings['no_search_results'] ?? 'No matching devices';
   String get pageNotFound =>
       _localizedStrings['page_not_found'] ?? 'Page not found';
   String get armFirmware => _localizedStrings['arm_firmware'] ?? 'ARM FW';

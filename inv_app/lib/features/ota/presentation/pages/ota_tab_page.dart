@@ -4,6 +4,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
+import 'package:inv_app/core/widgets/device_list_view.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
@@ -19,11 +20,15 @@ class OtaTabPage extends StatefulWidget {
 
 class _OtaTabPageState extends State<OtaTabPage> {
   DeviceListLoaded? _cachedState;
+  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
-    context.read<DeviceBloc>().add(const DeviceListRequested());
+    // 后端 page_size 上限 200，一次性拉全量设备，避免列表只显示第一页
+    context
+        .read<DeviceBloc>()
+        .add(const DeviceListRequested(pageSize: 200));
   }
 
   @override
@@ -65,7 +70,7 @@ class _OtaTabPageState extends State<OtaTabPage> {
               action: OutlinedButton(
                 onPressed: () => context
                     .read<DeviceBloc>()
-                    .add(const DeviceListRequested()),
+                    .add(const DeviceListRequested(pageSize: 200)),
                 child: Text(l10n.retry),
               ),
             );
@@ -90,14 +95,65 @@ class _OtaTabPageState extends State<OtaTabPage> {
         size: 176,
       );
     }
-    return StyledRefreshIndicator(
-      onRefresh: () async =>
-          context.read<DeviceBloc>().add(const DeviceListRequested()),
-      child: ListView.builder(
-        padding: EdgeInsets.all(12.w),
-        itemCount: state.devices.length,
-        itemBuilder: (context, index) =>
-            _buildDeviceCard(context, state.devices[index], l10n),
+    final devices = _filterDevices(state.devices);
+    return Column(
+      children: [
+        DeviceSearchBar(
+          onSearchChanged: (v) => setState(() => _searchQuery = v),
+        ),
+        Expanded(
+          child: devices.isEmpty
+              ? _buildNoSearchResult(l10n)
+              : StyledRefreshIndicator(
+                  onRefresh: () async => context
+                      .read<DeviceBloc>()
+                      .add(const DeviceListRequested(pageSize: 200)),
+                  child: ListView.builder(
+                    padding: EdgeInsets.all(12.w),
+                    itemCount: devices.length,
+                    itemBuilder: (context, index) =>
+                        _buildDeviceCard(context, devices[index], l10n),
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
+
+  /// 按 SN / 名称 / 备注（alias）本地过滤设备列表
+  List<dynamic> _filterDevices(List<dynamic> devices) {
+    final query = _searchQuery.trim().toLowerCase();
+    if (query.isEmpty) return devices;
+    return devices.where((d) {
+      final sn = (d['sn'] ?? d['device_sn'] ?? '').toString().toLowerCase();
+      final name =
+          (d['name'] ?? d['device_name'] ?? '').toString().toLowerCase();
+      final alias = (d['alias'] ?? '').toString().toLowerCase();
+      return sn.contains(query) ||
+          name.contains(query) ||
+          alias.contains(query);
+    }).toList();
+  }
+
+  Widget _buildNoSearchResult(AppLocalizations l10n) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.search_off_rounded,
+            size: 56.sp,
+            color: AppColors.textHint,
+          ),
+          SizedBox(height: 12.h),
+          Text(
+            l10n.noSearchResults,
+            style: TextStyle(
+              fontSize: 14.sp,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
       ),
     );
   }

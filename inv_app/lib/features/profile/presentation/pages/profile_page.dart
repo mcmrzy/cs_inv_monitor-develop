@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -16,6 +18,10 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
+  /// 加载超时兜底：超过 4s 仍无数据时展示失败态，提供手动重试入口
+  Timer? _loadTimeoutTimer;
+  bool _loadTimedOut = false;
+
   /// 将相对路径的头像URL转换为完整URL
   String? _getFullAvatarUrl(String? avatar) {
     if (avatar == null || avatar.isEmpty) return null;
@@ -42,6 +48,45 @@ class _ProfilePageState extends State<ProfilePage> {
     if (state is! AuthAuthenticated && state is! AuthLoading) {
       context.read<AuthBloc>().add(AuthCheckRequested());
     }
+    _startLoadTimeout();
+  }
+
+  @override
+  void dispose() {
+    _loadTimeoutTimer?.cancel();
+    super.dispose();
+  }
+
+  /// 启动加载超时计时：4s 后若仍处于加载态（或已进入但无缓存用户资料），显示失败态
+  void _startLoadTimeout() {
+    _loadTimeoutTimer?.cancel();
+    _loadTimeoutTimer = Timer(const Duration(seconds: 4), () {
+      if (!mounted) return;
+      final state = context.read<AuthBloc>().state;
+      if (state is AuthLoading ||
+          state is AuthInitial ||
+          (state is AuthAuthenticated && state.user == null)) {
+        setState(() => _loadTimedOut = true);
+      }
+    });
+  }
+
+  /// 手动重试：重新走 AuthCheckRequested（本地缓存乐观进入 + 后台刷新资料）
+  void _retryLoad() {
+    _loadTimeoutTimer?.cancel();
+    if (_loadTimedOut) setState(() => _loadTimedOut = false);
+    context.read<AuthBloc>().add(AuthCheckRequested());
+    _startLoadTimeout();
+  }
+
+  /// 下拉刷新：重新走 AuthCheckRequested，等待刷新流程完成后复位超时计时
+  Future<void> _onRefresh() async {
+    _loadTimeoutTimer?.cancel();
+    if (_loadTimedOut) setState(() => _loadTimedOut = false);
+    context.read<AuthBloc>().add(AuthCheckRequested());
+    // 简单等待：让 RefreshIndicator 指示器有反馈时间
+    await Future<void>.delayed(const Duration(milliseconds: 600));
+    _startLoadTimeout();
   }
 
   @override
@@ -65,6 +110,11 @@ class _ProfilePageState extends State<ProfilePage> {
       body: BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {
           if (state is AuthUnauthenticated) context.go('/login');
+          // 资料加载成功：取消超时兜底，复位失败态
+          if (state is AuthAuthenticated && state.user != null) {
+            _loadTimeoutTimer?.cancel();
+            if (_loadTimedOut) setState(() => _loadTimedOut = false);
+          }
         },
         builder: (context, state) {
           String displayName = '';
@@ -75,13 +125,27 @@ class _ProfilePageState extends State<ProfilePage> {
             isSystemAdmin = state.isSystemAdmin;
           }
           final isLoading = state is AuthLoading || state is AuthInitial;
+          // 加载超时 / 出错（如缓存缺失且网络差）时展示失败态 + 手动重试
+          final showLoadError = _loadTimedOut || state is AuthError;
 
-          return ListView(
-            children: [
-              _buildHeader(displayName, isSystemAdmin, isLoading, l10n, state is AuthAuthenticated ? state : null),
-              _buildMenuSection(context),
-              _buildLogoutButton(context, l10n),
-            ],
+          return RefreshIndicator(
+            onRefresh: _onRefresh,
+            color: AppColors.primary,
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: [
+                _buildHeader(
+                  displayName,
+                  isSystemAdmin,
+                  isLoading,
+                  showLoadError,
+                  l10n,
+                  state is AuthAuthenticated ? state : null,
+                ),
+                _buildMenuSection(context),
+                _buildLogoutButton(context, l10n),
+              ],
+            ),
           );
         },
       ),
@@ -92,6 +156,7 @@ class _ProfilePageState extends State<ProfilePage> {
     String displayName,
     bool isSystemAdmin,
     bool isLoading,
+    bool showLoadError,
     AppLocalizations l10n,
     AuthAuthenticated? authState,
   ) {
@@ -143,7 +208,55 @@ class _ProfilePageState extends State<ProfilePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (isLoading)
+                  if (showLoadError)
+                    // 加载失败态：小图标 + 提示 + 点击重试
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.error_outline_rounded,
+                              size: 18.sp,
+                              color: AppColors.errorLight,
+                            ),
+                            SizedBox(width: 6.w),
+                            Expanded(
+                              child: Text(
+                                l10n.loadFailed,
+                                style: TextStyle(
+                                  fontSize: 13.sp,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 4.h),
+                        TextButton.icon(
+                          onPressed: _retryLoad,
+                          icon: Icon(
+                            Icons.refresh_rounded,
+                            size: 16.sp,
+                            color: AppColors.primary,
+                          ),
+                          label: Text(
+                            l10n.retry,
+                            style: TextStyle(
+                              fontSize: 13.sp,
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          style: TextButton.styleFrom(
+                            padding: EdgeInsets.symmetric(horizontal: 8.w),
+                            minimumSize: Size(0, 28.h),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ),
+                      ],
+                    )
+                  else if (isLoading) ...[
                     Container(
                       width: 100.w,
                       height: 16.h,
@@ -151,8 +264,17 @@ class _ProfilePageState extends State<ProfilePage> {
                         color: AppColors.surfaceHover,
                         borderRadius: BorderRadius.circular(4.r),
                       ),
-                    )
-                  else
+                    ),
+                    SizedBox(height: 4.h),
+                    Container(
+                      width: 60.w,
+                      height: 12.h,
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceHover,
+                        borderRadius: BorderRadius.circular(4.r),
+                      ),
+                    ),
+                  ] else ...[
                     Text(
                       displayNameToShow,
                       style: TextStyle(
@@ -161,22 +283,13 @@ class _ProfilePageState extends State<ProfilePage> {
                         color: AppColors.textPrimary,
                       ),
                     ),
-                  SizedBox(height: 4.h),
-                  if (isLoading)
-                    Container(
-                      width: 60.w,
-                      height: 12.h,
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceHover,
-                        borderRadius: BorderRadius.circular(4.r),
-                      ),
-                    )
-                  else
+                    SizedBox(height: 4.h),
                     Text(
                       l10n.roleLabel(roleText),
                       style:
                           TextStyle(fontSize: 13.sp, color: AppColors.textHint),
                     ),
+                  ],
                 ],
               ),
             ),

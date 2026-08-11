@@ -245,24 +245,30 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
       const created = results.filter((r: any) => r.status === 'created')
       const failed = results.filter((r: any) => r.status !== 'created')
 
-      if (created.length > 0) {
-        message.success(
-          failed.length > 0
-            ? t('channel.invite.sendPartialSuccess', { count: created.length, failed: failed.length })
-            : t('channel.invite.sendSuccess', { count: created.length }),
-        )
+      // 结果提示统一使用同一 key：同 key 的新提示会替换旧提示，
+      // 保证同一时刻只有一条 toast，避免“成功/失败”同时叠加弹出。
+      const resultKey = 'invite-send-result'
+      if (created.length > 0 && failed.length === 0) {
+        message.success({ content: t('channel.invite.sendSuccess', { count: created.length }), key: resultKey })
+      } else if (created.length > 0) {
+        const detail = failed.map((r: any) => `${r.email}（${r.error || t('admin.operationFailed')}）`).join('、')
+        message.warning({
+          content: `${t('channel.invite.sendPartialSuccess', { count: created.length, failed: failed.length })}：${detail}`,
+          key: resultKey,
+          duration: 6,
+        })
+      } else {
+        const detail = failed.map((r: any) => `${r.email}（${r.error || t('admin.operationFailed')}）`).join('、')
+        message.error({ content: `${t('channel.invite.sendFailed')}：${detail}`, key: resultKey, duration: 6 })
       }
-      failed.forEach((r: any) => message.warning(`${r.email}: ${r.error || t('admin.operationFailed')}`))
 
-      // 复制首个邀请链接（原始 token 仅在创建时返回一次）
+      // 复制首个邀请链接（原始 token 仅在创建时返回一次）。
+      // 复制成功/失败均不再弹独立提示，避免与结果提示叠加
+      //（HTTP 非安全上下文下 clipboard API 不可用，复制失败不代表发送失败）。
       const first = created.find((r: any) => r.invite_link)
       if (first?.invite_link) {
         const link = `${window.location.origin}${first.invite_link}`
-        navigator.clipboard.writeText(link)
-          .then(() => message.success(t('channel.invite.linkCopied')))
-          .catch(() => message.warning(t('channel.invite.linkOnlyVisible')))
-      } else if (created.length > 0) {
-        message.warning(t('channel.invite.linkOnlyVisible'))
+        navigator.clipboard.writeText(link).catch(() => {})
       }
 
       setSelectedOrganizationIds([])

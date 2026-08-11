@@ -143,6 +143,12 @@ func TestParseStatusOnline(t *testing.T) {
 		{"no online field", []byte(`{"rssi":-65}`), true},
 		{"invalid json", []byte(`not json`), true},
 		{"empty payload", []byte{}, true},
+		{"envelope online false", []byte(`{"t":0,"v":2,"data":{"online":false}}`), false},
+		{"envelope online true", []byte(`{"t":1783676930,"v":2,"data":{"online":true,"rssi":-45}}`), true},
+		{"envelope without data online", []byte(`{"t":0,"v":2,"data":{"rssi":-65}}`), true},
+		{"envelope empty data", []byte(`{"t":0,"v":2,"data":{}}`), true},
+		{"envelope data not object", []byte(`{"t":0,"v":2,"data":"online"}`), true},
+		{"nested data online and top online false", []byte(`{"online":false,"data":{"online":true}}`), true},
 	}
 
 	for _, tt := range tests {

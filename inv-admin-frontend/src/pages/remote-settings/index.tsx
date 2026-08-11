@@ -46,7 +46,7 @@ const RemoteSettingsPage: React.FC = () => {
     queryFn: () =>
       deviceApi.getDevices({ page: 1, page_size: 200 }).then((r) => {
         const d = (r as any).data?.data ?? (r as any).data
-        return (d?.items ?? (Array.isArray(d) ? d : [])) as DeviceItem[]
+        return (Array.isArray(d?.items) ? d.items : (Array.isArray(d) ? d : [])) as DeviceItem[]
       }),
     staleTime: 60_000,
   })
@@ -56,7 +56,8 @@ const RemoteSettingsPage: React.FC = () => {
 
   // CS-L10-6K2（V2 协议型号）使用动态命令面板（由 device_model_commands 配置驱动）；
   // 其余旧型号（如 CS-I10-6k2）保留静态 Section。
-  const isDynamicModel = selectedDevice?.model === 'CS-L10-6K2'
+  // 型号比较不区分大小写：数据库中存在 CS-L10-6K2 与 CS-l10-6k2 两种写法，均走动态面板。
+  const isDynamicModel = selectedDevice?.model?.toUpperCase() === 'CS-L10-6K2'
 
   const handleRead = () => {
     setReading(true)

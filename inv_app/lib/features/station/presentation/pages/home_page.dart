@@ -870,8 +870,22 @@ class _StationActionSheetState extends State<_StationActionSheet>
                 width: 44.w,
                 height: 44.w,
                 decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12.r),
+                  gradient: LinearGradient(
+                    colors: [
+                      color.withValues(alpha: 0.08),
+                      color.withValues(alpha: 0.18),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
                 child: Icon(icon, color: color, size: 22.sp),
               ),

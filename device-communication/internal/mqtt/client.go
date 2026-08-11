@@ -768,13 +768,26 @@ func isThreePhaseTopic(topic string) bool {
 	return false
 }
 
-// parseStatusOnline 从 status 消息的 payload 中解析 online 字段
+// parseStatusOnline 从 status 消息的 payload 中解析 online 字段。
+// 兼容两种格式：
+//   信封格式 {"t":0,"v":2,"data":{"online":false}}（协议文档 LWT）
+//   平铺格式 {"online":false}（部分固件 LWT）
+// 两者都取不到或 JSON 解析失败时默认认为在线（收到消息本身说明设备还在）。
 func parseStatusOnline(payload []byte) bool {
 	var data map[string]interface{}
 	if err := json.Unmarshal(payload, &data); err != nil {
 		// 解析失败时默认认为在线（收到消息本身说明设备还在）
 		return true
 	}
+
+	// 信封格式：online 位于内层 data 对象
+	if inner, ok := data["data"].(map[string]interface{}); ok {
+		if online, ok := inner["online"].(bool); ok {
+			return online
+		}
+	}
+
+	// 平铺格式：online 位于顶层
 	online, ok := data["online"].(bool)
 	if !ok {
 		return true

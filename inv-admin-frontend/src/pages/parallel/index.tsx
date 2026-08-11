@@ -1,22 +1,26 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Alert, Card, Col, DatePicker, Descriptions, Empty, Row, Select, Space,
-  Statistic, Table, Tag, Typography,
+  Alert, App, Button, Card, Col, DatePicker, Descriptions, Empty, Form, Input,
+  Modal, Row, Select, Space, Statistic, Table, Tag, Typography,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs, { type Dayjs } from 'dayjs'
 import ReactECharts from '@/lib/echarts'
-import { ClusterOutlined } from '@ant-design/icons'
+import { ClusterOutlined, DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SendOutlined } from '@ant-design/icons'
 import { deviceApi } from '@/services/deviceApi'
 import {
   getApiErrorMessage,
+  parallelApi,
   protocolApi,
+  type ParallelGroup,
   type ParallelMachine,
+  type ParallelGroupPayload,
   type ThreePhaseSample,
 } from '@/services/protocolApi'
 import { formatInTimezone } from '@/utils/timezone'
 import useTimezoneStore from '@/stores/timezoneStore'
+import useAuthStore from '@/stores/authStore'
 import useTranslation from '@/hooks/useTranslation'
 
 const { Title, Text } = Typography
@@ -40,7 +44,12 @@ const number = (value: unknown, digits = 1) => {
 
 const ParallelPage: React.FC = () => {
   const { t } = useTranslation()
+  const { message, modal } = App.useApp()
+  const queryClient = useQueryClient()
   const { timezone } = useTimezoneStore()
+  const isSystemAdmin = useAuthStore((s) => Boolean(s.user?.isSystemAdmin))
+  const hasAnyPermission = useAuthStore((s) => s.hasAnyPermission)
+  const canControl = hasAnyPermission('devices:control', 'parallel:control')
   const [selectedSN, setSelectedSN] = useState<string>()
   const [range, setRange] = useState<[Dayjs, Dayjs]>([
     dayjs().subtract(24, 'hour'),
@@ -77,6 +86,174 @@ const ParallelPage: React.FC = () => {
     enabled: Boolean(historySN && isThreePhase),
     retry: false,
   })
+
+  // ── 并机组管理（管理员）──
+  const [groupModalOpen, setGroupModalOpen] = useState(false)
+  const [editingGroup, setEditingGroup] = useState<ParallelGroup | null>(null)
+  const [groupForm] = Form.useForm<ParallelGroupPayload>()
+
+  const groupsQuery = useQuery({
+    queryKey: ['parallel', 'groups'],
+    queryFn: () => parallelApi.listGroups({ page: 1, page_size: 100 }),
+    enabled: isSystemAdmin,
+    staleTime: 30_000,
+  })
+
+  const openCreate = () => {
+    setEditingGroup(null)
+    groupForm.resetFields()
+    setGroupModalOpen(true)
+  }
+
+  const openEdit = (group: ParallelGroup) => {
+    setEditingGroup(group)
+    groupForm.setFieldsValue({
+      name: group.name,
+      description: group.description,
+      phase_config: group.phase_config === 'three_phase' ? 'three_phase' : 'single_phase',
+      master_sn: group.master_sn,
+      device_sns: group.device_sns ?? [],
+    })
+    setGroupModalOpen(true)
+  }
+
+  const groupMutation = useMutation({
+    mutationFn: (payload: ParallelGroupPayload) =>
+      editingGroup ? parallelApi.updateGroup(editingGroup.id, payload) : parallelApi.createGroup(payload),
+    onSuccess: () => {
+      message.success(editingGroup ? t('parallel.updateSuccess') : t('parallel.createSuccess'))
+      setGroupModalOpen(false)
+      void queryClient.invalidateQueries({ queryKey: ['parallel', 'groups'] })
+    },
+    onError: (error: unknown) => {
+      message.error(`${editingGroup ? t('parallel.updateFailed') : t('parallel.createFailed')}：${getApiErrorMessage(error)}`)
+    },
+  })
+
+  const submitGroup = async () => {
+    const values = await groupForm.validateFields()
+    groupMutation.mutate(values)
+  }
+
+  const deleteGroup = (group: ParallelGroup) => {
+    modal.confirm({
+      title: t('parallel.confirmDelete'),
+      content: group.name,
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          await parallelApi.deleteGroup(group.id)
+          message.success(t('parallel.deleteSuccess'))
+          void queryClient.invalidateQueries({ queryKey: ['parallel', 'groups'] })
+        } catch (error) {
+          message.error(`${t('parallel.deleteFailed')}：${getApiErrorMessage(error)}`)
+        }
+      },
+    })
+  }
+
+  const syncGroup = (group: ParallelGroup) => {
+    const slaveCount = Math.max(0, (group.device_sns ?? []).length - 1)
+    modal.confirm({
+      title: t('parallel.syncConfirmTitle'),
+      content: t('parallel.syncConfirmContent', { master: group.master_sn ?? '-', slaves: slaveCount }),
+      okText: t('parallel.syncGroup'),
+      cancelText: t('common.cancel'),
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          const result = await parallelApi.syncGroup(group.id)
+          const failed = result.results.filter((r) => r.error)
+          if (failed.length > 0) {
+            message.warning(`${t('parallel.syncStarted')}（${failed.length} ${t('parallel.failed')}）：${failed.map((r) => r.sn).join(', ')}`)
+          } else {
+            message.success(t('parallel.syncStarted'))
+          }
+          void queryClient.invalidateQueries({ queryKey: ['protocol', 'parallel-state'] })
+          void queryClient.invalidateQueries({ queryKey: ['parallel', 'groups'] })
+        } catch (error) {
+          message.error(`${t('parallel.syncFailed')}：${getApiErrorMessage(error)}`)
+        }
+      },
+    })
+  }
+
+  const groupColumns: ColumnsType<ParallelGroup> = [
+    { title: t('parallel.groupName'), dataIndex: 'name', width: 180 },
+    {
+      title: t('parallel.phaseConfig'), dataIndex: 'phase_config', width: 110,
+      render: (value: string) => (
+        <Tag color={value === 'three_phase' ? 'purple' : 'blue'}>
+          {value === 'three_phase' ? t('parallel.threePhase') : t('parallel.singlePhase')}
+        </Tag>
+      ),
+    },
+    { title: t('parallel.masterSN'), dataIndex: 'master_sn', width: 180, render: (v) => v || '-' },
+    {
+      title: t('parallel.slaveCount'), key: 'slaves', width: 90, align: 'center',
+      render: (_, group) => Math.max(0, (group.device_sns ?? []).length - 1),
+    },
+    {
+      title: t('parallel.status'), dataIndex: 'status', width: 100,
+      render: (value: string) => {
+        const color = value === 'synced' ? 'success' : value === 'syncing' ? 'processing' : 'warning'
+        return <Tag color={color}>{t(`parallel.${value || 'outOfSync'}`)}</Tag>
+      },
+    },
+    { title: t('parallel.createTime'), dataIndex: 'created_at', width: 170, render: (v) => v || '-' },
+    {
+      title: t('parallel.actions'), key: 'actions', width: 200, fixed: 'right',
+      render: (_, group) => (
+        <Space size={4}>
+          <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(group)}>{t('parallel.editGroup')}</Button>
+          <Button size="small" danger icon={<DeleteOutlined />} onClick={() => deleteGroup(group)} />
+          <Button size="small" type="primary" ghost icon={<ReloadOutlined />} onClick={() => syncGroup(group)}>
+            {t('parallel.syncGroup')}
+          </Button>
+        </Space>
+      ),
+    },
+  ]
+
+  // ── 设备并机操作（协议：set_master_slave）──
+  const deviceCommand = useMutation({
+    mutationFn: (role: 'master' | 'slave') =>
+      deviceApi.sendCommand(selectedSN!, {
+        command: 'set_master_slave',
+        params: { value: role === 'master' ? 1 : 0 },
+      }),
+    onSuccess: () => {
+      message.success(t('parallel.cmdSent'))
+      void queryClient.invalidateQueries({ queryKey: ['protocol', 'parallel-state', selectedSN] })
+      void queryClient.invalidateQueries({ queryKey: ['parallel', 'groups'] })
+    },
+    onError: (error: unknown) => {
+      message.error(`${t('parallel.cmdFailed')}：${getApiErrorMessage(error)}`)
+    },
+  })
+
+  const setDeviceRole = (role: 'master' | 'slave') => {
+    if (!selectedSN) return
+    const contentKey = role === 'master' ? 'parallel.confirmSetAsMaster' : 'parallel.confirmSetAsSlave'
+    modal.confirm({
+      title: role === 'master' ? t('parallel.setMaster') : t('parallel.setSlave'),
+      content: t(contentKey, { sn: selectedSN }),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
+      okButtonProps: { danger: true },
+      onOk: () => deviceCommand.mutateAsync(role),
+    })
+  }
+
+  const currentRole = useMemo(() => {
+    const state = stateQuery.data
+    if (!state?.enabled) return undefined
+    if (state.master_sn === selectedSN) return 'master'
+    if ((state.machines ?? []).some((m) => m.sn === selectedSN)) return 'slave'
+    return undefined
+  }, [stateQuery.data, selectedSN])
 
   const machineColumns: ColumnsType<ParallelMachine> = [
     { title: t('parallel.machineId'), dataIndex: 'id', width: 90 },
@@ -153,8 +330,7 @@ const ParallelPage: React.FC = () => {
       <Alert
         type="info"
         showIcon
-        message={t('parallel.readOnlyTitle')}
-        description={t('parallel.readOnlyDescription')}
+        message={t('parallel.groupDescription')}
         style={{ marginBottom: 16 }}
       />
 
@@ -186,6 +362,47 @@ const ParallelPage: React.FC = () => {
       )}
       {selectedSN && stateQuery.isSuccess && hasReportedState && !state?.enabled && (
         <Alert type="warning" showIcon message={t('parallel.disabled')} description={t('parallel.disabledDescription')} />
+      )}
+
+      {isSystemAdmin && (
+        <Card
+          title={<Space size={8}><ClusterOutlined style={{ color: '#4f6ef7' }} /><span>{t('parallel.groupManagement')}</span></Space>}
+          extra={<Button type="primary" size="small" icon={<PlusOutlined />} onClick={openCreate}>{t('parallel.createGroup')}</Button>}
+          style={{ marginBottom: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}
+        >
+          {groupsQuery.isError && (
+            <Alert type="error" showIcon message={t('parallel.createFailed')} description={getApiErrorMessage(groupsQuery.error)} style={{ marginBottom: 12 }} />
+          )}
+          <Table
+            rowKey="id"
+            columns={groupColumns}
+            dataSource={groupsQuery.data?.items ?? []}
+            loading={groupsQuery.isLoading}
+            pagination={false}
+            size="small"
+            scroll={{ x: 1000 }}
+            locale={{ emptyText: <Empty description={t('parallel.noTopologyData')} image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
+          />
+        </Card>
+      )}
+
+      {canControl && selectedSN && (
+        <Card title={<Space size={8}><SendOutlined style={{ color: '#4f6ef7' }} />{t('parallel.deviceOps')}</Space>} style={{ marginBottom: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+          <Space wrap>
+            <Text strong>{selectedSN}</Text>
+            {currentRole && (
+              <Tag color={currentRole === 'master' ? 'green' : 'blue'}>
+                {currentRole === 'master' ? `${t('parallel.masterCurrent')} · ${t('parallel.master')}` : t('parallel.slave')}
+              </Tag>
+            )}
+            <Button size="small" type="primary" danger loading={deviceCommand.isPending} onClick={() => setDeviceRole('master')}>
+              {t('parallel.setMaster')}
+            </Button>
+            <Button size="small" loading={deviceCommand.isPending} onClick={() => setDeviceRole('slave')}>
+              {t('parallel.setSlave')}
+            </Button>
+          </Space>
+        </Card>
       )}
 
       {hasReportedState && state && (
@@ -234,6 +451,43 @@ const ParallelPage: React.FC = () => {
           />
         </Card>
       )}
+
+      <Modal
+        title={editingGroup ? t('parallel.editGroup') : t('parallel.createGroup')}
+        open={groupModalOpen}
+        onOk={submitGroup}
+        confirmLoading={groupMutation.isPending}
+        onCancel={() => setGroupModalOpen(false)}
+        destroyOnClose
+        width={560}
+      >
+        <Form form={groupForm} layout="vertical" initialValues={{ phase_config: 'single_phase', device_sns: [] }}>
+          <Form.Item name="name" label={t('parallel.groupName')} rules={[{ required: true, message: t('parallel.pleaseInputGroupName') }]}>
+            <Input placeholder={t('parallel.groupNamePlaceholder')} maxLength={64} />
+          </Form.Item>
+          <Form.Item name="description" label={t('parallel.pleaseInputDescription')}>
+            <Input.TextArea rows={2} maxLength={200} />
+          </Form.Item>
+          <Form.Item name="phase_config" label={t('parallel.phaseConfig')} rules={[{ required: true, message: t('parallel.pleaseSelectPhase') }]}>
+            <Select
+              options={[
+                { value: 'single_phase', label: t('parallel.singlePhase') },
+                { value: 'three_phase', label: t('parallel.threePhase') },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item name="master_sn" label={t('parallel.masterSN')} rules={[{ required: true, message: t('parallel.pleaseSelectMaster') }]}>
+            <Select showSearch options={deviceOptions} placeholder={t('parallel.masterSnPlaceholder')} optionFilterProp="label" />
+          </Form.Item>
+          <Form.Item
+            name="device_sns"
+            label={`${t('parallel.deviceSN')}（${t('parallel.upToEight')}）`}
+            rules={[{ required: true, message: t('parallel.pleaseSelectSlave') }]}
+          >
+            <Select mode="multiple" showSearch options={deviceOptions} placeholder={t('parallel.slaveSnPlaceholder')} optionFilterProp="label" maxCount={9} />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   )
 }

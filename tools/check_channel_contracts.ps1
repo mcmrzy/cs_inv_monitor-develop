@@ -265,6 +265,7 @@ function Test-IsChannelClientPath {
         $Path -match '^/invitations(?:/|$)' -or
         $Path -match '^/devices/(?:claims|bind)$' -or
         $Path -match '^/devices/[^/]+/(?:grants|transfers|unbind|request-unbind|unbind-requests)(?:/|$)' -or
+        $Path -match '^/devices/by-sn/[^/]+/(?:unbind|request-unbind)(?:/|$)' -or
         $Path -match '^/device-unbind-requests/[^/]+/(?:approve|reject)$' -or
         $Path -match '^/stations/[^/]+/transfers(?:/|$)' -or
         $Path -match '^/users(?:/|$)'
@@ -425,6 +426,12 @@ foreach ($operationKey in $currentMetadata.Operations.Keys) {
     $declaredShapes[$shape] = $operation
     if ($operation.Deprecated) {
         $deprecatedShapes[$shape] = $operation
+        # 历史客户端经 /devices/by-sn/{sn}/ 别名调用 legacy 设备端点（Gin 通配符冲突规避），
+        # 注册别名 shape 使 legacy 迁移警告仍能命中 by-sn 客户端调用。
+        if ($operation.Path -match '^/devices/\{[^/]+\}/(?:unbind|request-unbind)(?:/|$)') {
+            $aliasPath = '/devices/by-sn/{sn}/' + ($operation.Path -replace '^/devices/\{[^/]+\}/', '')
+            $deprecatedShapes[('{0} {1}' -f $operation.Method, (Get-RouteShape $aliasPath))] = $operation
+        }
     }
 }
 

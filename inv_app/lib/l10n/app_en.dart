@@ -103,6 +103,7 @@ const Map<String, String> en = {
   'device_action_unbind_hint': 'Unbind this device from the current station',
   'device_action_delete_hint': 'This action cannot be undone',
   'remove_device': 'Remove Device',
+  'confirm_remove_device': 'Are you sure you want to remove this device? This action cannot be undone.',
   'bind_to_station': 'Bind to Station',
   'device_action_bind_hint': 'Bind this device to a station',
   'device_action_rebind_hint': 'Move the device to another station',
@@ -401,6 +402,7 @@ const Map<String, String> en = {
   'firmware_corrupted_hint':
       'Firmware file may be corrupted, please re-download',
   'redownload': 'Re-download',
+  'downloaded_firmware_list': 'Downloaded Firmware',
   'configure_control_fields_hint':
       'Please configure device model control fields in the admin page',
   'device_offline_warning':
@@ -976,6 +978,7 @@ const Map<String, String> en = {
   'err_device_quota_reached': 'Device quota limit reached for this organization',
   'err_unbind_request_failed': 'Failed to request unbind, please try again later',
   'err_unbind_request_pending': 'An unbind request is already pending for this device',
+  'device_action_failed': 'Operation failed: {message}',
   'err_permission_denied': 'Permission denied',
   'err_admin_only': 'Admin only',
 
@@ -1043,6 +1046,7 @@ const Map<String, String> en = {
 
   // Search hints
   'search_device_hint': 'Search device name/SN',
+  'no_search_results': 'No matching devices',
   'page_not_found': 'Page not found',
   'arm_firmware': 'ARM FW',
   'search_stations_hint': 'Search station name',

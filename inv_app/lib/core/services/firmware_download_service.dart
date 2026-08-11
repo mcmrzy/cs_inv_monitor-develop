@@ -6,6 +6,23 @@ import 'package:crypto/crypto.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// 已下载固件的简要信息。
+/// 注意：现有 SharedPreferences 存储仅包含文件路径/大小/SHA-256，
+/// 不保存目标芯片与版本等元数据，因此这里只提供 id + 路径 + 文件名 + 大小。
+class DownloadedFirmwareInfo {
+  final int firmwareId;
+  final String filePath;
+  final String fileName;
+  final int fileSize;
+
+  const DownloadedFirmwareInfo({
+    required this.firmwareId,
+    required this.filePath,
+    required this.fileName,
+    required this.fileSize,
+  });
+}
+
 class FirmwareDownloadService {
   final Dio _dio;
   final SharedPreferences _sharedPreferences;
@@ -130,6 +147,53 @@ class FirmwareDownloadService {
       _progressController.add(-1.0);
       rethrow;
     }
+  }
+
+  /// 扫描 SharedPreferences 中所有 `firmware_path_*` 记录，返回有效（文件存在且
+  /// 大小/SHA-256 校验通过）的已下载固件列表。
+  /// 失效记录（文件缺失 / 校验失败）会被自动清理，与 [isFirmwareDownloaded] 行为一致。
+  /// 注意：现有存储不保存目标芯片/版本元数据，因此列表项仅含 id + 路径 + 文件名 + 大小。
+  Future<List<DownloadedFirmwareInfo>> listDownloadedFirmwares() async {
+    final result = <DownloadedFirmwareInfo>[];
+    for (final key in _sharedPreferences.getKeys()) {
+      if (!key.startsWith(_keyPrefix)) continue;
+      final id = int.tryParse(key.substring(_keyPrefix.length));
+      if (id == null || id <= 0) continue;
+
+      final path = _sharedPreferences.getString(key);
+      if (path == null || path.isEmpty) {
+        await _clearDownloadedRecord(id);
+        continue;
+      }
+
+      final file = File(path);
+      if (!await file.exists()) {
+        await _clearDownloadedRecord(id);
+        continue;
+      }
+
+      // 与 isFirmwareDownloaded 等价的完整性校验（校验失败时内部自动清理记录）
+      if (await isFirmwareDownloaded(id)) {
+        result.add(
+          DownloadedFirmwareInfo(
+            firmwareId: id,
+            filePath: path,
+            fileName: path.split(RegExp(r'[/\\]')).last,
+            fileSize: await file.length(),
+          ),
+        );
+      }
+    }
+    // 按 id 升序排序，保证列表顺序稳定
+    result.sort((a, b) => a.firmwareId.compareTo(b.firmwareId));
+    return result;
+  }
+
+  /// 清理某个 firmwareId 的全部持久化记录（路径/大小/SHA-256）。
+  Future<void> _clearDownloadedRecord(int firmwareId) async {
+    await _sharedPreferences.remove('$_keyPrefix$firmwareId');
+    await _sharedPreferences.remove('$_keySizePrefix$firmwareId');
+    await _sharedPreferences.remove('$_keySHA256Prefix$firmwareId');
   }
 
   Future<void> _verifyFirmware(

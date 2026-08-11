@@ -685,6 +685,15 @@ func (h *AdminHandler) GetMetrics(c *gin.Context) {
 	})
 }
 
+// CreateUserRequest 管理员创建用户请求
+// 字段与前端用户管理页创建表单保持一致（users/index.tsx handleSave）
+type CreateUserRequest struct {
+	Phone    string `json:"phone" binding:"required"`
+	Email    string `json:"email" binding:"required,email"`
+	Nickname string `json:"nickname" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}
+
 // UpdateUserRequest 通用用户更新请求
 type UpdateUserRequest struct {
 	Nickname *string `json:"nickname"`
@@ -713,6 +722,30 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 	if err != nil || user == nil {
 		response.Error(c, 404, "用户不存在")
 		return
+	}
+
+	// 手机号/邮箱唯一性预检查：更新后与其他用户冲突时返回明确错误，避免唯一约束报 500
+	if req.Phone != nil && *req.Phone != "" {
+		existing, cerr := h.userRepo.GetByPhone(ctx, *req.Phone)
+		if cerr != nil {
+			response.Error(c, 500, "查询用户失败")
+			return
+		}
+		if existing != nil && existing.ID != userID {
+			response.Error(c, 400, "手机号已被注册")
+			return
+		}
+	}
+	if req.Email != nil && *req.Email != "" {
+		existing, cerr := h.userRepo.GetByEmail(ctx, *req.Email)
+		if cerr != nil {
+			response.Error(c, 500, "查询用户失败")
+			return
+		}
+		if existing != nil && existing.ID != userID {
+			response.Error(c, 400, "邮箱已被注册")
+			return
+		}
 	}
 
 	setClauses := []string{}
@@ -750,11 +783,104 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 	args = append(args, userID)
 
 	if _, err := h.db.Exec(ctx, query, args...); err != nil {
+		// 并发场景下仍可能触发唯一约束，捕获后返回明确错误
+		if strings.Contains(err.Error(), "unique_violation") || strings.Contains(err.Error(), "duplicate key") {
+			response.Error(c, 400, "手机号或邮箱已被注册")
+			return
+		}
 		response.Error(c, 500, "更新用户失败")
 		return
 	}
 
 	response.SuccessWithMessage(c, "用户更新成功", nil)
+}
+
+// CreateUser 管理员创建用户
+func (h *AdminHandler) CreateUser(c *gin.Context) {
+	var req CreateUserRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, 400, "invalid request")
+		return
+	}
+
+	if len(req.Password) < 6 {
+		response.Error(c, 400, "密码长度不能少于6位")
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// 手机号唯一性检查
+	existing, err := h.userRepo.GetByPhone(ctx, req.Phone)
+	if err != nil {
+		response.Error(c, 500, "查询用户失败")
+		return
+	}
+	if existing != nil {
+		response.Error(c, 400, "手机号已被注册")
+		return
+	}
+
+	// 邮箱唯一性检查
+	existing, err = h.userRepo.GetByEmail(ctx, req.Email)
+	if err != nil {
+		response.Error(c, 500, "查询用户失败")
+		return
+	}
+	if existing != nil {
+		response.Error(c, 400, "邮箱已被注册")
+		return
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		response.Error(c, 500, "密码加密失败")
+		return
+	}
+
+	user := &model.User{
+		Phone:        req.Phone,
+		Email:        req.Email,
+		PasswordHash: string(hashedPassword),
+		Nickname:     req.Nickname,
+		Status:       1,
+	}
+	if err := h.userRepo.Create(ctx, user); err != nil {
+		response.Error(c, 500, "创建用户失败")
+		return
+	}
+
+	response.Success(c, gin.H{"id": user.ID})
+}
+
+// DeleteUser 删除用户（软删除，deleted_at 标记）
+func (h *AdminHandler) DeleteUser(c *gin.Context) {
+	userID := parseID(c.Param("id"))
+	if userID <= 0 {
+		response.Error(c, 400, "invalid user id")
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// 禁止删除当前登录账号
+	if currentID := c.GetInt64("user_id"); currentID > 0 && currentID == userID {
+		response.Error(c, 400, "不能删除当前登录账号")
+		return
+	}
+
+	user, err := h.userRepo.GetByID(ctx, userID)
+	if err != nil || user == nil {
+		response.Error(c, 404, "用户不存在")
+		return
+	}
+
+	if err := h.userRepo.Delete(ctx, userID); err != nil {
+		response.Error(c, 500, "删除用户失败")
+		return
+	}
+
+	response.SuccessWithMessage(c, "用户已删除", nil)
 }
 
 // ResetUserPasswordRequest 重置用户密码请求

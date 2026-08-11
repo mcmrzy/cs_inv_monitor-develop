@@ -98,8 +98,22 @@ class _DeviceActionSheetState extends State<DeviceActionSheet>
                 width: 44.w,
                 height: 44.w,
                 decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12.r),
+                  gradient: LinearGradient(
+                    colors: [
+                      color.withValues(alpha: 0.08),
+                      color.withValues(alpha: 0.18),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
                 child: Icon(icon, color: color, size: 22.sp),
               ),
@@ -192,8 +206,8 @@ class _DeviceActionSheetState extends State<DeviceActionSheet>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(l10n.deleteDevice),
-        content: const Text('确认删除该设备吗？删除后无法恢复。'),
+        title: Text(l10n.str('remove_device')),
+        content: Text(l10n.str('confirm_remove_device')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -264,6 +278,17 @@ class _DeviceActionSheetState extends State<DeviceActionSheet>
     Navigator.pop(context);
   }
 
+  // 操作结果 SnackBar 提示（成功绿色、失败红色）
+  void _showResultSnackBar(String message, {required bool success}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: success ? AppColors.success : AppColors.error,
+      ),
+    );
+  }
+
   // 电站选择器（复用 add_device_page 提取的共享组件 StationSelectorSheet）
   Future<(int, String)?> _showStationSelector() async {
     final completer = Completer<(int, String)?>();
@@ -298,7 +323,28 @@ class _DeviceActionSheetState extends State<DeviceActionSheet>
     final model = (widget.device['model'] ?? '').toString();
     final hasStation = widget.stationId != null;
 
-    return Container(
+    // 绑定/换绑/解绑/移除结果反馈：成功绿色、失败红色（sheet pop 前 emit 也能捕获，sn 匹配避免误报）
+    return BlocListener<station_bloc.StationBloc, station_bloc.StationState>(
+      listener: (context, state) {
+        if (state is station_bloc.DeviceBindSuccess && state.sn == _sn) {
+          _showResultSnackBar(l10n.str('device_bound'), success: true);
+        } else if (state is station_bloc.DeviceRebindSuccess &&
+            state.sn == _sn) {
+          _showResultSnackBar(l10n.str('device_rebound'), success: true);
+        } else if (state is station_bloc.DeviceUnbindSuccess &&
+            state.sn == _sn) {
+          _showResultSnackBar(l10n.str('device_unbound'), success: true);
+        } else if (state is station_bloc.DeviceDeleteSuccess &&
+            state.sn == _sn) {
+          _showResultSnackBar(l10n.str('device_deleted'), success: true);
+        } else if (state is station_bloc.StationError) {
+          _showResultSnackBar(
+            l10n.str('device_action_failed', {'message': state.message}),
+            success: false,
+          );
+        }
+      },
+      child: Container(
       decoration: BoxDecoration(
         color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
@@ -408,29 +454,30 @@ class _DeviceActionSheetState extends State<DeviceActionSheet>
                   onTap: () => _bindOrRebind(l10n),
                 ),
               ),
-              _animatedItem(
-                3,
-                _buildActionItem(
-                  icon: Icons.link_off_rounded,
-                  color: AppColors.error,
-                  title: l10n.unbind,
-                  subtitle: l10n.str('device_action_unbind_hint'),
-                  onTap: () => _confirmUnbind(l10n),
+              if (hasStation)
+                _animatedItem(
+                  3,
+                  _buildActionItem(
+                    icon: Icons.link_off_rounded,
+                    color: AppColors.error,
+                    title: l10n.unbind,
+                    subtitle: l10n.str('device_action_unbind_hint'),
+                    onTap: () => _confirmUnbind(l10n),
+                  ),
                 ),
-              ),
               _animatedItem(
-                4,
+                hasStation ? 4 : 3,
                 _buildActionItem(
                   icon: Icons.delete_outline_rounded,
                   color: AppColors.error,
-                  title: l10n.deleteDevice,
+                  title: l10n.str('remove_device'),
                   subtitle: l10n.str('device_action_delete_hint'),
                   onTap: () => _confirmDelete(l10n),
                 ),
               ),
               SizedBox(height: 14.h),
               _animatedItem(
-                5,
+                hasStation ? 5 : 4,
                 Material(
                   color: AppColor.surfaceHover(context),
                   borderRadius: BorderRadius.circular(14.r),
@@ -458,6 +505,7 @@ class _DeviceActionSheetState extends State<DeviceActionSheet>
         ),
         ),
       ),
-    );
+    ),
+  );
   }
 }

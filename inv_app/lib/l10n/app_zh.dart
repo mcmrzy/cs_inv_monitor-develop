@@ -101,8 +101,9 @@ const Map<String, String> zh = {
   'device_order_saved': '设备排序已保存',
   'unbind': '解绑',
   'device_action_unbind_hint': '从当前电站解绑该设备',
-  'device_action_delete_hint': '删除后无法恢复',
+  'device_action_delete_hint': '移除后无法恢复',
   'remove_device': '移除设备',
+  'confirm_remove_device': '确认移除该设备吗？移除后无法恢复。',
   'bind_to_station': '绑定电站',
   'device_action_bind_hint': '将设备绑定到指定电站',
   'device_action_rebind_hint': '更换设备所属电站',
@@ -394,6 +395,7 @@ const Map<String, String> zh = {
   'firmware_verify_failed': '固件校验失败',
   'firmware_corrupted_hint': '固件文件可能已损坏，请重新下载',
   'redownload': '重新下载',
+  'downloaded_firmware_list': '已下载固件',
   'configure_control_fields_hint': '请在后台管理页面配置设备型号的控制字段',
   'device_offline_warning': '设备离线，控制命令可能无法送达',
   'command_send_failed': '命令发送失败: {error}',
@@ -945,6 +947,7 @@ const Map<String, String> zh = {
   'err_device_quota_reached': '设备数量已达组织配额上限',
   'err_unbind_request_failed': '申请解绑失败，请稍后重试',
   'err_unbind_request_pending': '该设备已有待审核的解绑请求',
+  'device_action_failed': '操作失败：{message}',
   'err_permission_denied': '无权限执行此操作',
   'err_admin_only': '仅管理员可执行此操作',
 
@@ -1012,6 +1015,7 @@ const Map<String, String> zh = {
 
   // 设备搜索
   'search_device_hint': '搜索设备名称/SN',
+  'no_search_results': '未找到匹配的设备',
   'page_not_found': '页面未找到',
   'arm_firmware': 'ARM固件',
   'search_stations_hint': '搜索电站名称',
