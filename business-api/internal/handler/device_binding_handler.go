@@ -21,6 +21,7 @@ type BindDeviceRequest struct {
 	SN        string `json:"sn" binding:"required"`
 	StationID int64  `json:"station_id"`
 	DeviceKey string `json:"device_key"` // 可选：App 本地生成（新客户端，BLE 登记制）
+	Pin       string `json:"pin" binding:"required"` // 必填：设备铭牌 PIN（所有权证明，防抢绑）
 }
 
 // Bind binds a device to the current user.
@@ -65,7 +66,7 @@ func (h *DeviceHandler) Bind(c *gin.Context) {
 		return
 	}
 
-	if err := h.deviceService.Bind(c.Request.Context(), req.SN, userID, req.StationID, req.DeviceKey); err != nil {
+	if err := h.deviceService.Bind(c.Request.Context(), req.SN, userID, req.StationID, req.DeviceKey, req.Pin); err != nil {
 		var appErr *apperr.AppError
 		if errors.As(err, &appErr) {
 			// 业务错误（如 invalid device_key）按自身 HTTP/业务码返回
@@ -335,7 +336,7 @@ func (h *DeviceHandler) ImportExcel(c *gin.Context) {
 			continue
 		}
 
-		if err := h.deviceService.Bind(c.Request.Context(), sn, userID, stationID, ""); err != nil {
+		if err := h.deviceService.BindDirect(c.Request.Context(), sn, userID, stationID, ""); err != nil {
 			failedCount++
 			importErrors = append(importErrors, fmt.Sprintf("第%d行: 绑定失败: %s - %s", i+1, sn, err.Error()))
 			continue

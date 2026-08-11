@@ -64,14 +64,16 @@ class DeviceParamsUpdateRequested extends DeviceEvent {
 class DeviceBindRequested extends DeviceEvent {
   final String sn;
   final int? stationId;
+  final String? pin;
 
   const DeviceBindRequested({
     required this.sn,
     this.stationId,
+    this.pin,
   });
 
   @override
-  List<Object?> get props => [sn, stationId];
+  List<Object?> get props => [sn, stationId, pin];
 }
 
 class DeviceUnbindRequested extends DeviceEvent {

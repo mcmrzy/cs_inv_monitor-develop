@@ -178,22 +178,47 @@ class _AddDevicePageState extends State<AddDevicePage>
       );
       return;
     }
-    _bindDevice(sn);
+    // 二维码无 PIN → 弹窗要求输入铭牌 PIN（云端绑定同样强制 PIN 校验）
+    await _promptPinAndBind(sn);
   }
 
-  Future<void> _bindDevice(String sn) async {
-    if (!mounted) return;
-    if (_selectedStationId == null) {
-      final result = await _showStationSelector();
-      if (result == null) return;
-      if (!mounted) return;
-      _selectedStationId = result.$1;
-      _selectedStationName = result.$2;
-      setState(() {});
-    }
-    context
-        .read<DeviceBloc>()
-        .add(DeviceBindRequested(sn: sn, stationId: _selectedStationId));
+  /// 扫码/手动二维码无 PIN 时的补充输入：弹窗要求 6 位铭牌 PIN，
+  /// 随后进入 BLE 直连绑定页（后端严格模式：无 PIN 无法绑定）。
+  Future<void> _promptPinAndBind(String sn) async {
+    final controller = TextEditingController();
+    final pin = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(AppLocalizations.of(ctx)!.pinInputTitle),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          maxLength: 6,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          decoration: InputDecoration(
+            hintText: AppLocalizations.of(ctx)!.pinInputHint,
+            counterText: '',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(AppLocalizations.of(ctx)!.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: Text(AppLocalizations.of(ctx)!.confirm),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (pin == null || pin.isEmpty || !mounted) return;
+    _scannedPin = pin;
+    context.push(
+      '/device/qr-bind?sn=${Uri.encodeQueryComponent(sn)}&pin=${Uri.encodeQueryComponent(pin)}',
+    );
   }
 
   Future<(int, String)?> _showStationSelector() async {
@@ -282,15 +307,28 @@ class _AddDevicePageState extends State<AddDevicePage>
       }
     }
 
-    if (pin.isNotEmpty) {
-      // 填了 PIN → BLE 直连绑定（扫描附近设备匹配 SN，离网可用）
-      if (!mounted) return;
-      context.push(
-        '/device/qr-bind?sn=${Uri.encodeQueryComponent(sn)}&pin=${Uri.encodeQueryComponent(pin)}',
+    if (!mounted) return;
+    if (pin.isEmpty) {
+      // PIN 必填（后端严格模式：云端绑定同样强制 PIN 校验，见设计文档 §5.4）
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppLocalizations.of(context)!.pinRequired)),
       );
       return;
     }
-    _bindDevice(sn);
+
+    // 绑定前选择电站（可选，取消则不绑定）
+    if (_selectedStationId == null) {
+      final result = await _showStationSelector();
+      if (result == null) return;
+      if (!mounted) return;
+      _selectedStationId = result.$1;
+      _selectedStationName = result.$2;
+      setState(() {});
+    }
+    if (!mounted) return;
+    context.push(
+      '/device/qr-bind?sn=${Uri.encodeQueryComponent(sn)}&pin=${Uri.encodeQueryComponent(pin)}&station_id=${_selectedStationId ?? ''}',
+    );
   }
 
   @override

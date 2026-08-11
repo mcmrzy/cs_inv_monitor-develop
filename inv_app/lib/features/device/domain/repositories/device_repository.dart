@@ -11,7 +11,7 @@ abstract class DeviceRepository {
   });
   Future<Either<Failure, Map<String, dynamic>>> getDetail(String sn);
   Future<Either<Failure, Map<String, dynamic>>> getRealtimeData(String sn);
-  Future<Either<Failure, void>> bind(String sn, int? stationId);
+  Future<Either<Failure, void>> bind(String sn, int? stationId, {String? pin});
   Future<Either<Failure, void>> unbind(String sn);
   Future<Either<Failure, void>> updateDevice(
     String sn, {

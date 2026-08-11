@@ -117,9 +117,9 @@ class DeviceRepositoryImpl implements DeviceRepository {
   }
 
   @override
-  Future<Either<Failure, void>> bind(String sn, int? stationId) async {
+  Future<Either<Failure, void>> bind(String sn, int? stationId, {String? pin}) async {
     try {
-      final response = await remoteDataSource.bind(sn, stationId);
+      final response = await remoteDataSource.bind(sn, stationId, pin: pin);
       final parsed = _parseData(response, allowEmpty: true);
       return parsed.fold((failure) => Left(failure), (_) => const Right(null));
     } on DioException catch (e) {

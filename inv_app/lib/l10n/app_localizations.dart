@@ -1263,6 +1263,7 @@ class AppLocalizations {
       4009: 'err_email_registered',
       4029: 'err_too_many_attempts',
       5002: 'err_device_already_bound',
+      5010: 'err_invalid_pin',
     };
 
     // 先检查 [code] 格式
@@ -1316,6 +1317,7 @@ class AppLocalizations {
       'invalid request': 'err_invalid_request',
       // 设备绑定/解绑错误消息
       'device already bound': 'err_device_already_bound',
+      'invalid pin': 'err_invalid_pin',
       'device not found': 'err_device_not_found',
       'permission denied': 'err_permission_denied',
       'admin only': 'err_admin_only',
@@ -1477,6 +1479,8 @@ class AppLocalizations {
   String get manualPinDesc => _localizedStrings['manual_pin_desc']!;
   String get qrBindPinRequired => _localizedStrings['qr_bind_pin_required']!;
   String get qrBindBack => _localizedStrings['qr_bind_back']!;
+  String get errInvalidPin => _localizedStrings['err_invalid_pin']!;
+  String get cloudBindFallback => _localizedStrings['cloud_bind_fallback']!;
 }
 
 class _AppLocalizationsDelegate

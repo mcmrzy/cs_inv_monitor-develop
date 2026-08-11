@@ -282,7 +282,7 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     Emitter<DeviceState> emit,
   ) async {
     emit(DeviceLoading());
-    final result = await repository.bind(event.sn, event.stationId);
+    final result = await repository.bind(event.sn, event.stationId, pin: event.pin);
     result.fold(
       (failure) => emit(DeviceError(message: failure.message)),
       (_) => emit(DeviceBindSuccess()),

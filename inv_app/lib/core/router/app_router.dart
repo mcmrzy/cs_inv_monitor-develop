@@ -291,6 +291,7 @@ class AppRouter {
           DeviceQrBindPage(
             sn: state.uri.queryParameters['sn'] ?? '',
             pin: state.uri.queryParameters['pin'] ?? '',
+            stationId: int.tryParse(state.uri.queryParameters['station_id'] ?? ''),
           ),
         ),
       ),
