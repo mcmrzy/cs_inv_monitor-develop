@@ -103,6 +103,11 @@ import 'package:inv_app/core/router/guards/auth_guard.dart';
 
 import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
 
+import 'package:inv_app/features/device/domain/repositories/device_repository.dart';
+
+import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart'
+    as station_bloc;
+
 import 'package:inv_app/features/profile/presentation/widgets/profile_setup_dialog.dart';
 
 import 'package:inv_app/core/services/service_locator.dart';
@@ -218,8 +223,14 @@ class AppRouter {
         name: 'stationDetail',
         pageBuilder: (context, state) {
           final id = int.parse(state.pathParameters['id']!);
+          // 支持 ?tab=devices 直达设备管理 Tab（首页“移除设备”入口）
+          final initialTab =
+              state.uri.queryParameters['tab'] == 'devices' ? 2 : 0;
 
-          return _slidePage(state, StationDetailPage(stationId: id));
+          return _slidePage(
+            state,
+            StationDetailPage(stationId: id, initialTab: initialTab),
+          );
         },
       ),
       GoRoute(
@@ -1122,6 +1133,27 @@ class _DeviceListPageState extends State<DeviceListPage> {
   bool _sortMode = false;
   // 缓存最后一次列表数据：排序/更新产生其他状态时保持页面不闪 loading
   DeviceListLoaded? _cachedList;
+  // 按 sn 缓存的设备详情（列表无 station_id 时按 sn 拉详情补全，供解绑/换绑使用）
+  final Map<String, Map<String, dynamic>> _detailCache = {};
+
+  // 获取设备所属电站 id：列表数据优先，缺失时按 sn 拉详情（含内存缓存）
+  Future<int?> _stationIdForDevice(Map<String, dynamic> device) async {
+    final sn = (device['sn'] ?? '').toString();
+    final listed = device['station_id'];
+    if (listed is int) return listed;
+    if (listed is String) return int.tryParse(listed);
+    final cached = _detailCache[sn];
+    if (cached != null) {
+      final id = cached['station_id'];
+      return id is int ? id : (id is String ? int.tryParse(id) : null);
+    }
+    final detail = await getIt<DeviceRepository>().getDetail(sn);
+    return detail.fold((_) => null, (data) {
+      _detailCache[sn] = data;
+      final id = data['station_id'];
+      return id is int ? id : (id is String ? int.tryParse(id) : null);
+    });
+  }
 
   @override
   void initState() {
@@ -1162,13 +1194,23 @@ class _DeviceListPageState extends State<DeviceListPage> {
           ],
         ),
       ),
-      body: BlocConsumer<DeviceBloc, DeviceState>(
+      body: BlocListener<station_bloc.StationBloc, station_bloc.StationState>(
         listener: (context, state) {
-          // 设备编辑页保存别名/备注后刷新列表
-          if (state is DeviceUpdateSuccess) {
+          // 解绑/删除/绑定/换绑成功后刷新全局设备列表
+          if (state is station_bloc.DeviceUnbindSuccess ||
+              state is station_bloc.DeviceDeleteSuccess ||
+              state is station_bloc.DeviceBindSuccess ||
+              state is station_bloc.DeviceRebindSuccess) {
             context.read<DeviceBloc>().add(const DeviceListRequested());
           }
         },
+        child: BlocConsumer<DeviceBloc, DeviceState>(
+          listener: (context, state) {
+            // 设备编辑页保存别名/备注后刷新列表
+            if (state is DeviceUpdateSuccess) {
+              context.read<DeviceBloc>().add(const DeviceListRequested());
+            }
+          },
         builder: (context, state) {
           if (state is DeviceListLoaded) _cachedList = state;
           final ds = _cachedList;
@@ -1206,16 +1248,20 @@ class _DeviceListPageState extends State<DeviceListPage> {
                   .read<DeviceBloc>()
                   .add(DeviceGlobalReorderRequested(deviceOrder: order));
             },
-            onLongPressDevice: (sn) {
+            onLongPressDevice: (sn) async {
               final device = ds.devices.firstWhere(
                 (d) => (d['sn'] ?? '').toString() == sn,
                 orElse: () => <String, dynamic>{'sn': sn},
               );
-              // 全局设备页无电站上下文：菜单仅编辑/排序（排序入口原在 AppBar 图标）
+              // 列表无 station_id 时按 sn 拉详情补全（内存缓存），供解绑/换绑菜单使用
+              final stationId = await _stationIdForDevice(device);
+              if (!context.mounted) return;
               showModalBottomSheet(
                 context: context,
+                isScrollControlled: true,
                 builder: (ctx) => DeviceActionSheet(
                   device: device,
+                  stationId: stationId,
                   onEnterSortMode: () {
                     if (mounted) setState(() => _sortMode = true);
                   },
@@ -1224,6 +1270,7 @@ class _DeviceListPageState extends State<DeviceListPage> {
             },
           );
         },
+        ),
       ),
     );
   }

@@ -23,8 +23,14 @@ import 'package:inv_app/l10n/app_localizations.dart';
 
 class StationDetailPage extends StatefulWidget {
   final int stationId;
+  /// 初始 Tab（0 总览 / 1 统计 / 2 设备），支持路由直达设备管理
+  final int initialTab;
 
-  const StationDetailPage({super.key, required this.stationId});
+  const StationDetailPage({
+    super.key,
+    required this.stationId,
+    this.initialTab = 0,
+  });
 
   @override
   State<StationDetailPage> createState() => _StationDetailPageState();
@@ -61,7 +67,7 @@ class _StationDetailPageState extends State<StationDetailPage>
           ..repeat();
     _cachedState = null;
     _loadCachedDetailIfAvailable();
-    _activeTabIndex = 0;
+    _activeTabIndex = widget.initialTab;
     _weatherIcon = '\uD83C\uDF1E';
     _weatherTemp = null;
     _mqttSub?.cancel();
@@ -1517,10 +1523,12 @@ class _StationDetailPageState extends State<StationDetailPage>
                   // 保存新的排序顺序到数据库（order 为拖动后的 SN 顺序）
                   context
                       .read<StationBloc>()
-                      .add(DeviceReorderRequested(
-                        stationId: widget.stationId,
-                        deviceOrder: order,
-                      ));
+                      .add(
+                        DeviceReorderRequested(
+                          stationId: widget.stationId,
+                          deviceOrder: order,
+                        ),
+                      );
                 },
                 onLongPressDevice: (sn) {
                   // 长按卡片弹出设备操作菜单（编辑/排序/解绑/删除，携带电站上下文）
@@ -1530,6 +1538,7 @@ class _StationDetailPageState extends State<StationDetailPage>
                   );
                   showModalBottomSheet(
                     context: context,
+                    isScrollControlled: true,
                     builder: (ctx) => DeviceActionSheet(
                       device: device,
                       stationId: widget.stationId,
@@ -1543,7 +1552,8 @@ class _StationDetailPageState extends State<StationDetailPage>
                         if (mounted) {
                           context.read<StationBloc>().add(
                                 StationDetailRequested(
-                                    stationId: widget.stationId),
+                                  stationId: widget.stationId,
+                                ),
                               );
                         }
                       },
