@@ -1,6 +1,6 @@
 export default {
   zh: {
-    'bigScreen.title': '逆变器物联网监控平台',
+    'bigScreen.title': '辰烁科技联网监控平台',
     'bigScreen.onlineRate': '在线率',
     'bigScreen.deviceTotal': '设备总数',
     'bigScreen.deviceOnline': '在线设备',
@@ -79,7 +79,7 @@ export default {
     'bigScreen.stationMonitor': '电站实时监控',
   },
   en: {
-    'bigScreen.title': 'Inverter IoT Monitoring Platform',
+    'bigScreen.title': 'CSERGY Networking Monitoring Platform',
     'bigScreen.onlineRate': 'Online Rate',
     'bigScreen.deviceTotal': 'Total Devices',
     'bigScreen.deviceOnline': 'Online Devices',

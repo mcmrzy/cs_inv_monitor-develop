@@ -1,14 +1,25 @@
 import React, { useEffect, useRef } from 'react'
+import * as echarts from 'echarts'
+import 'echarts-gl'
+import { buildGlobeTextureDataURL } from './worldGeo'
 
 /**
- * RotatingGlobe — 自绘 Canvas 滚动地球
+ * RotatingGlobe — 真实 3D 地球仪（echarts-gl globe 组件）
  *
- * 纯 2D Canvas 正交投影实现，无需 echarts-gl / WebGL：
- * - 深蓝球体径向渐变 + 左上高光
- * - 纬线椭圆 + 经线随自转角度移动（正面亮、背面暗）
- * - 电站光点按球面坐标投影，仅正面可见（背面淡出）
- * - requestAnimationFrame 持续自转
+ * - 使用 echarts-gl 成熟 WebGL 渲染：NASA Blue Marble 真实卫星纹理包裹、
+ *   realistic 光照着色、大气层辉光
+ * - 内置交互：鼠标拖拽旋转、滚轮缩放（viewControl），空闲自动自转
+ * - 双击复位视角
+ * - 电站光点以 scatter3D 投影在球面，按状态着色
+ *
+ * 纹理来源：three-globe（globe.gl）开源包内置 NASA 卫星纹理，
+ * 已随镜像打包至 public/globe/，离线可用；加载失败时回退自绘贴图
  */
+
+// NASA Blue Marble 真实卫星纹理（public 静态资源，随 Docker 镜像分发）
+const EARTH_TEXTURE_URL = `${import.meta.env.BASE_URL}globe/earth-blue-marble.jpg`
+// 法线贴图（海洋/地形凹凸），增强立体感
+const EARTH_NORMAL_URL = `${import.meta.env.BASE_URL}globe/earth-water.png`
 
 export interface GlobeStation {
   id: number | string
@@ -17,170 +28,175 @@ export interface GlobeStation {
   status: number // 0=离线 1=在线 2=故障
 }
 
+export interface GlobeViewState {
+  /** 相机到球心距离（不含球半径） */
+  distance: number
+  alpha: number
+  beta: number
+}
+
 interface RotatingGlobeProps {
   stations?: GlobeStation[]
+  /** 视角变化回调（拖拽/滚轮缩放时触发），用于外部装饰（如光环）联动 */
+  onViewChange?: (state: GlobeViewState) => void
   className?: string
   style?: React.CSSProperties
 }
 
-// 球面点经绕 Y 轴旋转后的正交投影坐标（返回 [x, y, z]，z>0 朝向观察者）
-function projectPoint(latDeg: number, lonDeg: number, rotDeg: number, radius: number): [number, number, number] {
-  const lat = (latDeg * Math.PI) / 180
-  const lon = ((lonDeg + rotDeg) * Math.PI) / 180
-  const x = radius * Math.cos(lat) * Math.sin(lon)
-  const y = -radius * Math.sin(lat)
-  const z = radius * Math.cos(lat) * Math.cos(lon)
-  return [x, y, z]
-}
-
 const STATUS_COLORS: Record<number, string> = {
   0: 'rgba(148,163,184,0.85)',
-  1: 'rgba(0,255,136,0.95)',
-  2: 'rgba(255,77,109,0.95)',
+  1: '#00ff88',
+  2: '#ff4d6d',
 }
 
-const RotatingGlobe: React.FC<RotatingGlobeProps> = ({ stations = [], className, style }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const rotRef = useRef(0)
+const VIEW_RESET = {
+  alpha: 45,
+  beta: 0,
+  distance: 190,
+  autoRotate: true,
+}
+
+const RotatingGlobe: React.FC<RotatingGlobeProps> = ({ stations = [], onViewChange, className, style }) => {
+  const domRef = useRef<HTMLDivElement>(null)
+  const chartRef = useRef<echarts.ECharts | null>(null)
   const stationsRef = useRef<GlobeStation[]>(stations)
+  const onViewChangeRef = useRef(onViewChange)
 
   useEffect(() => {
     stationsRef.current = stations
   }, [stations])
 
   useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
+    onViewChangeRef.current = onViewChange
+  }, [onViewChange])
 
-    let raf = 0
-    let width = 0
-    let height = 0
+  // 初始化图表（一次性）
+  useEffect(() => {
+    const dom = domRef.current
+    if (!dom) return
 
-    const resize = () => {
-      const parent = canvas.parentElement
-      if (!parent) return
-      const dpr = window.devicePixelRatio || 1
-      width = parent.clientWidth
-      height = parent.clientHeight
-      canvas.width = width * dpr
-      canvas.height = height * dpr
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    // 首帧先用自绘贴图兜底渲染，真实卫星纹理加载完成后无缝替换
+    const fallbackTexture = buildGlobeTextureDataURL()
+    const chart = echarts.init(dom)
+    chartRef.current = chart
+
+    chart.setOption({
+      backgroundColor: 'transparent',
+      globe: {
+        globeRadius: 100,
+        baseTexture: fallbackTexture,
+        shading: 'realistic',
+        // PBR 材质：高粗糙度哑光（消除塑料感镜面高光）+ 法线贴图增强立体感
+        realisticMaterial: {
+          roughness: 0.9,
+          metalness: 0,
+          normalTexture: EARTH_NORMAL_URL,
+        },
+        environment: 'none',
+        atmosphere: {
+          show: true,
+          color: '#4d9fff',
+          glowPower: 45,
+          innerGlowPower: 4,
+        },
+        light: {
+          ambient: { intensity: 0.55 },
+          main: { intensity: 1.0, shadow: false, alpha: 45, beta: 15 },
+        },
+        viewControl: {
+          autoRotate: true,
+          autoRotateSpeed: 6,
+          rotateSensitivity: 1,
+          zoomSensitivity: 1.2,
+          panSensitivity: 0,
+          distance: 190,
+          minDistance: 85,
+          maxDistance: 380,
+          alpha: 45,
+          beta: 0,
+          damping: 0.85,
+        },
+      },
+      series: [
+        {
+          type: 'scatter3D',
+          coordinateSystem: 'globe',
+          blendMode: 'lighter',
+          symbolSize: (value: number[], params: { data: number[] }) => {
+            const status = params.data[3]
+            return status === 2 ? 11 : status === 1 ? 9 : 6
+          },
+          itemStyle: {
+            color: (params: { data: number[] }) => {
+              const status = params.data[3]
+              return STATUS_COLORS[status] ?? STATUS_COLORS[1]
+            },
+            opacity: 0.95,
+            borderWidth: 1,
+            borderColor: 'rgba(255,255,255,0.9)',
+          },
+          label: { show: false },
+          data: [],
+        },
+      ],
+    })
+
+    // 预加载 NASA 真实卫星纹理，成功即替换自绘贴图
+    const earthImg = new Image()
+    earthImg.onload = () => {
+      if (chartRef.current === chart) {
+        chart.setOption({ globe: { baseTexture: EARTH_TEXTURE_URL } })
+      }
     }
-    resize()
-    const observer = new ResizeObserver(resize)
-    if (canvas.parentElement) observer.observe(canvas.parentElement)
+    earthImg.src = EARTH_TEXTURE_URL
 
-    const draw = () => {
-      const cx = width / 2
-      const cy = height / 2
-      const R = Math.min(width, height) * 0.38
-      if (R < 10) return
-      const rot = rotRef.current
-
-      ctx.clearRect(0, 0, width, height)
-
-      // ── 球体 ──
-      const sphereGrad = ctx.createRadialGradient(cx - R * 0.35, cy - R * 0.42, R * 0.08, cx, cy, R)
-      sphereGrad.addColorStop(0, 'rgba(59,130,246,0.85)')
-      sphereGrad.addColorStop(0.35, 'rgba(13,50,92,0.92)')
-      sphereGrad.addColorStop(0.75, 'rgba(5,20,45,0.96)')
-      sphereGrad.addColorStop(1, 'rgba(2,10,28,0.98)')
-      ctx.beginPath()
-      ctx.arc(cx, cy, R, 0, Math.PI * 2)
-      ctx.fillStyle = sphereGrad
-      ctx.fill()
-
-      // 球体边缘描光
-      ctx.beginPath()
-      ctx.arc(cx, cy, R, 0, Math.PI * 2)
-      ctx.strokeStyle = 'rgba(0,212,255,0.25)'
-      ctx.lineWidth = 1
-      ctx.stroke()
-
-      // ── 纬线（绕 X 轴的水平圆，正交投影为椭圆）──
-      for (let lat = -60; lat <= 60; lat += 30) {
-        const latRad = (lat * Math.PI) / 180
-        const rx = R * Math.cos(latRad)
-        const ry = R * Math.abs(Math.sin(latRad)) * 0.55 + R * 0.06
-        ctx.beginPath()
-        ctx.ellipse(cx, cy, Math.max(rx, 1), Math.max(ry, 1), 0, 0, Math.PI * 2)
-        ctx.strokeStyle = 'rgba(0,212,255,0.16)'
-        ctx.lineWidth = 1
-        ctx.stroke()
-      }
-
-      // ── 经线（随自转移动，正面亮背面暗）──
-      for (let L = -120; L <= 240; L += 30) {
-        const a = ((L + rot) * Math.PI) / 180
-        const sinA = Math.sin(a)
-        const cosA = Math.cos(a)
-        const front = cosA > 0
-        ctx.beginPath()
-        for (let lat = -90; lat <= 90; lat += 4) {
-          const latRad = (lat * Math.PI) / 180
-          const sx = cx + R * Math.cos(latRad) * sinA
-          const sy = cy - R * Math.sin(latRad)
-          if (lat === -90) ctx.moveTo(sx, sy)
-          else ctx.lineTo(sx, sy)
-        }
-        ctx.strokeStyle = front ? 'rgba(0,212,255,0.28)' : 'rgba(0,212,255,0.08)'
-        ctx.lineWidth = 1
-        ctx.stroke()
-      }
-
-      // ── 电站光点（球面投影，仅正面可见）──
-      for (const s of stationsRef.current) {
-        if (!s.latitude || !s.longitude) continue
-        const [x, y, z] = projectPoint(s.latitude, s.longitude, rot, R)
-        if (z <= 0) continue
-        const sx = cx + x
-        const sy = cy + y
-        const depth = z / R // 0~1，越靠近中心越亮
-        const color = STATUS_COLORS[s.status] ?? STATUS_COLORS[1]
-        const alpha = 0.35 + 0.65 * depth
-
-        // 光晕
-        const glow = ctx.createRadialGradient(sx, sy, 0, sx, sy, 7)
-        glow.addColorStop(0, color.replace(/[\d.]+\)$/, `${(0.45 * alpha).toFixed(2)})`))
-        glow.addColorStop(1, 'rgba(0,0,0,0)')
-        ctx.beginPath()
-        ctx.arc(sx, sy, 7, 0, Math.PI * 2)
-        ctx.fillStyle = glow
-        ctx.fill()
-
-        // 核心点
-        ctx.beginPath()
-        ctx.arc(sx, sy, 2.2, 0, Math.PI * 2)
-        ctx.fillStyle = color
-        ctx.fill()
-        ctx.strokeStyle = 'rgba(255,255,255,0.85)'
-        ctx.lineWidth = 0.8
-        ctx.stroke()
-      }
-
-      // ── 顶部扫光（模拟大气层反光）──
-      const sheen = ctx.createRadialGradient(cx - R * 0.45, cy - R * 0.5, 0, cx - R * 0.45, cy - R * 0.5, R * 0.9)
-      sheen.addColorStop(0, 'rgba(180,225,255,0.10)')
-      sheen.addColorStop(1, 'rgba(180,225,255,0)')
-      ctx.beginPath()
-      ctx.arc(cx, cy, R, 0, Math.PI * 2)
-      ctx.fillStyle = sheen
-      ctx.fill()
-
-      rotRef.current = (rot + 0.25) % 360
-      raf = requestAnimationFrame(draw)
+    // 视角变化（拖拽/缩放）→ 回调外部联动装饰光环
+    const onViewChanged = (e: unknown) => {
+      const state = e as { distance: number; alpha: number; beta: number }
+      onViewChangeRef.current?.({ distance: state.distance, alpha: state.alpha, beta: state.beta })
     }
+    chart.on('globeChangeCamera', onViewChanged)
 
-    raf = requestAnimationFrame(draw)
+    // 双击复位视角
+    const onDblClick = () => {
+      chart.setOption({ globe: { viewControl: { ...VIEW_RESET } } })
+    }
+    dom.addEventListener('dblclick', onDblClick)
+
+    const observer = new ResizeObserver(() => chart.resize())
+    observer.observe(dom)
+
     return () => {
-      cancelAnimationFrame(raf)
+      chart.off('globeChangeCamera', onViewChanged)
+      dom.removeEventListener('dblclick', onDblClick)
       observer.disconnect()
+      chart.dispose()
+      chartRef.current = null
     }
   }, [])
 
-  return <canvas ref={canvasRef} className={className} style={{ width: '100%', height: '100%', ...style }} />
+  // 电站数据更新 → 增量更新光点
+  useEffect(() => {
+    const chart = chartRef.current
+    if (!chart) return
+    chart.setOption({
+      series: [
+        {
+          type: 'scatter3D',
+          coordinateSystem: 'globe',
+          data: stationsRef.current.map((s) => [s.longitude, s.latitude, 0, s.status]),
+        },
+      ],
+    })
+  }, [stations])
+
+  return (
+    <div
+      ref={domRef}
+      className={className}
+      style={{ width: '100%', height: '100%', cursor: 'grab', touchAction: 'none', ...style }}
+    />
+  )
 }
 
 export default React.memo(RotatingGlobe)

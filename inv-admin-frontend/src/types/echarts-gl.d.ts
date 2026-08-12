@@ -1,0 +1,5 @@
+/**
+ * echarts-gl 无官方 TypeScript 声明（@types/echarts-gl 已废弃），
+ * 此处以 any 模块声明放行，配置对象在 RotatingGlobe 中以字面量编写。
+ */
+declare module 'echarts-gl'
