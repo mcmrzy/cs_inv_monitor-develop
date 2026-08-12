@@ -288,20 +288,17 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: PreferredSize(
-        preferredSize: Size.fromHeight(50.h),
-        child: AppBar(
-          title: Text(
-            l10n.firmwareList,
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17.sp),
-          ),
-          centerTitle: true,
-          elevation: 0,
-          scrolledUnderElevation: 0.5,
-          leading: IconButton(
-            icon: Icon(Icons.arrow_back_ios_new_rounded, size: 20.sp),
-            onPressed: () => Navigator.pop(context),
-          ),
+      appBar: AppBar(
+        title: Text(
+          l10n.firmwareList,
+          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17.sp),
+        ),
+        centerTitle: true,
+        elevation: 0,
+        scrolledUnderElevation: 0.5,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios_new_rounded, size: 20.sp),
+          onPressed: () => Navigator.pop(context),
         ),
       ),
       body: BlocConsumer<OtaBloc, OtaState>(
@@ -428,12 +425,16 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
 
   Widget _buildPackageList(BuildContext context, List<dynamic> packages) {
     final l10n = AppLocalizations.of(context)!;
-    return ListView(
+    // 懒构建：固件包数量不定，改用 ListView.builder 按需构建卡片
+    final hasCurrentCard = widget.currentMainVersion.isNotEmpty;
+    final headerOffset = hasCurrentCard ? 1 : 0;
+    return ListView.builder(
       padding: EdgeInsets.all(16.w),
-      children: [
-        // Current version card
-        if (widget.currentMainVersion.isNotEmpty)
-          Container(
+      itemCount: packages.length + headerOffset,
+      itemBuilder: (context, index) {
+        // 当前版本卡片作为列表头部
+        if (hasCurrentCard && index == 0) {
+          return Container(
             padding: EdgeInsets.all(14.w),
             margin: EdgeInsets.only(bottom: 16.h),
             decoration: BoxDecoration(
@@ -482,11 +483,11 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                 ),
               ],
             ),
-          ),
-
-        // Package cards
-        ...packages.map((pkg) => _buildPackageCard(context, pkg)),
-      ],
+          );
+        }
+        // 固件包卡片（当前版本卡片占位后索引偏移一位）
+        return _buildPackageCard(context, packages[index - headerOffset]);
+      },
     );
   }
 

@@ -340,6 +340,7 @@ const Map<String, String> en = {
   'station_not_found': 'Station not found',
   'clear_filter': 'Clear filter',
   'station_count': '{count} stations',
+  'pagination_info': 'Page {page} / {pages}',
   'tap_plus_to_create': 'Tap + to create',
   'pv_inverter_monitor': 'PV Inverter Smart Monitor',
   'add_new_pv_station': 'Add New PV Station',

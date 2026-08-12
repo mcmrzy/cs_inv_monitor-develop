@@ -40,6 +40,8 @@ class _StationDetailPageState extends State<StationDetailPage>
     with TickerProviderStateMixin {
   StationDetailLoaded? _cachedState;
   int _activeTabIndex = 0;
+  // IndexedStack 懒加载：已访问过的 tab 索引集合（初始仅总览 tab 0）
+  final Set<int> _visitedTabs = {0};
   late AnimationController _anim;
   String _weatherIcon = '\uD83C\uDF1E';
   String? _weatherTemp;
@@ -68,6 +70,8 @@ class _StationDetailPageState extends State<StationDetailPage>
     _cachedState = null;
     _loadCachedDetailIfAvailable();
     _activeTabIndex = widget.initialTab;
+    // 路由直达统计/设备 tab 时也标记为已访问，避免懒加载下首帧空白
+    _visitedTabs.add(widget.initialTab);
     _weatherIcon = '\uD83C\uDF1E';
     _weatherTemp = null;
     _mqttSub?.cancel();
@@ -395,8 +399,13 @@ class _StationDetailPageState extends State<StationDetailPage>
                     index: _activeTabIndex,
                     children: [
                       _buildOverviewBody(station),
-                      _buildStatisticsBody(station),
-                      _buildDevicesBody(ds),
+                      // 懒加载：仅已访问过的 tab 才构建，避免未点开的统计/设备 tab 提前拉数据
+                      _visitedTabs.contains(1)
+                          ? _buildStatisticsBody(station)
+                          : const SizedBox.shrink(),
+                      _visitedTabs.contains(2)
+                          ? _buildDevicesBody(ds)
+                          : const SizedBox.shrink(),
                     ],
                   ),
                 ),
@@ -514,7 +523,6 @@ class _StationDetailPageState extends State<StationDetailPage>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Material(
                 color: Colors.transparent,
@@ -1432,7 +1440,11 @@ class _StationDetailPageState extends State<StationDetailPage>
         child: InkWell(
           onTap: () {
             if (i != _activeTabIndex) {
-              setState(() => _activeTabIndex = i);
+              setState(() {
+                _activeTabIndex = i;
+                // 切换前先标记 visited，避免 IndexedStack 下一帧才渲染
+                _visitedTabs.add(i);
+              });
             }
           },
           child: Column(
@@ -1560,6 +1572,12 @@ class _StationDetailPageState extends State<StationDetailPage>
                     ),
                   );
                 },
+                // 下拉刷新：重新拉取电站详情（含设备列表）
+                onRefresh: () async {
+                  context.read<StationBloc>().add(
+                        StationDetailRequested(stationId: widget.stationId),
+                      );
+                },
               ),
             ),
           ],
@@ -1612,6 +1630,8 @@ class _StationDetailPageState extends State<StationDetailPage>
               ),
             ),
           ),
+          // 与统计 tab 保持一致：返回按钮与标题文字间距 4.w
+          SizedBox(width: 4.w),
           Expanded(
             child: Text(
               name,

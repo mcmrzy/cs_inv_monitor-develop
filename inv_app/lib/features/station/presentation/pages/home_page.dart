@@ -10,6 +10,7 @@ import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/widgets/jiggle_once.dart';
 import 'package:inv_app/core/widgets/offline_banner.dart';
+import 'package:inv_app/core/widgets/pagination_bar.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
@@ -29,6 +30,8 @@ class _HomePageState extends State<HomePage> {
   StationSummaryLoaded? _cachedState;
   int _filterIndex = 0;
   bool _showSearch = false;
+  // 电站列表分页页码（1-based）；搜索/筛选切换时重置为 1
+  int _stationPage = 1;
   // 电站拖动排序模式：由长按面板“电站排序”入口开启
   bool _stationSortMode = false;
   // 排序模式下的本地电站顺序（完成时提交后端）
@@ -141,6 +144,7 @@ class _HomePageState extends State<HomePage> {
       _filterIndex = 0;
       _showSearch = false;
       _searchCtl.clear();
+      _stationPage = 1;
       _sortStations = List.of(ds.stations);
     });
   }
@@ -194,6 +198,20 @@ class _HomePageState extends State<HomePage> {
           }
 
           final filtered = _filterStations(ds.stations);
+          // 分页：每页 10 条；不足一页时整页展示（分页栏仅在多页时渲染）
+          final stationPageCount = filtered.isEmpty
+              ? 1
+              : (filtered.length / 10).ceil();
+          final safeStationPage = _stationPage.clamp(1, stationPageCount);
+          final stationPageEnd = safeStationPage * 10 < filtered.length
+              ? safeStationPage * 10
+              : filtered.length;
+          final pagedStations = stationPageCount <= 1
+              ? filtered
+              : filtered.sublist(
+                  (safeStationPage - 1) * 10,
+                  stationPageEnd,
+                );
           final isFromCache = ds.isFromCache;
 
           return Column(
@@ -364,9 +382,19 @@ class _HomePageState extends State<HomePage> {
                           padding: EdgeInsets.symmetric(horizontal: 16.w),
                           sliver: SliverList(
                             delegate: SliverChildBuilderDelegate(
-                              (_, i) => _buildCard(filtered[i]),
-                              childCount: filtered.length,
+                              (_, i) => _buildCard(pagedStations[i]),
+                              childCount: pagedStations.length,
                             ),
+                          ),
+                        ),
+                      // 超过一页才显示分页栏
+                      if (stationPageCount > 1)
+                        SliverToBoxAdapter(
+                          child: PaginationBar(
+                            currentPage: safeStationPage,
+                            totalPages: stationPageCount,
+                            onPageChanged: (p) =>
+                                setState(() => _stationPage = p),
                           ),
                         ),
                       const SliverToBoxAdapter(child: SizedBox(height: 100)),
@@ -420,6 +448,7 @@ class _HomePageState extends State<HomePage> {
                   setState(() {
                     _showSearch = !_showSearch;
                     if (!_showSearch) _searchCtl.clear();
+                    _stationPage = 1;
                   });
                 }),
                 SizedBox(width: 10.w),
@@ -472,7 +501,7 @@ class _HomePageState extends State<HomePage> {
         child: TextField(
           controller: _searchCtl,
           autofocus: true,
-          onChanged: (_) => setState(() {}),
+          onChanged: (_) => setState(() => _stationPage = 1),
           cursorColor: AppColors.primary,
           style: TextStyle(fontSize: 14.sp, color: AppColors.textPrimary),
           decoration: InputDecoration(
@@ -492,7 +521,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                     onPressed: () {
                       _searchCtl.clear();
-                      setState(() {});
+                      setState(() => _stationPage = 1);
                     },
                   )
                 : null,
@@ -548,7 +577,10 @@ class _HomePageState extends State<HomePage> {
               child: Padding(
                 padding: EdgeInsets.symmetric(horizontal: 3.w),
                 child: GestureDetector(
-                  onTap: () => setState(() => _filterIndex = active ? 0 : i),
+                  onTap: () => setState(() {
+                    _filterIndex = active ? 0 : i;
+                    _stationPage = 1;
+                  }),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     curve: Curves.easeOutCubic,

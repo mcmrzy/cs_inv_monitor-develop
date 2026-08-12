@@ -686,28 +686,25 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
       },
       child: Scaffold(
         backgroundColor: AppColor.surfaceHover(context),
-        appBar: PreferredSize(
-          preferredSize: Size.fromHeight(50.h),
-          child: AppBar(
-            title: Text(
-              l10n.deviceDetail,
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17.sp),
-            ),
-            centerTitle: true,
-            elevation: 0,
-            scrolledUnderElevation: 0.5,
-            backgroundColor: AppColor.surfaceContainer(context),
-            foregroundColor: AppColors.textPrimary,
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.refresh_rounded),
-                onPressed: () {
-                  setState(() => _loading = true);
-                  _fetchDeviceDetail();
-                },
-              ),
-            ],
+        appBar: AppBar(
+          title: Text(
+            l10n.deviceDetail,
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17.sp),
           ),
+          centerTitle: true,
+          elevation: 0,
+          scrolledUnderElevation: 0.5,
+          backgroundColor: AppColor.surfaceContainer(context),
+          foregroundColor: AppColors.textPrimary,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh_rounded),
+              onPressed: () {
+                setState(() => _loading = true);
+                _fetchDeviceDetail();
+              },
+            ),
+          ],
         ),
         body: _loading
             ? const Center(child: CircularProgressIndicator())

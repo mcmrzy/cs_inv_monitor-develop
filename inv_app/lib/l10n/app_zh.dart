@@ -340,6 +340,7 @@ const Map<String, String> zh = {
   'station_not_found': '电站不存在',
   'clear_filter': '清除筛选',
   'station_count': '{count} 个电站',
+  'pagination_info': '第 {page} 页 / 共 {pages} 页',
   'tap_plus_to_create': '点击右上角 + 创建',
   'pv_inverter_monitor': '光伏逆变器智能监控',
   'add_new_pv_station': '添加新光伏电站',
