@@ -973,17 +973,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
         child: ListView(
           padding: EdgeInsets.all(16.w),
           children: [
-            // 即时保存提示
-            Padding(
-              padding: EdgeInsets.only(bottom: 12.h),
-              child: Text(
-                l10n.str('profile_auto_save_hint'),
-                style: TextStyle(
-                  fontSize: 13.sp,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ),
+
             _buildAvatarSection(l10n),
             SizedBox(height: 16.h),
             // 所有字段放在一个卡片中

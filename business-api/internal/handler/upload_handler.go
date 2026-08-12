@@ -20,6 +20,10 @@ const (
 	maxAvatarSize   = 2 << 20 // 2 MiB
 	avatarUploadDir = "/data/uploads/avatars"
 	avatarURLPrefix = "/uploads/avatars"
+
+	maxStationImageSize   = 5 << 20 // 5 MiB
+	stationImageUploadDir = "/data/uploads/station-cards"
+	stationImageURLPrefix = "/uploads/station-cards"
 )
 
 var allowedAvatarTypes = map[string]bool{
@@ -42,22 +46,33 @@ func NewUploadHandler(serverURL string) *UploadHandler {
 // UploadAvatar handles avatar image upload.
 // POST /api/v1/upload/avatar
 func (h *UploadHandler) UploadAvatar(c *gin.Context) {
+	h.uploadImage(c, "file", maxAvatarSize, avatarUploadDir, avatarURLPrefix, "avatar")
+}
+
+// UploadStationImage handles station card image upload.
+// POST /api/v1/upload/station-image
+func (h *UploadHandler) UploadStationImage(c *gin.Context) {
+	h.uploadImage(c, "file", maxStationImageSize, stationImageUploadDir, stationImageURLPrefix, "station")
+}
+
+// uploadImage is a generic image upload handler.
+func (h *UploadHandler) uploadImage(c *gin.Context, formKey string, maxSize int64, uploadDir, urlPrefix, prefix string) {
 	userID := middleware.GetUserID(c)
 	if userID <= 0 {
 		response.Error(c, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
-	file, header, err := c.Request.FormFile("file")
+	file, header, err := c.Request.FormFile(formKey)
 	if err != nil {
-		response.Error(c, http.StatusBadRequest, "请选择头像文件")
+		response.Error(c, http.StatusBadRequest, "请选择图片文件")
 		return
 	}
 	defer file.Close()
 
 	// Validate file size
-	if header.Size <= 0 || header.Size > maxAvatarSize {
-		response.Error(c, http.StatusBadRequest, "头像文件大小必须在 1 字节到 2 MiB 之间")
+	if header.Size <= 0 || header.Size > maxSize {
+		response.Error(c, http.StatusBadRequest, fmt.Sprintf("文件大小必须在 1 字节到 %d MiB 之间", maxSize>>20))
 		return
 	}
 
@@ -82,7 +97,7 @@ func (h *UploadHandler) UploadAvatar(c *gin.Context) {
 	}
 
 	// Create upload directory
-	if err := os.MkdirAll(avatarUploadDir, 0755); err != nil {
+	if err := os.MkdirAll(uploadDir, 0755); err != nil {
 		response.Error(c, http.StatusInternalServerError, "创建上传目录失败")
 		return
 	}
@@ -108,8 +123,8 @@ func (h *UploadHandler) UploadAvatar(c *gin.Context) {
 		}
 	}
 
-	filename := fmt.Sprintf("avatar_%d_%s_%d%s", userID, hex.EncodeToString(randBytes), time.Now().UnixMilli(), ext)
-	savePath := filepath.Join(avatarUploadDir, filename)
+	filename := fmt.Sprintf("%s_%d_%s_%d%s", prefix, userID, hex.EncodeToString(randBytes), time.Now().UnixMilli(), ext)
+	savePath := filepath.Join(uploadDir, filename)
 
 	// Sanitize filename to prevent path traversal
 	safeFilename := filepath.Base(filename)
@@ -119,9 +134,9 @@ func (h *UploadHandler) UploadAvatar(c *gin.Context) {
 	}
 
 	// Ensure save path is within upload directory
-	savePath = filepath.Join(avatarUploadDir, safeFilename)
+	savePath = filepath.Join(uploadDir, safeFilename)
 	absSavePath, pathErr := filepath.Abs(savePath)
-	if pathErr != nil || !strings.HasPrefix(absSavePath, avatarUploadDir) {
+	if pathErr != nil || !strings.HasPrefix(absSavePath, uploadDir) {
 		response.Error(c, http.StatusBadRequest, "invalid file path")
 		return
 	}
@@ -133,13 +148,13 @@ func (h *UploadHandler) UploadAvatar(c *gin.Context) {
 	}
 
 	// Build URL - 使用相对路径，通过前端 nginx 代理访问
-	avatarURL := fmt.Sprintf("%s/%s", avatarURLPrefix, filename)
+	imageURL := fmt.Sprintf("%s/%s", urlPrefix, filename)
 
 	c.JSON(http.StatusOK, gin.H{
 		"code":    0,
 		"message": "success",
 		"data": gin.H{
-			"url":      avatarURL,
+			"url":      imageURL,
 			"filename": filename,
 		},
 	})

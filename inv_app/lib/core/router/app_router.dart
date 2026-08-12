@@ -116,6 +116,7 @@ import 'package:inv_app/features/profile/presentation/widgets/profile_setup_dial
 import 'package:inv_app/core/services/service_locator.dart';
 
 import 'package:inv_app/core/widgets/device_list_view.dart';
+import 'package:inv_app/core/widgets/app_toast.dart';
 
 CustomTransitionPage<void> _slidePage(GoRouterState state, Widget child) {
   return CustomTransitionPage<void>(
@@ -757,14 +758,7 @@ class _MainShellState extends State<MainShell> {
 
           _showBrowserDownloadDialog(info);
         } else if (e is! DioException) {
-          ScaffoldMessenger.of(ctx).showSnackBar(
-            SnackBar(
-              content: Text(
-                AppLocalizations.of(ctx)!
-                    .str('download_failed', {'error': e.toString()}),
-              ),
-            ),
-          );
+          AppToast.show(ctx, AppLocalizations.of(ctx)!.str('download_failed', {'error': e.toString()}), type: ToastType.error);
         }
       }
     } finally {
@@ -911,7 +905,7 @@ class _BottomNavBarState extends State<BottomNavBar> {
 
     final currentIndex = _selectedNavIndex(currentPath, navItems);
     final colorScheme = Theme.of(context).colorScheme;
-    final selectedColor = colorScheme.primary;
+    final selectedColor = Theme.of(context).bottomNavigationBarTheme.selectedItemColor ?? colorScheme.primary;
     final unselectedColor = colorScheme.onSurfaceVariant;
 
     return Container(

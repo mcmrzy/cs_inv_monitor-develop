@@ -16,6 +16,7 @@ import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
 import 'package:inv_app/core/services/data_cache_service.dart';
+import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 class HomePage extends StatefulWidget {
@@ -172,12 +173,7 @@ class _HomePageState extends State<HomePage> {
       body: BlocConsumer<StationBloc, StationState>(
         listener: (context, state) {
           if (state is StationReorderSuccess) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content:
-                    Text(AppLocalizations.of(context)!.stationOrderSaved),
-              ),
-            );
+            AppToast.show(context, AppLocalizations.of(context)!.stationOrderSaved, type: ToastType.success);
             context.read<StationBloc>().add(StationSummaryRequested());
           }
         },

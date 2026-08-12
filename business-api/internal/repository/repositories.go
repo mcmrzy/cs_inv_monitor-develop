@@ -502,7 +502,7 @@ const stationListSelectColumns = `id, user_id, name,
 	COALESCE(country, ''), COALESCE(province, ''), COALESCE(city, ''), COALESCE(district, ''),
 	COALESCE(address, ''), COALESCE(capacity, 0), COALESCE(panel_count, 0),
 	COALESCE(latitude, 0), COALESCE(longitude, 0),
-	COALESCE(timezone, 'Asia/Shanghai'), status, created_at, updated_at`
+	COALESCE(timezone, 'Asia/Shanghai'), status, card_image_url, created_at, updated_at`
 
 func NewStationRepository(db *pgxpool.Pool) *StationRepository {
 	return &StationRepository{db: db}
@@ -522,15 +522,15 @@ func (r *StationRepository) HasAccess(ctx context.Context, userID, stationID int
 func (r *StationRepository) Create(ctx context.Context, station *model.Station) error {
 	query := `
 		INSERT INTO stations (user_id, name, country, province, city, district, address, capacity,
-							  panel_count, latitude, longitude, timezone, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
+							  panel_count, latitude, longitude, timezone, status, card_image_url, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW(), NOW())
 		RETURNING id, created_at, updated_at
 	`
 
 	return r.db.QueryRow(ctx, query,
 		station.UserID, station.Name, station.Country, station.Province, station.City, station.District,
 		station.Address, station.Capacity, station.PanelCount,
-		station.Latitude, station.Longitude, station.Timezone, station.Status,
+		station.Latitude, station.Longitude, station.Timezone, station.Status, station.CardImageURL,
 	).Scan(&station.ID, &station.CreatedAt, &station.UpdatedAt)
 }
 
@@ -545,15 +545,16 @@ func (r *StationRepository) Update(ctx context.Context, station *model.Station) 
 		UPDATE stations SET name = $1, country = $2, province = $3, city = $4, district = $5, address = $6,
 							 capacity = $7, panel_count = $8,
 							 peak_price = $9, valley_price = $10,
-							 latitude = $11, longitude = $12, timezone = $13, updated_at = NOW()
-		WHERE id = $14
+							 latitude = $11, longitude = $12, timezone = $13,
+							 card_image_url = $14, updated_at = NOW()
+		WHERE id = $15
 	`
 
 	_, err = tx.Exec(ctx, query,
 		station.Name, station.Country, station.Province, station.City, station.District, station.Address,
 		station.Capacity, station.PanelCount,
 		station.PeakPrice, station.ValleyPrice,
-		station.Latitude, station.Longitude, station.Timezone, station.ID,
+		station.Latitude, station.Longitude, station.Timezone, station.CardImageURL, station.ID,
 	)
 	if err != nil {
 		return err
@@ -600,7 +601,7 @@ func (r *StationRepository) GetByID(ctx context.Context, id int64) (*model.Stati
 			COALESCE(country, ''), COALESCE(province, ''), COALESCE(city, ''), COALESCE(district, ''),
 			COALESCE(address, ''), COALESCE(capacity, 0), COALESCE(panel_count, 0),
 			COALESCE(latitude, 0), COALESCE(longitude, 0),
-			COALESCE(timezone, 'Asia/Shanghai'), status, created_at, updated_at
+			COALESCE(timezone, 'Asia/Shanghai'), status, card_image_url, created_at, updated_at
 		FROM stations WHERE id = $1 AND deleted_at IS NULL
 	`
 
@@ -609,7 +610,7 @@ func (r *StationRepository) GetByID(ctx context.Context, id int64) (*model.Stati
 		&station.ID, &station.UserID, &station.Name, &station.Country, &station.Province, &station.City,
 		&station.District, &station.Address, &station.Capacity, &station.PanelCount,
 		&station.Latitude, &station.Longitude, &station.Timezone,
-		&station.Status, &station.CreatedAt, &station.UpdatedAt,
+		&station.Status, &station.CardImageURL, &station.CreatedAt, &station.UpdatedAt,
 	)
 
 	if err != nil {
@@ -650,7 +651,7 @@ func (r *StationRepository) GetByUserID(ctx context.Context, userID int64, page,
 			&station.ID, &station.UserID, &station.Name, &station.Country, &station.Province, &station.City,
 			&station.District, &station.Address, &station.Capacity, &station.PanelCount,
 			&station.Latitude, &station.Longitude, &station.Timezone,
-			&station.Status, &station.CreatedAt, &station.UpdatedAt,
+			&station.Status, &station.CardImageURL, &station.CreatedAt, &station.UpdatedAt,
 		); err != nil {
 			return nil, 0, err
 		}
@@ -688,7 +689,7 @@ func (r *StationRepository) GetAll(ctx context.Context, page, pageSize int) ([]*
 			&station.ID, &station.UserID, &station.Name, &station.Country, &station.Province, &station.City,
 			&station.District, &station.Address, &station.Capacity, &station.PanelCount,
 			&station.Latitude, &station.Longitude, &station.Timezone,
-			&station.Status, &station.CreatedAt, &station.UpdatedAt,
+			&station.Status, &station.CardImageURL, &station.CreatedAt, &station.UpdatedAt,
 		); err != nil {
 			return nil, 0, err
 		}
@@ -1770,14 +1771,9 @@ func (r *DeviceRepository) MarkStaleDevicesOffline(ctx context.Context, timeoutS
 }
 
 func (r *DeviceRepository) SyncStationStatus(ctx context.Context) error {
+	// 电站 status 仅表示人工启停，不随设备在线状态自动改写
 	_, err := r.db.Exec(ctx, `
-		UPDATE stations SET
-			status = CASE
-				WHEN EXISTS (SELECT 1 FROM devices WHERE devices.station_id = stations.id AND devices.status IN (1, 2) AND devices.deleted_at IS NULL) THEN 1
-				ELSE 0
-			END,
-			updated_at = NOW()
-		WHERE deleted_at IS NULL
+		UPDATE stations SET status = 1, updated_at = NOW() WHERE deleted_at IS NULL
 	`)
 	return err
 }

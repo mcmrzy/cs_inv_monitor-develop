@@ -11,6 +11,7 @@ import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
+import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 class LocalModePage extends StatefulWidget {
@@ -130,12 +131,7 @@ class _LocalModePageState extends State<LocalModePage> {
         if (testOk && mounted) {
           context.push('/device/${device.ssid}');
         } else if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(AppLocalizations.of(context)!.apCommTestFailed),
-              backgroundColor: AppColors.warning,
-            ),
-          );
+          AppToast.show(context, AppLocalizations.of(context)!.apCommTestFailed, type: ToastType.error);
         }
       } else {
         setState(() {

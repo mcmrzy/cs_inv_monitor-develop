@@ -9,6 +9,7 @@ import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart'
     as station_bloc;
 import 'package:inv_app/core/widgets/station_selector_sheet.dart';
+import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 /// 长按设备卡片弹出的操作菜单（交互与长按电站一致）：
@@ -99,21 +100,7 @@ class _DeviceActionSheetState extends State<DeviceActionSheet>
                 height: 44.w,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12.r),
-                  gradient: LinearGradient(
-                    colors: [
-                      color.withValues(alpha: 0.08),
-                      color.withValues(alpha: 0.18),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.04),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
+                  color: color.withValues(alpha: 0.1),
                 ),
                 child: Icon(icon, color: color, size: 22.sp),
               ),
@@ -278,15 +265,10 @@ class _DeviceActionSheetState extends State<DeviceActionSheet>
     Navigator.pop(context);
   }
 
-  // 操作结果 SnackBar 提示（成功绿色、失败红色）
+  // 操作结果 Toast 提示（成功绿色、失败红色）
   void _showResultSnackBar(String message, {required bool success}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: success ? AppColors.success : AppColors.error,
-      ),
-    );
+    AppToast.show(context, message, type: success ? ToastType.success : ToastType.error);
   }
 
   // 电站选择器（复用 add_device_page 提取的共享组件 StationSelectorSheet）
@@ -370,14 +352,7 @@ class _DeviceActionSheetState extends State<DeviceActionSheet>
                     height: 48.w,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(14.r),
-                      gradient: LinearGradient(
-                        colors: [
-                          AppColors.primary.withValues(alpha: 0.08),
-                          AppColors.primary.withValues(alpha: 0.18),
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
+                      color: AppColors.primary.withValues(alpha: 0.1),
                     ),
                     child: Icon(
                       Icons.memory_rounded,

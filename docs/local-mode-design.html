@@ -1,0 +1,1778 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>光伏逆变器监控系统 - 本地模式设计方案</title>
+    <style>
+        :root {
+            --primary: #0D47A1;
+            --primary-light: #1976D2;
+            --primary-bg: #E3F2FD;
+            --success: #2E7D32;
+            --success-bg: #E8F5E9;
+            --warning: #F57C00;
+            --warning-bg: #FFF3E0;
+            --error: #C62828;
+            --error-bg: #FFEBEE;
+            --text-primary: #212121;
+            --text-secondary: #757575;
+            --border: #E0E0E0;
+            --bg: #FAFAFA;
+            --card-bg: #FFFFFF;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text-primary);
+            background: var(--bg);
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 24px;
+        }
+        
+        header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            color: white;
+            padding: 60px 0;
+            margin-bottom: 40px;
+        }
+        
+        header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+        
+        header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-right: 8px;
+            margin-bottom: 8px;
+        }
+        
+        .badge-primary { background: var(--primary-bg); color: var(--primary); }
+        .badge-success { background: var(--success-bg); color: var(--success); }
+        .badge-warning { background: var(--warning-bg); color: var(--warning); }
+        
+        h2 {
+            font-size: 1.8rem;
+            color: var(--primary);
+            margin: 48px 0 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid var(--primary);
+        }
+        
+        h3 {
+            font-size: 1.4rem;
+            color: var(--text-primary);
+            margin: 32px 0 16px;
+        }
+        
+        h4 {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            margin: 24px 0 12px;
+        }
+        
+        p {
+            margin-bottom: 16px;
+            color: var(--text-secondary);
+        }
+        
+        .card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            border: 1px solid var(--border);
+        }
+        
+        .card-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        
+        .card-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 16px;
+            font-size: 1.5rem;
+        }
+        
+        .card-icon-primary { background: var(--primary-bg); }
+        .card-icon-success { background: var(--success-bg); }
+        .card-icon-warning { background: var(--warning-bg); }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+        }
+        
+        .feature-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .feature-list li {
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: flex-start;
+        }
+        
+        .feature-list li:last-child {
+            border-bottom: none;
+        }
+        
+        .feature-list li::before {
+            content: "✓";
+            color: var(--success);
+            font-weight: bold;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 24px 0;
+        }
+        
+        th, td {
+            padding: 14px 16px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        th {
+            background: var(--primary-bg);
+            color: var(--primary);
+            font-weight: 600;
+        }
+        
+        tr:hover {
+            background: #F5F5F5;
+        }
+        
+        code {
+            background: #F5F5F5;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.9rem;
+            color: var(--error);
+        }
+        
+        pre {
+            background: #263238;
+            color: #EEFFFF;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 16px 0;
+        }
+        
+        pre code {
+            background: none;
+            color: inherit;
+            padding: 0;
+        }
+        
+        .diagram {
+            background: var(--card-bg);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            padding: 32px;
+            margin: 24px 0;
+            text-align: center;
+        }
+        
+        .diagram-title {
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 20px;
+        }
+        
+        .flow-box {
+            display: inline-block;
+            padding: 12px 24px;
+            border-radius: 8px;
+            margin: 8px;
+            font-weight: 500;
+        }
+        
+        .flow-primary { background: var(--primary-bg); color: var(--primary); }
+        .flow-success { background: var(--success-bg); color: var(--success); }
+        .flow-warning { background: var(--warning-bg); color: var(--warning); }
+        
+        .arrow {
+            display: inline-block;
+            margin: 0 12px;
+            color: var(--text-secondary);
+        }
+        
+        .phase {
+            border-left: 4px solid var(--primary);
+            padding-left: 20px;
+            margin: 24px 0;
+        }
+        
+        .phase-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        
+        .phase-number {
+            background: var(--primary);
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            margin-right: 12px;
+        }
+        
+        .timeline {
+            position: relative;
+            padding-left: 40px;
+        }
+        
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 15px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: var(--border);
+        }
+        
+        .timeline-item {
+            position: relative;
+            margin-bottom: 32px;
+        }
+        
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -29px;
+            top: 8px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--primary);
+            border: 3px solid var(--card-bg);
+        }
+        
+        .warning-box {
+            background: var(--warning-bg);
+            border-left: 4px solid var(--warning);
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        
+        .info-box {
+            background: var(--primary-bg);
+            border-left: 4px solid var(--primary);
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        
+        .wireframe {
+            background: #F5F5F5;
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            margin: 20px 0;
+        }
+        
+        .wireframe-header {
+            background: var(--primary);
+            color: white;
+            padding: 12px 16px;
+            border-radius: 8px 8px 0 0;
+            margin: -24px -24px 20px;
+            text-align: center;
+            font-weight: 600;
+        }
+        
+        .mock-button {
+            display: inline-block;
+            padding: 10px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            margin: 8px;
+        }
+        
+        .mock-btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+        
+        .mock-btn-outline {
+            background: transparent;
+            border: 2px solid var(--primary);
+            color: var(--primary);
+        }
+        
+        .mock-btn-text {
+            background: transparent;
+            color: var(--text-secondary);
+            text-decoration: underline;
+        }
+        
+        .mock-input {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin: 8px 0;
+            width: 100%;
+            max-width: 400px;
+        }
+        
+        .mock-card {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            margin: 12px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        footer {
+            background: var(--text-primary);
+            color: white;
+            padding: 40px 0;
+            margin-top: 60px;
+            text-align: center;
+        }
+        
+        footer p {
+            color: rgba(255,255,255,0.7);
+        }
+        
+        @media (max-width: 768px) {
+            header h1 {
+                font-size: 1.8rem;
+            }
+            
+            .grid {
+                grid-template-columns: 1fr;
+            }
+            
+            table {
+                font-size: 0.9rem;
+            }
+            
+            th, td {
+                padding: 10px 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div>
+                <span class="badge badge-primary">Flutter App</span>
+                <span class="badge badge-success">v1.0</span>
+                <span class="badge badge-warning">Phase 1-3</span>
+            </div>
+            <h1>光伏逆变器监控系统</h1>
+            <p>本地模式 / 离网模式技术设计方案</p>
+            <p style="margin-top: 16px; opacity: 0.8;">文档版本: 1.0 | 最后更新: 2026年8月12日</p>
+        </div>
+    </header>
+    
+    <div class="container">
+        <!-- 1. 概述 -->
+        <section id="overview">
+            <h2>1. 概述</h2>
+            
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon card-icon-primary">🎯</div>
+                    <div>
+                        <h3 style="margin: 0;">1.1 项目目标</h3>
+                    </div>
+                </div>
+                <p>实现光伏逆变器监控系统的<strong>本地模式/离网模式</strong>，使用户无需连接后端云服务即可管理和监控设备。该模式适用于以下场景：</p>
+                <ul class="feature-list">
+                    <li>无网络环境：偏远地区、地下室等无互联网覆盖的场所</li>
+                    <li>设备现场调试：工程师现场维护、首次配置设备</li>
+                    <li>网络故障：云端服务不可用时的应急方案</li>
+                    <li>数据隐私：敏感场景下不希望数据上传云端</li>
+                </ul>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon card-icon-success">👤</div>
+                    <div>
+                        <h3 style="margin: 0;">1.2 目标用户</h3>
+                    </div>
+                </div>
+                <div class="grid">
+                    <div>
+                        <h4>现场工程师</h4>
+                        <ul class="feature-list">
+                            <li>设备安装调试</li>
+                            <li>故障排查</li>
+                            <li>固件升级</li>
+                            <li>参数配置</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4>终端用户</h4>
+                        <ul class="feature-list">
+                            <li>查看实时发电数据</li>
+                            <li>基础设备控制</li>
+                            <li>离线数据查看</li>
+                            <li>设备状态监控</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="info-box">
+                <strong>现有基础：</strong>项目已实现WiFi AP设备发现（<code>LocalDiscoveryService</code>）、mDNS局域网发现（<code>MDNSDiscoveryService</code>）和连接模式切换（<code>ConnectionModeService</code>）。本方案在此基础上扩展BLE支持和免登录入口。
+            </div>
+        </section>
+        
+        <!-- 2. 架构设计 -->
+        <section id="architecture">
+            <h2>2. 架构设计</h2>
+            
+            <div class="card">
+                <h3>2.1 连接模式枚举</h3>
+                <p>扩展现有 <code>ConnectionMode</code> 枚举，支持三种连接模式：</p>
+                
+                <pre><code>enum ConnectionMode {
+  remote,      // 远程模式 - 云端API
+  localWifi,   // 本地WiFi - AP直连/局域网
+  localBle,    // 本地BLE - 蓝牙低功耗
+}
+
+// 连接状态
+enum ConnectionState {
+  disconnected,
+  connecting,
+  connected,
+  error,
+}
+
+// 设备发现方式
+enum DiscoveryMethod {
+  wifiAp,      // WiFi热点扫描
+  mdns,        // mDNS局域网发现
+  ble,         // BLE蓝牙扫描
+}</code></pre>
+            </div>
+            
+            <div class="card">
+                <h3>2.2 认证绕过策略</h3>
+                <p>通过 <code>AuthGuard</code> 白名单机制实现本地模式免登录：</p>
+                
+                <pre><code>class AuthGuard {
+  // 公开路由 - 无需认证
+  static final List&lt;String&gt; _publicRoutes = [
+    '/splash',
+    '/onboarding',
+    '/login',
+    '/register',
+    '/forgot-password',
+    '/local-mode',  // 新增：本地模式入口
+  ];
+  
+  // 本地模式路由 - 标记后可免登录访问
+  static final List&lt;String&gt; _localModeRoutes = [
+    '/home',
+    '/devices',
+    '/device/',           // 设备详情
+    '/local-mode',
+    '/local-device/',     // 本地设备详情
+    '/local-settings',
+  ];
+  
+  static Future&lt;String?&gt; redirect(
+    BuildContext context, 
+    GoRouterState state,
+  ) async {
+    final currentPath = state.matchedLocation;
+    
+    // 公开路由直接放行
+    if (_publicRoutes.contains(currentPath)) {
+      return null;
+    }
+    
+    // 检查是否处于本地模式
+    final storageService = getIt&lt;StorageService&gt;();
+    final isLocalMode = await storageService.getIsLocalMode();
+    
+    if (isLocalMode && _localModeRoutes.any(
+      (route) => currentPath.startsWith(route)
+    )) {
+      return null; // 本地模式下放行
+    }
+    
+    // 其他路由需要认证
+    final token = await storageService.getToken();
+    if (token == null || token.isEmpty) {
+      return '/login';
+    }
+    
+    return null;
+  }
+}</code></pre>
+            </div>
+            
+            <div class="diagram">
+                <div class="diagram-title">系统架构图</div>
+                <div style="display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 16px;">
+                    <div class="flow-box flow-primary">用户界面层<br><small>Flutter Widget</small></div>
+                    <span class="arrow">→</span>
+                    <div class="flow-box flow-success">业务逻辑层<br><small>BLoC / Service</small></div>
+                    <span class="arrow">→</span>
+                    <div class="flow-box flow-warning">通信层<br><small>HTTP / BLE / MQTT</small></div>
+                    <span class="arrow">→</span>
+                    <div class="flow-box flow-primary">设备层<br><small>逆变器 / 采集器</small></div>
+                </div>
+                <div style="margin-top: 24px;">
+                    <div class="flow-box flow-success">云端API</div>
+                    <span class="arrow">←→</span>
+                    <div class="flow-box flow-warning">本地缓存</div>
+                    <span class="arrow">←→</span>
+                    <div class="flow-box flow-primary">SQLite</div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h3>2.3 数据流对比</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>特性</th>
+                            <th>在线模式 (Remote)</th>
+                            <th>本地WiFi模式</th>
+                            <th>本地BLE模式</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>认证方式</td>
+                            <td>JWT Token</td>
+                            <td>设备密码 / 无</td>
+                            <td>BLE配对</td>
+                        </tr>
+                        <tr>
+                            <td>通信协议</td>
+                            <td>HTTPS + MQTT</td>
+                            <td>HTTP / mDNS</td>
+                            <td>GATT / BLE</td>
+                        </tr>
+                        <tr>
+                            <td>数据存储</td>
+                            <td>云端数据库</td>
+                            <td>设备本地 + App缓存</td>
+                            <td>设备本地 + App缓存</td>
+                        </tr>
+                        <tr>
+                            <td>实时性</td>
+                            <td>高 (MQTT推送)</td>
+                            <td>中 (轮询)</td>
+                            <td>低 (按需读取)</td>
+                        </tr>
+                        <tr>
+                            <td>带宽需求</td>
+                            <td>中等</td>
+                            <td>局域网高速</td>
+                            <td>极低 (&lt;100KB/s)</td>
+                        </tr>
+                        <tr>
+                            <td>覆盖范围</td>
+                            <td>全球</td>
+                            <td>同一网络</td>
+                            <td>~10米</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        
+        <!-- 3. UI设计 -->
+        <section id="ui-design">
+            <h2>3. UI设计</h2>
+            
+            <div class="card">
+                <h3>3.1 登录页 - 本地模式入口</h3>
+                <p>在登录页底部添加"本地模式"文字链接，作为次要操作，不影响主要登录流程：</p>
+                
+                <div class="wireframe">
+                    <div class="wireframe-header">登录页面 - AuthPage</div>
+                    <div style="text-align: center; padding: 40px 20px;">
+                        <div style="font-size: 2rem; font-weight: 700; color: var(--primary); margin-bottom: 8px;">CSERGY</div>
+                        <div style="color: var(--text-secondary); margin-bottom: 40px;">光伏逆变器智能监控</div>
+                        
+                        <div class="mock-card" style="max-width: 400px; margin: 0 auto;">
+                            <div class="mock-input" style="color: var(--text-secondary);">手机号 / 邮箱</div>
+                            <div class="mock-input" style="color: var(--text-secondary);">••••••••</div>
+                            <div class="mock-button mock-btn-primary" style="width: 100%; text-align: center; margin-top: 16px;">登 录</div>
+                        </div>
+                        
+                        <div style="margin-top: 24px;">
+                            <span style="color: var(--text-secondary);">还没有账号？</span>
+                            <a href="#" style="color: var(--primary); text-decoration: none; font-weight: 600;">立即注册</a>
+                        </div>
+                        
+                        <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--border);">
+                            <div class="mock-button mock-btn-text">
+                                📡 本地模式 / 离网模式
+                            </div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 8px;">
+                                无需登录，直接连接设备
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <pre><code>// auth_page.dart - 添加本地模式入口
+Widget _buildLocalModeEntry() {
+  return Padding(
+    padding: EdgeInsets.only(top: 32.h),
+    child: Column(
+      children: [
+        Divider(
+          color: AppColor.border(context),
+          height: 1,
+        ),
+        SizedBox(height: 24.h),
+        TextButton.icon(
+          onPressed: () {
+            // 设置本地模式标记
+            context.read&lt;ConnectionModeService&gt;().switchToLocal();
+            // 跳转到本地模式首页
+            context.go('/local-mode');
+          },
+          icon: Icon(
+            Icons.wifi_tethering,
+            size: 20.sp,
+            color: AppColors.textSecondary,
+          ),
+          label: Text(
+            '本地模式 / 离网模式',
+            style: TextStyle(
+              fontSize: 14.sp,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ),
+        SizedBox(height: 8.h),
+        Text(
+          '无需登录，直接连接设备',
+          style: TextStyle(
+            fontSize: 12.sp,
+            color: AppColors.textHint,
+          ),
+        ),
+      ],
+    ),
+  );
+}</code></pre>
+            </div>
+            
+            <div class="card">
+                <h3>3.2 本地模式首页</h3>
+                <p>展示已发现设备列表，支持扫描和连接操作：</p>
+                
+                <div class="wireframe">
+                    <div class="wireframe-header">本地模式首页 - LocalModePage</div>
+                    <div style="padding: 16px;">
+                        <!-- 模式切换 -->
+                        <div style="background: white; border-radius: 12px; padding: 16px; display: flex; align-items: center; margin-bottom: 16px;">
+                            <div style="width: 40px; height: 40px; background: var(--success-bg); border-radius: 10px; display: flex; align-items: center; justify-content: center;">📶</div>
+                            <div style="margin-left: 12px; flex: 1;">
+                                <div style="font-weight: 600;">本地模式</div>
+                                <div style="font-size: 0.8rem; color: var(--text-secondary);">直连设备AP</div>
+                            </div>
+                            <div style="width: 48px; height: 28px; background: var(--success); border-radius: 14px; position: relative;">
+                                <div style="width: 24px; height: 24px; background: white; border-radius: 12px; position: absolute; top: 2px; right: 2px;"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- 扫描按钮 -->
+                        <div class="mock-button mock-btn-primary" style="width: 100%; text-align: center;">
+                            🔍 扫描设备
+                        </div>
+                        
+                        <!-- 设备列表 -->
+                        <div style="margin-top: 16px;">
+                            <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 12px;">
+                                WiFi AP设备 (2)
+                            </div>
+                            
+                            <div class="mock-card">
+                                <div style="display: flex; align-items: center;">
+                                    <div style="width: 40px; height: 40px; background: var(--primary-bg); border-radius: 10px; display: flex; align-items: center; justify-content: center;">📶</div>
+                                    <div style="margin-left: 12px; flex: 1;">
+                                        <div style="font-weight: 600;">CS-INV-A1B2C3</div>
+                                        <div style="font-size: 0.75rem; color: var(--text-secondary);">信号强度: ████░ -45dBm</div>
+                                    </div>
+                                    <div style="color: var(--text-secondary);">›</div>
+                                </div>
+                            </div>
+                            
+                            <div class="mock-card">
+                                <div style="display: flex; align-items: center;">
+                                    <div style="width: 40px; height: 40px; background: var(--success-bg); border-radius: 10px; display: flex; align-items: center; justify-content: center;">🌐</div>
+                                    <div style="margin-left: 12px; flex: 1;">
+                                        <div style="font-weight: 600;">INV-Solar-01</div>
+                                        <div style="font-size: 0.75rem; color: var(--text-secondary);">192.168.1.100 · SN: CS2026001</div>
+                                    </div>
+                                    <div style="color: var(--text-secondary);">›</div>
+                                </div>
+                            </div>
+                            
+                            <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin: 16px 0 12px;">
+                                局域网设备 (1)
+                            </div>
+                            
+                            <div class="mock-card">
+                                <div style="display: flex; align-items: center;">
+                                    <div style="width: 40px; height: 40px; background: var(--warning-bg); border-radius: 10px; display: flex; align-items: center; justify-content: center;">📡</div>
+                                    <div style="margin-left: 12px; flex: 1;">
+                                        <div style="font-weight: 600;">BLE-Inverter-03</div>
+                                        <div style="font-size: 0.75rem; color: var(--text-secondary);">蓝牙连接 · 信号: ███░░</div>
+                                    </div>
+                                    <div style="color: var(--text-secondary);">›</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h3>3.3 本地设备详情页</h3>
+                <p>展示设备实时数据和基础控制功能：</p>
+                
+                <div class="wireframe">
+                    <div class="wireframe-header">设备详情 - LocalDevicePage</div>
+                    <div style="padding: 16px;">
+                        <div style="display: flex; align-items: center; margin-bottom: 20px;">
+                            <div style="width: 48px; height: 48px; background: var(--primary-bg); border-radius: 12px; display: flex; align-items: center; justify-content: center;">☀️</div>
+                            <div style="margin-left: 12px;">
+                                <div style="font-weight: 600; font-size: 1.1rem;">CS-INV-A1B2C3</div>
+                                <div style="font-size: 0.8rem; color: var(--success);">● 已连接</div>
+                            </div>
+                        </div>
+                        
+                        <!-- 实时数据卡片 -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px;">
+                            <div class="mock-card" style="text-align: center;">
+                                <div style="font-size: 0.75rem; color: var(--text-secondary);">当前功率</div>
+                                <div style="font-size: 1.5rem; font-weight: 700; color: var(--primary);">3.2 kW</div>
+                            </div>
+                            <div class="mock-card" style="text-align: center;">
+                                <div style="font-size: 0.75rem; color: var(--text-secondary);">今日发电</div>
+                                <div style="font-size: 1.5rem; font-weight: 700; color: var(--success);">12.5 kWh</div>
+                            </div>
+                            <div class="mock-card" style="text-align: center;">
+                                <div style="font-size: 0.75rem; color: var(--text-secondary);">直流电压</div>
+                                <div style="font-size: 1.2rem; font-weight: 600;">580V</div>
+                            </div>
+                            <div class="mock-card" style="text-align: center;">
+                                <div style="font-size: 0.75rem; color: var(--text-secondary);">机内温度</div>
+                                <div style="font-size: 1.2rem; font-weight: 600;">45°C</div>
+                            </div>
+                        </div>
+                        
+                        <!-- 操作按钮 -->
+                        <div style="display: flex; gap: 12px;">
+                            <div class="mock-button mock-btn-outline" style="flex: 1; text-align: center;">刷新数据</div>
+                            <div class="mock-button mock-btn-primary" style="flex: 1; text-align: center;">设备设置</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- 4. 设备发现与连接 -->
+        <section id="device-discovery">
+            <h2>4. 设备发现与连接</h2>
+            
+            <div class="card">
+                <h3>4.1 WiFi AP模式</h3>
+                <p>扫描设备自身开启的WiFi热点，直接连接进行通信：</p>
+                
+                <div class="diagram">
+                    <div class="diagram-title">WiFi AP连接流程</div>
+                    <div style="display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 8px;">
+                        <div class="flow-box flow-primary">App启动扫描</div>
+                        <span class="arrow">→</span>
+                        <div class="flow-box flow-success">发现CS-INV_*热点</div>
+                        <span class="arrow">→</span>
+                        <div class="flow-box flow-warning">连接热点</div>
+                        <span class="arrow">→</span>
+                        <div class="flow-box flow-primary">HTTP请求192.168.4.1</div>
+                        <span class="arrow">→</span>
+                        <div class="flow-box flow-success">获取设备数据</div>
+                    </div>
+                </div>
+                
+                <pre><code>// 已有实现 - LocalDiscoveryService
+class LocalDiscoveryService {
+  // 扫描CS-INV设备AP
+  Future&lt;List&lt;DiscoveredDevice&gt;&gt; scanCSInvAPs() async {
+    final results = await scanWifiNetworks();
+    return results
+      .where((ap) => ap.ssid.startsWith('CS-INV') || 
+                     ap.ssid.startsWith('CS_INV'))
+      .map((ap) => DiscoveredDevice(
+        ssid: ap.ssid,
+        rssi: ap.level,
+        isEncrypted: ap.capabilities.contains('WPA'),
+      ))
+      .toList();
+  }
+  
+  // 连接设备AP
+  Future&lt;bool&gt; connectToAP(String ssid, {String? password}) async {
+    return await WiFiForIoTPlugin.connect(
+      ssid,
+      password: password ?? '',
+      withInternet: false,
+    );
+  }
+}</code></pre>
+                
+                <div class="info-box">
+                    <strong>已有实现：</strong><code>LocalDiscoveryService</code> 已完成WiFi AP扫描和连接功能，支持信号强度显示和加密检测。
+                </div>
+            </div>
+            
+            <div class="card">
+                <h3>4.2 mDNS模式</h3>
+                <p>在局域网内通过mDNS协议发现设备：</p>
+                
+                <pre><code>// 已有实现 - MDNSDiscoveryService
+class MDNSDiscoveryService {
+  // 发现局域网设备
+  Future&lt;List&lt;MDNSDevice&gt;&gt; discoverInvServices() async {
+    // 扫描 _http._tcp 和 _inv._tcp 服务
+    final httpDevices = await discoverServices(
+      serviceType: '_http._tcp',
+    );
+    final invDevices = await discoverServices(
+      serviceType: '_inv._tcp',
+    );
+    return [...httpDevices, ...invDevices];
+  }
+}
+
+// 设备数据模型
+class MDNSDevice {
+  final String name;      // 设备名称
+  final String host;      // IP地址
+  final int port;         // 端口号
+  final String? sn;       // 序列号
+}</code></pre>
+                
+                <table>
+                    <thead>
+                        <tr>
+                            <th>mDNS服务类型</th>
+                            <th>描述</th>
+                            <th>用途</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>_http._tcp</code></td>
+                            <td>HTTP服务</td>
+                            <td>Web管理界面</td>
+                        </tr>
+                        <tr>
+                            <td><code>_inv._tcp</code></td>
+                            <td>逆变器服务</td>
+                            <td>设备数据接口</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="card">
+                <h3>4.3 BLE模式（新增）</h3>
+                <p>通过蓝牙低功耗协议连接设备，适用于无WiFi环境：</p>
+                
+                <div class="warning-box">
+                    <strong>新增需求：</strong>项目已集成 <code>flutter_blue_ultra</code> 依赖，需实现BLE通信服务。
+                </div>
+                
+                <pre><code>// 新增 - BLE通信服务
+class BleCommunicationService {
+  // BLE服务UUID
+  static const String SERVICE_UUID = "0000fff0-0000-1000-8000-00805f9b34fb";
+  static const String CHAR_READ_UUID = "0000fff1-0000-1000-8000-00805f9b34fb";
+  static const String CHAR_WRITE_UUID = "0000fff2-0000-1000-8000-00805f9b34fb";
+  static const String CHAR_NOTIFY_UUID = "0000fff3-0000-1000-8000-00805f9b34fb";
+  
+  FlutterBlueUltra _flutterBlue = FlutterBlueUltra.instance;
+  BluetoothDevice? _connectedDevice;
+  BluetoothCharacteristic? _readChar;
+  BluetoothCharacteristic? _writeChar;
+  
+  // 扫描BLE设备
+  Future&lt;List&lt;BleDevice&gt;&gt; scanDevices({
+    Duration timeout = const Duration(seconds: 10),
+  }) async {
+    final devices = &lt;BleDevice&gt;[];
+    
+    await _flutterBlue.startScan(
+      timeout: timeout,
+      withServices: [Guid(SERVICE_UUID)], // 过滤特定服务
+    );
+    
+    _flutterBlue.scanResults.listen((results) {
+      for (final result in results) {
+        if (result.device.name.startsWith('CS-INV') ||
+            result.device.name.startsWith('INV-')) {
+          devices.add(BleDevice(
+            id: result.device.id.id,
+            name: result.device.name,
+            rssi: result.rssi,
+          ));
+        }
+      }
+    });
+    
+    await _flutterBlue.stopScan();
+    return devices;
+  }
+  
+  // 连接BLE设备
+  Future&lt;bool&gt; connect(String deviceId) async {
+    try {
+      final device = await _flutterBlue.connect(deviceId);
+      _connectedDevice = device;
+      
+      // 发现服务
+      final services = await device.discoverServices();
+      final service = services.firstWhere(
+        (s) => s.uuid.toString() == SERVICE_UUID,
+      );
+      
+      // 获取特征值
+      _readChar = service.characteristics.firstWhere(
+        (c) => c.uuid.toString() == CHAR_READ_UUID,
+      );
+      _writeChar = service.characteristics.firstWhere(
+        (c) => c.uuid.toString() == CHAR_WRITE_UUID,
+      );
+      
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+  
+  // 读取设备数据
+  Future&lt;Map&lt;String, dynamic&gt;&gt; readDeviceData() async {
+    if (_readChar == null) throw Exception('Not connected');
+    
+    final bytes = await _readChar!.read();
+    return _parseDeviceData(bytes);
+  }
+  
+  // 写入控制命令
+  Future&lt;bool&gt; writeCommand(int cmd, List&lt;int&gt; params) async {
+    if (_writeChar == null) throw Exception('Not connected');
+    
+    final bytes = [cmd, ...params];
+    await _writeChar!.write(bytes);
+    return true;
+  }
+  
+  // 解析设备数据
+  Map&lt;String, dynamic&gt; _parseDeviceData(List&lt;int&gt; bytes) {
+    // 解析协议数据
+    return {
+      'power': bytes[0] | (bytes[1] &lt;&lt; 8),      // 当前功率 (W)
+      'voltage': bytes[2] | (bytes[3] &lt;&lt; 8),    // 直流电压 (V)
+      'current': bytes[4] | (bytes[5] &lt;&lt; 8),    // 直流电流 (A)
+      'temp': bytes[6],                           // 温度 (°C)
+      'status': bytes[7],                         // 设备状态
+    };
+  }
+}
+
+// BLE设备模型
+class BleDevice {
+  final String id;
+  final String name;
+  final int rssi;
+  
+  BleDevice({
+    required this.id,
+    required this.name,
+    required this.rssi,
+  });
+}</code></pre>
+                
+                <div class="card">
+                    <h4>BLE GATT服务定义</h4>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>服务/特征</th>
+                                <th>UUID</th>
+                                <th>权限</th>
+                                <th>描述</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>主服务</td>
+                                <td><code>FFF0</code></td>
+                                <td>-</td>
+                                <td>设备信息服务</td>
+                            </tr>
+                            <tr>
+                                <td>读取特征</td>
+                                <td><code>FFF1</code></td>
+                                <td>Read</td>
+                                <td>设备状态数据</td>
+                            </tr>
+                            <tr>
+                                <td>写入特征</td>
+                                <td><code>FFF2</code></td>
+                                <td>Write</td>
+                                <td>控制命令</td>
+                            </tr>
+                            <tr>
+                                <td>通知特征</td>
+                                <td><code>FFF3</code></td>
+                                <td>Notify</td>
+                                <td>实时数据推送</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+        
+        <!-- 5. 数据同步策略 -->
+        <section id="data-sync">
+            <h2>5. 数据同步策略</h2>
+            
+            <div class="card">
+                <h3>5.1 本地设备缓存</h3>
+                <p>使用SQLite存储设备信息和采集数据，支持离线查看：</p>
+                
+                <pre><code>// 数据库表结构
+class LocalDatabase {
+  // 设备表
+  static const String CREATE_DEVICES = '''
+    CREATE TABLE devices (
+      id TEXT PRIMARY KEY,
+      sn TEXT UNIQUE NOT NULL,
+      name TEXT,
+      model TEXT,
+      connection_type TEXT, -- 'wifi_ap', 'mdns', 'ble'
+      ip_address TEXT,
+      mac_address TEXT,
+      last_seen_at INTEGER,
+      created_at INTEGER,
+      synced_at INTEGER,
+      is_pending_sync INTEGER DEFAULT 0
+    )
+  ''';
+  
+  // 采集数据表
+  static const String CREATE_TELEMETRY = '''
+    CREATE TABLE telemetry (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      device_sn TEXT NOT NULL,
+      timestamp INTEGER NOT NULL,
+      power REAL,
+      voltage REAL,
+      current REAL,
+      temperature REAL,
+      daily_energy REAL,
+      status INTEGER,
+      synced INTEGER DEFAULT 0,
+      FOREIGN KEY (device_sn) REFERENCES devices(sn)
+    )
+  ''';
+  
+  // 设备配置表
+  static const String CREATE_CONFIGS = '''
+    CREATE TABLE device_configs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      device_sn TEXT NOT NULL,
+      config_key TEXT NOT NULL,
+      config_value TEXT,
+      updated_at INTEGER,
+      synced INTEGER DEFAULT 0,
+      UNIQUE(device_sn, config_key)
+    )
+  ''';
+}</code></pre>
+            </div>
+            
+            <div class="card">
+                <h3>5.2 同步流程</h3>
+                
+                <div class="diagram">
+                    <div class="diagram-title">数据同步状态机</div>
+                    <div style="display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 8px;">
+                        <div class="flow-box flow-primary">离线采集</div>
+                        <span class="arrow">→</span>
+                        <div class="flow-box flow-warning">标记待同步</div>
+                        <span class="arrow">→</span>
+                        <div class="flow-box flow-success">网络恢复</div>
+                        <span class="arrow">→</span>
+                        <div class="flow-box flow-primary">上传云端</div>
+                        <span class="arrow">→</span>
+                        <div class="flow-box flow-success">同步完成</div>
+                    </div>
+                </div>
+                
+                <h4>在线→离线切换</h4>
+                <pre><code>// 切换到本地模式时保留设备信息
+Future&lt;void&gt; switchToLocalMode() async {
+  final db = getIt&lt;LocalDatabase&gt;();
+  
+  // 1. 保存当前在线设备到本地
+  final onlineDevices = await apiService.getDevices();
+  for (final device in onlineDevices) {
+    await db.upsertDevice(LocalDevice(
+      id: device.id,
+      sn: device.sn,
+      name: device.name,
+      model: device.model,
+      lastSeenAt: DateTime.now(),
+      syncedAt: DateTime.now(),
+    ));
+  }
+  
+  // 2. 标记为本地模式
+  await storageService.saveIsLocalMode(true);
+  
+  // 3. 切换UI状态
+  connectionModeService.switchToLocal();
+}</code></pre>
+                
+                <h4>离线→在线同步（Reconciliation）</h4>
+                <pre><code>// 以SN为键进行数据合并
+Future&lt;void&gt; syncLocalDataToCloud() async {
+  final db = getIt&lt;LocalDatabase&gt;();
+  final api = getIt&lt;ApiService&gt;();
+  
+  // 1. 获取待同步数据
+  final pendingDevices = await db.getPendingSyncDevices();
+  final pendingData = await db.getPendingSyncTelemetry();
+  
+  // 2. 逐个设备同步
+  for (final device in pendingDevices) {
+    try {
+      // 查询云端是否存在
+      final cloudDevice = await api.getDeviceBySN(device.sn);
+      
+      if (cloudDevice == null) {
+        // 云端不存在，创建新设备
+        await api.createDevice(device);
+      } else {
+        // 云端存在，合并数据（云端优先）
+        final merged = _mergeDevice(cloudDevice, device);
+        await api.updateDevice(merged);
+      }
+      
+      // 标记已同步
+      await db.markDeviceSynced(device.sn);
+    } catch (e) {
+      print('Sync failed for ${device.sn}: $e');
+    }
+  }
+  
+  // 3. 同步采集数据
+  for (final data in pendingData) {
+    try {
+      await api.uploadTelemetry(data);
+      await db.markTelemetrySynced(data.id);
+    } catch (e) {
+      print('Telemetry sync failed: $e');
+    }
+  }
+}
+
+// 合并策略：云端优先，本地修改标记pending
+LocalDevice _mergeDevice(CloudDevice cloud, LocalDevice local) {
+  return LocalDevice(
+    id: cloud.id,
+    sn: cloud.sn,
+    name: cloud.name ?? local.name,
+    model: cloud.model ?? local.model,
+    // 本地新增字段标记为pending
+    isPendingSync: local.hasUnsyncedChanges ? 1 : 0,
+  );
+}</code></pre>
+            </div>
+            
+            <div class="card">
+                <h3>5.3 冲突解决策略</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>场景</th>
+                            <th>策略</th>
+                            <th>说明</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>设备信息冲突</td>
+                            <td>云端优先</td>
+                            <td>以云端数据为准，本地修改标记为pending待审核</td>
+                        </tr>
+                        <tr>
+                            <td>采集数据冲突</td>
+                            <td>时间戳合并</td>
+                            <td>相同时间戳的数据取云端值，不同时间戳全部保留</td>
+                        </tr>
+                        <tr>
+                            <td>配置参数冲突</td>
+                            <td>最新优先</td>
+                            <td>以最后修改时间较新的为准</td>
+                        </tr>
+                        <tr>
+                            <td>设备删除冲突</td>
+                            <td>云端优先</td>
+                            <td>云端已删除的设备，本地数据归档处理</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        
+        <!-- 6. 性能与可扩展性 -->
+        <section id="performance">
+            <h2>6. 性能与可扩展性</h2>
+            
+            <div class="grid">
+                <div class="card">
+                    <h3>6.1 设备发现延迟目标</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>发现方式</th>
+                                <th>目标延迟</th>
+                                <th>最大延迟</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>WiFi AP</td>
+                                <td>3-5秒</td>
+                                <td>10秒</td>
+                            </tr>
+                            <tr>
+                                <td>mDNS</td>
+                                <td>2-4秒</td>
+                                <td>8秒</td>
+                            </tr>
+                            <tr>
+                                <td>BLE</td>
+                                <td>5-8秒</td>
+                                <td>15秒</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="card">
+                    <h3>6.2 本地数据缓存上限</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>数据类型</th>
+                                <th>上限</th>
+                                <th>清理策略</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>设备列表</td>
+                                <td>100台</td>
+                                <td>LRU淘汰</td>
+                            </tr>
+                            <tr>
+                                <td>采集数据</td>
+                                <td>7天</td>
+                                <td>按时间滚动</td>
+                            </tr>
+                            <tr>
+                                <td>历史图表</td>
+                                <td>30天</td>
+                                <td>聚合压缩</td>
+                            </tr>
+                            <tr>
+                                <td>数据库总大小</td>
+                                <td>50MB</td>
+                                <td>自动清理</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h3>6.3 BLE带宽约束</h3>
+                <div class="warning-box">
+                    <strong>注意：</strong>BLE理论最大带宽约100KB/s，实际可用约20-50KB/s，需优化数据传输策略。
+                </div>
+                
+                <ul class="feature-list">
+                    <li><strong>数据压缩：</strong>使用二进制协议而非JSON，减少传输字节数</li>
+                    <li><strong>增量更新：</strong>只传输变化的数据字段</li>
+                    <li><strong>批量传输：</strong>合并多个小包为单次传输</li>
+                    <li><strong>优先级队列：</strong>关键数据优先传输（告警、状态变化）</li>
+                    <li><strong>MTU协商：</strong>连接时协商最大传输单元（建议247字节）</li>
+                </ul>
+            </div>
+        </section>
+        
+        <!-- 7. 安全考量 -->
+        <section id="security">
+            <h2>7. 安全考量</h2>
+            
+            <div class="card">
+                <h3>7.1 本地模式安全原则</h3>
+                <ul class="feature-list">
+                    <li><strong>凭据隔离：</strong>本地模式不存储或传输云端JWT Token</li>
+                    <li><strong>最小权限：</strong>本地模式只访问设备基础功能，敏感操作需登录</li>
+                    <li><strong>数据隔离：</strong>本地缓存数据与云端数据逻辑分离</li>
+                    <li><strong>会话管理：</strong>本地模式会话有时间限制，超时需重新连接</li>
+                </ul>
+                
+                <pre><code>// 安全隔离实现
+class SecurityService {
+  // 检查操作权限
+  bool canPerformAction(String action, {bool isLocalMode}) {
+    if (!isLocalMode) return true; // 在线模式全功能
+    
+    // 本地模式限制
+    const allowedInLocal = [
+      'view_realtime_data',
+      'view_device_info',
+      'basic_control',
+      'wifi_config',
+    ];
+    
+    return allowedInLocal.contains(action);
+  }
+  
+  // 敏感操作需登录
+  Future&lt;bool&gt; requireLoginForAction(String action) async {
+    const sensitiveActions = [
+      'change_password',
+      'factory_reset',
+      'firmware_upgrade',
+      'delete_device',
+    ];
+    
+    if (sensitiveActions.contains(action)) {
+      final isAuth = await AuthGuard.isAuthenticated();
+      if (!isAuth) {
+        throw AuthRequiredException('此操作需要登录');
+      }
+      return true;
+    }
+    return false;
+  }
+}</code></pre>
+            </div>
+            
+            <div class="card">
+                <h3>7.2 BLE配对策略</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>配对模式</th>
+                            <th>安全性</th>
+                            <th>用户体验</th>
+                            <th>适用场景</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Just Works</td>
+                            <td>低</td>
+                            <td>最佳</td>
+                            <td>低安全需求设备</td>
+                        </tr>
+                        <tr>
+                            <td>Passkey</td>
+                            <td>中</td>
+                            <td>一般</td>
+                            <td>标准安全设备</td>
+                        </tr>
+                        <tr>
+                            <td>Numeric Comparison</td>
+                            <td>高</td>
+                            <td>较好</td>
+                            <td>推荐默认模式</td>
+                        </tr>
+                        <tr>
+                            <td>OOB (NFC)</td>
+                            <td>最高</td>
+                            <td>最佳</td>
+                            <td>高安全设备</td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <div class="info-box">
+                    <strong>推荐：</strong>默认使用 <strong>Numeric Comparison</strong> 模式，在App和设备上显示相同数字，用户确认后完成配对。
+                </div>
+            </div>
+            
+            <div class="card">
+                <h3>7.3 本地通信加密</h3>
+                <pre><code>// BLE通信加密
+class BleEncryption {
+  // AES-128加密
+  static List&lt;int&gt; encrypt(List&lt;int&gt; data, List&lt;int&gt; key) {
+    final cipher = AES(Key(key), mode: AESMode.cbc);
+    final iv = SecureRandom(16).bytes;
+    final encrypted = cipher.encrypt(data, iv: iv);
+    return [...iv, ...encrypted];
+  }
+  
+  // 解密
+  static List&lt;int&gt; decrypt(List&lt;int&gt; data, List&lt;int&gt; key) {
+    final iv = data.sublist(0, 16);
+    final encrypted = data.sublist(16);
+    final cipher = AES(Key(key), mode: AESMode.cbc);
+    return cipher.decrypt(encrypted, iv: iv);
+  }
+  
+  // 密钥派生
+  static List&lt;int&gt; deriveKey(String deviceId, String salt) {
+    final bytes = utf8.encode(deviceId + salt);
+    return sha256.convert(bytes).bytes.sublist(0, 16);
+  }
+}</code></pre>
+            </div>
+        </section>
+        
+        <!-- 8. 实施路线图 -->
+        <section id="roadmap">
+            <h2>8. 实施路线图</h2>
+            
+            <div class="timeline">
+                <div class="timeline-item">
+                    <div class="card">
+                        <div class="phase-header">
+                            <div class="phase-number">1</div>
+                            <div>
+                                <h3 style="margin: 0;">Phase 1：基础功能整合</h3>
+                                <div class="badge badge-primary">预计 2 周</div>
+                            </div>
+                        </div>
+                        
+                        <h4>目标</h4>
+                        <p>实现登录页本地模式入口，整合现有WiFi/mDNS功能</p>
+                        
+                        <h4>任务清单</h4>
+                        <ul class="feature-list">
+                            <li>修改 <code>auth_page.dart</code> 添加本地模式按钮</li>
+                            <li>扩展 <code>ConnectionMode</code> 枚举支持三种模式</li>
+                            <li>优化 <code>AuthGuard</code> 白名单机制</li>
+                            <li>整合现有 <code>LocalDiscoveryService</code> 和 <code>MDNSDiscoveryService</code></li>
+                            <li>创建本地模式首页 <code>LocalModePage</code> UI</li>
+                            <li>添加本地模式状态指示器</li>
+                        </ul>
+                        
+                        <h4>交付物</h4>
+                        <ul class="feature-list">
+                            <li>登录页新增本地模式入口</li>
+                            <li>WiFi AP设备扫描和连接</li>
+                            <li>mDNS局域网设备发现</li>
+                            <li>基础设备详情页</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="timeline-item">
+                    <div class="card">
+                        <div class="phase-header">
+                            <div class="phase-number">2</div>
+                            <div>
+                                <h3 style="margin: 0;">Phase 2：BLE通信与数据同步</h3>
+                                <div class="badge badge-warning">预计 3 周</div>
+                            </div>
+                        </div>
+                        
+                        <h4>目标</h4>
+                        <p>实现BLE通信层，完成本地数据缓存和同步机制</p>
+                        
+                        <h4>任务清单</h4>
+                        <ul class="feature-list">
+                            <li>实现 <code>BleCommunicationService</code></li>
+                            <li>定义BLE GATT服务和特征值</li>
+                            <li>实现BLE设备扫描和配对</li>
+                            <li>创建SQLite本地数据库</li>
+                            <li>实现设备数据缓存</li>
+                            <li>开发在线/离线切换逻辑</li>
+                            <li>实现数据同步和冲突解决</li>
+                        </ul>
+                        
+                        <h4>交付物</h4>
+                        <ul class="feature-list">
+                            <li>BLE设备发现和连接</li>
+                            <li>本地SQLite数据库</li>
+                            <li>数据同步机制</li>
+                            <li>离线数据查看</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="timeline-item">
+                    <div class="card">
+                        <div class="phase-header">
+                            <div class="phase-number">3</div>
+                            <div>
+                                <h3 style="margin: 0;">Phase 3：高级功能与优化</h3>
+                                <div class="badge badge-success">预计 2 周</div>
+                            </div>
+                        </div>
+                        
+                        <h4>目标</h4>
+                        <p>完善离线功能，优化用户体验</p>
+                        
+                        <h4>任务清单</h4>
+                        <ul class="feature-list">
+                            <li>实现离线历史图表</li>
+                            <li>添加本地告警通知</li>
+                            <li>优化BLE传输性能</li>
+                            <li>实现后台数据同步</li>
+                            <li>添加数据导出功能</li>
+                            <li>性能测试和优化</li>
+                            <li>用户文档编写</li>
+                        </ul>
+                        
+                        <h4>交付物</h4>
+                        <ul class="feature-list">
+                            <li>完整离线功能</li>
+                            <li>性能优化</li>
+                            <li>用户文档</li>
+                            <li>测试报告</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h3>里程碑时间表</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>阶段</th>
+                            <th>开始时间</th>
+                            <th>结束时间</th>
+                            <th>关键交付物</th>
+                            <th>验收标准</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Phase 1</td>
+                            <td>2026-08-15</td>
+                            <td>2026-08-28</td>
+                            <td>本地模式入口 + WiFi/mDNS</td>
+                            <td>可扫描并连接设备</td>
+                        </tr>
+                        <tr>
+                            <td>Phase 2</td>
+                            <td>2026-08-29</td>
+                            <td>2026-09-18</td>
+                            <td>BLE通信 + 数据同步</td>
+                            <td>离线采集可同步</td>
+                        </tr>
+                        <tr>
+                            <td>Phase 3</td>
+                            <td>2026-09-19</td>
+                            <td>2026-10-02</td>
+                            <td>高级功能 + 优化</td>
+                            <td>完整离线体验</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        
+        <!-- 附录 -->
+        <section id="appendix">
+            <h2>附录</h2>
+            
+            <div class="card">
+                <h3>A. 相关文件清单</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>文件路径</th>
+                            <th>描述</th>
+                            <th>状态</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>lib/features/auth/presentation/pages/auth_page.dart</code></td>
+                            <td>登录页</td>
+                            <td>需修改</td>
+                        </tr>
+                        <tr>
+                            <td><code>lib/core/services/connection_mode_service.dart</code></td>
+                            <td>连接模式服务</td>
+                            <td>需扩展</td>
+                        </tr>
+                        <tr>
+                            <td><code>lib/core/router/guards/auth_guard.dart</code></td>
+                            <td>认证守卫</td>
+                            <td>需优化</td>
+                        </tr>
+                        <tr>
+                            <td><code>lib/features/device/presentation/pages/local_mode_page.dart</code></td>
+                            <td>本地模式页</td>
+                            <td>已有，需优化</td>
+                        </tr>
+                        <tr>
+                            <td><code>lib/core/services/local_discovery_service.dart</code></td>
+                            <td>WiFi AP发现</td>
+                            <td>已有</td>
+                        </tr>
+                        <tr>
+                            <td><code>lib/core/services/mdns_discovery_service.dart</code></td>
+                            <td>mDNS发现</td>
+                            <td>已有</td>
+                        </tr>
+                        <tr>
+                            <td><code>lib/core/services/ble_communication_service.dart</code></td>
+                            <td>BLE通信服务</td>
+                            <td>新建</td>
+                        </tr>
+                        <tr>
+                            <td><code>lib/core/database/local_database.dart</code></td>
+                            <td>本地数据库</td>
+                            <td>新建</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="card">
+                <h3>B. 依赖库</h3>
+                <pre><code># pubspec.yaml 已有依赖
+dependencies:
+  flutter_blue_ultra: ^2.2.0  # BLE通信
+  sqflite: ^2.4.2            # SQLite数据库
+  wifi_iot: ^0.3.19          # WiFi AP控制
+  wifi_scan: ^0.4.1+2        # WiFi扫描
+
+# 可能需要添加
+  path_provider: ^2.1.2      # 文件路径
+  crypto: ^3.0.6             # 加密算法</code></pre>
+            </div>
+            
+            <div class="card">
+                <h3>C. API接口设计</h3>
+                <pre><code>// 本地设备HTTP API（设备内置）
+// 基础地址: http://192.168.4.1 (AP模式)
+// 或: http://{device_ip} (局域网模式)
+
+// 获取设备信息
+GET /api/v1/device/info
+Response: {
+  "sn": "CS2026001",
+  "model": "CS-INV-5KW",
+  "firmware": "1.2.3",
+  "mac": "AA:BB:CC:DD:EE:FF"
+}
+
+// 获取实时数据
+GET /api/v1/telemetry/realtime
+Response: {
+  "power": 3200,
+  "voltage": 580,
+  "current": 5.5,
+  "temperature": 45,
+  "daily_energy": 12.5,
+  "status": 1
+}
+
+// 获取历史数据
+GET /api/v1/telemetry/history?start={timestamp}&end={timestamp}
+Response: {
+  "data": [
+    {"timestamp": 1693000000, "power": 3100, "energy": 1.2},
+    ...
+  ]
+}
+
+// 设备控制
+POST /api/v1/device/control
+Body: {
+  "command": "restart",
+  "params": {}
+}
+
+// WiFi配置
+POST /api/v1/wifi/config
+Body: {
+  "ssid": "HomeWiFi",
+  "password": "12345678"
+}</code></pre>
+            </div>
+        </section>
+    </div>
+    
+    <footer>
+        <div class="container">
+            <p>光伏逆变器监控系统 - 本地模式设计方案 v1.0</p>
+            <p style="margin-top: 8px;">© 2026 CSERGY. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

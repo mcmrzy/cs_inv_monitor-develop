@@ -19,6 +19,7 @@ import 'package:inv_app/core/widgets/device_list_view.dart';
 import 'package:inv_app/core/widgets/device_action_sheet.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/core/widgets/energy_statistics_tab.dart';
+import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 class StationDetailPage extends StatefulWidget {
@@ -316,70 +317,32 @@ class _StationDetailPageState extends State<StationDetailPage>
         return BlocListener<StationBloc, StationState>(
           listener: (context, state) {
             if (state is StationDeleteSuccess) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(l10n.str('station_deleted', {})),
-                ),
-              );
+              AppToast.show(context, l10n.str('station_deleted', {}), type: ToastType.info);
               context.pop();
             } else if (state is DeviceUnbindSuccess) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    '${l10n.str('device_unbound', {})} - ${state.sn}',
-                  ),
-                ),
-              );
+              AppToast.show(context, '${l10n.str('device_unbound', {})} - ${state.sn}', type: ToastType.success);
               context.read<StationBloc>().add(
                 StationDetailRequested(stationId: widget.stationId),
               );
             } else if (state is DeviceDeleteSuccess) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    '${l10n.str('device_deleted', {})} - ${state.sn}',
-                  ),
-                ),
-              );
+              AppToast.show(context, '${l10n.str('device_deleted', {})} - ${state.sn}', type: ToastType.success);
               context.read<StationBloc>().add(
                 StationDetailRequested(stationId: widget.stationId),
               );
             } else if (state is DeviceRebindSuccess) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    '${l10n.str('device_rebound', {})} - ${state.sn}',
-                  ),
-                ),
-              );
+              AppToast.show(context, '${l10n.str('device_rebound', {})} - ${state.sn}', type: ToastType.success);
               context.read<StationBloc>().add(
                 StationDetailRequested(stationId: widget.stationId),
               );
             } else if (state is DeviceBindSuccess) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    '${l10n.str('device_bound', {})} - ${state.sn}',
-                  ),
-                ),
-              );
+              AppToast.show(context, '${l10n.str('device_bound', {})} - ${state.sn}', type: ToastType.success);
               context.read<StationBloc>().add(
                 StationDetailRequested(stationId: widget.stationId),
               );
             } else if (state is DeviceReorderSuccess) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    l10n.str('device_order_saved', {}),
-                  ),
-                ),
-              );
+              AppToast.show(context, l10n.str('device_order_saved', {}), type: ToastType.success);
             } else if (state is StationError) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(l10n.translateError(state.message)),
-                ),
-              );
+              AppToast.show(context, l10n.translateError(state.message), type: ToastType.error);
             }
           },
           child: Scaffold(
@@ -520,7 +483,7 @@ class _StationDetailPageState extends State<StationDetailPage>
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 20.w),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Row(
             children: [
@@ -539,6 +502,7 @@ class _StationDetailPageState extends State<StationDetailPage>
                   ),
                 ),
               ),
+              SizedBox(width: 4.w),
               Expanded(
                 child: Text(
                   name,

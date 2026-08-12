@@ -28,25 +28,26 @@ type User struct {
 }
 
 type Station struct {
-	ID          int64      `json:"id"`
-	UserID      int64      `json:"user_id"`
-	Name        string     `json:"name"`
-	Country     string     `json:"country"`
-	Province    string     `json:"province"`
-	City        string     `json:"city"`
-	District    string     `json:"district"`
-	Address     string     `json:"address"`
-	Capacity    float64    `json:"capacity"`
-	PanelCount  int        `json:"panel_count"`
-	PeakPrice   float64    `json:"peak_price"`
-	ValleyPrice float64    `json:"valley_price"`
-	Latitude    float64    `json:"latitude"`
-	Longitude   float64    `json:"longitude"`
-	Timezone    string     `json:"timezone"`
-	Status      int        `json:"status"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
-	DeletedAt   *time.Time `json:"-"`
+	ID           int64      `json:"id"`
+	UserID       int64      `json:"user_id"`
+	Name         string     `json:"name"`
+	Country      string     `json:"country"`
+	Province     string     `json:"province"`
+	City         string     `json:"city"`
+	District     string     `json:"district"`
+	Address      string     `json:"address"`
+	Capacity     float64    `json:"capacity"`
+	PanelCount   int        `json:"panel_count"`
+	PeakPrice    float64    `json:"peak_price"`
+	ValleyPrice  float64    `json:"valley_price"`
+	Latitude     float64    `json:"latitude"`
+	Longitude    float64    `json:"longitude"`
+	Timezone     string     `json:"timezone"`
+	Status       int        `json:"status"`
+	CardImageURL *string    `json:"card_image_url,omitempty"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
+	DeletedAt    *time.Time `json:"-"`
 }
 
 type Device struct {

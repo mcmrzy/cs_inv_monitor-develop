@@ -17,7 +17,7 @@ class DeviceListRequested extends DeviceEvent {
     this.stationId,
     this.status,
     this.page = 1,
-    this.pageSize = 20,
+    this.pageSize = 100,
   });
 
   @override

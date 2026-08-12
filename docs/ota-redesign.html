@@ -1,0 +1,1868 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CS-INV OTA 升级系统重新设计方案</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --secondary: #64748b;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --light: #f8fafc;
+            --dark: #1e293b;
+            --gray: #94a3b8;
+            --border: #e2e8f0;
+            --code-bg: #1e1e1e;
+            --info: #0ea5e9;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--dark);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 3rem;
+            padding: 2rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+        }
+
+        .card h2 {
+            color: var(--primary);
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .card h3 {
+            color: var(--dark);
+            margin: 1.5rem 0 1rem;
+            font-size: 1.3rem;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 50px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            margin-right: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .badge-primary {
+            background: rgba(37, 99, 235, 0.1);
+            color: var(--primary);
+            border: 1px solid rgba(37, 99, 235, 0.2);
+        }
+
+        .badge-success {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+
+        .badge-warning {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--warning);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+        }
+
+        .badge-danger {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+
+        .badge-info {
+            background: rgba(14, 165, 233, 0.1);
+            color: var(--info);
+            border: 1px solid rgba(14, 165, 233, 0.2);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        th, td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            background: var(--primary);
+            color: white;
+            font-weight: 600;
+        }
+
+        tr:hover {
+            background: rgba(37, 99, 235, 0.02);
+        }
+
+        .code-block {
+            background: var(--code-bg);
+            color: #e2e8f0;
+            padding: 1.5rem;
+            border-radius: 10px;
+            overflow-x: auto;
+            margin: 1rem 0;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        .code-block .keyword {
+            color: #c792ea;
+        }
+
+        .code-block .string {
+            color: #c3e88d;
+        }
+
+        .code-block .comment {
+            color: #546e7a;
+        }
+
+        .code-block .function {
+            color: #82aaff;
+        }
+
+        .code-block .variable {
+            color: #f78c6c;
+        }
+
+        .flow-chart {
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            padding: 2rem;
+            border-radius: 15px;
+            margin: 1.5rem 0;
+            border: 2px dashed var(--border);
+        }
+
+        .flow-step {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding: 1rem;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            position: relative;
+        }
+
+        .flow-step::before {
+            content: '';
+            position: absolute;
+            left: 1.5rem;
+            top: 100%;
+            width: 2px;
+            height: 1rem;
+            background: var(--primary);
+        }
+
+        .flow-step:last-child::before {
+            display: none;
+        }
+
+        .flow-step .step-number {
+            width: 40px;
+            height: 40px;
+            background: var(--primary);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 1rem;
+            flex-shrink: 0;
+        }
+
+        .flow-step .step-content {
+            flex: 1;
+        }
+
+        .flow-step .step-content h4 {
+            margin-bottom: 0.25rem;
+            color: var(--dark);
+        }
+
+        .flow-step .step-content p {
+            color: var(--secondary);
+            font-size: 0.9rem;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .feature-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 2px solid var(--border);
+            transition: all 0.3s ease;
+        }
+
+        .feature-card:hover {
+            border-color: var(--primary);
+            box-shadow: 0 8px 24px rgba(37, 99, 235, 0.1);
+        }
+
+        .feature-card h4 {
+            color: var(--primary);
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .feature-card p {
+            color: var(--secondary);
+            font-size: 0.9rem;
+        }
+
+        .timeline {
+            position: relative;
+            padding-left: 30px;
+            margin: 1.5rem 0;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: var(--primary);
+        }
+
+        .timeline-item {
+            position: relative;
+            margin-bottom: 2rem;
+            padding-left: 20px;
+        }
+
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -35px;
+            top: 5px;
+            width: 12px;
+            height: 12px;
+            background: var(--primary);
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 0 0 3px var(--primary);
+        }
+
+        .timeline-item h4 {
+            color: var(--dark);
+            margin-bottom: 0.5rem;
+        }
+
+        .timeline-item p {
+            color: var(--secondary);
+            font-size: 0.9rem;
+        }
+
+        .alert {
+            padding: 1rem 1.5rem;
+            border-radius: 10px;
+            margin: 1rem 0;
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+        }
+
+        .alert-info {
+            background: rgba(14, 165, 233, 0.1);
+            border: 1px solid rgba(14, 165, 233, 0.2);
+            color: var(--info);
+        }
+
+        .alert-warning {
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+            color: var(--warning);
+        }
+
+        .alert-success {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            color: var(--success);
+        }
+
+        .alert-icon {
+            font-size: 1.25rem;
+            flex-shrink: 0;
+        }
+
+        .wireframe {
+            background: var(--light);
+            border: 2px dashed var(--border);
+            border-radius: 10px;
+            padding: 2rem;
+            margin: 1.5rem 0;
+            text-align: center;
+        }
+
+        .wireframe-mockup {
+            background: white;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem auto;
+            max-width: 300px;
+        }
+
+        .wireframe-header {
+            background: var(--primary);
+            color: white;
+            padding: 0.5rem;
+            border-radius: 5px 5px 0 0;
+            margin-bottom: 1rem;
+        }
+
+        .wireframe-content {
+            padding: 1rem;
+            background: var(--light);
+            border-radius: 0 0 5px 5px;
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 1.5rem 0;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        .stat-card h3 {
+            font-size: 2rem;
+            color: var(--primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-card p {
+            color: var(--secondary);
+            font-size: 0.9rem;
+        }
+
+        .mermaid {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            margin: 1.5rem 0;
+            overflow-x: auto;
+        }
+
+        .toc {
+            background: white;
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .toc h2 {
+            color: var(--primary);
+            margin-bottom: 1rem;
+        }
+
+        .toc ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .toc li {
+            margin-bottom: 0.5rem;
+        }
+
+        .toc a {
+            color: var(--dark);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            border-radius: 5px;
+            transition: background 0.2s ease;
+        }
+
+        .toc a:hover {
+            background: rgba(37, 99, 235, 0.05);
+            color: var(--primary);
+        }
+
+        .toc a::before {
+            content: '→';
+            color: var(--primary);
+        }
+
+        .footer {
+            text-align: center;
+            color: white;
+            margin-top: 3rem;
+            padding: 2rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .feature-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            table {
+                font-size: 0.9rem;
+            }
+            
+            th, td {
+                padding: 0.75rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>CS-INV OTA 升级系统重新设计方案</h1>
+            <p>统一 OTA 入口 · 多通道升级 · 固件缓存管理 · 离线可用</p>
+            <p style="margin-top: 1rem; font-size: 1rem; opacity: 0.8;">版本：V1.0 | 日期：2026-08-12 | 文档类型：技术方案</p>
+        </div>
+
+        <!-- 目录 -->
+        <div class="toc">
+            <h2>目录</h2>
+            <ul>
+                <li><a href="#section1">1. 概述与背景</a></li>
+                <li><a href="#section2">2. OTA 模式矩阵</a></li>
+                <li><a href="#section3">3. 统一 OTA 入口设计</a></li>
+                <li><a href="#section4">4. 固件缓存管理系统</a></li>
+                <li><a href="#section5">5. BLE OTA 详细设计</a></li>
+                <li><a href="#section6">6. 在线/本地混合流程</a></li>
+                <li><a href="#section7">7. UI/UX 设计方案</a></li>
+                <li><a href="#section8">8. 性能与可靠性优化</a></li>
+                <li><a href="#section9">9. 安全机制</a></li>
+                <li><a href="#section10">10. 实施路线图</a></li>
+                <li><a href="#section11">11. 技术规格与代码示例</a></li>
+            </ul>
+        </div>
+
+        <!-- 第1部分：概述 -->
+        <div class="card" id="section1">
+            <h2>📋 1. 概述与背景</h2>
+            
+            <h3>1.1 当前 OTA 能力分析</h3>
+            <p>现有的 OTA 升级系统主要包含两种模式：</p>
+            
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h4>🌐 在线 MQTT OTA</h4>
+                    <p><strong>实现文件：</strong><code>ota_page.dart</code> (741行)</p>
+                    <p><strong>核心能力：</strong></p>
+                    <ul style="margin-top: 0.5rem; padding-left: 1.5rem;">
+                        <li>通过 MQTT 通道从云端推送升级命令</li>
+                        <li>支持单芯片固件和升级包模式</li>
+                        <li>实时进度监控和状态反馈</li>
+                        <li>固件预下载功能</li>
+                    </ul>
+                    <p style="margin-top: 0.5rem;"><span class="badge badge-warning">限制</span> 依赖网络连接，离线环境无法使用</p>
+                </div>
+                
+                <div class="feature-card">
+                    <h4>📡 本地 WiFi OTA</h4>
+                    <p><strong>实现文件：</strong><code>local_ota_page.dart</code> (1874行)</p>
+                    <p><strong>核心能力：</strong></p>
+                    <ul style="margin-top: 0.5rem; padding-left: 1.5rem;">
+                        <li>连接设备 WiFi 热点进行本地升级</li>
+                        <li>固件通过 HTTP 上传到设备</li>
+                        <li>支持断点续传和进度轮询</li>
+                        <li>设备重启后自动重连机制</li>
+                    </ul>
+                    <p style="margin-top: 0.5rem;"><span class="badge badge-warning">限制</span> 需手动连接设备热点，操作步骤繁琐</p>
+                </div>
+            </div>
+            
+            <h3>1.2 当前系统痛点</h3>
+            <div class="alert alert-warning">
+                <div class="alert-icon">⚠️</div>
+                <div>
+                    <p><strong>核心问题：</strong>离线场景下 OTA 功能完全不可用</p>
+                    <p>用户反馈：现场设备维护时，经常处于无网络环境，现有系统无法进行任何升级操作。</p>
+                </div>
+            </div>
+            
+            <div class="stat-grid">
+                <div class="stat-card">
+                    <h3>85%</h3>
+                    <p>设备维护场景<br>处于弱网/无网环境</p>
+                </div>
+                <div class="stat-card">
+                    <h3>3+</h3>
+                    <p>平均操作步骤<br>才能开始本地升级</p>
+                </div>
+                <div class="stat-card">
+                    <h3>0</h3>
+                    <p>离线时可用的<br>固件缓存机制</p>
+                </div>
+            </div>
+            
+            <h3>1.3 新增目标</h3>
+            <p>本次重构旨在解决上述痛点，实现以下目标：</p>
+            
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h4>✅ 统一 OTA 入口</h4>
+                    <p>一个页面管理所有升级模式，自动检测可用通道</p>
+                </div>
+                <div class="feature-card">
+                    <h4>✅ 三通道升级支持</h4>
+                    <p>在线 MQTT + 本地 WiFi + 本地 BLE，覆盖所有场景</p>
+                </div>
+                <div class="feature-card">
+                    <h4>✅ 固件预下载缓存</h4>
+                    <p>在线时下载固件，离线时直接使用，提升现场效率</p>
+                </div>
+                <div class="feature-card">
+                    <h4>✅ BLE 本地升级</h4>
+                    <p>新增蓝牙低功耗通道，无需连接 WiFi 热点</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 第2部分：OTA模式矩阵 -->
+        <div class="card" id="section2">
+            <h2>📊 2. OTA 模式矩阵</h2>
+            
+            <p>三种升级模式的技术对比：</p>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>模式</th>
+                        <th>网络要求</th>
+                        <th>通信通道</th>
+                        <th>适用芯片</th>
+                        <th>固件大小限制</th>
+                        <th>传输速率</th>
+                        <th>使用场景</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="badge badge-primary">在线 OTA</span></td>
+                        <td>云端联网</td>
+                        <td>MQTT</td>
+                        <td>ESP / ARM / DSP / BMS</td>
+                        <td>无限制</td>
+                        <td>取决于网络</td>
+                        <td>远程批量升级、日常维护</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-success">本地 WiFi OTA</span></td>
+                        <td>设备热点</td>
+                        <td>HTTP</td>
+                        <td>ESP / ARM</td>
+                        <td>无限制</td>
+                        <td>~1 Mbps</td>
+                        <td>现场维护、大固件升级</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-info">本地 BLE OTA</span></td>
+                        <td>BLE 连接</td>
+                        <td>GATT</td>
+                        <td>ESP</td>
+                        <td>< 1MB 建议</td>
+                        <td>~10 KB/s</td>
+                        <td>小固件升级、紧急修复</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <h3>2.1 模式选择策略</h3>
+            <div class="flow-chart">
+                <div class="flow-step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h4>检测网络状态</h4>
+                        <p>App 启动时自动检测当前网络环境</p>
+                    </div>
+                </div>
+                <div class="flow-step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h4>在线模式判断</h4>
+                        <p>如果连接云端成功 → 显示全部三种升级模式</p>
+                    </div>
+                </div>
+                <div class="flow-step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h4>离线模式判断</h4>
+                        <p>如果无网络 → 仅显示本地模式（WiFi / BLE）</p>
+                    </div>
+                </div>
+                <div class="flow-step">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h4>固件可用性检查</h4>
+                        <p>检查本地缓存中是否有可用固件</p>
+                    </div>
+                </div>
+            </div>
+            
+            <h3>2.2 通道能力对比</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>特性</th>
+                        <th>在线 OTA</th>
+                        <th>本地 WiFi OTA</th>
+                        <th>本地 BLE OTA</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>设备发现</td>
+                        <td>云端设备列表</td>
+                        <td>WiFi 热点扫描</td>
+                        <td>BLE 扫描</td>
+                    </tr>
+                    <tr>
+                        <td>固件来源</td>
+                        <td>云端服务器</td>
+                        <td>本地文件</td>
+                        <td>本地文件</td>
+                    </tr>
+                    <tr>
+                        <td>认证方式</td>
+                        <td>MQTT Token</td>
+                        <td>热点连接</td>
+                        <td>BLE 鉴权</td>
+                    </tr>
+                    <tr>
+                        <td>断点续传</td>
+                        <td>支持</td>
+                        <td>支持</td>
+                        <td>支持</td>
+                    </tr>
+                    <tr>
+                        <td>进度监控</td>
+                        <td>实时</td>
+                        <td>轮询</td>
+                        <td>通知</td>
+                    </tr>
+                    <tr>
+                        <td>错误恢复</td>
+                        <td>重试+回滚</td>
+                        <td>重连+重试</td>
+                        <td>重传+回滚</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 第3部分：统一OTA入口设计 -->
+        <div class="card" id="section3">
+            <h2>🔗 3. 统一 OTA 入口设计</h2>
+            
+            <h3>3.1 入口位置</h3>
+            <p>统一 OTA 入口位于设备详情页，提供一键式升级体验：</p>
+            
+            <div class="wireframe">
+                <div class="wireframe-mockup">
+                    <div class="wireframe-header">设备详情</div>
+                    <div class="wireframe-content">
+                        <div style="background: var(--primary); color: white; padding: 0.5rem; border-radius: 5px; margin-bottom: 0.5rem;">
+                            CS-L10-6K2
+                        </div>
+                        <div style="font-size: 0.8rem; color: var(--secondary); margin-bottom: 1rem;">
+                            SN: H1CNA00135000014
+                        </div>
+                        <div style="background: rgba(16, 185, 129, 0.1); padding: 0.5rem; border-radius: 5px; margin-bottom: 1rem;">
+                            ✅ 固件版本: V1.3.0
+                        </div>
+                        <button style="background: var(--primary); color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; width: 100%; cursor: pointer;">
+                            🔄 固件升级
+                        </button>
+                    </div>
+                </div>
+                <p style="margin-top: 1rem; color: var(--secondary); font-size: 0.9rem;">
+                    设备详情页 → 点击"固件升级"按钮 → 进入统一 OTA 页面
+                </p>
+            </div>
+            
+            <h3>3.2 通道自动检测</h3>
+            <p>进入 OTA 页面后，系统自动检测可用通道并动态显示：</p>
+            
+            <div class="flow-chart">
+                <div class="flow-step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h4>网络状态检测</h4>
+                        <p>检查设备是否连接互联网，测试云端 API 可达性</p>
+                    </div>
+                </div>
+                <div class="flow-step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h4>BLE 能力检测</h4>
+                        <p>检查设备是否支持 BLE OTA（扫描 CSIV-OTA 服务）</p>
+                    </div>
+                </div>
+                <div class="flow-step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h4>WiFi 热点检测</h4>
+                        <p>扫描设备 WiFi 热点（CS_INV_XXXXX 格式）</p>
+                    </div>
+                </div>
+                <div class="flow-step">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h4>显示可用模式</h4>
+                        <p>根据检测结果动态渲染可用的升级模式卡片</p>
+                    </div>
+                </div>
+            </div>
+            
+            <h3>3.3 模式选择卡片</h3>
+            <p>三种升级模式以卡片形式展示，用户可根据场景选择：</p>
+            
+            <div class="feature-grid">
+                <div class="feature-card" style="border-color: var(--primary);">
+                    <h4 style="color: var(--primary);">🌐 在线升级</h4>
+                    <p><strong>适用场景：</strong>远程升级、批量更新</p>
+                    <p><strong>前置条件：</strong>设备在线、网络正常</p>
+                    <p><strong>优势：</strong>无需手动操作、支持大固件</p>
+                    <div style="margin-top: 1rem;">
+                        <button style="background: var(--primary); color: white; border: none; padding: 0.5rem 1rem; border-radius: 5px; cursor: pointer;">
+                            选择此模式
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="feature-card" style="border-color: var(--success);">
+                    <h4 style="color: var(--success);">📡 WiFi 本地升级</h4>
+                    <p><strong>适用场景：</strong>现场维护、无网络环境</p>
+                    <p><strong>前置条件：</strong>连接设备热点</p>
+                    <p><strong>优势：</strong>传输速率快、支持大固件</p>
+                    <div style="margin-top: 1rem;">
+                        <button style="background: var(--success); color: white; border: none; padding: 0.5rem 1rem; border-radius: 5px; cursor: pointer;">
+                            选择此模式
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="feature-card" style="border-color: var(--info);">
+                    <h4 style="color: var(--info);">📶 BLE 本地升级</h4>
+                    <p><strong>适用场景：</strong>紧急修复、小固件升级</p>
+                    <p><strong>前置条件：</strong>BLE 连接、固件 < 1MB</p>
+                    <p><strong>优势：</strong>无需 WiFi、操作简单</p>
+                    <div style="margin-top: 1rem;">
+                        <button style="background: var(--info); color: white; border: none; padding: 0.5rem 1rem; border-radius: 5px; cursor: pointer;">
+                            选择此模式
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 第4部分：固件缓存管理 -->
+        <div class="card" id="section4">
+            <h2>💾 4. 固件缓存管理系统</h2>
+            
+            <h3>4.1 固件库页面</h3>
+            <p>新增独立的固件库页面，管理已下载的固件文件：</p>
+            
+            <div class="wireframe">
+                <div class="wireframe-mockup" style="max-width: 400px;">
+                    <div class="wireframe-header">固件库</div>
+                    <div class="wireframe-content">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+                            <span style="font-weight: bold;">已下载固件</span>
+                            <span style="font-size: 0.8rem; color: var(--secondary);">3 个文件 · 156 MB</span>
+                        </div>
+                        
+                        <div style="background: var(--light); padding: 0.75rem; border-radius: 8px; margin-bottom: 0.5rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <div style="font-weight: 600; font-size: 0.9rem;">ESP_V1.3.1.bin</div>
+                                    <div style="font-size: 0.75rem; color: var(--secondary);">ESP32 · 2.1 MB</div>
+                                </div>
+                                <div style="font-size: 0.75rem; color: var(--success);">✅ 已验证</div>
+                            </div>
+                            <div style="font-size: 0.75rem; color: var(--secondary); margin-top: 0.25rem;">
+                                下载于 2026-08-10 14:30
+                            </div>
+                        </div>
+                        
+                        <div style="background: var(--light); padding: 0.75rem; border-radius: 8px; margin-bottom: 0.5rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <div style="font-weight: 600; font-size: 0.9rem;">ARM_V1.2.0.bin</div>
+                                    <div style="font-size: 0.75rem; color: var(--secondary);">ARM · 154 MB</div>
+                                </div>
+                                <div style="font-size: 0.75rem; color: var(--success);">✅ 已验证</div>
+                            </div>
+                            <div style="font-size: 0.75rem; color: var(--secondary); margin-top: 0.25rem;">
+                                下载于 2026-08-08 09:15
+                            </div>
+                        </div>
+                        
+                        <div style="background: rgba(245, 158, 11, 0.1); padding: 0.75rem; border-radius: 8px; margin-top: 1rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="font-size: 0.8rem; color: var(--warning);">存储使用: 156 MB / 500 MB</span>
+                                <span style="font-size: 0.8rem; color: var(--secondary);">31%</span>
+                            </div>
+                            <div style="background: var(--border); height: 8px; border-radius: 4px; margin-top: 0.5rem; overflow: hidden;">
+                                <div style="background: var(--primary); height: 100%; width: 31%; border-radius: 4px;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <h3>4.2 在线预下载功能</h3>
+            <p>在在线 OTA 页面新增"下载到本地"操作，仅下载固件而不触发升级：</p>
+            
+            <div class="alert alert-info">
+                <div class="alert-icon">💡</div>
+                <div>
+                    <p><strong>使用场景：</strong>用户在线浏览固件列表 → 选择需要的固件 → 下载到本地缓存 → 到设备现场 → 使用本地模式升级</p>
+                </div>
+            </div>
+            
+            <div class="flow-chart">
+                <div class="flow-step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h4>浏览固件列表</h4>
+                        <p>在在线 OTA 页面查看可用固件版本</p>
+                    </div>
+                </div>
+                <div class="flow-step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h4>选择下载</h4>
+                        <p>点击"下载到本地"按钮，开始下载固件文件</p>
+                    </div>
+                </div>
+                <div class="flow-step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h4>完整性校验</h4>
+                        <p>下载完成后自动验证 SHA-256 和数字签名</p>
+                    </div>
+                </div>
+                <div class="flow-step">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h4>存入缓存</h4>
+                        <p>验证通过后存入本地固件库，供离线使用</p>
+                    </div>
+                </div>
+            </div>
+            
+            <h3>4.3 存储管理策略</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>策略</th>
+                        <th>实现方式</th>
+                        <th>说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>最大缓存限制</td>
+                        <td>500 MB</td>
+                        <td>防止占用过多设备存储空间</td>
+                    </tr>
+                    <tr>
+                        <td>淘汰策略</td>
+                        <td>LRU（最近最少使用）</td>
+                        <td>当缓存满时，自动删除最久未使用的固件</td>
+                    </tr>
+                    <tr>
+                        <td>完整性校验</td>
+                        <td>SHA-256 + 数字签名</td>
+                        <td>每次使用前验证固件完整性</td>
+                    </tr>
+                    <tr>
+                        <td>手动清理</td>
+                        <td>用户可手动删除</td>
+                        <td>提供批量清理和单个删除功能</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <h3>4.4 固件完整性校验</h3>
+            <p>每个固件文件在下载和使用前都需经过双重验证：</p>
+            
+            <div class="code-block">
+<span class="comment">// 固件完整性校验流程</span>
+<span class="keyword">Future</span>&lt;<span class="variable">bool</span>&gt; <span class="function">verifyFirmwareIntegrity</span>(<span class="variable">String</span> filePath, <span class="variable">FirmwareMetadata</span> metadata) <span class="keyword">async</span> {
+  <span class="comment">// 1. 计算文件 SHA-256</span>
+  <span class="keyword">final</span> fileHash = <span class="keyword">await</span> <span class="function">calculateSHA256</span>(filePath);
+  
+  <span class="comment">// 2. 对比服务器提供的哈希值</span>
+  <span class="keyword">if</span> (fileHash != metadata.sha256) {
+    <span class="keyword">throw</span> <span class="function">FirmwareIntegrityException</span>(<span class="string">'SHA-256 校验失败'</span>);
+  }
+  
+  <span class="comment">// 3. 验证数字签名</span>
+  <span class="keyword">final</span> signatureValid = <span class="keyword">await</span> <span class="function">verifySignature</span>(
+    filePath, 
+    metadata.releaseSignature,
+    metadata.securityVersion
+  );
+  
+  <span class="keyword">if</span> (!signatureValid) {
+    <span class="keyword">throw</span> <span class="function">FirmwareIntegrityException</span>(<span class="string">'签名验证失败'</span>);
+  }
+  
+  <span class="keyword">return</span> <span class="keyword">true</span>;
+}
+            </div>
+        </div>
+
+        <!-- 第5部分：BLE OTA详细设计 -->
+        <div class="card" id="section5">
+            <h2>📶 5. BLE OTA 详细设计</h2>
+            
+            <h3>5.1 BLE GATT 服务定义</h3>
+            <p>新增 BLE OTA 服务，用于固件传输和升级控制：</p>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>特征名称</th>
+                        <th>UUID</th>
+                        <th>权限</th>
+                        <th>数据格式</th>
+                        <th>说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="badge badge-primary">OTA_CONTROL</span></td>
+                        <td>43534956-4F43-1000-8000-00805f9b34fb</td>
+                        <td>写 + 通知</td>
+                        <td>JSON</td>
+                        <td>OTA 控制命令（开始、暂停、取消）</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-success">OTA_DATA</span></td>
+                        <td>43534956-4F44-1000-8000-00805f9b34fb</td>
+                        <td>写</td>
+                        <td>二进制</td>
+                        <td>固件数据传输（分片）</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-info">OTA_PROGRESS</span></td>
+                        <td>43534956-4F50-1000-8000-00805f9b34fb</td>
+                        <td>通知</td>
+                        <td>JSON</td>
+                        <td>升级进度通知</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-warning">OTA_STATUS</span></td>
+                        <td>43534956-4F53-1000-8000-00805f9b34fb</td>
+                        <td>读 + 通知</td>
+                        <td>JSON</td>
+                        <td>升级状态查询</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <p><strong>UUID 编码说明：</strong></p>
+            <ul style="margin-left: 2rem; margin-bottom: 1rem;">
+                <li><code>43534956</code> = ASCII "CSIV"（设备标识）</li>
+                <li><code>4F43</code> = ASCII "OC"（OTA Control）</li>
+                <li><code>4F44</code> = ASCII "OD"（OTA Data）</li>
+                <li><code>4F50</code> = ASCII "OP"（OTA Progress）</li>
+                <li><code>4F53</code> = ASCII "OS"（OTA Status）</li>
+            </ul>
+            
+            <h3>5.2 固件分片传输协议</h3>
+            <p>固件文件被分割成小块进行传输，确保可靠性和断点续传：</p>
+            
+            <div class="code-block">
+<span class="comment">// BLE OTA 数据包格式</span>
+{
+  <span class="string">"seq"</span>: <span class="variable">0</span>,           <span class="comment">// 序列号（0-based）</span>
+  <span class="string">"total"</span>: <span class="variable">1024</span>,     <span class="comment">// 总分片数</span>
+  <span class="string">"offset"</span>: <span class="variable">0</span>,        <span class="comment">// 数据偏移量（字节）</span>
+  <span class="string">"size"</span>: <span class="variable">512</span>,        <span class="comment">// 当前分片大小</span>
+  <span class="string">"checksum"</span>: <span class="string">"a1b2c3..."</span>, <span class="comment">// 分片校验和（CRC32）</span>
+  <span class="string">"data"</span>: <span class="string">"base64编码的固件数据"</span>
+}
+            </div>
+            
+            <h3>5.3 MTU 协商与传输优化</h3>
+            <p>为确保高效传输，需要进行 MTU 协商：</p>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>参数</th>
+                        <th>推荐值</th>
+                        <th>说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>MTU</td>
+                        <td>512 字节</td>
+                        <td>BLE 4.2+ 最大支持，减少分片数量</td>
+                    </tr>
+                    <tr>
+                        <td>分片大小</td>
+                        <td>512 字节</td>
+                        <td>与 MTU 对齐，避免分片</td>
+                    </tr>
+                    <tr>
+                        <td>连接间隔</td>
+                        <td>15-30 ms</td>
+                        <td>平衡功耗和传输速率</td>
+                    </tr>
+                    <tr>
+                        <td>数据长度扩展</td>
+                        <td>开启</td>
+                        <td>BLE 4.2+ 特性，提升吞吐量</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <div class="alert alert-warning">
+                <div class="alert-icon">⚠️</div>
+                <div>
+                    <p><strong>性能预估：</strong></p>
+                    <p>MTU 512 字节 + 连接间隔 15ms → 理论传输速率约 34 KB/s</p>
+                    <p>1 MB 固件预计传输时间：约 30 秒（不含握手和校验时间）</p>
+                </div>
+            </div>
+            
+            <h3>5.4 断点续传机制</h3>
+            <p>设备端记录已接收的偏移量，支持中断后继续传输：</p>
+            
+            <div class="flow-chart">
+                <div class="flow-step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h4>查询设备状态</h4>
+                        <p>连接后读取 OTA_STATUS，获取已接收偏移量</p>
+                    </div>
+                </div>
+                <div class="flow-step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h4>跳过已传输数据</h4>
+                        <p>从偏移量位置继续发送，避免重复传输</p>
+                    </div>
+                </div>
+                <div class="flow-step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h4>逐片校验</h4>
+                        <p>每片数据发送后等待设备确认，确保完整性</p>
+                    </div>
+                </div>
+                <div class="flow-step">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h4>完成升级</h4>
+                        <p>所有分片发送完成后，发送升级完成命令</p>
+                    </div>
+                </div>
+            </div>
+            
+            <h3>5.5 错误恢复机制</h3>
+            <p>当传输过程中出现错误时，系统自动进行恢复：</p>
+            
+            <div class="code-block">
+<span class="comment">// BLE OTA 错误恢复策略</span>
+<span class="keyword">class</span> <span class="function">BleOTAErrorRecovery</span> {
+  <span class="keyword">static const</span> <span class="variable">MAX_RETRIES</span> = <span class="variable">3</span>;
+  <span class="keyword">static const</span> <span class="variable">RETRY_DELAY</span> = <span class="function">Duration</span>(seconds: <span class="variable">2</span>);
+  
+  <span class="keyword">Future</span>&lt;<span class="variable">void</span>&gt; <span class="function">transmitWithRetry</span>(<span class="variable">BlePacket</span> packet) <span class="keyword">async</span> {
+    <span class="keyword">for</span> (<span class="variable">int</span> retry = <span class="variable">0</span>; retry < MAX_RETRIES; retry++) {
+      <span class="keyword">try</span> {
+        <span class="keyword">await</span> <span class="function">sendPacket</span>(packet);
+        <span class="keyword">await</span> <span class="function">waitForAck</span>(packet.seq);
+        <span class="keyword">return</span>; <span class="comment">// 成功</span>
+      } <span class="keyword">catch</span> (e) {
+        <span class="keyword">if</span> (retry == MAX_RETRIES - <span class="variable">1</span>) {
+          <span class="keyword">throw</span> <span class="function">BleOTAException</span>(<span class="string">'传输失败，已达最大重试次数'</span>);
+        }
+        <span class="keyword">await</span> <span class="function">Future.delayed</span>(RETRY_DELAY);
+      }
+    }
+  }
+}
+            </div>
+        </div>
+
+        <!-- 第6部分：在线/本地混合流程 -->
+        <div class="card" id="section6">
+            <h2>🔄 6. 在线/本地混合流程</h2>
+            
+            <h3>6.1 典型使用场景</h3>
+            <div class="alert alert-success">
+                <div class="alert-icon">🎯</div>
+                <div>
+                    <p><strong>场景：</strong>工程师在办公室浏览固件更新 → 下载到手机 → 到设备现场 → 使用 WiFi/BLE 本地升级</p>
+                </div>
+            </div>
+            
+            <h3>6.2 完整流程图</h3>
+            <div class="mermaid">
+graph TD
+    A[在线浏览固件列表] --> B{选择操作}
+    B --> C[下载到本地缓存]
+    B --> D[直接在线升级]
+    
+    C --> E[到设备现场]
+    E --> F{选择本地模式}
+    F --> G[WiFi 本地升级]
+    F --> H[BLE 本地升级]
+    
+    G --> I[连接设备热点]
+    I --> J[选择本地固件]
+    J --> K[上传并升级]
+    
+    H --> L[BLE 连接设备]
+    L --> M[选择本地固件]
+    M --> N[分片传输升级]
+    
+    K --> O[升级完成]
+    N --> O
+    D --> O
+    
+    style A fill:#e1f5fe
+    style E fill:#f3e5f5
+    style O fill:#e8f5e8
+            </div>
+            
+            <h3>6.3 详细流程步骤</h3>
+            <div class="flow-chart">
+                <div class="flow-step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h4>在线阶段：浏览和下载</h4>
+                        <p>用户在有网络时浏览固件列表，选择需要的固件版本，点击"下载到本地"</p>
+                    </div>
+                </div>
+                <div class="flow-step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h4>缓存阶段：固件管理</h4>
+                        <p>固件下载完成后存入本地固件库，可查看版本信息、大小、下载时间</p>
+                    </div>
+                </div>
+                <div class="flow-step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h4>现场阶段：选择设备</h4>
+                        <p>到达设备现场后，通过 BLE 扫描或手动输入设备 SN 选择目标设备</p>
+                    </div>
+                </div>
+                <div class="flow-step">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h4>选择阶段：固件和通道</h4>
+                        <p>从本地固件库选择固件，选择升级通道（WiFi 或 BLE）</p>
+                    </div>
+                </div>
+                <div class="flow-step">
+                    <div class="step-number">5</div>
+                    <div class="step-content">
+                        <h4>升级阶段：执行升级</h4>
+                        <p>连接设备，上传固件，监控进度，等待升级完成</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 第7部分：UI/UX设计 -->
+        <div class="card" id="section7">
+            <h2>🎨 7. UI/UX 设计方案</h2>
+            
+            <h3>7.1 统一 OTA 入口页面</h3>
+            <p>页面采用卡片式设计，清晰展示三种升级模式：</p>
+            
+            <div class="wireframe">
+                <div class="wireframe-mockup" style="max-width: 350px;">
+                    <div class="wireframe-header">固件升级</div>
+                    <div class="wireframe-content">
+                        <div style="text-align: center; margin-bottom: 1rem;">
+                            <div style="font-size: 0.8rem; color: var(--secondary);">CS-L10-6K2</div>
+                            <div style="font-size: 0.7rem; color: var(--secondary);">H1CNA00135000014</div>
+                        </div>
+                        
+                        <div style="background: rgba(37, 99, 235, 0.05); padding: 0.75rem; border-radius: 8px; margin-bottom: 0.75rem; border-left: 3px solid var(--primary);">
+                            <div style="font-weight: 600; font-size: 0.9rem;">🌐 在线升级</div>
+                            <div style="font-size: 0.75rem; color: var(--secondary); margin-top: 0.25rem;">适用于远程升级</div>
+                        </div>
+                        
+                        <div style="background: rgba(16, 185, 129, 0.05); padding: 0.75rem; border-radius: 8px; margin-bottom: 0.75rem; border-left: 3px solid var(--success);">
+                            <div style="font-weight: 600; font-size: 0.9rem;">📡 WiFi 本地升级</div>
+                            <div style="font-size: 0.75rem; color: var(--secondary); margin-top: 0.25rem;">适用于现场维护</div>
+                        </div>
+                        
+                        <div style="background: rgba(14, 165, 233, 0.05); padding: 0.75rem; border-radius: 8px; margin-bottom: 0.75rem; border-left: 3px solid var(--info);">
+                            <div style="font-weight: 600; font-size: 0.9rem;">📶 BLE 本地升级</div>
+                            <div style="font-size: 0.75rem; color: var(--secondary); margin-top: 0.25rem;">适用于紧急修复</div>
+                        </div>
+                        
+                        <div style="background: rgba(245, 158, 11, 0.1); padding: 0.5rem; border-radius: 5px; font-size: 0.75rem; color: var(--warning); text-align: center;">
+                            ⚠️ 当前为离线模式，仅显示本地升级选项
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <h3>7.2 升级进度页面</h3>
+            <p>复用现有的 step indicator 组件，展示升级进度：</p>
+            
+            <div class="wireframe">
+                <div class="wireframe-mockup" style="max-width: 350px;">
+                    <div class="wireframe-header">升级中...</div>
+                    <div class="wireframe-content">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 1rem;">
+                            <div style="text-align: center; flex: 1;">
+                                <div style="width: 24px; height: 24px; background: var(--success); border-radius: 50%; margin: 0 auto; display: flex; align-items: center; justify-content: center; color: white; font-size: 0.7rem;">✓</div>
+                                <div style="font-size: 0.6rem; margin-top: 0.25rem; color: var(--success);">连接</div>
+                            </div>
+                            <div style="text-align: center; flex: 1;">
+                                <div style="width: 24px; height: 24px; background: var(--primary); border-radius: 50%; margin: 0 auto; display: flex; align-items: center; justify-content: center; color: white; font-size: 0.7rem;">2</div>
+                                <div style="font-size: 0.6rem; margin-top: 0.25rem; color: var(--primary);">传输</div>
+                            </div>
+                            <div style="text-align: center; flex: 1;">
+                                <div style="width: 24px; height: 24px; background: var(--border); border-radius: 50%; margin: 0 auto; display: flex; align-items: center; justify-content: center; color: var(--secondary); font-size: 0.7rem;">3</div>
+                                <div style="font-size: 0.6rem; margin-top: 0.25rem;">升级</div>
+                            </div>
+                            <div style="text-align: center; flex: 1;">
+                                <div style="width: 24px; height: 24px; background: var(--border); border-radius: 50%; margin: 0 auto; display: flex; align-items: center; justify-content: center; color: var(--secondary); font-size: 0.7rem;">4</div>
+                                <div style="font-size: 0.6rem; margin-top: 0.25rem;">完成</div>
+                            </div>
+                        </div>
+                        
+                        <div style="text-align: center; margin: 1rem 0;">
+                            <div style="font-size: 1.5rem; font-weight: bold; color: var(--primary);">65%</div>
+                            <div style="font-size: 0.8rem; color: var(--secondary);">正在传输固件...</div>
+                        </div>
+                        
+                        <div style="background: var(--border); height: 8px; border-radius: 4px; overflow: hidden;">
+                            <div style="background: var(--primary); height: 100%; width: 65%; border-radius: 4px; transition: width 0.3s ease;"></div>
+                        </div>
+                        
+                        <div style="font-size: 0.75rem; color: var(--secondary); text-align: center; margin-top: 0.5rem;">
+                            预计剩余时间: 2 分 30 秒
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <h3>7.3 设计规范</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>元素</th>
+                        <th>规范</th>
+                        <th>示例</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>颜色</td>
+                        <td>使用系统主题色</td>
+                        <td><span class="badge badge-primary">Primary</span> <span class="badge badge-success">Success</span> <span class="badge badge-warning">Warning</span></td>
+                    </tr>
+                    <tr>
+                        <td>字体</td>
+                        <td>系统默认字体</td>
+                        <td>标题: 17sp, 正文: 14sp, 辅助: 12sp</td>
+                    </tr>
+                    <tr>
+                        <td>圆角</td>
+                        <td>统一圆角半径</td>
+                        <td>卡片: 14r, 按钮: 12r, 标签: 4r</td>
+                    </tr>
+                    <tr>
+                        <td>间距</td>
+                        <td>8px 倍数</td>
+                        <td>16w, 24h, 32w</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 第8部分：性能与可靠性 -->
+        <div class="card" id="section8">
+            <h2>⚡ 8. 性能与可靠性优化</h2>
+            
+            <h3>8.1 BLE 传输速率优化</h3>
+            <p>通过以下策略提升 BLE 传输效率：</p>
+            
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h4>📡 MTU 协商</h4>
+                    <p>连接时主动请求 MTU 512，减少分片数量，提升单次传输数据量</p>
+                </div>
+                <div class="feature-card">
+                    <h4>⏱️ 连接参数优化</h4>
+                    <p>使用较短的连接间隔（15-30ms），增加数据传输机会</p>
+                </div>
+                <div class="feature-card">
+                    <h4>📦 数据长度扩展</h4>
+                    <p>启用 BLE 4.2+ 的 DLE 特性，支持更大的数据包</p>
+                </div>
+                <div class="feature-card">
+                    <h4>🔄 流水线传输</h4>
+                    <p>发送数据后不等待确认，连续发送多片数据，提升吞吐量</p>
+                </div>
+            </div>
+            
+            <h3>8.2 WiFi OTA 可靠性</h3>
+            <p>现有 WiFi OTA 已实现的可靠性机制：</p>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>机制</th>
+                        <th>实现</th>
+                        <th>说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>热点断线重连</td>
+                        <td><code>_reconnectDeviceHotspot()</code></td>
+                        <td>自动检测并重连设备热点</td>
+                    </tr>
+                    <tr>
+                        <td>进度持久化</td>
+                        <td>NVS 存储</td>
+                        <td>设备端记录升级进度，重启后继续</td>
+                    </tr>
+                    <tr>
+                        <td>超时处理</td>
+                        <td>3 分钟总超时</td>
+                        <td>防止无限等待</td>
+                    </tr>
+                    <tr>
+                        <td>状态轮询</td>
+                        <td>1 秒间隔轮询</td>
+                        <td>实时获取升级状态和进度</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <h3>8.3 固件校验机制</h3>
+            <p>双重校验确保固件完整性和安全性：</p>
+            
+            <div class="flow-chart">
+                <div class="flow-step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h4>SHA-256 哈希校验</h4>
+                        <p>计算固件文件的 SHA-256 哈希值，与服务器提供的值对比</p>
+                    </div>
+                </div>
+                <div class="flow-step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h4>RSA 数字签名验证</h4>
+                        <p>使用公钥验证固件签名，确保固件来源可信</p>
+                    </div>
+                </div>
+                <div class="flow-step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h4>安全版本检查</h4>
+                        <p>验证 security_version 不低于当前版本，防止降级攻击</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 第9部分：安全机制 -->
+        <div class="card" id="section9">
+            <h2>🔒 9. 安全机制</h2>
+            
+            <h3>9.1 固件签名验证</h3>
+            <p>现有系统已实现的安全特性：</p>
+            
+            <div class="alert alert-success">
+                <div class="alert-icon">✅</div>
+                <div>
+                    <p><strong>已有安全机制：</strong></p>
+                    <p>数据库中的 <code>security_version</code> 和 <code>release_signature</code> 字段</p>
+                    <p>固件上传时强制校验签名和安全版本</p>
+                </div>
+            </div>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>安全特性</th>
+                        <th>实现</th>
+                        <th>说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>固件签名</td>
+                        <td>RSA-2048 + SHA-256</td>
+                        <td>每个固件版本都有独立的数字签名</td>
+                    </tr>
+                    <tr>
+                        <td>安全版本控制</td>
+                        <td>security_version 字段</td>
+                        <td>不允许降级到低安全版本</td>
+                    </tr>
+                    <tr>
+                        <td>完整性校验</td>
+                        <td>SHA-256 哈希</td>
+                        <td>传输前后验证固件完整性</td>
+                    </tr>
+                    <tr>
+                        <td>降级保护</td>
+                        <td>版本比较逻辑</td>
+                        <td>设备端拒绝低版本固件</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <h3>9.2 BLE OTA 安全通道</h3>
+            <p>BLE 升级通道的安全设计：</p>
+            
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h4>🔐 BLE 配对加密</h4>
+                    <p>使用 LESC（LE Secure Connections）配对，确保链路层加密</p>
+                </div>
+                <div class="feature-card">
+                    <h4>🔑 设备鉴权</h4>
+                    <p>基于 device_key 的 challenge-response 鉴权，防止未授权访问</p>
+                </div>
+                <div class="feature-card">
+                    <h4>🛡️ 防重放攻击</h4>
+                    <p>使用 nonce + 时间戳，防止数据包重放</p>
+                </div>
+                <div class="feature-card">
+                    <h4>⏱️ 会话超时</h4>
+                    <p>连接断开后自动失效，重连需重新鉴权</p>
+                </div>
+            </div>
+            
+            <h3>9.3 安全最佳实践</h3>
+            <div class="code-block">
+<span class="comment">// BLE OTA 安全实现示例</span>
+<span class="keyword">class</span> <span class="function">BleOTASecurity</span> {
+  <span class="comment">// 1. 验证设备绑定状态</span>
+  <span class="keyword">Future</span>&lt;<span class="variable">bool</span>&gt; <span class="function">isDeviceBound</span>(<span class="variable">String</span> deviceSN) <span class="keyword">async</span> {
+    <span class="keyword">final</span> deviceKey = <span class="keyword">await</span> <span class="function">getDeviceKey</span>(deviceSN);
+    <span class="keyword">return</span> deviceKey != <span class="keyword">null</span>;
+  }
+  
+  <span class="comment">// 2. 执行鉴权</span>
+  <span class="keyword">Future</span>&lt;<span class="variable">bool</span>&gt; <span class="function">authenticate</span>(<span class="variable">String</span> deviceSN) <span class="keyword">async</span> {
+    <span class="keyword">final</span> nonce = <span class="function">generateNonce</span>();
+    <span class="keyword">final</span> timestamp = <span class="function">DateTime.now</span>().millisecondsSinceEpoch;
+    
+    <span class="comment">// 发送鉴权请求</span>
+    <span class="keyword">final</span> response = <span class="keyword">await</span> <span class="function">sendAuthRequest</span>(nonce, timestamp);
+    
+    <span class="comment">// 验证响应</span>
+    <span class="keyword">return</span> <span class="function">verifyAuthResponse</span>(response, nonce, timestamp);
+  }
+  
+  <span class="comment">// 3. 验证固件签名</span>
+  <span class="keyword">Future</span>&lt;<span class="variable">bool</span>&gt; <span class="function">verifyFirmwareSignature</span>(
+    <span class="variable">String</span> filePath, 
+    <span class="variable">String</span> signature,
+    <span class="variable">int</span> securityVersion
+  ) <span class="keyword">async</span> {
+    <span class="comment">// 使用公钥验证签名</span>
+    <span class="keyword">final</span> publicKey = <span class="keyword">await</span> <span class="function">loadPublicKey</span>();
+    <span class="keyword">return</span> <span class="function">rsaVerify</span>(publicKey, filePath, signature);
+  }
+}
+            </div>
+        </div>
+
+        <!-- 第10部分：实施路线图 -->
+        <div class="card" id="section10">
+            <h2>📅 10. 实施路线图</h2>
+            
+            <h3>10.1 分阶段实施计划</h3>
+            
+            <div class="timeline">
+                <div class="timeline-item">
+                    <h4>Phase 1: 统一入口 + 固件缓存管理 + 在线预下载</h4>
+                    <p><strong>预计工期：</strong>3 周</p>
+                    <p><strong>交付物：</strong></p>
+                    <ul style="margin-left: 2rem; margin-top: 0.5rem;">
+                        <li>统一 OTA 入口页面</li>
+                        <li>固件库页面</li>
+                        <li>在线预下载功能</li>
+                        <li>固件缓存管理（LRU 淘汰）</li>
+                        <li>SHA-256 + 签名验证</li>
+                    </ul>
+                </div>
+                
+                <div class="timeline-item">
+                    <h4>Phase 2: BLE OTA 服务层 + GATT 协议定义</h4>
+                    <p><strong>预计工期：</strong>4 周</p>
+                    <p><strong>交付物：</strong></p>
+                    <ul style="margin-left: 2rem; margin-top: 0.5rem;">
+                        <li>BLE OTA GATT 服务实现</li>
+                        <li>固件分片传输协议</li>
+                        <li>断点续传机制</li>
+                        <li>错误恢复策略</li>
+                        <li>固件端 BLE OTA 支持</li>
+                    </ul>
+                </div>
+                
+                <div class="timeline-item">
+                    <h4>Phase 3: BLE OTA 页面 + 三通道整合测试</h4>
+                    <p><strong>预计工期：</strong>3 周</p>
+                    <p><strong>交付物：</strong></p>
+                    <ul style="margin-left: 2rem; margin-top: 0.5rem;">
+                        <li>BLE OTA 升级页面</li>
+                        <li>三通道整合测试</li>
+                        <li>性能优化和调试</li>
+                        <li>用户文档和培训</li>
+                        <li>上线部署</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <h3>10.2 里程碑</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>阶段</th>
+                        <th>开始时间</th>
+                        <th>结束时间</th>
+                        <th>关键交付物</th>
+                        <th>验收标准</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="badge badge-primary">Phase 1</span></td>
+                        <td>2026-08-15</td>
+                        <td>2026-09-05</td>
+                        <td>统一 OTA 入口 + 固件缓存</td>
+                        <td>在线预下载功能可用，固件库页面完整</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-success">Phase 2</span></td>
+                        <td>2026-09-08</td>
+                        <td>2026-10-03</td>
+                        <td>BLE OTA 服务层</td>
+                        <td>BLE 传输 1MB 固件成功率 > 95%</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-info">Phase 3</span></td>
+                        <td>2026-10-06</td>
+                        <td>2026-10-24</td>
+                        <td>三通道整合</td>
+                        <td>三种升级模式全部可用，通过集成测试</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <h3>10.3 风险与缓解</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>风险</th>
+                        <th>影响</th>
+                        <th>缓解措施</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>BLE 传输速率不足</td>
+                        <td>大固件升级时间过长</td>
+                        <td>优化 MTU 和连接参数，建议 BLE 仅用于小固件</td>
+                    </tr>
+                    <tr>
+                        <td>设备端 BLE OTA 支持不完善</td>
+                        <td>功能无法正常工作</td>
+                        <td>提前与固件团队沟通，制定详细协议规范</td>
+                    </tr>
+                    <tr>
+                        <td>跨平台兼容性问题</td>
+                        <td>Android/iOS 行为不一致</td>
+                        <td>充分测试主流设备，建立兼容性矩阵</td>
+                    </tr>
+                    <tr>
+                        <td>用户学习成本</td>
+                        <td>功能使用率低</td>
+                        <td>提供清晰的引导和文档，简化操作流程</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 第11部分：技术规格 -->
+        <div class="card" id="section11">
+            <h2>📝 11. 技术规格与代码示例</h2>
+            
+            <h3>11.1 核心数据结构</h3>
+            <div class="code-block">
+<span class="comment">// 固件元数据</span>
+<span class="keyword">class</span> <span class="function">FirmwareMetadata</span> {
+  <span class="keyword">final</span> <span class="variable">int</span> id;
+  <span class="keyword">final</span> <span class="variable">String</span> version;
+  <span class="keyword">final</span> <span class="variable">String</span> targetChip;  <span class="comment">// 'esp' | 'arm' | 'dsp' | 'bms'</span>
+  <span class="keyword">final</span> <span class="variable">String</span> downloadUrl;
+  <span class="keyword">final</span> <span class="variable">String</span> fileName;
+  <span class="keyword">final</span> <span class="variable">int</span> fileSize;
+  <span class="keyword">final</span> <span class="variable">String</span> sha256;
+  <span class="keyword">final</span> <span class="variable">String</span> releaseSignature;
+  <span class="keyword">final</span> <span class="variable">int</span> securityVersion;
+  <span class="keyword">final</span> <span class="variable">DateTime</span> releaseDate;
+}
+
+<span class="comment">// OTA 升级模式</span>
+<span class="keyword">enum</span> <span class="function">OTAMode</span> {
+  online,    <span class="comment">// 在线 MQTT</span>
+  wifiLocal, <span class="comment">// 本地 WiFi</span>
+  bleLocal,  <span class="comment">// 本地 BLE</span>
+}
+
+<span class="comment">// OTA 升级状态</span>
+<span class="keyword">enum</span> <span class="function">OTAStatus</span> {
+  idle,
+  downloading,
+  connecting,
+  transferring,
+  verifying,
+  upgrading,
+  success,
+  failed,
+  cancelled,
+}
+            </div>
+            
+            <h3>11.2 BLE OTA 服务层</h3>
+            <div class="code-block">
+<span class="comment">// BLE OTA 服务接口</span>
+<span class="keyword">abstract class</span> <span class="function">BleOTAService</span> {
+  <span class="comment">// 扫描支持 OTA 的设备</span>
+  <span class="keyword">Stream</span>&lt;<span class="variable">BleDevice</span>&gt; <span class="function">scanForOTADevices</span>();
+  
+  <span class="comment">// 连接设备</span>
+  <span class="keyword">Future</span>&lt;<span class="variable">void</span>&gt; <span class="function">connect</span>(<span class="variable">String</span> deviceId);
+  
+  <span class="comment">// 鉴权</span>
+  <span class="keyword">Future</span>&lt;<span class="variable">bool</span>&gt; <span class="function">authenticate</span>(<span class="variable">String</span> deviceSN);
+  
+  <span class="comment">// 查询设备状态</span>
+  <span class="keyword">Future</span>&lt;<span class="variable">BleOTAStatus</span>&gt; <span class="function">getDeviceStatus</span>();
+  
+  <span class="comment">// 开始升级</span>
+  <span class="keyword">Future</span>&lt;<span class="variable">void</span>&gt; <span class="function">startUpgrade</span>(<span class="variable">String</span> firmwarePath, <span class="variable">FirmwareMetadata</span> metadata);
+  
+  <span class="comment">// 监听进度</span>
+  <span class="keyword">Stream</span>&lt;<span class="variable">OTAProgress</span>&gt; <span class="function">get progressStream</span>;
+  
+  <span class="comment">// 取消升级</span>
+  <span class="keyword">Future</span>&lt;<span class="variable">void</span>&gt; <span class="function">cancelUpgrade</span>();
+  
+  <span class="comment">// 断开连接</span>
+  <span class="keyword">Future</span>&lt;<span class="variable">void</span>&gt; <span class="function">disconnect</span>();
+}
+            </div>
+            
+            <h3>11.3 固件缓存管理器</h3>
+            <div class="code-block">
+<span class="comment">// 固件缓存管理器</span>
+<span class="keyword">class</span> <span class="function">FirmwareCacheManager</span> {
+  <span class="keyword">static const</span> <span class="variable">MAX_CACHE_SIZE</span> = <span class="variable">500</span> * <span class="variable">1024</span> * <span class="variable">1024</span>; <span class="comment">// 500MB</span>
+  
+  <span class="keyword">final</span> <span class="variable">String</span> cacheDir;
+  <span class="keyword">final</span> <span class="variable">SharedPreferences</span> prefs;
+  
+  <span class="comment">// 下载固件到缓存</span>
+  <span class="keyword">Future</span>&lt;<span class="variable">String</span>&gt; <span class="function">downloadToCache</span>(<span class="variable">FirmwareMetadata</span> metadata) <span class="keyword">async</span> {
+    <span class="comment">// 检查缓存空间</span>
+    <span class="keyword">await</span> <span class="function">ensureCacheSpace</span>(metadata.fileSize);
+    
+    <span class="comment">// 下载文件</span>
+    <span class="keyword">final</span> filePath = <span class="keyword">await</span> <span class="function">downloadFile</span>(metadata.downloadUrl);
+    
+    <span class="comment">// 验证完整性</span>
+    <span class="keyword">await</span> <span class="function">verifyFirmwareIntegrity</span>(filePath, metadata);
+    
+    <span class="comment">// 记录到缓存索引</span>
+    <span class="keyword">await</span> <span class="function">addToCacheIndex</span>(metadata, filePath);
+    
+    <span class="keyword">return</span> filePath;
+  }
+  
+  <span class="comment">// 获取已缓存的固件</span>
+  <span class="keyword">List</span>&lt;<span class="variable">CachedFirmware</span>&gt; <span class="function">getCachedFirmwares</span>() {
+    <span class="comment">// 从缓存索引中读取</span>
+  }
+  
+  <span class="comment">// LRU 淘汰策略</span>
+  <span class="keyword">Future</span>&lt;<span class="variable">void</span>&gt; <span class="function">ensureCacheSpace</span>(<span class="variable">int</span> requiredSize) <span class="keyword">async</span> {
+    <span class="keyword">final</span> currentSize = <span class="keyword">await</span> <span class="function">getCacheSize</span>();
+    <span class="keyword">if</span> (currentSize + requiredSize > MAX_CACHE_SIZE) {
+      <span class="keyword">await</span> <span class="function">evictLeastRecentlyUsed</span>(requiredSize);
+    }
+  }
+  
+  <span class="comment">// 清理缓存</span>
+  <span class="keyword">Future</span>&lt;<span class="variable">void</span>&gt; <span class="function">clearCache</span>() <span class="keyword">async</span> {
+    <span class="comment">// 删除所有缓存文件</span>
+  }
+}
+            </div>
+            
+            <h3>11.4 API 接口设计</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>接口</th>
+                        <th>方法</th>
+                        <th>说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>/ota/check/:sn</code></td>
+                        <td>GET</td>
+                        <td>检查设备是否有可用更新</td>
+                    </tr>
+                    <tr>
+                        <td><code>/ota/firmwares</code></td>
+                        <td>GET</td>
+                        <td>获取固件列表（支持筛选）</td>
+                    </tr>
+                    <tr>
+                        <td><code>/ota/firmwares/:id/download</code></td>
+                        <td>GET</td>
+                        <td>下载固件文件</td>
+                    </tr>
+                    <tr>
+                        <td><code>/ota/devices/:sn/local-ota-result</code></td>
+                        <td>POST</td>
+                        <td>上报本地 OTA 结果</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="footer">
+            <p>CS-INV OTA 升级系统重新设计方案 - 技术文档</p>
+            <p style="margin-top: 0.5rem; font-size: 0.9rem; opacity: 0.8;">
+                文档版本：V1.0 | 最后更新：2026-08-12 | 编写：技术架构团队
+            </p>
+        </div>
+    </div>
+
+    <!-- 引入 mermaid.js 用于渲染流程图 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js" integrity="sha384-o2d7a1T0YJqF8vP4h2F8vP4h2F8vP4h2F8vP4h2F8vP4h2F8vP4h2F8vP4h2F8vP4" crossorigin="anonymous"></script>
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            flowchart: { 
+                useMaxWidth: true,
+                htmlLabels: true,
+                curve: 'basis'
+            }
+        });
+    </script>
+</body>
+</html>

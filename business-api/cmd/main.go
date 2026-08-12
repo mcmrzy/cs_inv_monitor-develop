@@ -1000,6 +1000,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 
 			// 文件上传
 			auth.POST("/upload/avatar", deps.UploadHandler.UploadAvatar)
+			auth.POST("/upload/station-image", deps.UploadHandler.UploadStationImage)
 		}
 
 		requireAdmin := middleware.RequirePermission(deps.PermChecker, "admin", "manage")
@@ -1083,6 +1084,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			authMembers.DELETE("/memberships/:id/remove", deps.MemberLifecycleHandler.RemoveMember)
 			authMembers.PATCH("/memberships/:id/deactivate", deps.MemberLifecycleHandler.DeactivateMember)
 			authMembers.PATCH("/memberships/:id/reactivate", deps.MemberLifecycleHandler.ReactivateMember)
+			authMembers.PUT("/memberships/:id/role", deps.MemberLifecycleHandler.UpdateMemberRole)
 
 			// Cross-organization transfer
 			authMembers.POST("/transfer/initiate", deps.MemberLifecycleHandler.TransferInitiate)

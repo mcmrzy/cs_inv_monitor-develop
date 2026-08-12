@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-/// 排序/批量模式的错相位"摇晃"入场动画（iOS 编辑模式 jiggle 风格）：
-/// `active` 变为 true 时卡片做一次小幅 scale/rotate 往复摇晃，随后回到静止态；
+/// 排序/批量模式的错相位持续抖动动画（iOS 编辑模式 jiggle 风格）：
+/// `active` 变为 true 时卡片持续做小幅 scale/rotate 往复抖动；
 /// 每张卡片按 `index` 偏移 0.15s 错峰播放（与 _AnimatedMenuSheet 的 Interval 错峰一致）。
 /// 拖动/勾选等后续交互不会重复触发；退出模式立即停止并复位。
 class JiggleOnce extends StatefulWidget {
@@ -31,7 +31,7 @@ class _JiggleOnceState extends State<JiggleOnce>
     super.initState();
     _ctl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1000),
+      duration: const Duration(milliseconds: 400),
     );
     // 控制器 1000ms：index * 0.15 直接对应 150ms 相位偏移；
     // 起始延迟限幅，保证每张卡片都有足够的摇晃时长
@@ -42,20 +42,14 @@ class _JiggleOnceState extends State<JiggleOnce>
       curve: Interval(start, end, curve: Curves.easeInOut),
     );
     _rotation = TweenSequence<double>([
-      // 小幅往复摇晃后归零（角度约 ±1.7°）
-      TweenSequenceItem(tween: Tween(begin: 0.0, end: -0.03), weight: 25),
-      TweenSequenceItem(tween: Tween(begin: -0.03, end: 0.03), weight: 30),
-      TweenSequenceItem(tween: Tween(begin: 0.03, end: -0.02), weight: 20),
-      TweenSequenceItem(tween: Tween(begin: -0.02, end: 0.02), weight: 15),
-      TweenSequenceItem(tween: Tween(begin: 0.02, end: 0.0), weight: 10),
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: -0.017), weight: 33),
+      TweenSequenceItem(tween: Tween(begin: -0.017, end: 0.017), weight: 34),
+      TweenSequenceItem(tween: Tween(begin: 0.017, end: 0.0), weight: 33),
     ]).animate(animation);
     _scale = TweenSequence<double>([
-      // 同步小幅 scale 起伏，随摇晃收放
-      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.985), weight: 25),
-      TweenSequenceItem(tween: Tween(begin: 0.985, end: 1.012), weight: 30),
-      TweenSequenceItem(tween: Tween(begin: 1.012, end: 0.99), weight: 20),
-      TweenSequenceItem(tween: Tween(begin: 0.99, end: 1.006), weight: 15),
-      TweenSequenceItem(tween: Tween(begin: 1.006, end: 1.0), weight: 10),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.995), weight: 33),
+      TweenSequenceItem(tween: Tween(begin: 0.995, end: 1.005), weight: 34),
+      TweenSequenceItem(tween: Tween(begin: 1.005, end: 1.0), weight: 33),
     ]).animate(animation);
     if (widget.active) _play();
   }
@@ -77,7 +71,7 @@ class _JiggleOnceState extends State<JiggleOnce>
   void _play() {
     // 延迟一帧再启动，确保元素在树中稳定
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && widget.active) _ctl.forward(from: 0);
+      if (mounted && widget.active) _ctl.repeat();
     });
   }
 
@@ -92,8 +86,6 @@ class _JiggleOnceState extends State<JiggleOnce>
     return AnimatedBuilder(
       animation: _ctl,
       builder: (context, child) {
-        // 动画未开始/已结束：保持静止，不做任何变换
-        if (_ctl.isCompleted || _ctl.isDismissed) return child!;
         return Transform.rotate(
           angle: _rotation.value,
           child: Transform.scale(

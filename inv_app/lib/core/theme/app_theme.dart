@@ -141,7 +141,7 @@ class AppTheme {
         type: BottomNavigationBarType.fixed,
         elevation: 0,
         backgroundColor: Colors.white,
-        selectedItemColor: const Color(0xFF1565C0),
+        selectedItemColor: const Color(0xFF0D47A1),
         unselectedItemColor: const Color(0xFF9E9E9E),
         selectedLabelStyle:
             TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600),

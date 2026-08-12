@@ -2,11 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 import 'package:inv_app/core/data/china_regions.dart';
 import 'package:inv_app/core/data/country_name_mapping.dart';
 import 'package:inv_app/core/data/province_name_mapping.dart';
 import 'package:inv_app/core/data/regions_data.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/services/service_locator.dart';
+import 'package:inv_app/core/network/api_client.dart';
+import 'package:inv_app/features/station/data/station_image_upload_service.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
 import 'package:inv_app/features/station/presentation/widgets/inline_location_picker.dart';
 import 'package:inv_app/features/station/presentation/widgets/region_picker_routes.dart';
@@ -39,6 +44,9 @@ class _EditStationPageState extends State<EditStationPage> {
   double? _longitude;
   bool _loaded = false;
   bool _isSubmitting = false;
+  File? _cardImage;
+  String? _cardImageUrl;
+  bool _uploadingImage = false;
 
   /// 当前国家的省份列表（中国用内置数据，其他国家用全球数据并翻译）
   List<String> get _provinces {
@@ -84,6 +92,38 @@ class _EditStationPageState extends State<EditStationPage> {
     super.dispose();
   }
 
+  Future<void> _pickAndUploadImage() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1024,
+      maxHeight: 1024,
+      imageQuality: 85,
+    );
+    if (picked == null) return;
+
+    setState(() => _uploadingImage = true);
+    try {
+      final apiClient = getIt<ApiClient>();
+      final uploadService = StationImageUploadService(apiClient);
+      final url = await uploadService.uploadStationImage(File(picked.path));
+      if (mounted) {
+        setState(() {
+          _cardImage = File(picked.path);
+          _cardImageUrl = url;
+          _uploadingImage = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _uploadingImage = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString())),
+        );
+      }
+    }
+  }
+
   void _loadData(dynamic station) {
     if (_loaded || station == null) return;
     _loaded = true;
@@ -103,6 +143,11 @@ class _EditStationPageState extends State<EditStationPage> {
     _addressController.text = station['address'] ?? '';
     _latitude = (station['latitude'] as num?)?.toDouble();
     _longitude = (station['longitude'] as num?)?.toDouble();
+    // 加载卡片图片URL
+    final cardImageUrl = station['card_image_url'] as String?;
+    if (cardImageUrl != null && cardImageUrl.isNotEmpty) {
+      _cardImageUrl = cardImageUrl;
+    }
   }
 
   // 搜索地址：拼接地区+详细地址让地图定位（onLocationChanged 会自动同步经纬度）
@@ -200,6 +245,10 @@ class _EditStationPageState extends State<EditStationPage> {
       data['latitude'] = _latitude ?? 0;
       data['longitude'] = _longitude ?? 0;
     }
+    // 电站卡片图片
+    if (_cardImageUrl != null) {
+      data['card_image_url'] = _cardImageUrl;
+    }
     context.read<StationBloc>().add(
           StationUpdateRequested(
             stationId: widget.stationId,
@@ -251,9 +300,16 @@ class _EditStationPageState extends State<EditStationPage> {
                     icon: Icons.solar_power_rounded,
                     title: AppLocalizations.of(context)!.stationInfo,
                     subtitle: AppLocalizations.of(context)!.fillStationInfo,
-                    child: _buildField(
-                      _nameController,
-                      AppLocalizations.of(context)!.stationName,
+                    child: Column(
+                      children: [
+                        // 电站卡片图片
+                        _buildImagePicker(),
+                        SizedBox(height: 12.h),
+                        _buildField(
+                          _nameController,
+                          AppLocalizations.of(context)!.stationName,
+                        ),
+                      ],
                     ),
                   ),
                   SizedBox(height: 16.h),
@@ -498,6 +554,164 @@ class _EditStationPageState extends State<EditStationPage> {
     context
         .read<StationBloc>()
         .add(StationDeleteRequested(stationId: widget.stationId));
+  }
+
+  Widget _buildImagePicker() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              '电站卡片图片',
+              style: TextStyle(
+                fontSize: 13.sp,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            SizedBox(width: 4.w),
+            Text(
+              '(可选)',
+              style: TextStyle(
+                fontSize: 11.sp,
+                color: AppColors.textHint,
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: 8.h),
+        GestureDetector(
+          onTap: _uploadingImage ? null : _pickAndUploadImage,
+          child: Container(
+            width: double.infinity,
+            height: 160.h,
+            decoration: BoxDecoration(
+              color: AppColor.surfaceHover(context),
+              borderRadius: BorderRadius.circular(12.r),
+              border: Border.all(
+                color: (_cardImage != null || _cardImageUrl != null)
+                    ? AppColors.primary.withValues(alpha: 0.3)
+                    : AppColor.border(context),
+              ),
+            ),
+            child: _uploadingImage
+                ? Center(
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      color: AppColors.primary,
+                    ),
+                  )
+                : _cardImage != null
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(12.r),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            Image.file(
+                              _cardImage!,
+                              fit: BoxFit.cover,
+                            ),
+                            Positioned(
+                              top: 8,
+                              right: 8,
+                              child: GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _cardImage = null;
+                                    _cardImageUrl = null;
+                                  });
+                                },
+                                child: Container(
+                                  padding: EdgeInsets.all(4.w),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black54,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Icons.close,
+                                    size: 16.sp,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : _cardImageUrl != null
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(12.r),
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                Image.network(
+                                  _cardImageUrl!,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Center(
+                                    child: Icon(
+                                      Icons.broken_image_outlined,
+                                      size: 36.sp,
+                                      color: AppColors.textHint,
+                                    ),
+                                  ),
+                                ),
+                                Positioned(
+                                  top: 8,
+                                  right: 8,
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      setState(() {
+                                        _cardImageUrl = null;
+                                      });
+                                    },
+                                    child: Container(
+                                      padding: EdgeInsets.all(4.w),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black54,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        Icons.close,
+                                        size: 16.sp,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.add_photo_alternate_outlined,
+                                size: 36.sp,
+                                color: AppColors.textHint,
+                              ),
+                              SizedBox(height: 8.h),
+                              Text(
+                                '点击上传电站卡片图片',
+                                style: TextStyle(
+                                  fontSize: 13.sp,
+                                  color: AppColors.textHint,
+                                ),
+                              ),
+                              SizedBox(height: 4.h),
+                              Text(
+                                '支持 JPEG、PNG、GIF、WebP，最大 5MB',
+                                style: TextStyle(
+                                  fontSize: 11.sp,
+                                  color: AppColors.textHint.withValues(alpha: 0.7),
+                                ),
+                              ),
+                            ],
+                          ),
+          ),
+        ),
+      ],
+    );
   }
 
   /// 分区卡片：图标圆底 + 标题 + 副标题 + 内容（与创建电站页风格一致）

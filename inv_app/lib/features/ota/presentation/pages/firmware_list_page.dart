@@ -7,6 +7,7 @@ import 'package:inv_app/core/services/firmware_download_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/ota/presentation/bloc/ota_bloc.dart';
+import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -173,12 +174,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
         });
 
         final l10n = AppLocalizations.of(context)!;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l10n.str('downloaded')),
-            backgroundColor: AppColors.successLight,
-          ),
-        );
+        AppToast.show(context, l10n.str('downloaded'), type: ToastType.success);
       }
     } catch (e) {
       debugPrint('[PreDownload] Error: $e');
@@ -188,12 +184,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
         });
 
         final l10n = AppLocalizations.of(context)!;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l10n.str('pre_download_failed', {'error': '$e'})),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        AppToast.show(context, l10n.str('pre_download_failed', {'error': '$e'}), type: ToastType.error);
       }
     }
   }

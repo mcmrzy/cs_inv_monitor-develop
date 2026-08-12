@@ -3,15 +3,19 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 import 'package:inv_app/core/data/china_regions.dart';
 import 'package:inv_app/core/data/regions_data.dart';
 import 'package:inv_app/core/data/country_name_mapping.dart';
 import 'package:inv_app/core/data/province_name_mapping.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/services/service_locator.dart';
+import 'package:inv_app/core/network/api_client.dart';
 import 'package:inv_app/features/station/presentation/widgets/region_picker_routes.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
 import 'package:inv_app/features/station/presentation/widgets/inline_location_picker.dart';
+import 'package:inv_app/features/station/data/station_image_upload_service.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 class CreateStationPage extends StatefulWidget {
@@ -34,6 +38,9 @@ class _CreateStationPageState extends State<CreateStationPage> {
   double? _latitude;
   double? _longitude;
   bool _submitting = false;
+  File? _cardImage;
+  String? _cardImageUrl;
+  bool _uploadingImage = false;
 
   List<String> get _provinces {
     if (_country == '中国') {
@@ -64,6 +71,36 @@ class _CreateStationPageState extends State<CreateStationPage> {
     super.dispose();
   }
 
+  Future<void> _pickAndUploadImage() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1024,
+      maxHeight: 1024,
+      imageQuality: 85,
+    );
+    if (picked == null) return;
+
+    setState(() => _uploadingImage = true);
+    try {
+      final apiClient = getIt<ApiClient>();
+      final uploadService = StationImageUploadService(apiClient);
+      final url = await uploadService.uploadStationImage(File(picked.path));
+      if (mounted) {
+        setState(() {
+          _cardImage = File(picked.path);
+          _cardImageUrl = url;
+          _uploadingImage = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _uploadingImage = false);
+        _showErr(e.toString());
+      }
+    }
+  }
+
   void _submit() {
     final l10n = AppLocalizations.of(context)!;
     if (_province == null) {
@@ -83,19 +120,21 @@ class _CreateStationPageState extends State<CreateStationPage> {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _submitting = true);
+    final data = {
+      'name': _nameCtl.text.trim(),
+      'country': _country,
+      'province': _province,
+      'city': _city ?? '',
+      'district': _district ?? '',
+      'address': _addressText,
+      'latitude': _latitude ?? 0,
+      'longitude': _longitude ?? 0,
+    };
+    if (_cardImageUrl != null) {
+      data['card_image_url'] = _cardImageUrl!;
+    }
     context.read<StationBloc>().add(
-          StationCreateRequested(
-            data: {
-              'name': _nameCtl.text.trim(),
-              'country': _country,
-              'province': _province,
-              'city': _city ?? '',
-              'district': _district ?? '',
-              'address': _addressText,
-              'latitude': _latitude ?? 0,
-              'longitude': _longitude ?? 0,
-            },
-          ),
+          StationCreateRequested(data: data),
         );
   }
 
@@ -225,6 +264,9 @@ class _CreateStationPageState extends State<CreateStationPage> {
                     subtitle: AppLocalizations.of(context)!.fillStationInfo,
                     child: Column(
                       children: [
+                        // 电站卡片图片
+                        _buildImagePicker(),
+                        SizedBox(height: 12.h),
                         _field(
                           _nameCtl,
                           AppLocalizations.of(context)!.stationName,
@@ -498,6 +540,121 @@ class _CreateStationPageState extends State<CreateStationPage> {
           child,
         ],
       ),
+    );
+  }
+
+  Widget _buildImagePicker() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              AppLocalizations.of(context)!.stationCardImage ?? '电站卡片图片',
+              style: TextStyle(
+                fontSize: 13.sp,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            SizedBox(width: 4.w),
+            Text(
+              '(可选)',
+              style: TextStyle(
+                fontSize: 11.sp,
+                color: AppColors.textHint,
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: 8.h),
+        GestureDetector(
+          onTap: _uploadingImage ? null : _pickAndUploadImage,
+          child: Container(
+            width: double.infinity,
+            height: 160.h,
+            decoration: BoxDecoration(
+              color: AppColor.surfaceHover(context),
+              borderRadius: BorderRadius.circular(12.r),
+              border: Border.all(
+                color: _cardImage != null
+                    ? AppColors.primary.withValues(alpha: 0.3)
+                    : AppColor.border(context),
+              ),
+            ),
+            child: _uploadingImage
+                ? Center(
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      color: AppColors.primary,
+                    ),
+                  )
+                : _cardImage != null
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(12.r),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            Image.file(
+                              _cardImage!,
+                              fit: BoxFit.cover,
+                            ),
+                            Positioned(
+                              top: 8,
+                              right: 8,
+                              child: GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _cardImage = null;
+                                    _cardImageUrl = null;
+                                  });
+                                },
+                                child: Container(
+                                  padding: EdgeInsets.all(4.w),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black54,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Icons.close,
+                                    size: 16.sp,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.add_photo_alternate_outlined,
+                            size: 36.sp,
+                            color: AppColors.textHint,
+                          ),
+                          SizedBox(height: 8.h),
+                          Text(
+                            '点击上传电站卡片图片',
+                            style: TextStyle(
+                              fontSize: 13.sp,
+                              color: AppColors.textHint,
+                            ),
+                          ),
+                          SizedBox(height: 4.h),
+                          Text(
+                            '支持 JPEG、PNG、GIF、WebP，最大 5MB',
+                            style: TextStyle(
+                              fontSize: 11.sp,
+                              color: AppColors.textHint.withValues(alpha: 0.7),
+                            ),
+                          ),
+                        ],
+                      ),
+          ),
+        ),
+      ],
     );
   }
 
