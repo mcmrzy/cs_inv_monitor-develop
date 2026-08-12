@@ -519,6 +519,24 @@ func setupRouter(cfg *config.Config, dataService *service.DataService, stateMana
 			}
 
 			if !dataService.IsDeviceOnline(sn) {
+				// 设备离线时，将 OTA 命令入队，设备上线后自动发送
+				if mqtt.IsOtaCommand(cmdType) {
+					if err := dataService.QueueCommand(sn, cmdType, rawBody); err != nil {
+						logger.Error("Failed to queue offline OTA command",
+							zap.String("sn", sn), zap.String("cmd", cmdType), zap.Error(err))
+						c.JSON(http.StatusInternalServerError, gin.H{"error": "设备离线且命令入队失败"})
+						return
+					}
+					logger.Info("OTA command queued for offline device",
+						zap.String("sn", sn), zap.String("cmd", cmdType))
+					c.JSON(http.StatusAccepted, gin.H{
+						"sn":      sn,
+						"command": cmdType,
+						"status":  "queued",
+						"message": "设备离线，命令已入队等待设备上线",
+					})
+					return
+				}
 				c.JSON(http.StatusServiceUnavailable, gin.H{"error": "设备离线"})
 				return
 			}

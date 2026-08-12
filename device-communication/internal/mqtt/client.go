@@ -538,8 +538,8 @@ func (c *Client) handleCommands(ctx context.Context) {
 	}
 }
 
-// isOtaCommand 判断是否为 OTA 相关命令
-func isOtaCommand(cmdType string) bool {
+// IsOtaCommand 判断是否为 OTA 相关命令
+func IsOtaCommand(cmdType string) bool {
 	return cmdType == "ota_upgrade" || cmdType == "ota_notify" || cmdType == "start"
 }
 
@@ -548,14 +548,14 @@ func (c *Client) sendCommand(ctx context.Context, cmd *DeviceCommand) {
 
 	// OTA命令使用专用主题 cs_inv/{sn}/ota/cmd，其他命令使用通用主题 cs_inv/{sn}/cmd
 	var topic string
-	if isOtaCommand(cmd.CmdType) {
+	if IsOtaCommand(cmd.CmdType) {
 		topic = fmt.Sprintf("cs_inv/%s/ota/cmd", cmd.DeviceSN)
 	} else {
 		topic = fmt.Sprintf("cs_inv/%s/cmd", cmd.DeviceSN)
 	}
 
 	// OTA 命令有原始 JSON，直接发送
-	if isOtaCommand(cmd.CmdType) && len(cmd.RawPayload) > 0 {
+	if IsOtaCommand(cmd.CmdType) && len(cmd.RawPayload) > 0 {
 		_, err := c.cm.Publish(ctx, &paho.Publish{
 			QoS:     1,
 			Topic:   topic,

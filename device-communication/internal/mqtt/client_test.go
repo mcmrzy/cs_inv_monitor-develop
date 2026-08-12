@@ -174,7 +174,7 @@ func TestIsOtaCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.cmdType, func(t *testing.T) {
-			got := isOtaCommand(tt.cmdType)
+			got := IsOtaCommand(tt.cmdType)
 			assert.Equal(t, tt.want, got)
 		})
 	}

@@ -76,6 +76,29 @@ func (s *DataService) SendCommand(sn string, cmdType string, params map[string]i
 	return nil
 }
 
+// QueueCommand 将命令入队到 Redis，设备上线后自动发送
+func (s *DataService) QueueCommand(sn string, cmdType string, rawPayload []byte) error {
+	if s.rdb == nil {
+		return fmt.Errorf("redis not available")
+	}
+
+	queueKey := "device:cmd:queue:" + sn
+	entry := map[string]interface{}{
+		"command":    cmdType,
+		"raw_payload": string(rawPayload),
+		"t":          time.Now().Unix(),
+		"expires_at": time.Now().Add(24 * time.Hour).Unix(),
+	}
+	data, err := json.Marshal(entry)
+	if err != nil {
+		return fmt.Errorf("marshal queue entry failed: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	return s.rdb.RPush(ctx, queueKey, string(data)).Err()
+}
+
 // HandleCmdResult 处理设备上报的命令执行结果 (cs_inv/{sn}/cmd_result)
 func (s *DataService) HandleCmdResult(sn string, payload []byte) {
 	if s.apiServer == "" {
@@ -140,29 +163,38 @@ func (s *DataService) FlushPendingCommands(ctx context.Context, sn string) {
 
 func decodePendingCommand(sn string, raw []byte) (*mqtt.DeviceCommand, error) {
 	var queued struct {
-		Command   string                 `json:"command"`
-		Params    map[string]interface{} `json:"params"`
-		TaskID    string                 `json:"task_id"`
-		CreatedAt int64                  `json:"t"`
-		ExpiresAt int64                  `json:"expires_at"`
+		Command    string                 `json:"command"`
+		Params     map[string]interface{} `json:"params"`
+		TaskID     string                 `json:"task_id"`
+		RawPayload string                 `json:"raw_payload"`
+		CreatedAt  int64                  `json:"t"`
+		ExpiresAt  int64                  `json:"expires_at"`
 	}
 	if err := json.Unmarshal(raw, &queued); err != nil {
 		return nil, err
 	}
-	if queued.Command == "" || queued.TaskID == "" {
-		return nil, fmt.Errorf("queued command and task_id are required")
+	if queued.Command == "" {
+		return nil, fmt.Errorf("queued command is required")
 	}
 	now := time.Now().Unix()
 	if (queued.ExpiresAt > 0 && now > queued.ExpiresAt) ||
 		(queued.ExpiresAt == 0 && queued.CreatedAt > 0 && now-queued.CreatedAt > 300) {
 		return nil, fmt.Errorf("queued command %s has expired", queued.TaskID)
 	}
+
+	// 优先使用 raw_payload（OTA 命令），否则构造 payload
+	var rawPayload []byte
+	if queued.RawPayload != "" {
+		rawPayload = []byte(queued.RawPayload)
+	} else {
+		rawPayload = append([]byte(nil), raw...)
+	}
+
 	return &mqtt.DeviceCommand{
-		DeviceSN: sn,
-		CmdType:  queued.Command,
-		Params:   queued.Params,
-		// buildMqttPayload reads the original task_id and keeps it unchanged.
-		RawPayload: append([]byte(nil), raw...),
+		DeviceSN:   sn,
+		CmdType:    queued.Command,
+		Params:     queued.Params,
+		RawPayload: rawPayload,
 	}, nil
 }
 
