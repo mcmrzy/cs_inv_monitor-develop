@@ -79,16 +79,6 @@ class _ProfilePageState extends State<ProfilePage> {
     _startLoadTimeout();
   }
 
-  /// 下拉刷新：重新走 AuthCheckRequested，等待刷新流程完成后复位超时计时
-  Future<void> _onRefresh() async {
-    _loadTimeoutTimer?.cancel();
-    if (_loadTimedOut) setState(() => _loadTimedOut = false);
-    context.read<AuthBloc>().add(AuthCheckRequested());
-    // 简单等待：让 RefreshIndicator 指示器有反馈时间
-    await Future<void>.delayed(const Duration(milliseconds: 600));
-    _startLoadTimeout();
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -128,24 +118,20 @@ class _ProfilePageState extends State<ProfilePage> {
           // 加载超时 / 出错（如缓存缺失且网络差）时展示失败态 + 手动重试
           final showLoadError = _loadTimedOut || state is AuthError;
 
-          return RefreshIndicator(
-            onRefresh: _onRefresh,
-            color: AppColors.primary,
-            child: ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              children: [
-                _buildHeader(
-                  displayName,
-                  isSystemAdmin,
-                  isLoading,
-                  showLoadError,
-                  l10n,
-                  state is AuthAuthenticated ? state : null,
-                ),
-                _buildMenuSection(context),
-                _buildLogoutButton(context, l10n),
-              ],
-            ),
+          return ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: [
+              _buildHeader(
+                displayName,
+                isSystemAdmin,
+                isLoading,
+                showLoadError,
+                l10n,
+                state is AuthAuthenticated ? state : null,
+              ),
+              _buildMenuSection(context),
+              _buildLogoutButton(context, l10n),
+            ],
           );
         },
       ),
