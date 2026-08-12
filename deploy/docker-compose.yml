@@ -51,7 +51,7 @@ services:
       context: ..
       dockerfile: business-api/Dockerfile
     image: inv-api-server:latest
-    container_name: inv-api-server
+    container_name: business-api
     restart: unless-stopped
     environment:
       DB_HOST: postgres
@@ -109,7 +109,7 @@ services:
       context: ../device-communication
       dockerfile: Dockerfile
     image: inv-device-server:latest
-    container_name: inv-device-server
+    container_name: device-communication
     restart: unless-stopped
     environment:
       DB_HOST: postgres
@@ -120,7 +120,7 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       REDIS_PASSWORD: ${REDIS_PASSWORD}
-      MQTT_BROKER: ${MQTT_BROKER:-jiuxiaoyw.online}
+      MQTT_BROKER: ${MQTT_BROKER:-mqtt.jiuxiaoyw.online}
       MQTT_PORT: ${MQTT_PORT:-8883}
       MQTT_CLIENT_ID: ${MQTT_CLIENT_ID:-CSKJ-INV-SERVER-DEVICE-LOCAL}
       MQTT_USERNAME: ${MQTT_USERNAME}
@@ -149,7 +149,7 @@ services:
       context: ../api-gateway
       dockerfile: Dockerfile
     image: api-gateway:latest
-    container_name: inv-api-gateway
+    container_name: api-gateway
     restart: unless-stopped
     environment:
       JWT_SECRET: ${JWT_SECRET}
@@ -182,7 +182,7 @@ services:
       context: ../mqtt-kafka-bridge
       dockerfile: Dockerfile
     image: mqtt-kafka-bridge:latest
-    container_name: inv-mqtt-bridge
+    container_name: mqtt-kafka-bridge
     restart: unless-stopped
     environment:
       KAFKA_BROKERS: ${KAFKA_BROKERS:-broker.jiuxiaoyw.online:9092}

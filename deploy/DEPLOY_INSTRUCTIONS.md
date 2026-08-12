@@ -70,7 +70,7 @@ MQTT_PORT=8883
 MQTT_CLIENT_ID=CSKJ-INV-SERVER-DEVICE-LOCAL
 MQTT_USERNAME=CSKJ-INV-SERVER-DEVICE
 MQTT_PASSWORD=CHANGE_ME_ROTATE_CREDENTIAL
-MQTT_TLS_INSECURE=true
+MQTT_TLS_INSECURE=false  # standard CA verification (no fingerprint pinning)
 
 # Email
 EMAIL_HOST=smtp.qq.com
@@ -147,9 +147,9 @@ ssh cskj@example.invalid "bash /opt/deploy.sh"
 docker ps
 
 # 查看服务日志
-docker logs inv-api-server
-docker logs inv-device-server
-docker logs inv-api-gateway
+docker logs business-api
+docker logs device-communication
+docker logs api-gateway
 
 # 重启服务
 docker-compose restart
