@@ -379,13 +379,9 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
                           if (!mounted) return;
                           Navigator.pop(context); // ignore: use_build_context_synchronously
                           if (inviteLink != null) {
-                            final serverBase =
-                                AppConfig.apiBaseUrl.replaceAll(
-                              RegExp(r'/api/v1$'),
-                              '',
-                            );
+                            // 邀请链接指向管理后台（Web），使用 frontendBaseUrl（www 域）
                             _showInviteLinkDialog(
-                              '$serverBase$inviteLink',
+                              '${AppConfig.frontendBaseUrl}$inviteLink',
                               email,
                             );
                           } else {

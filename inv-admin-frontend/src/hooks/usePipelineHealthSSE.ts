@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import useAuthStore from '@/stores/authStore';
+import { API_BASE } from '@/utils/urls';
 import type { PipelineHealthSSEEvent } from '@/types/pipeline-health';
 
 interface UsePipelineHealthSSEReturn {
@@ -13,7 +14,7 @@ interface UsePipelineHealthSSEReturn {
   reconnect: () => void;
 }
 
-const SSE_URL = '/api/v1/system/pipeline-health/stream';
+const SSE_URL = `${API_BASE}/system/pipeline-health/stream`;
 const RECONNECT_DELAY_MS = 5000;
 
 export function usePipelineHealthSSE(): UsePipelineHealthSSEReturn {

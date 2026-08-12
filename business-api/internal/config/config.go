@@ -35,6 +35,7 @@ type BackendsConfig struct {
 	DeviceServer  string `mapstructure:"device_server"`
 	InternalKey   string `mapstructure:"internal_key"`
 	ServerURL     string `mapstructure:"server_url"`     // 外部访问地址，用于ESP32下载固件
+	DownloadURL   string `mapstructure:"download_url"`   // 固件下载CDN域名（download子域），用于构造下载URL；为空时回退 server_url
 	FrontendURL   string `mapstructure:"frontend_url"`   // 管理后台外部访问地址，用于邀请邮件等通知链接
 	WeatherAPI    string `mapstructure:"weather_api"`    // 天气API地址
 	AmapAPIKey    string `mapstructure:"amap_api_key"`   // 高德地图API Key
@@ -284,6 +285,7 @@ func Load(configPath string) (*Config, error) {
 	viper.BindEnv("backends.device_server", "DEVICE_SERVER_URL")
 	viper.BindEnv("backends.internal_key", "INTERNAL_KEY")
 	viper.BindEnv("backends.server_url", "SERVER_URL")
+	viper.BindEnv("backends.download_url", "DOWNLOAD_URL")
 	viper.BindEnv("backends.frontend_url", "FRONTEND_URL")
 	viper.BindEnv("backends.weather_api", "WEATHER_API_URL")
 	viper.BindEnv("backends.amap_api_key", "AMAP_API_KEY")

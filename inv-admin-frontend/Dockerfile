@@ -8,6 +8,13 @@ RUN npm ci --registry=https://registry.npmmirror.com
 
 COPY . .
 
+# 外部服务地址（CDN 多子域模式），构建时通过 --build-arg 注入；
+# 不注入则回退到同源相对路径（单域部署 / 本地开发）。
+ARG VITE_API_BASE=""
+ARG VITE_WS_BASE=""
+ENV VITE_API_BASE=$VITE_API_BASE
+ENV VITE_WS_BASE=$VITE_WS_BASE
+
 RUN npm run build
 
 FROM alpine:3.23

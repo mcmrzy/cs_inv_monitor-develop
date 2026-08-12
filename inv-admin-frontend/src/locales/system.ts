@@ -44,6 +44,7 @@ export default {
 
     /* 系统监控 Tab 标签 */
     'system.tabSystemHealth': '系统健康',
+    'system.openBigScreen': '大屏监控',
     'system.tabDataPipeline': '数据管道',
     'system.tabOperationStats': '运营统计',
     'system.tabSystemLog': '系统日志',
@@ -116,6 +117,7 @@ export default {
 
     /* System Monitor Tab Labels */
     'system.tabSystemHealth': 'System Health',
+    'system.openBigScreen': 'Big Screen',
     'system.tabDataPipeline': 'Data Pipeline',
     'system.tabOperationStats': 'Operation Stats',
     'system.tabSystemLog': 'System Logs',

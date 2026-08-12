@@ -35,11 +35,12 @@ type OTAService struct {
 	internalKey  string
 	uploadDir    string // 固件上传存储目录
 	serverURL    string // 外部访问地址，用于构造ESP32下载URL
+	downloadURL  string // 固件下载CDN域名（download子域），优先于 serverURL 用于构造下载URL
 	httpClient   *http.Client
 	concurrency  int
 }
 
-func NewOTAService(repo *repository.OTARepository, rdb *redis.Client, deviceServer string, internalKey string, uploadDir string, serverURL string, db *pgxpool.Pool, jpushService *JPushService) *OTAService {
+func NewOTAService(repo *repository.OTARepository, rdb *redis.Client, deviceServer string, internalKey string, uploadDir string, serverURL string, downloadURL string, db *pgxpool.Pool, jpushService *JPushService) *OTAService {
 	if uploadDir == "" {
 		uploadDir = "/data/firmware"
 	}
@@ -52,6 +53,7 @@ func NewOTAService(repo *repository.OTARepository, rdb *redis.Client, deviceServ
 		internalKey:  internalKey,
 		uploadDir:    uploadDir,
 		serverURL:    serverURL,
+		downloadURL:  downloadURL,
 		httpClient:   &http.Client{Timeout: 30 * time.Second},
 		concurrency:  10,
 	}
@@ -219,10 +221,7 @@ func (s *OTAService) PushUpgrade(ctx context.Context, req *PushUpgradeReq) error
 	}
 
 	// 2. 构造下载URL
-	downloadURL := fw.FileURL
-	if s.serverURL != "" && strings.HasPrefix(fw.FileURL, "/") {
-		downloadURL = strings.TrimRight(s.serverURL, "/") + fw.FileURL
-	}
+	downloadURL := s.downloadURLFor(fw.FileURL)
 
 	// 2.5 如果调用方未传 taskID，自动创建一个 source='admin' 的 upgrade_task
 	taskID := req.TaskID
@@ -457,10 +456,7 @@ func (s *OTAService) RetryUpgrade(ctx context.Context, firmwareID int64, deviceS
 	}
 
 	// 重新发送升级命令
-	downloadURL := fw.FileURL
-	if s.serverURL != "" && strings.HasPrefix(fw.FileURL, "/") {
-		downloadURL = strings.TrimRight(s.serverURL, "/") + fw.FileURL
-	}
+	downloadURL := s.downloadURLFor(fw.FileURL)
 
 	for _, sn := range deviceSNs {
 		du, err := s.repo.GetDeviceUpgrade(ctx, sn, firmwareID)
@@ -1292,6 +1288,15 @@ func (s *OTAService) generateMainVersion(ctx context.Context, model string) (str
 
 // BuildDownloadURL 构造固件下载URL（公开方法）
 func (s *OTAService) BuildDownloadURL(fileURL string) string {
+	return s.downloadURLFor(fileURL)
+}
+
+// downloadURLFor 构造固件下载 URL：优先使用 downloadURL（下载CDN域名），
+// 未配置时回退 serverURL；两者均未配置时返回原相对路径。
+func (s *OTAService) downloadURLFor(fileURL string) string {
+	if s.downloadURL != "" && strings.HasPrefix(fileURL, "/") {
+		return strings.TrimRight(s.downloadURL, "/") + fileURL
+	}
 	if s.serverURL != "" && strings.HasPrefix(fileURL, "/") {
 		return strings.TrimRight(s.serverURL, "/") + fileURL
 	}

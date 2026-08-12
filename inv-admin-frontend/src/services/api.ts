@@ -1,6 +1,7 @@
 import axios, { AxiosError } from 'axios'
 import type { ApiResponse } from '@/types'
 import useAuthStore from '@/stores/authStore'
+import { API_BASE } from '@/utils/urls'
 
 export type ExpectedDataShape = 'object' | 'array' | 'page'
 
@@ -74,7 +75,7 @@ async function doRefreshToken(): Promise<string | null> {
   const refreshToken = useAuthStore.getState().refreshToken
   if (!refreshToken) return null
   try {
-    const res = await axios.post('/api/v1/auth/refresh', { refresh_token: refreshToken })
+    const res = await axios.post(`${API_BASE}/auth/refresh`, { refresh_token: refreshToken })
     const data = res.data?.data ?? res.data
     const newToken = data?.token ?? data?.access_token
     if (newToken) {
@@ -89,7 +90,7 @@ async function doRefreshToken(): Promise<string | null> {
 }
 
 const api = axios.create({
-  baseURL: '/api/v1',
+  baseURL: API_BASE,
   timeout: 15000,
   withCredentials: true,
   headers: {

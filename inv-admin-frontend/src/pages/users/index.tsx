@@ -31,9 +31,17 @@ interface UserRecord {
   /** @deprecated */
   role?: number
   org_roles?: string[]
+  membership_id?: number
   status: number
   parent_id?: string | null
   created_at: string
+}
+
+// Roles that can be assigned via the edit dialog (single identity).
+const ASSIGNABLE_ROLES = ['agent', 'distributor', 'installer', 'customer'] as const
+
+function currentRoleOf(record: UserRecord): string | undefined {
+  return record.org_roles?.find((r) => (ASSIGNABLE_ROLES as readonly string[]).includes(r))
 }
 
 // In the new permission system, only system admins can manage users.
@@ -102,6 +110,12 @@ const UsersPage: React.FC = () => {
     onError: (err: any) => message.error(err?.response?.data?.message || t('user.updateFailed')),
   })
 
+  const roleMutation = useMutation({
+    mutationFn: ({ membershipId, role }: { membershipId: number; role: string }) => userApi.updateMemberRole(membershipId, role),
+    onSuccess: () => { message.success(t('user.roleUpdated')); invalidate() },
+    onError: (err: any) => message.error(err?.response?.data?.message || t('user.roleUpdateFailed')),
+  })
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => userApi.delete(id),
     onSuccess: () => { message.success(t('user.deleteSuccess')); invalidate() },
@@ -136,7 +150,8 @@ const UsersPage: React.FC = () => {
   const openAdd = () => { setEditingUser(null); form.resetFields(); setModalOpen(true) }
   const openEdit = (record: User) => {
     setEditingUser(record)
-    form.setFieldsValue({ phone: record.phone, email: record.email, nickname: record.nickname })
+    const raw = record as unknown as UserRecord
+    form.setFieldsValue({ phone: record.phone, email: record.email, nickname: record.nickname, role: currentRoleOf(raw) })
     setModalOpen(true)
   }
 
@@ -144,7 +159,17 @@ const UsersPage: React.FC = () => {
     try {
       const values = await form.validateFields()
       if (editingUser) {
-        updateMutation.mutate({ id: editingUser.id, data: { phone: values.phone, email: values.email, nickname: values.nickname } })
+        const raw = editingUser as unknown as UserRecord
+        const data: any = { phone: values.phone, email: values.email, nickname: values.nickname }
+        updateMutation.mutate({ id: editingUser.id, data })
+        // Role change requires an active organization membership (single identity switch)
+        if (values.role && values.role !== currentRoleOf(raw)) {
+          if (raw.membership_id) {
+            roleMutation.mutate({ membershipId: raw.membership_id, role: values.role })
+          } else {
+            message.warning(t('user.roleRequiresMembership'))
+          }
+        }
       } else {
         if (!values.password) { message.warning(t('user.pleaseInputPassword')); return }
         createMutation.mutate(values)
@@ -277,6 +302,11 @@ const UsersPage: React.FC = () => {
           <Form.Item name="phone" label={t('user.phone')} rules={[{ required: true, message: t('common.pleaseInput') + t('user.phone') }]}><Input placeholder={t('common.pleaseInput') + t('user.phone')} /></Form.Item>
           <Form.Item name="email" label={t('user.email')} rules={[{ required: true, message: t('common.pleaseInput') + t('user.email') }, { type: 'email', message: t('user.emailFormatError') }]}><Input placeholder={t('common.pleaseInput') + t('user.email')} /></Form.Item>
           <Form.Item name="nickname" label={t('user.nickname')} rules={[{ required: true, message: t('common.pleaseInput') + t('user.nickname') }]}><Input placeholder={t('common.pleaseInput') + t('user.nickname')} /></Form.Item>
+          {editingUser && !(editingUser as unknown as UserRecord).is_system_admin && (
+            <Form.Item name="role" label={t('user.role')}>
+              <Select allowClear placeholder={t('admin.selectRole')} options={ASSIGNABLE_ROLES.map((r) => ({ label: roleLabel(r, t), value: r }))} />
+            </Form.Item>
+          )}
           {!editingUser && parentUsers && parentUsers.length > 0 && (
             <Form.Item name="parentId" label={t('user.parentUser')}>
               <Select

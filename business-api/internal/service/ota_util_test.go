@@ -65,6 +65,23 @@ func TestBuildDownloadURL_ServerURL尾部斜杠处理(t *testing.T) {
 	assert.Equal(t, "https://api.example.com/firmware/v2.0.0.bin", result)
 }
 
+func TestBuildDownloadURL_DownloadURL优先于ServerURL(t *testing.T) {
+	s := &OTAService{
+		serverURL:   "https://api.example.com",
+		downloadURL: "https://download.example.com",
+	}
+
+	result := s.BuildDownloadURL("/firmware/v2.0.0.bin")
+	assert.Equal(t, "https://download.example.com/firmware/v2.0.0.bin", result)
+}
+
+func TestBuildDownloadURL_仅DownloadURL配置时使用DownloadURL(t *testing.T) {
+	s := &OTAService{downloadURL: "https://download.example.com"}
+
+	result := s.BuildDownloadURL("/firmware/v2.0.0.bin")
+	assert.Equal(t, "https://download.example.com/firmware/v2.0.0.bin", result)
+}
+
 func TestValidateFirmwareRequest(t *testing.T) {
 	valid := func() *CreateFirmwareReq {
 		req := &CreateFirmwareReq{

@@ -1,6 +1,7 @@
 // 环境配置：修改 apiBaseUrl 的 defaultValue 切换环境
 // 本地开发：http://localhost:8888/api/v1 (模拟器) 或 http://<电脑IP>:8888/api/v1 (真机)
-// 生产环境：https://jiuxiaoyw.online/api/v1
+// 生产环境（构建时注入）：--dart-define=API_BASE_URL=https://api.jiuxiaoyw.online/api/v1
+//                         --dart-define=FRONTEND_BASE_URL=https://www.jiuxiaoyw.online
 class AppConfig {
   static const String appName = '辰烁光伏';
   static const String version = '1.0.0';
@@ -9,6 +10,13 @@ class AppConfig {
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
     defaultValue: 'http://192.168.8.57:8888/api/v1',
+  );
+
+  /// 管理后台（Web）外部访问地址，用于邀请链接等分享场景；
+  /// 生产构建时通过 --dart-define=FRONTEND_BASE_URL 注入。
+  static const String frontendBaseUrl = String.fromEnvironment(
+    'FRONTEND_BASE_URL',
+    defaultValue: 'https://www.jiuxiaoyw.online',
   );
   static const int connectTimeout = 30000;
   static const int receiveTimeout = 30000;

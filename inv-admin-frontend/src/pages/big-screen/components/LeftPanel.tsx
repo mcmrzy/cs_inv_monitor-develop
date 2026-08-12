@@ -1,0 +1,212 @@
+import React, { useMemo } from 'react'
+import {
+  ThunderboltOutlined,
+  DatabaseOutlined,
+  WifiOutlined,
+  AlertOutlined,
+} from '@ant-design/icons'
+import ReactECharts from '@/lib/echarts'
+import useTranslation from '@/hooks/useTranslation'
+
+export interface DeviceStats {
+  total: number
+  online: number
+  offline: number
+  fault: number
+}
+
+export interface TrendPoint {
+  timeLabel: string
+  energy: number
+  loadEnergy?: number
+}
+
+interface LeftPanelProps {
+  deviceStats: DeviceStats
+  todayEnergy: number
+  totalCapacity: number
+  onlineRate: number
+  totalStations: number
+  trendData: TrendPoint[]
+}
+
+const ACCENT = '#00d4ff'
+const GREEN = '#00ff88'
+const RED = '#ff4d6d'
+const AMBER = '#ffa502'
+
+const LeftPanel: React.FC<LeftPanelProps> = ({
+  deviceStats,
+  todayEnergy,
+  totalCapacity,
+  onlineRate,
+  totalStations,
+  trendData,
+}) => {
+  const { t } = useTranslation()
+
+  const statusPieOption = useMemo(() => {
+    const total = deviceStats.total || 0
+    return {
+      backgroundColor: 'transparent',
+      tooltip: { trigger: 'item', backgroundColor: 'rgba(6,20,40,0.92)', borderColor: ACCENT, textStyle: { color: '#fff' } },
+      legend: {
+        bottom: 0,
+        textStyle: { color: 'rgba(255,255,255,0.65)', fontSize: 11 },
+        itemWidth: 10,
+        itemHeight: 10,
+        icon: 'circle',
+        data: [t('bigScreen.online'), t('bigScreen.offline'), t('bigScreen.fault')],
+      },
+      series: [{
+        type: 'pie',
+        radius: ['58%', '80%'],
+        center: ['50%', '44%'],
+        label: { show: false },
+        data: [
+          { name: t('bigScreen.online'), value: deviceStats.online, itemStyle: { color: GREEN } },
+          { name: t('bigScreen.offline'), value: deviceStats.offline, itemStyle: { color: 'rgba(148,163,184,0.7)' } },
+          { name: t('bigScreen.fault'), value: deviceStats.fault, itemStyle: { color: RED } },
+        ],
+      }],
+      graphic: total > 0 ? [{
+        type: 'text',
+        left: 'center',
+        top: '36%',
+        style: {
+          text: `${deviceStats.online}`,
+          fill: '#fff',
+          fontSize: 22,
+          fontWeight: 700,
+          textAlign: 'center',
+        },
+      }, {
+        type: 'text',
+        left: 'center',
+        top: '50%',
+        style: {
+          text: t('bigScreen.online'),
+          fill: 'rgba(255,255,255,0.5)',
+          fontSize: 11,
+          textAlign: 'center',
+        },
+      }] : [],
+    }
+  }, [deviceStats, t])
+
+  const trendOption = useMemo(() => ({
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: 'rgba(6,20,40,0.92)',
+      borderColor: ACCENT,
+      textStyle: { color: '#fff' },
+      formatter: (params: any) => {
+        const list = Array.isArray(params) ? params : [params]
+        let html = `<div style="font-weight:600;margin-bottom:4px">${list[0].axisValue}</div>`
+        list.forEach((p: any) => {
+          html += `<div>${p.marker} ${p.seriesName}: ${Number(p.value).toFixed(2)} kWh</div>`
+        })
+        return html
+      },
+    },
+    grid: { top: 24, right: 10, bottom: 22, left: 42 },
+    xAxis: {
+      type: 'category',
+      data: trendData.map((d) => d.timeLabel),
+      axisLine: { lineStyle: { color: 'rgba(255,255,255,0.12)' } },
+      axisLabel: { color: 'rgba(255,255,255,0.55)', fontSize: 10 },
+      axisTick: { show: false },
+    },
+    yAxis: {
+      type: 'value',
+      splitLine: { lineStyle: { color: 'rgba(255,255,255,0.06)' } },
+      axisLabel: { color: 'rgba(255,255,255,0.45)', fontSize: 10 },
+      axisLine: { show: false },
+    },
+    series: [
+      {
+        name: t('bigScreen.energy'),
+        type: 'bar',
+        data: trendData.map((d) => parseFloat(Number(d.energy).toFixed(2))),
+        barWidth: '48%',
+        itemStyle: {
+          color: {
+            type: 'linear', x: 0, y: 1, x2: 0, y2: 0,
+            colorStops: [
+              { offset: 0, color: 'rgba(0,212,255,0.15)' },
+              { offset: 1, color: ACCENT },
+            ],
+          },
+          borderRadius: [2, 2, 0, 0],
+        },
+      },
+      {
+        name: t('bigScreen.load'),
+        type: 'line',
+        data: trendData.map((d) => parseFloat(Number(d.loadEnergy ?? 0).toFixed(2))),
+        smooth: true,
+        symbol: 'none',
+        lineStyle: { color: GREEN, width: 2 },
+        areaStyle: {
+          color: {
+            type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [
+              { offset: 0, color: 'rgba(0,255,136,0.25)' },
+              { offset: 1, color: 'rgba(0,255,136,0)' },
+            ],
+          },
+        },
+      },
+    ],
+  }), [trendData, t])
+
+  const kpis = [
+    { icon: <DatabaseOutlined />, color: AMBER, value: totalStations.toLocaleString(), label: t('bigScreen.totalStations') },
+    { icon: <ThunderboltOutlined />, color: ACCENT, value: deviceStats.total.toLocaleString(), label: t('bigScreen.deviceTotal') },
+    { icon: <WifiOutlined />, color: GREEN, value: deviceStats.online.toLocaleString(), label: t('bigScreen.deviceOnline') },
+    { icon: <AlertOutlined />, color: RED, value: deviceStats.fault.toLocaleString(), label: t('bigScreen.deviceFault') },
+  ]
+
+  return (
+    <div className="bs-left">
+      {/* 系统总览 */}
+      <div className="bs-panel">
+        <div className="bs-panel-title"><span className="bs-title-bar" />{t('bigScreen.systemOverview')}</div>
+        <div className="bs-corner-tr" />
+        <div className="bs-corner-bl" />
+        <div className="bs-kpi-grid">
+          {kpis.map((k) => (
+            <div className="bs-kpi-card" key={k.label}>
+              <div className="bs-kpi-icon" style={{ color: k.color }}>{k.icon}</div>
+              <div className="bs-kpi-value" style={{ color: k.color }}>{k.value}</div>
+              <div className="bs-kpi-label">{k.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 设备状态分布 */}
+      <div className="bs-panel">
+        <div className="bs-panel-title"><span className="bs-title-bar" />{t('bigScreen.deviceStatus')}</div>
+        <div className="bs-corner-tr" />
+        <div className="bs-corner-bl" />
+        <div className="bs-chart-box">
+          <ReactECharts option={statusPieOption} style={{ width: '100%', height: '100%' }} opts={{ renderer: 'canvas' }} />
+        </div>
+      </div>
+
+      {/* 发电趋势 */}
+      <div className="bs-panel">
+        <div className="bs-panel-title"><span className="bs-title-bar" />{t('bigScreen.energyTrend')}</div>
+        <div className="bs-corner-tr" />
+        <div className="bs-corner-bl" />
+        <div className="bs-chart-box">
+          <ReactECharts option={trendOption} style={{ width: '100%', height: '100%' }} opts={{ renderer: 'canvas' }} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default React.memo(LeftPanel)

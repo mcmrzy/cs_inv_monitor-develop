@@ -1,0 +1,134 @@
+import React, { useMemo } from 'react'
+import { AlertOutlined, RiseOutlined, FundOutlined, ApartmentOutlined } from '@ant-design/icons'
+import useTranslation from '@/hooks/useTranslation'
+
+export interface AlarmItem {
+  id: number
+  device_sn: string
+  alarm_level: number
+  fault_code?: string
+  fault_message: string
+  status?: string
+  occurred_at: string
+}
+
+export interface ProvinceStat {
+  province: string
+  count: number
+}
+
+interface RightPanelProps {
+  todayEnergy: number
+  totalEnergy: number
+  totalCapacity: number
+  recentAlarms: AlarmItem[]
+  provinceStats: ProvinceStat[]
+}
+
+const ACCENT = '#00d4ff'
+const GREEN = '#00ff88'
+const RED = '#ff4d6d'
+const AMBER = '#ffa502'
+
+const getAlarmClass = (level: number) => {
+  if (level >= 3) return 'bs-alert-item bs-alert-critical'
+  if (level === 2) return 'bs-alert-item bs-alert-warning'
+  return 'bs-alert-item bs-alert-info'
+}
+
+function formatEnergy(val: number): string {
+  if (val >= 1e6) return `${(val / 1e6).toFixed(2)}M`
+  if (val >= 1e4) return `${(val / 1e4).toFixed(2)}W`
+  return Number(val || 0).toLocaleString()
+}
+
+const RightPanel: React.FC<RightPanelProps> = ({
+  todayEnergy = 0,
+  totalEnergy = 0,
+  totalCapacity = 0,
+  recentAlarms = [],
+  provinceStats = [],
+}) => {
+  const { t } = useTranslation()
+
+  const displayAlarms = recentAlarms.slice(0, 6)
+
+  const maxProvince = useMemo(() => {
+    let max = 0
+    provinceStats.forEach((p) => { if (p.count > max) max = p.count })
+    return max || 1
+  }, [provinceStats])
+
+  const stats = [
+    { icon: <RiseOutlined />, color: ACCENT, value: `${formatEnergy(todayEnergy)} kWh`, label: t('bigScreen.todayEnergy') },
+    { icon: <FundOutlined />, color: GREEN, value: `${formatEnergy(totalEnergy)} kWh`, label: t('bigScreen.totalGeneration') },
+    { icon: <ApartmentOutlined />, color: AMBER, value: `${Number(totalCapacity || 0).toLocaleString()} kW`, label: t('bigScreen.totalCapacity') },
+  ]
+
+  return (
+    <div className="bs-right">
+      {/* 发电量统计 */}
+      <div className="bs-panel">
+        <div className="bs-panel-title"><span className="bs-title-bar" />{t('bigScreen.todayGeneration')}</div>
+        <div className="bs-corner-tr" />
+        <div className="bs-corner-bl" />
+        <div className="bs-energy-grid">
+          {stats.map((s) => (
+            <div className="bs-energy-item" key={s.label}>
+              <div className="bs-energy-icon" style={{ color: s.color }}>{s.icon}</div>
+              <div className="bs-energy-value" style={{ color: s.color }}>{s.value}</div>
+              <div className="bs-energy-label">{s.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 实时告警 */}
+      <div className="bs-panel bs-alert-panel">
+        <div className="bs-panel-title"><span className="bs-title-bar" />{t('bigScreen.realtimeAlarms')}</div>
+        <div className="bs-corner-tr" />
+        <div className="bs-corner-bl" />
+        <div className="bs-alert-list">
+          {displayAlarms.length === 0 && (
+            <div className="bs-alert-empty">{t('bigScreen.noAlarms')}</div>
+          )}
+          {displayAlarms.map((a) => (
+            <div key={a.id} className={getAlarmClass(a.alarm_level)}>
+              <AlertOutlined className="bs-alert-icon" />
+              <div className="bs-alert-content">
+                <div className="bs-alert-msg">{a.device_sn}: {a.fault_message}</div>
+                <div className="bs-alert-time">{a.occurred_at}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 电站省份分布 */}
+      <div className="bs-panel">
+        <div className="bs-panel-title"><span className="bs-title-bar" />{t('bigScreen.stationDistribution')}</div>
+        <div className="bs-corner-tr" />
+        <div className="bs-corner-bl" />
+        <div className="bs-province-list">
+          {provinceStats.length === 0 && (
+            <div className="bs-alert-empty">{t('bigScreen.noStationRanking')}</div>
+          )}
+          {provinceStats.map((p) => (
+            <div className="bs-province-item" key={p.province}>
+              <span className="bs-province-name">{p.province}</span>
+              <div className="bs-province-bar-bg">
+                <div
+                  className="bs-province-bar"
+                  style={{ width: `${(p.count / maxProvince) * 100}%` }}
+                />
+              </div>
+              <span className="bs-province-count">{p.count}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default React.memo(RightPanel)
