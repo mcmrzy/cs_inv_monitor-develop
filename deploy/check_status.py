@@ -17,7 +17,7 @@ if err and 'sudo' not in err:
 
 # 检查服务日�?
 print('\n=== API 服务日志 (最�?0�? ===')
-stdin, stdout, stderr = client.exec_command("echo 'CHANGE_ME_ROTATE_CREDENTIAL' | sudo -S docker logs inv-api-server --tail 20 2>&1")
+stdin, stdout, stderr = client.exec_command("echo 'CHANGE_ME_ROTATE_CREDENTIAL' | sudo -S docker logs business-api --tail 20 2>&1")
 print(stdout.read().decode())
 
 client.close()

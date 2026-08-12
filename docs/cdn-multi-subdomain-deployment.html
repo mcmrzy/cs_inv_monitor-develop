@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CDN 多子域加速部署指南 — cs_inv_monitor</title>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;background:#f5f7fa;color:#333;margin:0;padding:20px;line-height:1.7}
+.wrap{max-width:960px;margin:0 auto;background:#fff;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.06);padding:32px 40px}
+h1{color:#2c5364;border-bottom:3px solid #2c5364;padding-bottom:10px;margin-top:0}
+h2{color:#2c5364;margin-top:36px;border-left:4px solid #2c5364;padding-left:10px}
+h3{color:#34495e;margin-top:24px}
+p{margin:8px 0}
+pre{background:#2d3748;color:#e2e8f0;padding:16px;border-radius:8px;overflow-x:auto;font-size:13px;line-height:1.5}
+code{background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:13px;color:#e11d48}
+pre code{background:transparent;color:#e2e8f0;padding:0}
+table{width:100%;border-collapse:collapse;margin:16px 0;font-size:14px}
+th,td{padding:10px 12px;text-align:left;border-bottom:1px solid #e8ecf0}
+th{background:#f0f4f8;color:#2c5364}
+tr:hover td{background:#f8fafc}
+.note{background:#fff3e0;border-left:4px solid #f57c00;padding:12px 16px;margin:16px 0;border-radius:0 6px 6px 0;font-size:14px}
+.warn{background:#fdecea;border-left:4px solid #d32f2f;padding:12px 16px;margin:16px 0;border-radius:0 6px 6px 0;font-size:14px}
+.ok{background:#e8f5e9;border-left:4px solid #2e7d32;padding:12px 16px;margin:16px 0;border-radius:0 6px 6px 0;font-size:14px}
+.tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;margin-right:6px}
+.tag.proxy{background:#e3f2fd;color:#1565c0}
+.tag.dns{background:#ede7f6;color:#5e35b1}
+.tag.done{background:#e8f5e9;color:#2e7d32}
+.tag.miss{background:#fdecea;color:#c62828}
+.step{background:#f8fafc;border:1px solid #e8ecf0;border-radius:8px;padding:16px 20px;margin:16px 0}
+.step-num{display:inline-flex;width:26px;height:26px;border-radius:50%;background:#2c5364;color:#fff;align-items:center;justify-content:center;font-weight:700;font-size:14px;margin-right:8px}
+ul,ol{padding-left:24px}
+li{margin:4px 0}
+.small{font-size:12px;color:#888}
+a{color:#1565c0;text-decoration:none}
+a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>🚀 CDN 多子域加速部署指南</h1>
+<p>光伏逆变器物联网监控系统（cs_inv_monitor）— 阿里云 ESA（Edge Security Acceleration）多子域 CDN 加速上线指南</p>
+<p class="small">适用范围：生产环境 · 文档版本 v1.0 · 关联域名：<code>jiuxiaoyw.online</code>（下文所有域名可按实际替换）</p>
+
+<h2>目录</h2>
+<ul>
+  <li><a href="#overview">一、方案总览（多子域结构）</a></li>
+  <li><a href="#code-done">二、代码改动清单（已完成）</a></li>
+  <li><a href="#dns-check">三、前置检查：DNS 记录核对表</a></li>
+  <li><a href="#step-mqtt-dns">四、第 1 步：补 mqtt 子域 DNS 记录</a></li>
+  <li><a href="#step-emqx">五、第 2 步：EMQX 证书与指纹同步（⚠ 设备在线关键）</a></li>
+  <li><a href="#step-cert">六、第 3 步：签发 nginx 通配符证书</a></li>
+  <li><a href="#step-env">七、第 4 步：修改服务器 .env.prod</a></li>
+  <li><a href="#step-deploy">八、第 5 步：重新部署</a></li>
+  <li><a href="#step-esa">九、第 6 步：阿里云 ESA 加速域名配置</a></li>
+  <li><a href="#step-web">十、第 7 步：管理后台发布（构建参数注入）</a></li>
+  <li><a href="#step-app">十一、第 8 步：App 发版（--dart-define）</a></li>
+  <li><a href="#order">十二、迁移顺序（强烈建议按此执行）</a></li>
+  <li><a href="#verify">十三、上线验证清单</a></li>
+  <li><a href="#rollback">十四、回滚预案</a></li>
+  <li><a href="#faq">十五、常见问题（FAQ）</a></li>
+</ul>
+
+<h2 id="overview">一、方案总览（多子域结构）</h2>
+<p>将单一域名下的流量按类型拆分到独立子域，由阿里云 ESA 分别用最适合的加速类型承载：</p>
+<table>
+  <tr><th>域名</th><th>用途</th><th>ESA 加速类型</th><th>回源目标</th></tr>
+  <tr><td><code>www.jiuxiaoyw.online</code></td><td>管理后台网站页面</td><td><span class="tag proxy">代理加速 · 网站页面</span></td><td>前端容器（nginx）</td></tr>
+  <tr><td><code>api.jiuxiaoyw.online</code></td><td>REST API + WebSocket + SSE + 头像上传</td><td><span class="tag proxy">代理加速 · API 加速</span></td><td>api-gateway</td></tr>
+  <tr><td><code>download.jiuxiaoyw.online</code></td><td>固件大文件下载 <code>/firmware/*</code></td><td><span class="tag proxy">代理加速 · 大文件下载</span></td><td>api-gateway（仅 /firmware/）</td></tr>
+  <tr><td><code>mqtt.jiuxiaoyw.online</code></td><td>设备 MQTT 8883 直连</td><td><span class="tag dns">仅 DNS（不加速！）</span></td><td>EMQX（直连）</td></tr>
+  <tr><td><code>jiuxiaoyw.online</code>（@）</td><td>根域</td><td><span class="tag dns">仅 DNS</span></td><td>nginx 301 跳转 → www</td></tr>
+  <tr><td><code>*.jiuxiaoyw.online</code>（*）</td><td>兜底（内部域名等）</td><td><span class="tag dns">仅 DNS</span></td><td>—</td></tr>
+</table>
+
+<div class="note">
+<strong>为什么 MQTT 不能走加速？</strong> ESA/CDN 节点只监听 80/443 端口，设备用 8883 端口连接时会连到 CDN 节点导致端口不通、全部掉线。
+因此 mqtt 子域必须保持 <strong>仅 DNS</strong>，让设备直连源站。这就像快递驿站不接收 20 吨的大货车——大件货物只能走自己的专用通道。
+</div>
+
+<h2 id="code-done">二、代码改动清单（已完成并验证）</h2>
+<p>以下改动已全部落盘并通过验证（Go build + 8 个单元测试、前端 tsc + 232 个测试、Flutter analyze 改动文件零问题）。<strong>部署时请使用包含这些改动的镜像/分支。</strong></p>
+
+<table>
+  <tr><th>模块</th><th>文件</th><th>改动内容</th></tr>
+  <tr><td>前端</td><td><code>src/utils/urls.ts</code>（新增）</td><td>API_BASE / WS_BASE 环境变量 + resolveMediaUrl 图片 URL 解析</td></tr>
+  <tr><td>前端</td><td><code>src/services/api.ts</code></td><td>baseURL 改用 API_BASE，刷新接口同步</td></tr>
+  <tr><td>前端</td><td><code>src/hooks/useWebSocket.ts</code>、<code>usePipelineHealthSSE.ts</code></td><td>WS / SSE 地址环境变量化</td></tr>
+  <tr><td>前端</td><td><code>src/components/UploadAvatar.tsx</code>、<code>src/layouts/MainLayout.tsx</code></td><td>上传地址环境变量化、头像用 resolveMediaUrl</td></tr>
+  <tr><td>前端</td><td><code>Dockerfile</code>、<code>src/vite-env.d.ts</code></td><td>VITE_API_BASE / VITE_WS_BASE 构建参数 + 类型声明</td></tr>
+  <tr><td>后端</td><td><code>internal/config/config.go</code></td><td>新增 DOWNLOAD_URL 配置（环境变量绑定）</td></tr>
+  <tr><td>后端</td><td><code>internal/service/ota_service.go</code>、<code>cmd/main.go</code></td><td>downloadURLFor()：download 域 → serverURL → 原样三级回退</td></tr>
+  <tr><td>后端</td><td><code>internal/service/ota_util_test.go</code></td><td>新增 2 个 DownloadURL 优先/回退测试</td></tr>
+  <tr><td>网关</td><td><code>deploy/configs/gateway.yaml</code></td><td>CORS 白名单新增 www 域（http/https）</td></tr>
+  <tr><td>nginx</td><td><code>deploy/nginx-proxy.conf</code></td><td>重写为根域 / www / api / download 四个 server 块（SSE 关缓冲、WS 透传、/firmware/ 仅限 download 域）</td></tr>
+  <tr><td>App</td><td><code>lib/core/config/app_config.dart</code>、<code>lib/core/screens/org_invitation_screen.dart</code>、<code>lib/l10n/app_en.dart</code>、<code>app_zh.dart</code></td><td>邀请链接改用 FRONTEND_BASE_URL（默认 www 域）</td></tr>
+  <tr><td>CI/部署</td><td><code>.github/workflows/cd.yml</code>、<code>deploy/docker-compose.prod.yml</code>、<code>deploy/.env.prod.example</code></td><td>构建参数注入 + SERVER_URL / DOWNLOAD_URL / FRONTEND_URL 透传</td></tr>
+  <tr><td>部署（本次新增）</td><td><code>deploy/docker-compose.prod.yml</code>、<code>.github/workflows/cd.yml</code></td><td><strong>上传数据持久化修复</strong>：business-api 挂载 inv-uploads / inv-firmware 卷（头像/电站图/固件容器重建不丢）+ nginx 日志卷；CD 脚本自动执行一次性数据迁移（旧容器 → 新卷）</td></tr>
+</table>
+
+<div class="ok">
+<strong>可移植性设计</strong>：所有域名通过环境变量 / 构建参数注入，未配置时自动回退同源相对路径。
+换服务器、换域名、本地开发、单域部署均不受影响——代码里没有任何写死的生产域名。
+</div>
+
+<h2 id="dns-check">三、前置检查：DNS 记录核对表</h2>
+<p>在阿里云控制台（云解析 DNS）检查以下记录是否齐备：</p>
+<table>
+  <tr><th>记录</th><th>类型</th><th>值</th><th>解析方式</th><th>状态</th></tr>
+  <tr><td>api</td><td>A/AAAA</td><td>源站两个 IP + IPv6</td><td>代理加速（API 加速）</td><td><span class="tag done">已配置 ✓</span></td></tr>
+  <tr><td>download</td><td>A/AAAA</td><td>同上</td><td>代理加速（大文件下载）</td><td><span class="tag done">已配置 ✓</span></td></tr>
+  <tr><td>www</td><td>A/AAAA</td><td>同上</td><td>代理加速（网站页面）</td><td><span class="tag done">已配置 ✓</span></td></tr>
+  <tr><td>@</td><td>A/AAAA</td><td>同上</td><td>仅 DNS</td><td><span class="tag done">已配置 ✓</span></td></tr>
+  <tr><td>*</td><td>A/AAAA</td><td>同上</td><td>仅 DNS</td><td><span class="tag done">已配置 ✓</span></td></tr>
+  <tr><td><strong>mqtt</strong></td><td>A/AAAA</td><td><strong>同上</strong></td><td><strong>仅 DNS（禁止加速）</strong></td><td><span class="tag miss">缺失 ✗ 必须补</span></td></tr>
+</table>
+
+<h2 id="step-mqtt-dns">四、第 1 步：补 mqtt 子域 DNS 记录</h2>
+<div class="step">
+<span class="step-num">1</span><strong>阿里云控制台 → 云解析 DNS → jiuxiaoyw.online → 添加记录</strong>
+<ol>
+  <li>记录类型：<strong>A</strong>（如需要 IPv6 再添加一条 <strong>AAAA</strong>）</li>
+  <li>主机记录：<code>mqtt</code></li>
+  <li>记录值：源站两个 IP（与 api/www/download 相同）</li>
+  <li>解析请求来源：默认（自动）</li>
+  <li>解析方式：<strong>仅 DNS</strong>（<span class="tag miss">千万不要选代理加速！</span>）</li>
+  <li>TTL：默认即可</li>
+</ol>
+</div>
+
+<h2 id="step-emqx">五、第 2 步：EMQX 证书与指纹同步（⚠ 设备在线关键）</h2>
+<div class="warn">
+<strong>此步骤影响设备在线，必须最先处理！</strong> 设备通过 TLS 连接 <code>mqtt.jiuxiaoyw.online:8883</code> 时校验服务端证书与 <code>MQTT_CERT_SHA256</code> 指纹。
+若证书不含新域名或指纹未同步，设备 TLS 握手失败 → <strong>全部掉线</strong>。
+</div>
+<ol>
+  <li><strong>重新签发 EMQX 证书</strong>：证书必须包含 <code>mqtt.jiuxiaoyw.online</code>（SAN），建议直接签通配符 <code>*.jiuxiaoyw.online</code> 一次覆盖所有子域；CA 需为设备信任的标准 CA（保持现状即可）。</li>
+  <li><strong>更新服务器 <code>.env.prod</code> 的 <code>MQTT_CERT_SHA256</code></strong>：换成新证书的 SHA-256 指纹。</li>
+  <li><strong>同步设备端指纹常量</strong>：固件 / App 中硬编码的指纹需同步更新，否则老设备连接会被拒（存量设备见<a href="#order">迁移顺序</a>说明）。</li>
+</ol>
+
+<h2 id="step-cert">六、第 3 步：签发 nginx 通配符证书</h2>
+<p>nginx 四个 server 块统一使用通配符证书（路径已在 <code>nginx-proxy.conf</code> 中写死）：</p>
+<div class="step">
+<span class="step-num">2</span><strong>服务器上执行（certbot 需已安装且 80 端口可被 http-01 验证）</strong>
+<pre>certbot certonly --webroot -w /var/www/certbot \
+  -d jiuxiaoyw.online \
+  -d www.jiuxiaoyw.online \
+  -d api.jiuxiaoyw.online \
+  -d download.jiuxiaoyw.online</pre>
+<p class="small">证书输出目录：<code>/etc/letsencrypt/live/jiuxiaoyw.online/</code>（fullchain.pem + privkey.pem），与 nginx-proxy.conf 中引用路径一致。</p>
+</div>
+
+<h2 id="step-env">七、第 4 步：修改服务器 .env.prod</h2>
+<div class="step">
+<span class="step-num">3</span><strong>编辑 <code>deploy/.env.prod</code>，确认 / 追加以下变量</strong>
+<pre># ---- MQTT Broker（设备直连域名）----
+MQTT_BROKER=mqtt.jiuxiaoyw.online
+MQTT_CERT_SHA256=新证书的SHA256指纹   # ← 必须与新证书一致
+
+# ---- 外部访问域名（多子域 CDN 模式）----
+SERVER_URL=https://api.jiuxiaoyw.online
+DOWNLOAD_URL=https://download.jiuxiaoyw.online
+FRONTEND_URL=https://www.jiuxiaoyw.online</pre>
+<p class="small">完整字段说明见 <code>deploy/.env.prod.example</code>。其中：SERVER_URL 用于上传文件返回 URL；DOWNLOAD_URL 用于固件下载链接拼接（为空时回退 SERVER_URL）；FRONTEND_URL 用于邀请邮件链接。</p>
+</div>
+
+<h2 id="step-deploy">八、第 5 步：重新部署</h2>
+<div class="step">
+<span class="step-num">4</span><strong>在 deploy 目录执行</strong>
+<pre>cd /path/to/deploy
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build</pre>
+<p>检查各服务健康状态：</p>
+<pre>docker compose -f docker-compose.prod.yml --env-file .env.prod ps</pre>
+<p>确认 nginx 配置语法与证书可读：</p>
+<pre>docker exec inv-nginx nginx -t</pre>
+</div>
+
+<div class="warn">
+<strong>首次部署自动迁移上传数据</strong>：历史版本 business-api 未挂载持久卷，头像/电站图/固件存于容器可写层（每次部署重建都会清空）。
+本次已修复：compose 新增 <code>inv-uploads</code> / <code>inv-firmware</code> 卷，cd.yml 部署脚本会在首次部署时自动执行「备份旧容器数据 → 重建 → 恢复 + 修正属主」的一次性迁移（成功后创建标记 <code>/opt/inv-mqtt/.uploads-migrated</code>，失败保留 <code>/opt/inv-mqtt/data-backup</code> 待人工处理、下次自动重试）。
+<br><br>
+<strong>若绕过 CD 手动部署</strong>，请手动迁移：
+<pre>mkdir -p /opt/inv-mqtt/data-backup
+docker cp business-api:/data/uploads /opt/inv-mqtt/data-backup/uploads
+# 更新 compose 后重建容器，再执行：
+docker cp /opt/inv-mqtt/data-backup/uploads/. business-api:/data/uploads/
+docker exec -u root business-api chown -R app:app /data/uploads /data/firmware</pre>
+</div>
+
+<h2 id="step-esa">九、第 6 步：阿里云 ESA 加速域名配置</h2>
+<p>阿里云控制台 → ESA → 为 <code>www</code> / <code>api</code> / <code>download</code> 三个加速域名分别配置（加速类型已随 DNS 记录选定）：</p>
+<ol>
+  <li><strong>源站信息</strong>：源站类型 IP，填源站 IP（如 <code>183.197.106.187</code> 或 <code>101.43.90.25</code>），端口 443（或 80 + 强制跳转）。</li>
+  <li><strong>回源 HOST（最关键）</strong>：必须填对应的子域！
+    <table>
+      <tr><th>加速域名</th><th>回源 HOST 填</th><th>原因</th></tr>
+      <tr><td>www</td><td><code>www.jiuxiaoyw.online</code></td><td>源站 nginx 靠 Host 头分流，填错则落到错误 server 块返回 404</td></tr>
+      <tr><td>api</td><td><code>api.jiuxiaoyw.online</code></td><td>同上</td></tr>
+      <tr><td>download</td><td><code>download.jiuxiaoyw.online</code></td><td>同上</td></tr>
+    </table>
+  </li>
+  <li><strong>HTTPS</strong>：三个加速域名都开启 HTTPS（可用阿里云免费证书，或上传自己的通配符证书）。</li>
+  <li><strong>缓存规则建议</strong>：
+    <table>
+      <tr><th>加速域名</th><th>路径</th><th>缓存策略</th></tr>
+      <tr><td>download</td><td><code>/firmware/*</code></td><td>缓存（建议 30 天，固件不可变）</td></tr>
+      <tr><td>www</td><td><code>/assets/*</code>（静态资源）</td><td>缓存（带 hash 文件名，可长期缓存）</td></tr>
+      <tr><td>www</td><td><code>/*</code>（页面）</td><td>不缓存或短缓存（SPA index.html）</td></tr>
+      <tr><td>api</td><td><code>/*</code></td><td><strong>全部不缓存</strong>（动态接口，缓存会导致数据过期）</td></tr>
+    </table>
+  </li>
+</ol>
+<div class="note">
+<strong>SSE / WebSocket 回源提示</strong>：api 域回源必须透传 <code>Upgrade</code> 头与 <code>text/event-stream</code>（nginx-proxy.conf 已配置）。若 ESA 有 WebSocket/流式回源开关，请开启，否则进度推送 / 实时数据流可能被缓存或截断。
+</div>
+
+<h2 id="step-web">十、第 7 步：管理后台发布（构建参数注入）</h2>
+<p>前端镜像由 GitHub Actions（<code>.github/workflows/cd.yml</code>）构建，构建时注入子域参数。构建产物中不含相对路径回退之外的任何域名。</p>
+<div class="step">
+<span class="step-num">5</span><strong>在 GitHub 仓库 Settings → Secrets and variables → Actions → Variables 中配置：</strong>
+<pre>VITE_API_BASE = https://api.jiuxiaoyw.online
+VITE_WS_BASE  = https://api.jiuxiaoyw.online</pre>
+<p class="small">说明：WebSocket 与 API 同域（api），WS 地址基于同域拼接（代码中默认 <code>/ws</code> 路径自动补到 api 域）。若 WS 需要独立域名，将 VITE_WS_BASE 设为完整 WS URL 即可。</p>
+<p>然后推送触发 CD 流水线重新构建并发布前端镜像。</p>
+</div>
+
+<h2 id="step-app">十一、第 8 步：App 发版（--dart-define）</h2>
+<p>App 代码无需改动，发版时注入构建参数：</p>
+<div class="step">
+<span class="step-num">6</span><strong>构建 App 时追加参数（默认值已是 www 域，不传也能用）</strong>
+<pre>flutter build apk \
+  --dart-define=FRONTEND_BASE_URL=https://www.jiuxiaoyw.online</pre>
+<p class="small">用途：组织邀请链接拼接为 <code>https://www.jiuxiaoyw.online/...邀请路径</code>（原实现提取 API 域名拼接，跨域部署时可能指向 api 域导致无法打开）。</p>
+</div>
+
+<h2 id="order">十二、迁移顺序（强烈建议按此执行）</h2>
+<table>
+  <tr><th>顺序</th><th>动作</th><th>影响范围</th></tr>
+  <tr><td>①</td><td>补 <code>mqtt</code> DNS 记录 + 换 EMQX 证书 + 同步 MQTT_CERT_SHA256</td><td>设备在线（最关键，先做）</td></tr>
+  <tr><td>②</td><td>服务器：certbot 证书 → .env.prod → 重新部署 nginx/网关/后端</td><td>Web 服务（子域接入就绪）</td></tr>
+  <tr><td>③</td><td>阿里云 ESA：三个加速域名配置（回源 HOST + HTTPS + 缓存规则）</td><td>CDN 开始接管流量</td></tr>
+  <tr><td>④</td><td>管理后台镜像重新构建发布（GitHub vars 注入）</td><td>前端指向 api 域</td></tr>
+  <tr><td>⑤</td><td>App 发版（--dart-define 注入 FRONTEND_BASE_URL）</td><td>移动端</td></tr>
+</table>
+
+<div class="warn">
+<strong>存量设备兼容提醒</strong>：已出厂、固件中写死旧 broker 地址的设备不会自动切换到 mqtt 新域名。
+新老并存期间，<strong>旧 broker 地址的 DNS 记录和证书不要删除</strong>，等存量设备全部升级后再清理。
+</div>
+
+<h2 id="verify">十三、上线验证清单</h2>
+<h3>本地（发布前）</h3>
+<ul>
+  <li>✅ <code>go build ./... &amp;&amp; go test ./...</code>（后端）</li>
+  <li>✅ <code>npx tsc --noEmit</code> + <code>npm run test:run</code>（前端）</li>
+  <li>✅ <code>flutter analyze</code>（App，改动文件零问题）</li>
+</ul>
+<h3>服务器（部署后）</h3>
+<ul>
+  <li>✅ <code>docker exec inv-nginx nginx -t</code> 通过</li>
+  <li>✅ 各容器健康检查 <code>docker compose ps</code> 全部 healthy</li>
+  <li>✅ 根域访问 → 301 跳转 www</li>
+  <li>✅ <code>curl -I https://www.jiuxiaoyw.online</code> 200（页面）</li>
+  <li>✅ <code>curl -I https://api.jiuxiaoyw.online/api/v1/health</code>（或实际健康接口）200</li>
+  <li>✅ <code>curl -I https://download.jiuxiaoyw.online/firmware/xxx</code> 200 / 非 download 域访问 /firmware/ 返回 403</li>
+  <li>✅ 登录 → 头像上传 → 头像可正常显示（uploads 走 api 域）</li>
+  <li>✅ 批量操作进度（WS）、管道健康（SSE）功能正常</li>
+  <li>✅ 固件列表下载链接为 <code>https://download.jiuxiaoyw.online/firmware/...</code></li>
+</ul>
+<h3>设备（上线后观察）</h3>
+<ul>
+  <li>✅ 设备在线率无明显下降（MQTT 切换平稳）</li>
+  <li>✅ 遥测数据持续写入（Kafka/DB 无断流）</li>
+  <li>✅ 观察 <code>docker compose logs</code> 无 TLS 握手报错</li>
+</ul>
+
+<h2 id="rollback">十四、回滚预案</h2>
+<table>
+  <tr><th>故障场景</th><th>回滚动作</th><th>耗时</th></tr>
+  <tr><td>ESA 加速异常（502/超时）</td><td>阿里云控制台将受影响记录改为「仅 DNS」，流量直连源站（服务器侧配置已就绪，零代码改动）</td><td>1 分钟</td></tr>
+  <tr><td>设备批量掉线</td><td>核对 MQTT_CERT_SHA256 与新证书指纹；如指纹已改但设备端未更新，先回退指纹 + 旧证书，恢复连接后再安排发版</td><td>5 分钟</td></tr>
+  <tr><td>前端页面异常</td><td>GitHub Actions 触发上一稳定镜像重新部署（cd.yml 支持回滚）</td><td>数分钟</td></tr>
+  <tr><td>域名跳转错误</td><td>nginx 配置还原旧版本（<code>nginx-proxy.conf</code> 有 git 历史）后 reload</td><td>1 分钟</td></tr>
+</table>
+
+<h2 id="faq">十五、常见问题（FAQ）</h2>
+<h3>Q1：部署到别的服务器 / 换域名还能用吗？</h3>
+<p>能。所有生产域名均来自环境变量 / 构建参数，未配置时回退同源相对路径。换域名只需修改 <code>.env.prod</code>、GitHub vars 和 DNS，代码零改动。</p>
+<h3>Q2：本地开发 / 测试环境会受影响吗？</h3>
+<p>不会。本地未注入环境变量，前端回退 <code>/api/v1</code>、<code>/ws</code> 相对路径，走 Vite 代理；后端 DOWNLOAD_URL 为空时回退 SERVER_URL / 原样返回，与改动前行为一致。</p>
+<h3>Q3：为什么 api 域不能缓存？</h3>
+<p>REST 接口数据实时性强（设备状态、告警、遥测），缓存会导致数据过期或串租户。ESA 的 API 加速本身主要做链路优化（TCP 优化、TLS 握手加速），不必开缓存。</p>
+<h3>Q4：www 域还能直接访问 /api/ 吗？</h3>
+<p>可以，nginx 为 www 域保留了 <code>/api/</code>、<code>/ws/</code>、<code>/uploads/</code> 的兼容转发，存量书签 / 老前端不受影响；但新发布的前端会优先走 api 域。</p>
+<h3>Q5：上传头像走哪个域？</h3>
+<p><code>POST https://api.jiuxiaoyw.online/api/v1/upload/avatar</code>。返回的 <code>/uploads/xxx</code> 相对路径由前端 resolveMediaUrl 自动补全为 api 域。</p>
+<h3>Q6：头像/电站图/固件存哪里？部署会丢吗？</h3>
+<p>三类文件都存在 business-api 容器的 <code>/data/uploads</code>（头像/电站图）与 <code>/data/firmware</code>（固件）。已修复为 Docker 持久卷（inv-uploads / inv-firmware），容器重建不再丢数据；离线日志存 PostgreSQL（pg-data 卷）。当前规模无需对象存储（OSS/MinIO），若未来扩多副本或磁盘不足再迁移，代码侧 URL 已是相对路径 + 环境变量拼接，迁移成本低。</p>
+
+<hr>
+<p class="small">生成时间：2026-08-12 · 关联代码改动：前端环境变量化（VITE_API_BASE/VITE_WS_BASE）、后端 DOWNLOAD_URL、网关 CORS、nginx 多子域、App FRONTEND_BASE_URL、CI 构建参数</p>
+
+</div>
+</body>
+</html>

@@ -300,7 +300,7 @@ sudo sed -i "s|^MQTT_PASSWORD=.*|MQTT_PASSWORD=新密码|" deploy/.env.prod
 docker compose restart inv-device-server
 
 # 4. 监控设备重连情况
-docker logs inv-device-server 2>&1 | grep "connected"
+docker logs device-communication 2>&1 | grep "connected"
 ```
 
 > **注意：** MQTT 凭证轮换可能导致设备短暂离线，建议在设备端已实现自动重连机制后进行。
@@ -354,7 +354,7 @@ curl -s -X POST https://api.example.com/api/v1/auth/send-email-code \
 docker exec redis redis-cli -a "$REDIS_PASSWORD" PING
 
 # 6. 检查 MQTT 设备在线数
-docker logs inv-device-server 2>&1 | grep -c "device connected"
+docker logs device-communication 2>&1 | grep -c "device connected"
 
 # 7. 清理备份文件（保留 48 小时后删除）
 ls -la deploy/.env.prod.bak.*

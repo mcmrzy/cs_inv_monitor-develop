@@ -151,8 +151,63 @@ jobs:
             # ---------- 拉取新镜像 ----------
             docker compose -f docker-compose.prod.yml --env-file .env.prod pull
 
+            # ---------- 上传数据持久化迁移（仅首次） ----------
+            # 历史版本 inv-api-server 未挂载持久卷，头像/电站图/固件存于容器可写层，
+            # 容器重建即清空。首次部署带卷新版本时执行一次性迁移：
+            #   ① 备份旧容器数据 → ② up 新容器（挂空卷）→ ③ 恢复数据并修正属主。
+            # 全部成功才创建标记文件；中途失败保留备份目录，下次部署自动重试。
+            MIGRATED_FLAG=/opt/inv-mqtt/.uploads-migrated
+            BACKUP_DIR=/opt/inv-mqtt/data-backup
+            if [ ! -f "$MIGRATED_FLAG" ]; then
+              # 备份源：旧容器 inv-api-server（尚未改名部署时数据在其可写层）；
+              # 若已按新配置运行（容器 business-api 且数据已在卷内），备份段自然跳过。
+              if docker ps -a --format '{{.Names}}' | grep -q '^inv-api-server$'; then
+                mkdir -p "$BACKUP_DIR"
+                echo "=== [迁移] 备份旧容器上传数据 ==="
+                docker cp inv-api-server:/data/uploads "$BACKUP_DIR/uploads" 2>/dev/null || echo "  uploads 无可备份数据"
+                docker cp inv-api-server:/data/firmware "$BACKUP_DIR/firmware" 2>/dev/null || echo "  firmware 无可备份数据"
+              fi
+            fi
+
             # ---------- 更新容器 ----------
             docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --remove-orphans --wait --wait-timeout 180
+
+            # ---------- 上传数据恢复（迁移第二步） ----------
+            if [ ! -f "$MIGRATED_FLAG" ]; then
+              restored=0
+              if [ -d "$BACKUP_DIR/uploads" ] && [ -n "$(ls -A "$BACKUP_DIR/uploads" 2>/dev/null)" ]; then
+                echo "=== [迁移] 恢复 uploads → 持久卷 ==="
+                docker cp "$BACKUP_DIR/uploads/." business-api:/data/uploads/ && restored=1
+              fi
+              if [ -d "$BACKUP_DIR/firmware" ] && [ -n "$(ls -A "$BACKUP_DIR/firmware" 2>/dev/null)" ]; then
+                echo "=== [迁移] 恢复 firmware → 持久卷 ==="
+                docker cp "$BACKUP_DIR/firmware/." business-api:/data/firmware/ && restored=1
+              fi
+              if [ "$restored" = "1" ]; then
+                # docker cp 以宿主机属主写入，修正为容器内 app 用户
+                docker exec -u root business-api chown -R app:app /data/uploads /data/firmware
+                echo "✅ [迁移] 上传数据迁移完成"
+              fi
+              if [ "$restored" = "1" ] || [ ! -d "$BACKUP_DIR" ]; then
+                touch "$MIGRATED_FLAG"
+                rm -rf "$BACKUP_DIR"
+              else
+                echo "⚠️ [迁移] 恢复未完成，保留 $BACKUP_DIR 待人工检查，下次部署重试"
+              fi
+            fi
+
+            # ---------- nginx 配置热加载（nginx-proxy.conf 已由 Sync 步骤更新） ----------
+            # nginx 使用官方镜像，不随 IMAGE_TAG 变化，up -d 不会重建容器，
+            # 必须显式 reload 才能加载新的多子域配置
+            if docker ps -a --format "{{.Names}}" | grep -q '^inv-nginx$'; then
+              if docker exec inv-nginx nginx -t > /dev/null 2>&1; then
+                docker exec inv-nginx nginx -s reload
+                echo "✅ nginx 配置校验通过并已热加载"
+              else
+                echo "⚠️ nginx 配置校验失败，强制重建容器（失败将由健康检查触发回滚）"
+                docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --force-recreate nginx || true
+              fi
+            fi
 
             # ---------- 保留最近 N 个镜像 tag，清理旧镜像 ----------
             KEEP_COUNT=3
@@ -190,6 +245,13 @@ jobs:
                 echo "✅ Admin Frontend 正常"
               else
                 echo "❌ Admin Frontend 异常"
+                failed=1
+              fi
+
+              if docker ps --format "{{.Names}}" | grep -q inv-nginx && docker inspect -f "{{.State.Running}}" inv-nginx | grep -q true; then
+                echo "✅ Nginx 正常"
+              else
+                echo "❌ Nginx 异常"
                 failed=1
               fi
 

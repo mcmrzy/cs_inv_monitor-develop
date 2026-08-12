@@ -1238,21 +1238,21 @@ services:
     
   inv-api-server:
     build: ../business-api
-    container_name: inv-api-server
+    container_name: business-api
     ports: ["8081:8080"]  # 固件下载专用端口
     
   inv-device-server:
     build: ../device-communication
-    container_name: inv-device-server
+    container_name: device-communication
     
   api-gateway:
     build: ../api-gateway
-    container_name: inv-api-gateway
+    container_name: api-gateway
     ports: ["8888:8080"]  # API 网关入口
     
   mqtt-kafka-bridge:
     build: ../mqtt-kafka-bridge
-    container_name: inv-mqtt-bridge
+    container_name: mqtt-kafka-bridge
     ports: ["8082:18088"]
     
   inv-admin-frontend:

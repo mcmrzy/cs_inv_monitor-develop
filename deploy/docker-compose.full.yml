@@ -1,7 +1,7 @@
 services:
   api-gateway:
     build: ../api-gateway
-    container_name: inv-api-gateway
+    container_name: api-gateway
     ports:
       - "8080:8080"
     # config.docker.yaml 使用 ${VAR} 占位符（os.ExpandEnv），需要注入完整环境变量
@@ -127,7 +127,7 @@ services:
     build:
       context: ..
       dockerfile: business-api/Dockerfile
-    container_name: inv-api-server
+    container_name: business-api
     expose:
       - "8080"
     volumes:
@@ -149,7 +149,7 @@ services:
 
   inv-device-server:
     build: ../device-communication
-    container_name: inv-device-server
+    container_name: device-communication
     expose:
       - "8081"
     volumes:

@@ -9,7 +9,7 @@ print("=== 测试结果 ===")
 print(stdout.read().decode())
 
 # 查看最新日�?
-stdin, stdout, stderr = client.exec_command("echo 'CHANGE_ME_ROTATE_CREDENTIAL' | sudo -S docker logs inv-api-server --tail 5 2>&1")
+stdin, stdout, stderr = client.exec_command("echo 'CHANGE_ME_ROTATE_CREDENTIAL' | sudo -S docker logs business-api --tail 5 2>&1")
 print("\n=== 最新日�?===")
 print(stdout.read().decode())
 

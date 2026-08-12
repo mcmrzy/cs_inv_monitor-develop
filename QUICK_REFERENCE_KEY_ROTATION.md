@@ -43,7 +43,7 @@ Simple, actionable checklists for fast execution during key rotation operations.
 - [ ] Verify services running healthy:
   ```bash
   docker-compose -f deploy/docker-compose.prod.yml ps
-  docker logs inv-api-server --tail 30
+  docker logs business-api --tail 30
   docker logs api-gateway --tail 30
   ```
 
@@ -67,7 +67,7 @@ Simple, actionable checklists for fast execution during key rotation operations.
 **Rollback Command** (if issues detected):
 ```bash
 cp deploy/.env.prod.backup.* deploy/.env.prod
-docker-compose -f deploy/docker-compose.prod.yml restart inv-api-server api-gateway
+docker-compose -f deploy/docker-compose.prod.yml restart business-api api-gateway
 ```
 
 ---
@@ -234,7 +234,7 @@ All cached data will be lost during rotation. API response times may increase te
   ```
 - [ ] Stop services cleanly:
   ```bash
-  docker-compose -f deploy/docker-compose.prod.yml down inv-api-server
+  docker-compose -f deploy/docker-compose.prod.yml down business-api
   ```
 - [ ] Update password in `.env.prod`:
   ```bash
