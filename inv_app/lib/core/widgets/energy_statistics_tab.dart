@@ -631,6 +631,13 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
   /// 图表展示区
   /// 功率折线图区域
   Widget _buildPowerChartSection(AppLocalizations l10n) {
+    // 加载中且无旧数据时显示骨架占位，避免闪烁
+    if (_loading && _dataPoints.isEmpty && _powerFlowData.isEmpty) {
+      return Container(
+        height: 260.h,
+        decoration: AppColor.card(context),
+      );
+    }
     if (_dataPoints.isEmpty && _powerFlowData.isEmpty && !_powerFlowLoading) {
       return Container(
         height: 260.h,
@@ -684,6 +691,13 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
 
   /// 能量柱状图区域
   Widget _buildEnergyChartSection(AppLocalizations l10n) {
+    // 加载中且无旧数据时显示骨架占位，避免闪烁
+    if (_loading && _dataPoints.isEmpty) {
+      return Container(
+        height: 260.h,
+        decoration: AppColor.card(context),
+      );
+    }
     if (_dataPoints.isEmpty) {
       return Container(
         height: 260.h,
