@@ -550,7 +550,7 @@ class _CreateStationPageState extends State<CreateStationPage> {
         Row(
           children: [
             Text(
-              AppLocalizations.of(context)!.stationCardImage ?? '电站卡片图片',
+              AppLocalizations.of(context)!.stationCardImage,
               style: TextStyle(
                 fontSize: 13.sp,
                 fontWeight: FontWeight.w500,

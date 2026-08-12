@@ -120,6 +120,7 @@ class AppLocalizations {
   String get stationDevices => _localizedStrings['station_devices']!;
   String get noStations => _localizedStrings['no_stations']!;
   String get createStation => _localizedStrings['create_station']!;
+  String get stationCardImage => _localizedStrings['station_card_image'] ?? '电站卡片图片';
   String get searchStation => _localizedStrings['search_station']!;
   String get pv => _localizedStrings['pv']!;
   String get battery => _localizedStrings['battery']!;

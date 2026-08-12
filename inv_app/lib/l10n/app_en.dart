@@ -76,6 +76,7 @@ const Map<String, String> en = {
   'station_devices': 'Devices',
   'no_stations': 'No Stations',
   'create_station': 'Create Station',
+  'station_card_image': 'Station Card Image',
   'search_station': 'Search Station',
   'pv': 'PV',
   'battery': 'Battery',
