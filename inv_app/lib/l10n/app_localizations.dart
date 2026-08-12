@@ -875,6 +875,9 @@ class AppLocalizations {
   String get stationCount => str('station_count');
   String stationCountParam(String count) =>
       str('station_count', {'count': count});
+  // 分页栏：第 X 页 / 共 Y 页
+  String paginationInfo(int page, int pages) =>
+      str('pagination_info', {'page': '$page', 'pages': '$pages'});
   String get offlineDataHint => _localizedStrings['offline_data_hint']!;
 
   // 国际化补充

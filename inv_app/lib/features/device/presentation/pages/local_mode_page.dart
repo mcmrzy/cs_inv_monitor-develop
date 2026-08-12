@@ -165,19 +165,16 @@ class _LocalModePageState extends State<LocalModePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColor.surfaceHover(context),
-      appBar: PreferredSize(
-        preferredSize: Size.fromHeight(50.h),
-        child: AppBar(
-          title: Text(
-            AppLocalizations.of(context)!.localConnection,
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
-          ),
-          centerTitle: true,
-          elevation: 0,
-          scrolledUnderElevation: 0.5,
-          backgroundColor: AppColor.surfaceContainer(context),
-          foregroundColor: AppColors.textPrimary,
+      appBar: AppBar(
+        title: Text(
+          AppLocalizations.of(context)!.localConnection,
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
         ),
+        centerTitle: true,
+        elevation: 0,
+        scrolledUnderElevation: 0.5,
+        backgroundColor: AppColor.surfaceContainer(context),
+        foregroundColor: AppColors.textPrimary,
       ),
       body: Column(
         children: [

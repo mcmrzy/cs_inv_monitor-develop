@@ -34,19 +34,16 @@ class _DashboardOverviewPageState extends State<DashboardOverviewPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColor.surface(context),
-      appBar: PreferredSize(
-        preferredSize: Size.fromHeight(50.h),
-        child: AppBar(
-          title: Text(
-            AppLocalizations.of(context)!.dataOverview,
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17.sp),
-          ),
-          centerTitle: true,
-          elevation: 0,
-          scrolledUnderElevation: 0.5,
-          backgroundColor: AppColor.surfaceContainer(context),
-          foregroundColor: AppColor.textPrimary(context),
+      appBar: AppBar(
+        title: Text(
+          AppLocalizations.of(context)!.dataOverview,
+          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17.sp),
         ),
+        centerTitle: true,
+        elevation: 0,
+        scrolledUnderElevation: 0.5,
+        backgroundColor: AppColor.surfaceContainer(context),
+        foregroundColor: AppColor.textPrimary(context),
       ),
       body: BlocConsumer<DashboardBloc, DashboardState>(
         listener: (context, state) {

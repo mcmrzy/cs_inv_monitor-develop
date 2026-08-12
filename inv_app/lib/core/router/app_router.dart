@@ -28,6 +28,7 @@ import 'package:inv_app/core/theme/csergy_assets.dart';
 
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 import 'package:inv_app/core/widgets/device_action_sheet.dart';
+import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 
@@ -1175,32 +1176,29 @@ class _DeviceListPageState extends State<DeviceListPage> {
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: AppColor.surface(context),
-      appBar: PreferredSize(
-        preferredSize: Size.fromHeight(50.h),
-        child: AppBar(
-          title: Text(
-            l10n.deviceManagement,
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
-          ),
-          centerTitle: true,
-          elevation: 0,
-          scrolledUnderElevation: 0.5,
-          backgroundColor: AppColor.surfaceContainer(context),
-          foregroundColor: AppColor.textPrimary(context),
-          actions: [
-            if (_sortMode)
-              TextButton(
-                onPressed: () => setState(() => _sortMode = false),
-                child: Text(
-                  l10n.finishSorting,
-                  style: const TextStyle(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w600,
-                  ),
+      appBar: AppBar(
+        title: Text(
+          l10n.deviceManagement,
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
+        ),
+        centerTitle: true,
+        elevation: 0,
+        scrolledUnderElevation: 0.5,
+        backgroundColor: AppColor.surfaceContainer(context),
+        foregroundColor: AppColor.textPrimary(context),
+        actions: [
+          if (_sortMode)
+            TextButton(
+              onPressed: () => setState(() => _sortMode = false),
+              child: Text(
+                l10n.finishSorting,
+                style: const TextStyle(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
       body: BlocListener<station_bloc.StationBloc, station_bloc.StationState>(
         listener: (context, state) {
@@ -1246,36 +1244,42 @@ class _DeviceListPageState extends State<DeviceListPage> {
           }
 
           // 全局设备列表页：长按弹设备操作菜单（无电站上下文，仅编辑/排序）
-          return DeviceListView(
-            devices: ds.devices,
-            whiteHeader: true,
-            sortMode: _sortMode,
-            onDeviceChanged: (order) {
-              // 拖动即持久化全局设备顺序
-              context
-                  .read<DeviceBloc>()
-                  .add(DeviceGlobalReorderRequested(deviceOrder: order));
+          return StyledRefreshIndicator(
+            // 下拉刷新：重新拉取全局设备列表（默认 pageSize 20）
+            onRefresh: () async {
+              context.read<DeviceBloc>().add(const DeviceListRequested());
             },
-            onLongPressDevice: (sn) async {
-              final device = ds.devices.firstWhere(
-                (d) => (d['sn'] ?? '').toString() == sn,
-                orElse: () => <String, dynamic>{'sn': sn},
-              );
-              // 列表无 station_id 时按 sn 拉详情补全（内存缓存），供解绑/换绑菜单使用
-              final stationId = await _stationIdForDevice(device);
-              if (!context.mounted) return;
-              showModalBottomSheet(
-                context: context,
-                isScrollControlled: true,
-                builder: (ctx) => DeviceActionSheet(
-                  device: device,
-                  stationId: stationId,
-                  onEnterSortMode: () {
-                    if (mounted) setState(() => _sortMode = true);
-                  },
-                ),
-              );
-            },
+            child: DeviceListView(
+              devices: ds.devices,
+              whiteHeader: true,
+              sortMode: _sortMode,
+              onDeviceChanged: (order) {
+                // 拖动即持久化全局设备顺序
+                context
+                    .read<DeviceBloc>()
+                    .add(DeviceGlobalReorderRequested(deviceOrder: order));
+              },
+              onLongPressDevice: (sn) async {
+                final device = ds.devices.firstWhere(
+                  (d) => (d['sn'] ?? '').toString() == sn,
+                  orElse: () => <String, dynamic>{'sn': sn},
+                );
+                // 列表无 station_id 时按 sn 拉详情补全（内存缓存），供解绑/换绑菜单使用
+                final stationId = await _stationIdForDevice(device);
+                if (!context.mounted) return;
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  builder: (ctx) => DeviceActionSheet(
+                    device: device,
+                    stationId: stationId,
+                    onEnterSortMode: () {
+                      if (mounted) setState(() => _sortMode = true);
+                    },
+                  ),
+                );
+              },
+            ),
           );
         },
         ),

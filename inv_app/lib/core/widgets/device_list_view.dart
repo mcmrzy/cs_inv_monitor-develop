@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/widgets/jiggle_once.dart';
+import 'package:inv_app/core/widgets/pagination_bar.dart';
+import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
@@ -339,6 +341,8 @@ class DeviceListView extends StatefulWidget {
   final ValueChanged<String>? onLongPressDevice;
   // 排序模式：启用 ReorderableListView 长按拖动
   final bool sortMode;
+  // 下拉刷新回调：非空时非排序列表包 StyledRefreshIndicator 支持下拉刷新
+  final Future<void> Function()? onRefresh;
 
   const DeviceListView({
     super.key,
@@ -351,6 +355,7 @@ class DeviceListView extends StatefulWidget {
     this.onDeviceChanged,
     this.onLongPressDevice,
     this.sortMode = false,
+    this.onRefresh,
   });
 
   @override
@@ -360,6 +365,8 @@ class DeviceListView extends StatefulWidget {
 class _DeviceListViewState extends State<DeviceListView> {
   int _deviceFilter = 0;
   String _searchQuery = '';
+  // 非排序模式分页页码（1-based）；搜索/筛选/设备集合变化时重置为 1
+  int _page = 1;
   // 拖动排序后的设备顺序：以本地状态持有，避免每次 build
   // 从 widget.devices 重新派生导致排序丢失
   late List<dynamic> _ordered;
@@ -377,6 +384,8 @@ class _DeviceListViewState extends State<DeviceListView> {
     // 拖动排序后父级刷新返回同集合数据时保持本地顺序
     if (!_sameSnSet(oldWidget.devices, widget.devices)) {
       _ordered = List.of(widget.devices);
+      // 设备集合变化（新增/删除/刷新）时回到第一页
+      _page = 1;
     }
   }
 
@@ -442,9 +451,52 @@ class _DeviceListViewState extends State<DeviceListView> {
     return 'inv';
   }
 
+  // 非排序列表：分页 + onRefresh 非空时用 StyledRefreshIndicator 包裹支持下拉刷新
+  // （分页栏固定在列表底部，不随列表滚动）
+  Widget _buildNonSortList(List<dynamic> paged, int pageCount, int safePage) {
+    final listView = ListView.builder(
+      physics: const BouncingScrollPhysics(),
+      padding: EdgeInsets.fromLTRB(16.w, 4.h, 16.w, (widget.bottomPadding ?? 100).h),
+      addAutomaticKeepAlives: false,
+      addRepaintBoundaries: true,
+      itemCount: paged.length,
+      itemBuilder: (_, i) => DeviceCard(
+        key: ValueKey(paged[i]['sn'] ?? i),
+        device: paged[i],
+        onLongPressDevice: widget.onLongPressDevice,
+        sortMode: widget.sortMode,
+      ),
+    );
+    final content = Column(
+      children: [
+        Expanded(child: listView),
+        // 超过一页才显示分页栏
+        if (pageCount > 1)
+          PaginationBar(
+            currentPage: safePage,
+            totalPages: pageCount,
+            onPageChanged: (p) => setState(() => _page = p),
+          ),
+      ],
+    );
+    if (widget.onRefresh == null) return content;
+    return StyledRefreshIndicator(
+      color: AppColors.primary,
+      onRefresh: widget.onRefresh!,
+      child: content,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final filtered = _filterDevices(_ordered);
+    // 分页：每页 10 条；不足一页时整页展示（PaginationBar 自身也会兜底隐藏）
+    final pageCount = filtered.isEmpty ? 1 : (filtered.length / 10).ceil();
+    final safePage = _page.clamp(1, pageCount);
+    final pageEnd = safePage * 10 < filtered.length ? safePage * 10 : filtered.length;
+    final paged = pageCount <= 1
+        ? filtered
+        : filtered.sublist((safePage - 1) * 10, pageEnd);
     final headerBgColor =
         widget.whiteHeader ? AppColor.surfaceContainer(context) : AppColor.surface(context);
     final headerChipBgColor =
@@ -458,10 +510,19 @@ class _DeviceListViewState extends State<DeviceListView> {
             children: [
               if (widget.showSearch)
                 DeviceSearchBar(
-                  onSearchChanged: (v) => setState(() => _searchQuery = v),
+                  onSearchChanged: (v) => setState(() {
+                    _searchQuery = v;
+                    _page = 1;
+                  }),
                 ),
-              DeviceFilterBar(selectedIndex: _deviceFilter, onSelected: (i) => setState(() => _deviceFilter = i),
-                  filterLabels: widget.filterLabels, backgroundColor: headerChipBgColor),
+              DeviceFilterBar(
+                  selectedIndex: _deviceFilter,
+                  onSelected: (i) => setState(() {
+                    _deviceFilter = i;
+                    _page = 1;
+                  }),
+                  filterLabels: widget.filterLabels,
+                  backgroundColor: headerChipBgColor),
             ],
           ),
         ),
@@ -527,19 +588,7 @@ class _DeviceListViewState extends State<DeviceListView> {
                         ),
                       ),
                     )
-                  : ListView.builder(
-                      physics: BouncingScrollPhysics(),
-                      padding: EdgeInsets.fromLTRB(16.w, 4.h, 16.w, (widget.bottomPadding ?? 100).h),
-                      addAutomaticKeepAlives: false,
-                      addRepaintBoundaries: true,
-                      itemCount: filtered.length,
-                      itemBuilder: (_, i) => DeviceCard(
-                        key: ValueKey(filtered[i]['sn'] ?? i),
-                        device: filtered[i],
-                        onLongPressDevice: widget.onLongPressDevice,
-                        sortMode: widget.sortMode,
-                      ),
-                    ),
+                  : _buildNonSortList(paged, pageCount, safePage),
         ),
       ],
     );

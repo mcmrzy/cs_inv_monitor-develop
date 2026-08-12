@@ -820,17 +820,14 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: PreferredSize(
-        preferredSize: Size.fromHeight(50.h),
-        child: AppBar(
-          title: Text(
-            l10n.localFirmwareUpgrade,
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17.sp),
-          ),
-          centerTitle: true,
-          elevation: 0,
-          scrolledUnderElevation: 0.5,
+      appBar: AppBar(
+        title: Text(
+          l10n.localFirmwareUpgrade,
+          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17.sp),
         ),
+        centerTitle: true,
+        elevation: 0,
+        scrolledUnderElevation: 0.5,
       ),
       body: Column(
         children: [

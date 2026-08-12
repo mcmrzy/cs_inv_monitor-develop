@@ -36,19 +36,16 @@ class _OtaTabPageState extends State<OtaTabPage> {
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: AppColor.surface(context),
-      appBar: PreferredSize(
-        preferredSize: Size.fromHeight(50.h),
-        child: AppBar(
-          title: Text(
-            l10n.otaTitle,
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
-          ),
-          centerTitle: true,
-          elevation: 0,
-          scrolledUnderElevation: 0.5,
-          backgroundColor: AppColor.surfaceContainer(context),
-          foregroundColor: AppColor.textPrimary(context),
+      appBar: AppBar(
+        title: Text(
+          l10n.otaTitle,
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
         ),
+        centerTitle: true,
+        elevation: 0,
+        scrolledUnderElevation: 0.5,
+        backgroundColor: AppColor.surfaceContainer(context),
+        foregroundColor: AppColor.textPrimary(context),
       ),
       body: BlocBuilder<DeviceBloc, DeviceState>(
         builder: (context, state) {
