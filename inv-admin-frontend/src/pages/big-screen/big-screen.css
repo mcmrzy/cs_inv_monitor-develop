@@ -363,6 +363,7 @@
 /* ==================== 滚动地球 ==================== */
 
 .bs-globe-wrap {
+  --globe-size: min(58vh, 50vw, 620px);
   position: relative;
   flex: 1;
   min-height: 0;
@@ -374,22 +375,24 @@
 
 .bs-globe {
   position: relative;
-  width: min(52vh, 44vw, 560px);
-  height: min(52vh, 44vw, 560px);
+  width: var(--globe-size);
+  height: var(--globe-size);
   border-radius: 50%;
 }
 
-/* 旋转光环 */
+/* 旋转光环（静态装饰：地球在环内自转，环不随转；transform 的 scale 由 JS 随缩放联动） */
 .bs-globe-rings {
   position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) scale(1);
   border-radius: 50%;
   pointer-events: none;
-  animation: bs-ring-spin 14s linear infinite;
 }
 
 .bs-globe-ring-outer {
-  width: calc(min(52vh, 44vw, 560px) + 46px);
-  height: calc(min(52vh, 44vw, 560px) + 46px);
+  width: calc(var(--globe-size) + 46px);
+  height: calc(var(--globe-size) + 46px);
   border: 1px dashed rgba(0, 212, 255, 0.3);
   box-shadow:
     0 0 24px rgba(0, 212, 255, 0.12) inset,
@@ -397,16 +400,9 @@
 }
 
 .bs-globe-ring-inner {
-  width: calc(min(52vh, 44vw, 560px) + 22px);
-  height: calc(min(52vh, 44vw, 560px) + 22px);
+  width: calc(var(--globe-size) + 22px);
+  height: calc(var(--globe-size) + 22px);
   border: 1px solid rgba(255, 215, 0, 0.18);
-  animation-duration: 9s;
-  animation-direction: reverse;
-}
-
-@keyframes bs-ring-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
 }
 
 /* 地球光晕 */

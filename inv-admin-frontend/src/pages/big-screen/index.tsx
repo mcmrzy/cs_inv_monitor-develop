@@ -63,6 +63,20 @@ const BigScreenPage: React.FC = () => {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
+  // 光环缩放联动：随地球滚轮缩放同比例放大缩小（基准为初始视角）
+  const outerRingRef = useRef<HTMLDivElement>(null)
+  const innerRingRef = useRef<HTMLDivElement>(null)
+  const ringScaleRef = useRef(1)
+  const BASE_VIEW_DISTANCE = 190 + 100 // 初始视角相机到球心距离（distance + 球半径）
+  const handleViewChange = useCallback(({ distance }: { distance: number }) => {
+    const scale = Math.asin(100 / (distance + 100)) / Math.asin(100 / BASE_VIEW_DISTANCE)
+    if (Math.abs(scale - ringScaleRef.current) < 0.002) return
+    ringScaleRef.current = scale
+    const transform = `translate(-50%, -50%) scale(${scale.toFixed(4)})`
+    if (outerRingRef.current) outerRingRef.current.style.transform = transform
+    if (innerRingRef.current) innerRingRef.current.style.transform = transform
+  }, [])
+
   // 2. 时钟（useRef + setInterval 避免 re-render）
   const clockRef = useRef<HTMLSpanElement>(null)
   const dateRef = useRef<HTMLSpanElement>(null)
@@ -251,11 +265,11 @@ const BigScreenPage: React.FC = () => {
           </div>
 
           <div className="bs-globe-wrap">
-            <div className="bs-globe-rings bs-globe-ring-outer" />
-            <div className="bs-globe-rings bs-globe-ring-inner" />
+            <div className="bs-globe-rings bs-globe-ring-outer" ref={outerRingRef} />
+            <div className="bs-globe-rings bs-globe-ring-inner" ref={innerRingRef} />
             <div className="bs-globe">
               <GlobalOutlined className="bs-globe-badge" />
-              <RotatingGlobe stations={stations} />
+              <RotatingGlobe stations={stations} onViewChange={handleViewChange} />
             </div>
           </div>
 
