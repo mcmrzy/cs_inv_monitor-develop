@@ -76,6 +76,7 @@ const Map<String, String> zh = {
   'station_devices': '关联设备',
   'no_stations': '还没有电站',
   'create_station': '创建电站',
+  'station_card_image': '电站卡片图片',
   'search_station': '搜索电站名称',
   'pv': '光伏',
   'battery': '储能',
