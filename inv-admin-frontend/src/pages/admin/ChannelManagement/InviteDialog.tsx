@@ -296,6 +296,8 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
   }
 
   const validateAndSend = (): boolean => {
+    // 防重复提交：请求进行中时拒绝再次发送
+    if (sendMutation.isPending) return false
     if (!isSystemAdmin && (managedOrgIds?.size ?? 0) === 0) {
       message.warning(t('channel.invite.noManagePermission'))
       return false
