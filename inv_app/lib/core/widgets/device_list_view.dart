@@ -490,13 +490,13 @@ class _DeviceListViewState extends State<DeviceListView> {
   @override
   Widget build(BuildContext context) {
     final filtered = _filterDevices(_ordered);
-    // 分页：每页 10 条；不足一页时整页展示（PaginationBar 自身也会兜底隐藏）
-    final pageCount = filtered.isEmpty ? 1 : (filtered.length / 10).ceil();
+    // 分页：每页 20 条；不足一页时整页展示（PaginationBar 自身也会兜底隐藏）
+    final pageCount = filtered.isEmpty ? 1 : (filtered.length / 20).ceil();
     final safePage = _page.clamp(1, pageCount);
-    final pageEnd = safePage * 10 < filtered.length ? safePage * 10 : filtered.length;
+    final pageEnd = safePage * 20 < filtered.length ? safePage * 20 : filtered.length;
     final paged = pageCount <= 1
         ? filtered
-        : filtered.sublist((safePage - 1) * 10, pageEnd);
+        : filtered.sublist((safePage - 1) * 20, pageEnd);
     final headerBgColor =
         widget.whiteHeader ? AppColor.surfaceContainer(context) : AppColor.surface(context);
     final headerChipBgColor =

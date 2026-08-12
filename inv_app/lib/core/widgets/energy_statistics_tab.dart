@@ -3,7 +3,6 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:inv_app/core/data/alarm_code_mapping.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
-import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/core/entities/energy_data_point.dart';
 import 'package:dio/dio.dart';
 import 'package:inv_app/core/services/service_locator.dart';
@@ -1497,14 +1496,29 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
   }
 
   Widget _buildSkeleton() {
-    return ListView(
-      padding: EdgeInsets.all(16.w),
-      children: [
-        const SkeletonCard(height: 130),
-        SizedBox(height: 16.h),
-        const SkeletonCard(height: 260),
-        SizedBox(height: 80.h),
-      ],
+    return Container(
+      color: AppColor.surface(context),
+      child: ListView(
+        padding: EdgeInsets.all(16.w),
+        children: [
+          Container(
+            height: 130.h,
+            decoration: BoxDecoration(
+              color: AppColor.surfaceContainer(context),
+              borderRadius: BorderRadius.circular(16.r),
+            ),
+          ),
+          SizedBox(height: 16.h),
+          Container(
+            height: 260.h,
+            decoration: BoxDecoration(
+              color: AppColor.surfaceContainer(context),
+              borderRadius: BorderRadius.circular(16.r),
+            ),
+          ),
+          SizedBox(height: 80.h),
+        ],
+      ),
     );
   }
 }

@@ -17,6 +17,7 @@ import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/utils/sn_utils.dart';
 import 'package:inv_app/core/utils/api_response.dart';
 import 'package:inv_app/core/widgets/station_selector_sheet.dart';
+import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 class AddDevicePage extends StatefulWidget {
@@ -107,14 +108,7 @@ class _AddDevicePageState extends State<AddDevicePage>
       _scannedPin = '';
       _scanning = false;
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content:
-                Text('${AppLocalizations.of(context)!.qrNotRecognized}:\n$raw'),
-            backgroundColor: AppColors.errorLight,
-            duration: const Duration(seconds: 3),
-          ),
-        );
+        AppToast.show(context, '${AppLocalizations.of(context)!.qrNotRecognized}:\n$raw', type: ToastType.error);
       }
       return;
     }
@@ -127,15 +121,7 @@ class _AddDevicePageState extends State<AddDevicePage>
       _scannedPin = '';
       _scanning = false;
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '${AppLocalizations.of(context)!.snFormatError}:\n${formatSNForDisplay(sn)}',
-            ),
-            backgroundColor: AppColors.errorLight,
-            duration: const Duration(seconds: 3),
-          ),
-        );
+        AppToast.show(context, '${AppLocalizations.of(context)!.snFormatError}:\n${formatSNForDisplay(sn)}', type: ToastType.error);
       }
       return;
     }
@@ -257,9 +243,7 @@ class _AddDevicePageState extends State<AddDevicePage>
   Future<void> _manualBind() async {
     final raw = _snController.text.trim();
     if (raw.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context)!.pleaseInputSn)),
-      );
+      AppToast.show(context, AppLocalizations.of(context)!.pleaseInputSn, type: ToastType.info);
       return;
     }
 
@@ -269,15 +253,7 @@ class _AddDevicePageState extends State<AddDevicePage>
     final pin = qr?.pin ?? _pinController.text.trim();
 
     if (!validateSNFormat(sn)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '${AppLocalizations.of(context)!.snFormatError}:\n${formatSNForDisplay(sn)}',
-          ),
-          backgroundColor: AppColors.errorLight,
-          duration: const Duration(seconds: 3),
-        ),
-      );
+      AppToast.show(context, '${AppLocalizations.of(context)!.snFormatError}:\n${formatSNForDisplay(sn)}', type: ToastType.error);
       return;
     }
 
@@ -311,9 +287,7 @@ class _AddDevicePageState extends State<AddDevicePage>
     if (!mounted) return;
     if (pin.isEmpty) {
       // PIN 必填（后端严格模式：云端绑定同样强制 PIN 校验，见设计文档 §5.4）
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context)!.pinRequired)),
-      );
+      AppToast.show(context, AppLocalizations.of(context)!.pinRequired, type: ToastType.info);
       return;
     }
 
@@ -419,27 +393,13 @@ class _AddDevicePageState extends State<AddDevicePage>
               _scanning = false;
             });
             _addToScanHistory(_lastScanned, true);
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  '✅ ${AppLocalizations.of(context)!.alreadyBoundNDevices('$_sessionBoundCount')}',
-                ),
-                backgroundColor: AppColors.successLight,
-              ),
-            );
+            AppToast.show(context, AppLocalizations.of(context)!.alreadyBoundNDevices('$_sessionBoundCount'), type: ToastType.success);
           } else if (state is DeviceError) {
             _scanning = false;
             _lastScanned = '';
             _scannedPin = '';
             _addToScanHistory(_lastScanned, false);
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  AppLocalizations.of(context)!.translateError(state.message),
-                ),
-                backgroundColor: AppColors.errorLight,
-              ),
-            );
+            AppToast.show(context, AppLocalizations.of(context)!.translateError(state.message), type: ToastType.error);
           }
         },
         builder: (context, state) {

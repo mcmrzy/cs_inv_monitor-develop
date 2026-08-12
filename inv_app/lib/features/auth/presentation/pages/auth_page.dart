@@ -10,6 +10,7 @@ import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:inv_app/features/auth/presentation/widgets/login_form.dart';
 import 'package:inv_app/features/auth/presentation/widgets/register_form.dart';
+import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 /// 登录/注册模式
@@ -73,14 +74,7 @@ class _AuthPageState extends State<AuthPage>
       body: BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {
           if (state is AuthError) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  AppLocalizations.of(context)!.translateError(state.message),
-                ),
-                backgroundColor: AppColors.error,
-              ),
-            );
+            AppToast.show(context, AppLocalizations.of(context)!.translateError(state.message), type: ToastType.error);
           } else if (state is AuthAuthenticated) {
             context.go('/home');
           }
@@ -207,25 +201,26 @@ class _AuthPageState extends State<AuthPage>
     final isRegister = _mode == AuthMode.register;
     return Column(
       children: [
-        SizedBox(height: 64.h),
-        AnimatedDefaultTextStyle(
-          duration: const Duration(milliseconds: 350),
-          curve: Curves.easeInOutCubic,
-          style: TextStyle(
-            fontSize: isRegister ? 22.sp : 30.sp,
-            fontWeight: FontWeight.w600,
-            color: Colors.white,
-            letterSpacing: 1.5,
-            shadows: const [
-              Shadow(
-                color: Colors.black26,
-                blurRadius: 8,
-                offset: Offset(0, 2),
-              ),
-            ],
+        SizedBox(height: isRegister ? 24.h : 96.h),
+        if (!isRegister)
+          AnimatedDefaultTextStyle(
+            duration: const Duration(milliseconds: 350),
+            curve: Curves.easeInOutCubic,
+            style: TextStyle(
+              fontSize: 30.sp,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+              letterSpacing: 1.5,
+              shadows: const [
+                Shadow(
+                  color: Colors.black26,
+                  blurRadius: 8,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Text(l10n.brandName, textAlign: TextAlign.center),
           ),
-          child: Text(l10n.brandName, textAlign: TextAlign.center),
-        ),
         // 副标语：光伏逆变器智能监控（注册模式淡出且不占位）
         AnimatedOpacity(
           opacity: isRegister ? 0 : 1,

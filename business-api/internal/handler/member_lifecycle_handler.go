@@ -32,6 +32,11 @@ type UpdateMembershipRequest struct {
 	MembershipType *string    `json:"membership_type"`
 }
 
+// UpdateMemberRoleRequest represents a request to set a member's role (single identity)
+type UpdateMemberRoleRequest struct {
+	Role string `json:"role" binding:"required"`
+}
+
 // RemoveMemberRequest represents a request to remove a member
 type RemoveMemberRequest struct {
 	Reason string `json:"reason"`
@@ -98,6 +103,7 @@ type MemberLifecycleServiceInterface interface {
 	ListMembers(ctx context.Context, orgID int64, page, pageSize int, roleFilter string) (*service.ListMembersResult, error)
 	BulkAdd(ctx context.Context, actorUserID int64, tenantID int64, req service.BulkAddParams) (*service.BulkAddResult, error)
 	BulkTransfer(ctx context.Context, actorUserID int64, req service.BulkTransferParams) (*service.BulkTransferResult, error)
+	UpdateMemberRole(ctx context.Context, actorUserID int64, tenantID int64, membershipID int64, role string) error
 }
 
 // ==================== Handler Struct ====================
@@ -196,6 +202,41 @@ func (h *MemberLifecycleHandler) UpdateMembership(c *gin.Context) {
 
 	response.SuccessWithMessage(c, "成员信息已更新", gin.H{
 		"membership_id": membershipID,
+	})
+}
+
+// ==================== Update Member Role Endpoint ====================
+
+// UpdateMemberRole handles PUT /api/v1/members/memberships/:id/role - Set member role (single identity)
+func (h *MemberLifecycleHandler) UpdateMemberRole(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+	membershipID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.Error(c, 400, "无效的会员关系 ID")
+		return
+	}
+
+	var req UpdateMemberRoleRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, 400, "invalid request")
+		return
+	}
+
+	tenantID := middleware.GetRootTenantID(c)
+	if tenantID == 0 {
+		response.Error(c, 403, "tenant context missing")
+		return
+	}
+
+	err = h.svc.UpdateMemberRole(c.Request.Context(), userID, tenantID, membershipID, req.Role)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+
+	response.SuccessWithMessage(c, "成员角色已更新", gin.H{
+		"membership_id": membershipID,
+		"role":          req.Role,
 	})
 }
 

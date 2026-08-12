@@ -22,6 +22,7 @@ type mockMemberLifecycleService struct {
 	removeMemberFn     func(ctx context.Context, actorUserID int64, membershipID int64, reason string) error
 	deactivateMemberFn func(ctx context.Context, actorUserID int64, membershipID int64, reason string) error
 	reactivateMemberFn func(ctx context.Context, actorUserID int64, membershipID int64) error
+	updateMemberRoleFn func(ctx context.Context, actorUserID int64, tenantID int64, membershipID int64, role string) error
 	transferInitiateFn func(ctx context.Context, actorUserID int64, membershipIDs []int64, targetOrgID int64, reason string) (*service.TransferResult, error)
 	transferAcceptFn   func(ctx context.Context, actorUserID int64, transferID int64) error
 	transferRejectFn   func(ctx context.Context, actorUserID int64, transferID int64, reason string) error
@@ -65,6 +66,12 @@ func (m *mockMemberLifecycleService) DeactivateMember(ctx context.Context, a int
 func (m *mockMemberLifecycleService) ReactivateMember(ctx context.Context, a int64, mi int64) error {
 	if m.reactivateMemberFn != nil {
 		return m.reactivateMemberFn(ctx, a, mi)
+	}
+	return nil
+}
+func (m *mockMemberLifecycleService) UpdateMemberRole(ctx context.Context, a int64, t int64, mi int64, role string) error {
+	if m.updateMemberRoleFn != nil {
+		return m.updateMemberRoleFn(ctx, a, t, mi, role)
 	}
 	return nil
 }

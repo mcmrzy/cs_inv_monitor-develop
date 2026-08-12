@@ -515,3 +515,99 @@ func (r *MemberLifecycleRepository) ListMembersByOrgID(ctx context.Context, orgI
 func (r *MemberLifecycleRepository) LogAudit(ctx context.Context, operatorID int64, operatorName, action, resourceType, resourceID, detail, ip string) {
 	r.userRepo.LogAudit(ctx, operatorID, operatorName, action, resourceType, resourceID, detail, ip)
 }
+
+// ==================== Member Role Update ====================
+
+// FindOrgByType 在同租户下查找指定类型的活跃组织（用于角色切换）
+func (r *MemberLifecycleRepository) FindOrgByType(ctx context.Context, tx pgx.Tx, tenantID int64, orgType string) (int64, error) {
+	var orgID int64
+	err := tx.QueryRow(ctx, `
+		SELECT id FROM organizations
+		WHERE root_tenant_id = $1 AND org_type = $2 AND status = 'active' AND deleted_at IS NULL
+		ORDER BY id LIMIT 1
+	`, tenantID, orgType).Scan(&orgID)
+	if err == pgx.ErrNoRows {
+		return 0, nil
+	}
+	return orgID, err
+}
+
+// CreateOrgForRole 创建指定类型的组织（角色切换时自动补齐缺失的组织层级）
+func (r *MemberLifecycleRepository) CreateOrgForRole(ctx context.Context, tx pgx.Tx, tenantID, parentID int64, orgType, name string) (int64, error) {
+	var orgID int64
+	err := tx.QueryRow(ctx, `
+		INSERT INTO organizations (root_tenant_id, parent_id, org_type, name, status, version)
+		VALUES ($1, $2, $3, $4, 'active', 1)
+		RETURNING id
+	`, tenantID, parentID, orgType, name).Scan(&orgID)
+	return orgID, err
+}
+
+// UpdateMembershipOrg 更新成员关系所属组织并切换角色（单一身份）：
+// organization_memberships 被 membership_role_assignments / role_permission_grants /
+// resource_grants 以复合键（root_tenant_id, organization_id, id）外键引用，直接 UPDATE
+// organization_id 会因引用旧三元组而违反外键（且双向同步必然存在中间态）。
+// 因此按“先删旧引用 → 切换组织 → 重建新引用”的顺序在同一事务内完成：
+// 删除旧角色分配及其授权、切换 membership 组织、创建目标角色分配并写入默认授权。
+func (r *MemberLifecycleRepository) UpdateMembershipOrg(ctx context.Context, tx pgx.Tx, membershipID, orgID int64, role string) error {
+	// 1. 删除该成员关系的显式资源授权（切换组织后旧组织授权作废）
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM resource_grants WHERE subject_membership_id = $1
+	`, membershipID); err != nil {
+		return fmt.Errorf("drop resource grants: %w", err)
+	}
+
+	// 2. 删除旧活跃角色分配的授权（role_permission_grants 引用 role_assignment）
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM role_permission_grants g
+		USING membership_role_assignments ra
+		WHERE g.role_assignment_id = ra.id AND ra.membership_id = $1 AND ra.status = 'active'
+	`, membershipID); err != nil {
+		return fmt.Errorf("drop old role grants: %w", err)
+	}
+
+	// 3. 删除旧活跃角色分配（释放对 membership 旧组织三元组的引用）
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM membership_role_assignments
+		WHERE membership_id = $1 AND status = 'active'
+	`, membershipID); err != nil {
+		return fmt.Errorf("drop old role assignments: %w", err)
+	}
+
+	// 4. membership 组织切换 + 授权版本提升（使已签发 JWT 的授权上下文失效）
+	if _, err := tx.Exec(ctx, `
+		UPDATE organization_memberships
+		SET organization_id = $1, updated_at = NOW(), version = version + 1,
+		    authorization_version = authorization_version + 1
+		WHERE id = $2
+	`, orgID, membershipID); err != nil {
+		return fmt.Errorf("switch membership org: %w", err)
+	}
+
+	// 5. 创建目标角色分配（role_code 对应目标组织类型）
+	var rootTenantID, assignmentID int64
+	if err := tx.QueryRow(ctx, `
+		INSERT INTO membership_role_assignments (root_tenant_id, organization_id, membership_id, role_code, status, version)
+		SELECT m.root_tenant_id, $1, m.id, $2, 'active', 1
+		FROM organization_memberships m WHERE m.id = $3
+		RETURNING id, root_tenant_id
+	`, orgID, role, membershipID).Scan(&assignmentID, &rootTenantID); err != nil {
+		return fmt.Errorf("create role assignment: %w", err)
+	}
+
+	// 6. 写入目标角色默认授权（幂等：已存在的授权保持不变）
+	return EnsureRoleDefaultGrants(ctx, tx, rootTenantID, orgID, assignmentID, role)
+}
+
+// RevokeOtherMemberships 撤销同一用户的其他活跃成员关系（保证单一身份），返回撤销数量
+func (r *MemberLifecycleRepository) RevokeOtherMemberships(ctx context.Context, tx pgx.Tx, userID, keepMembershipID int64) (int64, error) {
+	tag, err := tx.Exec(ctx, `
+		UPDATE organization_memberships
+		SET status = 'revoked', updated_at = NOW(), version = version + 1
+		WHERE user_id = $1 AND id != $2 AND status = 'active'
+	`, userID, keepMembershipID)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}

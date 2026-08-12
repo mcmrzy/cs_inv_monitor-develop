@@ -9,7 +9,7 @@ class DeviceRemoteDataSource {
     int? stationId,
     int? status,
     int page = 1,
-    int pageSize = 20,
+    int pageSize = 100,
   }) async {
     final params = <String, dynamic>{
       'page': page,

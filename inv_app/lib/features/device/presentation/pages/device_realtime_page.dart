@@ -15,6 +15,7 @@ import 'package:inv_app/core/entities/inverter_data.dart';
 import 'package:inv_app/core/entities/device_model_field.dart';
 import 'package:inv_app/core/utils/telemetry_quality.dart';
 import 'package:inv_app/core/utils/api_response.dart';
+import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 class DeviceRealtimePage extends StatefulWidget {
@@ -674,13 +675,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
         if (state is DeviceLocalDisconnected) {
           // 逆变器无响应，已自动断开设备热点并切回家用 WiFi
           final l10n = AppLocalizations.of(context)!;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(l10n.inverterNoResponse),
-              backgroundColor: AppColors.warning,
-              duration: const Duration(seconds: 5),
-            ),
-          );
+          AppToast.show(context, l10n.inverterNoResponse, type: ToastType.error);
           context.pop();
         }
       },

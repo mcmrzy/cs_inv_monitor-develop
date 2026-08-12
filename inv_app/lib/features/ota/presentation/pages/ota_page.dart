@@ -11,6 +11,7 @@ import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 import 'package:inv_app/features/ota/presentation/bloc/ota_bloc.dart';
 import 'package:inv_app/features/ota/presentation/pages/firmware_list_page.dart';
+import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -139,12 +140,7 @@ class _OTAPageState extends State<OTAPage> {
           _downloadingIds.remove(firmwareId);
         });
         final l10n = AppLocalizations.of(context)!;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l10n.str('pre_download_failed', {'error': '$e'})),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        AppToast.show(context, l10n.str('pre_download_failed', {'error': '$e'}), type: ToastType.error);
       }
     }
   }
@@ -183,15 +179,7 @@ class _OTAPageState extends State<OTAPage> {
             _triggering = false;
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      AppLocalizations.of(context)!
-                          .translateError(state.message),
-                    ),
-                    duration: const Duration(seconds: 2),
-                  ),
-                );
+                AppToast.show(context, AppLocalizations.of(context)!.translateError(state.message), type: ToastType.error);
               }
             });
           }

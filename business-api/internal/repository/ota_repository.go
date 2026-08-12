@@ -1294,7 +1294,7 @@ func (r *OTARepository) CreateTaskFromAppTrigger(ctx context.Context, userID int
 			}
 			pkgItemRows.Close()
 		}
-		taskName = fmt.Sprintf("App升级到 %s", pkg.MainVersion)
+		taskName = fmt.Sprintf("升级到 %s", pkg.MainVersion)
 		taskType = model.TaskTypePackage
 		deviceModel = pkg.Model
 		pkgID = &pkg.ID
@@ -1314,7 +1314,7 @@ func (r *OTARepository) CreateTaskFromAppTrigger(ctx context.Context, userID int
 		if err != nil {
 			return 0, fmt.Errorf("firmware not found")
 		}
-		taskName = fmt.Sprintf("App升级到 %s", fw.Version)
+		taskName = fmt.Sprintf("升级到 %s", fw.Version)
 		taskType = model.TaskTypeSingle
 		deviceModel = fw.Model
 		fwID = &fw.ID

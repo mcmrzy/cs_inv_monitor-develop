@@ -723,7 +723,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
         item.timestamp,
       );
     }
-    // 进入批量模式：卡片错相位摇晃，提示可多选（JiggleOnce 仅进入时播放一次）
+    // 进入批量模式：卡片错相位持续抖动，提示可多选
     if (batchMode) {
       card = JiggleOnce(active: batchMode, index: index, child: card);
     }
@@ -1139,13 +1139,9 @@ class _LongPressFeedbackCardState extends State<_LongPressFeedbackCard> {
           margin: widget.margin,
           decoration: BoxDecoration(
             // 选中态优先于按压高亮；长按达成提示保留最高优先级
-            color: _confirmed
-                ? AppColors.primary.withValues(alpha: 0.12)
-                : (widget.selected
-                    ? AppColors.primary.withValues(alpha: 0.08)
-                    : (_pressed
-                        ? AppColors.primary.withValues(alpha: 0.06)
-                        : baseColor)),
+            color: widget.selected
+                ? AppColors.primary.withValues(alpha: 0.08)
+                : baseColor,
             borderRadius: widget.borderRadius,
             // 选中态整卡主色描边 1.5px
             border: widget.selected

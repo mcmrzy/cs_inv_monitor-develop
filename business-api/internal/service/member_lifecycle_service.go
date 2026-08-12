@@ -11,6 +11,7 @@ import (
 	"inv-api-server/internal/repository"
 	"inv-api-server/pkg/logger"
 
+	"github.com/jackc/pgx/v5"
 	"go.uber.org/zap"
 )
 
@@ -241,6 +242,99 @@ func (s *MemberLifecycleService) UpdateMembership(ctx context.Context, actorUser
 	})
 
 	return nil
+}
+
+// ==================== Update Member Role ====================
+
+// roleParentType 角色对应的父组织类型（层级：manufacturer -> agent -> distributor -> installer）
+var roleParentType = map[string]string{
+	"agent":       "manufacturer",
+	"distributor": "agent",
+	"installer":   "distributor",
+	"customer":    "installer",
+}
+
+var roleNameZH = map[string]string{
+	"agent":       "代理商组织",
+	"distributor": "经销商组织",
+	"installer":   "安装商组织",
+	"customer":    "终端用户组织",
+}
+
+// UpdateMemberRole 设置成员角色（单一身份）：
+// 将成员关系切换到目标角色对应的组织，若租户下不存在该类型组织则自动创建；
+// 同时撤销该用户的其他所有活跃成员关系，确保一个用户只对应一个角色。
+func (s *MemberLifecycleService) UpdateMemberRole(ctx context.Context, actorUserID int64, tenantID int64, membershipID int64, role string) error {
+	validRoles := map[string]bool{"agent": true, "distributor": true, "installer": true, "customer": true}
+	if !validRoles[role] {
+		return newServiceError(400, "无效的角色")
+	}
+
+	membership, err := s.repo.GetMembershipByID(ctx, membershipID)
+	if err != nil || membership == nil {
+		return newServiceError(404, "成员关系不存在")
+	}
+	if membership.RootTenantID != tenantID {
+		return newServiceError(403, "无权访问此组织成员关系")
+	}
+	if membership.Status != "active" {
+		return newServiceError(400, "成员关系已失效")
+	}
+
+	tx, err := s.repo.BeginTx(ctx)
+	if err != nil {
+		return newServiceError(500, "数据库事务开始失败")
+	}
+	defer tx.Rollback(ctx)
+
+	targetOrgID, err := s.ensureOrgByRole(ctx, tx, tenantID, role)
+	if err != nil {
+		return newServiceError(500, "组织准备失败")
+	}
+
+	if err := s.repo.UpdateMembershipOrg(ctx, tx, membershipID, targetOrgID, role); err != nil {
+		return newServiceError(500, "更新成员角色失败")
+	}
+	// 单一身份：撤销该用户的其他所有活跃成员关系
+	if _, err := s.repo.RevokeOtherMemberships(ctx, tx, membership.UserID, membershipID); err != nil {
+		return newServiceError(500, "更新成员角色失败")
+	}
+
+	s.repo.InvalidateAuthCache(membership.RootTenantID, membership.OrganizationID)
+	s.repo.InvalidateAuthCache(tenantID, targetOrgID)
+
+	if err := tx.Commit(ctx); err != nil {
+		return newServiceError(500, "保存更新失败")
+	}
+
+	s.auditLog(actorUserID, "member.update_role", targetOrgID, map[string]interface{}{
+		"membership_id": membershipID,
+		"user_id":       membership.UserID,
+		"role":          role,
+	})
+	return nil
+}
+
+// ensureOrgByRole 确保租户下存在指定角色类型的组织，不存在则按层级自动创建
+func (s *MemberLifecycleService) ensureOrgByRole(ctx context.Context, tx pgx.Tx, tenantID int64, role string) (int64, error) {
+	orgID, err := s.repo.FindOrgByType(ctx, tx, tenantID, role)
+	if err != nil {
+		return 0, err
+	}
+	if orgID > 0 {
+		return orgID, nil
+	}
+	parentType := roleParentType[role]
+	var parentID int64
+	if parentType == "manufacturer" {
+		parentID = tenantID // 根厂家组织 id = root_tenant_id
+	} else {
+		parentID, err = s.ensureOrgByRole(ctx, tx, tenantID, parentType)
+		if err != nil {
+			return 0, err
+		}
+	}
+	return s.repo.CreateOrgForRole(ctx, tx, tenantID, parentID, role, roleNameZH[role])
 }
 
 // ==================== Remove Member ====================

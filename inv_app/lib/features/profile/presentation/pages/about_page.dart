@@ -7,6 +7,7 @@ import 'package:inv_app/core/services/app_update_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
+import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -30,12 +31,7 @@ class _AboutPageState extends State<AboutPage> {
     } else {
       if (mounted) {
         final l10n = AppLocalizations.of(context)!;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l10n.cannotOpenLink(url)),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        AppToast.show(context, l10n.cannotOpenLink(url), type: ToastType.info);
       }
     }
   }
@@ -134,11 +130,7 @@ class _AboutPageState extends State<AboutPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(AppLocalizations.of(context)!.checkUpdateFailed),
-          ),
-        );
+        AppToast.show(context, AppLocalizations.of(context)!.checkUpdateFailed, type: ToastType.error);
       }
     } finally {
       if (mounted) setState(() => _checkingUpdate = false);
@@ -380,14 +372,7 @@ class _AboutPageState extends State<AboutPage> {
           Navigator.pop(context);
           _showBrowserDownloadDialog(info);
         } else if (e is! DioException) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                AppLocalizations.of(context)!
-                    .str('download_failed', {'error': e.toString()}),
-              ),
-            ),
-          );
+          AppToast.show(context, AppLocalizations.of(context)!.str('download_failed', {'error': e.toString()}), type: ToastType.error);
         }
       }
     } finally {

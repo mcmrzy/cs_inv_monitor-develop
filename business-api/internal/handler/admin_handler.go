@@ -61,20 +61,27 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 
 	// Attach each user's organization type(s) so the frontend can
 	// show the org-type-based role (agent/distributor/installer/customer).
+	// MembershipID is the user's active membership used for role switching.
 	type userListItem struct {
 		model.User
-		OrgRoles []string `json:"org_roles"`
+		MembershipID int64    `json:"membership_id,omitempty"`
+		OrgRoles     []string `json:"org_roles"`
+	}
+
+	type orgRoleInfo struct {
+		membershipID int64
+		role         string
 	}
 
 	items := make([]userListItem, 0, len(result.Items))
-	roleMap := make(map[int64][]string)
+	roleMap := make(map[int64][]orgRoleInfo)
 	if len(result.Items) > 0 {
 		ids := make([]int64, 0, len(result.Items))
 		for _, u := range result.Items {
 			ids = append(ids, u.ID)
 		}
 		rows, qerr := h.db.Query(c.Request.Context(), `
-			SELECT m.user_id, o.org_type
+			SELECT m.id, m.user_id, o.org_type
 			FROM organization_memberships m
 			JOIN organizations o ON o.id = m.organization_id AND o.deleted_at IS NULL
 			WHERE m.status = 'active' AND m.user_id = ANY($1)
@@ -84,9 +91,9 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 			defer rows.Close()
 			seen := make(map[int64]map[string]struct{})
 			for rows.Next() {
-				var uid int64
+				var membershipID, uid int64
 				var orgType string
-				if err := rows.Scan(&uid, &orgType); err != nil {
+				if err := rows.Scan(&membershipID, &uid, &orgType); err != nil {
 					continue
 				}
 				// manufacturer is shown as org_admin (super admin)
@@ -101,7 +108,7 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 					continue
 				}
 				seen[uid][code] = struct{}{}
-				roleMap[uid] = append(roleMap[uid], code)
+				roleMap[uid] = append(roleMap[uid], orgRoleInfo{membershipID: membershipID, role: code})
 			}
 		}
 	}
@@ -109,9 +116,16 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 	for _, u := range result.Items {
 		roles := roleMap[u.ID]
 		if roles == nil {
-			roles = []string{}
+			roles = []orgRoleInfo{}
 		}
-		items = append(items, userListItem{User: u, OrgRoles: roles})
+		item := userListItem{User: u, OrgRoles: []string{}}
+		for _, r := range roles {
+			item.OrgRoles = append(item.OrgRoles, r.role)
+			if item.MembershipID == 0 {
+				item.MembershipID = r.membershipID
+			}
+		}
+		items = append(items, item)
 	}
 
 	response.Success(c, gin.H{

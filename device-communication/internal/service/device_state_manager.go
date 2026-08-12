@@ -590,7 +590,12 @@ func (m *DeviceStateManager) DetectAndHandleFault(ctx context.Context, sn string
 // 只有当设备确实没有活跃心跳时，才通过状态机执行离线转换。
 func (m *DeviceStateManager) HandleLWTOffline(ctx context.Context, sn string) error {
 	// 竞态条件检查：如果设备有活跃的心跳，说明已重连，忽略过时的 LWT
-	if m.HasHeartbeat(ctx, sn) {
+	hasHeartbeat := m.HasHeartbeat(ctx, sn)
+	logger.Info("LWT offline: heartbeat check result",
+		zap.String("sn", sn),
+		zap.Bool("has_heartbeat", hasHeartbeat),
+		zap.String("action", map[bool]string{true: "ignore_lwt", false: "process_offline"}[hasHeartbeat]))
+	if hasHeartbeat {
 		logger.Info("LWT offline ignored: device has active heartbeat (reconnected)",
 			zap.String("sn", sn))
 		return nil
@@ -599,11 +604,16 @@ func (m *DeviceStateManager) HandleLWTOffline(ctx context.Context, sn string) er
 	// 无活跃心跳 → 设备确实离线
 	logger.Info("LWT offline: device has no active heartbeat, processing offline transition",
 		zap.String("sn", sn))
-	return m.HandleStateChange(ctx, &StateChangeRequest{
+	stateChangeReq := &StateChangeRequest{
 		SN:        sn,
 		Event:     EventLWTOffline,
 		Timestamp: time.Now().UTC(),
-	})
+	}
+	logger.Info("LWT offline: sending state change request",
+		zap.String("sn", sn),
+		zap.Int("event", int(stateChangeReq.Event)),
+		zap.Time("timestamp", stateChangeReq.Timestamp))
+	return m.HandleStateChange(ctx, stateChangeReq)
 }
 
 // HandleMQTTStatusChange 是 MQTT 设备状态主题（cs_inv/{sn}/status）的统一入口。

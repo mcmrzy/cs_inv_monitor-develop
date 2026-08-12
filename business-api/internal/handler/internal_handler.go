@@ -308,12 +308,7 @@ func (h *InternalHandler) DeviceStatus(c *gin.Context) {
 	}
 
 	if _, err := h.db.Exec(ctx, `
-		UPDATE stations SET
-			status = CASE
-				WHEN EXISTS (SELECT 1 FROM devices WHERE devices.station_id = stations.id AND devices.status IN (1, 2) AND devices.deleted_at IS NULL) THEN 1
-				ELSE 0
-			END,
-			updated_at = NOW()
+		UPDATE stations SET status = 1, updated_at = NOW()
 		WHERE deleted_at IS NULL
 		AND id IN (SELECT station_id FROM devices WHERE sn = $1 AND station_id IS NOT NULL)
 	`, req.SN); err != nil {
@@ -322,6 +317,13 @@ func (h *InternalHandler) DeviceStatus(c *gin.Context) {
 
 	// 设备状态变化时，插入通知记录（带 120 秒冷却期，防止状态抖动产生大量重复通知）
 	if oldStatus != newStatus && userID > 0 {
+		logger.Info("DeviceStatus: state change detected",
+			zap.String("sn", req.SN),
+			zap.Int("old_status", oldStatus),
+			zap.Int("new_status", newStatus),
+			zap.Int64("user_id", userID),
+			zap.Int64("station_id", stationID.Int64))
+
 		notifyType := "device_online"
 		title := "设备重新上线"
 		content := "设备 " + req.SN + " 已上线"
@@ -335,6 +337,12 @@ func (h *InternalHandler) DeviceStatus(c *gin.Context) {
 			notifyType = ""
 		}
 
+		logger.Info("DeviceStatus: notification type determined",
+			zap.String("sn", req.SN),
+			zap.String("notify_type", notifyType),
+			zap.String("title", title),
+			zap.String("content", content))
+
 		// notifyType 为空时表示不生成通知（如故障恢复由 DeviceAlarm 路径统一处理）
 		if notifyType != "" {
 			// 冷却期检查：120 秒内同一设备同类型通知不重复写入
@@ -346,6 +354,10 @@ func (h *InternalHandler) DeviceStatus(c *gin.Context) {
 				logger.Warn("DeviceStatus: failed to check notification dedup",
 					zap.String("sn", req.SN), zap.Error(err))
 			}
+			logger.Info("DeviceStatus: dedup check result",
+				zap.String("sn", req.SN),
+				zap.String("notify_type", notifyType),
+				zap.Bool("exists", exists))
 			if exists {
 				response.Success(c, gin.H{"status": "ok", "notify_dedup": true})
 				return
@@ -361,9 +373,19 @@ func (h *InternalHandler) DeviceStatus(c *gin.Context) {
 			`, req.SN, sid, userID, notifyType, title, content); err != nil {
 				logger.Warn("DeviceStatus: failed to insert notification",
 					zap.String("sn", req.SN), zap.String("notify_type", notifyType), zap.Error(err))
+			} else {
+				logger.Info("DeviceStatus: notification inserted to database",
+					zap.String("sn", req.SN),
+					zap.String("notify_type", notifyType),
+					zap.Int64("user_id", userID),
+					zap.Int64("station_id", sid))
 			}
 
 			// 通过 SSE 实时推送通知给前端
+			logger.Info("DeviceStatus: broadcasting SSE notification",
+				zap.String("sn", req.SN),
+				zap.String("notify_type", notifyType),
+				zap.Int64("user_id", userID))
 			h.broadcastNotification(userID, notifyType, title, content, req.SN)
 
 			// JPush/邮件 推送通知给 APP 端（按用户通知偏好过滤，通知入库与 SSE 不受偏好影响）
@@ -373,6 +395,11 @@ func (h *InternalHandler) DeviceStatus(c *gin.Context) {
 				pushTitle = "设备离线"
 				pushContent = fmt.Sprintf("设备 %s 已离线", req.SN)
 			}
+			logger.Info("DeviceStatus: sending push notification",
+				zap.String("sn", req.SN),
+				zap.String("notify_type", notifyType),
+				zap.String("push_title", pushTitle),
+				zap.String("push_content", pushContent))
 			h.sendPushNotification(ctx, notifyType, req.SN, pushTitle, pushContent, 0)
 		}
 	}
@@ -1526,12 +1553,7 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 				zap.String("sn", req.SN), zap.Error(err))
 		}
 		if _, err := h.db.Exec(ctx, `
-			UPDATE stations SET
-				status = CASE
-					WHEN EXISTS (SELECT 1 FROM devices WHERE devices.station_id = stations.id AND devices.status = 1 AND devices.deleted_at IS NULL) THEN 1
-					ELSE 0
-				END,
-				updated_at = NOW()
+			UPDATE stations SET status = 1, updated_at = NOW()
 			WHERE deleted_at IS NULL
 			AND id IN (SELECT station_id FROM devices WHERE sn = $1 AND station_id IS NOT NULL)
 		`, req.SN); err != nil {
@@ -1694,12 +1716,7 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 				zap.String("sn", req.SN), zap.Error(err))
 		}
 		if _, err := h.db.Exec(ctx, `
-			UPDATE stations SET
-				status = CASE
-					WHEN EXISTS (SELECT 1 FROM devices WHERE devices.station_id = stations.id AND devices.status IN (1, 2) AND devices.deleted_at IS NULL) THEN 1
-					ELSE 0
-				END,
-				updated_at = NOW()
+			UPDATE stations SET status = 1, updated_at = NOW()
 			WHERE deleted_at IS NULL
 			AND id IN (SELECT station_id FROM devices WHERE sn = $1 AND station_id IS NOT NULL)
 		`, req.SN); err != nil {
@@ -1886,11 +1903,26 @@ func (h *InternalHandler) broadcastNotification(userID int64, notifyType, title,
 }
 
 // getNotificationUsers 获取对该设备有权限的所有用户ID
+// 包括设备直接关联的用户以及通过电站关联的用户
 func (h *InternalHandler) getNotificationUsers(ctx context.Context, deviceSN string) ([]int64, error) {
+	logger.Info("getNotificationUsers: querying notification users",
+		zap.String("device_sn", deviceSN))
+
+	// 查询设备直接关联的用户以及通过电站关联的用户
 	rows, err := h.db.Query(ctx, `
-		SELECT DISTINCT user_id FROM devices
-		WHERE sn = $1 AND user_id > 0 AND deleted_at IS NULL`, deviceSN)
+		SELECT DISTINCT user_id FROM (
+			-- 设备直接关联的用户
+			SELECT user_id FROM devices
+			WHERE sn = $1 AND user_id > 0 AND deleted_at IS NULL
+			UNION
+			-- 通过电站关联的用户（设备属于某个电站，电站的创建者也应收到通知）
+			SELECT s.user_id FROM devices d
+			JOIN stations s ON d.station_id = s.id
+			WHERE d.sn = $1 AND d.station_id IS NOT NULL AND s.user_id > 0 AND s.deleted_at IS NULL
+		) AS notification_users`, deviceSN)
 	if err != nil {
+		logger.Error("getNotificationUsers: query failed",
+			zap.String("device_sn", deviceSN), zap.Error(err))
 		return nil, err
 	}
 	defer rows.Close()
@@ -1899,10 +1931,18 @@ func (h *InternalHandler) getNotificationUsers(ctx context.Context, deviceSN str
 	for rows.Next() {
 		var uid int64
 		if err := rows.Scan(&uid); err != nil {
+			logger.Warn("getNotificationUsers: failed to scan user_id",
+				zap.String("device_sn", deviceSN), zap.Error(err))
 			continue
 		}
 		userIDs = append(userIDs, uid)
 	}
+
+	logger.Info("getNotificationUsers: found notification users",
+		zap.String("device_sn", deviceSN),
+		zap.Int("user_count", len(userIDs)),
+		zap.Int64s("user_ids", userIDs))
+
 	return userIDs, nil
 }
 
