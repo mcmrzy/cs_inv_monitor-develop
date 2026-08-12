@@ -271,9 +271,26 @@ func TestDecodePendingCommandPreservesTaskIDPayload(t *testing.T) {
 	assert.JSONEq(t, string(raw), string(cmd.RawPayload))
 }
 
-func TestDecodePendingCommandRejectsMissingTaskID(t *testing.T) {
-	_, err := decodePendingCommand("SN001", []byte(`{"command":"set_power_limit"}`))
-	assert.Error(t, err)
+func TestDecodePendingCommandAllowsMissingTaskID(t *testing.T) {
+	// OTA 离线命令（raw_payload 路径）无 task_id 是合法场景，应正常解析
+	cmd, err := decodePendingCommand("SN001", []byte(`{"command":"ota_upgrade"}`))
+	assert.NoError(t, err)
+	assert.Equal(t, "SN001", cmd.DeviceSN)
+	assert.Equal(t, "ota_upgrade", cmd.CmdType)
+	assert.JSONEq(t, `{"command":"ota_upgrade"}`, string(cmd.RawPayload))
+}
+
+func TestDecodePendingCommandPrefersRawPayload(t *testing.T) {
+	raw := []byte(`{"command":"ota_upgrade","task_id":"t-1","raw_payload":"{\"action\":\"ota_upgrade\",\"version\":\"1.2.3\"}"}`)
+	cmd, err := decodePendingCommand("SN001", raw)
+	assert.NoError(t, err)
+	// raw_payload 优先于原始 JSON
+	assert.Equal(t, `{"action":"ota_upgrade","version":"1.2.3"}`, string(cmd.RawPayload))
+}
+
+func TestDecodePendingCommandRejectsMissingCommand(t *testing.T) {
+	_, err := decodePendingCommand("SN001", []byte(`{"task_id":"t-1"}`))
+	assert.ErrorContains(t, err, "command is required")
 }
 
 func TestDecodePendingCommandRejectsExpiredCommand(t *testing.T) {
