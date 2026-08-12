@@ -163,6 +163,8 @@ const OrgCardTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.channels.orgHierarchy() })
     queryClient.invalidateQueries({ queryKey: queryKeys.channels.organizations() })
+    // 邀请发送/撤销后同步刷新邀请列表
+    queryClient.invalidateQueries({ queryKey: queryKeys.channels.invitations() })
   }
 
   // 默认展开第一层（根节点）
