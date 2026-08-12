@@ -1,5 +1,6 @@
 import { createClient } from 'redis'
 import pg from 'pg'
+import { createHmac } from 'node:crypto'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -19,6 +20,16 @@ import { fileURLToPath } from 'node:url'
 const E2E_API = process.env.E2E_API_BASE || 'http://localhost:18888'
 const REDIS_URL = process.env.E2E_REDIS_URL || 'redis://:testredispass@127.0.0.1:16379'
 const PG_DSN = process.env.E2E_PG_DSN || 'postgres://testuser:testpass@127.0.0.1:15432/inv_test'
+const PRODUCT_SECRET = process.env.E2E_PRODUCT_SECRET || 'CS_INV_L10_2026_SECRET'
+
+// computeDevicePIN derives the 6-digit nameplate PIN (leading zeros preserved):
+// HMAC-SHA256(secret, sn) first 3 bytes mod 1000000 — must stay in sync with
+// business-api internal/service computeDevicePIN.
+function computeDevicePIN(secret: string, sn: string): string {
+  const d = createHmac('sha256', secret).update(sn).digest()
+  const pin = ((d[0] << 16) | (d[1] << 8) | d[2]) % 1000000
+  return String(pin).padStart(6, '0')
+}
 
 const EVIDENCE_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'e2e_evidence')
 
@@ -78,7 +89,7 @@ async function bindDevice(token: string, sn: string): Promise<void> {
   const res = await fetch(`${E2E_API}/api/v1/devices/bind`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ sn, station_id: 0 }),
+    body: JSON.stringify({ sn, station_id: 0, pin: computeDevicePIN(PRODUCT_SECRET, sn) }),
   })
   const body = (await res.json()) as { code?: number; message?: string }
   if (body.code !== 0) {
