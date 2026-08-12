@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,7 +13,10 @@ import (
 
 	"inv-device-server/internal/mqtt"
 
+	"github.com/alicebob/miniredis/v2"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDataService_HandleCmdResult_SNInjection(t *testing.T) {
@@ -333,4 +337,108 @@ func TestDataService_ConcurrentSendCommand(t *testing.T) {
 			return
 		}
 	}
+}
+
+func newTestRedis(t *testing.T) (*redis.Client, *miniredis.Miniredis) {
+	t.Helper()
+	mr, err := miniredis.Run()
+	require.NoError(t, err)
+	t.Cleanup(mr.Close)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+	return rdb, mr
+}
+
+func TestDataService_QueueCommand_PersistsEntry(t *testing.T) {
+	rdb, _ := newTestRedis(t)
+	service := NewDataService(nil, nil, mqtt.NewHub(nil), rdb, "", "")
+
+	err := service.QueueCommand("SN001", "ota_upgrade", []byte(`{"action":"ota_upgrade","version":"1.2.3"}`))
+	assert.NoError(t, err)
+
+	list, err := rdb.LRange(context.Background(), "device:cmd:queue:SN001", 0, -1).Result()
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+
+	var entry map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(list[0]), &entry))
+	assert.Equal(t, "ota_upgrade", entry["command"])
+	assert.Equal(t, `{"action":"ota_upgrade","version":"1.2.3"}`, entry["raw_payload"])
+	assert.NotZero(t, entry["expires_at"])
+	assert.NotZero(t, entry["t"])
+}
+
+func TestDataService_QueueCommand_NoRedis(t *testing.T) {
+	service := NewDataService(nil, nil, mqtt.NewHub(nil), nil, "", "")
+	assert.Error(t, service.QueueCommand("SN001", "ota_upgrade", []byte(`{}`)))
+}
+
+func TestDataService_FlushPendingCommands_DeliversInOrder(t *testing.T) {
+	rdb, _ := newTestRedis(t)
+	hub := mqtt.NewHub(nil)
+	service := NewDataService(nil, nil, hub, rdb, "", "")
+
+	assert.NoError(t, service.QueueCommand("SN001", "set_control", []byte(`{"cmd":"set_control","params":{"power":50}}`)))
+	assert.NoError(t, service.QueueCommand("SN001", "ota_upgrade", []byte(`{"action":"ota_upgrade","version":"1.2.3"}`)))
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		service.FlushPendingCommands(context.Background(), "SN001")
+	}()
+
+	// FIFO 顺序，raw_payload 原样保留
+	cmd1 := <-hub.GetCmdChan()
+	assert.Equal(t, "set_control", cmd1.CmdType)
+	assert.Equal(t, `{"cmd":"set_control","params":{"power":50}}`, string(cmd1.RawPayload))
+
+	cmd2 := <-hub.GetCmdChan()
+	assert.Equal(t, "ota_upgrade", cmd2.CmdType)
+	assert.Equal(t, `{"action":"ota_upgrade","version":"1.2.3"}`, string(cmd2.RawPayload))
+
+	<-done
+	// 队列已清空
+	left, err := rdb.LLen(context.Background(), "device:cmd:queue:SN001").Result()
+	require.NoError(t, err)
+	assert.Zero(t, left)
+}
+
+func TestDataService_FlushPendingCommands_EmptyQueue(t *testing.T) {
+	rdb, _ := newTestRedis(t)
+	hub := mqtt.NewHub(nil)
+	service := NewDataService(nil, nil, hub, rdb, "", "")
+
+	service.FlushPendingCommands(context.Background(), "SN001")
+
+	select {
+	case cmd := <-hub.GetCmdChan():
+		t.Fatalf("unexpected command for empty queue: %+v", cmd)
+	default:
+	}
+}
+
+func TestDataService_FlushPendingCommands_SkipsInvalidEntries(t *testing.T) {
+	rdb, _ := newTestRedis(t)
+	hub := mqtt.NewHub(nil)
+	service := NewDataService(nil, nil, hub, rdb, "", "")
+
+	ctx := context.Background()
+	// 坏 JSON 与缺 command 的条目应被跳过，合法命令正常下发
+	assert.NoError(t, rdb.RPush(ctx, "device:cmd:queue:SN001", "not json").Err())
+	assert.NoError(t, rdb.RPush(ctx, "device:cmd:queue:SN001", `{"t":123}`).Err())
+	assert.NoError(t, service.QueueCommand("SN001", "set_control", []byte(`{"cmd":"set_control"}`)))
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		service.FlushPendingCommands(ctx, "SN001")
+	}()
+
+	cmd := <-hub.GetCmdChan()
+	assert.Equal(t, "set_control", cmd.CmdType)
+	<-done
+
+	left, err := rdb.LLen(ctx, "device:cmd:queue:SN001").Result()
+	require.NoError(t, err)
+	assert.Zero(t, left)
 }
