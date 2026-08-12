@@ -23,7 +23,7 @@ redis:
   db: 0
 
 mqtt:
-  broker: broker.jiuxiaoyw.online
+  broker: mqtt.jiuxiaoyw.online  # cert SAN covers mqtt. (not broker.); required for CA verification
   port: 8883
   client_id: CSKJ-INV-DEVICE-SERVER
   username: CSKJ-INV-DEVICE-SERVER
@@ -35,8 +35,9 @@ mqtt:
   #   2. MQTT_TLS_INSECURE=true    → certificate pinning: broker leaf cert is verified
   #      against MQTT_CERT_SHA256 (a valid 64-char hex SHA-256 pin).
   #   3. both false (default)      → standard CA-based TLS verification (port 8883).
-  # deploy/.env already sets MQTT_TLS_INSECURE=true + MQTT_CERT_SHA256 for the
-  # external EMQX broker; keep both flags false here to avoid config conflicts.
+  # Production runs mode 3: deploy/.env sets MQTT_TLS_INSECURE=false and leaves
+  # MQTT_CERT_SHA256 empty → standard CA-based verification for the EMQX broker.
+  # Keep both flags false here to avoid config conflicts.
   tls_insecure: false
   cert_sha256: ""
   tls_skip_verify: false

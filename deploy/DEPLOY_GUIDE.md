@@ -80,7 +80,7 @@ MQTT_PORT=8883
 MQTT_CLIENT_ID=CSKJ-INV-SERVER-DEVICE-LOCAL
 MQTT_USERNAME=CSKJ-INV-SERVER-DEVICE
 MQTT_PASSWORD=CHANGE_ME_MQTT_PASSWORD
-MQTT_TLS_INSECURE=true
+MQTT_TLS_INSECURE=false  # standard CA verification (no fingerprint pinning)
 EMAIL_HOST=smtp.qq.com
 EMAIL_PORT=465
 EMAIL_USER=ops@example.invalid
@@ -137,9 +137,9 @@ ssh cskj@example.invalid "cd /opt/inv-mqtt-work && git pull && cd deploy && dock
 ssh cskj@example.invalid "docker ps"
 
 # 查看日志
-ssh cskj@example.invalid "docker logs inv-api-server"
-ssh cskj@example.invalid "docker logs inv-device-server"
-ssh cskj@example.invalid "docker logs inv-api-gateway"
+ssh cskj@example.invalid "docker logs business-api"
+ssh cskj@example.invalid "docker logs device-communication"
+ssh cskj@example.invalid "docker logs api-gateway"
 
 # 重启服务
 ssh cskj@example.invalid "cd /opt/inv-mqtt-work/deploy && docker-compose restart"
@@ -154,7 +154,7 @@ ssh cskj@example.invalid "cd /opt/inv-mqtt-work/deploy && docker-compose down"
 
 ```bash
 # 强制删除所有项目相关容器（即使不存在也不会报错�?
-docker rm -f inv-admin-frontend inv-api-gateway inv-api-server inv-device-server inv-postgres inv-redis 2>/dev/null || true
+docker rm -f inv-admin-frontend api-gateway business-api device-communication inv-postgres inv-redis 2>/dev/null || true
 ```
 
 > **说明**：`docker compose down --remove-orphans` 只能清理 compose 管理的容器，无法处理由旧�?compose 文件或手动创建的孤立容器。`docker rm -f` 可以确保所有同名容器被彻底清除�?
