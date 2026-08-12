@@ -573,7 +573,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
                         style: TextStyle(
                           fontSize: 20.sp,
                           fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
+                          color: AppColor.textPrimary(context),
                           fontFamily: 'Roboto',
                         ),
                       ),
@@ -662,7 +662,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
             style: TextStyle(
               fontSize: 14.sp,
               fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
+              color: AppColor.textPrimary(context),
             ),
           ),
           SizedBox(height: 16.h),
@@ -715,7 +715,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
             style: TextStyle(
               fontSize: 14.sp,
               fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
+              color: AppColor.textPrimary(context),
             ),
           ),
           SizedBox(height: 16.h),
@@ -816,7 +816,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
                 style: TextStyle(
                   fontSize: 14.sp,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
+                  color: AppColor.textPrimary(context),
                 ),
               ),
             ],
@@ -946,7 +946,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
                   message,
                   style: TextStyle(
                     fontSize: 12.sp,
-                    color: AppColors.textPrimary,
+                    color: AppColor.textPrimary(context),
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
