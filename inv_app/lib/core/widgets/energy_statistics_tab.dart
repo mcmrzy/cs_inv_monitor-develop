@@ -31,6 +31,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
   String _period = 'day'; // day / month / year
   DateTime _selectedDate = DateTime.now();
   bool _loading = false;
+  bool _initialLoaded = false; // 首次加载是否已完成
   List<EnergyDataPoint> _dataPoints = [];
   EnergySummary _summary = const EnergySummary();
   late AppLocalizations _l10n;
@@ -174,14 +175,15 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
             _dataPoints = points;
             _summary = EnergySummary.fromDataPointsWithPeriod(points, _period);
             _loading = false;
+            _initialLoaded = true;
           });
         }
       } else {
-        if (mounted) setState(() => _loading = false);
+        if (mounted) setState(() { _loading = false; _initialLoaded = true; });
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _loading = false);
+        setState(() { _loading = false; _initialLoaded = true; });
       }
     }
   }
@@ -324,9 +326,9 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
         // 时间选择器（用于电量概览）
         _buildTimeSelector(l10n),
         SizedBox(height: 12.h),
-        // 内容区：首载无数据时展示骨架；刷新/切日期/切周期时保留旧数据，仅顶部细进度条提示
+        // 内容区：首次加载未完成时展示骨架；刷新/切日期/切周期时保留旧数据，仅顶部细进度条提示
         Expanded(
-          child: _loading && _dataPoints.isEmpty
+          child: !_initialLoaded
               ? _buildSkeleton()
               : RefreshIndicator(
                   onRefresh: () async {
@@ -337,8 +339,8 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
                   child: ListView(
                     padding: EdgeInsets.symmetric(horizontal: 16.w),
                     children: [
-                      // 刷新中且已有旧数据：不闪骨架，顶部细进度条双反馈
-                      if (_loading && _dataPoints.isNotEmpty)
+                      // 刷新中：顶部细进度条反馈
+                      if (_loading)
                         const Padding(
                           padding: EdgeInsets.only(top: 8),
                           child: LinearProgressIndicator(minHeight: 2),
@@ -467,6 +469,27 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
 
   /// 4 宫格能源概览卡片
   Widget _buildEnergyCards(AppLocalizations l10n) {
+    // 首次加载未完成时显示骨架占位，避免闪烁
+    if (!_initialLoaded) {
+      return GridView.count(
+        crossAxisCount: 2,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        mainAxisSpacing: 12.h,
+        crossAxisSpacing: 12.w,
+        childAspectRatio: 1.6,
+        children: List.generate(
+          4,
+          (index) => Container(
+            padding: EdgeInsets.all(14.w),
+            decoration: BoxDecoration(
+              color: AppColor.surfaceContainer(context),
+              borderRadius: BorderRadius.circular(14.r),
+            ),
+          ),
+        ),
+      );
+    }
     return GridView.count(
       crossAxisCount: 2,
       shrinkWrap: true,
@@ -631,8 +654,8 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
   /// 图表展示区
   /// 功率折线图区域
   Widget _buildPowerChartSection(AppLocalizations l10n) {
-    // 加载中且无旧数据时显示骨架占位，避免闪烁
-    if (_loading && _dataPoints.isEmpty && _powerFlowData.isEmpty) {
+    // 首次加载未完成时显示骨架占位，避免闪烁
+    if (!_initialLoaded) {
       return Container(
         height: 260.h,
         decoration: AppColor.card(context),
@@ -691,8 +714,8 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
 
   /// 能量柱状图区域
   Widget _buildEnergyChartSection(AppLocalizations l10n) {
-    // 加载中且无旧数据时显示骨架占位，避免闪烁
-    if (_loading && _dataPoints.isEmpty) {
+    // 首次加载未完成时显示骨架占位，避免闪烁
+    if (!_initialLoaded) {
       return Container(
         height: 260.h,
         decoration: AppColor.card(context),
