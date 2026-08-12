@@ -180,28 +180,39 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
         child: Row(
           children: [
+            // 头像：加载中时显示加载指示器，避免闪烁默认头像
             Container(
               width: 56.w,
               height: 56.w,
               clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
                 color: AppColors.primary.withValues(alpha: 0.1),
-                // 圆形头像：与编辑页保持一致
                 shape: BoxShape.circle,
-                image: avatarUrl != null
-                    ? DecorationImage(
-                        image: NetworkImage(avatarUrl),
-                        fit: BoxFit.cover,
-                      )
-                    : null,
               ),
-              child: avatarUrl == null
-                  // 默认头像插画：未设置头像时的品牌兜底（美术路由 avatar-default）
-                  ? Image.asset(
-                      CsergyAssets.avatarDefault,
-                      fit: BoxFit.cover,
+              child: isLoading && avatarUrl == null
+                  ? Center(
+                      child: SizedBox(
+                        width: 24.w,
+                        height: 24.w,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.primary,
+                        ),
+                      ),
                     )
-                  : null,
+                  : (avatarUrl != null
+                      ? Image.network(
+                          avatarUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => Image.asset(
+                            CsergyAssets.avatarDefault,
+                            fit: BoxFit.cover,
+                          ),
+                        )
+                      : Image.asset(
+                          CsergyAssets.avatarDefault,
+                          fit: BoxFit.cover,
+                        )),
             ),
             SizedBox(width: 16.w),
             Expanded(
