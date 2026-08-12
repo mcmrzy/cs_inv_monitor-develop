@@ -7073,6 +7073,11 @@ INSERT INTO schema_migrations (version, name) VALUES (92, '092_add_devices_sort_
 INSERT INTO schema_migrations (version, name) VALUES (93, '093_add_station_country.up.sql') ON CONFLICT (version) DO NOTHING;
 INSERT INTO schema_migrations (version, name) VALUES (94, '094_user_notify_prefs.up.sql') ON CONFLICT (version) DO NOTHING;
 INSERT INTO schema_migrations (version, name) VALUES (95, '095_device_alias_station_sort.up.sql') ON CONFLICT (version) DO NOTHING;
-INSERT INTO schema_migrations (version, name) VALUES (96, '096_add_csl10_6k2_v21.up.sql') ON CONFLICT (version) DO NOTHING;
+-- 096 未合并进本基线（squash 遗漏）：其 DDL 变更（devices 新增
+-- phase/inverter_module/bootloader_version/rated_power_w/info_reported_at 5 列、
+-- device_diagnostics/device_health_history/device_config_schema/device_config_changes
+-- 4 张新表等）由 migrator 在服务器启动时按编号迁移执行。
+-- 096 设计为幂等可重放（ALTER IF NOT EXISTS / INSERT ON CONFLICT），
+-- 全新 initdb 库启动时执行一次即可与逐版本升级的旧库收敛一致。
 
 -- Next migration version to use: 097
