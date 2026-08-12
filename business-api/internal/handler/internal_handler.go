@@ -1162,7 +1162,7 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 	// 将设备上报的状态映射为数据库状态
 	dbStatus := req.Status
 	switch req.Status {
-	case "preparing", "downloading", "transferring", "writing", "verifying", "upgrading":
+	case "preparing", "downloading", "transferring", "writing", "verifying", "upgrading", "rebooting":
 		dbStatus = "upgrading"
 	case "done", "completed":
 		dbStatus = "success"
