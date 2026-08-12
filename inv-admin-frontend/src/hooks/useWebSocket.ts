@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import useAuthStore from '@/stores/authStore';
+import { WS_BASE } from '@/utils/urls';
 
 interface UseWebSocketReturn {
   /** 最后收到的消息 */
@@ -7,8 +8,6 @@ interface UseWebSocketReturn {
   /** WebSocket 连接状态 (1=CONNECTING, 2=OPEN, 3=CLOSED) */
   readyState: number;
 }
-
-const WS_URL = '/ws/jobs';
 
 export function useWebSocket(jobId: string): UseWebSocketReturn {
   const [lastMessage, setLastMessage] = useState<MessageEvent | null>(null);
@@ -30,7 +29,7 @@ export function useWebSocket(jobId: string): UseWebSocketReturn {
     }
 
     try {
-      const url = `${WS_URL}/${jobId}/progress?user_id=${useAuthStore.getState().user?.id}`;
+      const url = `${WS_BASE}/jobs/${jobId}/progress?user_id=${useAuthStore.getState().user?.id}`;
       const ws = new WebSocket(url);
       wsRef.current = ws;
 

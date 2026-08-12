@@ -59,3 +59,5 @@ cors:
     - "http://localhost:5173"
     - "http://jiuxiaoyw.online"
     - "https://jiuxiaoyw.online"
+    - "https://www.jiuxiaoyw.online"
+    - "http://www.jiuxiaoyw.online"

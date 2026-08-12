@@ -1,40 +1,25 @@
 import './big-screen.css'
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { FullscreenOutlined, FullscreenExitOutlined, RocketOutlined } from '@ant-design/icons'
+import { FullscreenOutlined, FullscreenExitOutlined, RocketOutlined, GlobalOutlined } from '@ant-design/icons'
 import { dashboardApi } from '@/services/dashboardApi'
 import api from '@/services/api'
 import useLocaleStore from '@/stores/localeStore'
 import useTranslation from '@/hooks/useTranslation'
-import { KPIPanel, MapPanel, TrendPanel } from './components'
+import {
+  RotatingGlobe,
+  LeftPanel,
+  RightPanel,
+  type DeviceStats,
+  type TrendPoint,
+  type AlarmItem,
+  type ProvinceStat,
+} from './components'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
 
 // ──────────────────────────────────────────────────────────
 // Types
 // ──────────────────────────────────────────────────────────
-interface DeviceStats {
-  total: number
-  online: number
-  offline: number
-  fault: number
-}
-
-interface TrendPoint {
-  timeLabel: string
-  energy: number
-  loadEnergy?: number
-}
-
-interface AlarmItem {
-  id: number
-  device_sn: string
-  alarm_level: number
-  fault_code: string
-  fault_message: string
-  status: string
-  occurred_at: string
-}
-
 interface BigScreenData {
   deviceStats: DeviceStats
   todayEnergy: number
@@ -80,12 +65,19 @@ const BigScreenPage: React.FC = () => {
 
   // 2. 时钟（useRef + setInterval 避免 re-render）
   const clockRef = useRef<HTMLSpanElement>(null)
+  const dateRef = useRef<HTMLSpanElement>(null)
   const { lang } = useLocaleStore()
   const { t } = useTranslation()
   useEffect(() => {
     const update = () => {
+      const now = new Date()
       if (clockRef.current) {
-        clockRef.current.textContent = new Date().toLocaleTimeString(lang === 'zh' ? 'zh-CN' : 'en-US', { hour12: false })
+        clockRef.current.textContent = now.toLocaleTimeString(lang === 'zh' ? 'zh-CN' : 'en-US', { hour12: false })
+      }
+      if (dateRef.current) {
+        dateRef.current.textContent = now.toLocaleDateString(lang === 'zh' ? 'zh-CN' : 'en-US', {
+          year: 'numeric', month: '2-digit', day: '2-digit',
+        })
       }
     }
     update()
@@ -132,24 +124,39 @@ const BigScreenPage: React.FC = () => {
   // 6. 数据提取（安全取值）
   const deviceStats = mainData?.deviceStats ?? { total: 0, online: 0, offline: 0, fault: 0 }
   const todayEnergy = mainData?.todayEnergy ?? 0
+  const totalEnergy = mainData?.totalEnergy ?? 0
   const totalDevices = deviceStats.total || 1
   const onlineRate = (deviceStats.online / totalDevices) * 100
-  const alarmCount = mainData?.recentAlarms?.length ?? 0
+  const recentAlarms = mainData?.recentAlarms ?? []
+
   const trendData: TrendPoint[] = (trendRes ?? []).map((d) => ({
     timeLabel: d.date,
     energy: d.energy,
     loadEnergy: d.load,
   }))
-  const recentAlarms = mainData?.recentAlarms ?? []
 
-  const stations = stationsRes?.stations?.map((s) => ({
-    id: s.station_id ?? s.id,
-    name: s.station_name ?? s.name,
-    latitude: s.latitude ?? 0,
-    longitude: s.longitude ?? 0,
-    capacity: s.total_power ?? s.capacity ?? 0,
-    status: (s.fault_count ?? 0) > 0 ? 2 : (s.online_count ?? 0) > 0 ? 1 : 0,
-  })) ?? []
+  // 电站列表 + 球面光点 + 省份统计
+  const { stations, provinceStats } = useMemo(() => {
+    const list = (stationsRes?.stations ?? []).map((s) => ({
+      id: s.station_id ?? s.id,
+      name: s.station_name ?? s.name,
+      latitude: s.latitude ?? 0,
+      longitude: s.longitude ?? 0,
+      capacity: s.total_power ?? s.capacity ?? 0,
+      status: (s.fault_count ?? 0) > 0 ? 2 : (s.online_count ?? 0) > 0 ? 1 : 0,
+      province: s.province ?? '',
+    }))
+    const provMap = new Map<string, number>()
+    list.forEach((s) => {
+      if (!s.province) return
+      provMap.set(s.province, (provMap.get(s.province) ?? 0) + 1)
+    })
+    const provs: ProvinceStat[] = Array.from(provMap.entries())
+      .map(([province, count]) => ({ province, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 6)
+    return { stations: list, provinceStats: provs }
+  }, [stationsRes])
 
   // 总装机容量 = 各电站 capacity 之和
   const totalCapacity = stations.reduce((sum, s) => sum + (s.capacity || 0), 0)
@@ -158,7 +165,22 @@ const BigScreenPage: React.FC = () => {
     totalStations: 0,
     totalDevices: 0,
     onlineDevices: 0,
+    todayGeneration: 0,
+    totalGeneration: 0,
+    faultDevices: 0,
   }
+
+  // 电站列表自动轮播索引
+  const [stationIdx, setStationIdx] = useState(0)
+  useEffect(() => {
+    if (stations.length <= 1) return
+    const timer = setInterval(() => {
+      setStationIdx((i) => (i + 1) % stations.length)
+    }, 4000)
+    return () => clearInterval(timer)
+  }, [stations.length])
+
+  const activeStation = stations.length > 0 ? stations[stationIdx % stations.length] : null
 
   const queryError = mainError || stationsError || trendError
   const retry = () => {
@@ -179,14 +201,18 @@ const BigScreenPage: React.FC = () => {
       )}
       {/* Header */}
       <header className="bs-header">
-        <div className="bs-header-left">
-          <RocketOutlined className="bs-header-icon" />
-          <span className="bs-header-title">{t('bigScreen.monitoringCenter')}</span>
-        </div>
+        <div className="bs-header-side" />
         <div className="bs-header-center">
-          <span ref={clockRef} className="bs-clock" />
+          <span className="bs-header-deco-left" />
+          <RocketOutlined className="bs-header-icon" />
+          <span className="bs-header-title">{t('bigScreen.title')}</span>
+          <span className="bs-header-deco-right" />
         </div>
         <div className="bs-header-right">
+          <div className="bs-header-clock">
+            <span className="bs-clock" ref={clockRef} />
+            <span className="bs-date" ref={dateRef} />
+          </div>
           <span className="bs-online-badge">
             {t('bigScreen.onlineRate')} <strong>{onlineRate.toFixed(1)}%</strong>
           </span>
@@ -197,23 +223,68 @@ const BigScreenPage: React.FC = () => {
       </header>
 
       {/* 三栏内容 */}
-      <KPIPanel
-        todayEnergy={todayEnergy}
-        totalCapacity={totalCapacity}
-        onlineRate={onlineRate}
-        alarmCount={alarmCount}
-        deviceStats={deviceStats}
-      />
+      <div className="bs-main">
+        <LeftPanel
+          deviceStats={deviceStats}
+          todayEnergy={todayEnergy}
+          totalCapacity={totalCapacity}
+          onlineRate={onlineRate}
+          totalStations={summary.totalStations}
+          trendData={trendData}
+        />
 
-      <MapPanel
-        stations={stations}
-        summary={summary}
-      />
+        {/* 中栏：滚动地球 */}
+        <div className="bs-center">
+          <div className="bs-center-stats">
+            <div className="bs-center-stat">
+              <span className="bs-center-stat-value">{Number(todayEnergy).toFixed(1)}</span>
+              <span className="bs-center-stat-label">{t('bigScreen.todayEnergy')} (kWh)</span>
+            </div>
+            <div className="bs-center-stat">
+              <span className="bs-center-stat-value">{Number(totalEnergy).toLocaleString()}</span>
+              <span className="bs-center-stat-label">{t('bigScreen.totalGeneration')} (kWh)</span>
+            </div>
+            <div className="bs-center-stat">
+              <span className="bs-center-stat-value">{onlineRate.toFixed(1)}%</span>
+              <span className="bs-center-stat-label">{t('bigScreen.onlineRate')}</span>
+            </div>
+          </div>
 
-      <TrendPanel
-        trendData={trendData}
-        recentAlarms={recentAlarms}
-      />
+          <div className="bs-globe-wrap">
+            <div className="bs-globe-rings bs-globe-ring-outer" />
+            <div className="bs-globe-rings bs-globe-ring-inner" />
+            <div className="bs-globe">
+              <GlobalOutlined className="bs-globe-badge" />
+              <RotatingGlobe stations={stations} />
+            </div>
+          </div>
+
+          {/* 电站轮播信息 */}
+          <div className="bs-station-ticker">
+            <span className="bs-ticker-title">{t('bigScreen.stationMonitor')}</span>
+            {activeStation ? (
+              <span className="bs-ticker-content" key={activeStation.id}>
+                <span className="bs-ticker-dot bs-ticker-dot-on" />
+                {activeStation.name}
+                <span className="bs-ticker-sep">|</span>
+                {Number(activeStation.capacity).toLocaleString()} kW
+                <span className="bs-ticker-sep">|</span>
+                {t('bigScreen.stations')} {stations.length}
+              </span>
+            ) : (
+              <span className="bs-ticker-content">{t('bigScreen.noStationRanking')}</span>
+            )}
+          </div>
+        </div>
+
+        <RightPanel
+          todayEnergy={todayEnergy}
+          totalEnergy={totalEnergy}
+          totalCapacity={totalCapacity}
+          recentAlarms={recentAlarms}
+          provinceStats={provinceStats}
+        />
+      </div>
     </div>
   )
 }

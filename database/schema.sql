@@ -119,6 +119,7 @@ CREATE TABLE IF NOT EXISTS stations (
     longitude DECIMAL(10,7),
     timezone VARCHAR(50) NOT NULL DEFAULT 'Asia/Shanghai', -- 电站所在时区
     status SMALLINT NOT NULL DEFAULT 1, -- 1:正常 0:禁用
+    card_image_url VARCHAR(500), -- 电站卡片展示图片URL（migration 086）
     sort_order INTEGER NOT NULL DEFAULT 0, -- 电站排序（App 长按拖动排序, migration 095）
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

@@ -130,6 +130,9 @@ services:
       REDIS_HOST: redis
       DEVICE_SERVER_URL: http://inv-device-server:8081
       INTERNAL_KEY: ${INTERNAL_KEY}
+      SERVER_URL: ${SERVER_URL}
+      DOWNLOAD_URL: ${DOWNLOAD_URL}
+      FRONTEND_URL: ${FRONTEND_URL}
       PRODUCT_SECRET: ${PRODUCT_SECRET}  # 设备 PIN 派生密钥，须与固件/工厂铭牌工具一致
       JPUSH_ENABLED: ${JPUSH_ENABLED:-false}
       JPUSH_APP_KEY: ${JPUSH_APP_KEY}

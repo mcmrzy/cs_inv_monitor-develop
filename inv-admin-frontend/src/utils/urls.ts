@@ -1,0 +1,35 @@
+/**
+ * 外部服务地址（CDN 多子域模式）
+ *
+ * 通过构建参数注入（VITE_API_BASE / VITE_WS_BASE，见 Dockerfile 的 ARG）：
+ *   VITE_API_BASE=https://api.example.com/api/v1
+ *   VITE_WS_BASE=wss://api.example.com/ws
+ *
+ * 未注入时回退到同源相对路径（本地开发、单域部署、单元测试均不受影响）。
+ */
+
+export const API_BASE: string = import.meta.env.VITE_API_BASE || '/api/v1'
+
+export const WS_BASE: string = import.meta.env.VITE_WS_BASE || '/ws'
+
+/** API 域名源（如 https://api.example.com），未注入时返回空字符串 */
+function apiOrigin(): string {
+  if (!API_BASE.startsWith('http')) return ''
+  return API_BASE.match(/^(https?:\/\/[^/]+)/)?.[1] ?? ''
+}
+
+/**
+ * 将服务端返回的相对资源路径（如 /uploads/avatars/xxx）解析为可访问的绝对地址。
+ * - 已是完整 URL（http/https）时原样返回
+ * - 注入 API 域名后，/uploads/ 资源指向 API 域（图片跨域加载不受 CORS 限制）
+ * - 未注入时保持相对路径（由部署方 nginx 转发）
+ */
+export function resolveMediaUrl(path?: string | null): string | undefined {
+  if (!path) return undefined
+  if (/^https?:\/\//.test(path)) return path
+  if (path.startsWith('/uploads/')) {
+    const origin = apiOrigin()
+    if (origin) return `${origin}${path}`
+  }
+  return path
+}

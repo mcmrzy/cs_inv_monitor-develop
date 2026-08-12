@@ -12,7 +12,7 @@ import {
   ReloadOutlined, CheckCircleOutlined, WarningOutlined, CloseCircleOutlined,
   CloudServerOutlined, ApiOutlined, DatabaseOutlined, ClusterOutlined,
   DeleteOutlined, RedoOutlined, ThunderboltOutlined,
-  DownloadOutlined, SearchOutlined,
+  DownloadOutlined, SearchOutlined, FundViewOutlined,
 } from '@ant-design/icons'
 import ReactECharts from '@/lib/echarts'
 
@@ -922,7 +922,17 @@ const SystemMonitorPage: React.FC = () => {
 
   return (
     <div>
-      <Title level={4} style={{ marginBottom: 16 }}>{t('menu.systemMonitor')}</Title>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <Title level={4} style={{ marginBottom: 0 }}>{t('menu.systemMonitor')}</Title>
+        {/* 大屏监控入口：新窗口打开全屏页面 */}
+        <Button
+          type="primary"
+          icon={<FundViewOutlined />}
+          onClick={() => window.open('/big-screen', '_blank')}
+        >
+          {t('system.openBigScreen')}
+        </Button>
+      </div>
       <Tabs
         activeKey={activeTab}
         onChange={setActiveTab}

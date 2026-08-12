@@ -1,1 +1,12 @@
 /// <reference types="vite/client" />
+
+interface ImportMetaEnv {
+  /** 外部 API 基础地址（CDN 多子域模式），如 https://api.example.com/api/v1；缺省为同源相对路径 */
+  readonly VITE_API_BASE?: string
+  /** 外部 WebSocket 基础地址，如 wss://api.example.com/ws；缺省为同源相对路径 */
+  readonly VITE_WS_BASE?: string
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv
+}

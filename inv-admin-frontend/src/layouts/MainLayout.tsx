@@ -22,6 +22,7 @@ import api from '@/services/api'
 import { channelApi } from '@/services/channelApi'
 import { queryKeys } from '@/utils/queryKeys'
 import { TIMEZONE_LIST, REGION_LABELS, getTimezoneLabel } from '@/utils/timezone'
+import { resolveMediaUrl } from '@/utils/urls'
 import UploadAvatar from '@/components/UploadAvatar'
 import RegionPicker from '@/components/RegionPicker'
 
@@ -328,7 +329,7 @@ const MainLayout: React.FC = () => {
         avatarProps={{
           size: 'small',
           icon: <UserOutlined />,
-          src: user?.avatar && (user.avatar.startsWith('http') || user.avatar.startsWith('/uploads/')) ? user.avatar : undefined,
+          src: resolveMediaUrl(user?.avatar),
           title: user?.nickname || t('header.user'),
           render: (_, dom) => (
             <Dropdown menu={{ items: userMenuItemsDropdown }} placement="bottomRight">

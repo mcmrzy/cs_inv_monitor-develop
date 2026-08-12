@@ -4,6 +4,7 @@ import { UserOutlined, CameraOutlined } from '@ant-design/icons'
 import type { UploadProps } from 'antd'
 import useTranslation from '@/hooks/useTranslation'
 import useAuthStore from '@/stores/authStore'
+import { API_BASE } from '@/utils/urls'
 
 interface UploadAvatarProps {
   value?: string
@@ -124,7 +125,7 @@ const UploadAvatar: React.FC<UploadAvatarProps> = ({ value, onChange, size = 100
   return (
     <Upload
       name="file"
-      action="/api/v1/upload/avatar"
+      action={`${API_BASE}/upload/avatar`}
       headers={{
         Authorization: token ? `Bearer ${token}` : '',
       }}
