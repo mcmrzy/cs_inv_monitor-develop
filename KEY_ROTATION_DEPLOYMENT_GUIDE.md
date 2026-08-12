@@ -258,7 +258,7 @@ for service in "${services[@]}"; do
 done
 
 # Monitor error rates
-watch -n 5 'docker logs inv-api-server --tail 10 | grep -c "error"'
+watch -n 5 'docker logs business-api --tail 10 | grep -c "error"'
 ```
 
 ### Test 2: Rollback Procedure Verification

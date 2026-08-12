@@ -278,7 +278,7 @@ EMAIL_FROM=dev@local.test
 1. **检查配置是否加载：**
    ```bash
    # 在容器内查看环境变量
-   docker exec inv-api-server env | grep EMAIL
+   docker exec business-api env | grep EMAIL
    ```
 
 2. **手动测试 SMTP 连接：**
@@ -289,7 +289,7 @@ EMAIL_FROM=dev@local.test
 
 3. **查看服务日志：**
    ```bash
-   docker logs inv-api-server 2>&1 | grep -i email
+   docker logs business-api 2>&1 | grep -i email
    ```
 
 4. **验证 Redis 验证码存储：**

@@ -80,7 +80,7 @@ services:
   # ---------- inv-device-server ----------
   inv-device-server:
     image: ghcr.io/mcmrzy/inv-device-server:${IMAGE_TAG:?IMAGE_TAG must be an immutable release tag}
-    container_name: inv-device-server
+    container_name: device-communication
     expose:
       - "8081"
     env_file:
@@ -120,7 +120,7 @@ services:
   # ---------- inv-api-server ----------
   inv-api-server:
     image: ghcr.io/mcmrzy/inv-api-server:${IMAGE_TAG:?IMAGE_TAG must be an immutable release tag}
-    container_name: inv-api-server
+    container_name: business-api
     expose:
       - "8080"
     env_file:
@@ -142,6 +142,8 @@ services:
     volumes:
       - ./configs/api-server.yaml:/app/config.yaml:ro
       - ../database:/app/database:ro  # 挂载数据库迁移文件，启动时自动执行
+      - inv-uploads:/data/uploads     # 用户上传持久化（头像/电站图片），容器重建不丢
+      - inv-firmware:/data/firmware   # 固件包持久化，容器重建不丢
     networks:
       - inv-prod-network
     restart: unless-stopped
@@ -164,7 +166,7 @@ services:
   # ---------- api-gateway ----------
   api-gateway:
     image: ghcr.io/mcmrzy/api-gateway:${IMAGE_TAG:?IMAGE_TAG must be an immutable release tag}
-    container_name: inv-api-gateway
+    container_name: api-gateway
     ports:
       - "127.0.0.1:8080:8080"
     env_file:
@@ -225,6 +227,7 @@ services:
       - "80:80"
     volumes:
       - ./nginx-proxy.conf:/etc/nginx/conf.d/default.conf:ro
+      - inv-nginx-logs:/var/log/nginx  # 访问/错误日志持久化，容器重建不丢
     networks:
       - inv-prod-network
     restart: unless-stopped
@@ -250,3 +253,6 @@ volumes:
   pg-data:
   redis-data:
   device-logs:
+  inv-uploads:
+  inv-firmware:
+  inv-nginx-logs:

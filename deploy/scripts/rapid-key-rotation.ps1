@@ -344,7 +344,7 @@ if ($KeyType -eq 'jwt' -or $KeyType -eq 'all') {
     # Note: Service verification requires Docker access, which may not be available in PowerShell
     Log-Warn "Service verification should be done via Docker commands:"
     Log-Warn "  docker-compose -f deploy/docker-compose.prod.yml ps"
-    Log-Warn "  docker logs inv-api-server --tail 50"
+    Log-Warn "  docker logs business-api --tail 50"
 }
 
 Log-Info "Script execution completed at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"

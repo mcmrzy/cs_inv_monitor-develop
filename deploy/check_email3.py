@@ -4,7 +4,7 @@ client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 client.connect('example.invalid', username='cskj', password='CHANGE_ME_ROTATE_CREDENTIAL')
 
 # 获取最近的完整日志（不限过滤）
-stdin, stdout, stderr = client.exec_command("echo 'CHANGE_ME_ROTATE_CREDENTIAL' | sudo -S docker logs inv-api-server --tail 5 2>&1")
+stdin, stdout, stderr = client.exec_command("echo 'CHANGE_ME_ROTATE_CREDENTIAL' | sudo -S docker logs business-api --tail 5 2>&1")
 print("=== 最近日�?===")
 print(stdout.read().decode())
 
