@@ -225,9 +225,12 @@ services:
     container_name: inv-nginx
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./nginx-proxy.conf:/etc/nginx/conf.d/default.conf:ro
       - inv-nginx-logs:/var/log/nginx  # 访问/错误日志持久化，容器重建不丢
+      - /etc/letsencrypt:/etc/letsencrypt:ro  # SSL 证书挂载
+      - /var/www/certbot:/var/www/certbot:ro  # ACME 挑战文件
     networks:
       - inv-prod-network
     restart: unless-stopped

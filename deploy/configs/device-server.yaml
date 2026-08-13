@@ -28,7 +28,7 @@ mqtt:
   broker: ""
   port: 1883
   client_id: CSKJ-INV-SERVER-DEVICE
-  username: CSKJ-INV-SERVER-DEVICE
+  username: CSKJ-INV-DEVICE-SERVER
   password: ""
   qos: 1
   tls_insecure: false
