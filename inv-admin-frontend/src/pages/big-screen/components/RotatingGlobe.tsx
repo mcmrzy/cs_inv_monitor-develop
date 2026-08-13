@@ -85,7 +85,7 @@ const RotatingGlobe: React.FC<RotatingGlobeProps> = ({ stations = [], onViewChan
       globe: {
         globeRadius: 100,
         baseTexture: fallbackTexture,
-        shading: 'realistic',
+        shading: 'lambert',
         // PBR 材质：高粗糙度哑光（消除塑料感镜面高光）+ 法线贴图增强立体感
         realisticMaterial: {
           roughness: 0.9,
@@ -151,11 +151,14 @@ const RotatingGlobe: React.FC<RotatingGlobeProps> = ({ stations = [], onViewChan
     earthImg.src = EARTH_TEXTURE_URL
 
     // 视角变化（拖拽/缩放）→ 回调外部联动装饰光环
+    // 注意：echarts-gl 的 action type 是 globeChangeCamera，但 dispatchAction 触发的事件名
+    // 是 registerAction 里的 event 字段 'globecamerachanged'（见 echarts-gl/lib/component/globe/install.js），
+    // 监听 action type 不会收到任何事件。
     const onViewChanged = (e: unknown) => {
       const state = e as { distance: number; alpha: number; beta: number }
       onViewChangeRef.current?.({ distance: state.distance, alpha: state.alpha, beta: state.beta })
     }
-    chart.on('globeChangeCamera', onViewChanged)
+    chart.on('globecamerachanged', onViewChanged)
 
     // 双击复位视角
     const onDblClick = () => {
@@ -167,7 +170,7 @@ const RotatingGlobe: React.FC<RotatingGlobeProps> = ({ stations = [], onViewChan
     observer.observe(dom)
 
     return () => {
-      chart.off('globeChangeCamera', onViewChanged)
+      chart.off('globecamerachanged', onViewChanged)
       dom.removeEventListener('dblclick', onDblClick)
       observer.disconnect()
       chart.dispose()
