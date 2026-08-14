@@ -1818,6 +1818,72 @@ func (r *DeviceRepository) MarkDeviceOfflineBySN(ctx context.Context, sn string)
 	return result.RowsAffected() > 0, nil
 }
 
+// OfflineResult 离线处理结果
+// 包含状态是否变化、设备绑定的用户ID和电站ID（用于发送通知）
+type OfflineResult struct {
+	Changed   bool  // 状态是否发生了变化
+	UserID    int64 // 设备绑定的用户ID
+	StationID int64 // 设备所属电站ID
+}
+
+// MarkDeviceOffline 统一的设备离线处理函数
+// 所有离线检测路径（Redis Keyspace Notification、定时扫描、设备服务调用）都应调用此函数
+// 包含：状态检查、竞态防护、数据库更新、电站状态同步
+func (r *DeviceRepository) MarkDeviceOffline(ctx context.Context, sn string) (*OfflineResult, error) {
+	// 查询设备当前状态和关联信息
+	var currentStatus int
+	var userID int64
+	var stationID *int64
+	err := r.db.QueryRow(ctx, `
+		SELECT status, COALESCE(user_id, 0), station_id 
+		FROM devices WHERE sn = $1 AND deleted_at IS NULL
+	`, sn).Scan(&currentStatus, &userID, &stationID)
+	if err != nil {
+		return &OfflineResult{}, err
+	}
+
+	// 已经是离线状态，无需更新
+	if currentStatus == 0 {
+		return &OfflineResult{Changed: false, UserID: userID, StationID: ptrToInt64(stationID)}, nil
+	}
+
+	// 竞态防护：检查 Redis 心跳 key 是否存在（设备可能刚好重连）
+	if r.cache != nil {
+		if r.cache.Exists(ctx, "device:heartbeat:"+sn).Val() > 0 {
+			return &OfflineResult{Changed: false, UserID: userID, StationID: ptrToInt64(stationID)}, nil
+		}
+	}
+
+	// 更新设备状态为离线
+	result, err := r.db.Exec(ctx, `
+		UPDATE devices SET status=0, updated_at=NOW() 
+		WHERE sn = $1 AND status IN (1, 2)
+	`, sn)
+	if err != nil {
+		return &OfflineResult{}, err
+	}
+
+	changed := result.RowsAffected() > 0
+	if changed {
+		// 同步电站状态
+		r.SyncStationStatus(ctx)
+	}
+
+	return &OfflineResult{
+		Changed:   changed,
+		UserID:    userID,
+		StationID: ptrToInt64(stationID),
+	}, nil
+}
+
+// ptrToInt64 辅助函数：*int64 转 int64
+func ptrToInt64(p *int64) int64 {
+	if p == nil {
+		return 0
+	}
+	return *p
+}
+
 // DEPRECATED: Device sharing feature removed.
 // func (r *DeviceRepository) GetShare(ctx context.Context, sn string, userID int64) (*model.DeviceShare, error) {
 // 	// Device sharing feature has been removed.
