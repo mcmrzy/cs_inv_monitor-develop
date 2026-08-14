@@ -138,6 +138,8 @@ e2e_evidence/auth-storage.json
 e2e_evidence/e2e-account.json
 e2e_evidence/playwright-report/
 e2e_evidence/playwright-output/
+e2e_evidence/e2e-login-failed.png
+e2e_evidence/e2e-redirect-login.png
 
 # Go 覆盖率产物
 mqtt-kafka-bridge/cover/
