@@ -560,6 +560,67 @@ func (a *AlertConsumer) HandleMQTTAlarm(sn string, payload []byte) {
 		logger.Info("MQTT V1 alarm delivered", zap.String("sn", sn), zap.Int("code", alarmData.Code))
 		return
 	}
+	// Legacy format support: device sends {"source":N,"code":"X","level":L,"state":S} directly
+	if _, hasData := payloadMap["data"]; !hasData && len(payloadMap) > 0 {
+		alarm := &model.AlarmData{
+			SN:         sn,
+			ReceivedAt: receivedAt,
+		}
+		
+		// Handle code field (support both string and number)
+		switch v := payloadMap["code"].(type) {
+		case string:
+			// If code is a string (e.g., "comm_timeout"), use it directly as message
+			alarm.Message = v
+		case float64:
+			// If code is numeric (0, 1, 2, ...), convert to descriptive string
+			alarm.Message = fmt.Sprintf("code_%d", int(v))
+		default:
+			alarm.Message = "unknown_alarm"
+		}
+		
+		// Map level from numeric to name
+		if level, ok := payloadMap["level"].(float64); ok {
+			switch int(level) {
+			case 1:
+				alarm.Level = "warning"
+			case 2:
+				alarm.Level = "fault"
+			default:
+				alarm.Level = fmt.Sprintf("level_%d", int(level))
+			}
+		}
+		
+		// Map state: your spec says 1=active, 0=recovered (reversed from old system)
+		if state, ok := payloadMap["state"].(float64); ok {
+			if int(state) == 1 {
+				// New spec: 1=active (new alarm) → use standard POST
+				if err := a.postInternalAlarm(alarm); err != nil {
+					logger.Error("Failed to post new-format MQTT alarm", zap.String("sn", sn), zap.Error(err))
+					return
+				}
+			} else if int(state) == 0 {
+				// New spec: 0=recovered (alarm clear) → send with code=0
+				clearAlarm := &model.AlarmData{
+					SN:         sn,
+					Code:       0,
+					Level:      "normal",
+					Message:    "设备故障恢复",
+					Timestamp:  time.Now().Unix(),
+					ReceivedAt: receivedAt,
+				}
+				a.rdb.Set(ctx, fmt.Sprintf("alarm:clear:%s", sn), "1", 60*time.Second)
+				if err := a.postInternalAlarm(clearAlarm); err != nil {
+					logger.Error("Failed to post recovered MQTT alarm", zap.String("sn", sn), zap.Error(err))
+				}
+				return
+			}
+		}
+		
+		a.markAlertProcessed(ctx, msgKey)
+		logger.Info("MQTT legacy alarm delivered", zap.String("sn", sn), zap.String("message", alarm.Message), zap.String("level", alarm.Level))
+		return
+	}
 
 	// 旧格式：复用 postInternalAlarm
 	alarm := &model.AlarmData{

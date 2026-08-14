@@ -5,6 +5,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/config/app_config.dart';
+import 'package:inv_app/core/services/connection_mode_service.dart';
+import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
@@ -46,7 +48,7 @@ class _ProfilePageState extends State<ProfilePage> {
   void initState() {
     super.initState();
     final state = context.read<AuthBloc>().state;
-    if (state is! AuthAuthenticated && state is! AuthLoading) {
+    if (state is! AuthLoading && state is! AuthInitial) {
       context.read<AuthBloc>().add(AuthCheckRequested());
     }
     _startLoadTimeout();
@@ -117,11 +119,23 @@ class _ProfilePageState extends State<ProfilePage> {
         builder: (context, state) {
           String displayName = '';
           bool isSystemAdmin = false;
+          bool isGuestLocalMode = false;
+          
           if (state is AuthAuthenticated) {
             // 优先显示昵称，如果没有昵称则显示手机号
             displayName = state.nickname ?? state.phone;
             isSystemAdmin = state.isSystemAdmin;
+          } else {
+            // 未登录状态检查是否处于 Guest Local Mode
+            final connectionModeService = getIt<ConnectionModeService>();
+            isGuestLocalMode = connectionModeService.isGuestLocalMode;
+            if (isGuestLocalMode) {
+              displayName = '离线用户';
+            } else {
+              displayName = '未登录';
+            }
           }
+          
           final isLoading = state is AuthLoading || state is AuthInitial;
           // 加载超时 / 出错（如缓存缺失且网络差）时展示失败态 + 手动重试
           final showLoadError = _loadTimedOut || state is AuthError;
@@ -158,10 +172,18 @@ class _ProfilePageState extends State<ProfilePage> {
 
     // 如果 displayName 为空或仅包含手机号（说明没有昵称），则显示"未设置昵称"
     final hasNickname = authState != null && authState.nickname != null && authState.nickname!.isNotEmpty;
-    final displayNameToShow = hasNickname && displayName.isNotEmpty 
+    final connectionModeService = getIt<ConnectionModeService>();
+    final isGuestLocalMode = connectionModeService.isGuestLocalMode;
+    
+    final displayNameToShow = (hasNickname && displayName.isNotEmpty) 
       ? displayName 
-      : (authState != null ? l10n.nicknameNotSet : l10n.loggedIn);
+      : (isGuestLocalMode
+        ? '离线用户'  // Guest Local Mode 显示固定文本
+        : (authState != null ? l10n.nicknameNotSet : l10n.loggedIn));
     final avatarUrl = _getFullAvatarUrl(authState?.avatar);
+    
+    // 判断是否应该使用默认头像
+    final shouldUseDefaultAvatar = authState == null || authState.user == null;
 
     return GestureDetector(
       onTap: () => context.push('/edit-profile'),
@@ -195,19 +217,24 @@ class _ProfilePageState extends State<ProfilePage> {
                         ),
                       ),
                     )
-                  : (avatarUrl != null
-                      ? Image.network(
-                          avatarUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => Image.asset(
-                            CsergyAssets.avatarDefault,
-                            fit: BoxFit.cover,
-                          ),
-                        )
-                      : Image.asset(
+                  : (shouldUseDefaultAvatar || showLoadError
+                      ? Image.asset(
                           CsergyAssets.avatarDefault,
                           fit: BoxFit.cover,
-                        )),
+                        )
+                      : (avatarUrl != null
+                          ? Image.network(
+                              avatarUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) => Image.asset(
+                                CsergyAssets.avatarDefault,
+                                fit: BoxFit.cover,
+                              ),
+                            )
+                          : Image.asset(
+                              CsergyAssets.avatarDefault,
+                              fit: BoxFit.cover,
+                            ))),
             ),
             SizedBox(width: 16.w),
             Expanded(
@@ -280,7 +307,41 @@ class _ProfilePageState extends State<ProfilePage> {
                         borderRadius: BorderRadius.circular(4.r),
                       ),
                     ),
-                  ] else ...[
+                  ] else ...[ // 正常显示状态
+                    // 离网模式提示标签
+                    if (isGuestLocalMode)
+                      Container(
+                        margin: EdgeInsets.only(bottom: 6.h),
+                        padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 3.h),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF7ED).withValues(alpha: 0.8),
+                          borderRadius: BorderRadius.circular(6.r),
+                          border: Border.all(
+                            color: const Color(0xFFFDBA74).withValues(alpha: 0.5),
+                            width: 0.5,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.wifi_off_rounded,
+                              size: 12.sp,
+                              color: const Color(0xFFF97316),
+                            ),
+                            SizedBox(width: 4.w),
+                            Text(
+                              l10n.localMode,
+                              style: TextStyle(
+                                fontSize: 10.sp,
+                                color: const Color(0xFF9A3412),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    
                     Text(
                       displayNameToShow,
                       style: TextStyle(
@@ -326,11 +387,6 @@ class _ProfilePageState extends State<ProfilePage> {
       (Icons.settings_outlined,
         l10n.systemSettings,
         () => context.push('/settings')
-      ),
-      (
-        Icons.lock_outlined,
-        l10n.changePassword,
-        () => context.push('/change-password')
       ),
       (
         Icons.help_outline_rounded,

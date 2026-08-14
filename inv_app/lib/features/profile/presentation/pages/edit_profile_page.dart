@@ -18,6 +18,7 @@ import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:inv_app/features/profile/data/avatar_upload_service.dart';
+import 'package:inv_app/features/profile/presentation/widgets/change_password_dialog.dart';
 import 'package:inv_app/features/station/presentation/widgets/region_picker_routes.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
@@ -46,6 +47,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
   // 手机验证码相关状态
   int _phoneCountdown = 0;
   Timer? _phoneTimer;
+
+  /// 是否为首次设置密码模式（无密码账号）
+  bool _isSetPasswordMode = false;
 
   /// 将相对路径的头像URL转换为完整URL
   String _getFullAvatarUrl(String? avatar) {
@@ -83,6 +87,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
       region = state.regionName ?? '';
       phone = state.phone;
       _avatarUrl = state.avatar;
+      // 判断是否为无密码账号（需要设置密码）
+      _isSetPasswordMode = !(state.user?.hasPassword ?? true);
     }
 
     _nicknameController = TextEditingController(text: nickname);
@@ -974,6 +980,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
         .toList();
   }
 
+  /// 显示设置/修改密码弹窗：无密码账号进入设置密码模式，有密码账号进入修改密码模式
+  void _showChangePasswordDialog(AppLocalizations l10n) {
+    ChangePasswordDialog.show(context, isSetPassword: _isSetPasswordMode);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -1034,6 +1045,17 @@ class _EditProfilePageState extends State<EditProfilePage> {
                   ),
                   Divider(height: 1.h, indent: 16.w, endIndent: 16.w),
                   _buildRegionSelector(l10n),
+                  Divider(height: 1.h, indent: 16.w, endIndent: 16.w),
+                  // 所有已登录用户均显示密码入口：无密码账号显示“设置密码”，有密码账号显示“修改密码”
+                  _buildReadOnlyField(
+                    label: _isSetPasswordMode
+                        ? l10n.setPassword
+                        : l10n.changePassword,
+                    value: _isSetPasswordMode ? '-' : '••••••',
+                    icon: Icons.lock_outline,
+                    onEdit: () => _showChangePasswordDialog(l10n),
+                    l10n: l10n,
+                  ),
                 ],
               ),
             ),

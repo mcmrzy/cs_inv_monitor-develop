@@ -31,10 +31,10 @@ services:
     container_name: inv-redis
     restart: unless-stopped
     command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru --notify-keyspace-events Ex
-    # 生产环境不暴露端口，仅通过Docker内部网络访问
+    # 生产环境不暴露端口，仅通过 Docker 内部网络访问
     # 如需本地调试，取消注释下面的行
-    # ports:
-    #   - "127.0.0.1:6379:6379"
+    ports:
+      - "127.0.0.1:6379:6379"
     expose:
       - "6379"
     volumes:

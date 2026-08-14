@@ -376,18 +376,12 @@ class _AuthPageState extends State<AuthPage>
   }
 
   /// 本地离网模式入口（Q4）：以 guest 身份进入本地模式，免登录直接使用
-  /// 本地数据链路（蓝牙/AP/本地 OTA）；已连接设备 AP 则直接进离网主界面，
-  /// 否则进入 /local-mode 引导页
+  /// 直接跳转至主应用界面（不经过引导页），在首页根据网络状态自动判断显示云端/本地数据
   Future<void> _enterGuestLocalMode() async {
     await getIt<ConnectionModeService>().enterGuestLocalMode();
     if (!mounted) return;
-    final connectedToDeviceAP = await _isConnectedToDeviceAP();
-    if (!mounted) return;
-    if (connectedToDeviceAP) {
-      context.go('/home');
-    } else {
-      context.go('/local-mode');
-    }
+    // 直接跳转至主应用首页，不再区分是否连接设备 AP
+    context.go('/home');
   }
 
   /// 当前 WiFi 是否已连接到逆变器热点（CS-INV-xxxx / CS_INV_xxxx）

@@ -73,8 +73,6 @@ import 'package:inv_app/features/profile/presentation/pages/profile_page.dart';
 
 import 'package:inv_app/features/profile/presentation/pages/settings_page.dart';
 
-import 'package:inv_app/features/profile/presentation/pages/change_password_page.dart';
-
 import 'package:inv_app/features/profile/presentation/pages/edit_profile_page.dart';
 
 import 'package:inv_app/features/profile/presentation/pages/about_page.dart';
@@ -422,12 +420,6 @@ class AppRouter {
         name: 'offlineModeSettings',
         pageBuilder: (context, state) =>
             _slidePage(state, const OfflineModeSettingsPage()),
-      ),
-      GoRoute(
-        path: '/change-password',
-        name: 'changePassword',
-        pageBuilder: (context, state) =>
-            _slidePage(state, const ChangePasswordPage()),
       ),
       GoRoute(
         path: '/edit-profile',

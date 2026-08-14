@@ -1353,7 +1353,7 @@ const Map<String, String> zh = {
   'password_strength_weak': '弱',
   'password_strength_medium': '中',
   'password_strength_strong': '强',
-  'password_rule_hint': '建议使用字母、数字与符号组合，至少 8 位',
+  'password_rule_hint': '6-20 位，建议字母、数字与符号组合',
 
   // === 本地 OTA 通道选择 ===
   'local_ota_channel_select_title': '选择升级方式',

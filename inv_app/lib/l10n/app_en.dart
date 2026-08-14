@@ -1396,7 +1396,7 @@ const Map<String, String> en = {
   'password_strength_weak': 'Weak',
   'password_strength_medium': 'Medium',
   'password_strength_strong': 'Strong',
-  'password_rule_hint': 'Use a mix of letters, numbers and symbols, at least 8 characters',
+  'password_rule_hint': '6-20 characters, a mix of letters, numbers and symbols recommended',
 
   // === Local OTA Channel Select ===
   'local_ota_channel_select_title': 'Select Upgrade Method',

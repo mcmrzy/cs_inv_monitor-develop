@@ -149,6 +149,8 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 	userGroup.Any("/api/v1/auth/send-email-change-code", p.Handler())
 	userGroup.Any("/api/v1/auth/change-phone", p.Handler())
 	userGroup.Any("/api/v1/auth/change-email", p.Handler())
+	// 用户操作历史聚合（App 操作历史页，按当前用户维度，业务层过滤）
+	userGroup.Any("/api/v1/op-logs", p.Handler())
 
 	userGroup.Any("/api/v1/stations/*action", p.Handler())
 	userGroup.Any("/api/v1/stations", p.Handler())
