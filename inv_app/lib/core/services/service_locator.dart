@@ -13,6 +13,7 @@ import 'package:inv_app/core/services/ble/ble_direct_service.dart';
 import 'package:inv_app/core/services/ble/ble_polling_service.dart';
 import 'package:inv_app/core/network/api_client.dart';
 import 'package:inv_app/core/services/storage_service.dart';
+import 'package:inv_app/core/data/local_cache_database.dart';
 import 'package:inv_app/core/services/realtime_data_service.dart';
 import 'package:inv_app/core/services/notification_service.dart';
 import 'package:inv_app/features/profile/data/notify_prefs_service.dart';
@@ -26,6 +27,7 @@ import 'package:inv_app/core/services/offline_sync_service.dart';
 import 'package:inv_app/core/services/network_status_service.dart';
 import 'package:inv_app/core/services/deep_link_service.dart';
 import 'package:inv_app/core/services/locale_service.dart';
+import 'package:inv_app/core/services/theme_service.dart';
 import 'package:inv_app/core/services/data_cache_service.dart';
 import 'package:inv_app/core/services/app_update_service.dart';
 import 'package:inv_app/core/services/jpush_service.dart';
@@ -296,7 +298,15 @@ getIt.registerLazySingleton<NotifyPrefsService>(
     );
 
     getIt.registerLazySingleton<ConnectionModeService>(
-      () => ConnectionModeService(getIt()),
+      () => ConnectionModeService(
+        getIt(),
+        networkStatusService: getIt<NetworkStatusService>(),
+      ),
+      dispose: (service) => service.dispose(),
+    );
+
+    getIt.registerLazySingleton<LocalCacheDatabase>(
+      () => LocalCacheDatabase(),
     );
 
     getIt.registerLazySingleton<NetworkStatusService>(
@@ -381,6 +391,11 @@ getIt.registerLazySingleton<NotifyPrefsService>(
 
     getIt.registerLazySingleton<LocaleService>(
       () => LocaleService(getIt()),
+      dispose: (service) => service.dispose(),
+    );
+
+    getIt.registerLazySingleton<ThemeService>(
+      () => ThemeService(getIt()),
       dispose: (service) => service.dispose(),
     );
 
@@ -515,6 +530,8 @@ getIt.registerLazySingleton<NotifyPrefsService>(
         repository: getIt(),
         storageService: getIt(),
         dataCacheService: getIt(),
+        connectionModeService: getIt(),
+        localCache: getIt(),
       ),
     );
 
@@ -526,6 +543,7 @@ getIt.registerLazySingleton<NotifyPrefsService>(
         connectionModeService: getIt(),
         offlineCacheService: getIt(),
         dataCacheService: getIt(),
+        localCache: getIt(),
       ),
     );
 

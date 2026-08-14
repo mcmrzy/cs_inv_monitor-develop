@@ -28,7 +28,6 @@ import 'package:inv_app/core/theme/csergy_assets.dart';
 
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 import 'package:inv_app/core/widgets/device_action_sheet.dart';
-import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 
@@ -80,6 +79,12 @@ import 'package:inv_app/features/profile/presentation/pages/edit_profile_page.da
 
 import 'package:inv_app/features/profile/presentation/pages/about_page.dart';
 
+import 'package:inv_app/features/profile/presentation/pages/help_center_page.dart';
+
+import 'package:inv_app/features/profile/presentation/pages/operation_history_page.dart';
+
+import 'package:inv_app/features/profile/presentation/pages/offline_mode_settings_page.dart';
+
 import 'package:inv_app/features/profile/presentation/pages/notify_settings_page.dart';
 
 import 'package:inv_app/features/device/presentation/pages/device_control_page.dart';
@@ -99,6 +104,12 @@ import 'package:inv_app/features/ota/presentation/pages/ota_detail_page.dart';
 import 'package:inv_app/features/ota/presentation/pages/local_ota_page.dart';
 
 import 'package:inv_app/features/ota/presentation/pages/ota_tab_page.dart';
+
+import 'package:inv_app/features/ota/presentation/pages/local_upgrade_page.dart';
+
+import 'package:inv_app/features/ota/presentation/pages/upgrade_history_page.dart';
+
+import 'package:inv_app/features/ota/presentation/pages/firmware_list_page.dart';
 
 import 'package:inv_app/features/ota/presentation/bloc/ota_bloc.dart';
 
@@ -395,6 +406,24 @@ class AppRouter {
             _slidePage(state, const SettingsPage()),
       ),
       GoRoute(
+        path: '/help-center',
+        name: 'helpCenter',
+        pageBuilder: (context, state) =>
+            _slidePage(state, const HelpCenterPage()),
+      ),
+      GoRoute(
+        path: '/operation-history',
+        name: 'operationHistory',
+        pageBuilder: (context, state) =>
+            _slidePage(state, const OperationHistoryPage()),
+      ),
+      GoRoute(
+        path: '/offline-mode-settings',
+        name: 'offlineModeSettings',
+        pageBuilder: (context, state) =>
+            _slidePage(state, const OfflineModeSettingsPage()),
+      ),
+      GoRoute(
         path: '/change-password',
         name: 'changePassword',
         pageBuilder: (context, state) =>
@@ -487,6 +516,52 @@ class AppRouter {
               fileSha256: fileSha256,
               securityVersion: securityVersion,
               releaseSignature: releaseSignature,
+            ),
+          );
+        },
+      ),
+      // 本地升级双 Tab 页（BLE 直连 / WiFi 热点）——需求 16
+      GoRoute(
+        path: '/local-upgrade',
+        name: 'localUpgrade',
+        pageBuilder: (context, state) {
+          final sn = state.uri.queryParameters['sn'] ?? '';
+          final model = state.uri.queryParameters['model'] ?? '';
+          return _slidePage(
+            state,
+            LocalUpgradePage(deviceSN: sn, deviceModel: model),
+          );
+        },
+      ),
+      // 设备升级历史（含回退权限门控）——需求 16
+      GoRoute(
+        path: '/upgrade-history',
+        name: 'upgradeHistory',
+        pageBuilder: (context, state) {
+          final sn = state.uri.queryParameters['sn'] ?? '';
+          return _slidePage(
+            state,
+            UpgradeHistoryPage(deviceSN: sn),
+          );
+        },
+      ),
+      // 固件列表（按设备过滤）——需求 16
+      GoRoute(
+        path: '/firmware-list',
+        name: 'firmwareList',
+        pageBuilder: (context, state) {
+          final sn = state.uri.queryParameters['sn'] ?? '';
+          final model = state.uri.queryParameters['model'] ?? '';
+          final version = state.uri.queryParameters['version'] ?? '';
+          return _slidePage(
+            state,
+            BlocProvider(
+              create: (_) => getIt<OtaBloc>(),
+              child: FirmwareListPage(
+                sn: sn,
+                deviceModel: model,
+                currentMainVersion: version,
+              ),
             ),
           );
         },
@@ -1238,22 +1313,17 @@ class _DeviceListPageState extends State<DeviceListPage> {
           }
 
           // 全局设备列表页：长按弹设备操作菜单（无电站上下文，仅编辑/排序）
-          return StyledRefreshIndicator(
-            // 下拉刷新：重新拉取全局设备列表（默认 pageSize 20）
-            onRefresh: () async {
-              context.read<DeviceBloc>().add(const DeviceListRequested());
+          return DeviceListView(
+            devices: ds.devices,
+            whiteHeader: true,
+            sortMode: _sortMode,
+            onDeviceChanged: (order) {
+              // 拖动即持久化全局设备顺序
+              context
+                  .read<DeviceBloc>()
+                  .add(DeviceGlobalReorderRequested(deviceOrder: order));
             },
-            child: DeviceListView(
-              devices: ds.devices,
-              whiteHeader: true,
-              sortMode: _sortMode,
-              onDeviceChanged: (order) {
-                // 拖动即持久化全局设备顺序
-                context
-                    .read<DeviceBloc>()
-                    .add(DeviceGlobalReorderRequested(deviceOrder: order));
-              },
-              onLongPressDevice: (sn) async {
+            onLongPressDevice: (sn) async {
                 final device = ds.devices.firstWhere(
                   (d) => (d['sn'] ?? '').toString() == sn,
                   orElse: () => <String, dynamic>{'sn': sn},
@@ -1273,7 +1343,6 @@ class _DeviceListPageState extends State<DeviceListPage> {
                   ),
                 );
               },
-            ),
           );
         },
         ),

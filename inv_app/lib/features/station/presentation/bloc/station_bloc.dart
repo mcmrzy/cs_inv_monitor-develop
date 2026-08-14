@@ -1,6 +1,11 @@
+import 'dart:async';
+
 import 'package:equatable/equatable.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:inv_app/core/data/local_cache_database.dart';
 import 'package:inv_app/core/errors/failures.dart';
+import 'package:inv_app/core/services/connection_mode_service.dart';
 import 'package:inv_app/core/services/network_status_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/features/station/domain/repositories/station_repository.dart';
@@ -19,6 +24,8 @@ class StationBloc extends Bloc<StationEvent, StationState> {
   final DataCacheService? dataCacheService;
   final BleDeviceKeyStore? bleKeyStore;
   final OfflineOpLogStore? offlineLogStore;
+  final ConnectionModeService? connectionModeService;
+  final LocalCacheDatabase? localCache;
 
   StationBloc({
     required this.repository,
@@ -26,6 +33,8 @@ class StationBloc extends Bloc<StationEvent, StationState> {
     this.dataCacheService,
     this.bleKeyStore,
     this.offlineLogStore,
+    this.connectionModeService,
+    this.localCache,
   }) : super(StationInitial()) {
     on<StationSummaryRequested>(_onSummaryRequested);
     on<StationListRequested>(_onListRequested);
@@ -54,6 +63,50 @@ class StationBloc extends Bloc<StationEvent, StationState> {
     StationSummaryRequested event,
     Emitter<StationState> emit,
   ) async {
+    // 本地离网模式：直接读快照库渲染主界面（需求 6，不等待网络、不复制页面）
+    if (connectionModeService?.isLocal ?? false) {
+      try {
+        final rows =
+            await localCache?.loadStations() ?? const <Map<String, dynamic>>[];
+        final stations = rows.map<Map<String, dynamic>>((r) {
+          return <String, dynamic>{
+            'id': int.tryParse('${r['id']}'),
+            'name': r['name'],
+            'address': r['address'],
+            'capacity': r['capacity'],
+            'status': r['status'],
+            'device_count': r['device_count'],
+          };
+        }).toList();
+        final totalDevices = rows.fold<int>(
+          0,
+          (sum, r) => sum + ((r['device_count'] as int?) ?? 0),
+        );
+        final summary = <String, dynamic>{
+          'totalStations': rows.length,
+          'totalDevices': totalDevices,
+          'onlineDevices': 0,
+          'todayGeneration': 0.0,
+          'monthGeneration': 0.0,
+          'totalGeneration': 0.0,
+          'totalIncome': 0.0,
+        };
+        debugPrint(
+          '[StationBloc] local mode: ${rows.length} stations snapshot',
+        );
+        emit(
+          StationSummaryLoaded(
+            stations: stations,
+            summary: summary,
+            isFromCache: true,
+          ),
+        );
+        return;
+      } catch (e) {
+        debugPrint('[StationBloc] local snapshot load failed: $e');
+      }
+    }
+
     // 断网时直接加载缓存，不等待 30s 超时
     if (!await _hasNetwork()) {
       if (dataCacheService != null) {
@@ -101,9 +154,22 @@ class StationBloc extends Bloc<StationEvent, StationState> {
         final summary = (data['summary'] as Map<String, dynamic>?) ?? {};
         // 成功时保存到缓存
         dataCacheService?.save(DataCacheService.stationSummary, data);
+        // 电站快照入库（支撑离网模式快照渲染，失败静默）
+        unawaited(_saveStationSnapshot(stations));
         emit(StationSummaryLoaded(stations: stations, summary: summary));
       },
     );
+  }
+
+  /// 将云端电站列表写入本地快照库（离网模式数据源）
+  Future<void> _saveStationSnapshot(List<dynamic> stations) async {
+    try {
+      await localCache?.upsertStations(
+        stations.whereType<Map<String, dynamic>>().toList(),
+      );
+    } catch (e) {
+      debugPrint('[StationBloc] upsert station snapshot failed: $e');
+    }
   }
 
   Future<void> _onListRequested(

@@ -189,6 +189,15 @@ func Load(configPath string) (*Config, error) {
 	if v := os.Getenv("API_SERVER_URL"); v != "" {
 		viper.Set("backends.api_server", v)
 	}
+	if v := os.Getenv("MQTT_USERNAME"); v != "" {
+		viper.Set("mqtt.username", v)
+	}
+	if v := os.Getenv("MQTT_PASSWORD"); v != "" {
+		viper.Set("mqtt.password", v)
+	}
+	if v := os.Getenv("MQTT_CLIENT_ID"); v != "" {
+		viper.Set("mqtt.client_id", v)
+	}
 
 	var config Config
 	if err := viper.Unmarshal(&config); err != nil {

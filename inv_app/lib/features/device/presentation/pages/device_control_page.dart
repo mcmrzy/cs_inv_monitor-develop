@@ -12,6 +12,7 @@ import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 
 import 'package:inv_app/l10n/app_localizations.dart';
+import 'package:inv_app/features/ota/presentation/pages/local_ota_channel_select_page.dart';
 
 class DeviceControlPage extends StatefulWidget {
   final String deviceSN;
@@ -1761,6 +1762,11 @@ class _DeviceControlPageState extends State<DeviceControlPage>
 
         SizedBox(height: 12.h),
 
+        // OTA升级按钮
+        _buildOtaButtonsCard(),
+
+        SizedBox(height: 12.h),
+
         // desired/reported 配置差异
         _buildConfigDiffCard(),
 
@@ -1915,6 +1921,69 @@ class _DeviceControlPageState extends State<DeviceControlPage>
               fontSize: 13.sp,
               fontWeight: FontWeight.w500,
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOtaButtonsCard() {
+    final l10n = AppLocalizations.of(context)!;
+    final device =
+        _deviceInfo['device'] as Map<String, dynamic>? ?? _deviceInfo;
+    final deviceModel =
+        device['model'] ?? device['model_name'] ?? '';
+    final firmwareVersion = device['firmware_version'] ??
+        device['fw_version'] ??
+        _controlState['reported']?['firmware_version'] ??
+        '';
+
+    return Container(
+      decoration: AppColor.card(context),
+      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 16.h),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.system_update,
+                size: 20.sp,
+                color: AppColors.blue,
+              ),
+              SizedBox(width: 8.w),
+              Text(
+                l10n.firmwareUpgrade,
+                style: TextStyle(
+                  fontSize: 14.sp,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 12.h),
+          Row(
+            children: [
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => LocalOTAChannelSelectPage(
+                          deviceSN: widget.deviceSN,
+                          deviceModel: deviceModel,
+                          currentFirmwareVersion: firmwareVersion,
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.phone_android),
+                  label: Text(l10n.localUpgrade),
+                ),
+              ),
+            ],
           ),
         ],
       ),

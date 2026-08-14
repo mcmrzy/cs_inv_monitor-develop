@@ -169,23 +169,26 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
             value: _prefs.notifyAlarm,
             onChanged: (value) => _update(_prefs.copyWith(notifyAlarm: value)),
           ),
-          // 告警级别子开关（红/橙/蓝圆点区分级别）
+          // 告警级别子开关（红/橙/蓝圆点区分级别）；父级关闭时置灰保留上下文
           SettingsLevelRow(
             title: _l10n.alarmFatal,
             value: _prefs.notifyAlarmFatal,
             dotColor: AppColors.error,
+            enabled: _prefs.notifyAlarm,
             onChanged: (v) => _update(_prefs.copyWith(notifyAlarmFatal: v)),
           ),
           SettingsLevelRow(
             title: _l10n.alarmWarning,
             value: _prefs.notifyAlarmWarning,
             dotColor: AppColors.warning,
+            enabled: _prefs.notifyAlarm,
             onChanged: (v) => _update(_prefs.copyWith(notifyAlarmWarning: v)),
           ),
           SettingsLevelRow(
             title: _l10n.alarmLevelInfo,
             value: _prefs.notifyAlarmInfo,
             dotColor: AppColors.primary,
+            enabled: _prefs.notifyAlarm,
             onChanged: (v) => _update(_prefs.copyWith(notifyAlarmInfo: v)),
           ),
           SettingsSwitchRow(

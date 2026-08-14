@@ -3,12 +3,14 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'dart:io';
 import 'package:inv_app/core/data/china_regions.dart';
 import 'package:inv_app/core/data/country_name_mapping.dart';
 import 'package:inv_app/core/data/province_name_mapping.dart';
 import 'package:inv_app/core/data/regions_data.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/network/api_client.dart';
 import 'package:inv_app/features/station/data/station_image_upload_service.dart';
@@ -102,14 +104,38 @@ class _EditStationPageState extends State<EditStationPage> {
     );
     if (picked == null) return;
 
+    // 方形裁剪后再上传（与头像上传一致，支持缩放/拖动调整）
+    final CroppedFile? cropped = await ImageCropper().cropImage(
+      sourcePath: picked.path,
+      maxWidth: 1024,
+      maxHeight: 1024,
+      compressFormat: ImageCompressFormat.jpg,
+      compressQuality: 85,
+      uiSettings: [
+        AndroidUiSettings(
+          cropStyle: CropStyle.rectangle,
+          lockAspectRatio: true,
+          initAspectRatio: CropAspectRatioPreset.square,
+          // 隐藏比例工具栏：固定方形裁剪，避免用户改比例破坏卡片形状
+          hideBottomControls: true,
+        ),
+        IOSUiSettings(
+          cropStyle: CropStyle.rectangle,
+          aspectRatioLockEnabled: true,
+          aspectRatioPresets: [CropAspectRatioPreset.square],
+        ),
+      ],
+    );
+    if (cropped == null) return;
+
     setState(() => _uploadingImage = true);
     try {
       final apiClient = getIt<ApiClient>();
       final uploadService = StationImageUploadService(apiClient);
-      final url = await uploadService.uploadStationImage(File(picked.path));
+      final url = await uploadService.uploadStationImage(File(cropped.path));
       if (mounted) {
         setState(() {
-          _cardImage = File(picked.path);
+          _cardImage = File(cropped.path);
           _cardImageUrl = url;
           _uploadingImage = false;
         });
@@ -143,7 +169,7 @@ class _EditStationPageState extends State<EditStationPage> {
     _addressController.text = station['address'] ?? '';
     _latitude = (station['latitude'] as num?)?.toDouble();
     _longitude = (station['longitude'] as num?)?.toDouble();
-    // 加载卡片图片URL
+    // 加载电站图片URL
     final cardImageUrl = station['card_image_url'] as String?;
     if (cardImageUrl != null && cardImageUrl.isNotEmpty) {
       _cardImageUrl = cardImageUrl;
@@ -245,7 +271,7 @@ class _EditStationPageState extends State<EditStationPage> {
       data['latitude'] = _latitude ?? 0;
       data['longitude'] = _longitude ?? 0;
     }
-    // 电站卡片图片
+    // 电站图片
     if (_cardImageUrl != null) {
       data['card_image_url'] = _cardImageUrl;
     }
@@ -302,7 +328,7 @@ class _EditStationPageState extends State<EditStationPage> {
                     subtitle: AppLocalizations.of(context)!.fillStationInfo,
                     child: Column(
                       children: [
-                        // 电站卡片图片
+                        // 电站图片
                         _buildImagePicker(),
                         SizedBox(height: 12.h),
                         _buildField(
@@ -560,41 +586,30 @@ class _EditStationPageState extends State<EditStationPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Text(
-              '电站卡片图片',
-              style: TextStyle(
-                fontSize: 13.sp,
-                fontWeight: FontWeight.w500,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            SizedBox(width: 4.w),
-            Text(
-              '(可选)',
-              style: TextStyle(
-                fontSize: 11.sp,
-                color: AppColors.textHint,
-              ),
-            ),
-          ],
+        Text(
+          AppLocalizations.of(context)!.stationCardImage,
+          style: TextStyle(
+            fontSize: 13.sp,
+            fontWeight: FontWeight.w500,
+            color: AppColors.textPrimary,
+          ),
         ),
         SizedBox(height: 8.h),
-        GestureDetector(
-          onTap: _uploadingImage ? null : _pickAndUploadImage,
-          child: Container(
-            width: double.infinity,
-            height: 160.h,
-            decoration: BoxDecoration(
-              color: AppColor.surfaceHover(context),
-              borderRadius: BorderRadius.circular(12.r),
-              border: Border.all(
-                color: (_cardImage != null || _cardImageUrl != null)
-                    ? AppColors.primary.withValues(alpha: 0.3)
-                    : AppColor.border(context),
+        Center(
+          child: GestureDetector(
+            onTap: _uploadingImage ? null : _pickAndUploadImage,
+            child: Container(
+              width: 120.w,
+              height: 120.w,
+              decoration: BoxDecoration(
+                color: AppColor.surfaceHover(context),
+                borderRadius: BorderRadius.circular(12.r),
+                border: Border.all(
+                  color: (_cardImage != null || _cardImageUrl != null)
+                      ? AppColors.primary.withValues(alpha: 0.3)
+                      : AppColor.border(context),
+                ),
               ),
-            ),
             child: _uploadingImage
                 ? Center(
                     child: CircularProgressIndicator(
@@ -682,32 +697,21 @@ class _EditStationPageState extends State<EditStationPage> {
                               ],
                             ),
                           )
-                        : Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.add_photo_alternate_outlined,
-                                size: 36.sp,
-                                color: AppColors.textHint,
-                              ),
-                              SizedBox(height: 8.h),
-                              Text(
-                                '点击上传电站卡片图片',
-                                style: TextStyle(
-                                  fontSize: 13.sp,
-                                  color: AppColors.textHint,
-                                ),
-                              ),
-                              SizedBox(height: 4.h),
-                              Text(
-                                '支持 JPEG、PNG、GIF、WebP，最大 5MB',
-                                style: TextStyle(
-                                  fontSize: 11.sp,
-                                  color: AppColors.textHint.withValues(alpha: 0.7),
-                                ),
-                              ),
-                            ],
+                        : Image.asset(
+                            CsergyAssets.stationDefaultImage,
+                            fit: BoxFit.contain,
                           ),
+            ),
+          ),
+        ),
+        SizedBox(height: 6.h),
+        Center(
+          child: Text(
+            AppLocalizations.of(context)!.stationImageUploadHint,
+            style: TextStyle(
+              fontSize: 12.sp,
+              color: AppColors.textHint,
+            ),
           ),
         ),
       ],

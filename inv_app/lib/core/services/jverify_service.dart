@@ -18,6 +18,15 @@ class JVerifyCarrierException implements Exception {
 /// 封装 JVerify SDK，提供一键登录能力。
 /// 使用单例模式，通过 [ServiceLocator] 注册。
 class JVerifyService {
+  // JVerify 错误码常量（来源：极光官方文档）
+  static const int codeSuccess = 7000;       // 预取号成功
+  static const int codeNoSim = 2002;         // 无 SIM 卡 / 蜂窝不可用
+  static const int codePreLoginFailed = 2005; // 预取号超时/失败
+  static const int codeSdkNotReady = 6012;   // SDK 初始化未就绪
+  static const int codeLoginSuccess = 6000;  // 登录取号成功
+  static const int codeUserCancel1 = 8001;   // 用户取消（通道 1）
+  static const int codeUserCancel2 = 9000;   // 用户取消（通道 2）
+
   static final JVerifyService _instance = JVerifyService._internal();
   factory JVerifyService() => _instance;
   JVerifyService._internal();
@@ -100,11 +109,29 @@ class JVerifyService {
     }
     final safeTimeout = timeoutMs.clamp(3000, 10000).toInt();
     _preLoginAt = now;
-    final future = _doPreLogin(timeoutMs: safeTimeout);
-    // 失败不缓存（重试重新取号）；成功缓存 20s（运营商 token 有效期约 30s）
-    _preLoginFuture = future.then<bool>((ok) {
-      if (!ok) _preLoginFuture = null;
-      return ok;
+    // 原生回调可能丢失（运营商网关无响应，日志表现为 requestPreLogin 后无结果）：
+    // 外层 8s 兆底超时，避免永久 pending 的 future 被 20s 缓存反复复用，造成“一直取号失败”
+    final future = _doPreLogin(timeoutMs: safeTimeout)
+        .timeout(const Duration(seconds: 8), onTimeout: () {
+      // 超时后同时复位时间戳，防止 20s 窗口内旧时间戳干扰
+      _preLoginAt = null;
+      return false;
+    });
+    // 失败不缓存，延迟 1.5s 自动重试 1 次；成功缓存 20s
+    _preLoginFuture = future.then<bool>((ok) async {
+      if (!ok) {
+        _preLoginFuture = null;
+        _preLoginAt = null;
+        // 自动重试 1 次：运营商网关偶发无响应，延迟后重新取号
+        debugPrint('[JVerifyService] preLogin failed, retrying after 1.5s...');
+        await Future.delayed(const Duration(milliseconds: 1500));
+        final retryOk = await _doPreLogin(timeoutMs: safeTimeout);
+        if (!retryOk) {
+          debugPrint('[JVerifyService] preLogin retry also failed');
+        }
+        return retryOk;
+      }
+      return true;
     });
     return _preLoginFuture!;
   }
@@ -113,7 +140,7 @@ class JVerifyService {
     if (!isSupported || !_initialized) return false;
     try {
       final map = await _jverify.preLogin(timeOut: timeoutMs);
-      final ok = map['code'] == 7000;
+      final ok = map['code'] == codeSuccess;
       debugPrint(
           '[JVerifyService] preLogin result: code=${map['code']} msg=${map['message']} (ok=$ok)',
       );
@@ -169,16 +196,23 @@ class JVerifyService {
     }
     if (!ready) {
       debugPrint('[JVerifyService] Session #$_loginAttemptCounter: SDK init not ready after 5s');
-      throw JVerifyCarrierException(6012, 'SDK init not ready');
+      throw JVerifyCarrierException(codeSdkNotReady, 'SDK init not ready');
+    }
+
+    // 蜂窝环境前置检查：无 SIM 卡 / 非移动数据网络时立即降级，避免 5s 干等
+    if (!await checkVerifyEnable()) {
+      debugPrint(
+          '[JVerifyService] Session #$_loginAttemptCounter: no cellular env, degrade to other login',
+      );
+      throw JVerifyCarrierException(codeNoSim, 'Carrier not available');
     }
 
     // 拉起授权页前确保预取号成功：token 就绪则授权页立即显示脱敏号码、点击即秒回；
-    // 预取号失败说明运营商通道不可用，快速降级提示，避免授权页内取号超时（2005）
+    // 预取号失败不再阻断——SDK 授权页内会自动取号（官方推荐路径）
     if (!await ensurePreLogin()) {
       debugPrint(
-          '[JVerifyService] Session #$_loginAttemptCounter: preLogin failed, degrade to other login',
+          '[JVerifyService] Session #$_loginAttemptCounter: preLogin failed, continue to auth page (SDK auto-fetch)',
       );
-      throw JVerifyCarrierException(2005, 'Carrier preLogin failed');
     }
 
     // 配置自绘授权页 UI（品牌区 + 脱敏号码 + 同意并登录 + 协议）
@@ -199,7 +233,7 @@ class JVerifyService {
 
           if (completer.isCompleted) return;
 
-          if (event.code == 6000 && event.message != null) {
+          if (event.code == codeLoginSuccess && event.message != null) {
             // 成功：message 是 accessCode；先关闭授权页避免残留盖在 Flutter 之上
             debugPrint('[JVerifyService] Success! Access code: ${event.message!.substring(0, 20)}...');
             try {
@@ -213,7 +247,7 @@ class JVerifyService {
               'phoneNumber': null,
               'operator': event.operator,
             });
-          } else if (event.code == 8001 || event.code == 9000) {
+          } else if (event.code == codeUserCancel1 || event.code == codeUserCancel2) {
             // 用户取消：返回空结果，不视为错误
             debugPrint('[JVerifyService] User cancelled: ${event.code}');
             completer.complete({});
@@ -242,7 +276,7 @@ class JVerifyService {
         onTimeout: () {
           debugPrint('[JVerifyService] loginAuth timed out after 20s');
           // 超时说明运营商网络无响应，抛异常释放 UI 并引导降级
-          throw JVerifyCarrierException(2005, 'One-click auth timed out');
+          throw JVerifyCarrierException(codePreLoginFailed, 'One-click auth timed out');
         },
       );
     } on JVerifyCarrierException catch (e) {

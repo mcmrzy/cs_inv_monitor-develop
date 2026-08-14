@@ -1265,10 +1265,7 @@ func (h *OTAHandler) ReportLocalOTAResult(c *gin.Context) {
 // AppListUpgradePackages APP端查询升级包列表（过滤敏感字段）
 func (h *OTAHandler) AppListUpgradePackages(c *gin.Context) {
 	modelFilter := c.Query("model")
-	if modelFilter == "" {
-		response.Error(c, 400, "model is required")
-		return
-	}
+	// model 为空时返回全部已发布包（前端可再过滤），避免 400 死路
 
 	list, err := h.otaService.ListUpgradePackages(c.Request.Context(), modelFilter)
 	if err != nil {
@@ -1292,6 +1289,10 @@ func (h *OTAHandler) AppListUpgradePackages(c *gin.Context) {
 
 	packages := make([]safePackage, 0, len(list))
 	for _, pkg := range list {
+		// App 端仅可见已发布包（未发布包仅管理后台可见）
+		if !pkg.IsPublished {
+			continue
+		}
 		items := make([]safeItem, 0, len(pkg.Items))
 		for _, item := range pkg.Items {
 			items = append(items, safeItem{
@@ -1433,6 +1434,10 @@ func (h *OTAHandler) ListDeviceUpgradePackages(c *gin.Context) {
 
 	packages := make([]packageInfo, 0, len(list))
 	for _, pkg := range list {
+		// App 端仅可见已发布包（未发布包仅管理后台可见）
+		if !pkg.IsPublished {
+			continue
+		}
 		items := make([]chipItem, 0, len(pkg.Items))
 		for _, item := range pkg.Items {
 			items = append(items, chipItem{

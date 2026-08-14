@@ -1,6 +1,8 @@
 import 'package:equatable/equatable.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'dart:async';
+import 'package:inv_app/core/data/local_cache_database.dart';
 import 'package:inv_app/core/errors/failures.dart';
 import 'package:inv_app/core/services/realtime_data_service.dart';
 import 'package:inv_app/core/services/local_communication_service.dart';
@@ -28,6 +30,7 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
   final DataCacheService? dataCacheService;
   final BleDeviceKeyStore? bleKeyStore;
   final OfflineOpLogStore? offlineLogStore;
+  final LocalCacheDatabase? localCache;
   StreamSubscription<InverterRealtime>? _mqttSub;
   String? _activeSN;
   Timer? _localPollTimer;
@@ -44,6 +47,7 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     this.dataCacheService,
     this.bleKeyStore,
     this.offlineLogStore,
+    this.localCache,
   }) : super(DeviceInitial()) {
     on<DeviceListRequested>(_onListRequested);
     on<DeviceDetailRequested>(_onDetailRequested);
@@ -79,6 +83,38 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     DeviceListRequested event,
     Emitter<DeviceState> emit,
   ) async {
+    // 本地离网模式：直接读设备快照库（需求 6，不等待网络超时）
+    if (connectionModeService?.isLocal ?? false) {
+      try {
+        final rows =
+            await localCache?.loadDevices() ?? const <Map<String, dynamic>>[];
+        final devices = rows.map<Map<String, dynamic>>((r) {
+          return <String, dynamic>{
+            'sn': r['sn'],
+            'name': r['name'],
+            'device_model': r['model'],
+            'firmware_arm': r['firmware_arm'],
+            'firmware_esp': r['firmware_esp'],
+            'station_id': r['station_id'],
+            'status': r['status'],
+          };
+        }).toList();
+        debugPrint(
+          '[DeviceBloc] local mode: ${devices.length} devices snapshot',
+        );
+        emit(
+          DeviceListLoaded(
+            devices: devices,
+            total: devices.length,
+            isFromCache: true,
+          ),
+        );
+        return;
+      } catch (e) {
+        debugPrint('[DeviceBloc] local device snapshot load failed: $e');
+      }
+    }
+
     // 如果已有数据，不显示loading（静默刷新）
     if (state is! DeviceListLoaded) {
       emit(DeviceLoading());
@@ -128,9 +164,22 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
               : DataCacheService.deviceList;
           dataCacheService!.save(cacheKey, data);
         }
+        // 设备快照入库（支撑离网模式设备列表渲染，失败静默）
+        unawaited(_saveDeviceSnapshot(devices));
         emit(DeviceListLoaded(devices: devices, total: total));
       },
     );
+  }
+
+  /// 将云端设备列表写入本地快照库（离网模式数据源）
+  Future<void> _saveDeviceSnapshot(List<dynamic> devices) async {
+    try {
+      await localCache?.upsertDevices(
+        devices.whereType<Map<String, dynamic>>().toList(),
+      );
+    } catch (e) {
+      debugPrint('[DeviceBloc] upsert device snapshot failed: $e');
+    }
   }
 
   Future<void> _onDetailRequested(

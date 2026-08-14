@@ -2,16 +2,17 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
+import 'package:inv_app/core/data/local_cache_database.dart';
 import 'package:inv_app/core/services/connection_mode_service.dart';
 import 'package:inv_app/core/services/local_communication_service.dart';
 import 'package:inv_app/core/services/local_discovery_service.dart';
 import 'package:inv_app/core/services/mdns_discovery_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
-import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 import 'package:inv_app/core/widgets/app_toast.dart';
+import 'package:inv_app/core/widgets/wifi_enable_dialog.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 class LocalModePage extends StatefulWidget {
@@ -29,6 +30,7 @@ class _LocalModePageState extends State<LocalModePage> {
 
   List<DiscoveredDevice> _apDevices = [];
   List<MDNSDevice> _mdnsDevices = [];
+  List<Map<String, dynamic>> _cachedDevices = [];
   bool _isScanning = false;
   bool _isConnecting = false;
   String? _connectedSSID;
@@ -38,8 +40,10 @@ class _LocalModePageState extends State<LocalModePage> {
   @override
   void initState() {
     super.initState();
-    _modeService = ConnectionModeService(getIt<StorageService>());
+    // 共享全局单例（需求 6：与 StationBloc/DeviceBloc 数据源分支保持一致）
+    _modeService = getIt<ConnectionModeService>();
     _initMode();
+    _loadCachedDevices();
   }
 
   Future<void> _initMode() async {
@@ -50,15 +54,26 @@ class _LocalModePageState extends State<LocalModePage> {
     setState(() {});
   }
 
+  /// 从本地缓存加载设备快照，用于离网时展示
+  Future<void> _loadCachedDevices() async {
+    try {
+      final devices = await LocalCacheDatabase().loadDevices();
+      if (mounted) setState(() => _cachedDevices = devices);
+    } catch (_) {
+      // 缓存读取失败不影响主流程
+    }
+  }
+
   @override
   void dispose() {
     _modeSubscription?.cancel();
-    _modeService.dispose();
     super.dispose();
   }
 
   Future<void> _scanDevices() async {
     if (_isScanning) return;
+    // 扫描前确保手机 WiFi 已开启（未开启弹窗引导，取消则中止扫描，Q1）
+    if (!await ensureWifiEnabled(context)) return;
     setState(() {
       _isScanning = true;
       _errorMessage = null;
@@ -129,7 +144,8 @@ class _LocalModePageState extends State<LocalModePage> {
 
         final testOk = await _commService.testConnection();
         if (testOk && mounted) {
-          context.push('/device/${device.ssid}');
+          // 连接成功：进入离网主界面（复用 ShellRoute 骨架，不复制页面）
+          context.go('/home');
         } else if (mounted) {
           AppToast.show(context, AppLocalizations.of(context)!.apCommTestFailed, type: ToastType.error);
         }
@@ -347,7 +363,10 @@ class _LocalModePageState extends State<LocalModePage> {
   }
 
   Widget _buildDeviceList() {
-    if (_apDevices.isEmpty && _mdnsDevices.isEmpty && !_isScanning) {
+    final hasScanned = _apDevices.isNotEmpty || _mdnsDevices.isNotEmpty;
+    final hasCached = _cachedDevices.isNotEmpty;
+
+    if (!hasScanned && !hasCached && !_isScanning) {
       // 小烁提醒动作插画：本地模式未发现设备空态（美术路由 C3/reminder）
       return XiaoshuoStatePanel(
         asset: CsergyAssets.xiaoshuoReminder,
@@ -390,7 +409,138 @@ class _LocalModePageState extends State<LocalModePage> {
           ),
           ..._mdnsDevices.map((d) => _buildMDNSDeviceCard(d)),
         ],
+        // 缓存设备区：来自 sqflite 快照，标记在线/离线
+        if (hasCached) ...[
+          _buildCachedSection(),
+        ],
       ],
+    );
+  }
+
+  /// 缓存设备区标题 + 设备列表
+  Widget _buildCachedSection() {
+    final l10n = AppLocalizations.of(context)!;
+    // 收集已扫描到的 SN，用于判断缓存设备是否在线
+    final onlineSNs = <String>{};
+    for (final d in _apDevices) {
+      onlineSNs.add(d.ssid.replaceAll(RegExp(r'^CS[-_]INV[-_]', caseSensitive: false), ''));
+    }
+    for (final d in _mdnsDevices) {
+      if (d.sn != null) onlineSNs.add(d.sn!);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.only(top: 16.h, bottom: 4.h),
+          child: Text(
+            l10n.str('local_cached_devices'),
+            style: TextStyle(
+              fontSize: 13.sp,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ),
+        Padding(
+          padding: EdgeInsets.only(bottom: 8.h),
+          child: Text(
+            l10n.str('local_cached_devices_hint'),
+            style: TextStyle(fontSize: 11.sp, color: AppColors.textHint),
+          ),
+        ),
+        ..._cachedDevices.map((d) => _buildCachedDeviceCard(d, onlineSNs)),
+      ],
+    );
+  }
+
+  /// 缓存设备卡片：根据是否在扫描结果中显示在线/离线标记
+  Widget _buildCachedDeviceCard(
+    Map<String, dynamic> device,
+    Set<String> onlineSNs,
+  ) {
+    final sn = device['sn']?.toString() ?? '';
+    final name = device['name']?.toString() ?? sn;
+    final model = device['model']?.toString() ?? '';
+    final isOnline = onlineSNs.contains(sn);
+    final l10n = AppLocalizations.of(context)!;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: 8.h),
+      child: Material(
+        color: AppColor.surfaceContainer(context),
+        borderRadius: BorderRadius.circular(14.r),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14.r),
+          onTap: isOnline ? () => context.push('/device/$sn') : null,
+          child: Padding(
+            padding: EdgeInsets.all(14.w),
+            child: Row(
+              children: [
+                Container(
+                  width: 40.w,
+                  height: 40.w,
+                  decoration: BoxDecoration(
+                    color: isOnline
+                        ? AppColors.badgeNormalBg
+                        : AppColor.surfaceHover(context),
+                    borderRadius: BorderRadius.circular(10.r),
+                  ),
+                  child: Icon(
+                    isOnline ? Icons.solar_power : Icons.solar_power_outlined,
+                    size: 20.sp,
+                    color: isOnline ? AppColors.successLight : AppColors.textHint,
+                  ),
+                ),
+                SizedBox(width: 12.w),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        style: TextStyle(
+                          fontSize: 14.sp,
+                          fontWeight: FontWeight.w600,
+                          color: isOnline ? AppColors.textPrimary : AppColors.textSecondary,
+                        ),
+                      ),
+                      SizedBox(height: 2.h),
+                      Text(
+                        '$sn${model.isNotEmpty ? ' · $model' : ''}',
+                        style: TextStyle(
+                          fontSize: 11.sp,
+                          color: AppColors.textHint,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 3.h),
+                  decoration: BoxDecoration(
+                    color: isOnline
+                        ? AppColors.badgeNormalBg
+                        : AppColor.surfaceHover(context),
+                    borderRadius: BorderRadius.circular(6.r),
+                  ),
+                  child: Text(
+                    isOnline
+                        ? l10n.str('local_device_online')
+                        : l10n.str('local_device_offline'),
+                    style: TextStyle(
+                      fontSize: 11.sp,
+                      fontWeight: FontWeight.w600,
+                      color: isOnline ? AppColors.successLight : AppColors.textHint,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -512,12 +662,23 @@ class _LocalModePageState extends State<LocalModePage> {
         elevation: 0,
         child: InkWell(
           borderRadius: BorderRadius.circular(14.r),
-          onTap: () {
+          onTap: () async {
             if (device.host.isNotEmpty) {
               _commService.connect(device.host);
               _modeService.switchToLocal();
               setState(() {});
-              context.push('/device/${device.sn ?? device.name}');
+              // 与 AP 路径对齐：连接后探测设备通信，失败不进入离网主界面
+              final testOk = await _commService.testConnection();
+              if (testOk && mounted) {
+                // 进入离网主界面（复用 ShellRoute 骨架，不复制页面）
+                context.go('/home');
+              } else if (mounted) {
+                AppToast.show(
+                  context,
+                  AppLocalizations.of(context)!.apCommTestFailed,
+                  type: ToastType.error,
+                );
+              }
             }
           },
           child: Padding(

@@ -45,8 +45,9 @@ abstract class StorageService implements StorageServiceLike {
   Future<String?> getSavedPassword();
   Future<void> saveSavedPassword(String password);
 
-  Future<bool> getIsDarkMode();
-  Future<void> saveIsDarkMode(bool value);
+  Future<String?> getThemeMode();
+  Future<void> saveThemeMode(String mode);
+  String? getThemeModeSync();
 
   Future<String?> getServerUrl();
   Future<void> saveServerUrl(String url);
@@ -54,11 +55,15 @@ abstract class StorageService implements StorageServiceLike {
   Future<bool> getIsLocalMode();
   Future<void> saveIsLocalMode(bool value);
 
+  Future<bool> getIsGuestLocalMode();
+  Future<void> saveIsGuestLocalMode(bool value);
+
   Future<int> getBlePollInterval();
   Future<void> saveBlePollInterval(int seconds);
 
   Future<String?> getLocale();
   Future<void> saveLocale(String locale);
+  Future<void> deleteLocale();
   String? getLocaleSync();
 
   Future<String?> getTimezone();
@@ -115,8 +120,10 @@ class StorageServiceImpl implements StorageService {
   static const String _keySavedPhone = 'saved_phone';
   static const String _keySavedPassword = 'saved_password';
   static const String _keyIsDarkMode = 'is_dark_mode';
+  static const String _keyThemeMode = 'app_theme_mode';
   static const String _keyServerUrl = 'server_url';
   static const String _keyIsLocalMode = 'is_local_mode';
+  static const String _keyIsGuestLocalMode = 'is_guest_local_mode';
   static const String _keyLocale = 'app_locale';
   static const String _keyTimezone = 'user_timezone';
   static const String _keyStationCache = 'station_cache';
@@ -290,13 +297,33 @@ class StorageServiceImpl implements StorageService {
   }
 
   @override
-  Future<bool> getIsDarkMode() async {
-    return _sharedPreferences.getBool(_keyIsDarkMode) ?? false;
+  Future<String?> getThemeMode() async {
+    final saved = _sharedPreferences.getString(_keyThemeMode);
+    if (saved != null) return saved;
+    // 一次性迁移旧布尔键（is_dark_mode）：true → dark，false → 视为未设置
+    final legacy = _sharedPreferences.getBool(_keyIsDarkMode);
+    if (legacy != null) {
+      await _sharedPreferences.remove(_keyIsDarkMode);
+      if (legacy) {
+        await _sharedPreferences.setString(_keyThemeMode, 'dark');
+        return 'dark';
+      }
+    }
+    return null;
   }
 
   @override
-  Future<void> saveIsDarkMode(bool value) async {
-    await _sharedPreferences.setBool(_keyIsDarkMode, value);
+  Future<void> saveThemeMode(String mode) async {
+    await _sharedPreferences.setString(_keyThemeMode, mode);
+  }
+
+  @override
+  String? getThemeModeSync() {
+    final saved = _sharedPreferences.getString(_keyThemeMode);
+    if (saved != null) return saved;
+    // 同步路径也兼容旧布尔键（SharedPreferences 已加载完毕）
+    if (_sharedPreferences.getBool(_keyIsDarkMode) == true) return 'dark';
+    return null;
   }
 
   @override
@@ -320,6 +347,16 @@ class StorageServiceImpl implements StorageService {
   }
 
   @override
+  Future<bool> getIsGuestLocalMode() async {
+    return _sharedPreferences.getBool(_keyIsGuestLocalMode) ?? false;
+  }
+
+  @override
+  Future<void> saveIsGuestLocalMode(bool value) async {
+    await _sharedPreferences.setBool(_keyIsGuestLocalMode, value);
+  }
+
+  @override
   Future<String?> getLocale() async {
     return _sharedPreferences.getString(_keyLocale);
   }
@@ -327,6 +364,11 @@ class StorageServiceImpl implements StorageService {
   @override
   Future<void> saveLocale(String locale) async {
     await _sharedPreferences.setString(_keyLocale, locale);
+  }
+
+  @override
+  Future<void> deleteLocale() async {
+    await _sharedPreferences.remove(_keyLocale);
   }
 
   @override

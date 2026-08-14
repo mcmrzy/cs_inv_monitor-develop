@@ -80,6 +80,7 @@ class AppLocalizations {
   String get otherLogin => _localizedStrings['other_login']!;
     String get oneClickLogin => _localizedStrings['one_click_login']!;
     String get jverifyNotAvailable => _localizedStrings['jverify_not_available']!;
+  String get jverifySecureTip => _localizedStrings['jverify_secure_tip']!;
   String get wechatLogin => _localizedStrings['wechat_login']!;
   String get googleLogin => _localizedStrings['google_login']!;
   String get oneClickLoginTitle =>
@@ -99,6 +100,8 @@ class AppLocalizations {
   String get jverifyLaunching => _localizedStrings['jverify_launching']!;
   String get jverifyCancelled => _localizedStrings['jverify_cancelled']!;
   String get jverifyAuthFailed => _localizedStrings['jverify_auth_failed']!;
+  String get jverifyCarrierUnavailable =>
+      _localizedStrings['jverify_carrier_unavailable']!;
   String get jverifyRetry => _localizedStrings['jverify_retry']!;
 
   // 导航
@@ -120,7 +123,11 @@ class AppLocalizations {
   String get stationDevices => _localizedStrings['station_devices']!;
   String get noStations => _localizedStrings['no_stations']!;
   String get createStation => _localizedStrings['create_station']!;
-  String get stationCardImage => _localizedStrings['station_card_image'] ?? '电站卡片图片';
+  String get stationCardImage => _localizedStrings['station_card_image'] ?? '电站图片';
+  String get stationImageUploadHint =>
+      _localizedStrings['station_image_upload_hint'] ?? '点击上传电站图片';
+  String get stationImageUploadFormats =>
+      _localizedStrings['station_image_upload_formats'] ?? '支持 JPEG、PNG、GIF、WebP，最大 5MB';
   String get searchStation => _localizedStrings['search_station']!;
   String get pv => _localizedStrings['pv']!;
   String get battery => _localizedStrings['battery']!;
@@ -468,6 +475,68 @@ class AppLocalizations {
   String get goUpdate => _localizedStrings['go_update']!;
   String get updateNow => _localizedStrings['update_now']!;
   String get aboutUs => _localizedStrings['about_us']!;
+
+  // 帮助中心 / 操作历史 / 离网模式设置
+  String get helpCenter => _localizedStrings['help_center']!;
+  String get operationHistory => _localizedStrings['operation_history']!;
+  String get offlineModeSettings =>
+      _localizedStrings['offline_mode_settings']!;
+  String get offlineModeSettingsHint =>
+      _localizedStrings['offline_mode_settings_hint']!;
+  String get helpSelfService => _localizedStrings['help_self_service']!;
+  String get helpSelfServiceHint =>
+      _localizedStrings['help_self_service_hint']!;
+  String get helpDocDevice => _localizedStrings['help_doc_device']!;
+  String get helpDocApp => _localizedStrings['help_doc_app']!;
+  String get helpDocSystem => _localizedStrings['help_doc_system']!;
+  String get helpDocUnavailable =>
+      _localizedStrings['help_doc_unavailable']!;
+  String get helpCustomerService =>
+      _localizedStrings['help_customer_service']!;
+  String get helpCustomerServiceHint =>
+      _localizedStrings['help_customer_service_hint']!;
+  String get helpPhoneSupport => _localizedStrings['help_phone_support']!;
+  String get helpPhoneSupportHint =>
+      _localizedStrings['help_phone_support_hint']!;
+  String get helpOnlineSupport => _localizedStrings['help_online_support']!;
+  String get helpOnlineSupportHint =>
+      _localizedStrings['help_online_support_hint']!;
+  String get helpWorkOrder => _localizedStrings['help_work_order']!;
+  String get helpWorkOrderHint => _localizedStrings['help_work_order_hint']!;
+  String get workOrderSubmit => _localizedStrings['work_order_submit']!;
+  String get workOrderTitleLabel =>
+      _localizedStrings['work_order_title_label']!;
+  String get workOrderTitleHint => _localizedStrings['work_order_title_hint']!;
+  String get workOrderDescLabel => _localizedStrings['work_order_desc_label']!;
+  String get workOrderDescHint => _localizedStrings['work_order_desc_hint']!;
+  String get workOrderSubmitted => _localizedStrings['work_order_submitted']!;
+  String get workOrderSubmitFailed =>
+      _localizedStrings['work_order_submit_failed']!;
+  String get workOrderRequired => _localizedStrings['work_order_required']!;
+  String get workOrderEmpty => _localizedStrings['work_order_empty']!;
+  String get workOrderStatusPending =>
+      _localizedStrings['work_order_status_pending']!;
+  String get workOrderStatusProcessing =>
+      _localizedStrings['work_order_status_processing']!;
+  String get workOrderStatusResolved =>
+      _localizedStrings['work_order_status_resolved']!;
+  String get workOrderStatusClosed =>
+      _localizedStrings['work_order_status_closed']!;
+  String get workOrderTabAll => _localizedStrings['work_order_tab_all']!;
+  String get workOrderTabDone => _localizedStrings['work_order_tab_done']!;
+  String get workOrderAddImage =>
+      _localizedStrings['work_order_add_image']!;
+  String get workOrderAttachHint =>
+      _localizedStrings['work_order_attach_hint']!;
+  String get workOrderAttachFailed =>
+      _localizedStrings['work_order_attach_failed']!;
+  String get helpFaq => _localizedStrings['help_faq']!;
+  String get opLogEmpty => _localizedStrings['op_log_empty']!;
+  String get opLogLoadFailed => _localizedStrings['op_log_load_failed']!;
+  String get opLogTypeOperation => _localizedStrings['op_log_type_operation']!;
+  String get opLogTypeCommand => _localizedStrings['op_log_type_command']!;
+  String get opLogTypeOta => _localizedStrings['op_log_type_ota']!;
+  String get opLogTypeUnknown => _localizedStrings['op_log_type_unknown']!;
   String get pvInverterSmartMonitor =>
       _localizedStrings['pv_inverter_smart_monitor']!;
   String get appVersion => _localizedStrings['version']!;
@@ -509,6 +578,8 @@ class AppLocalizations {
 
   // 关于页（品牌区）
   String get aboutSlogan => _localizedStrings['about_slogan']!;
+  String get aboutLegalGroup => _localizedStrings['about_legal_group']!;
+  String get aboutMoreGroup => _localizedStrings['about_more_group']!;
 
   // 修改密码（密码强度）
   String get passwordStrengthLabel =>
@@ -519,6 +590,7 @@ class AppLocalizations {
       _localizedStrings['password_strength_medium']!;
   String get passwordStrengthStrong =>
       _localizedStrings['password_strength_strong']!;
+  String get passwordRuleHint => _localizedStrings['password_rule_hint']!;
 
   // 新增 getter
   String get myProfile => _localizedStrings['my_profile']!;
@@ -1181,6 +1253,9 @@ class AppLocalizations {
       _localizedStrings['loading_upgrade_list'] ?? 'Loading upgrade list...';
   String get noUpgradesAvailable =>
       _localizedStrings['no_upgrades_available'] ?? 'No upgrades available';
+  String get noFirmwareContactDealer =>
+      _localizedStrings['no_firmware_contact_dealer'] ??
+          'No firmware available. Please contact your dealer.';
   String get currentVersionLabel =>
       _localizedStrings['current_version_badge'] ?? 'Current Version';
   String get forceUpgrade =>

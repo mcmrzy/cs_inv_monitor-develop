@@ -6,11 +6,13 @@ import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/services/realtime_data_service.dart';
 import 'package:inv_app/core/services/network_status_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
+import 'package:inv_app/core/services/widget_update_service.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/widgets/jiggle_once.dart';
 import 'package:inv_app/core/widgets/offline_banner.dart';
 import 'package:inv_app/core/widgets/pagination_bar.dart';
+import 'package:inv_app/core/widgets/pressable_gesture_detector.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
@@ -35,6 +37,8 @@ class _HomePageState extends State<HomePage> {
   int _stationPage = 1;
   // 电站拖动排序模式：由长按面板“电站排序”入口开启
   bool _stationSortMode = false;
+  // 电站列表滚动控制器：翻页后跳回列表顶部
+  final ScrollController _stationListController = ScrollController();
   // 排序模式下的本地电站顺序（完成时提交后端）
   List<dynamic>? _sortStations;
   StreamSubscription<dynamic>? _statusSub;
@@ -93,11 +97,54 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// 将电站聚合数据推送到桌面小组件（统计 + 能量流）
+  ///
+  /// 后端 summary 为 camelCase 聚合字段（兼容 snake_case），
+  /// 数值统一格式化两位小数，避免超长小数撑破小组件布局。
+  void _pushStationWidgets(StationSummaryLoaded state) {
+    final s = state.summary;
+
+    String fmt(dynamic v) {
+      final d = (v is num) ? v.toDouble() : (double.tryParse('$v') ?? 0);
+      return d.toStringAsFixed(2);
+    }
+
+    // 统计小组件：累计发电 / 今日收益 / 设备在线
+    unawaited(
+      WidgetUpdateService.updateStatsWidget(
+        totalKwh: fmt(s['totalGeneration'] ?? s['total_energy']),
+        todayIncome: fmt(s['totalIncome'] ?? s['total_income']),
+        deviceOnline: '${s['onlineDevices'] ?? s['online_count'] ?? 0}',
+        deviceTotal: '${s['totalDevices'] ?? s['device_count'] ?? 0}',
+      ),
+    );
+
+    // 能量流小组件：今日发电 / 当前功率 / 本月发电
+    unawaited(
+      WidgetUpdateService.updateEnergyFlowWidget(
+        todayKwh: fmt(s['todayGeneration'] ?? s['today_energy']),
+        currentPower: fmt(s['total_power']),
+        monthKwh: fmt(s['monthGeneration'] ?? s['month_energy']),
+      ),
+    );
+
+    // 电站概览小组件：今日发电 / 设备在线 / 当前功率（数据与统计/能量流同源）
+    unawaited(
+      WidgetUpdateService.updateStationWidget(
+        todayKwh: fmt(s['todayGeneration'] ?? s['today_energy']),
+        deviceOnline: '${s['onlineDevices'] ?? s['online_count'] ?? 0}',
+        deviceTotal: '${s['totalDevices'] ?? s['device_count'] ?? 0}',
+        currentPower: fmt(s['total_power']),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _statusSub?.cancel();
     _alarmSub?.cancel();
     _searchCtl.dispose();
+    _stationListController.dispose();
     super.dispose();
   }
 
@@ -176,6 +223,10 @@ class _HomePageState extends State<HomePage> {
             AppToast.show(context, AppLocalizations.of(context)!.stationOrderSaved, type: ToastType.success);
             context.read<StationBloc>().add(StationSummaryRequested());
           }
+          // 统计刷新：将聚合数据推送到桌面小组件（统计 + 能量流）
+          if (state is StationSummaryLoaded && !state.isFromCache) {
+            _pushStationWidgets(state);
+          }
         },
         builder: (context, state) {
           final l10n = AppLocalizations.of(context)!;
@@ -219,6 +270,7 @@ class _HomePageState extends State<HomePage> {
                       .read<StationBloc>()
                       .add(StationSummaryRequested()),
                   child: CustomScrollView(
+                    controller: _stationListController,
                     physics: const AlwaysScrollableScrollPhysics(),
                     slivers: [
                       if (isFromCache)
@@ -389,8 +441,13 @@ class _HomePageState extends State<HomePage> {
                           child: PaginationBar(
                             currentPage: safeStationPage,
                             totalPages: stationPageCount,
-                            onPageChanged: (p) =>
-                                setState(() => _stationPage = p),
+                            onPageChanged: (p) {
+                              setState(() => _stationPage = p);
+                              // 翻页后跳回列表顶部，避免停留在上一页滚动位置
+                              if (_stationListController.hasClients) {
+                                _stationListController.jumpTo(0);
+                              }
+                            },
                           ),
                         ),
                       const SliverToBoxAdapter(child: SizedBox(height: 100)),
@@ -1170,7 +1227,8 @@ class _StationCardState extends State<_StationCard>
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.only(bottom: 14.h),
-      child: GestureDetector(
+      child: PressableGestureDetector(
+        // 长按 300ms 达成（与设备/通知卡片手感一致，比默认 500ms 更灵敏）
         onTapDown: (_) => _controller.forward(),
         onTapUp: (_) {
           _controller.reverse();
@@ -1217,7 +1275,7 @@ class _StationCardState extends State<_StationCard>
               ),
             ),
             child: Image.asset(
-              'assets/images/solar_panel.png',
+              CsergyAssets.stationDefaultImage,
               width: 56.w,
               height: 56.w,
               fit: BoxFit.contain,
@@ -1398,26 +1456,26 @@ class _AddMenuSheetState extends State<_AddMenuSheet>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       decoration: BoxDecoration(
         color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
       ),
       child: SafeArea(
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(20.w, 8.h, 20.w, 20.h),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // 分组卡片：浅色圆角容器 + 白色圆角菜单项
-              Container(
-                decoration: BoxDecoration(
-                  color: AppColor.surfaceHover(context),
-                  borderRadius: BorderRadius.circular(16.r),
-                ),
-                padding: EdgeInsets.all(8.w),
-                child: Column(
-                  children: List.generate(_items.length, (i) {
+        child: SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.8,
+            ),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(20.w, 8.h, 20.w, 20.h),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // 平铺菜单项（无分组容器）
+                  ...List.generate(_items.length, (i) {
                     final item = _items[i];
                     final start = i * 0.15;
                     final end = (start + 0.6).clamp(0.0, 1.0);
@@ -1441,9 +1499,31 @@ class _AddMenuSheetState extends State<_AddMenuSheet>
                       ),
                     );
                   }),
-                ),
+                  SizedBox(height: 14.h),
+                  // 取消按钮（对齐 DeviceActionSheet 取消按钮样式）
+                  Material(
+                    color: AppColor.surfaceHover(context),
+                    borderRadius: BorderRadius.circular(14.r),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(14.r),
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        height: 48.h,
+                        alignment: Alignment.center,
+                        child: Text(
+                          l10n.cancel,
+                          style: TextStyle(
+                            fontSize: 16.sp,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -1462,8 +1542,8 @@ class _AddMenuSheetState extends State<_AddMenuSheet>
           child: Row(
             children: [
               Container(
-                width: 40.w,
-                height: 40.w,
+                width: 44.w,
+                height: 44.w,
                 decoration: BoxDecoration(
                   color: item.color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12.r),

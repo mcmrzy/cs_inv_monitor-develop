@@ -5,8 +5,11 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:inv_app/core/services/storage_service.dart';
+import 'package:inv_app/core/services/connection_mode_service.dart';
+import 'package:inv_app/core/services/service_locator.dart';
 
 import 'package:inv_app/core/services/jpush_service.dart';
+import 'package:inv_app/core/services/widget_update_service.dart';
 import 'package:inv_app/features/auth/domain/entities/user.dart';
 import 'package:inv_app/features/auth/domain/usecases/login.dart';
 
@@ -34,6 +37,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
   /// 用户资料本地缓存 key（冷启动时先用缓存展示，后台刷新覆盖）
   static const String _cachedUserKey = 'cached_user_profile';
+
+  /// 资料版本号：本地资料更新（保存资料/改手机邮箱）时递增，
+  /// 用于丢弃过期的后台资料刷新结果，避免旧响应覆盖新保存的地区等字段
+  int _profileRevision = 0;
 
   AuthBloc({
     required this.loginUseCase,
@@ -117,23 +124,32 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     bool isSystemAdmin,
     List<String> permissions,
   ) async {
+    // 记录发起时的资料版本：期间用户若保存过资料（版本号变化），
+    // 则本次刷新的旧响应必须丢弃，避免覆盖新保存的地区等字段
+    final revisionAtStart = _profileRevision;
     // 启动/下拉刷新时网络可能未就绪，失败后延时重试，避免资料一直显示为空
     for (var attempt = 0; attempt < 3; attempt++) {
       try {
         final profileResult = await getProfileUseCase();
         // 期间已登出则放弃更新，避免状态回退
         if (state is AuthUnauthenticated) return;
+        // 期间用户已保存过资料：旧响应作废，丢弃本次刷新结果
+        if (revisionAtStart != _profileRevision) return;
         final user = profileResult.fold<User?>((_) => null, (u) => u);
         if (user != null) {
+          // 服务器读取可能滞后（读写分离副本延迟）：本地缓存非空的昵称/头像/地址字段优先，
+          // 避免刚保存的资料被旧响应覆盖（重启后地址偶尔消失的根因）
+          final cached = await _loadCachedUser();
+          final merged = _fillEmptyFromCached(user, cached);
           // 缓存最新资料，冷启动时优先展示本地缓存
-          await _cacheUser(user);
+          await _cacheUser(merged);
           emit(
             AuthAuthenticated(
               userId: userId,
-              phone: user.phone,
-              isSystemAdmin: user.isSystemAdmin,
-              permissions: user.permissions,
-              user: user,
+              phone: merged.phone,
+              isSystemAdmin: merged.isSystemAdmin,
+              permissions: merged.permissions,
+              user: merged,
             ),
           );
           return;
@@ -280,6 +296,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     jpushService.unbindUser();
 
+    // 清除桌面小组件数据（隐私：退出登录后不残留上一账号的电站数据）
+    unawaited(WidgetUpdateService.clearWidgetData());
+
+    // 退出 guest 本地模式（Q4：登录页免登录入口的标志，登录/退出后清除）
+    unawaited(getIt<ConnectionModeService>().exitGuestLocalMode());
+
     emit(AuthUnauthenticated());
   }
 
@@ -339,6 +361,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     AuthUpdateProfileRequested event,
     Emitter<AuthState> emit,
   ) async {
+    // 用户主动保存资料：递增版本号，使进行中的后台刷新结果失效
+    _profileRevision++;
     // 保存当前状态，以便在更新失败时恢复
     final previousState = state;
     final previousUserId = previousState is AuthAuthenticated ? previousState.userId : null;
@@ -365,23 +389,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       (_) async {
         // 更新成功后，重新获取用户信息
         final profileResult = await getProfileUseCase();
-        final refreshed = profileResult.fold<User?>(
-          (_) {
-            // 如果获取用户信息失败，仍然保持当前状态
-            if (previousUserId != null) {
-              emit(
-                AuthAuthenticated(
-                  userId: previousUserId,
-                  phone: previousPhone ?? '',
-                  isSystemAdmin: previousIsSystemAdmin,
-                  permissions: previousPermissions,
-                  user: previousUser,
-                ),
-              );
-            }
-            return null;
-          },
-          (user) => user,
+        final fetched = profileResult.fold<User?>((_) => null, (u) => u);
+        // 以本地提交值为准合并最新资料：服务器读取存在延迟时，
+        // 避免刚保存的地区等字段被旧响应覆盖（保存后消失的根因之一）
+        final refreshed = _mergeProfile(
+          fetched ?? previousUser,
+          nickname: event.nickname,
+          country: event.country,
+          regionName: event.regionName,
+          avatar: event.avatar,
         );
         // 使用最新的用户信息更新状态
         if (refreshed != null && previousUserId != null) {
@@ -397,8 +413,78 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               user: refreshed,
             ),
           );
+        } else if (previousUserId != null) {
+          // 获取资料失败且无旧资料可合并：恢复保存前状态，避免卡在加载中
+          emit(
+            AuthAuthenticated(
+              userId: previousUserId,
+              phone: previousPhone ?? '',
+              isSystemAdmin: previousIsSystemAdmin,
+              permissions: previousPermissions,
+              user: previousUser,
+            ),
+          );
         }
       },
+    );
+  }
+
+  /// 合并资料：以本地提交字段优先，其余取最新拉取结果
+  /// （服务器读取延迟时兜底，保证刚保存的字段立即可见）
+  User? _mergeProfile(
+    User? base, {
+    String? nickname,
+    String? country,
+    String? regionName,
+    String? avatar,
+  }) {
+    if (base == null) return null;
+    return User(
+      id: base.id,
+      phone: base.phone,
+      email: base.email,
+      nickname: nickname?.isNotEmpty == true ? nickname : base.nickname,
+      avatar: avatar?.isNotEmpty == true ? avatar : base.avatar,
+      country: country?.isNotEmpty == true ? country : base.country,
+      region: regionName?.isNotEmpty == true ? regionName : base.region,
+      bio: base.bio,
+      hasPassword: base.hasPassword,
+      isSystemAdmin: base.isSystemAdmin,
+      permissions: base.permissions,
+      status: base.status,
+      lastLoginAt: base.lastLoginAt,
+      createdAt: base.createdAt,
+      updatedAt: base.updatedAt,
+    );
+  }
+
+  /// 服务器返回字段为空而本地缓存非空时，以缓存值兜底（防止读写分离延迟导致旧响应覆盖刚保存的资料）
+  User _fillEmptyFromCached(User fetched, User? cached) {
+    if (cached == null) return fetched;
+    return User(
+      id: fetched.id,
+      phone: fetched.phone,
+      email: fetched.email,
+      nickname: fetched.nickname?.isNotEmpty == true
+          ? fetched.nickname
+          : cached.nickname,
+      avatar: fetched.avatar?.isNotEmpty == true
+          ? fetched.avatar
+          : cached.avatar,
+      country: fetched.country?.isNotEmpty == true
+          ? fetched.country
+          : cached.country,
+      region: fetched.region?.isNotEmpty == true
+          ? fetched.region
+          : cached.region,
+      bio: fetched.bio,
+      hasPassword: fetched.hasPassword,
+      isSystemAdmin: fetched.isSystemAdmin,
+      permissions: fetched.permissions,
+      status: fetched.status,
+      lastLoginAt: fetched.lastLoginAt,
+      createdAt: fetched.createdAt,
+      updatedAt: fetched.updatedAt,
     );
   }
 
@@ -408,6 +494,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     AuthContactChanged event,
     Emitter<AuthState> emit,
   ) async {
+    // 联系方式变更也是资料更新：使进行中的后台刷新结果失效
+    _profileRevision++;
     final current = state;
     if (current is! AuthAuthenticated) return;
 

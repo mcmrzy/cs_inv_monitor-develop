@@ -8,6 +8,7 @@ import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/widgets/app_toast.dart';
+import 'package:inv_app/core/widgets/settings_widgets.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -470,30 +471,47 @@ class _AboutPageState extends State<AboutPage> {
             ),
           ),
           SizedBox(height: 24.h),
-          _buildMenuItem(
-            Icons.description_outlined,
-            l10n.userAgreement,
-            _showUserAgreement,
+          // 法律与隐私分组：卡片化菜单
+          SettingsSectionTitle(
+            icon: Icons.verified_user_outlined,
+            title: l10n.aboutLegalGroup,
+            accent: AppColors.blue,
           ),
-          const Divider(height: 1, indent: 50),
-          _buildMenuItem(
-            Icons.privacy_tip_outlined,
-            l10n.privacyPolicy,
-            _showPrivacyPolicy,
+          SettingsCard([
+            SettingsValueRow(
+              icon: Icons.description_outlined,
+              accent: AppColors.blue,
+              title: l10n.userAgreement,
+              onTap: _showUserAgreement,
+            ),
+            SettingsValueRow(
+              icon: Icons.privacy_tip_outlined,
+              accent: AppColors.blue,
+              title: l10n.privacyPolicy,
+              onTap: _showPrivacyPolicy,
+            ),
+          ]),
+          // 更多信息分组：检查更新
+          SettingsSectionTitle(
+            icon: Icons.info_outline,
+            title: l10n.aboutMoreGroup,
+            accent: AppColors.teal,
           ),
-          const Divider(height: 1, indent: 50),
-          _buildMenuItem(
-            Icons.system_update_outlined,
-            l10n.checkUpdate,
-            _checkingUpdate ? null : _checkForUpdates,
-            trailing: _checkingUpdate
-                ? SizedBox(
-                    width: 20.w,
-                    height: 20.w,
-                    child: const CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : null,
-          ),
+          SettingsCard([
+            SettingsValueRow(
+              icon: Icons.system_update_outlined,
+              accent: AppColors.teal,
+              title: l10n.checkUpdate,
+              onTap: _checkingUpdate ? null : _checkForUpdates,
+              trailing: _checkingUpdate
+                  ? SizedBox(
+                      width: 20.w,
+                      height: 20.w,
+                      child: const CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : null,
+            ),
+          ]),
           SizedBox(height: 40.h),
           Center(
             child: Text(
@@ -503,24 +521,6 @@ class _AboutPageState extends State<AboutPage> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildMenuItem(
-    IconData icon,
-    String title,
-    VoidCallback? onTap, {
-    Widget? trailing,
-  }) {
-    return ListTile(
-      leading: Icon(icon, color: AppColors.textSecondary),
-      title: Text(
-        title,
-        style: TextStyle(fontSize: 15.sp, color: AppColors.textPrimary),
-      ),
-      trailing: trailing ??
-          const Icon(Icons.chevron_right, color: AppColors.textHint),
-      onTap: onTap,
     );
   }
 }

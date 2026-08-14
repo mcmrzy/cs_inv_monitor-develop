@@ -1771,9 +1771,22 @@ func (r *DeviceRepository) MarkStaleDevicesOffline(ctx context.Context, timeoutS
 }
 
 func (r *DeviceRepository) SyncStationStatus(ctx context.Context) error {
-	// 电站 status 仅表示人工启停，不随设备在线状态自动改写
+	// 电站 status 与站内设备在线状态联动：有在线/故障设备则置 1，全部离线则置 0。
+	// 原实现无条件置 1，导致电站卡片离线但详情页恒显示“在线正常”的状态不一致。
+	// 若未来需要“人工启停”语义（管理员停用不随设备状态改写），应另设字段区分。
 	_, err := r.db.Exec(ctx, `
-		UPDATE stations SET status = 1, updated_at = NOW() WHERE deleted_at IS NULL
+		UPDATE stations SET status = CASE
+			WHEN EXISTS (
+				SELECT 1 FROM devices d
+				WHERE d.station_id = stations.id AND d.deleted_at IS NULL AND d.status IN (1, 2)
+			) THEN 1 ELSE 0 END,
+			updated_at = NOW()
+		WHERE deleted_at IS NULL
+		  AND status <> CASE
+			WHEN EXISTS (
+				SELECT 1 FROM devices d
+				WHERE d.station_id = stations.id AND d.deleted_at IS NULL AND d.status IN (1, 2)
+			) THEN 1 ELSE 0 END
 	`)
 	return err
 }

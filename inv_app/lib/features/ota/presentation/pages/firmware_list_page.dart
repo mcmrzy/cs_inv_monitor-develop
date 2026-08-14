@@ -400,6 +400,14 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                         color: AppColors.textSecondary,
                       ),
                     ),
+                    SizedBox(height: 6.h),
+                    Text(
+                      l10n.noFirmwareContactDealer,
+                      style: TextStyle(
+                        fontSize: 12.sp,
+                        color: AppColors.textHint,
+                      ),
+                    ),
                   ],
                 ),
               );

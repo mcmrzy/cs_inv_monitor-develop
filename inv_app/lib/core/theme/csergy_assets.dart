@@ -63,6 +63,8 @@ abstract final class CsergyAssets {
   // ============ 品牌与头像 ============
   static const String brandShowcase = 'assets/brand/brand_showcase_1600x900.webp';
   static const String avatarDefault = 'assets/images/avatar_default_512.webp';
+  /// 电站默认图片（无图时占位，与 home_page 电站卡片一致）
+  static const String stationDefaultImage = 'assets/images/solar_panel.png';
 
   static const CsergyNavAsset home = CsergyNavAsset(
     normalAsset: '$iconDirectory/nav_home_normal.svg',

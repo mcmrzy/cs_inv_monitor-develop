@@ -383,9 +383,8 @@ class _StationDetailPageState extends State<StationDetailPage>
 
   Widget _buildOverviewBody(dynamic station) {
     final name = station['station_name'] ?? station['name'] ?? '';
-    final status = station['status'] ?? 1;
-    final deviceCount = (station['device_count'] as num?)?.toInt() ?? 0;
-    final online = status == 1 && deviceCount > 0;
+    // 在线口径与首页电站卡片统一：以 online_count 为准（status 由后端 SyncStationStatus 联动设备维护，避免两端不一致）
+    final online = ((station['online_count'] as num?)?.toInt() ?? 0) > 0;
 
     double pvW, loadW, battW, soc;
     if (_selectedDeviceSn != 'all') {

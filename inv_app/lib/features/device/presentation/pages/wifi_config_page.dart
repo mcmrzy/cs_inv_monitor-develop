@@ -11,6 +11,7 @@ import 'package:inv_app/core/services/wifi_scan_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/widgets/wifi_switch_dialog.dart';
+import 'package:inv_app/core/widgets/wifi_enable_dialog.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
@@ -27,7 +28,7 @@ class WifiConfigPage extends StatefulWidget {
 class _WifiConfigPageState extends State<WifiConfigPage> {
   final _provisionService = ProvisionService();
   final _bleProvisioningService = BleProvisioningService();
-  final _connectionModeService = ConnectionModeService(getIt<StorageService>());
+  final _connectionModeService = getIt<ConnectionModeService>();
 
   _ProvisionMode _provisionMode = _ProvisionMode.ble;
 
@@ -109,15 +110,10 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
     _bleResultSub = _bleProvisioningService.resultStream.listen((result) {
       if (mounted) {
         final message = _localizeBleMessage(result);
+        // 仅更新页面内状态展示，不再弹全局 SnackBar（避免与页面状态提示重复，Q3）
         setState(() {
           _bleErrorMessage = message;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            duration: const Duration(seconds: 3),
-          ),
-        );
       }
     });
   }
@@ -186,6 +182,13 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             duration: const Duration(seconds: 4),
           ),
         );
+        setState(() => _wifiScanning = false);
+        return;
+      }
+
+      // 检查手机 WiFi 是否开启：未开启则引导开启，取消则中止扫描（公共方法，Q1）
+      final wifiEnabled = await ensureWifiEnabled(context);
+      if (!wifiEnabled) {
         setState(() => _wifiScanning = false);
         return;
       }
@@ -527,15 +530,6 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       } catch (_) {}
 
       await _connectionModeService.switchToRemote();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(AppLocalizations.of(context)!.switchedToRemoteMode),
-            backgroundColor: AppColors.successLight,
-          ),
-        );
-      }
     }
   }
 
@@ -671,25 +665,14 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
     if (device == null) return;
     if (!await getIt<StorageService>().getIsBleDirectEnabled()) return;
     final binding = getIt<BleBindingService>();
-    final outcome = await binding.bindAfterProvision(
+    await binding.bindAfterProvision(
       macAddress: device.macAddress,
       knownSn: device.sn,
       // 补登记同样携带 PIN（后端严格模式：无 PIN 拒绝登记）
       pin: _pinController.text.trim(),
     );
     if (!mounted) return;
-    final l10n = AppLocalizations.of(context)!;
-    final message = switch (outcome) {
-      BindOutcome.bound => l10n.bleBindingSuccess,
-      BindOutcome.alreadyBound => l10n.bleBindingAlreadyBound,
-      BindOutcome.invalidPin => l10n.pinInvalid,
-      BindOutcome.locked => l10n.pinLocked,
-      BindOutcome.needLoginForSync => l10n.bleBindingNeedLogin,
-      BindOutcome.failed => l10n.bleBindingFailed,
-    };
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    // 绑定结果由页面成功卡片（_provisionSuccess）承担，不再弹全局 SnackBar（Q3）
   }
 
   String _localizeBleMessage(String? code) {
@@ -787,7 +770,13 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         title: Text(AppLocalizations.of(context)!.wifiConfig),
       ),
       body: ListView(
-        padding: EdgeInsets.all(20.w),
+        padding: EdgeInsets.fromLTRB(
+          20.w,
+          20.w,
+          20.w,
+          // 键盘弹出时增加底部留白，确保密码输入框可滚动到键盘上方
+          20.w + MediaQuery.viewInsetsOf(context).bottom,
+        ),
         children: [
           _buildModeSwitch(),
           SizedBox(height: 20.h),
@@ -940,11 +929,13 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
           // 小烁配网引导插画：连接设备热点前的流程引导（美术路由 C7/guide-wifi）
           ClipRRect(
             borderRadius: BorderRadius.circular(14.r),
-            child: Image.asset(
-              CsergyAssets.xiaoshuoWifiGuide,
-              width: double.infinity,
-              height: 150.h,
-              fit: BoxFit.cover,
+            // 图片为 1536x1024 横图：等比容器完整显示，避免 cover 裁剪人物头部
+            child: AspectRatio(
+              aspectRatio: 3 / 2,
+              child: Image.asset(
+                CsergyAssets.xiaoshuoWifiGuide,
+                fit: BoxFit.cover,
+              ),
             ),
           ),
           SizedBox(height: 16.h),
@@ -1066,6 +1057,12 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                           fontSize: 11.sp,
                           color: AppColors.textHint,
                         ),
+                      ),
+                      SizedBox(height: 12.h),
+                      OutlinedButton.icon(
+                        onPressed: _scanCSInvWiFi,
+                        icon: const Icon(Icons.refresh, size: 16),
+                        label: Text(AppLocalizations.of(context)!.retry),
                       ),
                     ],
                   ),
@@ -1404,11 +1401,13 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         if (showScanPhase) ...[
           ClipRRect(
             borderRadius: BorderRadius.circular(14.r),
-            child: Image.asset(
-              CsergyAssets.xiaoshuoWifiGuide,
-              width: double.infinity,
-              height: 150.h,
-              fit: BoxFit.cover,
+            // 图片为 1536x1024 横图：等比容器完整显示，避免 cover 裁剪人物头部
+            child: AspectRatio(
+              aspectRatio: 3 / 2,
+              child: Image.asset(
+                CsergyAssets.xiaoshuoWifiGuide,
+                fit: BoxFit.cover,
+              ),
             ),
           ),
           SizedBox(height: 16.h),

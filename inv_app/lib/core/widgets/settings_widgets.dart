@@ -151,6 +151,7 @@ class SettingsSwitchRow extends StatelessWidget {
     required this.value,
     this.onChanged,
     this.onTap,
+    this.enabled = true,
   });
 
   final IconData icon;
@@ -160,24 +161,42 @@ class SettingsSwitchRow extends StatelessWidget {
   final bool value;
   final ValueChanged<bool>? onChanged;
   final VoidCallback? onTap;
+  /// 置灰开关（父级关闭时子项禁用）：开关禁用 + 图标/文字灰化
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
       contentPadding: EdgeInsets.symmetric(horizontal: 16.w),
-      leading: SettingsIconContainer(icon: icon, accent: accent),
-      title: Text(title, style: TextStyle(fontSize: 15.sp)),
+      leading: Opacity(
+        opacity: enabled ? 1 : 0.4,
+        child: SettingsIconContainer(icon: icon, accent: accent),
+      ),
+      title: Text(
+        title,
+        style: TextStyle(
+          fontSize: 15.sp,
+          color: enabled ? null : AppColor.textHint(context),
+        ),
+      ),
       subtitle: subtitle == null
           ? null
           : Text(
               subtitle!,
               style: TextStyle(
                 fontSize: 12.sp,
-                color: AppColor.textSecondary(context),
+                color: enabled
+                    ? AppColor.textSecondary(context)
+                    : AppColor.textHint(context),
               ),
             ),
-      onTap: onTap ?? (onChanged == null ? null : () => onChanged!(!value)),
-      trailing: SettingsSwitch(value: value, onChanged: onChanged),
+      onTap: enabled
+          ? (onTap ?? (onChanged == null ? null : () => onChanged!(!value)))
+          : null,
+      trailing: SettingsSwitch(
+        value: value,
+        onChanged: enabled ? onChanged : null,
+      ),
     );
   }
 }
@@ -190,12 +209,15 @@ class SettingsLevelRow extends StatelessWidget {
     required this.value,
     required this.dotColor,
     required this.onChanged,
+    this.enabled = true,
   });
 
   final String title;
   final bool value;
   final Color dotColor;
   final ValueChanged<bool> onChanged;
+  /// 置灰开关（父级关闭时子项禁用）：开关禁用 + 文字/圆点灰化
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -207,12 +229,21 @@ class SettingsLevelRow extends StatelessWidget {
         height: 8.w,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: dotColor,
+          color: enabled ? dotColor : AppColor.textHint(context),
         ),
       ),
-      title: Text(title, style: TextStyle(fontSize: 14.sp)),
-      onTap: () => onChanged(!value),
-      trailing: SettingsSwitch(value: value, onChanged: onChanged),
+      title: Text(
+        title,
+        style: TextStyle(
+          fontSize: 14.sp,
+          color: enabled ? null : AppColor.textHint(context),
+        ),
+      ),
+      onTap: enabled ? () => onChanged(!value) : null,
+      trailing: SettingsSwitch(
+        value: value,
+        onChanged: enabled ? onChanged : null,
+      ),
     );
   }
 }

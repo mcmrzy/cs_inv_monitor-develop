@@ -9,6 +9,7 @@ import 'package:inv_app/core/services/app_update_service.dart';
 import 'package:inv_app/core/services/realtime_data_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/storage_service.dart';
+import 'package:inv_app/core/services/widget_update_service.dart';
 import 'package:inv_app/features/device/domain/repositories/device_repository.dart';
 import 'package:inv_app/features/notification/data/datasources/notification_remote_data_source.dart';
 
@@ -266,7 +267,34 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     // 4. 合并后端通知和本地通知
     allNotifications.addAll(localStored);
 
+    // 推送通知桌面小组件：最新告警标题 + 告警条数（fire-and-forget）
+    _pushNotificationWidget(allNotifications);
+
     emit(SystemNotificationsLoaded(notifications: allNotifications));
+  }
+
+  /// 将最新告警信息推送到通知桌面小组件
+  ///
+  /// 告警类通知 = 设备故障/离线/上线/告警清除；未读数语义在 App 端
+  /// 无后端支持，用告警类通知条数代替（当前告警规模）。
+  void _pushNotificationWidget(List<SystemNotification> notifications) {
+    const alarmTypes = {
+      SystemNotificationType.deviceFault,
+      SystemNotificationType.deviceOffline,
+      SystemNotificationType.deviceOnline,
+      SystemNotificationType.alarmCleared,
+    };
+    final alarms = notifications
+        .where((n) => alarmTypes.contains(n.type))
+        .toList()
+      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+    unawaited(
+      WidgetUpdateService.updateNotificationWidget(
+        latestAlarmTitle: alarms.isEmpty ? '' : alarms.first.title,
+        alarmCount: '${alarms.length}',
+      ),
+    );
   }
 
   /// 删除单条通知：后端通知调 DELETE /notifications/:id，本地通知直接从存储移除

@@ -741,10 +741,11 @@ func (h *InternalHandler) DeviceData(c *gin.Context) {
 	// {t,v,data} envelope, so it is intentionally not persisted. The canonical
 	// heartbeat path is stored by inv-device-server in device_telemetry_3min.
 
-	// 遥测数据入库即视为设备在线，刷新 last_online_at（30 秒节流避免高频更新）
+	// 遥测数据入库即视为设备在线：恢复 status=1 并刷新 last_online_at（30 秒节流避免高频更新）
+	// status != 1 条件避免在线设备每次遥测都触发状态写回（幂等恢复，解决离线后无法自动回线的状态不一致）
 	if _, err := h.db.Exec(ctx, `
-		UPDATE devices SET last_online_at = NOW(), updated_at = NOW()
-		WHERE sn = $1 AND (last_online_at IS NULL OR last_online_at < NOW() - INTERVAL '30 seconds')
+		UPDATE devices SET status = 1, last_online_at = NOW(), updated_at = NOW()
+		WHERE sn = $1 AND status != 1 AND (last_online_at IS NULL OR last_online_at < NOW() - INTERVAL '30 seconds')
 	`, req.SN); err != nil {
 		logger.Warn("DeviceData: failed to update last_online_at", zap.String("sn", req.SN), zap.Error(err))
 	}
@@ -820,15 +821,15 @@ func (h *InternalHandler) DeviceDataBatch(c *gin.Context) {
 		successCount++
 	}
 
-	// 批量更新 last_online_at（30 秒节流）
+	// 批量更新设备在线状态：恢复 status=1 并刷新 last_online_at（30 秒节流）
 	if len(snSet) > 0 {
 		sns := make([]string, 0, len(snSet))
 		for sn := range snSet {
 			sns = append(sns, sn)
 		}
 		if _, err := h.db.Exec(ctx, `
-			UPDATE devices SET last_online_at = NOW(), updated_at = NOW()
-			WHERE sn = ANY($1) AND (last_online_at IS NULL OR last_online_at < NOW() - INTERVAL '30 seconds')
+			UPDATE devices SET status = 1, last_online_at = NOW(), updated_at = NOW()
+			WHERE sn = ANY($1) AND status != 1 AND (last_online_at IS NULL OR last_online_at < NOW() - INTERVAL '30 seconds')
 		`, sns); err != nil {
 			logger.Warn("DeviceDataBatch: failed to batch update last_online_at", zap.Error(err))
 		}

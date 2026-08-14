@@ -7,6 +7,7 @@ import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/data/alarm_code_mapping.dart';
 import 'package:inv_app/core/widgets/jiggle_once.dart';
+import 'package:inv_app/core/widgets/pressable_gesture_detector.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
@@ -353,58 +354,63 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
     });
   }
 
+  /// 菜单操作项（样式对齐电站/设备长按弹窗 DeviceActionSheet：
+  /// 44w 纯色图标容器 + 标题/副标题 + 右箭头，无渐变阴影）
   Widget _buildMenuTile({
     required IconData icon,
     required Color color,
     required String title,
+    String? subtitle,
     required VoidCallback onTap,
   }) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(12.r),
-        // 透明水波纹：避免点击时蓝色闪烁
-        highlightColor: Colors.transparent,
-        splashColor: Colors.transparent,
-        hoverColor: Colors.transparent,
         onTap: onTap,
         child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 14.h),
+          padding: EdgeInsets.symmetric(vertical: 10.h, horizontal: 4.w),
           child: Row(
             children: [
               Container(
-                width: 40.w,
-                height: 40.w,
+                width: 44.w,
+                height: 44.w,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12.r),
-                  gradient: LinearGradient(
-                    colors: [
-                      color.withValues(alpha: 0.08),
-                      color.withValues(alpha: 0.18),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.04),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
+                  color: color.withValues(alpha: 0.1),
                 ),
-                child: Icon(icon, color: color, size: 20.sp),
+                child: Icon(icon, color: color, size: 22.sp),
               ),
               SizedBox(width: 14.w),
               Expanded(
-                child: Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 15.sp,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 16.sp,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    if (subtitle != null && subtitle.isNotEmpty) ...[
+                      SizedBox(height: 2.h),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: 12.sp,
+                          color: AppColors.textHint,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
+              ),
+              Icon(
+                Icons.arrow_forward_ios,
+                size: 14.sp,
+                color: AppColors.textHint,
               ),
             ],
           ),
@@ -420,22 +426,69 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
     return _AnimatedMenuSheet(header: header, tileBuilders: tileBuilders);
   }
 
-  /// 弹窗顶部消息标题 + 分隔线（与设备弹窗 Divider 样式一致）
-  Widget _buildSheetHeader(String title) {
+  /// 弹窗顶部消息头：左图标 + 右大SN + 下方通知标题（与菜单项左缘对齐）
+  Widget _buildSheetHeader({
+    required String title,
+    String? subtitle,
+    String? deviceSn,
+    bool isAlarm = false,
+  }) {
+    // 图标按通知类型选：告警→warning(error色)；系统→notifications(primary色)
+    final iconData = isAlarm ? Icons.warning_amber_rounded : Icons.notifications_rounded;
+    final iconColor = isAlarm ? AppColors.error : AppColors.primary;
+    // 上行显示文本：优先 SN，无 SN 回退 title（不拼设备前缀）
+    final hasSn = deviceSn != null && deviceSn.isNotEmpty;
+    final primaryText = hasSn ? deviceSn : title;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: EdgeInsets.fromLTRB(20.w, 14.h, 20.w, 10.h),
-          child: Text(
-            title,
-            style: TextStyle(
-              fontSize: 16.sp,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          // 与菜单项图标左缘对齐：sheet 20.w + header 4.w = 24.w，图标尺寸/间距同 _buildMenuTile
+          padding: EdgeInsets.fromLTRB(4.w, 14.h, 4.w, 10.h),
+          child: Row(
+            children: [
+              Container(
+                width: 44.w,
+                height: 44.w,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12.r),
+                  color: iconColor.withValues(alpha: 0.1),
+                ),
+                child: Icon(iconData, size: 22.sp, color: iconColor),
+              ),
+              SizedBox(width: 14.w),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      primaryText,
+                      style: TextStyle(
+                        fontSize: 16.sp,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (subtitle != null && subtitle.isNotEmpty) ...[
+                      SizedBox(height: 2.h),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: 12.sp,
+                          color: AppColors.textHint,
+                          height: 1.3,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
         const Divider(height: 1, color: AppColors.divider),
@@ -450,12 +503,17 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
     showModalBottomSheet(
       context: context,
       builder: (ctx) => _buildBottomSheet(
-        header: _buildSheetHeader(_notificationTitle(notification, l10n)),
+        header: _buildSheetHeader(
+          title: _notificationTitle(notification, l10n),
+          subtitle: _notificationTitle(notification, l10n),
+          deviceSn: notification.deviceSn,
+        ),
         tileBuilders: [
           (_) => _buildMenuTile(
             icon: Icons.delete_outline,
             color: AppColors.error,
             title: l10n.str('notif_delete'),
+            subtitle: l10n.str('notif_delete_hint'),
             onTap: () {
               Navigator.pop(ctx);
               _confirmDeleteNotification(notification);
@@ -465,15 +523,18 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
             icon: Icons.delete_sweep_outlined,
             color: AppColors.error,
             title: l10n.str('notif_clear_all'),
+            subtitle: l10n.str('notif_clear_all_hint'),
             onTap: () {
               Navigator.pop(ctx);
               _confirmClearAll();
             },
           ),
           (_) => _buildMenuTile(
-            icon: Icons.delete_sweep_outlined,
-            color: AppColors.error,
+            // 批量管理是模式入口而非删除操作：主题色 + 多选图标（与设备弹窗语义色一致）
+            icon: Icons.checklist_rounded,
+            color: AppColors.primary,
             title: l10n.str('notif_batch_manage'),
+            subtitle: l10n.str('notif_batch_manage_hint'),
             onTap: () {
               Navigator.pop(ctx);
               _enterBatchMode();
@@ -493,12 +554,20 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
     showModalBottomSheet(
       context: context,
       builder: (ctx) => _buildBottomSheet(
-        header: _buildSheetHeader(alarmTitle),
+        header: _buildSheetHeader(
+          title: alarmTitle,
+          subtitle: (alarm['fault_message'] ?? '').toString() != alarmTitle
+              ? (alarm['fault_message'] ?? '').toString()
+              : null,
+          deviceSn: (alarm['device_sn'] ?? '').toString(),
+          isAlarm: true,
+        ),
         tileBuilders: [
           (_) => _buildMenuTile(
             icon: Icons.done_all,
             color: AppColors.success,
             title: l10n.str('notif_mark_handled'),
+            subtitle: l10n.str('notif_mark_handled_hint'),
             onTap: () {
               Navigator.pop(ctx);
               context.read<AlarmBloc>().add(
@@ -510,6 +579,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
             icon: Icons.delete_outline,
             color: AppColors.error,
             title: l10n.str('notif_delete'),
+            subtitle: l10n.str('notif_delete_hint'),
             onTap: () {
               Navigator.pop(ctx);
               _confirmDeleteAlarm(alarmId);
@@ -1107,7 +1177,8 @@ class _LongPressFeedbackCardState extends State<_LongPressFeedbackCard> {
   @override
   Widget build(BuildContext context) {
     final baseColor = widget.baseColor ?? AppColor.surfaceContainer(context);
-    return GestureDetector(
+    return PressableGestureDetector(
+      // 长按 300ms 达成（与电站/设备卡片手感一致，比默认 500ms 更灵敏）
       // onTapDown 独立注册：点击与长按按下瞬间即反馈
       onTapDown: (_) {
         if (!_pressed) setState(() => _pressed = true);
@@ -1239,7 +1310,8 @@ class _AnimatedMenuSheetState extends State<_AnimatedMenuSheet>
               maxHeight: MediaQuery.of(context).size.height * 0.8,
             ),
             child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 8.h),
+              // 与设备弹窗一致：左右 20w、底部 20h（含取消按钮区）
+              padding: EdgeInsets.fromLTRB(20.w, 8.h, 20.w, 20.h),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1248,6 +1320,31 @@ class _AnimatedMenuSheetState extends State<_AnimatedMenuSheet>
                   ...List.generate(
                     widget.tileBuilders.length,
                     (i) => _animatedItem(i, widget.tileBuilders[i](i)),
+                  ),
+                  SizedBox(height: 14.h),
+                  // 取消按钮（样式对齐设备弹窗：48h 圆角底 + 次级文字）
+                  _animatedItem(
+                    widget.tileBuilders.length,
+                    Material(
+                      color: AppColor.surfaceHover(context),
+                      borderRadius: BorderRadius.circular(14.r),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(14.r),
+                        onTap: () => Navigator.pop(context),
+                        child: Container(
+                          height: 48.h,
+                          alignment: Alignment.center,
+                          child: Text(
+                            AppLocalizations.of(context)!.cancel,
+                            style: TextStyle(
+                              fontSize: 16.sp,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),

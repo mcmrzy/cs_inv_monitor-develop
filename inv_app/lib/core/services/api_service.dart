@@ -134,7 +134,7 @@ class ApiService {
   /// 获取用户所属的所有组织
   Future<List<Organization>> getOrganizations() async {
     final result = await get<List<Organization>>(
-      '/api/v1/organizations',
+      '/organizations',
       fromJson: (data) => (data as List)
           .map(
             (item) =>
@@ -154,7 +154,7 @@ class ApiService {
     String? description,
   }) async {
     final result = await post<Organization>(
-      '/api/v1/organizations',
+      '/organizations',
       data: {
         'name': name,
         if (description != null) 'description': description,
@@ -170,7 +170,7 @@ class ApiService {
   /// 获取组织详情
   Future<Organization> getOrganization(int orgId) async {
     final result = await get<Organization>(
-      '/api/v1/organizations/$orgId',
+      '/organizations/$orgId',
       fromJson: (json) => Organization.fromJson(json as Map<String, dynamic>),
     );
     return result.fold(
@@ -186,7 +186,7 @@ class ApiService {
     String? description,
   }) async {
     final result = await put<Organization>(
-      '/api/v1/organizations/$orgId',
+      '/organizations/$orgId',
       data: {
         'name': name,
         if (description != null) 'description': description,
@@ -202,7 +202,7 @@ class ApiService {
   /// 删除组织
   Future<void> deleteOrganization(int orgId) async {
     final result = await delete<Map<String, dynamic>>(
-      '/api/v1/organizations/$orgId',
+      '/organizations/$orgId',
       fromJson: (json) => json,
     );
     return result.fold(
@@ -216,7 +216,7 @@ class ApiService {
   /// 获取组织成员列表
   Future<List<OrganizationMember>> getOrganizationMembers(int orgId) async {
     final result = await get<List<OrganizationMember>>(
-      '/api/v1/organizations/$orgId/members',
+      '/organizations/$orgId/members',
       fromJson: (data) => (data as List)
           .map(
             (item) => OrganizationMember.fromJson(
@@ -238,7 +238,7 @@ class ApiService {
     required OrgMemberRole role,
   }) async {
     final result = await post<OrganizationMember>(
-      '/api/v1/organizations/$orgId/members',
+      '/organizations/$orgId/members',
       data: {
         'email': email,
         'role': role.apiValue,
@@ -259,7 +259,7 @@ class ApiService {
     required OrgMemberRole role,
   }) async {
     final result = await put<OrganizationMember>(
-      '/api/v1/organizations/$orgId/members/$userId',
+      '/organizations/$orgId/members/$userId',
       data: {'role': role.apiValue},
       fromJson: (json) =>
           OrganizationMember.fromJson(json as Map<String, dynamic>),
@@ -273,7 +273,7 @@ class ApiService {
   /// 移除组织成员
   Future<void> removeOrganizationMember(int orgId, int userId) async {
     final result = await delete<Map<String, dynamic>>(
-      '/api/v1/organizations/$orgId/members/$userId',
+      '/organizations/$orgId/members/$userId',
       fromJson: (json) => json,
     );
     return result.fold(
@@ -294,7 +294,7 @@ class ApiService {
     int? expiresHours,
   }) async {
     final result = await post<Map<String, dynamic>>(
-      '/api/v1/invitations/create',
+      '/invitations/create',
       data: {
         'emails': [email],
         'assignments': [
@@ -313,7 +313,7 @@ class ApiService {
   /// 获取邀请列表（分页结构 {items: [], total, page, page_size}）
   Future<List<OrganizationInvitation>> listInvitations(int orgId) async {
     final result = await get<List<OrganizationInvitation>>(
-      '/api/v1/invitations/list',
+      '/invitations/list',
       queryParameters: {'organization_id': orgId, 'page': 1, 'page_size': 100},
       fromJson: (data) {
         final list = data is Map ? (data['items'] as List) : (data as List);
@@ -332,10 +332,10 @@ class ApiService {
     );
   }
 
-  /// 撤销邀请（路径与后端一致：/api/v1/invitations/:id/revoke）
+  /// 撤销邀请（路径与后端一致：/invitations/:id/revoke）
   Future<void> revokeInvitation(int invitationId) async {
     final result = await delete<Map<String, dynamic>>(
-      '/api/v1/invitations/$invitationId/revoke',
+      '/invitations/$invitationId/revoke',
       fromJson: (json) => json,
     );
     return result.fold(
@@ -353,7 +353,7 @@ class ApiService {
     String? reason,
   }) async {
     final result = await post<Map<String, dynamic>>(
-      '/api/v1/devices/request-transfer',
+      '/devices/request-transfer',
       data: {
         'device_sn': deviceSn,
         'target_org_id': targetOrgId,
@@ -370,7 +370,7 @@ class ApiService {
   /// 获取转移请求列表
   Future<List<DeviceTransferRequest>> listTransferRequests() async {
     final result = await get<List<DeviceTransferRequest>>(
-      '/api/v1/devices/transfers/list',
+      '/devices/transfers/list',
       fromJson: (data) => (data as List)
           .map(
             (item) => DeviceTransferRequest.fromJson(
@@ -388,7 +388,7 @@ class ApiService {
   /// 审批转移请求
   Future<void> approveTransfer(int transferId, {String? approvalNote}) async {
     final result = await post<Map<String, dynamic>>(
-      '/api/v1/devices/transfers/approve/$transferId',
+      '/devices/transfers/approve/$transferId',
       data: {
         if (approvalNote != null) 'note': approvalNote,
       },
@@ -403,7 +403,7 @@ class ApiService {
   /// 拒绝转移请求
   Future<void> rejectTransfer(int transferId, String reason) async {
     final result = await post<Map<String, dynamic>>(
-      '/api/v1/devices/transfers/reject/$transferId',
+      '/devices/transfers/reject/$transferId',
       data: {'reason': reason},
       fromJson: (json) => json,
     );

@@ -725,11 +725,13 @@ class _AddDevicePageState extends State<AddDevicePage>
         // 小烁配网引导插画：手动绑定后引导设备配网（美术路由 C7/guide-wifi）
         ClipRRect(
           borderRadius: BorderRadius.circular(14.r),
-          child: Image.asset(
-            CsergyAssets.xiaoshuoWifiGuide,
-            width: double.infinity,
-            height: 150.h,
-            fit: BoxFit.cover,
+          // 图片为 1536x1024 横图：等比容器完整显示，避免 cover 裁剪人物头部
+          child: AspectRatio(
+            aspectRatio: 3 / 2,
+            child: Image.asset(
+              CsergyAssets.xiaoshuoWifiGuide,
+              fit: BoxFit.cover,
+            ),
           ),
         ),
         SizedBox(height: 16.h),
