@@ -151,6 +151,9 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 	userGroup.Any("/api/v1/auth/change-email", p.Handler())
 	// 用户操作历史聚合（App 操作历史页，按当前用户维度，业务层过滤）
 	userGroup.Any("/api/v1/op-logs", p.Handler())
+	// 帮助中心配置（system_configs 表 help_center key，登录即可，只读配置）
+	userGroup.Any("/api/v1/config/*action", p.Handler())
+	userGroup.Any("/api/v1/config", p.Handler())
 
 	userGroup.Any("/api/v1/stations/*action", p.Handler())
 	userGroup.Any("/api/v1/stations", p.Handler())

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>App 使用指南 - 辰烁光伏监控系统</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; line-height: 1.7; color: #333; background: #f7f8fa; }
+    .container { max-width: 780px; margin: 0 auto; padding: 24px 16px 60px; }
+    h1 { font-size: 22px; color: #1565C0; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #1565C0; }
+    h2 { font-size: 18px; color: #1F2937; margin: 28px 0 12px; padding-left: 10px; border-left: 4px solid #1565C0; }
+    h3 { font-size: 16px; color: #374151; margin: 20px 0 8px; }
+    p { margin: 8px 0; }
+    ol, ul { margin: 8px 0 8px 24px; }
+    li { margin: 6px 0; }
+    .tip { background: #EFF6FF; border-left: 4px solid #1565C0; padding: 12px 16px; margin: 16px 0; border-radius: 4px; font-size: 14px; }
+    .warn { background: #FEF3CD; border-left: 4px solid #F9A825; padding: 12px 16px; margin: 16px 0; border-radius: 4px; font-size: 14px; }
+    .step { display: flex; gap: 12px; margin: 12px 0; }
+    .step-num { min-width: 28px; height: 28px; border-radius: 50%; background: #1565C0; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; }
+    .step-content { flex: 1; padding-top: 3px; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+    th, td { border: 1px solid #E5E7EB; padding: 8px 12px; text-align: left; font-size: 14px; }
+    th { background: #F3F4F6; font-weight: 600; }
+    code { background: #F3F4F6; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+    .nav { background: #fff; border: 1px solid #E5E7EB; border-radius: 8px; padding: 16px 20px; margin: 20px 0; }
+    .nav h3 { margin: 0 0 8px; font-size: 15px; color: #1565C0; }
+    .nav ul { margin: 0; list-style: none; }
+    .nav li { margin: 4px 0; }
+    .nav a { color: #1565C0; text-decoration: none; }
+    .nav a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>辰烁光伏 App 使用指南</h1>
+  <p>辰烁光伏 App 是您的光伏电站随身助手，支持实时监控、远程控制、固件升级等功能。本文档介绍各功能的使用方法。</p>
+
+  <div class="nav">
+    <h3>快速导航</h3>
+    <ul>
+      <li><a href="#login">注册与登录</a></li>
+      <li><a href="#station">电站管理</a></li>
+      <li><a href="#monitor">实时监控</a></li>
+      <li><a href="#control">远程控制</a></li>
+      <li><a href="#alarm">告警通知</a></li>
+      <li><a href="#ota">固件升级</a></li>
+      <li><a href="#profile">个人设置</a></li>
+    </ul>
+  </div>
+
+  <h2 id="login">一、注册与登录</h2>
+
+  <h3>1.1 手机号登录</h3>
+  <div class="step"><div class="step-num">1</div><div class="step-content">打开 App，在登录页面输入手机号</div></div>
+  <div class="step"><div class="step-num">2</div><div class="step-content">点击「发送验证码」，收到短信后输入 6 位验证码</div></div>
+  <div class="step"><div class="step-num">3</div><div class="step-content">点击「登录」即可进入系统；首次登录会自动注册账号</div></div>
+
+  <h3>1.2 一键登录（推荐）</h3>
+  <p>如果您的手机号支持本机号码认证（移动/联通/电信），可以直接点击「一键登录」按钮，无需输入验证码，速度更快更安全。</p>
+
+  <div class="tip">
+    <strong>忘记密码？</strong>本系统使用验证码登录，无需记忆密码。如果收不到验证码，请检查手机号是否正确，或联系客服。
+  </div>
+
+  <h2 id="station">二、电站管理</h2>
+
+  <h3>2.1 创建电站</h3>
+  <div class="step"><div class="step-num">1</div><div class="step-content">进入「电站」页面，点击右上角 <strong>「+ 创建电站」</strong></div></div>
+  <div class="step"><div class="step-num">2</div><div class="step-content">填写电站名称（如"家庭光伏"、"厂房屋顶"）、装机容量、安装地址</div></div>
+  <div class="step"><div class="step-num">3</div><div class="step-content">点击「创建」，然后将设备绑定到该电站</div></div>
+
+  <h3>2.2 添加设备到电站</h3>
+  <ol>
+    <li>进入电站详情页，点击「添加设备」</li>
+    <li>扫描设备铭牌上的二维码，或手动输入设备序列号（SN）</li>
+    <li>确认绑定后，设备即出现在电站设备列表中</li>
+  </ol>
+
+  <h2 id="monitor">三、实时监控</h2>
+
+  <h3>3.1 电站概览</h3>
+  <p>进入电站详情页，可查看：</p>
+  <ul>
+    <li><strong>能量流图：</strong>直观展示 光伏板→逆变器→电网/负载/电池 的能量流动方向和实时功率</li>
+    <li><strong>今日发电：</strong>今日累计发电量和收益估算</li>
+    <li><strong>设备列表：</strong>该电站下所有逆变器的运行状态</li>
+  </ul>
+
+  <h3>3.2 设备详情</h3>
+  <p>点击设备可查看详细参数：</p>
+  <table>
+    <tr><th>数据项</th><th>说明</th></tr>
+    <tr><td>直流输入电压/电流</td><td>光伏板输出的直流电压（V）和电流（A）</td></tr>
+    <tr><td>交流输出电压/电流/频率</td><td>并网侧的交流参数</td></tr>
+    <tr><td>实时功率</td><td>当前发电功率（kW）</td></tr>
+    <tr><td>日/月/年/总发电量</td><td>各时段累计发电量（kWh）</td></tr>
+    <tr><td>内部温度</td><td>逆变器内部温度，超过 75°C 会触发高温保护</td></tr>
+    <tr><td>运行状态</td><td>正常/待机/故障/离线</td></tr>
+  </table>
+
+  <h3>3.3 历史数据</h3>
+  <p>在设备详情页切换到「历史数据」标签，可查看：</p>
+  <ul>
+    <li><strong>日视图：</strong>当天逐小时功率曲线</li>
+    <li><strong>月视图：</strong>当月每日发电量柱状图</li>
+    <li><strong>年视图：</strong>当年每月发电量柱状图</li>
+  </ul>
+
+  <h2 id="control">四、远程控制</h2>
+  <p>对于支持远程控制的设备型号，App 提供以下控制功能：</p>
+  <ul>
+    <li><strong>开关机：</strong>远程开启或关闭设备并网</li>
+    <li><strong>功率限制：</strong>设置最大并网功率（适用于限电场景）</li>
+    <li><strong>时间校准：</strong>同步设备时钟</li>
+    <li><strong>参数配置：</strong>调整并网电压上下限、功率因数等（仅专业人员操作）</li>
+  </ul>
+
+  <div class="warn">
+    <strong>注意：</strong>远程控制操作会记录在操作日志中，供审计和追溯。敏感参数修改需管理员权限。
+  </div>
+
+  <h2 id="alarm">五、告警通知</h2>
+  <h3>5.1 告警级别</h3>
+  <table>
+    <tr><th>级别</th><th>颜色</th><th>说明</th></tr>
+    <tr><td>紧急</td><td>红色</td><td>设备故障，需要立即处理</td></tr>
+    <tr><td>警告</td><td>橙色</td><td>异常参数，可能影响发电</td></tr>
+    <tr><td>信息</td><td>蓝色</td><td>状态变更通知，仅供参考</td></tr>
+  </table>
+
+  <h3>5.2 通知设置</h3>
+  <p>进入「设置 → 消息通知」，可以按告警级别开关推送通知。建议至少开启「紧急」级别通知。</p>
+
+  <h2 id="ota">六、固件升级</h2>
+  <p>当设备有新固件可用时，App 会在设备详情页显示升级提示。</p>
+  <ol>
+    <li>点击「立即升级」按钮</li>
+    <li>确认升级后，设备开始下载固件（期间不影响正常发电）</li>
+    <li>下载完成后设备自动重启并应用新固件</li>
+    <li>升级过程中请勿断电或操作设备</li>
+  </ol>
+
+  <div class="tip">
+    <strong>本地 OTA：</strong>如果设备网络较差，App 支持通过 WiFi 热点直连设备进行本地固件升级，无需联网。在设备详情页选择「本地升级」即可。
+  </div>
+
+  <h2 id="profile">七、个人设置</h2>
+  <ul>
+    <li><strong>修改头像/昵称：</strong>进入「设置 → 个人资料」</li>
+    <li><strong>切换语言：</strong>支持中文/English</li>
+    <li><strong>时区设置：</strong>调整数据展示的时区</li>
+    <li><strong>帮助中心：</strong>查看文档、FAQ、提交工单</li>
+    <li><strong>关于我们：</strong>查看版本信息、用户协议、隐私政策</li>
+  </ul>
+
+  <div class="tip">
+    <strong>使用问题？</strong>在 App 内进入「帮助中心」，可查看常见问题或提交工单获取技术支持。
+  </div>
+</div>
+</body>
+</html>

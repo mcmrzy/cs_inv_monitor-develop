@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>系统管理手册 - 辰烁光伏监控系统</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; line-height: 1.7; color: #333; background: #f7f8fa; }
+    .container { max-width: 780px; margin: 0 auto; padding: 24px 16px 60px; }
+    h1 { font-size: 22px; color: #1565C0; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #1565C0; }
+    h2 { font-size: 18px; color: #1F2937; margin: 28px 0 12px; padding-left: 10px; border-left: 4px solid #1565C0; }
+    h3 { font-size: 16px; color: #374151; margin: 20px 0 8px; }
+    p { margin: 8px 0; }
+    ol, ul { margin: 8px 0 8px 24px; }
+    li { margin: 6px 0; }
+    .tip { background: #EFF6FF; border-left: 4px solid #1565C0; padding: 12px 16px; margin: 16px 0; border-radius: 4px; font-size: 14px; }
+    .warn { background: #FEF3CD; border-left: 4px solid #F9A825; padding: 12px 16px; margin: 16px 0; border-radius: 4px; font-size: 14px; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+    th, td { border: 1px solid #E5E7EB; padding: 8px 12px; text-align: left; font-size: 14px; }
+    th { background: #F3F4F6; font-weight: 600; }
+    code { background: #F3F4F6; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>光伏逆变器监控系统 — 管理手册</h1>
+  <p>本文档面向系统管理员和组织管理员，介绍后台管理系统的使用方法。</p>
+
+  <h2>一、角色与权限</h2>
+  <p>系统采用 RBAC 权限模型，按组织层级划分角色：</p>
+  <table>
+    <tr><th>角色</th><th>级别</th><th>主要权限</th></tr>
+    <tr><td>超级管理员</td><td>系统级</td><td>全局管理，含用户、组织、固件、系统配置</td></tr>
+    <tr><td>代理商</td><td>渠道级</td><td>管理下属安装商和终端用户，查看辖区设备</td></tr>
+    <tr><td>安装商</td><td>服务商级</td><td>安装调试设备，管理终端用户</td></tr>
+    <tr><td>终端用户</td><td>业主级</td><td>查看自己的设备和电站数据</td></tr>
+  </table>
+
+  <h3>1.1 权限说明</h3>
+  <ul>
+    <li>上级角色可查看下级的所有数据</li>
+    <li>终端用户仅可查看自己绑定的设备</li>
+    <li>权限可按功能模块（设备管理、告警、OTA、工单等）细粒度分配</li>
+    <li>组织管理员可自定义角色并分配权限</li>
+  </ul>
+
+  <h2>二、设备管理</h2>
+  <h3>2.1 设备列表</h3>
+  <p>「设备管理」页面展示您有权限查看的所有设备，支持按状态（在线/离线/故障）、型号、电站等条件筛选。</p>
+  <ul>
+    <li>点击设备进入详情页，查看实时参数、历史数据、告警记录</li>
+    <li>支持批量操作：固件升级、参数配置、重启等</li>
+    <li>设备导出：可将设备列表导出为 Excel</li>
+  </ul>
+
+  <h3>2.2 设备型号管理</h3>
+  <p>「型号管理」页面用于管理支持的逆变器型号（如 CS-L10-3K、CS-L10-6K2 等），每种型号定义了：
+    <ul>
+      <li>芯片架构（ESP32/ARM）</li>
+      <li>支持的通信协议</li>
+      <li>额定功率范围</li>
+      <li>远程参数配置模板</li>
+    </ul>
+  </p>
+
+  <h2>三、告警管理</h2>
+  <h3>3.1 告警规则</h3>
+  <p>管理员可配置告警触发规则：</p>
+  <ul>
+    <li>设备离线超时（默认 5 分钟无心跳触发）</li>
+    <li>参数超限（电压、电流、温度等超过设定阈值）</li>
+    <li>通信异常（MQTT 断连、Kafka 消费延迟）</li>
+  </ul>
+
+  <h3>3.2 告警处理流程</h3>
+  <ol>
+    <li>系统自动生成告警记录并推送给相关人员</li>
+    <li>管理员确认告警并指派处理人</li>
+    <li>处理人记录处理结果，告警状态变更为「已处理」</li>
+    <li>支持批量确认和批量关闭</li>
+  </ol>
+
+  <h2>四、OTA 固件升级</h2>
+  <h3>4.1 固件版本管理</h3>
+  <p>在「固件管理」页面可以：</p>
+  <ul>
+    <li>上传新固件（支持 ESP32 和 ARM 双芯片）</li>
+    <li>查看固件版本历史和发布说明</li>
+    <li>管理升级包（多个芯片固件打包）</li>
+  </ul>
+
+  <h3>4.2 推送升级</h3>
+  <ol>
+    <li>选择目标固件版本</li>
+    <li>选择目标设备（单台或多台批量）</li>
+    <li>设置升级时间（立即或定时）</li>
+    <li>推送升级命令，设备收到后自动执行</li>
+  </ol>
+
+  <div class="warn">
+    <strong>升级注意：</strong>OTA 升级期间请确保设备供电稳定。升级失败可能需要本地 USB 刷机恢复。
+  </div>
+
+  <h2>五、工单管理</h2>
+  <p>「工单管理」用于跟踪和处理用户提交的故障工单和服务请求。</p>
+  <h3>5.1 工单流程</h3>
+  <ol>
+    <li>用户通过 App 提交工单（标题、描述、图片附件）</li>
+    <li>管理员审核工单，指派处理人</li>
+    <li>处理人解决问题后更新状态为「已解决」</li>
+    <li>用户确认后工单关闭</li>
+  </ol>
+
+  <h3>5.2 工单模板</h3>
+  <p>系统内置常用工单模板，帮助用户快速提交：</p>
+  <table>
+    <tr><th>模板</th><th>描述</th><th>默认优先级</th></tr>
+    <tr><td>设备故障</td><td>设备运行异常，需要检修</td><td>高</td></tr>
+    <tr><td>定期维护</td><td>设备定期保养维护</td><td>中</td></tr>
+    <tr><td>设备巡检</td><td>设备运行状态巡检</td><td>低</td></tr>
+    <tr><td>安装调试</td><td>设备安装与参数调试</td><td>中</td></tr>
+  </table>
+
+  <h2>六、组织架构</h2>
+  <p>「组织架构」管理支持树形层级结构：</p>
+  <ul>
+    <li>创建/编辑组织（代理商、安装商、终端用户）</li>
+    <li>邀请用户加入组织（通过邀请链接或手机号）</li>
+    <li>分配组织内角色和权限</li>
+    <li>查看组织下属的设备和电站</li>
+  </ul>
+
+  <h2>七、操作日志</h2>
+  <p>所有管理操作均记录在「操作日志」中，包括：</p>
+  <ul>
+    <li>用户登录/登出</li>
+    <li>设备绑定/解绑</li>
+    <li>远程控制命令</li>
+    <li>OTA 升级记录</li>
+    <li>权限变更</li>
+  </ul>
+
+  <div class="tip">
+    <strong>安全审计：</strong>操作日志不可删除，保留 90 天以上。建议定期导出备份。
+  </div>
+
+  <h2>八、系统监控</h2>
+  <p>「系统监控」页面展示平台运行状态：</p>
+  <ul>
+    <li>服务健康状态（API、数据库、Redis、MQTT）</li>
+    <li>CPU / 内存使用率</li>
+    <li>数据库连接池状态</li>
+    <li>版本号和运行时间</li>
+  </ul>
+</div>
+</body>
+</html>

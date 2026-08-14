@@ -51,6 +51,7 @@ const getAdminRoutes = (t: (key: string) => string): RouteMenuItem[] => [
   { path: '/users', name: t('menu.userManage'), icon: <TeamOutlined />, permission: 'users:view' },
   { path: '/operation-logs', name: t('menu.operationLogs'), icon: <UnorderedListOutlined />, permission: 'admin:view' },
   { path: '/system/system-monitor', name: t('menu.systemMonitor'), icon: <HeartOutlined />, permission: 'admin:view' },
+  { path: '/system/system-config', name: t('menu.systemConfig'), icon: <SettingOutlined />, permission: 'admin:manage' },
 ]
 
 const getUserRoutes = (t: (key: string) => string): RouteMenuItem[] => [

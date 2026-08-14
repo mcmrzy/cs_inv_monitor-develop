@@ -530,6 +530,33 @@ class AppLocalizations {
       _localizedStrings['work_order_attach_hint']!;
   String get workOrderAttachFailed =>
       _localizedStrings['work_order_attach_failed']!;
+  String get workOrderDetail => _localizedStrings['work_order_detail']!;
+  String get workOrderNo => _localizedStrings['work_order_no']!;
+  String get workOrderDescription =>
+      _localizedStrings['work_order_description']!;
+  String get workOrderPriority => _localizedStrings['work_order_priority']!;
+  String get workOrderCreator => _localizedStrings['work_order_creator']!;
+  String get workOrderAssignee => _localizedStrings['work_order_assignee']!;
+  String get workOrderCreatedAt =>
+      _localizedStrings['work_order_created_at']!;
+  String get workOrderUpdatedAt =>
+      _localizedStrings['work_order_updated_at']!;
+  String get workOrderTimeline => _localizedStrings['work_order_timeline']!;
+  String get workOrderAttachments =>
+      _localizedStrings['work_order_attachments']!;
+  String get workOrderResolution =>
+      _localizedStrings['work_order_resolution']!;
+  String get workOrderViewDetail =>
+      _localizedStrings['work_order_view_detail']!;
+  String get workOrderCopyId => _localizedStrings['work_order_copy_id']!;
+  String get workOrderPriorityHigh =>
+      _localizedStrings['work_order_priority_high']!;
+  String get workOrderPriorityMedium =>
+      _localizedStrings['work_order_priority_medium']!;
+  String get workOrderPriorityLow =>
+      _localizedStrings['work_order_priority_low']!;
+  String get workOrderLoadFailed =>
+      _localizedStrings['work_order_load_failed']!;
   String get helpFaq => _localizedStrings['help_faq']!;
   String get opLogEmpty => _localizedStrings['op_log_empty']!;
   String get opLogLoadFailed => _localizedStrings['op_log_load_failed']!;
@@ -537,6 +564,15 @@ class AppLocalizations {
   String get opLogTypeCommand => _localizedStrings['op_log_type_command']!;
   String get opLogTypeOta => _localizedStrings['op_log_type_ota']!;
   String get opLogTypeUnknown => _localizedStrings['op_log_type_unknown']!;
+  String get opLogDetail => _localizedStrings['op_log_detail']!;
+  String get opLogType => _localizedStrings['op_log_type']!;
+  String get opLogDevice => _localizedStrings['op_log_device']!;
+  String get opLogResult => _localizedStrings['op_log_result']!;
+  String get opLogTime => _localizedStrings['op_log_time']!;
+  String get opLogViewDetail => _localizedStrings['op_log_view_detail']!;
+  String get opLogCopySn => _localizedStrings['op_log_copy_sn']!;
+  String get opLogCopyTime => _localizedStrings['op_log_copy_time']!;
+  String get opLogCopied => _localizedStrings['op_log_copied']!;
   String get pvInverterSmartMonitor =>
       _localizedStrings['pv_inverter_smart_monitor']!;
   String get appVersion => _localizedStrings['version']!;

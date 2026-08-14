@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import 'package:dio/dio.dart';
 
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/core/widgets/pagination_bar.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
@@ -13,6 +15,10 @@ import 'package:inv_app/l10n/app_localizations.dart';
 /// 数据源：后端聚合端点 GET /op-logs（当前用户维度），
 /// 统一聚合 user_operation_logs + device_cmd_logs + device_upgrades，
 /// 按时间倒序分页返回统一结构（类型/操作/设备/结果/时间）。
+///
+/// 交互：
+/// - 单击卡片：弹出操作详情（全字段展示）
+/// - 长按卡片：弹出操作菜单（查看详情 / 复制设备序列号 / 复制时间）
 class OperationHistoryPage extends StatefulWidget {
   const OperationHistoryPage({super.key});
 
@@ -77,6 +83,166 @@ class _OperationHistoryPageState extends State<OperationHistoryPage> {
     _load();
   }
 
+  /// 单击卡片：弹出操作详情 BottomSheet
+  void _showDetailSheet(OpLogItem log) {
+    final l10n = AppLocalizations.of(context)!;
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColor.surfaceContainer(context),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(20.w, 20.h, 20.w, 24.h),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 头部：类型图标 + 标题
+              Row(
+                children: [
+                  _TypeBadge(source: log.source),
+                  SizedBox(width: 12.w),
+                  Expanded(
+                    child: Text(
+                      log.title,
+                      style: TextStyle(
+                        fontSize: 17.sp,
+                        fontWeight: FontWeight.w600,
+                        color: AppColor.onSurface(context),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 20.h),
+              _DetailRow(
+                label: l10n.opLogType,
+                value: OpLogItem.sourceLabel(l10n, log.source),
+              ),
+              if (log.deviceSn.isNotEmpty) ...[
+                SizedBox(height: 12.h),
+                _DetailRow(
+                  label: l10n.opLogDevice,
+                  value: log.deviceSn,
+                  onCopy: () => _copy(log.deviceSn),
+                ),
+              ],
+              SizedBox(height: 12.h),
+              _DetailRow(
+                label: l10n.opLogResult,
+                value: OpLogItem.resultLabel(l10n, log.result),
+                chipColor: OpLogItem.resultColor(log.result),
+              ),
+              SizedBox(height: 12.h),
+              _DetailRow(
+                label: l10n.opLogTime,
+                value: _formatTime(log.opTime),
+                onCopy: () => _copy(_formatTime(log.opTime)),
+              ),
+              SizedBox(height: 24.h),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => Navigator.pop(sheetContext),
+                  child: Text(l10n.str('close')),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 长按卡片：弹出操作菜单
+  void _showActionSheet(OpLogItem log) {
+    final l10n = AppLocalizations.of(context)!;
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColor.surfaceContainer(context),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(20.w, 16.h, 20.w, 24.h),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 拖动指示条
+              Container(
+                width: 36.w,
+                height: 4.h,
+                decoration: BoxDecoration(
+                  color: AppColor.outline(context),
+                  borderRadius: BorderRadius.circular(2.r),
+                ),
+              ),
+              SizedBox(height: 16.h),
+              // 当前记录摘要
+              Row(
+                children: [
+                  _TypeBadge(source: log.source),
+                  SizedBox(width: 12.w),
+                  Expanded(
+                    child: Text(
+                      log.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 15.sp,
+                        fontWeight: FontWeight.w600,
+                        color: AppColor.onSurface(context),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 12.h),
+              Divider(color: AppColor.outline(context).withValues(alpha: 0.5)),
+              SizedBox(height: 4.h),
+              _ActionSheetItem(
+                icon: Icons.visibility_outlined,
+                label: l10n.opLogViewDetail,
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _showDetailSheet(log);
+                },
+              ),
+              if (log.deviceSn.isNotEmpty)
+                _ActionSheetItem(
+                  icon: Icons.copy_rounded,
+                  label: l10n.opLogCopySn,
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _copy(log.deviceSn);
+                  },
+                ),
+              _ActionSheetItem(
+                icon: Icons.schedule_rounded,
+                label: l10n.opLogCopyTime,
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _copy(_formatTime(log.opTime));
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _copy(String text) async {
+    final l10n = AppLocalizations.of(context)!;
+    await Clipboard.setData(ClipboardData(text: text));
+    if (mounted) {
+      AppToast.show(context, l10n.opLogCopied, type: ToastType.success);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -121,11 +287,18 @@ class _OperationHistoryPageState extends State<OperationHistoryPage> {
       child: Column(
         children: [
           Expanded(
-            child: ListView.separated(
+            child: ListView.builder(
               physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 12.h),
               itemCount: _items.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (context, index) => _OpLogTile(log: _items[index]),
+              itemBuilder: (context, index) => Padding(
+                padding: EdgeInsets.only(bottom: 10.h),
+                child: _OpLogCard(
+                  log: _items[index],
+                  onTap: () => _showDetailSheet(_items[index]),
+                  onLongPress: () => _showActionSheet(_items[index]),
+                ),
+              ),
             ),
           ),
           PaginationBar(
@@ -165,54 +338,19 @@ class OpLogItem {
           DateTime.now(),
     );
   }
-}
 
-class _OpLogTile extends StatelessWidget {
-  final OpLogItem log;
-
-  const _OpLogTile({required this.log});
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    return ListTile(
-      leading: Icon(
-        _sourceIcon(log.source),
-        size: 22.sp,
-        color: _sourceColor(log.source),
-      ),
-      title: Text(
-        log.title,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontSize: 14.sp,
-          color: AppColors.textPrimary,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-      subtitle: Text(
-        '${_sourceLabel(l10n, log.source)}'
-        '${log.deviceSn.isEmpty ? '' : ' · ${log.deviceSn}'}'
-        ' · ${_formatTime(log.opTime)}',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(fontSize: 12.sp, color: AppColors.textHint),
-      ),
-      trailing: _ResultChip(result: log.result),
-    );
-  }
-
-  IconData _sourceIcon(String source) {
+  /// 类型图标（operation / command / ota）
+  static IconData sourceIcon(String source) {
     return switch (source) {
-      'ota' => Icons.system_update,
+      'ota' => Icons.system_update_rounded,
       'command' => Icons.terminal_rounded,
-      'operation' => Icons.touch_app,
-      _ => Icons.history,
+      'operation' => Icons.touch_app_rounded,
+      _ => Icons.history_rounded,
     };
   }
 
-  Color _sourceColor(String source) {
+  /// 类型主题色
+  static Color sourceColor(String source) {
     return switch (source) {
       'ota' => AppColors.purple,
       'command' => AppColors.blue,
@@ -221,13 +359,258 @@ class _OpLogTile extends StatelessWidget {
     };
   }
 
-  String _sourceLabel(AppLocalizations l10n, String source) {
+  /// 类型显示文案
+  static String sourceLabel(AppLocalizations l10n, String source) {
     return switch (source) {
       'ota' => l10n.opLogTypeOta,
       'command' => l10n.opLogTypeCommand,
       'operation' => l10n.opLogTypeOperation,
       _ => l10n.opLogTypeUnknown,
     };
+  }
+
+  /// 结果徽章色
+  static Color resultColor(String result) {
+    return switch (result) {
+      'success' => AppColors.successLight,
+      'failed' => AppColors.errorLight,
+      'pending' => AppColors.warning,
+      'downloading' || 'upgrading' => AppColors.primary,
+      _ => AppColors.textHint,
+    };
+  }
+
+  /// 结果显示文案（无 i18n 键时用大写原文）
+  static String resultLabel(AppLocalizations l10n, String result) {
+    return switch (result) {
+      'success' => l10n.str('op_log_result_success'),
+      'failed' => l10n.str('op_log_result_failed'),
+      'pending' => l10n.str('op_log_result_pending'),
+      _ => result.toUpperCase(),
+    };
+  }
+}
+
+/// 卡片式操作记录项：图标圆底 + 标题 + 元信息 + 结果徽章
+///
+/// 单击 [onTap] 查看详情；长按 [onLongPress] 弹出操作菜单。
+class _OpLogCard extends StatelessWidget {
+  final OpLogItem log;
+  final VoidCallback onTap;
+  final VoidCallback onLongPress;
+
+  const _OpLogCard({
+    required this.log,
+    required this.onTap,
+    required this.onLongPress,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final accent = OpLogItem.sourceColor(log.source);
+    return Material(
+      color: AppColor.surfaceContainer(context),
+      borderRadius: BorderRadius.circular(16.r),
+      child: InkWell(
+        onTap: onTap,
+        onLongPress: onLongPress,
+        borderRadius: BorderRadius.circular(16.r),
+        child: Container(
+          padding: EdgeInsets.all(14.w),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16.r),
+            border: Border.all(
+              color: AppColor.outline(context).withValues(alpha: 0.6),
+            ),
+          ),
+          child: Row(
+            children: [
+              // 类型图标圆底
+              Container(
+                width: 40.w,
+                height: 40.w,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  OpLogItem.sourceIcon(log.source),
+                  size: 20.sp,
+                  color: accent,
+                ),
+              ),
+              SizedBox(width: 12.w),
+              // 标题 + 元信息
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      log.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 14.sp,
+                        color: AppColor.onSurface(context),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    SizedBox(height: 4.h),
+                    Text(
+                      '${OpLogItem.sourceLabel(l10n, log.source)}'
+                      '${log.deviceSn.isEmpty ? '' : ' · ${log.deviceSn}'}'
+                      ' · ${_formatTime(log.opTime)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12.sp,
+                        color: AppColor.onSurfaceVariant(context),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(width: 8.w),
+              _ResultChip(result: log.result),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 类型图标 + 圆底（详情/菜单头部复用）
+class _TypeBadge extends StatelessWidget {
+  final String source;
+
+  const _TypeBadge({required this.source});
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = OpLogItem.sourceColor(source);
+    return Container(
+      width: 40.w,
+      height: 40.w,
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.1),
+        shape: BoxShape.circle,
+      ),
+      child: Icon(
+        OpLogItem.sourceIcon(source),
+        size: 20.sp,
+        color: accent,
+      ),
+    );
+  }
+}
+
+/// 详情字段行：标签 + 值（可附带复制按钮）
+class _DetailRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color? chipColor;
+  final VoidCallback? onCopy;
+
+  const _DetailRow({
+    required this.label,
+    required this.value,
+    this.chipColor,
+    this.onCopy,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final valueColor =
+        chipColor ?? AppColor.onSurface(context);
+    final valueWidget = chipColor != null
+        ? Container(
+            padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 3.h),
+            decoration: BoxDecoration(
+              color: chipColor!.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8.r),
+            ),
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 12.sp,
+                fontWeight: FontWeight.w600,
+                color: chipColor,
+              ),
+            ),
+          )
+        : Text(
+            value,
+            style: TextStyle(
+              fontSize: 14.sp,
+              fontWeight: FontWeight.w500,
+              color: valueColor,
+            ),
+          );
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 64.w,
+          child: Text(
+            label,
+            style: TextStyle(fontSize: 13.sp, color: AppColor.onSurfaceVariant(context)),
+          ),
+        ),
+        Expanded(child: valueWidget),
+        if (onCopy != null)
+          InkWell(
+            onTap: onCopy,
+            borderRadius: BorderRadius.circular(8.r),
+            child: Padding(
+              padding: EdgeInsets.all(4.w),
+              child: Icon(
+                Icons.copy_rounded,
+                size: 16.sp,
+                color: AppColor.onSurfaceVariant(context),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// 长按操作菜单项
+class _ActionSheetItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _ActionSheetItem({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12.r),
+      child: Padding(
+        padding: EdgeInsets.symmetric(vertical: 12.h, horizontal: 8.w),
+        child: Row(
+          children: [
+            Icon(icon, size: 20.sp, color: AppColor.onSurfaceVariant(context)),
+            SizedBox(width: 12.w),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 14.sp,
+                color: AppColor.onSurface(context),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -238,13 +621,8 @@ class _ResultChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (color, label) = switch (result) {
-      'success' => (AppColors.successLight, 'OK'),
-      'failed' => (AppColors.errorLight, 'FAIL'),
-      'pending' => (AppColors.warning, 'PENDING'),
-      'downloading' || 'upgrading' => (AppColors.primary, result.toUpperCase()),
-      _ => (AppColors.textHint, result.toUpperCase()),
-    };
+    final l10n = AppLocalizations.of(context)!;
+    final color = OpLogItem.resultColor(result);
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 3.h),
       decoration: BoxDecoration(
@@ -252,7 +630,7 @@ class _ResultChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(8.r),
       ),
       child: Text(
-        label,
+        OpLogItem.resultLabel(l10n, result),
         style: TextStyle(
           fontSize: 10.sp,
           fontWeight: FontWeight.w600,

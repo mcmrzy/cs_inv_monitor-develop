@@ -246,6 +246,9 @@ func (h *StationHandler) Update(c *gin.Context) {
 		return
 	}
 
+	// 记录审计日志
+	logAudit(c, h.userService, "update", "station", fmt.Sprintf("%d", stationID), fmt.Sprintf(`{"name":"%s"}`, station.Name))
+
 	response.Success(c, station)
 }
 
@@ -281,6 +284,9 @@ func (h *StationHandler) Delete(c *gin.Context) {
 		response.Error(c, 500, "delete station failed")
 		return
 	}
+
+	// 记录审计日志
+	logAudit(c, h.userService, "delete", "station", fmt.Sprintf("%d", stationID), fmt.Sprintf(`{"name":"%s"}`, station.Name))
 
 	response.SuccessWithMessage(c, "station deleted", nil)
 }
@@ -350,6 +356,9 @@ func (h *StationHandler) Assign(c *gin.Context) {
 		response.Error(c, 500, "assign station failed")
 		return
 	}
+
+	// 记录审计日志
+	logAudit(c, h.userService, "assign", "station", fmt.Sprintf("%d", stationID), fmt.Sprintf(`{"name":"%s","target_user_id":%d}`, station.Name, req.UserID))
 
 	response.SuccessWithMessage(c, "station assigned", nil)
 }

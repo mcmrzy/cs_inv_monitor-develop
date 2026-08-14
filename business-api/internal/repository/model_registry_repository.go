@@ -130,16 +130,6 @@ func (r *ModelRepository) SoftRetireModel(ctx context.Context, id int64) error {
 }
 
 func (r *ModelRepository) RetireModel(ctx context.Context, id int64) error {
-	// 先检查是否有设备关联到这个型号
-	var deviceCount int64
-	err := r.db.QueryRow(ctx, `SELECT COUNT(*) FROM devices WHERE model_id=$1 AND deleted_at IS NULL`, id).Scan(&deviceCount)
-	if err != nil {
-		return fmt.Errorf("检查设备关联失败: %w", err)
-	}
-	if deviceCount > 0 {
-		return fmt.Errorf("该型号下还有 %d 台设备，无法删除", deviceCount)
-	}
-
 	// 使用事务删除关联数据和型号记录
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
@@ -147,19 +137,13 @@ func (r *ModelRepository) RetireModel(ctx context.Context, id int64) error {
 	}
 	defer tx.Rollback(ctx)
 
-	// 删除关联的型号字段能力配置
-	_, err = tx.Exec(ctx, `DELETE FROM device_model_field_capabilities WHERE model_id=$1`, id)
+	// 解除设备与型号的关联（将 model_id 置 NULL）
+	_, err = tx.Exec(ctx, `UPDATE devices SET model_id=NULL, updated_at=NOW() WHERE model_id=$1`, id)
 	if err != nil {
-		return fmt.Errorf("删除字段能力配置失败: %w", err)
+		return fmt.Errorf("解除设备关联失败: %w", err)
 	}
 
-	// 删除关联的型号命令能力配置
-	_, err = tx.Exec(ctx, `DELETE FROM device_model_command_capabilities WHERE model_id=$1`, id)
-	if err != nil {
-		return fmt.Errorf("删除命令能力配置失败: %w", err)
-	}
-
-	// 删除关联的型号字段（新表）
+	// 删除关联的型号字段（V2表，ON DELETE RESTRICT 所以必须先删）
 	_, err = tx.Exec(ctx, `DELETE FROM device_model_fields WHERE model_id=$1`, id)
 	if err != nil {
 		return fmt.Errorf("删除型号字段失败: %w", err)

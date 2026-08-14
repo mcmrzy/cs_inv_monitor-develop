@@ -145,6 +145,7 @@ type InvitationHandler struct {
 	permChecker      *service.PermChecker
 	contextResolver  middleware.AuthorizationContextValidator
 	emailService     *service.EmailService
+	userService      *service.UserService
 }
 
 // NewInvitationHandler creates a new InvitationHandler instance.
@@ -158,6 +159,7 @@ func NewInvitationHandler(
 	permChecker *service.PermChecker,
 	contextResolver middleware.AuthorizationContextValidator,
 	emailService *service.EmailService,
+	userService *service.UserService,
 ) *InvitationHandler {
 	return &InvitationHandler{
 		db:               db,
@@ -169,7 +171,17 @@ func NewInvitationHandler(
 		permChecker:      permChecker,
 		contextResolver:  contextResolver,
 		emailService:     emailService,
+		userService:      userService,
 	}
+}
+
+// logInvitationAudit 记录邀请相关审计日志的辅助函数
+func (h *InvitationHandler) logInvitationAudit(c *gin.Context, action, resourceID, detail string) {
+	userID := middleware.GetUserID(c)
+	phone := middleware.GetPhone(c)
+	go func() {
+		h.userService.LogAudit(c.Request.Context(), userID, phone, action, "invitation", resourceID, detail, c.ClientIP())
+	}()
 }
 
 // SetAuthorizationContextValidator sets the context resolver for invitation management.

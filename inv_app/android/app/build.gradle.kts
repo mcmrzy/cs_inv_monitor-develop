@@ -34,10 +34,6 @@ android {
         isCoreLibraryDesugaringEnabled = true
     }
 
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11.toString()
-    }
-
     defaultConfig {
         applicationId = "com.csergy.app1"
         minSdk = 29  // jiguang_auth 要求 Android 10+
@@ -72,10 +68,17 @@ android {
         release {
             signingConfigs.findByName("release")?.let { signingConfig = it }
             proguardFiles(
-                getDefaultProguardFile("proguard-android.txt"),
+                getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
         }
+    }
+}
+
+// AGP 9 内置 Kotlin：以 compilerOptions DSL 替代已废弃的 kotlinOptions 块
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11
     }
 }
 

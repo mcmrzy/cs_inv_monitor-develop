@@ -34,6 +34,7 @@ const BatchSettingsPage = lazyWithRetry(() => import('@/pages/batch-settings'))
 const OperationLogsPage = lazyWithRetry(() => import('@/pages/operation-logs'))
 const DeviceDetailPage = lazyWithRetry(() => import('@/pages/device-detail'))
 const SystemMonitorPage = lazyWithRetry(() => import('@/pages/system/SystemMonitor'))
+const SystemConfigPage = lazyWithRetry(() => import('@/pages/system/SystemConfig'))
 
 const RoleRedirect: React.FC = () => {
   const user = useAuthStore((s) => s.user)
@@ -93,6 +94,7 @@ const AppRoutes: React.FC = () => (
       <Route path="/operation-logs" element={<OperationLogsPage />} />
       <Route path="/devices/:sn/detail" element={<DeviceDetailPage />} />
       <Route path="/system/system-monitor" element={<SystemMonitorPage />} />
+      <Route path="/system/system-config" element={<SystemConfigPage />} />
     </Route>
   </Routes>
 )

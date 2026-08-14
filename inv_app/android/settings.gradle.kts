@@ -14,15 +14,13 @@ pluginManagement {
         google()
         mavenCentral()
         gradlePluginPortal()
-        // 兼容旧版 flutter_libserialport（wifi_scan 依赖）
-        jcenter()
     }
 }
 
 plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
-    id("com.android.application") version "8.12.1" apply false
-    id("org.jetbrains.kotlin.android") version "2.2.20" apply false
+    id("com.android.application") version "9.0.1" apply false
+    // AGP 9 内置 Kotlin：不再声明 KGP，避免插件被 Flutter 兜底 apply(kotlin-android) 时冲突
 }
 
 include(":app")
