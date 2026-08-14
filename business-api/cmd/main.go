@@ -223,9 +223,9 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	heartbeatDone := make(chan struct{})
 	defer close(heartbeatDone)
 	// 浜嬩欢椹卞姩锛氱洃鍚?Redis Keyspace Notification锛屽績璺?key 杩囨湡鏃剁珛鍗虫爣璁拌澶囩绾?
-	go runHeartbeatExpiryListener(rdb, deviceRepo, heartbeatDone)
+	go runHeartbeatExpiryListener(rdb, deviceRepo, db, heartbeatDone)
 	// 鍏滃簳锛氭瘡 5 鍒嗛挓鍏ㄩ噺鎵弿涓€娆★紝澶勭悊鐩戝惉鍣ㄥ彲鑳介仐婕忕殑鎯呭喌
-	go runHeartbeatCheck(deviceRepo, heartbeatDone)
+	go runHeartbeatCheck(deviceRepo, db, heartbeatDone)
 
 	// Pipeline health ping: write API server status to Redis every 30s
 	go runPipelineHealthPing(rdb, heartbeatDone)
@@ -281,9 +281,9 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	serve(cfg, router)
 }
 
-// runHeartbeatExpiryListener 鐩戝惉 Redis Keyspace Notification锛屽綋 device:heartbeat:{sn} key 杩囨湡鏃?
-// 绔嬪嵆灏嗚澶囨爣璁颁负绂荤嚎锛屽疄鐜颁簨浠堕┍鍔ㄧ殑绂荤嚎妫€娴嬶紝寤惰繜浠庡垎閽熺骇闄嶅埌绉掔骇
-func runHeartbeatExpiryListener(rdb *redis.Client, deviceRepo *repository.DeviceRepository, done chan struct{}) {
+// runHeartbeatExpiryListener 监听 Redis Keyspace Notification，当 device:heartbeat:{sn} key 过期时
+// 立即将设备标记为离线，实现事件驱动的离线检测，延迟从分钟级降到秒级
+func runHeartbeatExpiryListener(rdb *redis.Client, deviceRepo *repository.DeviceRepository, db *pgxpool.Pool, done chan struct{}) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -348,24 +348,24 @@ func runHeartbeatExpiryListener(rdb *redis.Client, deviceRepo *repository.Device
 			logger.Info("Device heartbeat key expired, marking offline", zap.String("sn", sn))
 			// 鏍囪璁惧绂荤嚎锛堜娇鐢ㄦ柊鐨?context 閬垮厤瓒呮椂锛?
 			offlineCtx, offlineCancel := context.WithTimeout(context.Background(), 5*time.Second)
-			result, err := deviceRepo.MarkDeviceOfflineBySN(offlineCtx, sn)
+			offlineResult, err := deviceRepo.MarkDeviceOffline(offlineCtx, sn)
 			offlineCancel()
 			if err != nil {
 				logger.Error("Failed to mark device offline on heartbeat expiry", zap.String("sn", sn), zap.Error(err))
 				continue
 			}
-			if result {
+			if offlineResult.Changed {
 				logger.Info("Device marked offline via keyspace notification", zap.String("sn", sn))
-				syncCtx, syncCancel := context.WithTimeout(context.Background(), 5*time.Second)
-				deviceRepo.SyncStationStatus(syncCtx)
-				syncCancel()
+				// 发送离线通知
+				sendOfflineNotification(context.Background(), db, sn, offlineResult.UserID, offlineResult.StationID)
 			}
 		}
 	}
 }
 
-func runHeartbeatCheck(deviceRepo *repository.DeviceRepository, done chan struct{}) {
-	// 鍏滃簳鎵弿浠?5 鍒嗛挓缂╃煭涓?60 绉掞紝纭繚浜嬩欢椹卞姩澶辨晥鏃朵篃鑳藉揩閫熷彂鐜扮绾?
+func runHeartbeatCheck(deviceRepo *repository.DeviceRepository, db *pgxpool.Pool, done chan struct{}) {
+	// 兜底扫描：每60秒扫描一次，阈值设为360秒（心跳间隔180秒的2倍，避免误判）
+	// 设备正常上报间隔为180秒，360秒未上报才判定为离线
 	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
 	for {
@@ -374,16 +374,73 @@ func runHeartbeatCheck(deviceRepo *repository.DeviceRepository, done chan struct
 			logger.Info("Heartbeat check stopped")
 			return
 		case <-ticker.C:
-			sns, err := deviceRepo.MarkStaleDevicesOffline(context.Background(), 120)
+			// 使用统一的设备离线处理函数，逐个处理设备
+			sns, err := deviceRepo.MarkStaleDevicesOffline(context.Background(), 360)
 			if err != nil {
 				logger.Error("Heartbeat fallback scan failed", zap.Error(err))
 			} else if len(sns) > 0 {
 				logger.Info("Heartbeat fallback scan: marked stale devices offline",
 					zap.Int("count", len(sns)), zap.Strings("sns", sns))
-				deviceRepo.SyncStationStatus(context.Background())
+				// 逐个处理设备离线，插入通知记录
+				for _, sn := range sns {
+					offlineCtx, offlineCancel := context.WithTimeout(context.Background(), 5*time.Second)
+					offlineResult, err := deviceRepo.MarkDeviceOffline(offlineCtx, sn)
+					offlineCancel()
+					if err == nil && offlineResult.Changed {
+						sendOfflineNotification(context.Background(), db, sn, offlineResult.UserID, offlineResult.StationID)
+					}
+				}
 			}
 		}
 	}
+}
+
+// sendOfflineNotification 发送设备离线通知
+// 检查通知冷却期，插入通知记录
+// userID 和 stationID 由 MarkDeviceOffline 返回，无需再次查询
+func sendOfflineNotification(ctx context.Context, db *pgxpool.Pool, sn string, userID, stationID int64) {
+	// 没有绑定用户，不发送通知
+	if userID <= 0 {
+		logger.Debug("sendOfflineNotification: no user bound to device, skipping",
+			zap.String("sn", sn))
+		return
+	}
+
+	// 检查通知冷却期：120秒内同一设备同类型通知不重复写入
+	var exists bool
+	if err := db.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM notifications WHERE device_sn=$1 AND notify_type=$2 AND created_at > NOW() - INTERVAL '120 seconds')`,
+		sn, "device_offline",
+	).Scan(&exists); err != nil {
+		logger.Warn("sendOfflineNotification: failed to check notification dedup",
+			zap.String("sn", sn), zap.Error(err))
+		return
+	}
+	if exists {
+		logger.Debug("sendOfflineNotification: notification already sent within cooldown period",
+			zap.String("sn", sn))
+		return
+	}
+
+	// 插入通知记录
+	title := "设备离线"
+	content := "设备 " + sn + " 已离线"
+	if _, err := db.Exec(ctx, `
+		INSERT INTO notifications (device_sn, station_id, user_id, notify_type, title, content, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, NOW())
+	`, sn, stationID, userID, "device_offline", title, content); err != nil {
+		logger.Warn("sendOfflineNotification: failed to insert notification",
+			zap.String("sn", sn), zap.Error(err))
+		return
+	}
+
+	logger.Info("sendOfflineNotification: notification inserted",
+		zap.String("sn", sn),
+		zap.Int64("user_id", userID),
+		zap.Int64("station_id", stationID))
+
+	// TODO: 如果需要实时推送（SSE/JPush），需要传递相关服务依赖
+	// 当前只插入数据库通知记录，前端轮询时会读取
 }
 
 // runOTATimeoutCleanup 瀹氭湡娓呯悊鍗′綇鐨?OTA 鍗囩骇璁板綍銆?
