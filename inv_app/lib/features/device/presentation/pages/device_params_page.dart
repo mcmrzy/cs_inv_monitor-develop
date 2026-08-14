@@ -182,7 +182,7 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
                         param.description!,
                         style: TextStyle(
                           fontSize: 12.sp,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          color: AppColor.textSecondary(context),
                         ),
                       ),
                     ),
@@ -257,8 +257,6 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
       appBar: AppBar(title: Text(AppLocalizations.of(context)!.paramSettings)),
       body: BlocConsumer<DeviceBloc, DeviceState>(
@@ -318,20 +316,49 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
 
           return Column(
             children: [
+              // 搜索框：浅色圆角卡片容器
               Padding(
-                padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 4.h),
-                child: TextField(
-                  decoration: InputDecoration(
-                    hintText: AppLocalizations.of(context)!.searchParams,
-                    prefixIcon: const Icon(Icons.search),
-                    suffixIcon: _searchQuery.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear),
-                            onPressed: () => setState(() => _searchQuery = ''),
-                          )
-                        : null,
+                padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 8.h),
+                child: Container(
+                  height: 44.h,
+                  decoration: BoxDecoration(
+                    color: AppColor.surfaceHover(context),
+                    borderRadius: BorderRadius.circular(14.r),
+                    border: Border.all(
+                      color: AppColor.outline(context).withValues(alpha: 0.4),
+                    ),
                   ),
-                  onChanged: (v) => setState(() => _searchQuery = v),
+                  child: TextField(
+                    decoration: InputDecoration(
+                      hintText: AppLocalizations.of(context)!.searchParams,
+                      hintStyle: TextStyle(
+                        fontSize: 14.sp,
+                        color: AppColor.textHint(context),
+                      ),
+                      prefixIcon: Icon(
+                        Icons.search,
+                        size: 20.sp,
+                        color: AppColor.textSecondary(context),
+                      ),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: Icon(
+                                Icons.clear,
+                                size: 18.sp,
+                                color: AppColor.textHint(context),
+                              ),
+                              onPressed: () =>
+                                  setState(() => _searchQuery = ''),
+                            )
+                          : null,
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 4.w, vertical: 10.h),
+                    ),
+                    onChanged: (v) => setState(() => _searchQuery = v),
+                  ),
                 ),
               ),
               Expanded(
@@ -343,17 +370,17 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
                   },
                   child: ListView.builder(
                     padding:
-                        EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+                        EdgeInsets.fromLTRB(16.w, 4.h, 16.w, 24.h),
                     itemCount: groupKeys.length,
                     itemBuilder: (context, index) {
                       final groupKey = groupKeys[index];
                       final groupParams = grouped[groupKey]!;
-                      return _buildGroupTile(theme, groupKey, groupParams);
+                      return _buildGroupTile(groupKey, groupParams);
                     },
                   ),
                 ),
               ),
-              if (_modifiedCount > 0) _buildBottomBar(theme),
+              if (_modifiedCount > 0) _buildBottomBar(),
             ],
           );
         },
@@ -361,152 +388,210 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
     );
   }
 
-  Widget _buildGroupTile(
-    ThemeData theme,
-    String groupKey,
-    List<DeviceParam> params,
-  ) {
+  /// 分组卡片：圆角 16 白卡 + 细边框，组头含语义色图标容器 + 参数数量徽章
+  Widget _buildGroupTile(String groupKey, List<DeviceParam> params) {
+    final (icon, accent) = _groupStyle(groupKey);
     return Container(
-      margin: EdgeInsets.only(bottom: 8.h),
+      margin: EdgeInsets.only(bottom: 12.h),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(12.r),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 4.r,
-            offset: Offset(0, 1.h),
-          ),
-        ],
-      ),
-      child: ExpansionTile(
-        initiallyExpanded: true,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-        collapsedShape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-        title: Text(
-          groupKey,
-          style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w700),
+        color: AppColor.surfaceContainer(context),
+        borderRadius: BorderRadius.circular(16.r),
+        border: Border.all(
+          color: AppColor.outline(context).withValues(alpha: 0.6),
         ),
-        children: params.map((p) => _buildParamItem(theme, p)).toList(),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // 组头：图标容器 + 组名 + 数量徽章
+          Padding(
+            padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 10.h),
+            child: Row(
+              children: [
+                Container(
+                  width: 34.w,
+                  height: 34.w,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10.r),
+                  ),
+                  child: Icon(icon, size: 19.sp, color: accent),
+                ),
+                SizedBox(width: 10.w),
+                Expanded(
+                  child: Text(
+                    _groupTitle(groupKey),
+                    style: TextStyle(
+                      fontSize: 15.sp,
+                      fontWeight: FontWeight.w700,
+                      color: AppColor.textPrimary(context),
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Container(
+                  padding:
+                      EdgeInsets.symmetric(horizontal: 8.w, vertical: 3.h),
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12.r),
+                  ),
+                  child: Text(
+                    '${params.length}',
+                    style: TextStyle(
+                      fontSize: 11.sp,
+                      color: accent,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Divider(
+            height: 1,
+            color: AppColor.outline(context).withValues(alpha: 0.4),
+          ),
+          ...params.map((p) => _buildParamItem(p)).toList(),
+        ],
       ),
     );
   }
 
-  Widget _buildParamItem(ThemeData theme, DeviceParam param) {
+  /// 分组语义色与图标：按分组 key 映射（pv/ac/battery/grid 等）
+  (IconData, Color) _groupStyle(String groupKey) {
+    switch (groupKey.toLowerCase()) {
+      case 'pv':
+        return (Icons.wb_sunny_outlined, AppColors.orange);
+      case 'ac':
+        return (Icons.bolt_rounded, AppColors.purple);
+      case 'battery':
+        return (Icons.battery_charging_full_rounded, AppColors.teal);
+      case 'grid':
+        return (Icons.grid_view_rounded, AppColors.blue);
+      default:
+        return (Icons.tune_rounded, AppColors.primary);
+    }
+  }
+
+  /// 分组标题本地化（未知分组回退原始 key）
+  String _groupTitle(String groupKey) {
+    final l10n = AppLocalizations.of(context);
+    switch (groupKey.toLowerCase()) {
+      case 'pv':
+        return l10n?.groupPvParams ?? 'PV Parameters';
+      case 'ac':
+        return l10n?.groupAcParams ?? 'AC Parameters';
+      case 'battery':
+        return l10n?.groupBatteryParams ?? 'Battery Parameters';
+      case 'grid':
+        return l10n?.grid ?? 'Grid';
+      default:
+        return groupKey;
+    }
+  }
+
+  /// 参数项：危险参数整行浅红底 + 红色标识，修改态显示胶囊徽章
+  Widget _buildParamItem(DeviceParam param) {
     final modified = _isModified(param.key);
     final currentValue = _modifiedValues[param.key] ?? param.value;
+    final l10n = AppLocalizations.of(context)!;
 
     return Container(
+      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
       decoration: BoxDecoration(
+        color: param.isDangerous
+            ? AppColors.error.withValues(alpha: 0.04)
+            : null,
         border: Border(
-          top: BorderSide(color: theme.dividerColor, width: 0.5),
-          left: param.isDangerous
-              ? BorderSide(
-                  color: AppColors.error.withValues(alpha: 0.6),
-                  width: 3,
-                )
-              : BorderSide.none,
+          top: BorderSide(
+            color: AppColor.outline(context).withValues(alpha: 0.4),
+          ),
         ),
       ),
-      child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Row(
-                    children: [
-                      if (param.isDangerous)
-                        Padding(
-                          padding: EdgeInsets.only(right: 4.w),
-                          child: Icon(
-                            Icons.warning_amber_rounded,
-                            color: AppColors.error,
-                            size: 16.sp,
-                          ),
-                        ),
-                      Flexible(
-                        child: Text(
-                          param.label,
-                          style: TextStyle(
-                            fontSize: 14.sp,
-                            fontWeight: FontWeight.w500,
-                            color: param.isDangerous
-                                ? AppColors.error
-                                : theme.colorScheme.onSurface,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              if (param.isDangerous) ...[
+                Icon(
+                  Icons.warning_amber_rounded,
+                  color: AppColors.error,
+                  size: 16.sp,
                 ),
-                if (modified)
-                  Container(
-                    padding:
-                        EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(4.r),
-                    ),
-                    child: Text(
-                      AppLocalizations.of(context)!.paramModified,
-                      style: TextStyle(
-                        fontSize: 10.sp,
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
+                SizedBox(width: 4.w),
               ],
-            ),
-            if (param.description != null)
-              Padding(
-                padding: EdgeInsets.only(top: 2.h),
+              Expanded(
                 child: Text(
-                  param.description!,
+                  param.label,
                   style: TextStyle(
-                    fontSize: 11.sp,
-                    color: theme.colorScheme.onSurfaceVariant,
+                    fontSize: 14.sp,
+                    fontWeight: FontWeight.w600,
+                    color: param.isDangerous
+                        ? AppColors.error
+                        : AppColor.textPrimary(context),
                   ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-            SizedBox(height: 6.h),
-            _buildParamControl(theme, param, currentValue),
+              if (modified)
+                Container(
+                  padding:
+                      EdgeInsets.symmetric(horizontal: 8.w, vertical: 2.h),
+                  decoration: BoxDecoration(
+                    color: AppColor.primary(context).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10.r),
+                  ),
+                  child: Text(
+                    l10n.paramModified,
+                    style: TextStyle(
+                      fontSize: 10.sp,
+                      color: AppColor.primary(context),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          if (param.description != null) ...[
+            SizedBox(height: 2.h),
+            Text(
+              param.description!,
+              style: TextStyle(
+                fontSize: 11.sp,
+                color: AppColor.textSecondary(context),
+              ),
+            ),
           ],
-        ),
+          SizedBox(height: 8.h),
+          _buildParamControl(param, currentValue),
+        ],
       ),
     );
   }
 
   Widget _buildParamControl(
-    ThemeData theme,
     DeviceParam param,
     dynamic currentValue,
   ) {
     switch (param.paramType) {
       case 'number':
-        return _buildNumberControl(theme, param, currentValue);
+        return _buildNumberControl(param, currentValue);
       case 'enum':
-        return _buildEnumControl(theme, param, currentValue);
+        return _buildEnumControl(param, currentValue);
       case 'bool':
-        return _buildBoolControl(theme, param, currentValue);
+        return _buildBoolControl(param, currentValue);
       case 'text':
-        return _buildTextControl(theme, param, currentValue);
+        return _buildTextControl(param, currentValue);
       default:
-        return _buildNumberControl(theme, param, currentValue);
+        return _buildNumberControl(param, currentValue);
     }
   }
 
-  Widget _buildNumberControl(
-    ThemeData theme,
-    DeviceParam param,
-    dynamic currentValue,
-  ) {
+  Widget _buildNumberControl(DeviceParam param, dynamic currentValue) {
+    final modified = _isModified(param.key);
+    final l10n = AppLocalizations.of(context)!;
     return Row(
       children: [
         Expanded(
@@ -515,45 +600,67 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
               Text(
                 '${currentValue ?? '-'}',
                 style: TextStyle(
-                  fontSize: 16.sp,
+                  fontSize: 20.sp,
                   fontWeight: FontWeight.bold,
-                  color: _isModified(param.key)
-                      ? AppColors.primary
-                      : theme.colorScheme.onSurface,
+                  color: modified
+                      ? AppColor.primary(context)
+                      : AppColor.textPrimary(context),
                 ),
               ),
               if (param.unit.isNotEmpty)
                 Padding(
-                  padding: EdgeInsets.only(left: 4.w),
+                  padding: EdgeInsets.only(left: 5.w),
                   child: Text(
                     param.unit,
                     style: TextStyle(
                       fontSize: 12.sp,
-                      color: theme.colorScheme.onSurfaceVariant,
+                      color: AppColor.textSecondary(context),
                     ),
                   ),
                 ),
             ],
           ),
         ),
-        IconButton(
-          icon: Icon(Icons.edit, size: 20.sp, color: theme.colorScheme.primary),
-          onPressed: () => _showNumberEditDialog(param),
-          style: IconButton.styleFrom(
-            backgroundColor:
-                theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
-            minimumSize: Size(36.w, 36.w),
+        // 编辑胶囊按钮
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(10.r),
+            onTap: () => _showNumberEditDialog(param),
+            child: Container(
+              padding:
+                  EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
+              decoration: BoxDecoration(
+                color: AppColor.primarySoft(context),
+                borderRadius: BorderRadius.circular(10.r),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.edit_outlined,
+                    size: 14.sp,
+                    color: AppColor.primary(context),
+                  ),
+                  SizedBox(width: 4.w),
+                  Text(
+                    l10n.edit,
+                    style: TextStyle(
+                      fontSize: 12.sp,
+                      color: AppColor.primary(context),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildEnumControl(
-    ThemeData theme,
-    DeviceParam param,
-    dynamic currentValue,
-  ) {
+  Widget _buildEnumControl(DeviceParam param, dynamic currentValue) {
     if (param.options.length <= 4) {
       return Wrap(
         spacing: 6.w,
@@ -564,35 +671,58 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
             label: Text(opt.label, style: TextStyle(fontSize: 12.sp)),
             selected: selected,
             onSelected: (_) => _onValueChanged(param.key, opt.value),
-            selectedColor: theme.colorScheme.primaryContainer,
+            selectedColor: AppColor.primarySoft(context),
+            labelStyle: TextStyle(
+              fontSize: 12.sp,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+              color: selected
+                  ? AppColor.primary(context)
+                  : AppColor.textSecondary(context),
+            ),
+            side: BorderSide(
+              color: selected
+                  ? AppColor.primary(context).withValues(alpha: 0.4)
+                  : AppColor.outline(context).withValues(alpha: 0.5),
+            ),
           );
         }).toList(),
       );
     }
 
-    return DropdownButton<dynamic>(
-      value: currentValue,
-      isExpanded: true,
-      underline: const SizedBox.shrink(),
-      items: param.options
-          .map(
-            (opt) => DropdownMenuItem<dynamic>(
-              value: opt.value,
-              child: Text(opt.label, style: TextStyle(fontSize: 13.sp)),
-            ),
-          )
-          .toList(),
-      onChanged: (v) {
-        if (v != null) _onValueChanged(param.key, v);
-      },
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 2.h),
+      decoration: BoxDecoration(
+        color: AppColor.surfaceHover(context),
+        borderRadius: BorderRadius.circular(10.r),
+      ),
+      child: DropdownButton<dynamic>(
+        value: currentValue,
+        isExpanded: true,
+        underline: const SizedBox.shrink(),
+        icon: Icon(
+          Icons.arrow_drop_down,
+          color: AppColor.textSecondary(context),
+        ),
+        style: TextStyle(
+          fontSize: 13.sp,
+          color: AppColor.textPrimary(context),
+        ),
+        items: param.options
+            .map(
+              (opt) => DropdownMenuItem<dynamic>(
+                value: opt.value,
+                child: Text(opt.label, style: TextStyle(fontSize: 13.sp)),
+              ),
+            )
+            .toList(),
+        onChanged: (v) {
+          if (v != null) _onValueChanged(param.key, v);
+        },
+      ),
     );
   }
 
-  Widget _buildBoolControl(
-    ThemeData theme,
-    DeviceParam param,
-    dynamic currentValue,
-  ) {
+  Widget _buildBoolControl(DeviceParam param, dynamic currentValue) {
     final val = currentValue is bool
         ? currentValue
         : currentValue == 1 || currentValue == '1' || currentValue == 'true';
@@ -604,7 +734,9 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
               : AppLocalizations.of(context)!.paramOff,
           style: TextStyle(
             fontSize: 14.sp,
-            color: val ? AppColors.success : theme.colorScheme.onSurfaceVariant,
+            color: val
+                ? AppColors.success
+                : AppColor.textSecondary(context),
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -617,65 +749,141 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
     );
   }
 
-  Widget _buildTextControl(
-    ThemeData theme,
-    DeviceParam param,
-    dynamic currentValue,
-  ) {
+  Widget _buildTextControl(DeviceParam param, dynamic currentValue) {
     final controller = TextEditingController(text: '${currentValue ?? ''}');
     return TextField(
       controller: controller,
       decoration: InputDecoration(
         hintText: '${AppLocalizations.of(context)!.inputParam}${param.label}',
+        hintStyle: TextStyle(
+          fontSize: 13.sp,
+          color: AppColor.textHint(context),
+        ),
         isDense: true,
         contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+        filled: true,
+        fillColor: AppColor.surfaceHover(context),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10.r),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10.r),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10.r),
+          borderSide: BorderSide(
+            color: AppColor.primary(context).withValues(alpha: 0.5),
+          ),
+        ),
       ),
-      style: TextStyle(fontSize: 14.sp),
+      style: TextStyle(fontSize: 14.sp, color: AppColor.textPrimary(context)),
       onChanged: (v) => _onValueChanged(param.key, v),
     );
   }
 
-  Widget _buildBottomBar(ThemeData theme) {
+  Widget _buildBottomBar() {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
+        color: AppColor.surfaceContainer(context),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 8.r,
-            offset: Offset(0, -2.h),
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 16.r,
+            offset: Offset(0, -4.h),
           ),
         ],
       ),
       child: SafeArea(
         child: Row(
           children: [
+            // 已修改数量徽章
             Expanded(
-              child: Text(
-                AppLocalizations.of(context)!
-                    .paramModifiedCount('$_modifiedCount'),
-                style: TextStyle(
-                  fontSize: 13.sp,
-                  color: theme.colorScheme.onSurfaceVariant,
+              child: Container(
+                padding:
+                    EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+                decoration: BoxDecoration(
+                  color: AppColor.primarySoft(context),
+                  borderRadius: BorderRadius.circular(12.r),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.tune_rounded,
+                      size: 16.sp,
+                      color: AppColor.primary(context),
+                    ),
+                    SizedBox(width: 6.w),
+                    Flexible(
+                      child: Text(
+                        l10n.paramModifiedCount('$_modifiedCount'),
+                        style: TextStyle(
+                          fontSize: 13.sp,
+                          color: AppColor.primary(context),
+                          fontWeight: FontWeight.w600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-            FilledButton(
-              onPressed: _isApplying ? null : _applyChanges,
-              style: FilledButton.styleFrom(
-                padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 12.h),
-              ),
-              child: _isApplying
-                  ? SizedBox(
-                      width: 18.w,
-                      height: 18.w,
-                      child: const CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
+            SizedBox(width: 12.w),
+            // 品牌渐变胶囊应用按钮
+            SizedBox(
+              height: 44.h,
+              child: Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(22.r),
+                child: Ink(
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFF1565C0), Color(0xFF2196F3)],
+                    ),
+                    borderRadius: BorderRadius.circular(22.r),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF1565C0).withValues(alpha: 0.3),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
                       ),
-                    )
-                  : Text(AppLocalizations.of(context)!.applyChanges),
+                    ],
+                  ),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(22.r),
+                    onTap: _isApplying ? null : _applyChanges,
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 24.w),
+                      child: Center(
+                        child: _isApplying
+                            ? SizedBox(
+                                width: 18.w,
+                                height: 18.w,
+                                child: const CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Text(
+                                l10n.applyChanges,
+                                style: TextStyle(
+                                  fontSize: 14.sp,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
           ],
         ),

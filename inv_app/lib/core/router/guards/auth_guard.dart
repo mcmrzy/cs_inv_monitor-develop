@@ -14,8 +14,10 @@ class AuthGuard {
     '/forgot-password',
   ];
 
-  /// 离线可用路由 - 无需网络连接即可使用的本地功能
+  /// 离线可用路由 - 无需网络连接/登录即可使用的本地功能
   /// 包括：主页、设备列表、本地配网、本地OTA、WiFi配置等
+  /// （Q4/Q7：登录页"本地模式"guest 入口与已登录用户断网自动切换本地
+  /// 均复用这些路由，因此未登录也放行）
   static final List<String> _offlineRoutes = [
     '/home',
     '/devices',

@@ -18,9 +18,10 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  /// 加载超时兜底：超过 4s 仍无数据时展示失败态，提供手动重试入口
+  /// 加载超时兆底：超过 4s 仍无数据时展示失败态，提供手动重试入口
   Timer? _loadTimeoutTimer;
   bool _loadTimedOut = false;
+  int _autoRetryCount = 0; // 自动重试计数，上限 2 次
 
   /// 将相对路径的头像URL转换为完整URL
   String? _getFullAvatarUrl(String? avatar) {
@@ -57,7 +58,7 @@ class _ProfilePageState extends State<ProfilePage> {
     super.dispose();
   }
 
-  /// 启动加载超时计时：4s 后若仍处于加载态（或已进入但无缓存用户资料），显示失败态
+  /// 启动加载超时计时：4s 后若仍处于加载态，自动重试最多 2 次，之后显示失败态
   void _startLoadTimeout() {
     _loadTimeoutTimer?.cancel();
     _loadTimeoutTimer = Timer(const Duration(seconds: 4), () {
@@ -66,7 +67,13 @@ class _ProfilePageState extends State<ProfilePage> {
       if (state is AuthLoading ||
           state is AuthInitial ||
           (state is AuthAuthenticated && state.user == null)) {
-        setState(() => _loadTimedOut = true);
+        // 自动重试最多 2 次
+        if (_autoRetryCount < 2) {
+          _autoRetryCount++;
+          _retryLoad();
+        } else {
+          setState(() => _loadTimedOut = true);
+        }
       }
     });
   }
@@ -100,9 +107,10 @@ class _ProfilePageState extends State<ProfilePage> {
       body: BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {
           if (state is AuthUnauthenticated) context.go('/login');
-          // 资料加载成功：取消超时兜底，复位失败态
+          // 资料加载成功：取消超时兆底，复位失败态和重试计数
           if (state is AuthAuthenticated && state.user != null) {
             _loadTimeoutTimer?.cancel();
+            _autoRetryCount = 0;
             if (_loadTimedOut) setState(() => _loadTimedOut = false);
           }
         },
@@ -167,13 +175,14 @@ class _ProfilePageState extends State<ProfilePage> {
         child: Row(
           children: [
             // 头像：加载中时显示加载指示器，避免闪烁默认头像
+            // 圆角矩形（微信风格），不再使用圆形
             Container(
               width: 56.w,
               height: 56.w,
               clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
                 color: AppColors.primary.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
+                borderRadius: BorderRadius.circular(12.r),
               ),
               child: isLoading && avatarUrl == null
                   ? Center(
@@ -322,6 +331,21 @@ class _ProfilePageState extends State<ProfilePage> {
         Icons.lock_outlined,
         l10n.changePassword,
         () => context.push('/change-password')
+      ),
+      (
+        Icons.help_outline_rounded,
+        l10n.helpCenter,
+        () => context.push('/help-center')
+      ),
+      (
+        Icons.history_rounded,
+        l10n.operationHistory,
+        () => context.push('/operation-history')
+      ),
+      (
+        Icons.cloud_off_rounded,
+        l10n.offlineModeSettings,
+        () => context.push('/offline-mode-settings')
       ),
       (Icons.info_outline, l10n.aboutUs, () => context.push('/about')),
     ];

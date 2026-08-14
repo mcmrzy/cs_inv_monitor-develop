@@ -206,7 +206,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                             obscureText: _obscureOld,
                             decoration: InputDecoration(
                               labelText: l10n.currentPassword,
-                              prefixIcon: const Icon(Icons.lock_outlined),
+                              prefixIcon: const Icon(Icons.lock_outline),
                               suffixIcon: IconButton(
                                 icon: Icon(
                                   _obscureOld
@@ -230,7 +230,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                           obscureText: _obscureNew,
                           decoration: InputDecoration(
                             labelText: l10n.newPasswordLabel,
-                            prefixIcon: const Icon(Icons.lock_outlined),
+                            prefixIcon: const Icon(Icons.password_rounded),
                             suffixIcon: IconButton(
                               icon: Icon(
                                 _obscureNew
@@ -257,13 +257,36 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                           child:
                               _buildStrengthIndicator(l10n, _newPasswordController.text),
                         ),
+                        // 密码规则提示
+                        Padding(
+                          padding: EdgeInsets.only(top: 6.h),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.lightbulb_outline,
+                                size: 12.sp,
+                                color: AppColor.textHint(context),
+                              ),
+                              SizedBox(width: 4.w),
+                              Expanded(
+                                child: Text(
+                                  l10n.passwordRuleHint,
+                                  style: TextStyle(
+                                    fontSize: 11.sp,
+                                    color: AppColor.textHint(context),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                         SizedBox(height: 14.h),
                         TextFormField(
                           controller: _confirmPasswordController,
                           obscureText: _obscureConfirm,
                           decoration: InputDecoration(
                             labelText: l10n.confirmPasswordLabel,
-                            prefixIcon: const Icon(Icons.lock_outlined),
+                            prefixIcon: const Icon(Icons.lock_reset_rounded),
                             suffixIcon: IconButton(
                               icon: Icon(
                                 _obscureConfirm
@@ -285,22 +308,59 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                             return null;
                           },
                         ),
-                        SizedBox(height: 24.h),
+                        // 品牌渐变胶囊提交按钮
                         SizedBox(
                           width: double.infinity,
                           height: 48.h,
-                          child: ElevatedButton(
-                            onPressed: state is AuthLoading ? null : _submit,
-                            child: state is AuthLoading
-                                ? const CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  )
-                                : Text(
-                                    _setPasswordMode
-                                        ? l10n.setPassword
-                                        : l10n.confirmChange,
+                          child: Material(
+                            color: Colors.transparent,
+                            borderRadius: BorderRadius.circular(24.r),
+                            child: Ink(
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    Color(0xFF1565C0),
+                                    Color(0xFF2196F3),
+                                  ],
+                                ),
+                                borderRadius: BorderRadius.circular(24.r),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFF1565C0)
+                                        .withValues(alpha: 0.3),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
                                   ),
+                                ],
+                              ),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(24.r),
+                                onTap: state is AuthLoading ? null : _submit,
+                                child: Center(
+                                  child: state is AuthLoading
+                                      ? const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                      : Text(
+                                          _setPasswordMode
+                                              ? l10n.setPassword
+                                              : l10n.confirmChange,
+                                          style: TextStyle(
+                                            fontSize: 16.sp,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ],

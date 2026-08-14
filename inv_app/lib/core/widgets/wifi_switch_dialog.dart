@@ -10,7 +10,7 @@ Future<bool> showWifiSwitchDialog(
   return showDialog<bool>(
     context: context,
     barrierDismissible: false,
-    builder: (context) => const _WifiSwitchDialog(originalSsid: null),
+    builder: (context) => _WifiSwitchDialog(originalSsid: originalSsid),
   ).then((v) => v ?? false);
 }
 

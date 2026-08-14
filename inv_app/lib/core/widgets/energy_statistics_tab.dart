@@ -30,7 +30,6 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
 
   String _period = 'day'; // day / month / year
   DateTime _selectedDate = DateTime.now();
-  bool _loading = false;
   bool _initialLoaded = false; // 首次加载是否已完成
   List<EnergyDataPoint> _dataPoints = [];
   EnergySummary _summary = const EnergySummary();
@@ -38,9 +37,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
 
   // 通知数据
   List<Map<String, dynamic>> _alarms = [];
-  bool _alarmsLoading = false;
   List<Map<String, dynamic>> _powerFlowData = []; // energy-flow API 原始数据
-  bool _powerFlowLoading = false;
 
   @override
   void initState() {
@@ -61,11 +58,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
   }
 
   Future<void> _fetchAlarms() async {
-    if (widget.stationId == null) {
-      if (mounted) setState(() => _alarmsLoading = false);
-      return;
-    }
-    setState(() => _alarmsLoading = true);
+    if (widget.stationId == null) return;
     try {
       final dio = getIt<Dio>();
       final response = await dio.get(
@@ -83,19 +76,15 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
           if (data is Map<String, dynamic> && data['list'] is List) {
             setState(() {
               _alarms = List<Map<String, dynamic>>.from(data['list']);
-              _alarmsLoading = false;
             });
             return;
           }
         }
       }
     } catch (_) {}
-    if (mounted) setState(() => _alarmsLoading = false);
   }
 
   Future<void> _fetchData() async {
-    setState(() => _loading = true);
-
     try {
       // 使用全局认证 Dio 实例，而不是创建裸 Dio
       final dio = getIt<Dio>();
@@ -174,16 +163,15 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
           setState(() {
             _dataPoints = points;
             _summary = EnergySummary.fromDataPointsWithPeriod(points, _period);
-            _loading = false;
             _initialLoaded = true;
           });
         }
       } else {
-        if (mounted) setState(() { _loading = false; _initialLoaded = true; });
+        if (mounted) setState(() { _initialLoaded = true; });
       }
     } catch (e) {
       if (mounted) {
-        setState(() { _loading = false; _initialLoaded = true; });
+        setState(() { _initialLoaded = true; });
       }
     }
   }
@@ -193,12 +181,10 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
       if (mounted) {
         setState(() {
           _powerFlowData = [];
-          _powerFlowLoading = false;
         });
       }
       return;
     }
-    if (mounted) setState(() => _powerFlowLoading = true);
     try {
       final dio = getIt<Dio>();
       final response = await dio.get(
@@ -218,7 +204,6 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
               if (mounted) {
                 setState(() {
                   _powerFlowData = List<Map<String, dynamic>>.from(data);
-                  _powerFlowLoading = false;
                 });
               }
               return;
@@ -230,7 +215,6 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
     if (mounted) {
       setState(() {
         _powerFlowData = [];
-        _powerFlowLoading = false;
       });
     }
   }
@@ -339,12 +323,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
                   child: ListView(
                     padding: EdgeInsets.symmetric(horizontal: 16.w),
                     children: [
-                      // 刷新中：顶部细进度条反馈
-                      if (_loading)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 8),
-                          child: LinearProgressIndicator(minHeight: 2),
-                        ),
+                      // 静默刷新：切换日期/周期/下拉刷新时保留旧数据直接展示，无进度条反馈
                       _buildEnergyCards(l10n),
                       SizedBox(height: 16.h),
                       // 功率趋势（只在日模式下显示）
@@ -661,7 +640,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
         decoration: AppColor.card(context),
       );
     }
-    if (_dataPoints.isEmpty && _powerFlowData.isEmpty && !_powerFlowLoading) {
+    if (_dataPoints.isEmpty && _powerFlowData.isEmpty) {
       return Container(
         height: 260.h,
         decoration: AppColor.card(context),
@@ -696,15 +675,8 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
             ),
           ),
           SizedBox(height: 16.h),
-          if (_powerFlowLoading && _powerFlowData.isEmpty)
-            SizedBox(
-              height: 220.h,
-              child: const Center(
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            )
-          else
-            _buildLineChart(),
+          // 静默加载：数据就绪直接渲染，无数据时折线图内部展示空态（无加载动画）
+          _buildLineChart(),
           SizedBox(height: 12.h),
           _buildPowerLegend(),
         ],
@@ -859,31 +831,25 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
             ],
           ),
           SizedBox(height: 12.h),
-          _alarmsLoading
+          // 静默加载：加载期间不显示动画，有数据显示列表，无数据展示空态
+          _alarms.isEmpty
               ? Center(
                   child: Padding(
                     padding: EdgeInsets.all(20.w),
-                    child: const CircularProgressIndicator(strokeWidth: 2),
+                    child: Text(
+                      l10n.noAlarms,
+                      style: TextStyle(
+                        fontSize: 13.sp,
+                        color: AppColors.textHint,
+                      ),
+                    ),
                   ),
                 )
-              : _alarms.isEmpty
-                  ? Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(20.w),
-                        child: Text(
-                          l10n.noAlarms,
-                          style: TextStyle(
-                            fontSize: 13.sp,
-                            color: AppColors.textHint,
-                          ),
-                        ),
-                      ),
-                    )
-                  : Column(
-                      children: _alarms
-                          .map((alarm) => _buildAlarmItem(alarm))
-                          .toList(),
-                    ),
+              : Column(
+                  children: _alarms
+                      .map((alarm) => _buildAlarmItem(alarm))
+                      .toList(),
+                ),
         ],
       ),
     );

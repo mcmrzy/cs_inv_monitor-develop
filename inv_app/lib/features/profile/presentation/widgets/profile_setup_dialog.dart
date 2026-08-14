@@ -102,7 +102,7 @@ class _ProfileSetupDialogState extends State<ProfileSetupDialog> {
       );
       if (image == null || !mounted) return;
 
-      // 圆形裁剪后再上传
+      // 圆角矩形裁剪后再上传
       final CroppedFile? cropped = await ImageCropper().cropImage(
         sourcePath: image.path,
         maxWidth: 512,
@@ -111,14 +111,14 @@ class _ProfileSetupDialogState extends State<ProfileSetupDialog> {
         compressQuality: 85,
         uiSettings: [
           AndroidUiSettings(
-            cropStyle: CropStyle.circle,
+            cropStyle: CropStyle.rectangle,
             lockAspectRatio: true,
             initAspectRatio: CropAspectRatioPreset.square,
-            // 隐藏比例工具栏：固定方形裁剪，避免用户改比例破坏圆形头像
+            // 隐藏比例工具栏：固定方形裁剪，避免用户改比例破坏头像形状
             hideBottomControls: true,
           ),
           IOSUiSettings(
-            cropStyle: CropStyle.circle,
+            cropStyle: CropStyle.rectangle,
             aspectRatioLockEnabled: true,
             aspectRatioPresets: [CropAspectRatioPreset.square],
           ),
@@ -309,7 +309,8 @@ class _ProfileSetupDialogState extends State<ProfileSetupDialog> {
                         width: 76.w,
                         height: 76.w,
                         decoration: BoxDecoration(
-                          shape: BoxShape.circle,
+                          // 圆角矩形头像（微信风格）
+                          borderRadius: BorderRadius.circular(12.r),
                           color: AppColors.primary.withValues(alpha: 0.1),
                           image: _getFullAvatarUrl(_avatarUrl) != null
                               ? DecorationImage(

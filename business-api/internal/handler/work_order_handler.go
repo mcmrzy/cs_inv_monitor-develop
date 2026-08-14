@@ -82,7 +82,8 @@ func (h *WorkOrderHandler) List(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
-	filter := workOrderDataScope("w", isSystemAdmin, 1) + ` AND ($2='' OR w.status=$2) AND ($3='' OR w.priority=$3)`
+	// status 支持逗号分隔多值（如 resolved,closed），保持单值兼容
+	filter := workOrderDataScope("w", isSystemAdmin, 1) + ` AND ($2='' OR w.status=ANY(string_to_array($2, ','))) AND ($3='' OR w.priority=$3)`
 	var total int64
 	if err := h.db.QueryRow(ctx, `SELECT COUNT(*) FROM work_orders w WHERE `+filter, userID, status, priority).Scan(&total); err != nil {
 		logger.Error("list work orders count failed",

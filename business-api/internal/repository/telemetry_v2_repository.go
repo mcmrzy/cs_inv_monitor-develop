@@ -183,15 +183,16 @@ func (r *DeviceRepository) GetStationRealtimeSummary(ctx context.Context, statio
 	var energy, power float64
 	err := r.db.QueryRow(ctx, `SELECT ROUND(COALESCE(SUM(e.pv_energy),0)::numeric,2)::float8,COALESCE(SUM(l.ac_active_power),0)
 		FROM devices d LEFT JOIN device_energy_day e ON e.device_sn=d.sn AND e.stat_date=$2::date
-		LEFT JOIN device_latest_state l ON l.device_sn=d.sn
+		LEFT JOIN device_latest_state l ON l.device_sn=d.sn AND l.updated_at > NOW() - INTERVAL '5 minutes'
 		WHERE d.station_id=$1 AND d.deleted_at IS NULL`, stationID, today).Scan(&energy, &power)
 	return energy, power, err
 }
 
 func (r *DeviceRepository) GetStationPowerBreakdown(ctx context.Context, stationID int64) (pvPower, loadPower, gridPower, battPower, battSoc float64) {
+	// 新鲜度过滤（5 分钟）：离线残留的 device_latest_state 不再计入实时功率/能量流，避免电站离线后能量流仍"流动"
 	_ = r.db.QueryRow(ctx, `SELECT COALESCE(SUM(l.pv_total_power),0),COALESCE(SUM(l.ac_active_power),0),
 		COALESCE(SUM(l.battery_power),0),COALESCE(AVG(l.battery_soc),0)
-		FROM devices d JOIN device_latest_state l ON l.device_sn=d.sn
+		FROM devices d JOIN device_latest_state l ON l.device_sn=d.sn AND l.updated_at > NOW() - INTERVAL '5 minutes'
 		WHERE d.station_id=$1 AND d.deleted_at IS NULL`, stationID).Scan(&pvPower, &loadPower, &battPower, &battSoc)
 	return pvPower, loadPower, 0, battPower, battSoc
 }

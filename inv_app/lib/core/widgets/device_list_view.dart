@@ -5,7 +5,7 @@ import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/widgets/jiggle_once.dart';
 import 'package:inv_app/core/widgets/pagination_bar.dart';
-import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
+import 'package:inv_app/core/widgets/pressable_gesture_detector.dart';
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
@@ -237,8 +237,9 @@ class _DeviceCardState extends State<DeviceCard>
     Widget cardContent = Padding(
       // margin 放在缩放外层：与电站卡片结构一致，按下时只缩放卡片本体
       padding: EdgeInsets.only(bottom: 12.h),
-      child: GestureDetector(
+      child: PressableGestureDetector(
         // 与电站卡片一致的手感：按下缩放、抬起恢复并跳转
+        // 长按 300ms 达成（与电站/通知卡片手感一致，比默认 500ms 更灵敏）
         onTapDown: (_) => _controller.forward(),
         onTapUp: (_) {
           _controller.reverse();
@@ -341,7 +342,7 @@ class DeviceListView extends StatefulWidget {
   final ValueChanged<String>? onLongPressDevice;
   // 排序模式：启用 ReorderableListView 长按拖动
   final bool sortMode;
-  // 下拉刷新回调：非空时非排序列表包 StyledRefreshIndicator 支持下拉刷新
+  // 下拉刷新回调：保留兼容，传 null 即无
   final Future<void> Function()? onRefresh;
 
   const DeviceListView({
@@ -363,18 +364,28 @@ class DeviceListView extends StatefulWidget {
 }
 
 class _DeviceListViewState extends State<DeviceListView> {
+  // 分页每页条数（与电站列表每页 10 条保持一致）
+  static const int _pageSize = 10;
   int _deviceFilter = 0;
   String _searchQuery = '';
-  // 非排序模式分页页码（1-based）；搜索/筛选/设备集合变化时重置为 1
-  int _page = 1;
+  // 非排序模式当前页码（1-based）：超过一页时底部显示上一页/下一页/共几页
+  int _currentPage = 1;
   // 拖动排序后的设备顺序：以本地状态持有，避免每次 build
   // 从 widget.devices 重新派生导致排序丢失
   late List<dynamic> _ordered;
+  // 非排序列表滚动控制器：翻页后跳回列表顶部
+  final ScrollController _listController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _ordered = List.of(widget.devices);
+  }
+
+  @override
+  void dispose() {
+    _listController.dispose();
+    super.dispose();
   }
 
   @override
@@ -384,8 +395,8 @@ class _DeviceListViewState extends State<DeviceListView> {
     // 拖动排序后父级刷新返回同集合数据时保持本地顺序
     if (!_sameSnSet(oldWidget.devices, widget.devices)) {
       _ordered = List.of(widget.devices);
-      // 设备集合变化（新增/删除/刷新）时回到第一页
-      _page = 1;
+      // 设备集合变化（新增/删除/刷新）时重置回第一页
+      _currentPage = 1;
     }
   }
 
@@ -451,52 +462,55 @@ class _DeviceListViewState extends State<DeviceListView> {
     return 'inv';
   }
 
-  // 非排序列表：分页 + onRefresh 非空时用 StyledRefreshIndicator 包裹支持下拉刷新
-  // （分页栏固定在列表底部，不随列表滚动）
-  Widget _buildNonSortList(List<dynamic> paged, int pageCount, int safePage) {
-    final listView = ListView.builder(
+  // 非排序列表：分页卡片移入列表末尾 item，透明背景
+  Widget _buildNonSortList(List<dynamic> visible, int totalPages) {
+    return ListView.builder(
+      controller: _listController,
       physics: const BouncingScrollPhysics(),
       padding: EdgeInsets.fromLTRB(16.w, 4.h, 16.w, (widget.bottomPadding ?? 100).h),
       addAutomaticKeepAlives: false,
       addRepaintBoundaries: true,
-      itemCount: paged.length,
-      itemBuilder: (_, i) => DeviceCard(
-        key: ValueKey(paged[i]['sn'] ?? i),
-        device: paged[i],
-        onLongPressDevice: widget.onLongPressDevice,
-        sortMode: widget.sortMode,
-      ),
-    );
-    final content = Column(
-      children: [
-        Expanded(child: listView),
-        // 超过一页才显示分页栏
-        if (pageCount > 1)
-          PaginationBar(
-            currentPage: safePage,
-            totalPages: pageCount,
-            onPageChanged: (p) => setState(() => _page = p),
-          ),
-      ],
-    );
-    if (widget.onRefresh == null) return content;
-    return StyledRefreshIndicator(
-      color: AppColors.primary,
-      onRefresh: widget.onRefresh!,
-      child: content,
+      itemCount: visible.length + (totalPages > 1 ? 1 : 0),
+      itemBuilder: (_, i) {
+        // 末尾 item：透明背景翻页卡片
+        if (i == visible.length && totalPages > 1) {
+          return Container(
+            color: Colors.transparent,
+            padding: EdgeInsets.symmetric(vertical: 12.h),
+            child: PaginationBar(
+              currentPage: _currentPage,
+              totalPages: totalPages,
+              onPageChanged: (p) {
+                setState(() => _currentPage = p);
+                // 翻页后跳回列表顶部，避免停留在上一页滚动位置
+                if (_listController.hasClients) {
+                  _listController.jumpTo(0);
+                }
+              },
+            ),
+          );
+        }
+        return DeviceCard(
+          key: ValueKey(visible[i]['sn'] ?? i),
+          device: visible[i],
+          onLongPressDevice: widget.onLongPressDevice,
+          sortMode: widget.sortMode,
+        );
+      },
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final filtered = _filterDevices(_ordered);
-    // 分页：每页 20 条；不足一页时整页展示（PaginationBar 自身也会兜底隐藏）
-    final pageCount = filtered.isEmpty ? 1 : (filtered.length / 20).ceil();
-    final safePage = _page.clamp(1, pageCount);
-    final pageEnd = safePage * 20 < filtered.length ? safePage * 20 : filtered.length;
-    final paged = pageCount <= 1
-        ? filtered
-        : filtered.sublist((safePage - 1) * 20, pageEnd);
+    // 显式分页：每页 _pageSize 条；超过一页时列表底部显示分页栏（上一页/下一页/共几页）
+    final totalPages = (filtered.length / _pageSize).ceil();
+    // 数据集合缩短（刷新/删除）后当前页可能越界：钳制到有效范围
+    if (_currentPage > totalPages) {
+      _currentPage = totalPages < 1 ? 1 : totalPages;
+    }
+    final start = (_currentPage - 1) * _pageSize;
+    final visible = filtered.skip(start).take(_pageSize).toList();
     final headerBgColor =
         widget.whiteHeader ? AppColor.surfaceContainer(context) : AppColor.surface(context);
     final headerChipBgColor =
@@ -512,14 +526,14 @@ class _DeviceListViewState extends State<DeviceListView> {
                 DeviceSearchBar(
                   onSearchChanged: (v) => setState(() {
                     _searchQuery = v;
-                    _page = 1;
+                    _currentPage = 1;
                   }),
                 ),
               DeviceFilterBar(
                   selectedIndex: _deviceFilter,
                   onSelected: (i) => setState(() {
                     _deviceFilter = i;
-                    _page = 1;
+                    _currentPage = 1;
                   }),
                   filterLabels: widget.filterLabels,
                   backgroundColor: headerChipBgColor),
@@ -588,7 +602,7 @@ class _DeviceListViewState extends State<DeviceListView> {
                         ),
                       ),
                     )
-                  : _buildNonSortList(paged, pageCount, safePage),
+                  : _buildNonSortList(visible, totalPages),
         ),
       ],
     );

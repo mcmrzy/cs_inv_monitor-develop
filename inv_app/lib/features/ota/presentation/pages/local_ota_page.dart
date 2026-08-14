@@ -3,14 +3,19 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:inv_app/core/errors/ota_error_types.dart';
+import 'package:inv_app/core/services/ble/ble_adapter.dart';
 import 'package:inv_app/core/services/firmware_download_service.dart';
 import 'package:inv_app/core/services/local_communication_service.dart';
-import 'package:inv_app/core/errors/ota_error_types.dart';
-import 'package:inv_app/core/services/local_firmware_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/wifi_scan_service.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
+import 'package:inv_app/core/widgets/wifi_enable_dialog.dart';
+import 'package:inv_app/features/ota/data/datasources/ble_communication_service.dart';
+import 'package:inv_app/features/ota/data/datasources/wifi_ap_communication_service.dart';
+import 'package:inv_app/features/ota/domain/entities/local_channel.dart';
+import 'package:inv_app/features/ota/domain/repositories/local_communication_repository.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -37,6 +42,11 @@ class LocalOTAPage extends StatefulWidget {
   final String? fileSha256;
   final int? securityVersion;
   final String? releaseSignature;
+  final LocalCommunicationChannel channel;
+
+  /// 嵌入模式：作为 Tab 内容嵌入双通道页时不渲染自身 Scaffold/AppBar，
+  /// 仅渲染升级流程主体（步骤指示 + 内容），由外层页面提供 AppBar。
+  final bool embedded;
 
   const LocalOTAPage({
     super.key,
@@ -50,6 +60,8 @@ class LocalOTAPage extends StatefulWidget {
     this.fileSha256,
     this.securityVersion,
     this.releaseSignature,
+    this.channel = LocalCommunicationChannel.wifiAp,
+    this.embedded = false,
   });
 
   @override
@@ -83,7 +95,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   bool _autoConnecting = false;
 
   late final FirmwareDownloadService _downloadService;
-  late final LocalFirmwareService _firmwareService;
+  late final LocalCommunicationRepository _communicationService;
 
   StreamSubscription<double>? _downloadProgressSub;
 
@@ -92,7 +104,18 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     super.initState();
     _downloadService =
         FirmwareDownloadService(getIt<Dio>(), getIt<SharedPreferences>());
-    _firmwareService = LocalFirmwareService(LocalCommunicationService());
+
+    // 根据通道类型创建对应的通信服务
+    switch (widget.channel) {
+      case LocalCommunicationChannel.ble:
+        _communicationService = BleCommunicationService(
+          adapter: getIt<BleAdapter>(),
+        );
+        break;
+      case LocalCommunicationChannel.wifiAp:
+        _communicationService = WifiApCommunicationService();
+        break;
+    }
 
     _downloadProgressSub =
         _downloadService.downloadProgressStream.listen((progress) {
@@ -137,9 +160,14 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   void dispose() {
     _downloadProgressSub?.cancel();
     _downloadService.dispose();
-    // 退出页面时恢复正常网络，取消forceWifiUsage
-    WiFiForIoTPlugin.disconnect().catchError((_) => false);
-    WiFiForIoTPlugin.forceWifiUsage(false).catchError((_) => false);
+    // 清理通信服务资源
+    if (_communicationService case BleCommunicationService service) {
+      service.dispose();
+    } else {
+      // WiFi 通道：退出页面时恢复正常网络
+      WiFiForIoTPlugin.disconnect().catchError((_) => false);
+      WiFiForIoTPlugin.forceWifiUsage(false).catchError((_) => false);
+    }
     super.dispose();
   }
 
@@ -151,7 +179,14 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     });
     // 进入连接设备步骤时自动开始扫描+连接
     if (step == LocalOTAStep.connectDevice) {
-      _autoScanAndConnect();
+      switch (widget.channel) {
+        case LocalCommunicationChannel.ble:
+          _autoScanAndConnectBle();
+          break;
+        case LocalCommunicationChannel.wifiAp:
+          _autoScanAndConnect();
+          break;
+      }
     }
   }
 
@@ -188,6 +223,11 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
           _scanningWifi = false;
           _errorMessage = l10n.enableLocationService;
         });
+        return;
+      }
+      // 扫描前确保手机 WiFi 已开启（未开启弹窗引导，取消则中止扫描，Q1）
+      if (!await ensureWifiEnabled(context)) {
+        if (mounted) setState(() => _scanningWifi = false);
         return;
       }
       await WiFiForIoTPlugin.forceWifiUsage(true);
@@ -272,6 +312,65 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     }
   }
 
+  /// 自动扫描BLE设备并连接
+  Future<void> _autoScanAndConnectBle() async {
+    // 已在处理中或已连接成功，不重复触发
+    if (_scanningWifi || _autoConnecting || _isProcessing || _selectedAp != null) {
+      return;
+    }
+
+    setState(() {
+      _scanningWifi = true;
+      _errorMessage = null;
+    });
+
+    try {
+      // 检查蓝牙权限
+      final bluetoothStatus = await Permission.bluetooth.request();
+      if (!mounted) return;
+      if (!bluetoothStatus.isGranted) {
+        final l10n = AppLocalizations.of(context)!;
+        setState(() {
+          _scanningWifi = false;
+          _errorMessage = l10n.str('bluetooth_permission_required', {});
+        });
+        return;
+      }
+
+      // 使用通信服务连接设备
+      final connected = await _communicationService.connectToDevice(
+        deviceSN: widget.deviceSN,
+        deviceIP: widget.deviceIP,
+      );
+      if (!mounted) return;
+
+      if (!connected) {
+        final l10n = AppLocalizations.of(context)!;
+        setState(() {
+          _scanningWifi = false;
+          _errorMessage = l10n.str('ble_connection_failed', {'sn': widget.deviceSN});
+        });
+        return;
+      }
+
+      // 连接成功，一次性更新状态
+      setState(() {
+        _scanningWifi = false;
+        _autoConnecting = false;
+      });
+
+      // 自动测试连接并进入下一步
+      _checkConnectionAndProceed();
+    } catch (e) {
+      if (!mounted) return;
+      final l10n = AppLocalizations.of(context)!;
+      setState(() {
+        _scanningWifi = false;
+        _errorMessage = l10n.str('ble_scan_failed', {'error': '$e'});
+      });
+    }
+  }
+
   Future<void> _startDownload() async {
     if (widget.firmwareUrl == null ||
         widget.firmwareFileName == null ||
@@ -315,37 +414,41 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       _errorMessage = null;
     });
 
-    // 检查当前WiFi连接
+    // 根据通道类型检查连接
+    bool connected = false;
     String? currentSsid;
-    try {
-      currentSsid = await WiFiForIoTPlugin.getSSID();
-      final isConnected = await WiFiForIoTPlugin.isConnected();
-      debugPrint('Current SSID: $currentSsid, isConnected: $isConnected');
 
-      if (currentSsid == null || !currentSsid.startsWith('CS_INV')) {
-        setState(() {
-          _isProcessing = false;
-          _errorMessage =
-              l10n.str('connect_wifi_first', {'wifi': currentSsid ?? ''});
-        });
-        return;
+    if (widget.channel == LocalCommunicationChannel.wifiAp) {
+      // WiFi 通道：检查当前WiFi连接
+      try {
+        currentSsid = await WiFiForIoTPlugin.getSSID();
+        final isConnected = await WiFiForIoTPlugin.isConnected();
+        debugPrint('Current SSID: $currentSsid, isConnected: $isConnected');
+
+        if (currentSsid == null || !currentSsid.startsWith('CS_INV')) {
+          setState(() {
+            _isProcessing = false;
+            _errorMessage =
+                l10n.str('connect_wifi_first', {'wifi': currentSsid ?? ''});
+          });
+          return;
+        }
+      } catch (e) {
+        debugPrint('getSSID error: $e');
       }
-    } catch (e) {
-      debugPrint('getSSID error: $e');
+
+      // 强制使用WiFi
+      try {
+        await WiFiForIoTPlugin.forceWifiUsage(true);
+        debugPrint('forceWifiUsage(true) called');
+        await Future.delayed(const Duration(seconds: 3));
+      } catch (e) {
+        debugPrint('forceWifiUsage error: $e');
+      }
     }
 
-    // 强制使用WiFi
-    try {
-      await WiFiForIoTPlugin.forceWifiUsage(true);
-      debugPrint('forceWifiUsage(true) called');
-      await Future.delayed(const Duration(seconds: 3));
-    } catch (e) {
-      debugPrint('forceWifiUsage error: $e');
-    }
-
-    // 尝试连接
-    final connected =
-        await _firmwareService.testDeviceConnection(widget.deviceIP);
+    // 尝试连接（两种通道都使用统一接口）
+    connected = await _communicationService.testConnection(widget.deviceIP);
     debugPrint('Connection test result: $connected');
 
     if (connected) {
@@ -460,11 +563,19 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     );
 
     try {
-      // 上传固件文件到设备
-      await _firmwareService.uploadFirmware(
+      // 上传固件文件到设备（使用统一通信接口）
+      await _communicationService.uploadFirmware(
         deviceIP: widget.deviceIP,
         filePath: _selectedFilePath!,
-        manifest: manifest,
+        manifest: {
+          'target': manifest.target,
+          'task_id': manifest.taskId,
+          'version': manifest.version,
+          'sha256': manifest.sha256,
+          'signature': manifest.signature,
+          'security_version': manifest.securityVersion,
+          'timeout_seconds': manifest.timeoutSeconds,
+        },
         onProgress: (sent, total) {
           if (total > 0 && mounted) {
             setState(() {
@@ -508,10 +619,16 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     }
   }
 
-  /// 升级结束后断开设备热点WiFi，恢复正常网络
+  /// 升级结束后断开连接，恢复正常网络
   void _disconnectDeviceHotspot() {
-    WiFiForIoTPlugin.disconnect().catchError((_) => false);
-    WiFiForIoTPlugin.forceWifiUsage(false).catchError((_) => false);
+    if (widget.channel == LocalCommunicationChannel.ble) {
+      // BLE通道：断开BLE连接
+      _communicationService.disconnect();
+    } else {
+      // WiFi通道：断开WiFi热点
+      WiFiForIoTPlugin.disconnect().catchError((_) => false);
+      WiFiForIoTPlugin.forceWifiUsage(false).catchError((_) => false);
+    }
   }
 
   /// 本地OTA成功后，上报结果到后端
@@ -559,6 +676,8 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   /// 尝试重新连接设备热点
   Future<bool> _reconnectDeviceHotspot() async {
     try {
+      // 重连前确保手机 WiFi 已开启（未开启引导开启，取消则中止，Q1）
+      if (!await ensureWifiEnabled(context)) return false;
       await WiFiForIoTPlugin.forceWifiUsage(true);
       final networks = await scanWifiNetworks();
       final sn = widget.deviceSN.toUpperCase();
@@ -614,45 +733,46 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       }
       isFirstPoll = false;
 
-      // 1. 先检查 WiFi 连接状态
-      final wifiConnected = await _isDeviceHotspotConnected();
+      // 1. 检查连接状态（仅WiFi通道需要检查热点）
+      if (widget.channel == LocalCommunicationChannel.wifiAp) {
+        final wifiConnected = await _isDeviceHotspotConnected();
 
-      if (!wifiConnected) {
-        offlineCount++;
-        // 设备热点断开 = 正在重启
-        if (mounted) {
-          setState(() {
-            _upgradeStatus = l10n.str(
-              'waiting_hotspot_recovery',
-              {'seconds': '$totalWaitSeconds'},
-            );
-          });
-        }
-
-        // 每 2 次离线检测（约 2 秒）尝试一次重连
-        if (offlineCount % 2 == 0) {
-          final reconnected = await _reconnectDeviceHotspot();
-          if (reconnected && mounted) {
+        if (!wifiConnected) {
+          offlineCount++;
+          // 设备热点断开 = 正在重启
+          if (mounted) {
             setState(() {
-              _upgradeStatus = l10n.str('hotspot_reconnected', {});
+              _upgradeStatus = l10n.str(
+                'waiting_hotspot_recovery',
+                {'seconds': '$totalWaitSeconds'},
+              );
             });
-            offlineCount = 0;
-            // 重连成功，继续下面的轮询
+          }
+
+          // 每 2 次离线检测（约 2 秒）尝试一次重连
+          if (offlineCount % 2 == 0) {
+            final reconnected = await _reconnectDeviceHotspot();
+            if (reconnected && mounted) {
+              setState(() {
+                _upgradeStatus = l10n.str('hotspot_reconnected', {});
+              });
+              offlineCount = 0;
+              // 重连成功，继续下面的轮询
+            } else {
+              continue; // 重连失败，继续等待
+            }
           } else {
-            continue; // 重连失败，继续等待
+            continue; // 热点未恢复，继续等待
           }
         } else {
-          continue; // 热点未恢复，继续等待
+          offlineCount = 0;
         }
-      } else {
-        offlineCount = 0;
       }
 
-      // 2. 热点已连接，尝试获取升级进度
+      // 2. 已连接，尝试获取升级进度
       try {
-        final progress = await _firmwareService.getLocalOTAProgress(
-          deviceIP: widget.deviceIP,
-        );
+        // 使用统一通信接口获取进度
+        final progress = await _communicationService.getProgress(widget.deviceIP);
         final status = (progress['state'] as String? ??
                 progress['status'] as String? ??
                 '')
@@ -696,9 +816,8 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                           '');
           if (newVersion == null) {
             try {
-              final info = await _firmwareService.getDeviceInfo(
-                deviceIP: widget.deviceIP,
-              );
+              // 使用统一通信接口获取设备信息
+              final info = await _communicationService.getDeviceInfo(widget.deviceIP);
               debugPrint('Device info response: $info');
               // 同样优先 main_version
               final infoMainVer = info['main_version'] as String? ?? '';
@@ -818,6 +937,21 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final body = Column(
+      children: [
+        _buildStepIndicator(),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.all(16.w),
+            child: _buildCurrentStepContent(),
+          ),
+        ),
+      ],
+    );
+    // 嵌入模式：由外层页面提供 AppBar 与 Scaffold
+    if (widget.embedded) {
+      return body;
+    }
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
@@ -828,18 +962,32 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         centerTitle: true,
         elevation: 0,
         scrolledUnderElevation: 0.5,
-      ),
-      body: Column(
-        children: [
-          _buildStepIndicator(),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.all(16.w),
-              child: _buildCurrentStepContent(),
+        actions: [
+          // 显示当前使用的通道类型
+          Padding(
+            padding: EdgeInsets.only(right: 16.w),
+            child: Chip(
+              label: Text(
+                widget.channel == LocalCommunicationChannel.ble ? 'BLE' : 'WiFi',
+                style: TextStyle(
+                  fontSize: 12.sp,
+                  fontWeight: FontWeight.w600,
+                  color: widget.channel == LocalCommunicationChannel.ble
+                      ? Colors.blue
+                      : Colors.orange,
+                ),
+              ),
+              backgroundColor: widget.channel == LocalCommunicationChannel.ble
+                  ? Colors.blue.withValues(alpha: 0.1)
+                  : Colors.orange.withValues(alpha: 0.1),
+              side: BorderSide.none,
+              padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 2.h),
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
           ),
         ],
       ),
+      body: body,
     );
   }
 
@@ -1314,11 +1462,15 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                     _isProcessing
                         ? l10n.checkConnection
                         : _selectedAp != null
-                            ? l10n.str(
-                                'connecting_to',
-                                {'ssid': _selectedAp?.ssid ?? ''},
-                              )
-                            : l10n.scanningDeviceHotspot,
+                            ? (widget.channel == LocalCommunicationChannel.ble
+                                ? l10n.str('connecting_ble_device', {'sn': widget.deviceSN})
+                                : l10n.str(
+                                    'connecting_to',
+                                    {'ssid': _selectedAp?.ssid ?? ''},
+                                  ))
+                            : (widget.channel == LocalCommunicationChannel.ble
+                                ? l10n.str('scanning_ble_device', {})
+                                : l10n.scanningDeviceHotspot),
                     style: TextStyle(
                       fontSize: 14.sp,
                       color: AppColors.textSecondary,
@@ -1326,7 +1478,9 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                   ),
                 ] else if (_selectedAp != null && _errorMessage == null) ...[
                   Icon(
-                    Icons.wifi_rounded,
+                    widget.channel == LocalCommunicationChannel.ble
+                        ? Icons.bluetooth_rounded
+                        : Icons.wifi_rounded,
                     size: 48.sp,
                     color: AppColors.successLight,
                   ),
@@ -1341,7 +1495,9 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                   ),
                   SizedBox(height: 4.h),
                   Text(
-                    _selectedAp!.ssid ?? '',
+                    widget.channel == LocalCommunicationChannel.ble
+                        ? widget.deviceSN
+                        : (_selectedAp!.ssid ?? ''),
                     style: TextStyle(
                       fontSize: 13.sp,
                       color: AppColors.textSecondary,
@@ -1349,7 +1505,9 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                   ),
                 ] else ...[
                   Icon(
-                    Icons.wifi_find_rounded,
+                    widget.channel == LocalCommunicationChannel.ble
+                        ? Icons.bluetooth_searching_rounded
+                        : Icons.wifi_find_rounded,
                     size: 48.sp,
                     color: AppColors.primary,
                   ),
@@ -1385,10 +1543,19 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                     width: double.infinity,
                     height: 40.h,
                     child: OutlinedButton.icon(
-                      onPressed: _autoScanAndConnect,
-                      icon: Icon(Icons.refresh_rounded, size: 18.sp),
+                      onPressed: widget.channel == LocalCommunicationChannel.ble
+                          ? _autoScanAndConnectBle
+                          : _autoScanAndConnect,
+                      icon: Icon(
+                        widget.channel == LocalCommunicationChannel.ble
+                            ? Icons.bluetooth_searching_rounded
+                            : Icons.refresh_rounded,
+                        size: 18.sp,
+                      ),
                       label: Text(
-                        l10n.rescanHotspot,
+                        widget.channel == LocalCommunicationChannel.ble
+                            ? l10n.str('rescan_ble_device', {})
+                            : l10n.rescanHotspot,
                         style: TextStyle(fontSize: 13.sp),
                       ),
                       style: OutlinedButton.styleFrom(

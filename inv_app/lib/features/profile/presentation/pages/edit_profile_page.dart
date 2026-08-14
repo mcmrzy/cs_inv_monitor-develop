@@ -116,7 +116,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
       if (image == null) return;
 
-      // 圆形裁剪后再上传
+      // 圆角矩形裁剪后再上传
       final CroppedFile? cropped = await ImageCropper().cropImage(
         sourcePath: image.path,
         maxWidth: 512,
@@ -125,14 +125,14 @@ class _EditProfilePageState extends State<EditProfilePage> {
         compressQuality: 85,
         uiSettings: [
           AndroidUiSettings(
-            cropStyle: CropStyle.circle,
+            cropStyle: CropStyle.rectangle,
             lockAspectRatio: true,
             initAspectRatio: CropAspectRatioPreset.square,
-            // 隐藏比例工具栏：固定方形裁剪，避免用户改比例破坏圆形头像
+            // 隐藏比例工具栏：固定方形裁剪，避免用户改比例破坏头像形状
             hideBottomControls: true,
           ),
           IOSUiSettings(
-            cropStyle: CropStyle.circle,
+            cropStyle: CropStyle.rectangle,
             aspectRatioLockEnabled: true,
             aspectRatioPresets: [CropAspectRatioPreset.square],
           ),
@@ -187,12 +187,34 @@ class _EditProfilePageState extends State<EditProfilePage> {
     final l10n = AppLocalizations.of(context)!;
 
     try {
+      // 记录本次提交的字段值，等待状态变化时校验是否已生效
+      // （防止后台旧资料刷新响应被误判为本次保存结果）
+      final submittedNickname = nickname?.trim();
+      final submittedCountry = country?.trim();
+      final submittedRegion = regionName?.trim();
+      final submittedAvatar = avatar;
       final completer = Completer<void>();
 
-      // 创建一个临时的监听器来等待状态变化
+      // 创建一个临时的监听器来等待状态变化：
+      // 仅当 AuthAuthenticated 中已包含本次提交字段（或保存失败）时才视为完成
       final subscription = context.read<AuthBloc>().stream.listen((state) {
-        if (state is AuthAuthenticated || state is AuthError) {
+        if (state is AuthError) {
           completer.complete();
+          return;
+        }
+        if (state is AuthAuthenticated) {
+          final user = state.user;
+          final nicknameOk = submittedNickname == null ||
+              (user?.nickname ?? '') == submittedNickname;
+          final countryOk = submittedCountry == null ||
+              (user?.country ?? '') == submittedCountry;
+          final regionOk = submittedRegion == null ||
+              (user?.region ?? '') == submittedRegion;
+          final avatarOk = submittedAvatar == null ||
+              (user?.avatar ?? '') == submittedAvatar;
+          if (nicknameOk && countryOk && regionOk && avatarOk) {
+            completer.complete();
+          }
         }
       });
 
@@ -205,8 +227,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
             ),
           );
 
-      // 等待 AuthBloc 处理完成
-      await completer.future;
+      // 等待 AuthBloc 处理完成；15s 超时兜底，避免永久等待
+      await completer.future.timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {},
+      );
       await subscription.cancel();
 
       if (!mounted) return false;
@@ -1041,7 +1066,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
                   height: 80.w,
                   decoration: BoxDecoration(
                     color: AppColors.primary.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
+                    // 圆角矩形头像（微信风格）
+                    borderRadius: BorderRadius.circular(12.r),
                     image: avatarUrl.isNotEmpty
                         ? DecorationImage(
                             image: NetworkImage(avatarUrl),
@@ -1062,7 +1088,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     child: Container(
                       decoration: BoxDecoration(
                         color: Colors.black.withValues(alpha: 0.5),
-                        shape: BoxShape.circle,
+                        // 与头像圆角矩形形状保持一致
+                        borderRadius: BorderRadius.circular(12.r),
                       ),
                       child: Center(
                         child: SizedBox(

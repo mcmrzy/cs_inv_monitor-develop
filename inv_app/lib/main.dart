@@ -6,10 +6,13 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
+import 'package:home_widget/home_widget.dart';
 import 'package:inv_app/core/config/app_config.dart';
 import 'package:inv_app/core/services/ble/ble_direct_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/locale_service.dart';
+import 'package:inv_app/core/services/theme_service.dart';
+import 'package:inv_app/core/services/widget_update_service.dart';
 import 'package:inv_app/core/services/offline/offline_log_sync_service.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
@@ -24,6 +27,7 @@ import 'package:inv_app/core/services/jpush_service.dart';
 import 'package:inv_app/core/services/jverify_service.dart';
 import 'package:inv_app/core/services/deep_link_service.dart';
 import 'package:inv_app/core/services/network_status_service.dart';
+import 'package:inv_app/core/services/connection_mode_service.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 import 'package:inv_app/core/data/china_regions.dart';
 import 'package:inv_app/core/data/regions_data.dart';
@@ -68,6 +72,9 @@ void main() async {
   // 网络状态服务初始化：默认乐观在线，启动瞬间不误判离线
   unawaited(getIt<NetworkStatusService>().initialize());
 
+  // 连接模式服务初始化：恢复上次会话的本地/远程模式标记（需求 6）
+  unawaited(getIt<ConnectionModeService>().init());
+
   // 极光推送/认证 SDK 初始化改为首帧渲染后异步执行，
   // 不阻塞冷启动（一键登录的完整性由 SplashPage 的轮询兑底保证）
   unawaited(_initPushSdks());
@@ -77,6 +84,9 @@ void main() async {
 
   // 智能链接 Deep Link：冷启动 + 热启动接收 csinv://bind
   unawaited(_initDeepLinks());
+
+  // 桌面小组件：初始化共享数据分组 + 点击深链监听（invapp://notifications）
+  unawaited(_initWidgetDeepLinks());
 }
 
 Future<void> _restoreBleServices() async {
@@ -116,6 +126,36 @@ Future<void> _initDeepLinks() async {
   service.linkStream.listen(handle);
 }
 
+/// 桌面小组件初始化 + 点击深链
+///
+/// 通知小组件点击通过 HomeWidgetLaunchIntent 携带 invapp://notifications URI：
+/// - 冷启动：读初始 intent 的 URI 后跳转通知中心
+/// - 热启动：插件将新 intent 转发到 HomeWidget.widgetClicked 流
+Future<void> _initWidgetDeepLinks() async {
+  unawaited(WidgetUpdateService.init());
+
+  void handleUri(Uri? uri) {
+    if (uri == null) return;
+    debugPrint('[WidgetUpdate] widget clicked: $uri');
+    if (uri.host == 'notifications') {
+      AppRouter.router.push('/alarms');
+    }
+  }
+
+  // 热启动：点击小组件时插件通过 onNewIntent 转发 URI
+  HomeWidget.widgetClicked
+      .listen(handleUri)
+      .onError((Object e) => debugPrint('[WidgetUpdate] widgetClicked error: $e'));
+
+  // 冷启动：App 由小组件点击拉起时读初始 intent URI
+  try {
+    final initialUri = await HomeWidget.initiallyLaunchedFromHomeWidget();
+    handleUri(initialUri);
+  } catch (e) {
+    debugPrint('[WidgetUpdate] initiallyLaunchedFromHomeWidget failed: $e');
+  }
+}
+
 Future<void> _initPushSdks() async {
   // 初始化极光推送（在依赖注入完成后）
   try {
@@ -143,16 +183,26 @@ class InvApp extends StatefulWidget {
 
 class _InvAppState extends State<InvApp> {
   Locale _currentLocale = const Locale('zh', 'CN');
+  ThemeMode _themeMode = ThemeMode.system;
   StreamSubscription<Locale>? _localeSubscription;
+  StreamSubscription<ThemeMode>? _themeSubscription;
 
   @override
   void initState() {
     super.initState();
     _currentLocale = getIt<LocaleService>().currentLocale;
+    _themeMode = getIt<ThemeService>().currentThemeMode;
     _localeSubscription = getIt<LocaleService>().localeStream.listen((locale) {
       if (mounted) {
         setState(() {
           _currentLocale = locale;
+        });
+      }
+    });
+    _themeSubscription = getIt<ThemeService>().themeStream.listen((mode) {
+      if (mounted) {
+        setState(() {
+          _themeMode = mode;
         });
       }
     });
@@ -161,6 +211,7 @@ class _InvAppState extends State<InvApp> {
   @override
   void dispose() {
     _localeSubscription?.cancel();
+    _themeSubscription?.cancel();
     super.dispose();
   }
 
@@ -218,7 +269,7 @@ class _InvAppState extends State<InvApp> {
               debugShowCheckedModeBanner: false,
               theme: AppTheme.light,
               darkTheme: AppTheme.dark,
-              themeMode: ThemeMode.system,
+              themeMode: _themeMode,
               routerConfig: AppRouter.router,
               localizationsDelegates: const [
                 AppLocalizations.delegate,

@@ -187,6 +187,8 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	dashboardHandler := handler.NewDashboardHandler(db, rdb)
 	alertRuleHandler := handler.NewAlertRuleHandler(db)
 	workOrderHandler := handler.NewWorkOrderHandler(db)
+	configHandler := handler.NewConfigHandler(configService)
+	userOpLogHandler := handler.NewUserOpLogHandler(db)
 	parallelRepo := repository.NewParallelRepository(db)
 	parallelService := service.NewParallelService(parallelRepo)
 	parallelHandler := handler.NewParallelHandler(parallelService, deviceService)
@@ -262,6 +264,8 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 		DashboardHandler:              dashboardHandler,
 		AlertRuleHandler:              alertRuleHandler,
 		WorkOrderHandler:              workOrderHandler,
+		ConfigHandler:                 configHandler,
+		UserOpLogHandler:              userOpLogHandler,
 		ParallelHandler:               parallelHandler,
 		OrganizationHandler:           organizationHandler,
 		MemberLifecycleHandler:        memberLifecycleHandler,
@@ -694,6 +698,8 @@ type RouterDeps struct {
 	DashboardHandler              *handler.DashboardHandler
 	AlertRuleHandler              *handler.AlertRuleHandler
 	WorkOrderHandler              *handler.WorkOrderHandler
+	ConfigHandler                 *handler.ConfigHandler
+	UserOpLogHandler              *handler.UserOpLogHandler
 	ParallelHandler               *handler.ParallelHandler
 	OrganizationHandler           *handler.OrganizationHandler
 	MemberLifecycleHandler        *handler.MemberLifecycleHandler
@@ -985,6 +991,10 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			auth.DELETE("/alert-rules/:id", deps.AlertRuleHandler.Delete)
 
 			auth.GET("/work-orders", deps.WorkOrderHandler.List)
+			// 帮助中心配置（system_configs 表 help_center key，登录即可）
+			auth.GET("/config/help-center", deps.ConfigHandler.GetHelpCenter)
+			// 用户操作历史聚合端点（user_operation_logs + device_cmd_logs + device_upgrades）
+			auth.GET("/op-logs", deps.UserOpLogHandler.List)
 			// Renamed to avoid wildcard conflict with GET /work-orders/:id
 			auth.GET("/work-order-stats", deps.WorkOrderHandler.GetStatistics)
 			auth.GET("/work-order-templates", deps.WorkOrderHandler.ListTemplates)

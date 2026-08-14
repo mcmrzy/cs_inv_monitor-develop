@@ -5,3 +5,11 @@ class DeviceConnectionException implements Exception {
   @override
   String toString() => message;
 }
+
+/// 本地固件相关异常
+class LocalFirmwareException implements Exception {
+  final String message;
+  LocalFirmwareException(this.message);
+  @override
+  String toString() => message;
+}

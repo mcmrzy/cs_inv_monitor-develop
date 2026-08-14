@@ -43,7 +43,7 @@ dependencies:
   
   permission_handler: ^13.0.0
   image_picker: ^1.2.1
-  mobile_scanner: ^7.2.0
+  mobile_scanner: ^7.4.0
   wifi_iot: ^0.3.19
   wifi_scan: ^0.4.1+2
   flutter_blue_ultra: ^2.2.0  # FBP 1.x 社区延续版（BSD 3-Clause，免费商用）；flutter_blue_plus 1.36+ 商用需付费
@@ -63,6 +63,7 @@ dependencies:
   path_provider: ^2.1.2
   sqflite: ^2.4.2
   uuid: ^4.5.1
+  home_widget: ^0.9.3
 
   shimmer: ^3.0.0
 

@@ -232,7 +232,7 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
   Future<void> _loadMyOrgTypes() async {
     try {
       final result = await _apiService.get<List<dynamic>>(
-        '/api/v1/my/organizations',
+        '/my/organizations',
         fromJson: (data) => data as List,
       );
       final orgTypes = result.fold(

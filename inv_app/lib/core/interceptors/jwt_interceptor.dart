@@ -26,9 +26,9 @@ class JwtInterceptor extends Interceptor {
       options.headers['Authorization'] = 'Bearer $token';
 
       // 调试日志（生产环境应该移除或降低级别）
-      if (options.path.contains('/api/v1/organizations') ||
-          options.path.contains('/api/v1/invitations') ||
-          options.path.contains('/api/v1/devices/transfers')) {
+      if (options.path.contains('/organizations') ||
+          options.path.contains('/invitations') ||
+          options.path.contains('/devices/transfers')) {
         debugPrint('[JWT] Adding auth token to ${options.path}');
       }
     }

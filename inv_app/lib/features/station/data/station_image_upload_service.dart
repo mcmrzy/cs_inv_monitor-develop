@@ -7,7 +7,7 @@ class StationImageUploadService {
 
   StationImageUploadService(this._apiClient);
 
-  /// 上传电站卡片图片
+  /// 上传电站图片
   /// 返回图片URL
   Future<String> uploadStationImage(File imageFile) async {
     try {

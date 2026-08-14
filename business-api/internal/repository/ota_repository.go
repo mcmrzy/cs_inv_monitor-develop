@@ -757,6 +757,10 @@ func (r *OTARepository) GetPublishedPackagesForDevice(ctx context.Context, sn st
 		return nil, fmt.Errorf("get device by sn: %w", err)
 	}
 
+	// model 规范化（trim + 大小写归一）：降低设备上报 model 与升级包 model 格式差异（空格/大小写）导致的空列表；
+	// 仍保持精确匹配语义，避免跨型号误配。
+	deviceModel := strings.ToUpper(strings.TrimSpace(device.Model))
+
 	rows, err := r.db.Query(ctx, `
 		SELECT id, model, main_version, COALESCE(changelog,''), is_force, status,
 		       COALESCE(created_by,0), created_at, updated_at,
@@ -773,7 +777,7 @@ func (r *OTARepository) GetPublishedPackagesForDevice(ctx context.Context, sn st
 		      OR (rollout_type = 'device' AND $4 = ANY(string_to_array(rollout_targets, ',')))
 		  )
 		ORDER BY created_at DESC
-	`, device.Model, device.Model, fmt.Sprintf("%d", userID), sn)
+	`, deviceModel, deviceModel, fmt.Sprintf("%d", userID), sn)
 	if err != nil {
 		return nil, err
 	}

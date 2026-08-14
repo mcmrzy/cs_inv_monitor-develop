@@ -201,25 +201,18 @@ class JPushService {
   /// 根据通知类型执行页面跳转
   ///
   /// 跳转目标：
-  /// - device_alarm / alarm_cleared / device_offline / device_online → 设备详情页
+  /// - device_alarm / alarm_cleared / device_offline / device_online → 通知中心页面（/alarms）
+  ///   （上下线/告警等通知统一进通知中心，用户可在列表中查看具体告警并进入详情）
   /// - system_announcement → 通知中心页面（/alarms）
+  /// - 未知类型 → 兜底打开通知中心，避免点击无响应
   void _handleNavigation(JPushNotification notification) {
     final notifyType = notification.notifyType;
-    final deviceSn = notification.deviceSn;
 
     switch (notifyType) {
       case 'device_alarm':
       case 'alarm_cleared':
       case 'device_offline':
       case 'device_online':
-        if (deviceSn != null && deviceSn.isNotEmpty) {
-          AppRouter.router.go('/device/$deviceSn');
-        } else {
-          debugPrint(
-            '[JPushService] Missing device_sn for notify_type=$notifyType',
-          );
-        }
-        break;
       case 'system_announcement':
         AppRouter.router.go('/alarms');
         break;
@@ -233,9 +226,8 @@ class JPushService {
         AppRouter.router.go('/statistics');
         break;
       default:
-        debugPrint(
-          '[JPushService] Unknown notify_type: $notifyType, skip navigation',
-        );
+        // 未知类型兜底：仍打开通知中心，保证点击通知必有响应
+        AppRouter.router.go('/alarms');
     }
   }
 

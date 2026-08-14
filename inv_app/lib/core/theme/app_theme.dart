@@ -141,7 +141,8 @@ class AppTheme {
         type: BottomNavigationBarType.fixed,
         elevation: 0,
         backgroundColor: Colors.white,
-        selectedItemColor: const Color(0xFF0D47A1),
+        // 与电站详情页底部 Tab 选中色保持一致（AppColors.primary）
+        selectedItemColor: AppColors.primary,
         unselectedItemColor: const Color(0xFF9E9E9E),
         selectedLabelStyle:
             TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600),
@@ -414,7 +415,8 @@ class AppTheme {
         type: BottomNavigationBarType.fixed,
         elevation: 0,
         backgroundColor: const Color(0xFF1A1D24),
-        selectedItemColor: const Color(0xFF42A5F5),
+        // 与电站详情页底部 Tab 选中色保持一致（AppColors.primary）
+        selectedItemColor: AppColors.primary,
         unselectedItemColor: const Color(0xFF6B7280),
         selectedLabelStyle:
             TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600),

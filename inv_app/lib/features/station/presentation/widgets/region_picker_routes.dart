@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:inv_app/core/data/china_regions.dart';
 import 'package:inv_app/core/data/continents_data.dart';
 import 'package:inv_app/core/data/country_name_mapping.dart';
+import 'package:inv_app/core/data/province_name_mapping.dart';
 import 'package:inv_app/core/data/regions_data.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
@@ -79,8 +83,8 @@ class _ContinentCountryPickerPageState
     return countries;
   }
 
-  /// 搜索国家/省市并自动滚动到对应位置
-  void _searchAndNavigate(String query) {
+  /// 搜索国家/省市：国家命中则定位滚轮；省份命中则直达该国家省/市/区选择页（Q8）
+  Future<void> _searchAndNavigate(String query) async {
     if (query.isEmpty) {
       setState(() {
         _searchQuery = '';
@@ -119,32 +123,41 @@ class _ContinentCountryPickerPageState
       }
     }
 
-    // 2. 搜索省份/城市（在 globalRegions 中搜索）
+    // 2. 搜索省份/城市（在 globalRegions 中搜索）：命中省份直达该国家的省/市/区选择页
     for (final entry in globalRegions.entries) {
       final countryNameEn = entry.key;
       final provinces = entry.value;
       for (final province in provinces) {
         if (province.toLowerCase().contains(lowerQuery)) {
-          // 找到匹配的省份，找到对应的国家在哪个洲
           final countryNameZh = _getChineseCountryName(countryNameEn);
-          for (int i = 0; i < continents.length; i++) {
-            final continent = continents[i];
-            final countries = continent['countries'] as List? ?? [];
-            for (int j = 0; j < countries.length; j++) {
-              final country = Map<String, String>.from(countries[j] as Map);
-              if (country['name'] == countryNameZh) {
-                setState(() {
-                  _continentIdx = i;
-                  _countryIdx = j;
-                });
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  _continentCtrl.jumpToItem(i);
-                  _countryCtrl.jumpToItem(j);
-                });
-                return;
-              }
-            }
+          // 构造该国家的省份列表（与 edit_profile_page._provincesFor 同逻辑）
+          final provList = countryNameZh == '中国'
+              ? chinaRegions.keys.toList()
+              : (globalRegions[countryNameEn] ?? [])
+                  .map((p) => getLocalizedProvinceName(countryNameEn, p))
+                  .toList();
+          // 直达省/市/区选择页（复用两步流程的第二步组件）
+          final result = await Navigator.push<Map<String, String>>(
+            context,
+            RegionPickerRoute(
+              provinces: provList,
+              citiesFn: (p) {
+                if (countryNameZh != '中国') return [];
+                final m = chinaRegions[p];
+                if (m == null) return [];
+                return m.keys.toList();
+              },
+              districtsFn: (p, c) {
+                if (countryNameZh != '中国') return [];
+                return chinaRegions[p]?[c] ?? [];
+              },
+            ),
+          );
+          if (result != null && mounted) {
+            // 透传国家 + 省市区结果（与上层两步流程的消费结构一致）
+            Navigator.of(context).pop({'country': countryNameZh, ...result});
           }
+          return;
         }
       }
     }
@@ -246,14 +259,14 @@ class _ContinentCountryPickerPageState
                   child: TextField(
                     controller: _searchCtrl,
                     decoration: InputDecoration(
-                      hintText: '搜索国家/地区...',
+                      hintText: AppLocalizations.of(context)!.str('country_region_search_hint'),
                       prefixIcon: Icon(Icons.search, size: 20.sp, color: AppColors.textHint),
                       suffixIcon: _searchQuery.isNotEmpty
                           ? IconButton(
                               icon: Icon(Icons.clear, size: 18.sp, color: AppColors.textHint),
                               onPressed: () {
                                 _searchCtrl.clear();
-                                _searchAndNavigate('');
+                                unawaited(_searchAndNavigate(''));
                               },
                             )
                           : null,
@@ -274,7 +287,7 @@ class _ContinentCountryPickerPageState
                       fillColor: AppColor.surfaceHover(context),
                     ),
                     onChanged: (value) {
-                      _searchAndNavigate(value);
+                      unawaited(_searchAndNavigate(value));
                     },
                   ),
                 ),
@@ -491,11 +504,14 @@ class _RegionPickerPageState extends State<RegionPickerPage> {
 
   static const _itemH = 44.0;
 
+  final _searchCtrl = TextEditingController();
+  String _searchQuery = '';
+  Timer? _debounce;
+
   @override
   void initState() {
     super.initState();
     if (widget.provinceOnly || widget.provinces.isEmpty) {
-      // 仅省份模式（或数据缺失）：不计算市/区列表
       _cities = [];
       _districts = [];
     } else {
@@ -514,6 +530,8 @@ class _RegionPickerPageState extends State<RegionPickerPage> {
     _provCtrl.dispose();
     _cityCtrl.dispose();
     _distCtrl.dispose();
+    _searchCtrl.dispose();
+    _debounce?.cancel();
     super.dispose();
   }
 
@@ -550,6 +568,75 @@ class _RegionPickerPageState extends State<RegionPickerPage> {
 
   void _onDistChanged(int idx) {
     setState(() => _distIdx = idx);
+  }
+
+  /// 搜索输入防抖 300ms
+  void _onSearchChanged(String query) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      if (!mounted) return;
+      setState(() => _searchQuery = query);
+      _searchAndNavigate(query);
+    });
+  }
+
+  /// 搜索省/市/区并跳转匹配项
+  void _searchAndNavigate(String query) {
+    if (query.isEmpty) return;
+    // 搜索省份
+    final provIdx = widget.provinces.indexWhere((p) => p.contains(query));
+    if (provIdx < 0) return;
+
+    setState(() {
+      _provIdx = provIdx;
+      _cities = widget.citiesFn(widget.provinces[provIdx]);
+      _cityIdx = 0;
+      _districts = _cities.isNotEmpty
+          ? widget.districtsFn(widget.provinces[provIdx], _cities[0])
+          : [];
+      _distIdx = 0;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_provCtrl.hasClients) _provCtrl.jumpToItem(provIdx);
+      if (_cityCtrl.hasClients) _cityCtrl.jumpToItem(0);
+      if (_distCtrl.hasClients) _distCtrl.jumpToItem(0);
+    });
+
+    if (widget.provinceOnly) return;
+
+    // 搜索城市
+    final cityIdx = _cities.indexWhere((c) => c.contains(query));
+    if (cityIdx >= 0) {
+      setState(() {
+        _cityIdx = cityIdx;
+        _districts = widget.districtsFn(widget.provinces[provIdx], _cities[cityIdx]);
+        _distIdx = 0;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_cityCtrl.hasClients) _cityCtrl.jumpToItem(cityIdx);
+        if (_distCtrl.hasClients) _distCtrl.jumpToItem(0);
+      });
+      return;
+    }
+
+    // 搜索区县
+    for (final city in _cities) {
+      final districts = widget.districtsFn(widget.provinces[provIdx], city);
+      final distIdx = districts.indexWhere((d) => d.contains(query));
+      if (distIdx >= 0) {
+        final cityIdxForDist = _cities.indexOf(city);
+        setState(() {
+          _cityIdx = cityIdxForDist;
+          _districts = districts;
+          _distIdx = distIdx;
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_cityCtrl.hasClients) _cityCtrl.jumpToItem(cityIdxForDist);
+          if (_distCtrl.hasClients) _distCtrl.jumpToItem(distIdx);
+        });
+        return;
+      }
+    }
   }
 
   void _confirm() {
@@ -629,6 +716,37 @@ class _RegionPickerPageState extends State<RegionPickerPage> {
                         ),
                       ),
                     ],
+                  ),
+                ),
+                // 搜索框（对齐第一级搜索框风格）
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+                  child: TextField(
+                    controller: _searchCtrl,
+                    onChanged: _onSearchChanged,
+                    cursorColor: AppColors.primary,
+                    style: TextStyle(fontSize: 15.sp),
+                    decoration: InputDecoration(
+                      hintText: AppLocalizations.of(context)!.str('region_search_hint'),
+                      hintStyle: TextStyle(fontSize: 14.sp, color: AppColors.textHint),
+                      prefixIcon: Icon(Icons.search, size: 20.sp, color: AppColors.textHint),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: Icon(Icons.clear, size: 18.sp, color: AppColors.textHint),
+                              onPressed: () {
+                                _searchCtrl.clear();
+                                setState(() => _searchQuery = '');
+                              },
+                            )
+                          : null,
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+                      filled: true,
+                      fillColor: AppColors.surfaceHover,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12.r),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
                   ),
                 ),
                 SizedBox(

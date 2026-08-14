@@ -160,3 +160,60 @@ inv_app/assets/images/backgrounds/*.png
 
 # 智能链接下载目录（App 安装包体积大，不入库；bind.html 正常提交）
 deploy/web/apk/
+
+# 临时文件和调试脚本
+_tmp_*.txt
+_e2e_out*.txt
+_git_check.ps1
+_globe_probe.mjs
+_run_viper_test.ps1
+_viper_out.txt
+_color_audit_*.txt
+_integration_out*.txt
+check_mqtt_config.sh
+dev-start.ps1
+dev-start.sh
+verify-dev-config.ps1
+tmp_check*.sql
+
+# 备份目录
+_sync_backup_*/
+
+# 测试输出和覆盖率
+coverage/
+coverage.out
+
+# 临时测试目录
+_viper_test/
+tmp_viper_test/
+
+# 管理后台调试脚本
+inv-admin-frontend/_*.mjs
+
+# Canvas状态文件
+canvases/*.canvas.status.json
+
+# 设备通信开发配置
+device-communication/config.dev.yaml
+
+# 文档（可选，根据团队规范）
+docs/app-ui-guidelines.md
+docs/icon-art-requirements.md
+docs/ota-redesign-plan.md
+docs/ota-refactor-plan.md
+
+# E2E测试输出
+e2e_evidence/render_tree*.txt
+e2e_evidence/widget_tree*.txt
+e2e_evidence/t*.png
+e2e_evidence/big-screen-*.png
+e2e_evidence/globe-*.png
+
+# Android Kotlin构建目录
+inv_app/android/.kotlin/
+
+# 字体文件（可选，根据团队规范）
+inv_app/assets/fonts/
+
+# 工具备份
+tools/xiaoshuo_backup/
