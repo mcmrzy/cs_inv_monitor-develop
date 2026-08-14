@@ -187,6 +187,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       }
 
       // 检查手机 WiFi 是否开启：未开启则引导开启，取消则中止扫描（公共方法，Q1）
+      if (!mounted) return;
       final wifiEnabled = await ensureWifiEnabled(context);
       if (!wifiEnabled) {
         setState(() => _wifiScanning = false);
@@ -368,13 +369,49 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
     });
   }
 
-  /// 重新扫描附近WiFi（手机端，在连接设备热点后临时切回普通模式扫描）
+  /// 重新扫描附近 WiFi（手机端，在连接设备热点后临时切回普通模式扫描）
   Future<void> _rescanNearbyWifiFromPhone() async {
     setState(() {
       _scanningNearbyWifi = true;
     });
     try {
-      // 临时切回普通WiFi模式以执行扫描
+      // 扫描前检查位置权限（Android 6+ 扫描 WiFi 列表必须有位置权限，系统限制）
+      final granted = await _requestWifiPermissions();
+      if (!granted) {
+        setState(() => _scanningNearbyWifi = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(AppLocalizations.of(context)!.wifiPermissionHint),
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+        return;
+      }
+  
+      // 请求打开位置服务（Android 11 及以下必须开启定位才能扫描 WiFi）
+      final serviceEnabled = await Permission.location.serviceStatus.isEnabled;
+      if (!serviceEnabled && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.locationServiceHint),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+        setState(() => _scanningNearbyWifi = false);
+        return;
+      }
+  
+      // 检查手机 WiFi 是否开启：未开启则引导开启，取消则中止扫描（公共方法，Q1）
+      if (!mounted) return;
+      final wifiEnabled = await ensureWifiEnabled(context);
+      if (!wifiEnabled) {
+        setState(() => _scanningNearbyWifi = false);
+        return;
+      }
+  
+      // 临时切回普通 WiFi 模式以执行扫描
       await WiFiForIoTPlugin.forceWifiUsage(false);
       await Future.delayed(const Duration(milliseconds: 500));
 
@@ -426,8 +463,10 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         _provisionStep = 2;
       });
     } catch (e) {
-      // 确保切回WiFi模式
-      await WiFiForIoTPlugin.forceWifiUsage(true);
+      // 确保切回 WiFi 模式（失败也不能阻塞状态复位，避免扫描状态卡死）
+      try {
+        await WiFiForIoTPlugin.forceWifiUsage(true);
+      } catch (_) {}
       setState(() {
         _scanningNearbyWifi = false;
         _provisionStatus = '${AppLocalizations.of(context)!.scanFailed}: $e';
