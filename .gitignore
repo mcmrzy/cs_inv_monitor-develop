@@ -150,6 +150,8 @@ inv_app/android/jiguang_sdk/jiguang_sdk/jiguang-demo/src/main/res/drawable-xxhdp
 
 # 超大截图与误产物占位文件
 artifacts/admin-login-page.png
+artifacts/big-screen-globe-zh.png
+e2e_evidence/e2e-logout.png
 /nginx.conf
 
 # 开屏/认证背景统一使用 WebP（PNG 为旧格式残留，禁止提交）
@@ -182,6 +184,7 @@ _sync_backup_*/
 # 测试输出和覆盖率
 coverage/
 coverage.out
+**/coverage
 
 # 临时测试目录
 _viper_test/
