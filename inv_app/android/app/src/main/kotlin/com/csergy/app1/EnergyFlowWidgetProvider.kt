@@ -1,0 +1,45 @@
+package com.csergy.app1
+
+import android.appwidget.AppWidgetManager
+import android.content.Context
+import android.content.SharedPreferences
+import android.widget.RemoteViews
+import es.antonborri.home_widget.HomeWidgetProvider
+
+/**
+ * 桌面小组件 Provider：能量流（2×2）
+ *
+ * 布局内为静态流向示意图（光伏 → 负载 → 电网，纯 TextView 组合，
+ * 不做自定义 Canvas 绘图，规避 Binder 事务与 SP 体积限制），
+ * 下方展示关键数值：今日发电 / 当前功率 / 本月发电。
+ * 数据由 Flutter 侧 WidgetUpdateService.updateEnergyFlowWidget 写入。
+ *
+ * 真机验证项：桌面长按 → 添加小部件 → 选择"辰烁光伏-能量流"。
+ */
+class EnergyFlowWidgetProvider : HomeWidgetProvider() {
+
+    override fun onUpdate(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetIds: IntArray,
+        widgetData: SharedPreferences,
+    ) {
+        appWidgetIds.forEach { widgetId ->
+            val views = RemoteViews(context.packageName, R.layout.energy_flow_widget_layout).apply {
+                // 今日发电（kWh）
+                val todayKwh = widgetData.getString("ef_today_kwh", null) ?: "--"
+                setTextViewText(R.id.ef_today_kwh, "$todayKwh kWh")
+
+                // 当前功率（W）
+                val power = widgetData.getString("ef_current_power", null) ?: "--"
+                setTextViewText(R.id.ef_current_power, "$power W")
+
+                // 本月发电（kWh）
+                val monthKwh = widgetData.getString("ef_month_kwh", null) ?: "--"
+                setTextViewText(R.id.ef_month_kwh, "$monthKwh kWh")
+            }
+
+            appWidgetManager.updateAppWidget(widgetId, views)
+        }
+    }
+}

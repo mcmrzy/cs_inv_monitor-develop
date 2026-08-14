@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 桌面小组件布局：能量流卡片（2×2 单元格）
+     静态流向示意图：光伏 → 负载 → 电网（纯 TextView 组合，
+     不做自定义 Canvas 绘图，规避 Binder 事务与 SP 体积限制） -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="10dp"
+    android:background="@android:color/white">
+
+    <!-- 标题行 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <ImageView
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:src="@mipmap/ic_launcher"
+            android:contentDescription="辰烁光伏-能量流" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:text="能量流"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:textColor="#333333" />
+    </LinearLayout>
+
+    <!-- 静态流向示意：光伏 → 负载 → 电网 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="光伏"
+            android:textSize="10sp"
+            android:textColor="#16A34A" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="3dp"
+            android:layout_marginEnd="3dp"
+            android:text="→"
+            android:textSize="10sp"
+            android:textColor="#999999" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="负载"
+            android:textSize="10sp"
+            android:textColor="#2563EB" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="3dp"
+            android:layout_marginEnd="3dp"
+            android:text="→"
+            android:textSize="10sp"
+            android:textColor="#999999" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="电网"
+            android:textSize="10sp"
+            android:textColor="#F59E0B" />
+    </LinearLayout>
+
+    <!-- 数据行1：今日发电 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="今日发电"
+            android:textSize="11sp"
+            android:textColor="#666666" />
+
+        <TextView
+            android:id="@+id/ef_today_kwh"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="-- kWh"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:textColor="#16A34A" />
+    </LinearLayout>
+
+    <!-- 数据行2：当前功率 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="当前功率"
+            android:textSize="11sp"
+            android:textColor="#666666" />
+
+        <TextView
+            android:id="@+id/ef_current_power"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="-- W"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:textColor="#F59E0B" />
+    </LinearLayout>
+
+    <!-- 数据行3：本月发电 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="本月发电"
+            android:textSize="11sp"
+            android:textColor="#666666" />
+
+        <TextView
+            android:id="@+id/ef_month_kwh"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="-- kWh"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:textColor="#2563EB" />
+    </LinearLayout>
+
+</LinearLayout>

@@ -1,0 +1,45 @@
+package com.csergy.app1
+
+import android.appwidget.AppWidgetManager
+import android.content.Context
+import android.content.SharedPreferences
+import android.widget.RemoteViews
+import es.antonborri.home_widget.HomeWidgetProvider
+
+/**
+ * 桌面小组件 Provider：统计信息（2×2）
+ *
+ * 展示累计发电 / 今日收益 / 设备在线。
+ * 数据由 Flutter 侧 WidgetUpdateService.updateStatsWidget 写入，
+ * 与其余小组件共享同一个 AppGroupId（SharedPreferences 分组）。
+ *
+ * 真机验证项：桌面长按 → 添加小部件 → 选择"辰烁光伏-统计"。
+ */
+class StatsWidgetProvider : HomeWidgetProvider() {
+
+    override fun onUpdate(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetIds: IntArray,
+        widgetData: SharedPreferences,
+    ) {
+        appWidgetIds.forEach { widgetId ->
+            val views = RemoteViews(context.packageName, R.layout.stats_widget_layout).apply {
+                // 累计发电（kWh）
+                val totalKwh = widgetData.getString("stats_total_kwh", null) ?: "--"
+                setTextViewText(R.id.stats_total_kwh, "$totalKwh kWh")
+
+                // 今日收益（元）
+                val income = widgetData.getString("stats_today_income", null) ?: "--"
+                setTextViewText(R.id.stats_today_income, "¥$income")
+
+                // 设备在线 / 总数
+                val online = widgetData.getString("stats_online", null) ?: "--"
+                val total = widgetData.getString("stats_total", null) ?: "--"
+                setTextViewText(R.id.stats_online, "$online / $total")
+            }
+
+            appWidgetManager.updateAppWidget(widgetId, views)
+        }
+    }
+}
