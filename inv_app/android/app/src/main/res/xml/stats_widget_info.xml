@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 统计信息小组件元数据：2×2 单元格，30 分钟周期（配合 HomeWidget.updateWidget 主动刷新） -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="110dp"
+    android:minHeight="110dp"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/stats_widget_layout"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:label="辰烁光伏-统计"
+    android:previewLayout="@layout/stats_widget_layout"
+    android:previewImage="@drawable/widget_preview_stats" />
