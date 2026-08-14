@@ -150,7 +150,8 @@ func (c *Config) Validate() error {
 	if invalidRequiredSecret(c.Database.Password) {
 		missing = append(missing, "database.password must not use a CHANGE_ME* placeholder")
 	}
-	if invalidRequiredSecret(c.Redis.Password) {
+	// Redis password can be empty (no authentication)
+	if c.Redis.Password != "" && invalidRequiredSecret(c.Redis.Password) {
 		missing = append(missing, "redis.password must not use a CHANGE_ME* placeholder")
 	}
 	if c.Server.Port < 1 || c.Server.Port > 65535 {
@@ -197,7 +198,11 @@ func validIPOrCIDR(value string) bool {
 }
 
 func invalidRequiredSecret(value string) bool {
-	return strings.TrimSpace(value) == "" || isPlaceholder(value)
+	// Redis password can be empty (no password case)
+	if strings.TrimSpace(value) == "" {
+		return false
+	}
+	return isPlaceholder(value)
 }
 
 func isPlaceholder(value string) bool {

@@ -375,7 +375,7 @@ func runHeartbeatCheck(deviceRepo *repository.DeviceRepository, db *pgxpool.Pool
 			return
 		case <-ticker.C:
 			// 使用统一的设备离线处理函数，逐个处理设备
-			sns, err := deviceRepo.MarkStaleDevicesOffline(context.Background(), 360)
+			sns, err := deviceRepo.MarkStaleDevicesOffline(context.Background(), 270)
 			if err != nil {
 				logger.Error("Heartbeat fallback scan failed", zap.Error(err))
 			} else if len(sns) > 0 {

@@ -256,7 +256,7 @@ func (m *DeviceStateManager) UpdateHeartbeat(ctx context.Context, sn string) err
 	key := fmt.Sprintf("device:heartbeat:%s", sn)
 	// Pipeline: set heartbeat TTL + SADD to online set (secondary index for O(1) retrieval)
 	pipe := m.rdb.Pipeline()
-	pipe.Set(ctx, key, time.Now().Unix(), 10*time.Minute)
+	pipe.Set(ctx, key, time.Now().Unix(), 5*time.Minute)
 	pipe.SAdd(ctx, "device:online_set", sn)
 	_, err := pipe.Exec(ctx)
 	return err

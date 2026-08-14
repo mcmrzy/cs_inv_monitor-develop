@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:dio/dio.dart';
@@ -6,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
-import 'package:inv_app/core/entities/inverter_data.dart';
 import 'package:inv_app/core/services/realtime_data_service.dart';
 import 'package:inv_app/core/services/network_status_service.dart';
 import 'package:inv_app/core/services/data_cache_service.dart';
@@ -49,15 +47,6 @@ class _StationDetailPageState extends State<StationDetailPage>
 
   // 统计数据已移至 EnergyStatisticsTab 组件
 
-  final Set<String> _mqttSubscribed = {};
-  StreamSubscription<InverterRealtime>? _mqttSub;
-  StreamSubscription<dynamic>? _statusSub;
-  StreamSubscription<dynamic>? _alarmSub;
-  double _mqttPvW = 0;
-  double _mqttLoadW = 0;
-  double _mqttBattW = 0;
-  double _mqttSoc = 0;
-  bool _mqttActive = false;
   String _selectedDeviceSn = 'all';
   // 设备拖动排序模式：由设备编辑页“设备排序”入口开启
   bool _deviceSortMode = false;
@@ -75,26 +64,9 @@ class _StationDetailPageState extends State<StationDetailPage>
     _visitedTabs.add(widget.initialTab);
     _weatherIcon = '\uD83C\uDF1E';
     _weatherTemp = null;
-    _mqttSub?.cancel();
-    _mqttSub = null;
-    _mqttSubscribed.clear();
-    _mqttActive = false;
     context
         .read<StationBloc>()
         .add(StationDetailRequested(stationId: widget.stationId));
-    final realtimeService = getIt<RealtimeDataService>();
-    _statusSub = realtimeService.statusStream.listen((_) {
-      if (!mounted) return;
-      context
-          .read<StationBloc>()
-          .add(StationDetailRequested(stationId: widget.stationId));
-    });
-    _alarmSub = realtimeService.alarmStream.listen((_) {
-      if (!mounted) return;
-      context
-          .read<StationBloc>()
-          .add(StationDetailRequested(stationId: widget.stationId));
-    });
     _fetchWeather();
   }
 
@@ -188,10 +160,7 @@ class _StationDetailPageState extends State<StationDetailPage>
 
   @override
   void dispose() {
-    _statusSub?.cancel();
-    _alarmSub?.cancel();
     _anim.dispose();
-    _mqttSub?.cancel();
     super.dispose();
   }
 
@@ -218,78 +187,6 @@ class _StationDetailPageState extends State<StationDetailPage>
     }
   }
 
-  void _initMQTTRealtime(StationDetailLoaded ds) {
-    if (_mqttSub != null) return;
-    final devices = (ds.devices as List?) ?? [];
-    if (devices.isEmpty) return;
-
-    final station = ds.station;
-    if (station != null) {
-      _mqttPvW = (station['pv_power'] as num?)?.toDouble() ?? 0;
-      _mqttLoadW = (station['load_power'] as num?)?.toDouble() ?? 0;
-      _mqttBattW = (station['batt_power'] as num?)?.toDouble() ?? 0;
-      _mqttSoc = (station['batt_soc'] as num?)?.toDouble() ?? 0;
-    }
-    _mqttActive = true;
-
-    final realtimeService = getIt<RealtimeDataService>();
-    for (final d in devices) {
-      final sn = d['sn'] as String?;
-      if (sn == null || sn.isEmpty || _mqttSubscribed.contains(sn)) continue;
-      _mqttSubscribed.add(sn);
-      realtimeService.startPolling(sn);
-    }
-
-    _mqttSub = realtimeService.realtimeDataStream.listen(_onMQTTData);
-  }
-
-  void _onMQTTData(InverterRealtime data) {
-    if (!_mqttSubscribed.contains(data.deviceSN)) return;
-    _recalcMqttAggregation();
-  }
-
-  /// 根据 _selectedDeviceSn 重新聚合 MQTT 数据
-  void _recalcMqttAggregation() {
-    var pvSum = 0.0;
-    var loadSum = 0.0;
-    var battWSum = 0.0;
-    var socSum = 0.0;
-    var socCount = 0;
-    var hasPv = false;
-    var hasAc = false;
-    var hasBatt = false;
-
-    final realtimeService = getIt<RealtimeDataService>();
-    final targetSNs =
-        _selectedDeviceSn == 'all' ? _mqttSubscribed : {_selectedDeviceSn};
-    for (final sn in targetSNs) {
-      final rt = realtimeService.getLatestData(sn);
-      if (rt == null) continue;
-      if (rt.pv != null) {
-        pvSum += rt.pv!.pvPower;
-        hasPv = true;
-      }
-      if (rt.ac != null) {
-        loadSum += rt.ac!.power;
-        hasAc = true;
-      }
-      if (rt.battery != null) {
-        battWSum += rt.battery!.voltage * rt.battery!.current;
-        socSum += rt.battery!.soc;
-        socCount++;
-        hasBatt = true;
-      }
-    }
-
-    setState(() {
-      _mqttActive = true;
-      if (hasPv) _mqttPvW = pvSum;
-      if (hasAc) _mqttLoadW = loadSum;
-      if (hasBatt) _mqttBattW = battWSum;
-      _mqttSoc = socCount > 0 ? socSum / socCount : _mqttSoc;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<StationBloc, StationState>(
@@ -298,7 +195,6 @@ class _StationDetailPageState extends State<StationDetailPage>
         if (state is StationDetailLoaded) {
           if (state.stationId == widget.stationId) {
             _cachedState = state;
-            _initMQTTRealtime(state);
           }
         }
         final ds = _cachedState;
@@ -407,10 +303,10 @@ class _StationDetailPageState extends State<StationDetailPage>
     }
 
     // 离线时功率/SOC 清零：能量流全零，动画自然停止
-    final displayPvW = online ? (_mqttActive ? _mqttPvW : pvW) : 0.0;
-    final displayLoadW = online ? (_mqttActive ? _mqttLoadW : loadW) : 0.0;
-    final displayBattW = online ? (_mqttActive ? _mqttBattW : battW) : 0.0;
-    final displaySoc = online ? (_mqttActive ? _mqttSoc : soc) : 0.0;
+    final displayPvW = online ? pvW : 0.0;
+    final displayLoadW = online ? loadW : 0.0;
+    final displayBattW = online ? battW : 0.0;
+    final displaySoc = online ? soc : 0.0;
     const displayGridW = 0.0;
     final todayKwh = (station['today_energy'] ?? 0.0).toDouble();
     final totalKwh = (station['total_energy'] ?? 0.0).toDouble();
@@ -652,7 +548,30 @@ class _StationDetailPageState extends State<StationDetailPage>
     );
     if (selected == null || !mounted) return;
     setState(() => _selectedDeviceSn = selected);
-    _recalcMqttAggregation();
+  }
+
+  /// 按 Align 布局公式计算能量流节点的圆心：
+  /// 圆心 = 容器中心 + alignment * (容器尺寸 - 子组件尺寸) / 2 + 标签偏移。
+  /// 与 _energyNode/_energyNodeBatt 的 Column 结构保持一致，
+  /// 避免 CustomPainter 固定比例估算与真实节点位置错位。
+  Offset _flowNodeCenter({
+    required Size size,
+    required Alignment align,
+    required bool labelAbove,
+    required bool active,
+  }) {
+    // 与 _energyNode/_buildGlow 尺寸一致：节点圆 80.w、光晕 110.w、标签 12.sp、间距 4.h
+    final nodeD = 80.0 * size.width / 375.0;
+    final glowD = 110.0 * size.width / 375.0;
+    final labelH = 12.0 * size.width / 375.0;
+    final gapH = size.height / 100.0; // 4.h，容器高 400.h → 比例 1/100
+    final childD = active ? glowD : nodeD;
+    final childH = labelH + gapH + childD;
+    final childW = childD;
+    final cx = size.width / 2 + align.x * (size.width - childW) / 2;
+    final cy = size.height / 2 + align.y * (size.height - childH) / 2;
+    final circleOffset = (childH - nodeD) / 2;
+    return Offset(cx, cy + (labelAbove ? circleOffset : -circleOffset));
   }
 
   Widget _flowArea(
@@ -671,54 +590,90 @@ class _StationDetailPageState extends State<StationDetailPage>
 
     return SizedBox(
       height: 400.h,
-      child: AnimatedBuilder(
-        animation: _anim,
-        builder: (_, child) => Stack(
-          children: [
-            Positioned.fill(
-              child: CustomPaint(
-                painter:
-                    _EnergyFlowPainter(flows: flows, animValue: _anim.value),
-              ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final size = Size(constraints.maxWidth, constraints.maxHeight);
+          // 节点圆心按 Align 布局公式精确计算，保证连线端点与节点边缘对齐
+          final pvCenter = _flowNodeCenter(
+            size: size,
+            align: const Alignment(0, -0.75),
+            labelAbove: true,
+            active: pv > 0,
+          );
+          final loadCenter = _flowNodeCenter(
+            size: size,
+            align: const Alignment(0, 0.75),
+            labelAbove: false,
+            active: load > 0,
+          );
+          final battCenter = _flowNodeCenter(
+            size: size,
+            align: const Alignment(-0.75, 0),
+            labelAbove: true,
+            active: batt.abs() > 0,
+          );
+          final gridCenter = _flowNodeCenter(
+            size: size,
+            align: const Alignment(0.75, 0),
+            labelAbove: true,
+            active: grid.abs() > 0,
+          );
+          return AnimatedBuilder(
+            animation: _anim,
+            builder: (_, child) => Stack(
+              children: [
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: _EnergyFlowPainter(
+                      flows: flows,
+                      animValue: _anim.value,
+                      pvCenter: pvCenter,
+                      loadCenter: loadCenter,
+                      battCenter: battCenter,
+                      gridCenter: gridCenter,
+                    ),
+                  ),
+                ),
+                _energyNode(
+                  l10n.pv,
+                  pvW,
+                  Icons.wb_sunny,
+                  AppColors.orange,
+                  const Alignment(0, -0.75),
+                  true,
+                  active: pv > 0,
+                ),
+                _energyNode(
+                  l10n.load,
+                  loadW,
+                  Icons.home_rounded,
+                  AppColors.blue,
+                  const Alignment(0, 0.75),
+                  false,
+                  active: load > 0,
+                ),
+                _energyNodeBatt(
+                  l10n.battery,
+                  battW,
+                  soc,
+                  Icons.battery_charging_full,
+                  AppColors.successLight,
+                  const Alignment(-0.75, 0),
+                  active: batt.abs() > 0,
+                ),
+                _energyNode(
+                  l10n.grid,
+                  gridW,
+                  Icons.electrical_services,
+                  AppColors.textSecondary,
+                  const Alignment(0.75, 0),
+                  true,
+                  active: grid.abs() > 0,
+                ),
+              ],
             ),
-            _energyNode(
-              l10n.pv,
-              pvW,
-              Icons.wb_sunny,
-              AppColors.orange,
-              const Alignment(0, -0.75),
-              true,
-              active: pv > 0,
-            ),
-            _energyNode(
-              l10n.load,
-              loadW,
-              Icons.home_rounded,
-              AppColors.blue,
-              const Alignment(0, 0.75),
-              false,
-              active: load > 0,
-            ),
-            _energyNodeBatt(
-              l10n.battery,
-              battW,
-              soc,
-              Icons.battery_charging_full,
-              AppColors.successLight,
-              const Alignment(-0.75, 0),
-              active: batt.abs() > 0,
-            ),
-            _energyNode(
-              l10n.grid,
-              gridW,
-              Icons.electrical_services,
-              AppColors.textSecondary,
-              const Alignment(0.75, 0),
-              true,
-              active: grid.abs() > 0,
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -1632,28 +1587,31 @@ class FlowEdge {
 class _EnergyFlowPainter extends CustomPainter {
   final List<FlowEdge> flows;
   final double animValue;
+  // 节点圆心：由 _flowArea 按 Align 布局公式计算后传入（见 _flowNodeCenter）
+  final Offset pvCenter;
+  final Offset loadCenter;
+  final Offset battCenter;
+  final Offset gridCenter;
 
-  _EnergyFlowPainter({required this.flows, required this.animValue});
+  _EnergyFlowPainter({
+    required this.flows,
+    required this.animValue,
+    required this.pvCenter,
+    required this.loadCenter,
+    required this.battCenter,
+    required this.gridCenter,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
     final cx = size.width / 2;
-    final cy = size.height / 2;
+    final pvC = pvCenter;
+    final loadC = loadCenter;
+    final battC = battCenter;
+    final gridC = gridCenter;
 
     // 动态计算：80.w / 2 = 40 * size.width / 375
     final nodeR = 40.0 * size.width / 375.0;
-    // 标签12.sp + 间距4.h 导致圆心偏移 = (12.w/375 + 4.h/812) / 2
-    // gapH = 4 * size.height / 400 = size.height / 100 (因为 400.h = size.height)
-    // labelH ≈ 12 * size.width / 375
-    final labelOff = (12.0 * size.width / 375.0 + size.height / 100.0) / 2.0;
-
-    // Align 坐标 → 圆的实际中心（含标签偏移）
-    // labelAbove=true 的节点（光伏、电网、储能）：圆心下移 labelOff
-    // labelAbove=false 的节点（负载）：圆心在 Align 锚点上方 labelOff
-    final pvC = Offset(cx, size.height * 0.125 + labelOff);
-    final loadC = Offset(cx, size.height * 0.875 - labelOff);
-    final battC = Offset(size.width * 0.125, cy + labelOff);
-    final gridC = Offset(size.width * 0.875, cy + labelOff);
 
     const pvColor = Color(0xFFF59E0B);
     const loadColor = Color(0xFF3B82F6);
@@ -2079,7 +2037,12 @@ class _EnergyFlowPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _EnergyFlowPainter old) =>
-      flows.length != old.flows.length || animValue != old.animValue;
+      flows.length != old.flows.length ||
+      animValue != old.animValue ||
+      pvCenter != old.pvCenter ||
+      loadCenter != old.loadCenter ||
+      battCenter != old.battCenter ||
+      gridCenter != old.gridCenter;
 }
 
 // 选择设备弹窗：白色圆角面板 + 设备列表（选中态高亮、逐项入场动画）

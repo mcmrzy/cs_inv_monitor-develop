@@ -18,9 +18,9 @@ import (
 // UserOpLogHandler 用户操作历史聚合查询（App"操作历史"页数据源）。
 //
 // GET /api/v1/op-logs 按当前用户维度聚合三类操作记录：
-//  1. user_operation_logs（登录/设备控制/参数修改等用户操作）
-//  2. device_cmd_logs（用户名下设备收到的命令）
-//  3. device_upgrades（用户名下设备的 OTA 升级记录）
+//   - user_operation_logs（登录/设备控制/参数修改等用户操作）
+//   - device_cmd_logs（用户名下设备收到的命令）
+//   - device_upgrades（用户名下设备的 OTA 升级记录）
 //
 // 三源 UNION ALL 后按时间倒序统一分页返回。
 type UserOpLogHandler struct {
@@ -53,20 +53,31 @@ func (h *UserOpLogHandler) List(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
-	// 三源聚合公共片段：统一 source/title/device_sn/result/op_time 五字段。
+	// 三源聚合公共片段：统一 source/title/device_sn/result/op_time 五字段，并拼接为 JSON 对象（json 类型）。
 	// UNION ALL 各分支共享同一参数编号空间：$1=userID、$2=limit、$3=offset。
-	operationSrc := `SELECT 'operation' AS source, o.operation_type AS title,
-		COALESCE(o.device_sn,'') AS device_sn, o.result,
-		o.created_at AS op_time
-		FROM user_operation_logs o WHERE o.user_id = $1`
-	cmdSrc := `SELECT 'command' AS source, c.cmd AS title,
-		c.device_sn, COALESCE(NULLIF(c.status,''),'pending'),
-		c.sent_at AS op_time
-		FROM device_cmd_logs c`
-	otaSrc := `SELECT 'ota' AS source, u.firmware_version AS title,
-		u.device_sn, COALESCE(NULLIF(u.status,''),'pending'),
-		u.created_at AS op_time
-		FROM device_upgrades u`
+	operationSrc := `SELECT json_build_object(
+		'source', 'operation',
+		'title', o.operation_type,
+		'device_sn', COALESCE(o.device_sn,''),
+		'result', o.result,
+		'op_time', o.created_at
+	) AS item FROM user_operation_logs o WHERE o.user_id = $1`
+
+	cmdSrc := `SELECT json_build_object(
+		'source', 'command',
+		'title', c.cmd,
+		'device_sn', c.device_sn,
+		'result', COALESCE(NULLIF(c.status,''),'pending'),
+		'op_time', c.sent_at
+	) AS item FROM device_cmd_logs c`
+
+	otaSrc := `SELECT json_build_object(
+		'source', 'ota',
+		'title', u.firmware_version,
+		'device_sn', u.device_sn,
+		'result', COALESCE(NULLIF(u.status,''),'pending'),
+		'op_time', u.created_at
+	) AS item FROM device_upgrades u`
 
 	// 系统管理员可见全部设备的命令/OTA 记录；普通用户仅限名下设备。
 	// 用户操作日志始终为当前用户维度。
@@ -89,7 +100,7 @@ func (h *UserOpLogHandler) List(c *gin.Context) {
 		return
 	}
 
-	rows, err := h.db.Query(ctx, unionSQL+` ORDER BY t.op_time DESC LIMIT $2 OFFSET $3`,
+	rows, err := h.db.Query(ctx, unionSQL+` ORDER BY t.item->>'op_time' DESC LIMIT $2 OFFSET $3`,
 		userID, pageSize, (page-1)*pageSize)
 	if err != nil {
 		logger.Error("list user op logs failed",

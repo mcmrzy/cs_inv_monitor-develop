@@ -222,3 +222,6 @@ inv_app/assets/fonts/
 
 # 工具备份
 tools/xiaoshuo_backup/
+
+# ESP32 固件独立仓库（含密钥，禁止提交）
+CS_INV_WIFI/

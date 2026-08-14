@@ -203,51 +203,66 @@ class _LocalModePageState extends State<LocalModePage> {
   Widget _buildModeSwitch() {
     final isLocal = _modeService.isLocal;
     return Container(
-      margin: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 0),
-      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
+      margin: EdgeInsets.fromLTRB(16.w, 20.h, 16.w, 16.h),
+      padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 28.h),
       decoration: BoxDecoration(
         color: AppColor.surfaceContainer(context),
-        borderRadius: BorderRadius.circular(14.r),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            isLocal ? Icons.wifi : Icons.cloud_outlined,
-            size: 22.sp,
-            color: isLocal ? AppColors.successLight : AppColors.primary,
+        borderRadius: BorderRadius.circular(20.r),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF1565C0).withValues(alpha: 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
           ),
-          SizedBox(width: 12.w),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isLocal
-                      ? AppLocalizations.of(context)!.localMode
-                      : AppLocalizations.of(context)!.remoteMode,
-                  style: TextStyle(
-                    fontSize: 15.sp,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                SizedBox(height: 2.h),
-                Text(
-                  isLocal
-                      ? AppLocalizations.of(context)!.localModeDirectAp
-                      : AppLocalizations.of(context)!.remoteModeCloud,
-                  style: TextStyle(
-                    fontSize: 12.sp,
-                    color: AppColors.textHint,
-                  ),
-                ),
-              ],
+        ],
+      ),
+      child: Column(
+        children: [
+          // 居中的图标
+          Container(
+            width: 56.w,
+            height: 56.w,
+            decoration: BoxDecoration(
+              color: isLocal
+                  ? AppColors.successLight.withValues(alpha: 0.15)
+                  : AppColors.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(14.r),
+            ),
+            child: Icon(
+              isLocal ? Icons.wifi : Icons.cloud_outlined,
+              size: 28.sp,
+              color: isLocal ? AppColors.successLight : AppColors.primary,
             ),
           ),
+          SizedBox(height: 12.h),
+          // 居中的主标题
+          Text(
+            isLocal
+                ? AppLocalizations.of(context)!.localMode
+                : AppLocalizations.of(context)!.remoteMode,
+            style: TextStyle(
+              fontSize: 17.sp,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          SizedBox(height: 4.h),
+          // 居中的副标题
+          Text(
+            isLocal
+                ? AppLocalizations.of(context)!.localModeDirectAp
+                : AppLocalizations.of(context)!.remoteModeCloud,
+            style: TextStyle(
+              fontSize: 13.sp,
+              color: AppColors.textHint,
+            ),
+          ),
+          SizedBox(height: 20.h),
+          // Switch 放在下方
           Switch(
             value: isLocal,
-            activeTrackColor: AppColors.successLight,
-            activeThumbColor: AppColors.successLight,
+            activeTrackColor: isLocal ? AppColors.successLight : AppColors.primary,
+            activeThumbColor: Colors.white,
             onChanged: (value) async {
               if (value) {
                 await _modeService.switchToLocal();
