@@ -30,6 +30,7 @@ type OTAHandler struct {
 	jpushService *service.JPushService
 	notifyPrefs  *repository.NotifyPrefsRepository
 	emailService *service.EmailService
+	userService  *service.UserService
 }
 
 // toUserVersion 将 main_version (V1.0.0.20260703) 转换为 user_version 格式 (V1.0.0)
@@ -42,8 +43,17 @@ func toUserVersion(mainVersion string) string {
 	return mainVersion
 }
 
-func NewOTAHandler(otaService *service.OTAService, db *pgxpool.Pool, jpushService *service.JPushService, notifyPrefs *repository.NotifyPrefsRepository, emailService *service.EmailService) *OTAHandler {
-	return &OTAHandler{otaService: otaService, db: db, jpushService: jpushService, notifyPrefs: notifyPrefs, emailService: emailService}
+func NewOTAHandler(otaService *service.OTAService, db *pgxpool.Pool, jpushService *service.JPushService, notifyPrefs *repository.NotifyPrefsRepository, emailService *service.EmailService, userService *service.UserService) *OTAHandler {
+	return &OTAHandler{otaService: otaService, db: db, jpushService: jpushService, notifyPrefs: notifyPrefs, emailService: emailService, userService: userService}
+}
+
+// logOTAAudit 记录OTA相关审计日志的辅助函数
+func (h *OTAHandler) logOTAAudit(c *gin.Context, action, resourceID, detail string) {
+	userID := middleware.GetUserID(c)
+	phone := middleware.GetPhone(c)
+	go func() {
+		h.userService.LogAudit(c.Request.Context(), userID, phone, action, "firmware", resourceID, detail, c.ClientIP())
+	}()
 }
 
 type CreateFirmwareRequest struct {
@@ -206,6 +216,10 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 		response.Error(c, 500, "创建固件失败")
 		return
 	}
+
+	// 记录审计日志
+	h.logOTAAudit(c, "create", "", fmt.Sprintf(`{"model":"%s","version":"%s"}`, req.Model, req.Version))
+
 	response.SuccessWithMessage(c, "固件创建成功", nil)
 }
 
@@ -243,6 +257,10 @@ func (h *OTAHandler) DeleteFirmware(c *gin.Context) {
 		response.Error(c, 500, "删除固件失败")
 		return
 	}
+
+	// 记录审计日志
+	h.logOTAAudit(c, "delete", fmt.Sprintf("%d", id), fmt.Sprintf(`{"firmware_id":%d}`, id))
+
 	response.SuccessWithMessage(c, "固件已删除", nil)
 }
 
@@ -273,6 +291,10 @@ func (h *OTAHandler) PushUpgrade(c *gin.Context) {
 	}
 	// 通知设备所属用户（按通知偏好过滤：notify_ota / 勿扰 / 邮件渠道）
 	h.notifyDevicesUpgrade(c.Request.Context(), req.DeviceSNs)
+
+	// 记录审计日志
+	h.logOTAAudit(c, "command", fmt.Sprintf("%d", req.FirmwareID), fmt.Sprintf(`{"firmware_id":%d,"device_count":%d}`, req.FirmwareID, len(req.DeviceSNs)))
+
 	response.SuccessWithMessage(c, "升级已推送", nil)
 }
 

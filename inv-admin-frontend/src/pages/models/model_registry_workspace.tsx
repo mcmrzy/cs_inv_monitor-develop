@@ -18,9 +18,10 @@ import {
 
 const { Text, Title } = Typography
 
-const unwrap = <T,>(response: { data: { data?: T } | T }): T => {
+const unwrap = <T,>(response: { data: { data?: T } | T }, fallback?: T): T => {
   const body = response.data as { data?: T }
-  return body.data === undefined ? response.data as T : body.data
+  const result = body.data === undefined ? response.data as T : body.data
+  return (result ?? fallback ?? ([] as unknown as T))
 }
 
 const statusColor: Record<string, string> = {
@@ -58,25 +59,25 @@ const ModelRegistryWorkspace: React.FC = () => {
 
   const modelsQuery = useQuery({
     queryKey: ['model-registry'],
-    queryFn: async () => unwrap<DeviceModelItem[]>(await modelApi.listModels()),
+    queryFn: async () => unwrap<DeviceModelItem[]>(await modelApi.listModels(), []),
   })
   const catalogQuery = useQuery({
     queryKey: ['field-catalog'],
-    queryFn: async () => unwrap<FieldCatalogItem[]>(await modelApi.getFieldCatalog()),
+    queryFn: async () => unwrap<FieldCatalogItem[]>(await modelApi.getFieldCatalog(), []),
   })
   const versionsQuery = useQuery({
     queryKey: ['protocol-versions'],
-    queryFn: async () => unwrap<ProtocolVersionItem[]>(await modelApi.listProtocolVersions()),
+    queryFn: async () => unwrap<ProtocolVersionItem[]>(await modelApi.listProtocolVersions(), []),
   })
   const capabilitiesQuery = useQuery({
     queryKey: ['model-field-capabilities', selectedModel?.id],
     enabled: !!selectedModel,
-    queryFn: async () => unwrap<ModelFieldCapability[]>(await modelApi.getFieldCapabilities(selectedModel!.id)),
+    queryFn: async () => unwrap<ModelFieldCapability[]>(await modelApi.getFieldCapabilities(selectedModel!.id), []),
   })
   const commandsQuery = useQuery({
     queryKey: ['model-command-capabilities', selectedModel?.id],
     enabled: !!selectedModel,
-    queryFn: async () => unwrap<ModelCommandCapability[]>(await modelApi.getCommandCapabilities(selectedModel!.id)),
+    queryFn: async () => unwrap<ModelCommandCapability[]>(await modelApi.getCommandCapabilities(selectedModel!.id), []),
   })
   const schemaQuery = useQuery<Record<string, unknown> | null>({
     queryKey: ['model-protocol-schema', selectedModel?.id],

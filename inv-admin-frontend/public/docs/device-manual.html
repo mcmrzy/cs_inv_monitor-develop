@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>设备使用说明书 - 辰烁光伏监控系统</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; line-height: 1.7; color: #333; background: #f7f8fa; }
+    .container { max-width: 780px; margin: 0 auto; padding: 24px 16px 60px; }
+    h1 { font-size: 22px; color: #1565C0; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #1565C0; }
+    h2 { font-size: 18px; color: #1F2937; margin: 28px 0 12px; padding-left: 10px; border-left: 4px solid #1565C0; }
+    h3 { font-size: 16px; color: #374151; margin: 20px 0 8px; }
+    p { margin: 8px 0; }
+    ol, ul { margin: 8px 0 8px 24px; }
+    li { margin: 6px 0; }
+    .tip { background: #EFF6FF; border-left: 4px solid #1565C0; padding: 12px 16px; margin: 16px 0; border-radius: 4px; font-size: 14px; }
+    .warn { background: #FEF3CD; border-left: 4px solid #F9A825; padding: 12px 16px; margin: 16px 0; border-radius: 4px; font-size: 14px; }
+    .step { display: flex; gap: 12px; margin: 12px 0; }
+    .step-num { min-width: 28px; height: 28px; border-radius: 50%; background: #1565C0; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; }
+    .step-content { flex: 1; padding-top: 3px; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+    th, td { border: 1px solid #E5E7EB; padding: 8px 12px; text-align: left; font-size: 14px; }
+    th { background: #F3F4F6; font-weight: 600; }
+    code { background: #F3F4F6; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>光伏逆变器设备使用说明书</h1>
+  <p>本文档介绍 CS-INV 系列光伏逆变器设备的安装、配置与日常使用方法。</p>
+
+  <h2>一、设备概述</h2>
+  <p>CS-INV 系列逆变器是辰烁能源推出的智能光伏并网逆变器，支持 WiFi/4G 联网，可通过手机 App 远程监控发电数据、运行状态和告警信息。</p>
+  <table>
+    <tr><th>参数</th><th>说明</th></tr>
+    <tr><td>额定功率</td><td>3kW / 5kW / 6kW / 10kW（按型号）</td></tr>
+    <tr><td>输入电压范围</td><td>80V ~ 500V DC</td></tr>
+    <tr><td>输出电压</td><td>220V / 230V AC（可配置）</td></tr>
+    <tr><td>通信方式</td><td>WiFi 2.4GHz / 4G（可选）</td></tr>
+    <tr><td>防护等级</td><td>IP65（户外安装）</td></tr>
+    <tr><td>工作温度</td><td>-25°C ~ +60°C</td></tr>
+  </table>
+
+  <h2>二、安装与接线</h2>
+  <div class="warn">
+    <strong>安全警告：</strong>安装和接线必须由持有资质证书的专业电工完成。安装前务必断开所有电源。
+  </div>
+
+  <h3>2.1 安装位置要求</h3>
+  <ul>
+    <li>选择通风良好、避免阳光直射的墙壁</li>
+    <li>设备周围保留至少 20cm 散热空间</li>
+    <li>安装高度建议离地 1.5m 以上，便于查看显示屏</li>
+    <li>避免安装在潮湿、多灰尘或易燃环境中</li>
+  </ul>
+
+  <h3>2.2 电气接线顺序</h3>
+  <div class="step"><div class="step-num">1</div><div class="step-content"><strong>直流侧（PV）：</strong>将光伏板正极（+）接 PV+，负极（-）接 PV-，拧紧端子螺丝（扭矩 2.5N·m）。</div></div>
+  <div class="step"><div class="step-num">2</div><div class="step-content"><strong>交流侧（AC）：</strong>将电网火线（L）、零线（N）、地线（PE）接入对应端子，确保接地可靠。</div></div>
+  <div class="step"><div class="step-num">3</div><div class="step-content"><strong>合闸上电：</strong>先闭合交流侧断路器，再闭合直流侧开关。设备将自动启动自检并网。</div></div>
+
+  <h2>三、WiFi 配网</h2>
+  <p>设备首次使用或更换 WiFi 网络时，需要通过 App 进行配网操作。</p>
+
+  <h3>3.1 进入配网模式</h3>
+  <ol>
+    <li>长按设备面板上的 <strong>WiFi 按钮</strong> 5 秒，WiFi 指示灯快速闪烁（约 2 次/秒）</li>
+    <li>此时设备会创建一个名为 <code>CS-INV-XXXX</code> 的 WiFi 热点（无密码）</li>
+  </ol>
+
+  <h3>3.2 App 配网步骤</h3>
+  <div class="step"><div class="step-num">1</div><div class="step-content">打开辰烁光伏 App，进入「设备」页面，点击右上角 <strong>「+ 添加设备」</strong></div></div>
+  <div class="step"><div class="step-num">2</div><div class="step-content">选择「WiFi 配网」，App 会自动扫描设备热点并连接</div></div>
+  <div class="step"><div class="step-num">3</div><div class="step-content">输入家中 WiFi 名称和密码，点击「开始配置」</div></div>
+  <div class="step"><div class="step-num">4</div><div class="step-content">等待 30 秒左右，WiFi 指示灯变为常亮表示配网成功</div></div>
+
+  <div class="tip">
+    <strong>提示：</strong>配网过程中请保持手机靠近设备（3米以内），确保 WiFi 信号稳定。如果配网失败，请重试或更换 2.4GHz WiFi 网络。
+  </div>
+
+  <h2>四、设备绑定</h2>
+  <p>配网成功后，设备会自动出现在 App 的「扫描结果」中，点击绑定即可将设备关联到您的账号。</p>
+  <ul>
+    <li>每台设备有唯一的 <strong>序列号（SN）</strong>，印在设备铭牌上，格式如 <code>CS-L10-6K2-XXXXXX</code></li>
+    <li>一台设备同一时间只能绑定一个账号；如需转移，请先在原账号中解绑</li>
+    <li>代理商/安装商可通过管理后台批量导入设备并分配给用户</li>
+  </ul>
+
+  <h2>五、日常监控</h2>
+  <h3>5.1 实时数据</h3>
+  <p>绑定成功后，在 App「电站」页面可查看：</p>
+  <ul>
+    <li><strong>发电功率：</strong>当前光伏板实时发电功率（kW）</li>
+    <li><strong>日发电量：</strong>今日累计发电量（kWh）</li>
+    <li><strong>总发电量：</strong>设备安装以来累计发电量</li>
+    <li><strong>并网电压/电流：</strong>交流侧实时参数</li>
+    <li><strong>温度：</strong>设备内部温度</li>
+  </ul>
+
+  <h3>5.2 设备状态指示</h3>
+  <table>
+    <tr><th>指示灯</th><th>状态</th><th>含义</th></tr>
+    <tr><td>运行（绿色）</td><td>常亮</td><td>正常并网发电中</td></tr>
+    <tr><td>运行（绿色）</td><td>慢闪</td><td>待机（夜间或光照不足）</td></tr>
+    <tr><td>故障（红色）</td><td>常亮/闪烁</td><td>设备故障，需检查</td></tr>
+    <tr><td>WiFi（蓝色）</td><td>常亮</td><td>网络连接正常</td></tr>
+    <tr><td>WiFi（蓝色）</td><td>闪烁</td><td>正在连接网络或配网模式</td></tr>
+  </table>
+
+  <h2>六、常见故障排查</h2>
+
+  <h3>6.1 设备离线</h3>
+  <p><strong>现象：</strong>App 显示设备离线，无法获取实时数据。</p>
+  <p><strong>排查步骤：</strong></p>
+  <ol>
+    <li>检查设备电源指示灯是否亮起（不亮则检查电源和断路器）</li>
+    <li>检查路由器是否正常工作，WiFi 信号是否覆盖设备位置</li>
+    <li>尝试重启路由器和设备（断电 30 秒后重新上电）</li>
+    <li>如仍无法恢复，在 App 中重新配网</li>
+  </ol>
+
+  <h3>6.2 发电量异常偏低</h3>
+  <p><strong>可能原因：</strong></p>
+  <ul>
+    <li>光伏板表面积灰、树叶遮挡 → 清洁光伏板</li>
+    <li>连续阴雨天气 → 属正常现象</li>
+    <li>部分光伏板损坏或接线松动 → 联系安装商检查</li>
+    <li>逆变器限功率保护（电网电压过高） → 等待电网恢复正常</li>
+  </ul>
+
+  <h3>6.3 设备报警</h3>
+  <p>当设备出现故障告警时，App 会推送通知。常见告警及处理方式：</p>
+  <table>
+    <tr><th>告警代码</th><th>含义</th><th>处理方式</th></tr>
+    <tr><td>E001</td><td>电网过压</td><td>等待电网恢复正常；频繁出现请联系供电局</td></tr>
+    <tr><td>E002</td><td>电网欠压</td><td>检查电网电压；检查交流侧接线是否松动</td></tr>
+    <tr><td>E003</td><td>过温保护</td><td>检查设备散热环境；清理通风口灰尘</td></tr>
+    <tr><td>E004</td><td>绝缘阻抗低</td><td>检查光伏板接线和接地；可能受潮</td></tr>
+    <tr><td>E005</td><td>漏电流过大</td><td>检查光伏板和线路绝缘；联系售后</td></tr>
+  </table>
+
+  <div class="tip">
+    <strong>如以上方法均无法解决问题：</strong>请通过 App「帮助中心 → 我的工单」提交故障工单，或拨打客服热线 <strong>400-888-8888</strong>（工作日 9:00-18:00）。
+  </div>
+
+  <h2>七、保养建议</h2>
+  <ul>
+    <li>定期清洁光伏板表面（建议每季度一次，灰尘较多地区每月一次）</li>
+    <li>定期检查设备接线端子是否松动</li>
+    <li>雷雨季节前检查防雷接地是否完好</li>
+    <li>设备运行 3 年以上建议联系专业人员进行全面检测</li>
+  </ul>
+</div>
+</body>
+</html>

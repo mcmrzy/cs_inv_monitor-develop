@@ -1,6 +1,7 @@
 export default {
   zh: {
     'logs.title': '操作记录',
+    'logs.clearFilter': '清空筛选',
     'logs.operationLog': '操作记录',
     'logs.alertLog': '告警日志',
     'logs.commandLog': '命令日志',
@@ -77,6 +78,7 @@ export default {
   },
   en: {
     'logs.title': 'Operation Logs',
+    'logs.clearFilter': 'Clear Filter',
     'logs.operationLog': 'Operation Log',
     'logs.alertLog': 'Alert Log',
     'logs.commandLog': 'Command Log',

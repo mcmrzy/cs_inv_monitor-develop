@@ -332,6 +332,8 @@ var basicUserGETPrefixes = []string{
 	"/api/v1/work-order-stats",
 	// 用户操作历史：按当前用户维度聚合，数据范围由 business-api 过滤
 	"/api/v1/op-logs",
+	// 帮助中心配置：只读配置（文档 URL/客服电话/FAQ），登录即可获取
+	"/api/v1/config",
 	// Organization tree / my-organizations / invitation records for the org
 	// management page; subtree scoping is enforced by business-api.
 	"/api/v1/organizations",

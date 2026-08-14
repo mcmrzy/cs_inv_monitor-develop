@@ -263,6 +263,12 @@ const StationDetailPage: React.FC = () => {
   // 从设备列表计算 fault_count（后端 GetByID 未返回此字段）
   const faultCount = station.fault_count ?? devices.filter((d: any) => d.status === 2).length
 
+  // 根据设备实际在线状态判定电站是否在线（而非仅依赖 station.status）
+  const hasOnlineDevices = devices.length > 0 && devices.some((d: any) => Number(d.status) === 1)
+  const effectiveStationStatus = devices.length > 0
+    ? (hasOnlineDevices ? 1 : (faultCount > 0 ? 2 : 0))
+    : station.status
+
   // 汇总实时功率（优先使用 deviceEnergy 聚合，回退到 station 级别字段）
   const totalRealtimePower = (station.pv_power || 0) > 0
     ? station.pv_power!
@@ -441,14 +447,21 @@ const StationDetailPage: React.FC = () => {
               ]}
             />
           } size="small">
-            <EnergyFlowDiagram
-              pvPower={aggregatedPv}
-              loadPower={aggregatedLoad}
-              battPower={aggregatedBatt}
-              gridPower={aggregatedGrid}
-              battSoc={avgSoc}
-              genPower={aggregatedGen}
-            />
+            {hasOnlineDevices || (deviceEnergy && (deviceEnergy.pvPower > 0 || deviceEnergy.loadPower > 0)) ? (
+              <EnergyFlowDiagram
+                pvPower={aggregatedPv}
+                loadPower={aggregatedLoad}
+                battPower={aggregatedBatt}
+                gridPower={aggregatedGrid}
+                battSoc={avgSoc}
+                genPower={aggregatedGen}
+              />
+            ) : (
+              <div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>
+                <DesktopOutlined style={{ fontSize: 32, marginBottom: 8, display: 'block' }} />
+                {t('station.noRealtimeData')}
+              </div>
+            )}
           </ProCard>
         </Col>
 
@@ -477,8 +490,8 @@ const StationDetailPage: React.FC = () => {
               <Row style={{ marginTop: 4 }}>
                 <Col span={24}>
                   <Text type="secondary">{t('station.systemStatus')}: </Text>
-                  <Tag color={station.status === 1 ? 'green' : 'red'} style={{ marginLeft: 4 }}>
-                    {station.status === 1 ? t('station.normal') : t('station.stopped')}
+                  <Tag color={effectiveStationStatus === 1 ? 'green' : effectiveStationStatus === 2 ? 'red' : 'default'} style={{ marginLeft: 4 }}>
+                    {effectiveStationStatus === 1 ? t('station.normal') : effectiveStationStatus === 2 ? t('station.fault') : t('station.offline')}
                   </Tag>
                 </Col>
               </Row>
@@ -595,8 +608,8 @@ const StationDetailPage: React.FC = () => {
               {t('common.back')}
             </Button>
             <Title level={4} style={{ margin: 0 }}>{stationName}</Title>
-            <Tag color={station.status === 1 ? 'green' : 'red'}>
-              {station.status === 1 ? t('station.normal') : t('station.stopped')}
+            <Tag color={effectiveStationStatus === 1 ? 'green' : effectiveStationStatus === 2 ? 'red' : 'default'}>
+              {effectiveStationStatus === 1 ? t('station.normal') : effectiveStationStatus === 2 ? t('station.fault') : t('station.offline')}
             </Tag>
             <Text type="secondary" style={{ fontSize: 13 }}>
               <DesktopOutlined style={{ marginRight: 4 }} />

@@ -713,9 +713,13 @@ const OperationLogsPage: React.FC = () => {
                 setUserFilter('')
                 setDeviceSnFilter('')
                 handleFilterChange()
+                // 清空筛选后重新加载当前活动 Tab 的数据
+                if (activeTab === 'operation') refetchAudit()
+                else if (activeTab === 'alarm') refetchAlarms()
+                else if (activeTab === 'command') refetchCommands()
               }}
             >
-              {t('common.reset')}
+              {t('logs.clearFilter')}
             </Button>
           </Col>
         </Row>

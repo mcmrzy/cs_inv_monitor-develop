@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -18,22 +19,33 @@ import (
 
 var deviceSNRegex = regexp.MustCompile(`^[A-Z0-9-]{8,64}$`)
 
+// logDeviceAudit 记录设备相关审计日志的辅助函数
+func (h *DeviceHandler) logDeviceAudit(c *gin.Context, action, resourceID, detail string) {
+	userID := middleware.GetUserID(c)
+	phone := middleware.GetPhone(c)
+	go func() {
+		h.userService.LogAudit(c.Request.Context(), userID, phone, action, "device", resourceID, detail, c.ClientIP())
+	}()
+}
+
 type DeviceHandler struct {
 	deviceService  *service.DeviceService
 	alarmService   *service.AlarmService
 	stationService *service.StationService
 	modelService   *service.ModelService
 	otaService     *service.OTAService
+	userService    *service.UserService
 	db             *pgxpool.Pool
 }
 
-func NewDeviceHandler(deviceService *service.DeviceService, alarmService *service.AlarmService, stationService *service.StationService, modelService *service.ModelService, otaService *service.OTAService, db *pgxpool.Pool) *DeviceHandler {
+func NewDeviceHandler(deviceService *service.DeviceService, alarmService *service.AlarmService, stationService *service.StationService, modelService *service.ModelService, otaService *service.OTAService, userService *service.UserService, db *pgxpool.Pool) *DeviceHandler {
 	return &DeviceHandler{
 		deviceService:  deviceService,
 		alarmService:   alarmService,
 		stationService: stationService,
 		modelService:   modelService,
 		otaService:     otaService,
+		userService:    userService,
 		db:             db,
 	}
 }
@@ -295,6 +307,9 @@ func (h *DeviceHandler) Create(c *gin.Context) {
 	}
 
 	response.SuccessWithMessage(c, "device created", device)
+
+	// 记录审计日志
+	h.logDeviceAudit(c, "create", req.SN, fmt.Sprintf(`{"sn":"%s","model":"%s"}`, req.SN, req.Model))
 }
 
 type UpdateDeviceRequest struct {
@@ -361,6 +376,9 @@ func (h *DeviceHandler) Update(c *gin.Context) {
 		return
 	}
 	response.SuccessWithMessage(c, "device updated", nil)
+
+	// 记录审计日志
+	h.logDeviceAudit(c, "update", sn, fmt.Sprintf(`{"sn":"%s"}`, sn))
 }
 
 func (h *DeviceHandler) DeleteDevice(c *gin.Context) {
@@ -390,6 +408,9 @@ func (h *DeviceHandler) DeleteDevice(c *gin.Context) {
 	}
 
 	response.SuccessWithMessage(c, "device deleted", nil)
+
+	// 记录审计日志
+	h.logDeviceAudit(c, "delete", sn, fmt.Sprintf(`{"sn":"%s"}`, sn))
 }
 
 type AddDeviceRequest struct {
@@ -442,6 +463,9 @@ func (h *DeviceHandler) AddToStation(c *gin.Context) {
 	}
 
 	response.SuccessWithMessage(c, "device added to station", nil)
+
+	// 记录审计日志
+	h.logDeviceAudit(c, "bind", req.SN, fmt.Sprintf(`{"sn":"%s","station_id":%d}`, req.SN, req.StationID))
 }
 
 func (h *DeviceHandler) RemoveFromStation(c *gin.Context) {
@@ -475,6 +499,9 @@ func (h *DeviceHandler) RemoveFromStation(c *gin.Context) {
 	}
 
 	response.SuccessWithMessage(c, "device removed from station", nil)
+
+	// 记录审计日志
+	h.logDeviceAudit(c, "unbind", sn, fmt.Sprintf(`{"sn":"%s"}`, sn))
 }
 
 func (h *DeviceHandler) ScanLocal(c *gin.Context) {
