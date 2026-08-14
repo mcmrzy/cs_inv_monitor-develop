@@ -1,0 +1,110 @@
+package com.csergy.app1
+
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import android.location.LocationManager
+import android.net.wifi.WifiManager
+import android.os.Build
+import androidx.core.content.ContextCompat
+import androidx.core.location.LocationManagerCompat
+import io.flutter.embedding.engine.plugins.FlutterPlugin
+import io.flutter.plugin.common.MethodCall
+import io.flutter.plugin.common.MethodChannel
+import io.flutter.plugin.common.MethodChannel.MethodCallHandler
+import io.flutter.plugin.common.MethodChannel.Result
+
+/**
+ * 自研 WiFi 扫描通道（替代停更的 wifi_scan 0.4.1+2 插件）。
+ *
+ * 背景：wifi_scan 作者 18 个月停更且应用 Kotlin Gradle Plugin（KGP），
+ * Flutter 3.44+ 要求插件迁移到 Built-in Kotlin，未来版本将直接构建失败。
+ * 本项目仅使用该插件的 4 个方法（canStartScan/startScan/canGetScannedResults/getScannedResults）
+ * 与 5 个字段（ssid/bssid/capabilities/frequency/level），故以 MethodChannel 自研等价实现。
+ *
+ * 设计约定：
+ * - 权限（位置/NEARBY_WIFI）由 App 层 permission_handler 统一请求与引导，
+ *   本插件只做状态检查（与原插件 askPermissions=false 语义一致），不发起权限请求；
+ * - 返回码保持原插件语义：0=不支持, 1=可以, 2=缺位置权限, 5=位置服务未开启；
+ * - 依赖系统 WifiManager：Android 13+ 需位置权限已授予才能返回完整 SSID。
+ */
+class WifiScanPlugin : FlutterPlugin, MethodCallHandler {
+    private lateinit var context: Context
+    private lateinit var channel: MethodChannel
+
+    override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        context = binding.applicationContext
+        channel = MethodChannel(binding.binaryMessenger, "csergy/wifi_scan")
+        channel.setMethodCallHandler(this)
+    }
+
+    override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        channel.setMethodCallHandler(null)
+    }
+
+    override fun onMethodCall(call: MethodCall, result: Result) {
+        when (call.method) {
+            "canStartScan" -> result.success(canStartScan())
+            "startScan" -> result.success(startScan())
+            "canGetScannedResults" -> result.success(canGetScannedResults())
+            "getScannedResults" -> result.success(getScannedResults())
+            else -> result.notImplemented()
+        }
+    }
+
+    private val wifi: WifiManager?
+        get() = context.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+
+    private fun hasLocationPermission(): Boolean {
+        val fine = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.ACCESS_FINE_LOCATION
+        )
+        val coarse = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.ACCESS_COARSE_LOCATION
+        )
+        return fine == PackageManager.PERMISSION_GRANTED ||
+            coarse == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun isLocationEnabled(): Boolean {
+        val locationManager =
+            context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        return LocationManagerCompat.isLocationEnabled(locationManager)
+    }
+
+    /** 0=不支持, 1=可以, 2=缺位置权限, 5=位置服务未开启 */
+    private fun canStartScan(): Int {
+        // Android 8（P=28）以下无需位置权限即可扫描
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return 1
+        val hasLoc = hasLocationPermission()
+        val locEnabled = isLocationEnabled()
+        return when {
+            hasLoc && locEnabled -> 1
+            hasLoc -> 5
+            else -> 2
+        }
+    }
+
+    private fun startScan(): Boolean = wifi?.startScan() ?: false
+
+    /** 0=不支持, 1=可以, 2=缺位置权限, 5=位置服务未开启 */
+    private fun canGetScannedResults(): Int {
+        val hasLoc = hasLocationPermission()
+        return when {
+            hasLoc && isLocationEnabled() -> 1
+            hasLoc -> 5
+            else -> 2
+        }
+    }
+
+    private fun getScannedResults(): List<Map<String, Any?>> =
+        wifi?.scanResults?.map { ap ->
+            mapOf(
+                "ssid" to ap.SSID,
+                "bssid" to ap.BSSID,
+                "capabilities" to ap.capabilities,
+                "frequency" to ap.frequency,
+                "level" to ap.level,
+            )
+        } ?: emptyList()
+}

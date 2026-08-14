@@ -45,7 +45,7 @@ dependencies:
   image_picker: ^1.2.1
   mobile_scanner: ^7.4.0
   wifi_iot: ^0.3.19
-  wifi_scan: ^0.4.1+2
+  # wifi_scan 已停更（0.4.1+2）且应用 KGP，改为自研 MethodChannel（WifiScanPlugin.kt）替代，不再声明依赖
   flutter_blue_ultra: ^2.2.0  # FBP 1.x 社区延续版（BSD 3-Clause，免费商用）；flutter_blue_plus 1.36+ 商用需付费
   
   flutter_local_notifications: ^22.2.0
