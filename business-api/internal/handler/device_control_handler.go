@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 
 	"inv-api-server/internal/middleware"
@@ -73,6 +74,9 @@ func (h *DeviceHandler) Control(c *gin.Context) {
 		response.Error(c, 5003, "发送命令失败，请稍后重试")
 		return
 	}
+
+	// 记录审计日志
+	h.logDeviceAudit(c, "command", sn, fmt.Sprintf(`{"sn":"%s","command":"%s"}`, sn, req.Command))
 
 	response.SuccessWithMessage(c, "command sent", gin.H{"task_id": taskID})
 }

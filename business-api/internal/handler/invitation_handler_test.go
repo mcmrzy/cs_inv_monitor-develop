@@ -27,7 +27,7 @@ func (suite *InvitationHandlerTestSuite) SetupSuite() {
 
 func (suite *InvitationHandlerTestSuite) SetupTest() {
 	// All dependencies are nil; only validation paths (before DB access) are tested.
-	suite.handler = NewInvitationHandler(nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	suite.handler = NewInvitationHandler(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 }
 
 func TestInvitationHandlerSuite(t *testing.T) {

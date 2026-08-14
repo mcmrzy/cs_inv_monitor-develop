@@ -496,6 +496,10 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 		"created": len(created),
 		"results": results,
 	}
+
+	// 记录审计日志
+	h.logInvitationAudit(c, "create", "", fmt.Sprintf(`{"email_count":%d}`, len(created)))
+
 	response.Success(c, payload)
 }
 
@@ -594,6 +598,9 @@ func (h *InvitationHandler) Revoke(c *gin.Context) {
 		response.Error(c, 500, "撤销邀请失败")
 		return
 	}
+
+	// 记录审计日志
+	h.logInvitationAudit(c, "delete", fmt.Sprintf("%d", invitationID), fmt.Sprintf(`{"invitation_id":%d,"email":"%s"}`, invitationID, invitation.Recipient))
 
 	response.SuccessWithMessage(c, "邀请已撤销", nil)
 }
