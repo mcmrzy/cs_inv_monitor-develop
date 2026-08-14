@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Card, Form, Input, Button, List, Modal, Space, Typography, App, Popconfirm, Empty } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, SaveOutlined, BookOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import api from '@/utils/axios'
+import api from '@/services/api'
 import useTranslation from '@/hooks/useTranslation'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
 
@@ -34,15 +34,18 @@ const SystemConfigPage: React.FC = () => {
   const [editingFaqIndex, setEditingFaqIndex] = useState<number | null>(null)
   const [faqs, setFaqs] = useState<FaqItem[]>([])
 
-  // 获取配置
+  // 获取配置（后端返回所有配置的map，需提取help_center字段）
   const { data: config, isLoading, error, refetch } = useQuery({
     queryKey: ['system-config', 'help-center'],
-    queryFn: () => api.get('/admin/system-config/help-center').then((res) => res.data?.data as HelpCenterConfig),
+    queryFn: () => api.get('/admin/system-config').then((res) => {
+      const allConfigs = res.data?.data as Record<string, unknown>
+      return (allConfigs?.help_center || {}) as HelpCenterConfig
+    }),
   })
 
-  // 保存配置
+  // 保存配置（后端期望map格式：{ help_center: {...} }）
   const saveMutation = useMutation({
-    mutationFn: (data: HelpCenterConfig) => api.patch('/admin/system-config', { key: 'help_center', value: data }),
+    mutationFn: (data: HelpCenterConfig) => api.patch('/admin/system-config', { help_center: data }),
     onSuccess: () => {
       message.success(t('system.saveSuccess'))
       queryClient.invalidateQueries({ queryKey: ['system-config'] })

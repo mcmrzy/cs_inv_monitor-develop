@@ -20,7 +20,7 @@ pluginManagement {
 plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
     id("com.android.application") version "9.0.1" apply false
-    // AGP 9 内置 Kotlin：不再声明 KGP，避免插件被 Flutter 兜底 apply(kotlin-android) 时冲突
+    id("org.jetbrains.kotlin.android") version "2.2.20" apply false
 }
 
 include(":app")

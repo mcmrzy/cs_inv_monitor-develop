@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"inv-api-server/internal/middleware"
 	"inv-api-server/internal/model"
 	"inv-api-server/internal/repository"
 	"inv-api-server/internal/service"
@@ -29,9 +30,10 @@ type AdminHandler struct {
 	db          *pgxpool.Pool
 	rdb         *redis.Client
 	cfgSvc      *service.ConfigService
+	userService *service.UserService
 }
 
-func NewAdminHandler(userRepo *repository.UserRepository, modelRepo *repository.ModelRepository, permChecker *service.PermChecker, db *pgxpool.Pool, rdb *redis.Client, cfgSvc *service.ConfigService) *AdminHandler {
+func NewAdminHandler(userRepo *repository.UserRepository, modelRepo *repository.ModelRepository, permChecker *service.PermChecker, db *pgxpool.Pool, rdb *redis.Client, cfgSvc *service.ConfigService, userService *service.UserService) *AdminHandler {
 	return &AdminHandler{
 		userRepo:    userRepo,
 		modelRepo:   modelRepo,
@@ -39,7 +41,17 @@ func NewAdminHandler(userRepo *repository.UserRepository, modelRepo *repository.
 		db:          db,
 		rdb:         rdb,
 		cfgSvc:      cfgSvc,
+		userService: userService,
 	}
+}
+
+// logAdminAudit 记录管理后台相关审计日志的辅助函数
+func (h *AdminHandler) logAdminAudit(c *gin.Context, action, resourceType, resourceID, detail string) {
+	userID := middleware.GetUserID(c)
+	phone := middleware.GetPhone(c)
+	go func() {
+		h.userService.LogAudit(c.Request.Context(), userID, phone, action, resourceType, resourceID, detail, c.ClientIP())
+	}()
 }
 
 func (h *AdminHandler) ListUsers(c *gin.Context) {
@@ -172,6 +184,14 @@ func (h *AdminHandler) ToggleUserStatus(c *gin.Context) {
 		response.Error(c, 500, "更新用户状态失败")
 		return
 	}
+
+	// 记录审计日志
+	statusText := "disabled"
+	if newStatus == 1 {
+		statusText = "enabled"
+	}
+	h.logAdminAudit(c, "update", "user", fmt.Sprintf("%d", userID), fmt.Sprintf(`{"user_id":%d,"status":"%s"}`, userID, statusText))
+
 	response.SuccessWithMessage(c, "用户状态已更新", nil)
 }
 
@@ -588,6 +608,9 @@ func (h *AdminHandler) CreateTenant(c *gin.Context) {
 		return
 	}
 
+	// 记录审计日志
+	h.logAdminAudit(c, "create", "tenant", fmt.Sprintf("%d", userID), fmt.Sprintf(`{"user_id":%d,"phone":"%s"}`, userID, req.Phone))
+
 	response.Success(c, gin.H{
 		"id":          userID,
 		"phone":       req.Phone,
@@ -647,6 +670,9 @@ func (h *AdminHandler) UpdateTenant(c *gin.Context) {
 	//     return
 	// }
 
+	// 记录审计日志
+	h.logAdminAudit(c, "update", "tenant", fmt.Sprintf("%d", tenantID), fmt.Sprintf(`{"tenant_id":%d}`, tenantID))
+
 	response.SuccessWithMessage(c, "配额更新成功", gin.H{
 		"id": tenantID,
 	})
@@ -676,6 +702,14 @@ func (h *AdminHandler) ToggleTenant(c *gin.Context) {
 		response.Error(c, 500, "更新租户状态失败")
 		return
 	}
+
+	// 记录审计日志
+	statusText := "disabled"
+	if newStatus == 1 {
+		statusText = "enabled"
+	}
+	h.logAdminAudit(c, "update", "tenant", fmt.Sprintf("%d", tenantID), fmt.Sprintf(`{"tenant_id":%d,"status":"%s"}`, tenantID, statusText))
+
 	response.SuccessWithMessage(c, "租户状态已更新", nil)
 }
 
@@ -805,6 +839,9 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 		response.Error(c, 500, "更新用户失败")
 		return
 	}
+
+	// 记录审计日志
+	h.logAdminAudit(c, "update", "user", fmt.Sprintf("%d", userID), fmt.Sprintf(`{"user_id":%d}`, userID))
 
 	response.SuccessWithMessage(c, "用户更新成功", nil)
 }

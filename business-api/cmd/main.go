@@ -182,7 +182,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	modelHandler := handler.NewModelHandler(modelService)
 	batteryHandler := handler.NewBatteryHandler(batteryService)
 	energyScheduleHandler := handler.NewEnergyScheduleHandler(energyScheduleService)
-	adminHandler := handler.NewAdminHandler(userRepo, modelRepo, permChecker, db, rdb, configService)
+	adminHandler := handler.NewAdminHandler(userRepo, modelRepo, permChecker, db, rdb, configService, userService)
 	otaHandler := handler.NewOTAHandler(otaService, db, jpushService, notifyPrefsRepo, emailService, userService)
 	dashboardHandler := handler.NewDashboardHandler(db, rdb)
 	alertRuleHandler := handler.NewAlertRuleHandler(db)
@@ -206,6 +206,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 		permChecker,
 		authorizationRepo,
 		emailService,
+		userService,
 	)
 
 	organizationHandler := handler.NewOrganizationHandler(db)
