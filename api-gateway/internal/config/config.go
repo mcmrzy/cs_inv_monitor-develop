@@ -147,8 +147,8 @@ func (c *Config) Validate() error {
 	if !validBackendURL(c.Backends.DeviceServer) {
 		missing = append(missing, "backends.device_server (env: DEVICE_SERVER_URL)")
 	}
-	if invalidRequiredSecret(c.Database.Password) {
-		missing = append(missing, "database.password must not use a CHANGE_ME* placeholder")
+	if strings.TrimSpace(c.Database.Password) == "" || invalidRequiredSecret(c.Database.Password) {
+		missing = append(missing, "database.password must not be empty or a CHANGE_ME* placeholder")
 	}
 	// Redis password can be empty (no authentication)
 	if c.Redis.Password != "" && invalidRequiredSecret(c.Redis.Password) {
