@@ -112,6 +112,9 @@ services:
       WEATHER_SOURCE: open-meteo
       EMAIL_HOST: smtp.example.com
       JPUSH_ENABLED: "false"
+      # schema.sql 基线未包含 096+ 迁移（squash 遗漏），启动时自动补齐；
+      # 001-095 已在基线中标记 applied，不会重放
+      MIGRATION_AUTO_RUN: "true"
     networks:
       - inv-test-net
     depends_on:

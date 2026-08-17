@@ -303,6 +303,11 @@ func Load(configPath string) (*Config, error) {
 	viper.BindEnv("jverify.app_key", "JVERIFY_APP_KEY")
 	viper.BindEnv("jverify.master_secret", "JVERIFY_MASTER_SECRET")
 
+	viper.BindEnv("migration.auto_run", "MIGRATION_AUTO_RUN")
+	viper.BindEnv("migration.dir", "MIGRATION_DIR")
+	viper.BindEnv("migration.schema_file", "MIGRATION_SCHEMA_FILE")
+	viper.BindEnv("migration.baseline_version", "MIGRATION_BASELINE_VERSION")
+
 	var config Config
 	if err := viper.Unmarshal(&config); err != nil {
 		return nil, err
