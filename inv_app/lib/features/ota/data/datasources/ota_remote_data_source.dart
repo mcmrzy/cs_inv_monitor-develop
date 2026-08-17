@@ -49,6 +49,10 @@ class OtaRemoteDataSource {
         '/ota/app/packages/install',
         data: {'sn': sn, 'package_id': packageId},
       );
+
+  /// GET /ota/firmware-info/:id — 按固件 ID 获取本地 OTA 元数据
+  Future<Response> getFirmwareInfo(int firmwareId) async =>
+      dio.get('/ota/firmware-info/$firmwareId');
 }
 
 class OtaRemoteDataSourceImpl extends OtaRemoteDataSource {

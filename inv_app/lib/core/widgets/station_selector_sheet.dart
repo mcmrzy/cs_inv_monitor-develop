@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
+import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 
 /// 电站选择面板（从 add_device_page 提取的共享组件）：
 /// 可拖拽高度 + 电站列表，选中后回调 (stationId, stationName)。
@@ -48,7 +49,7 @@ class _StationSelectorSheetState extends State<StationSelectorSheet> {
                     width: 40.w,
                     height: 4.h,
                     decoration: BoxDecoration(
-                      color: AppColors.divider,
+                      color: AppColor.divider(context),
                       borderRadius: BorderRadius.circular(2.r),
                     ),
                   ),
@@ -64,16 +65,16 @@ class _StationSelectorSheetState extends State<StationSelectorSheet> {
                     style: TextStyle(
                       fontSize: 18.sp,
                       fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
+                      color: AppColor.textPrimary(context),
                     ),
                   ),
                   const Spacer(),
                   GestureDetector(
                     onTap: widget.onCancel,
-                    child: const Icon(
+                    child: Icon(
                       Icons.close,
                       size: 24,
-                      color: AppColors.textSecondary,
+                      color: AppColor.textSecondary(context),
                     ),
                   ),
                 ],
@@ -83,7 +84,7 @@ class _StationSelectorSheetState extends State<StationSelectorSheet> {
               padding: EdgeInsets.symmetric(horizontal: 20.w),
               child: Text(
                 AppLocalizations.of(context)!.selectStationForDevice,
-                style: TextStyle(fontSize: 13.sp, color: AppColors.textHint),
+                style: TextStyle(fontSize: 13.sp, color: AppColor.textHint(context)),
               ),
             ),
             SizedBox(height: 12.h),
@@ -91,7 +92,7 @@ class _StationSelectorSheetState extends State<StationSelectorSheet> {
               child: BlocBuilder<StationBloc, StationState>(
                 builder: (context, state) {
                   if (state is StationLoading || state is StationInitial) {
-                    return const Center(child: CircularProgressIndicator());
+                    return const PageSkeleton();
                   }
                   if (state is StationError) {
                     return Center(
@@ -126,17 +127,17 @@ class _StationSelectorSheetState extends State<StationSelectorSheet> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.home_work_outlined,
                             size: 48,
-                            color: AppColors.textHint,
+                            color: AppColor.textHint(context),
                           ),
                           SizedBox(height: 12.h),
                           Text(
                             AppLocalizations.of(context)!.noStationsYet,
                             style: TextStyle(
                               fontSize: 15.sp,
-                              color: AppColors.textSecondary,
+                              color: AppColor.textSecondary(context),
                             ),
                           ),
                           SizedBox(height: 8.h),
@@ -144,7 +145,7 @@ class _StationSelectorSheetState extends State<StationSelectorSheet> {
                             AppLocalizations.of(context)!.createStationFirst,
                             style: TextStyle(
                               fontSize: 13.sp,
-                              color: AppColors.textHint,
+                              color: AppColor.textHint(context),
                             ),
                           ),
                           SizedBox(height: 16.h),
@@ -216,7 +217,7 @@ class _StationSelectorSheetState extends State<StationSelectorSheet> {
                                         style: TextStyle(
                                           fontSize: 15.sp,
                                           fontWeight: FontWeight.w600,
-                                          color: AppColors.textPrimary,
+                                          color: AppColor.textPrimary(context),
                                         ),
                                       ),
                                       SizedBox(height: 2.h),
@@ -225,16 +226,16 @@ class _StationSelectorSheetState extends State<StationSelectorSheet> {
                                             .nDevices('$deviceCount'),
                                         style: TextStyle(
                                           fontSize: 12.sp,
-                                          color: AppColors.textHint,
+                                          color: AppColor.textHint(context),
                                         ),
                                       ),
                                     ],
                                   ),
                                 ),
-                                const Icon(
+                                Icon(
                                   Icons.arrow_forward_ios,
                                   size: 16,
-                                  color: AppColors.textHint,
+                                  color: AppColor.textHint(context),
                                 ),
                               ],
                             ),

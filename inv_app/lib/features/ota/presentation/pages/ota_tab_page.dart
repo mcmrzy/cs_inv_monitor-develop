@@ -109,7 +109,7 @@ class _OtaTabPageState extends State<OtaTabPage> {
             padding: EdgeInsets.symmetric(vertical: 8.h),
             child: Text(
               l10n.str('ota_more_devices').replaceAll('{count}', '${devices.length}'),
-              style: TextStyle(fontSize: 12.sp, color: AppColors.textHint),
+              style: TextStyle(fontSize: 12.sp, color: AppColor.textHint(context)),
               textAlign: TextAlign.center,
             ),
           ),
@@ -156,7 +156,7 @@ class _OtaTabPageState extends State<OtaTabPage> {
           ),
           GestureDetector(
             onTap: () => setState(() => _selectedDevice = null),
-            child: Icon(Icons.close_rounded, size: 18.sp, color: AppColors.textHint),
+            child: Icon(Icons.close_rounded, size: 18.sp, color: AppColor.textHint(context)),
           ),
         ],
       ),
@@ -188,7 +188,7 @@ class _OtaTabPageState extends State<OtaTabPage> {
                 height: 8.w,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: isOnline ? AppColors.success : AppColors.textHint,
+                  color: isOnline ? AppColors.success : AppColor.textHint(context),
                 ),
               ),
               SizedBox(width: 12.w),
@@ -207,12 +207,12 @@ class _OtaTabPageState extends State<OtaTabPage> {
                     SizedBox(height: 2.h),
                     Text(
                       sn,
-                      style: TextStyle(fontSize: 11.sp, color: AppColors.textHint),
+                      style: TextStyle(fontSize: 11.sp, color: AppColor.textHint(context)),
                     ),
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right, size: 18.sp, color: AppColors.textHint),
+              Icon(Icons.chevron_right, size: 18.sp, color: AppColor.textHint(context)),
             ],
           ),
         ),
@@ -335,7 +335,7 @@ class _OtaTabPageState extends State<OtaTabPage> {
                       style: TextStyle(
                         fontSize: 14.sp,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
+                        color: AppColor.textPrimary(context),
                       ),
                     ),
                     SizedBox(height: 2.h),
@@ -343,7 +343,7 @@ class _OtaTabPageState extends State<OtaTabPage> {
                       l10n.str('local_mode_entry_hint'),
                       style: TextStyle(
                         fontSize: 12.sp,
-                        color: AppColors.textHint,
+                        color: AppColor.textHint(context),
                       ),
                     ),
                   ],
@@ -352,7 +352,7 @@ class _OtaTabPageState extends State<OtaTabPage> {
               Icon(
                 Icons.arrow_forward_ios_rounded,
                 size: 14.sp,
-                color: AppColors.textHint,
+                color: AppColor.textHint(context),
               ),
             ],
           ),
@@ -377,11 +377,11 @@ class _OtaTabPageState extends State<OtaTabPage> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.search_off_rounded, size: 56.sp, color: AppColors.textHint),
+          Icon(Icons.search_off_rounded, size: 56.sp, color: AppColor.textHint(context)),
           SizedBox(height: 12.h),
           Text(
             l10n.noSearchResults,
-            style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary),
+            style: TextStyle(fontSize: 14.sp, color: AppColor.textSecondary(context)),
           ),
         ],
       ),
@@ -411,7 +411,7 @@ class _ModeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final displayColor = available ? iconColor : AppColors.textHint;
+    final displayColor = available ? iconColor : AppColor.textHint(context);
     return Container(
       decoration: BoxDecoration(
         color: AppColor.surfaceContainer(context),
@@ -448,7 +448,7 @@ class _ModeCard extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                         color: available
                             ? AppColor.textPrimary(context)
-                            : AppColors.textHint,
+                            : AppColor.textHint(context),
                       ),
                     ),
                     SizedBox(height: 2.h),
@@ -456,7 +456,7 @@ class _ModeCard extends StatelessWidget {
                       available ? subtitle : unavailableHint,
                       style: TextStyle(
                         fontSize: 12.sp,
-                        color: AppColors.textHint,
+                        color: AppColor.textHint(context),
                       ),
                     ),
                   ],
@@ -472,7 +472,7 @@ class _ModeCard extends StatelessWidget {
                 Icon(
                   Icons.lock_outline_rounded,
                   size: 16.sp,
-                  color: AppColors.textHint,
+                  color: AppColor.textHint(context),
                 ),
             ],
           ),

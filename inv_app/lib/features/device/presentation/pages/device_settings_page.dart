@@ -7,6 +7,7 @@ import 'package:inv_app/core/widgets/param_confirm_dialog.dart';
 import 'package:inv_app/core/utils/api_response.dart';
 import 'package:inv_app/features/device/domain/entities/device_setting_config.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
+import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 
 class DeviceSettingsPage extends StatefulWidget {
   final String sn;
@@ -309,7 +310,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const PageSkeleton()
           : Column(
               children: [
                 if (_loadFailed) _buildLoadErrorBanner(l10n),
@@ -593,7 +594,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
           val ? l10n.paramOn : l10n.paramOff,
           style: TextStyle(
             fontSize: 14.sp,
-            color: val ? AppColors.success : AppColors.textSecondary,
+            color: val ? AppColors.success : AppColor.textSecondary(context),
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -667,11 +668,11 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
           children: [
             Text(
               '${minVal.toInt()}${item.unit ?? ''}',
-              style: TextStyle(fontSize: 11.sp, color: AppColors.textHint),
+              style: TextStyle(fontSize: 11.sp, color: AppColor.textHint(context)),
             ),
             Text(
               '${maxVal.toInt()}${item.unit ?? ''}',
-              style: TextStyle(fontSize: 11.sp, color: AppColors.textHint),
+              style: TextStyle(fontSize: 11.sp, color: AppColor.textHint(context)),
             ),
           ],
         ),
@@ -887,7 +888,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
                 l10n.paramModifiedCount('$_modifiedCount'),
                 style: TextStyle(
                   fontSize: 13.sp,
-                  color: AppColors.textSecondary,
+                  color: AppColor.textSecondary(context),
                 ),
               ),
             ),

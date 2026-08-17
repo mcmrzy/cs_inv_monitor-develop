@@ -4,6 +4,9 @@ import 'dart:convert';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:inv_app/core/data/local_cache_database.dart';
+import 'package:inv_app/core/services/ble/ble_device_manager.dart';
+import 'package:inv_app/core/services/offline/offline_op_log_store.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/services/connection_mode_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
@@ -231,6 +234,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           ),
         );
 
+        // 会话重建：退出 guest 本地模式、复位模式手动锁
+        await _onSessionEstablished();
+
         jpushService.bindUser(response.user.id);
       },
     );
@@ -272,6 +278,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           ),
         );
 
+        // 会话重建：退出 guest 本地模式、复位模式手动锁
+        await _onSessionEstablished();
+
         jpushService.bindUser(response.user.id);
       },
     );
@@ -293,16 +302,45 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     await storageService.deletePermissions();
     // 清除本地缓存的用户资料
     await storageService.saveString(_cachedUserKey, '');
+    // 清除组织上下文与电站缓存（隐私：不残留上一账号数据）
+    await storageService.deleteActiveOrgId();
+    await storageService.deleteActiveOrgName();
+    await storageService.deleteStationCache();
 
     jpushService.unbindUser();
 
     // 清除桌面小组件数据（隐私：退出登录后不残留上一账号的电站数据）
-    unawaited(WidgetUpdateService.clearWidgetData());
+    try {
+      unawaited(WidgetUpdateService.clearWidgetData());
+    } catch (_) {}
 
-    // 退出 guest 本地模式（Q4：登录页免登录入口的标志，登录/退出后清除）
-    unawaited(getIt<ConnectionModeService>().exitGuestLocalMode());
+    // 清除本地快照库、离线操作日志与 BLE 绑定密钥
+    // （隐私：退出登录后不残留上一账号的设备数据）
+    try {
+      await LocalCacheDatabase().clearAll();
+      await getIt<OfflineOpLogStore>().clearAll();
+      await getIt<BleDeviceKeyStore>().clearAll();
+    } catch (e) {
+      debugPrint('[AuthBloc] logout local cleanup error: $e');
+    }
+
+    // 退出 guest 本地模式（Q4：登录页免登录入口的标志，登录/退出后清除）；
+    // 副作用失败不阻塞登出状态转换
+    try {
+      unawaited(getIt<ConnectionModeService>().exitGuestLocalMode());
+    } catch (_) {}
 
     emit(AuthUnauthenticated());
+  }
+
+  /// 登录/注册成功后的会话重建副作用：
+  /// 退出 guest 本地模式、复位手动锁，避免 guest 标志/本地模式在登录后残留
+  Future<void> _onSessionEstablished() async {
+    try {
+      await getIt<ConnectionModeService>().onUserLoggedIn();
+    } catch (e) {
+      debugPrint('[AuthBloc] onUserLoggedIn error: $e');
+    }
   }
 
   Future<void> _onSendCodeRequested(
@@ -584,6 +622,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           ),
         );
 
+        // 会话重建：退出 guest 本地模式、复位模式手动锁
+        await _onSessionEstablished();
+
         jpushService.bindUser(response.user.id);
       },
     );
@@ -626,6 +667,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             user: response.user,
           ),
         );
+
+        // 会话重建：退出 guest 本地模式、复位模式手动锁
+        await _onSessionEstablished();
 
         jpushService.bindUser(response.user.id);
       },
@@ -691,6 +735,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           ),
         );
 
+        // 会话重建：退出 guest 本地模式、复位模式手动锁
+        await _onSessionEstablished();
+
         jpushService.bindUser(response.user.id);
       },
     );
@@ -727,6 +774,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             user: response.user,
           ),
         );
+
+        // 会话重建：退出 guest 本地模式、复位模式手动锁
+        await _onSessionEstablished();
 
         jpushService.bindUser(response.user.id);
       },
@@ -767,6 +817,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             user: response.user,
           ),
         );
+
+        // 会话重建：退出 guest 本地模式、复位模式手动锁
+        await _onSessionEstablished();
 
         jpushService.bindUser(response.user.id);
       },

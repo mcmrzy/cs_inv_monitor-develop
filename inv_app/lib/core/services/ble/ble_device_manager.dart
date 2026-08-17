@@ -61,6 +61,9 @@ abstract class BleDeviceKeyStore {
   Future<String?> read(String sn);
   Future<void> write(String sn, String keyBase64);
   Future<void> delete(String sn);
+
+  /// 清空全部设备绑定密钥（登出时调用，隐私：不残留上一账号的绑定关系）
+  Future<void> clearAll();
 }
 
 /// 基于 flutter_secure_storage 的 device_key 存储
@@ -69,7 +72,9 @@ class SecureStorageBleDeviceKeyStore implements BleDeviceKeyStore {
 
   SecureStorageBleDeviceKeyStore(this._storage);
 
-  static String _keyOf(String sn) => 'ble_device_key_$sn';
+  static const String _keyPrefix = 'ble_device_key_';
+
+  static String _keyOf(String sn) => '$_keyPrefix$sn';
 
   @override
   Future<String?> read(String sn) => _storage.read(key: _keyOf(sn));
@@ -80,6 +85,16 @@ class SecureStorageBleDeviceKeyStore implements BleDeviceKeyStore {
 
   @override
   Future<void> delete(String sn) => _storage.delete(key: _keyOf(sn));
+
+  @override
+  Future<void> clearAll() async {
+    final all = await _storage.readAll();
+    for (final key in all.keys) {
+      if (key.startsWith(_keyPrefix)) {
+        await _storage.delete(key: key);
+      }
+    }
+  }
 }
 
 /// TELEMETRY 分帧重组器（协议 §6.3：统一 1 字节控制头）

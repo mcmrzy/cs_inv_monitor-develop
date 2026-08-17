@@ -53,7 +53,7 @@ class _WifiSwitchDialog extends StatelessWidget {
           Text(
             AppLocalizations.of(context)?.provisionSuccessWifi ??
                 'Provisioning success, please switch back to your WiFi for remote monitoring.',
-            style: TextStyle(fontSize: 14.sp, color: AppColors.textPrimary),
+            style: TextStyle(fontSize: 14.sp, color: AppColor.textPrimary(context)),
           ),
           if (originalSsid != null) ...[
             SizedBox(height: 8.h),
@@ -72,7 +72,7 @@ class _WifiSwitchDialog extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 13.sp,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
+                      color: AppColor.textPrimary(context),
                     ),
                   ),
                 ],

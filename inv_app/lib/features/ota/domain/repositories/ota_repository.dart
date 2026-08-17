@@ -28,4 +28,8 @@ abstract class OtaRepository {
     String sn,
     int packageId,
   );
+
+  /// GET /ota/firmware-info/:id — 按固件 ID 获取本地 OTA 所需元数据
+  /// （下载 URL/SHA-256/签名/安全版本等），路由无需再携带复杂 query 参数
+  Future<Either<Failure, Map<String, dynamic>>> getFirmwareInfo(int firmwareId);
 }

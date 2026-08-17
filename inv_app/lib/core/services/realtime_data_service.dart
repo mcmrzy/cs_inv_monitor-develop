@@ -401,7 +401,9 @@ class RealtimeDataServiceImpl implements RealtimeDataService {
     final updatedAtStr = realtime['updated_at'] as String? ??
         responseData['data_time'] as String? ??
         '';
-    final updatedAt = DateTime.tryParse(updatedAtStr) ?? DateTime.now();
+    // 时间戳缺失时保持 null（视为未知），不用 DateTime.now() 兜底，
+    // 避免把陈旧数据误当实时值展示
+    final updatedAt = DateTime.tryParse(updatedAtStr);
 
     final onlineValue = realtime['online'] ?? responseData['online'];
     final onlineStatus = onlineValue != null

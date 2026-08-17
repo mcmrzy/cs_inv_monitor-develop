@@ -539,7 +539,10 @@ class InverterRealtime {
   final DeviceInfo? deviceInfo;
   final MeterData? meter;
   final double loadPower;
-  final DateTime updatedAt;
+
+  /// 遥测数据时间戳；缺失时为 null（视为未知，
+  /// 不用 DateTime.now() 兜底，避免把陈旧数据误当实时值展示）
+  final DateTime? updatedAt;
 
   const InverterRealtime({
     required this.deviceSN,
@@ -553,7 +556,7 @@ class InverterRealtime {
     this.deviceInfo,
     this.meter,
     this.loadPower = 0,
-    required this.updatedAt,
+    this.updatedAt,
   });
 
   factory InverterRealtime.fromJson(Map<String, dynamic> json) {
@@ -591,8 +594,8 @@ class InverterRealtime {
           ? MeterData.fromJson(json['meter'] as Map<String, dynamic>)
           : null,
       loadPower: (json['load_power'] as num?)?.toDouble() ?? 0,
-      updatedAt: DateTime.tryParse(json['updated_at'] as String? ?? '') ??
-          DateTime.now(),
+      updatedAt:
+          DateTime.tryParse(json['updated_at'] as String? ?? ''),
     );
   }
 
@@ -608,6 +611,6 @@ class InverterRealtime {
         'device_info': deviceInfo?.toJson(),
         'meter': meter?.toJson(),
         'load_power': loadPower,
-        'updated_at': updatedAt.toIso8601String(),
+        'updated_at': updatedAt?.toIso8601String(),
       };
 }

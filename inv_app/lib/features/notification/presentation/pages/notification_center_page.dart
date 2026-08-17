@@ -391,7 +391,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
                       style: TextStyle(
                         fontSize: 16.sp,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
+                        color: AppColor.textPrimary(context),
                       ),
                     ),
                     if (subtitle != null && subtitle.isNotEmpty) ...[
@@ -400,7 +400,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
                         subtitle,
                         style: TextStyle(
                           fontSize: 12.sp,
-                          color: AppColors.textHint,
+                          color: AppColor.textHint(context),
                         ),
                       ),
                     ],
@@ -410,7 +410,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
               Icon(
                 Icons.arrow_forward_ios,
                 size: 14.sp,
-                color: AppColors.textHint,
+                color: AppColor.textHint(context),
               ),
             ],
           ),
@@ -467,7 +467,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
                       style: TextStyle(
                         fontSize: 16.sp,
                         fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
+                        color: AppColor.textPrimary(context),
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -478,7 +478,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
                         subtitle,
                         style: TextStyle(
                           fontSize: 12.sp,
-                          color: AppColors.textHint,
+                          color: AppColor.textHint(context),
                           height: 1.3,
                         ),
                         maxLines: 2,
@@ -491,7 +491,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
             ],
           ),
         ),
-        const Divider(height: 1, color: AppColors.divider),
+        Divider(height: 1, color: AppColor.divider(context)),
         SizedBox(height: 6.h),
       ],
     );
@@ -870,7 +870,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
         iconData = Icons.check_circle_outline;
         break;
       default:
-        levelColor = AppColors.textHint;
+        levelColor = AppColor.textHint(context);
         levelText = l10n.general;
         iconData = Icons.notifications_none;
     }
@@ -900,14 +900,14 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
               width: 32.w,
               height: 32.w,
               decoration: BoxDecoration(
-                color: (isRead ? AppColors.textHint : levelColor)
+                color: (isRead ? AppColor.textHint(context) : levelColor)
                     .withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8.r),
               ),
               child: Icon(
                 isRead ? Icons.notifications_none : iconData,
                 size: 18.sp,
-                color: isRead ? AppColors.textHint : levelColor,
+                color: isRead ? AppColor.textHint(context) : levelColor,
               ),
             ),
             SizedBox(width: 12.w),
@@ -924,7 +924,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
                             fontSize: 14.sp,
                             fontWeight:
                                 isRead ? FontWeight.w500 : FontWeight.w600,
-                            color: AppColors.textPrimary,
+                            color: AppColor.textPrimary(context),
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -959,7 +959,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
                           '${l10n.deviceLabel}: ${alarm['device_sn'] ?? '-'}  ${l10n.faultCodeLabel}: ${alarm['fault_code'] ?? '-'}',
                           style: TextStyle(
                             fontSize: 12.sp,
-                            color: AppColors.textHint,
+                            color: AppColor.textHint(context),
                           ),
                         ),
                       ),
@@ -967,7 +967,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
                         _formatTime(timestamp, l10n),
                         style: TextStyle(
                           fontSize: 11.sp,
-                          color: AppColors.textHint,
+                          color: AppColor.textHint(context),
                         ),
                       ),
                     ],
@@ -975,7 +975,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
                 ],
               ),
             ),
-            Icon(Icons.chevron_right, color: AppColors.textHint, size: 20.sp),
+            Icon(Icons.chevron_right, color: AppColor.textHint(context), size: 20.sp),
           ],
         ),
       ),
@@ -1054,7 +1054,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
                     style: TextStyle(
                       fontSize: 14.sp,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
+                      color: AppColor.textPrimary(context),
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -1067,7 +1067,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
                           _notificationSubtitle(notification, l10n),
                           style: TextStyle(
                             fontSize: 12.sp,
-                            color: AppColors.textHint,
+                            color: AppColor.textHint(context),
                           ),
                         ),
                       ),
@@ -1075,7 +1075,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
                         _formatTime(timestamp, l10n),
                         style: TextStyle(
                           fontSize: 11.sp,
-                          color: AppColors.textHint,
+                          color: AppColor.textHint(context),
                         ),
                       ),
                     ],
@@ -1339,7 +1339,7 @@ class _AnimatedMenuSheetState extends State<_AnimatedMenuSheet>
                             style: TextStyle(
                               fontSize: 16.sp,
                               fontWeight: FontWeight.w600,
-                              color: AppColors.textSecondary,
+                              color: AppColor.textSecondary(context),
                             ),
                           ),
                         ),

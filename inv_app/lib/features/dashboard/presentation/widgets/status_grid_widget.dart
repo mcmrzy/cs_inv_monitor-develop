@@ -112,7 +112,7 @@ class _StatusCard extends StatelessWidget {
     IconData changeIcon;
 
     if (isNeutral) {
-      changeColor = AppColors.textHint;
+      changeColor = AppColor.textHint(context);
       changeIcon = Icons.remove;
     } else if (isPositive) {
       // 对于在线数量，增加是好事；对于离线/故障/告警，增加是坏事

@@ -16,6 +16,7 @@ import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/core/widgets/settings_widgets.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
+import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 
 /// 帮助中心页（需求 14）
 ///
@@ -696,7 +697,7 @@ class _WorkOrdersPageState extends State<_WorkOrdersPage> {
 
   Widget _buildBody(AppLocalizations l10n) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const PageSkeleton();
     }
     if (_items.isEmpty) {
       return Center(
@@ -1022,7 +1023,7 @@ class _WorkOrderDetailPageState extends State<_WorkOrderDetailPage> {
 
   Widget _buildBody(BuildContext context, AppLocalizations l10n) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const PageSkeleton();
     }
     if (_failed || _detail == null) {
       return Center(

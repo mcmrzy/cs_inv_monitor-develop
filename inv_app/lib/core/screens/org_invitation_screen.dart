@@ -8,6 +8,7 @@ import 'package:inv_app/core/stores/organization_context_store.dart';
 import 'package:inv_app/core/services/api_service.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:intl/intl.dart';
+import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 
 /// 可邀请角色按邀请人所属组织类型受限（与后端 inviterAllowedRolesByOrgType 一致）：
 /// manufacturer→{agent,distributor,installer,customer}、agent→{installer,customer}、
@@ -161,7 +162,7 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
 
   Widget _buildInvitationList(List<OrganizationInvitation> invitations) {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const PageSkeleton();
     }
 
     if (_error != null) {

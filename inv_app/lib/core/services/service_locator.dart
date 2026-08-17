@@ -19,11 +19,9 @@ import 'package:inv_app/core/services/notification_service.dart';
 import 'package:inv_app/features/profile/data/notify_prefs_service.dart';
 import 'package:inv_app/core/services/local_communication_service.dart';
 import 'package:inv_app/core/services/connection_mode_service.dart';
-import 'package:inv_app/core/services/offline_cache_service.dart';
 import 'package:inv_app/core/services/offline/offline_log_api.dart';
 import 'package:inv_app/core/services/offline/offline_log_sync_service.dart';
 import 'package:inv_app/core/services/offline/offline_op_log_store.dart';
-import 'package:inv_app/core/services/offline_sync_service.dart';
 import 'package:inv_app/core/services/network_status_service.dart';
 import 'package:inv_app/core/services/deep_link_service.dart';
 import 'package:inv_app/core/services/locale_service.dart';
@@ -372,21 +370,8 @@ getIt.registerLazySingleton<NotifyPrefsService>(
       ),
     );
 
-    getIt.registerLazySingleton<OfflineCacheService>(
-      () => OfflineCacheService(getIt()),
-    );
-
     getIt.registerLazySingleton<DataCacheService>(
       () => DataCacheService(getIt()),
-    );
-
-    getIt.registerLazySingleton<OfflineSyncService>(
-      () => OfflineSyncService(
-        cacheService: getIt(),
-        apiService: getIt(),
-        connectivity: Connectivity(),
-      ),
-      dispose: (service) => service.dispose(),
     );
 
     getIt.registerLazySingleton<LocaleService>(
@@ -541,7 +526,6 @@ getIt.registerLazySingleton<NotifyPrefsService>(
         realtimeDataService: getIt(),
         localCommunicationService: getIt(),
         connectionModeService: getIt(),
-        offlineCacheService: getIt(),
         dataCacheService: getIt(),
         localCache: getIt(),
       ),

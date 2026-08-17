@@ -96,10 +96,10 @@ class _ProfilePageState extends State<ProfilePage> {
       appBar: AppBar(
         title: Text(
           l10n.myProfile,
-          style: const TextStyle(
+          style: TextStyle(
             fontWeight: FontWeight.w600,
             fontSize: 17,
-            color: AppColors.textPrimary,
+            color: AppColor.textPrimary(context),
           ),
         ),
         centerTitle: true,
@@ -259,7 +259,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                 l10n.loadFailed,
                                 style: TextStyle(
                                   fontSize: 13.sp,
-                                  color: AppColors.textSecondary,
+                                  color: AppColor.textSecondary(context),
                                 ),
                               ),
                             ),
@@ -294,7 +294,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       width: 100.w,
                       height: 16.h,
                       decoration: BoxDecoration(
-                        color: AppColors.surfaceHover,
+                        color: AppColor.surfaceHover(context),
                         borderRadius: BorderRadius.circular(4.r),
                       ),
                     ),
@@ -303,7 +303,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       width: 60.w,
                       height: 12.h,
                       decoration: BoxDecoration(
-                        color: AppColors.surfaceHover,
+                        color: AppColor.surfaceHover(context),
                         borderRadius: BorderRadius.circular(4.r),
                       ),
                     ),
@@ -347,14 +347,14 @@ class _ProfilePageState extends State<ProfilePage> {
                       style: TextStyle(
                         fontSize: 16.sp,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
+                        color: AppColor.textPrimary(context),
                       ),
                     ),
                     SizedBox(height: 4.h),
                     Text(
                       l10n.roleLabel(roleText),
                       style:
-                          TextStyle(fontSize: 13.sp, color: AppColors.textHint),
+                          TextStyle(fontSize: 13.sp, color: AppColor.textHint(context)),
                     ),
                   ],
                 ],
@@ -363,7 +363,7 @@ class _ProfilePageState extends State<ProfilePage> {
             Icon(
               Icons.chevron_right_rounded,
               size: 20.sp,
-              color: AppColors.textHint,
+              color: AppColor.textHint(context),
             ),
           ],
         ),
@@ -422,19 +422,19 @@ class _ProfilePageState extends State<ProfilePage> {
                   leading: Icon(
                     item.$1,
                     size: 22.sp,
-                    color: AppColors.textSecondary,
+                    color: AppColor.textSecondary(context),
                   ),
                   title: Text(
                     item.$2,
                     style: TextStyle(
                       fontSize: 14.sp,
-                      color: AppColors.textPrimary,
+                      color: AppColor.textPrimary(context),
                     ),
                   ),
                   trailing: Icon(
                     Icons.chevron_right_rounded,
                     size: 18.sp,
-                    color: AppColors.textHint,
+                    color: AppColor.textHint(context),
                   ),
                   onTap: item.$3,
                   shape: RoundedRectangleBorder(

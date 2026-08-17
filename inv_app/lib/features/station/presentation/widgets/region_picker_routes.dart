@@ -213,9 +213,9 @@ class _ContinentCountryPickerPageState
                 Container(
                   padding:
                       EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     border: Border(
-                      bottom: BorderSide(color: AppColors.surfaceHover),
+                      bottom: BorderSide(color: AppColor.surfaceHover(context)),
                     ),
                   ),
                   child: Row(
@@ -227,7 +227,7 @@ class _ContinentCountryPickerPageState
                           AppLocalizations.of(context)!.cancel,
                           style: TextStyle(
                             fontSize: 15.sp,
-                            color: AppColors.textHint,
+                            color: AppColor.textHint(context),
                           ),
                         ),
                       ),
@@ -236,7 +236,7 @@ class _ContinentCountryPickerPageState
                         style: TextStyle(
                           fontSize: 16.sp,
                           fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
+                          color: AppColor.textPrimary(context),
                         ),
                       ),
                       TextButton(
@@ -260,10 +260,10 @@ class _ContinentCountryPickerPageState
                     controller: _searchCtrl,
                     decoration: InputDecoration(
                       hintText: AppLocalizations.of(context)!.str('country_region_search_hint'),
-                      prefixIcon: Icon(Icons.search, size: 20.sp, color: AppColors.textHint),
+                      prefixIcon: Icon(Icons.search, size: 20.sp, color: AppColor.textHint(context)),
                       suffixIcon: _searchQuery.isNotEmpty
                           ? IconButton(
-                              icon: Icon(Icons.clear, size: 18.sp, color: AppColors.textHint),
+                              icon: Icon(Icons.clear, size: 18.sp, color: AppColor.textHint(context)),
                               onPressed: () {
                                 _searchCtrl.clear();
                                 unawaited(_searchAndNavigate(''));
@@ -273,11 +273,11 @@ class _ContinentCountryPickerPageState
                       contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10.r),
-                        borderSide: const BorderSide(color: AppColors.surfaceHover),
+                        borderSide: BorderSide(color: AppColor.surfaceHover(context)),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10.r),
-                        borderSide: const BorderSide(color: AppColors.surfaceHover),
+                        borderSide: BorderSide(color: AppColor.surfaceHover(context)),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10.r),
@@ -306,7 +306,7 @@ class _ContinentCountryPickerPageState
                           colLabel: '洲',
                         ),
                       ),
-                      Container(width: 1, color: AppColors.surfaceHover),
+                      Container(width: 1, color: AppColor.surfaceHover(context)),
                       // 右列：国家列表
                       Expanded(
                         flex: 4,
@@ -348,7 +348,7 @@ class _ContinentCountryPickerPageState
             colLabel,
             style: TextStyle(
               fontSize: 12.sp,
-              color: AppColors.textHint,
+              color: AppColor.textHint(context),
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -360,7 +360,7 @@ class _ContinentCountryPickerPageState
                     '—',
                     style: TextStyle(
                       fontSize: 14.sp,
-                      color: AppColors.textHint,
+                      color: AppColor.textHint(context),
                     ),
                   ),
                 )
@@ -409,8 +409,8 @@ class _ContinentCountryPickerPageState
                                     ? FontWeight.w600
                                     : FontWeight.normal,
                                 color: selected
-                                    ? AppColors.textPrimary
-                                    : AppColors.textHint,
+                                    ? AppColor.textPrimary(context)
+                                    : AppColor.textHint(context),
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -678,9 +678,9 @@ class _RegionPickerPageState extends State<RegionPickerPage> {
                 Container(
                   padding:
                       EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     border: Border(
-                      bottom: BorderSide(color: AppColors.surfaceHover),
+                      bottom: BorderSide(color: AppColor.surfaceHover(context)),
                     ),
                   ),
                   child: Row(
@@ -692,7 +692,7 @@ class _RegionPickerPageState extends State<RegionPickerPage> {
                           AppLocalizations.of(context)!.cancel,
                           style: TextStyle(
                             fontSize: 15.sp,
-                            color: AppColors.textHint,
+                            color: AppColor.textHint(context),
                           ),
                         ),
                       ),
@@ -701,7 +701,7 @@ class _RegionPickerPageState extends State<RegionPickerPage> {
                         style: TextStyle(
                           fontSize: 16.sp,
                           fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
+                          color: AppColor.textPrimary(context),
                         ),
                       ),
                       TextButton(
@@ -728,11 +728,11 @@ class _RegionPickerPageState extends State<RegionPickerPage> {
                     style: TextStyle(fontSize: 15.sp),
                     decoration: InputDecoration(
                       hintText: AppLocalizations.of(context)!.str('region_search_hint'),
-                      hintStyle: TextStyle(fontSize: 14.sp, color: AppColors.textHint),
-                      prefixIcon: Icon(Icons.search, size: 20.sp, color: AppColors.textHint),
+                      hintStyle: TextStyle(fontSize: 14.sp, color: AppColor.textHint(context)),
+                      prefixIcon: Icon(Icons.search, size: 20.sp, color: AppColor.textHint(context)),
                       suffixIcon: _searchQuery.isNotEmpty
                           ? IconButton(
-                              icon: Icon(Icons.clear, size: 18.sp, color: AppColors.textHint),
+                              icon: Icon(Icons.clear, size: 18.sp, color: AppColor.textHint(context)),
                               onPressed: () {
                                 _searchCtrl.clear();
                                 setState(() => _searchQuery = '');
@@ -741,7 +741,7 @@ class _RegionPickerPageState extends State<RegionPickerPage> {
                           : null,
                       contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
                       filled: true,
-                      fillColor: AppColors.surfaceHover,
+                      fillColor: AppColor.surfaceHover(context),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12.r),
                         borderSide: BorderSide.none,
@@ -766,7 +766,7 @@ class _RegionPickerPageState extends State<RegionPickerPage> {
                           ),
                         ),
                       ] else ...[
-                      Container(width: 1, color: AppColors.surfaceHover),
+                      Container(width: 1, color: AppColor.surfaceHover(context)),
                       Expanded(
                         flex: 3,
                         child: _buildColumn(
@@ -777,7 +777,7 @@ class _RegionPickerPageState extends State<RegionPickerPage> {
                           colLabel: AppLocalizations.of(context)!.localCity,
                         ),
                       ),
-                      Container(width: 1, color: AppColors.surfaceHover),
+                      Container(width: 1, color: AppColor.surfaceHover(context)),
                       Expanded(
                         flex: 3,
                         child: _buildColumn(
@@ -817,7 +817,7 @@ class _RegionPickerPageState extends State<RegionPickerPage> {
             colLabel,
             style: TextStyle(
               fontSize: 12.sp,
-              color: AppColors.textHint,
+              color: AppColor.textHint(context),
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -829,7 +829,7 @@ class _RegionPickerPageState extends State<RegionPickerPage> {
                     '—',
                     style: TextStyle(
                       fontSize: 14.sp,
-                      color: AppColors.textHint,
+                      color: AppColor.textHint(context),
                     ),
                   ),
                 )
@@ -878,8 +878,8 @@ class _RegionPickerPageState extends State<RegionPickerPage> {
                                     ? FontWeight.w600
                                     : FontWeight.normal,
                                 color: selected
-                                    ? AppColors.textPrimary
-                                    : AppColors.textHint,
+                                    ? AppColor.textPrimary(context)
+                                    : AppColor.textHint(context),
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,

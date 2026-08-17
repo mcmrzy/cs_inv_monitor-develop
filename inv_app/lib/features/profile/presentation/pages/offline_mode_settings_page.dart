@@ -18,6 +18,7 @@ import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/core/widgets/settings_widgets.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
+import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 
 /// 离网模式设置页（需求 17）
 ///
@@ -155,7 +156,7 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
               style: TextStyle(
                 fontSize: 14.sp,
                 fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
+                color: AppColor.textPrimary(context),
               ),
             ),
             SizedBox(height: 16.h),
@@ -331,7 +332,7 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
             SizedBox(height: 16.h),
             Text(
               l10n.str('local_cache_clear_confirm'),
-              style: TextStyle(fontSize: 13.sp, color: AppColors.textHint),
+              style: TextStyle(fontSize: 13.sp, color: AppColor.textHint(context)),
             ),
           ],
         ),
@@ -363,7 +364,7 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
     if (_loading) {
       return Scaffold(
         appBar: AppBar(title: Text(l10n.offlineModeSettings)),
-        body: const Center(child: CircularProgressIndicator()),
+        body: const PageSkeleton(),
       );
     }
 

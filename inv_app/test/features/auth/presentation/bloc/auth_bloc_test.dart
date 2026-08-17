@@ -67,6 +67,13 @@ void main() {
         .thenAnswer((_) async => null);
     when(() => mockStorageService.saveString(any(), any()))
         .thenAnswer((_) async {});
+    // 登出时清除组织上下文与电站缓存
+    when(() => mockStorageService.deleteActiveOrgId())
+        .thenAnswer((_) async {});
+    when(() => mockStorageService.deleteActiveOrgName())
+        .thenAnswer((_) async {});
+    when(() => mockStorageService.deleteStationCache())
+        .thenAnswer((_) async {});
 
     authBloc = AuthBloc(
       loginUseCase: mockLoginUseCase,

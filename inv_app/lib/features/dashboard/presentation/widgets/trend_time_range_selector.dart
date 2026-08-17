@@ -63,7 +63,7 @@ class TrendTimeRangeSelector extends StatelessWidget {
           style: TextStyle(
             fontSize: 12.sp,
             fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-            color: isSelected ? AppColors.textPrimary : AppColors.textSecondary,
+            color: isSelected ? AppColor.textPrimary(context) : AppColor.textSecondary(context),
           ),
         ),
       ),

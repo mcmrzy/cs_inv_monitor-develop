@@ -5,6 +5,7 @@ import 'package:inv_app/core/services/offline/offline_op_log_store.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
+import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 
 /// 设备本地操作日志页（BLE 直连模式，设计文档 §3.5）
 ///
@@ -89,7 +90,7 @@ class _DeviceOpLogsPageState extends State<DeviceOpLogsPage> {
 
   Widget _buildBody(AppLocalizations l10n) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const PageSkeleton();
     }
     final logs = _logs ?? const <OfflineOpLog>[];
     if (logs.isEmpty) {

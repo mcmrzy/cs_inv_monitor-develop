@@ -12,7 +12,6 @@ import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:inv_app/features/auth/presentation/widgets/login_form.dart';
 import 'package:inv_app/features/auth/presentation/widgets/register_form.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
-import 'package:wifi_iot/wifi_iot.dart';
 
 /// 登录/注册模式
 enum AuthMode { login, register }
@@ -176,7 +175,7 @@ class _AuthPageState extends State<AuthPage>
                         Icon(
                           Icons.chevron_right_rounded,
                           size: 18.sp,
-                          color: AppColors.textHint,
+                          color: AppColor.textHint(context),
                         ),
                       ],
                     ),
@@ -384,18 +383,6 @@ class _AuthPageState extends State<AuthPage>
     context.go('/home');
   }
 
-  /// 当前 WiFi 是否已连接到逆变器热点（CS-INV-xxxx / CS_INV_xxxx）
-  Future<bool> _isConnectedToDeviceAP() async {
-    try {
-      final ssid = await WiFiForIoTPlugin.getSSID();
-      if (ssid == null || ssid.isEmpty) return false;
-      final upper = ssid.toUpperCase();
-      return upper.startsWith('CS-INV') || upper.startsWith('CS_INV');
-    } catch (_) {
-      return false;
-    }
-  }
-
   /// 底部切换行：登录 ⇄ 注册（点击后表单组件动画切换）
   Widget _buildSwitchRow() {
     final l10n = AppLocalizations.of(context)!;
@@ -405,7 +392,7 @@ class _AuthPageState extends State<AuthPage>
       children: [
         Text(
           isLogin ? l10n.notHaveAccount : l10n.alreadyHaveAccount,
-          style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary),
+          style: TextStyle(fontSize: 14.sp, color: AppColor.textSecondary(context)),
         ),
         TextButton(
           onPressed: () =>

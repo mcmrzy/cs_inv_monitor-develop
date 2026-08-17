@@ -372,7 +372,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
                 icon: Icon(
                   Icons.chevron_left,
                   size: 24.sp,
-                  color: AppColors.textSecondary,
+                  color: AppColor.textSecondary(context),
                 ),
                 padding: EdgeInsets.zero,
                 constraints: BoxConstraints(minWidth: 36.w, minHeight: 36.w),
@@ -412,7 +412,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
                 icon: Icon(
                   Icons.chevron_right,
                   size: 24.sp,
-                  color: AppColors.textSecondary,
+                  color: AppColor.textSecondary(context),
                 ),
                 padding: EdgeInsets.zero,
                 constraints: BoxConstraints(minWidth: 36.w, minHeight: 36.w),
@@ -439,7 +439,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
           style: TextStyle(
             fontSize: 13.sp,
             fontWeight: FontWeight.w500,
-            color: isActive ? Colors.white : AppColors.textSecondary,
+            color: isActive ? Colors.white : AppColor.textSecondary(context),
           ),
         ),
       ),
@@ -554,7 +554,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
                   label,
                   style: TextStyle(
                     fontSize: 12.sp,
-                    color: AppColors.textSecondary,
+                    color: AppColor.textSecondary(context),
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -583,7 +583,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
                         text: ' ${value >= 1000 ? 'MWh' : unit}',
                         style: TextStyle(
                           fontSize: 10.sp,
-                          color: AppColors.textHint,
+                          color: AppColor.textHint(context),
                         ),
                       ),
                     ],
@@ -648,11 +648,11 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.show_chart, size: 48.sp, color: AppColors.textHint),
+              Icon(Icons.show_chart, size: 48.sp, color: AppColor.textHint(context)),
               SizedBox(height: 8.h),
               Text(
                 l10n.noData,
-                style: TextStyle(fontSize: 14.sp, color: AppColors.textHint),
+                style: TextStyle(fontSize: 14.sp, color: AppColor.textHint(context)),
               ),
             ],
           ),
@@ -701,11 +701,11 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.bar_chart, size: 48.sp, color: AppColors.textHint),
+              Icon(Icons.bar_chart, size: 48.sp, color: AppColor.textHint(context)),
               SizedBox(height: 8.h),
               Text(
                 l10n.noData,
-                style: TextStyle(fontSize: 14.sp, color: AppColors.textHint),
+                style: TextStyle(fontSize: 14.sp, color: AppColor.textHint(context)),
               ),
             ],
           ),
@@ -762,7 +762,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
             SizedBox(width: 4.w),
             Text(
               label,
-              style: TextStyle(fontSize: 11.sp, color: AppColors.textSecondary),
+              style: TextStyle(fontSize: 11.sp, color: AppColor.textSecondary(context)),
             ),
           ],
         );
@@ -796,7 +796,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
             SizedBox(width: 4.w),
             Text(
               label,
-              style: TextStyle(fontSize: 11.sp, color: AppColors.textSecondary),
+              style: TextStyle(fontSize: 11.sp, color: AppColor.textSecondary(context)),
             ),
           ],
         );
@@ -840,7 +840,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
                       l10n.noAlarms,
                       style: TextStyle(
                         fontSize: 13.sp,
-                        color: AppColors.textHint,
+                        color: AppColor.textHint(context),
                       ),
                     ),
                   ),
@@ -898,7 +898,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
         levelText = _l10n.normal;
         break;
       default:
-        levelColor = AppColors.textHint;
+        levelColor = AppColor.textHint(context);
         levelText = _l10n.general;
     }
 
@@ -918,7 +918,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(
-            color: AppColors.divider.withValues(alpha: 0.3),
+            color: AppColor.divider(context).withValues(alpha: 0.3),
             width: 0.5,
           ),
         ),
@@ -957,7 +957,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
                 SizedBox(height: 2.h),
                 Text(
                   deviceSn,
-                  style: TextStyle(fontSize: 10.sp, color: AppColors.textHint),
+                  style: TextStyle(fontSize: 10.sp, color: AppColor.textHint(context)),
                 ),
               ],
             ),
@@ -965,7 +965,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
           if (timeStr.isNotEmpty)
             Text(
               timeStr,
-              style: TextStyle(fontSize: 10.sp, color: AppColors.textHint),
+              style: TextStyle(fontSize: 10.sp, color: AppColor.textHint(context)),
             ),
         ],
       ),
@@ -993,7 +993,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
         child: Center(
           child: Text(
             _l10n.noDataAvailable,
-            style: TextStyle(fontSize: 13.sp, color: AppColors.textHint),
+            style: TextStyle(fontSize: 13.sp, color: AppColor.textHint(context)),
           ),
         ),
       );
@@ -1057,7 +1057,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
               drawVerticalLine: false,
               horizontalInterval: yInterval,
               getDrawingHorizontalLine: (value) => FlLine(
-                color: AppColors.divider.withValues(alpha: 0.3),
+                color: AppColor.divider(context).withValues(alpha: 0.3),
                 strokeWidth: 0.5,
               ),
             ),
@@ -1072,7 +1072,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
                     return Text(
                       _formatPowerLabel(value),
                       style:
-                          TextStyle(fontSize: 10.sp, color: AppColors.textHint),
+                          TextStyle(fontSize: 10.sp, color: AppColor.textHint(context)),
                     );
                   },
                 ),
@@ -1091,7 +1091,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
                         fontSize: 9.sp,
                         color: hour == currentHour
                             ? AppColors.primary
-                            : AppColors.textHint,
+                            : AppColor.textHint(context),
                         fontWeight: hour == currentHour
                             ? FontWeight.w600
                             : FontWeight.normal,
@@ -1210,7 +1210,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
                   value >= 1000
                       ? '${(value / 1000).toStringAsFixed(1)}k'
                       : value.toStringAsFixed(0),
-                  style: TextStyle(fontSize: 10.sp, color: AppColors.textHint),
+                  style: TextStyle(fontSize: 10.sp, color: AppColor.textHint(context)),
                 ),
               ),
             ),
@@ -1238,7 +1238,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
                     child: Text(
                       _formatTimeLabel(_dataPoints[index].time),
                       style:
-                          TextStyle(fontSize: 9.sp, color: AppColors.textHint),
+                          TextStyle(fontSize: 9.sp, color: AppColor.textHint(context)),
                     ),
                   );
                 },
@@ -1254,7 +1254,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
             drawVerticalLine: false,
             horizontalInterval: maxY > 0 ? maxY / 4 : 1,
             getDrawingHorizontalLine: (value) => FlLine(
-              color: AppColors.divider.withValues(alpha: 0.4),
+              color: AppColor.divider(context).withValues(alpha: 0.4),
               strokeWidth: 0.5,
             ),
           ),
@@ -1443,7 +1443,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
           return Center(
             child: Text(
               '$year',
-              style: TextStyle(fontSize: 14.sp, color: AppColors.textPrimary),
+              style: TextStyle(fontSize: 14.sp, color: AppColor.textPrimary(context)),
             ),
           );
         },
@@ -1463,7 +1463,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
           return Center(
             child: Text(
               '${index + 1}',
-              style: TextStyle(fontSize: 14.sp, color: AppColors.textPrimary),
+              style: TextStyle(fontSize: 14.sp, color: AppColor.textPrimary(context)),
             ),
           );
         },
@@ -1489,7 +1489,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
           return Center(
             child: Text(
               '${index + 1}',
-              style: TextStyle(fontSize: 14.sp, color: AppColors.textPrimary),
+              style: TextStyle(fontSize: 14.sp, color: AppColor.textPrimary(context)),
             ),
           );
         },

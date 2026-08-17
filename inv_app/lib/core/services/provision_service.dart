@@ -65,7 +65,11 @@ class ProvisionService {
   }
 
   /// 使用当前 ESP32-C2 App 配网协议发送 Wi-Fi 配置。
+  ///
+  /// 安全预留（固件团队协同项）：当前 Wi-Fi 密码经热点局域网明文下发，
+  /// 设备端落地会话鉴权/密钥协商后，在此处改为加密传输（预留接入点）。
   Future<ProvisionResult> configure(String ssid, String password) async {
+    // TODO(固件团队): 会话密钥协商落地后对 password 加密后再下发
     return _postJson('$baseUrl/config', {'ssid': ssid, 'password': password});
   }
 

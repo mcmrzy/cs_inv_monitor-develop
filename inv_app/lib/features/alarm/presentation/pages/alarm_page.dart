@@ -60,13 +60,13 @@ class _AlarmPageState extends State<AlarmPage> {
                         Icon(
                           Icons.notifications_none,
                           size: 64.sp,
-                          color: AppColors.textHint,
+                          color: AppColor.textHint(context),
                         ),
                         SizedBox(height: 16.h),
                         Text(
                           l10n.noAlarms,
                           style: TextStyle(
-                            color: AppColors.textHint,
+                            color: AppColor.textHint(context),
                             fontSize: 16.sp,
                           ),
                         ),
@@ -109,12 +109,12 @@ class _AlarmPageState extends State<AlarmPage> {
                   Icon(
                     Icons.error_outline,
                     size: 48.sp,
-                    color: AppColors.textHint,
+                    color: AppColor.textHint(context),
                   ),
                   SizedBox(height: 12.h),
                   Text(
                     l10n.translateError(state.message),
-                    style: const TextStyle(color: AppColors.textSecondary),
+                    style: TextStyle(color: AppColor.textSecondary(context)),
                   ),
                   SizedBox(height: 12.h),
                   FilledButton.icon(
@@ -197,7 +197,7 @@ class _AlarmPageState extends State<AlarmPage> {
         levelText = l10n.normal;
         break;
       default:
-        levelColor = AppColors.textHint;
+        levelColor = AppColor.textHint(context);
         levelText = l10n.general;
     }
 
@@ -220,7 +220,7 @@ class _AlarmPageState extends State<AlarmPage> {
                 width: 32.w,
                 height: 32.w,
                 decoration: BoxDecoration(
-                  color: (isRead ? AppColors.textHint : levelColor)
+                  color: (isRead ? AppColor.textHint(context) : levelColor)
                       .withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8.r),
                 ),
@@ -229,7 +229,7 @@ class _AlarmPageState extends State<AlarmPage> {
                       ? Icons.notifications_none
                       : Icons.warning_amber_rounded,
                   size: 18.sp,
-                  color: isRead ? AppColors.textHint : levelColor,
+                  color: isRead ? AppColor.textHint(context) : levelColor,
                 ),
               ),
               SizedBox(width: 12.w),
@@ -246,7 +246,7 @@ class _AlarmPageState extends State<AlarmPage> {
                               fontSize: 14.sp,
                               fontWeight:
                                   isRead ? FontWeight.w500 : FontWeight.w600,
-                              color: AppColors.textPrimary,
+                              color: AppColor.textPrimary(context),
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -277,12 +277,12 @@ class _AlarmPageState extends State<AlarmPage> {
                     Text(
                       '${l10n.deviceLabel}: ${alarm['device_sn'] ?? '-'}  ${l10n.faultCodeLabel}: ${alarm['fault_code'] ?? '-'}',
                       style:
-                          TextStyle(fontSize: 12.sp, color: AppColors.textHint),
+                          TextStyle(fontSize: 12.sp, color: AppColor.textHint(context)),
                     ),
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right, color: AppColors.textHint, size: 20.sp),
+              Icon(Icons.chevron_right, color: AppColor.textHint(context), size: 20.sp),
             ],
           ),
         ),

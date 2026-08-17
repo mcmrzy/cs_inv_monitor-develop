@@ -140,7 +140,7 @@ class _StatChipState extends State<_StatChip>
     IconData changeIcon;
 
     if (isNeutral) {
-      changeColor = AppColors.textHint;
+      changeColor = AppColor.textHint(context);
       changeIcon = Icons.remove;
     } else if (isPositive) {
       changeColor = widget.positiveIsGood ? AppColors.success : AppColors.error;
@@ -197,7 +197,7 @@ class _StatChipState extends State<_StatChip>
                     style: TextStyle(
                       fontSize: 20.sp,
                       fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
+                      color: AppColor.textPrimary(context),
                     ),
                   ),
                   SizedBox(height: 2.h),
@@ -205,7 +205,7 @@ class _StatChipState extends State<_StatChip>
                     widget.label,
                     style: TextStyle(
                       fontSize: 11.sp,
-                      color: AppColors.textSecondary,
+                      color: AppColor.textSecondary(context),
                     ),
                   ),
                   // 变化指示器

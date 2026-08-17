@@ -7,6 +7,7 @@ import 'package:inv_app/features/device/domain/entities/device_param.dart';
 import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
+import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 
 class DeviceParamsPage extends StatefulWidget {
   final String deviceIP;
@@ -289,7 +290,7 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
         },
         builder: (context, state) {
           if (state is DeviceLoading && _params.isEmpty) {
-            return const Center(child: CircularProgressIndicator());
+            return const PageSkeleton();
           }
 
           if (state is DeviceError && _params.isEmpty) {

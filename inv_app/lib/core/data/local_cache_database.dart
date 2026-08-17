@@ -92,6 +92,18 @@ class LocalCacheDatabase {
     await db.delete('stations');
   }
 
+  /// 删除单个电站快照及其下属设备快照
+  /// （云端删除电站时联动调用，避免离网模式展示已删除的电站）
+  Future<void> deleteStation(String stationId) async {
+    final db = await database;
+    await db.delete('stations', where: 'id = ?', whereArgs: [stationId]);
+    await db.delete(
+      'devices',
+      where: 'station_id = ?',
+      whereArgs: [stationId],
+    );
+  }
+
   // ============ 设备快照 ============
 
   /// 批量 upsert 设备快照
@@ -135,6 +147,13 @@ class LocalCacheDatabase {
   Future<void> clearDevices() async {
     final db = await database;
     await db.delete('devices');
+  }
+
+  /// 删除单个设备快照（解绑/删除设备时联动调用，
+  /// 避免离网模式展示已解绑的设备）
+  Future<void> deleteDevice(String sn) async {
+    final db = await database;
+    await db.delete('devices', where: 'sn = ?', whereArgs: [sn]);
   }
 
   /// 清空全部缓存

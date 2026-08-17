@@ -69,7 +69,7 @@ class _EnergyTrendChartState extends State<EnergyTrendChart> {
                   style: TextStyle(
                     fontSize: 15.sp,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
+                    color: AppColor.textPrimary(context),
                   ),
                 ),
               ),
@@ -84,7 +84,7 @@ class _EnergyTrendChartState extends State<EnergyTrendChart> {
                     _buildLegendItem(AppColors.primary, l10n.powerGeneration),
                     if (hasLoadData)
                       _buildLegendItem(
-                        const Color(0xFFF5A623),
+                        AppColors.energyTrend,
                         l10n.powerConsumption,
                       ),
                   ],
@@ -124,7 +124,7 @@ class _EnergyTrendChartState extends State<EnergyTrendChart> {
         SizedBox(width: 6.w),
         Text(
           label,
-          style: TextStyle(fontSize: 11.sp, color: AppColors.textSecondary),
+          style: TextStyle(fontSize: 11.sp, color: AppColor.textSecondary(context)),
         ),
       ],
     );
@@ -153,7 +153,7 @@ class _EnergyTrendChartState extends State<EnergyTrendChart> {
             style: TextStyle(
               fontSize: 12.sp,
               fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
+              color: AppColor.textPrimary(context),
             ),
           ),
           const Spacer(),
@@ -167,7 +167,7 @@ class _EnergyTrendChartState extends State<EnergyTrendChart> {
             _buildDetailChip(
               l10n.powerConsumption,
               '${point.load.toStringAsFixed(1)} kWh',
-              const Color(0xFFF5A623),
+              AppColors.energyTrend,
             ),
           ],
         ],
@@ -187,7 +187,7 @@ class _EnergyTrendChartState extends State<EnergyTrendChart> {
         children: [
           Text(
             '$label: ',
-            style: TextStyle(fontSize: 10.sp, color: AppColors.textSecondary),
+            style: TextStyle(fontSize: 10.sp, color: AppColor.textSecondary(context)),
           ),
           Text(
             value,
@@ -258,16 +258,16 @@ class _EnergyTrendChartState extends State<EnergyTrendChart> {
           curveSmoothness: 0.45,
           preventCurveOverShooting: true,
           barWidth: 3,
-          color: const Color(0xFFF5A623),
+          color: AppColors.energyTrend,
           dotData: FlDotData(
             show: true,
             getDotPainter: (spot, percent, bar, index) => FlDotCirclePainter(
               radius: _touchedIndex == index ? 6 : 4,
               color: _touchedIndex == index
-                  ? const Color(0xFFF5A623)
+                  ? AppColors.energyTrend
                   : Colors.white,
               strokeWidth: _touchedIndex == index ? 3 : 2,
-              strokeColor: const Color(0xFFF5A623),
+              strokeColor: AppColors.energyTrend,
             ),
           ),
           belowBarData: BarAreaData(
@@ -276,8 +276,8 @@ class _EnergyTrendChartState extends State<EnergyTrendChart> {
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                const Color(0xFFF5A623).withValues(alpha: 0.15),
-                const Color(0xFFF5A623).withValues(alpha: 0.0),
+                AppColors.energyTrend.withValues(alpha: 0.15),
+                AppColors.energyTrend.withValues(alpha: 0.0),
               ],
             ),
           ),
@@ -291,7 +291,7 @@ class _EnergyTrendChartState extends State<EnergyTrendChart> {
         drawVerticalLine: false,
         horizontalInterval: maxY > 0 ? maxY / 4 : 1,
         getDrawingHorizontalLine: (value) => FlLine(
-          color: AppColors.divider.withValues(alpha: 0.3),
+          color: AppColor.divider(context).withValues(alpha: 0.3),
           strokeWidth: 0.5,
         ),
       ),
@@ -305,7 +305,7 @@ class _EnergyTrendChartState extends State<EnergyTrendChart> {
               return Text(
                 _formatAxisValue(value),
                 style:
-                    TextStyle(fontSize: 10.sp, color: AppColors.textHint),
+                    TextStyle(fontSize: 10.sp, color: AppColor.textHint(context)),
               );
             },
           ),
@@ -333,7 +333,7 @@ class _EnergyTrendChartState extends State<EnergyTrendChart> {
                 padding: EdgeInsets.only(top: 6.h),
                 child: Text(
                   _formatDate(widget.data[index].date),
-                  style: TextStyle(fontSize: 9.sp, color: AppColors.textHint),
+                  style: TextStyle(fontSize: 9.sp, color: AppColor.textHint(context)),
                 ),
               );
             },

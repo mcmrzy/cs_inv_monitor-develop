@@ -52,7 +52,7 @@ class RecentAlarmsCard extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 15.sp,
                   fontWeight: FontWeight.w600,
-                  color: AppColor.textPrimary(context),
+                  color: AppColors.textPrimary,
                 ),
               ),
               const Spacer(),
@@ -123,7 +123,7 @@ class RecentAlarmsCard extends StatelessWidget {
               l10n.noAlarms,
               style: TextStyle(
                 fontSize: 13.sp,
-                color: AppColor.textSecondary(context),
+                color: AppColors.textSecondary,
               ),
             ),
           ],
@@ -206,7 +206,7 @@ class RecentAlarmsCard extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 13.sp,
                             fontWeight: FontWeight.w500,
-                            color: AppColor.textPrimary(context),
+                            color: AppColors.textPrimary,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -240,14 +240,14 @@ class RecentAlarmsCard extends StatelessWidget {
                         Icon(
                           Icons.device_hub_rounded,
                           size: 12.w,
-                          color: AppColor.textHint(context),
+                          color: AppColors.textHint,
                         ),
                         SizedBox(width: 4.w),
                         Text(
                           deviceSn,
                           style: TextStyle(
                             fontSize: 11.sp,
-                            color: AppColor.textHint(context),
+                            color: AppColors.textHint,
                           ),
                         ),
                         SizedBox(width: 12.w),
@@ -255,14 +255,14 @@ class RecentAlarmsCard extends StatelessWidget {
                       Icon(
                         Icons.access_time_rounded,
                         size: 12.w,
-                        color: AppColor.textHint(context),
+                        color: AppColors.textHint,
                       ),
                       SizedBox(width: 4.w),
                       Text(
                         timeAgo,
                         style: TextStyle(
                           fontSize: 11.sp,
-                          color: AppColor.textHint(context),
+                          color: AppColors.textHint,
                         ),
                       ),
                     ],
@@ -274,7 +274,7 @@ class RecentAlarmsCard extends StatelessWidget {
             Icon(
               Icons.arrow_forward_ios,
               size: 14.w,
-              color: AppColor.textHint(context),
+              color: AppColors.textHint,
             ),
           ],
         ),

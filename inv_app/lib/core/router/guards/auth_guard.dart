@@ -25,8 +25,21 @@ class AuthGuard {
     '/wifi-config',
     '/local-mode',
     '/local-ota',
-    '/device/',
+    // 设备绑定深链入口（csinv://bind）；实际绑定仍需登录态，
+    // 未登录时由页面引导登录
+    '/device/qr-bind',
+    // 操作日志页（本地 op-log 存储，离线可用）
+    '/device/op-logs/',
   ];
+
+  /// 设备详情子路由离线白名单（guest/离线豁免复核结论）：
+  /// 逐路由显式放行而非 '/device/' 前缀匹配，新增设备路由不会被
+  /// 隐式暴露给 guest。control/settings 为本地直连链路的产品能力
+  /// （guest 本地模式免登录控制设备）；云端变更类操作无 token 时
+  /// 后端仍会拒绝，豁免仅保障本地直连与离线展示。
+  static final RegExp _offlineDeviceRoutePattern = RegExp(
+    r'^/device/[^/]+(/(control|protocol|history|settings|edit))?$',
+  );
 
   static Future<String?> redirect(
     BuildContext context,
@@ -43,6 +56,11 @@ class AuthGuard {
     if (_offlineRoutes.any(
       (route) => currentPath == route || currentPath.startsWith(route),
     )) {
+      return null;
+    }
+
+    // 设备详情子路由白名单放行（逐路由显式枚举，见上方复核结论）
+    if (_offlineDeviceRoutePattern.hasMatch(currentPath)) {
       return null;
     }
 

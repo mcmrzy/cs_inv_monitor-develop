@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -10,6 +12,7 @@ import 'package:inv_app/features/ota/presentation/bloc/ota_bloc.dart';
 import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 
 class FirmwareListPage extends StatefulWidget {
   final String sn;
@@ -39,14 +42,26 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
   final Set<int> _downloadingIds = {};
   final Set<int> _checkedDownloadIds = {};
 
+  /// 下载进度订阅（页面生命周期内单一订阅，dispose 时 cancel）
+  StreamSubscription<DownloadProgressEvent>? _progressSub;
+
   @override
   void initState() {
     super.initState();
     _requestList();
+    // 单一进度订阅（页面生命周期内复用）：按 firmwareId 过滤，
+    // 避免每次点下载新增订阅导致泄漏与 setState after dispose
+    _progressSub = _downloadService.progressStream.listen((event) {
+      if (!mounted || !_downloadingIds.contains(event.firmwareId)) return;
+      setState(() {
+        _downloadingProgress[event.firmwareId] = event.progress;
+      });
+    });
   }
 
   @override
   void dispose() {
+    _progressSub?.cancel();
     _downloadService.dispose();
     super.dispose();
   }
@@ -114,14 +129,6 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
       _downloadingProgress[packageId] = 0.0;
     });
 
-    _downloadService.downloadProgressStream.listen((progress) {
-      if (_downloadingIds.contains(packageId) && mounted) {
-        setState(() {
-          _downloadingProgress[packageId] = progress;
-        });
-      }
-    });
-
     try {
       int downloadedCount = 0;
       final totalItems = chips.length;
@@ -149,6 +156,11 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                 firmwareId: firmwareId,
                 expectedSize: (chip['file_size'] as num?)?.toInt(),
                 expectedSha256: chip['file_sha256'] as String?,
+                // 持久化离线升级元数据，支持无网时从已下载列表直接本地升级
+                targetChip: chip['target_chip'] as String?,
+                version: chip['firmware_version'] as String?,
+                signature: chip['release_signature'] as String?,
+                securityVersion: (chip['security_version'] as num?)?.toInt(),
               );
             }
             downloadedCount++;
@@ -190,16 +202,27 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
   }
 
   /// Compare version strings like "V3.0.2.20250601".
-  /// Returns -1 if a < b, 0 if equal, 1 if a > b.
-  int _compareVersions(String a, String b) {
-    List<int> parseSegments(String v) {
+  /// Returns -1 if a < b, 0 if equal, 1 if a > b;
+  /// null if either version contains non-numeric segments (incomparable,
+  /// 避免把带后缀的版本解析成低位数值导致误判升级/回退).
+  int? _compareVersions(String a, String b) {
+    List<int>? parseSegments(String v) {
       final cleaned =
           v.startsWith('V') || v.startsWith('v') ? v.substring(1) : v;
-      return cleaned.split('.').map((s) => int.tryParse(s) ?? 0).toList();
+      final segments = <int>[];
+      for (final s in cleaned.split('.')) {
+        final n = int.tryParse(s);
+        if (n == null) return null; // 非数字段：视为不可比
+        segments.add(n);
+      }
+      return segments;
     }
 
     final segA = parseSegments(a);
     final segB = parseSegments(b);
+    if (segA == null || segB == null || segA.isEmpty || segB.isEmpty) {
+      return null;
+    }
     final len = segA.length > segB.length ? segA.length : segB.length;
     for (int i = 0; i < len; i++) {
       final va = i < segA.length ? segA[i] : 0;
@@ -218,15 +241,20 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
   }
 
   bool _isRollback(String packageVersion) {
-    if (widget.currentMainVersion.isEmpty) return false;
+    if (widget.currentMainVersion.isEmpty || packageVersion.isEmpty) {
+      return false;
+    }
     final current = _normalizeVersion(widget.currentMainVersion);
-    return _compareVersions(packageVersion, current) < 0;
+    final cmp = _compareVersions(_normalizeVersion(packageVersion), current);
+    return (cmp ?? 1) < 0; // 不可比时保守处理：不标记为回退
   }
 
   bool _isCurrentVersion(String packageVersion) {
-    if (widget.currentMainVersion.isEmpty) return false;
+    if (widget.currentMainVersion.isEmpty || packageVersion.isEmpty) {
+      return false;
+    }
     final current = _normalizeVersion(widget.currentMainVersion);
-    return _compareVersions(packageVersion, current) == 0;
+    return _compareVersions(_normalizeVersion(packageVersion), current) == 0;
   }
 
   void _installPackage(BuildContext context, int packageId, String version) {
@@ -340,7 +368,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                         : l10n.loadingUpgradeList,
                     style: TextStyle(
                       fontSize: 14.sp,
-                      color: AppColors.textSecondary,
+                      color: AppColor.textSecondary(context),
                     ),
                   ),
                 ],
@@ -363,7 +391,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                     l10n.translateError(state.message),
                     style: TextStyle(
                       fontSize: 14.sp,
-                      color: AppColors.textSecondary,
+                      color: AppColor.textSecondary(context),
                     ),
                   ),
                   SizedBox(height: 20.h),
@@ -390,14 +418,14 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                     Icon(
                       Icons.inventory_2_outlined,
                       size: 56.sp,
-                      color: AppColors.textHint,
+                      color: AppColor.textHint(context),
                     ),
                     SizedBox(height: 12.h),
                     Text(
                       l10n.noUpgradesAvailable,
                       style: TextStyle(
                         fontSize: 14.sp,
-                        color: AppColors.textSecondary,
+                        color: AppColor.textSecondary(context),
                       ),
                     ),
                     SizedBox(height: 6.h),
@@ -405,7 +433,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                       l10n.noFirmwareContactDealer,
                       style: TextStyle(
                         fontSize: 12.sp,
-                        color: AppColors.textHint,
+                        color: AppColor.textHint(context),
                       ),
                     ),
                   ],
@@ -416,7 +444,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
           }
 
           // Fallback — show loading
-          return const Center(child: CircularProgressIndicator(strokeWidth: 3));
+          return const PageSkeleton();
         },
       ),
     );
@@ -515,15 +543,19 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
             ? (pkg['items'] as List)
             : <dynamic>[];
 
-    final isCurrent = _isCurrentVersion(displayVersion);
-    final isRollbackVer = _isRollback(displayVersion);
+    // 版本比较统一用 main_version（与设备当前版本同源同体系）；
+    // user_version 仅作展示，避免两套版本号体系混比导致误判
+    final compareVersion =
+        mainVersion.isNotEmpty ? mainVersion : displayVersion;
+    final isCurrent = _isCurrentVersion(compareVersion);
+    final isRollbackVer = _isRollback(compareVersion);
 
     // Format date
     final dateStr = _formatDate(createdAtRaw);
 
     final borderColor = isCurrent
         ? AppColors.successLight.withValues(alpha: 0.5)
-        : AppColors.border;
+        : AppColor.border(context);
 
     // 在 build 过程中触发异步状态恢复（仅执行一次）
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -562,7 +594,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                   style: TextStyle(
                     fontSize: 17.sp,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
+                    color: AppColor.textPrimary(context),
                   ),
                 ),
               ),
@@ -639,7 +671,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                         fwVer,
                         style: TextStyle(
                           fontSize: 11.sp,
-                          color: AppColors.textSecondary,
+                          color: AppColor.textSecondary(context),
                         ),
                       ),
                     ],
@@ -658,7 +690,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 12.sp,
-                color: AppColors.textSecondary,
+                color: AppColor.textSecondary(context),
                 height: 1.5,
               ),
             ),
@@ -671,12 +703,12 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
               Icon(
                 Icons.calendar_today_outlined,
                 size: 14.sp,
-                color: AppColors.textHint,
+                color: AppColor.textHint(context),
               ),
               SizedBox(width: 4.w),
               Text(
                 dateStr,
-                style: TextStyle(fontSize: 12.sp, color: AppColors.textHint),
+                style: TextStyle(fontSize: 12.sp, color: AppColor.textHint(context)),
               ),
               const Spacer(),
               if (!isCurrent) ...[
@@ -753,8 +785,8 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                     ),
                   ),
                 SizedBox(width: 8.w),
-                // 安装按钮
-                _buildInstallButton(context, id, displayVersion, isRollbackVer),
+                // 安装按钮（版本判定基于 main_version）
+                _buildInstallButton(context, id, compareVersion, isRollbackVer),
               ],
             ],
           ),
@@ -830,28 +862,75 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
 
   /// 执行实际的路由跳转到 LocalOTAPage
   void _jumpToLocalOTA(Map chip) {
-    final firmwareId = chip['firmware_id'] as int? ?? 0;
-    final downloadUrl = chip['download_url'] as String? ?? '';
-    final chipName = chip['target_chip'] as String? ?? 'firmware';
-    final version = chip['firmware_version'] as String? ?? '';
-    final fileName = '${chipName}_$version.bin';
+    context.push<bool>(_localOtaRoute(chip));
+  }
 
-    final route = Uri(
+  /// 构造 LocalOTAPage 路由：仅携带 firmware_id，
+  /// 升级元数据（下载 URL/签名/SHA-256 等）由页面按 ID 拉取，
+  /// 避免在 URL query 中传递签名等复杂参数
+  String _localOtaRoute(Map chip) {
+    final firmwareId = chip['firmware_id'] as int? ?? 0;
+    return Uri(
       path: '/ota/${widget.sn}/local',
       queryParameters: {
         'ip': '192.168.4.1',
         'firmware_id': '$firmwareId',
-        'firmware_url': downloadUrl,
-        'firmware_file_name': fileName,
-        'target_chip': chipName.toLowerCase(),
-        'firmware_version': version,
-        'file_sha256': chip['file_sha256'] as String? ?? '',
-        'security_version':
-            '${(chip['security_version'] as num?)?.toInt() ?? 0}',
-        'release_signature': chip['release_signature'] as String? ?? '',
       },
     ).toString();
-    context.push(route);
+  }
+
+  /// 升级包串行编排器：按服务端下发顺序（依赖顺序）逐芯片
+  /// 下载校验 → 本地升级 → 确认成功后再进入下一芯片，
+  /// 任一芯片失败/中断则整体中止并上报，避免版本组合非法
+  Future<void> _upgradePackageSequentially(List<dynamic> chips) async {
+    final l10n = AppLocalizations.of(context)!;
+
+    // 前置检查：全部芯片固件必须已下载（离线升级链路）
+    for (final chip in chips) {
+      final firmwareId = (chip as Map)['firmware_id'] as int? ?? 0;
+      if (firmwareId <= 0 ||
+          !await _downloadService.isFirmwareDownloaded(firmwareId)) {
+        if (mounted) {
+          AppToast.show(
+            context,
+            l10n.str('package_upgrade_need_download'),
+            type: ToastType.error,
+          );
+        }
+        return;
+      }
+    }
+
+    for (var i = 0; i < chips.length; i++) {
+      if (!mounted) return;
+      final chip = chips[i] as Map;
+      final chipName =
+          ((chip['target_chip'] as String?) ?? '').toUpperCase();
+      // 链式推进：LocalOTAPage 成功时 pop(true)，
+      // 失败/用户退出返回非 true → 整体中止
+      final ok = await context.push<bool>(_localOtaRoute(chip));
+      if (ok != true) {
+        if (mounted) {
+          AppToast.show(
+            context,
+            l10n.str(
+              'package_upgrade_aborted',
+              {'chip': chipName.isEmpty ? '${i + 1}' : chipName},
+            ),
+            type: ToastType.error,
+          );
+        }
+        return;
+      }
+    }
+
+    if (mounted) {
+      AppToast.show(
+        context,
+        l10n.str('package_upgrade_complete'),
+        type: ToastType.success,
+      );
+    }
   }
 
   /// 显示芯片选择对话框
@@ -898,7 +977,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                   'v$fwVer',
                   style: TextStyle(
                     fontSize: 12.sp,
-                    color: AppColors.textSecondary,
+                    color: AppColor.textSecondary(context),
                   ),
                 ),
                 onTap: () {
@@ -912,6 +991,19 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
             TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: Text(l10n.cancel),
+            ),
+            // 整包串行升级：按依赖顺序逐芯片升级，
+            // 避免用户手动逐片升级时漏升/顺序错误
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _upgradePackageSequentially(validChips);
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
+              child: Text(l10n.str('package_upgrade_all')),
             ),
           ],
         );

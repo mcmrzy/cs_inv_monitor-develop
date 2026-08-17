@@ -21,7 +21,6 @@ import 'package:inv_app/core/services/notification_service.dart';
 import 'package:inv_app/core/services/realtime_data_service.dart';
 import 'package:inv_app/core/services/connection_mode_service.dart';
 import 'package:inv_app/core/services/network_status_service.dart';
-import 'package:inv_app/core/services/offline_cache_service.dart';
 import 'package:inv_app/core/services/local_communication_service.dart';
 import 'package:inv_app/core/services/jpush_service.dart';
 import 'package:inv_app/core/services/jverify_service.dart';
@@ -84,10 +83,6 @@ class MockConnectionModeService extends Mock implements ConnectionModeService {}
 /// Mock implementation of [NetworkStatusService] for testing network-driven
 /// auto mode switching (Q7).
 class MockNetworkStatusService extends Mock implements NetworkStatusService {}
-
-/// Mock implementation of [OfflineCacheService] for testing offline data
-/// caching.
-class MockOfflineCacheService extends Mock implements OfflineCacheService {}
 
 /// Mock implementation of [LocalCommunicationService] for testing BLE/WiFi
 /// local communication.

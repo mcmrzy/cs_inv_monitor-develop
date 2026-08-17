@@ -444,6 +444,39 @@ const Map<String, String> en = {
       'Upload complete, waiting for device reboot...',
   'upload_firmware_failed': 'Failed to upload firmware: {error}',
   'upgrade_timeout': 'Upgrade timeout',
+  'ota_exit_confirm_title': 'Upgrade in progress',
+  'ota_exit_confirm_message':
+      'The device is flashing firmware. Leaving now will disconnect the device and interrupt the upgrade, which may prevent the device from booting. Leave anyway?',
+  'ota_exit_anyway': 'Leave anyway',
+  'ota_keep_upgrading': 'Continue upgrading',
+  'ota_exit_page': 'Exit page',
+  'ota_exit_page_hint':
+      'The device is still upgrading in the background. Leaving this page will not stop the upgrade. Exit anyway?',
+  'realtime_data_stale':
+      'Data stale: last updated at {time}. Values below may not reflect the current state',
+  'local_snapshot_time':
+      'Offline snapshot as of {time}; may not reflect the current device state',
+  'ota_err_connection': 'Device connection lost. Check the hotspot/BLE connection and retry',
+  'ota_err_timeout': 'Upgrade response timed out. The device may be stuck; retry later',
+  'ota_err_upload_rejected': 'Firmware upload was rejected by the device',
+  'ota_err_verify': 'Firmware verification failed. Re-download the firmware and retry',
+  'ota_err_firmware': 'Firmware file is corrupted or missing. Re-download it',
+  'ota_err_protocol': 'Invalid device response. Please retry',
+  'ota_err_unknown': 'Upgrade failed: {error}',
+  'ota_missing_metadata':
+      'This firmware is missing signature, security version or SHA-256. Re-download it from the upgrade list.',
+  'bluetooth_permission_required': 'Bluetooth permission is required. Grant it and retry',
+  'ble_connection_failed': 'BLE connection failed. Ensure the device is powered on and nearby',
+  'ble_scan_failed': 'BLE scan failed. Check location permission and Bluetooth status',
+  'connecting_ble_device': 'Connecting over BLE...',
+  'scanning_ble_device': 'Scanning for BLE devices...',
+  'rescan_ble_device': 'Rescan',
+  'package_upgrade_all': 'Upgrade full package',
+  'package_upgrade_need_download':
+      'Some chip firmwares are not downloaded. Pre-download the package first',
+  'package_upgrade_aborted':
+      'Package upgrade aborted: chip {chip} did not finish; remaining chips were not upgraded',
+  'package_upgrade_complete': 'All package chips upgraded in order',
   'idle': 'Idle',
   'uploading': 'Uploading',
   'firmware_download_hint':

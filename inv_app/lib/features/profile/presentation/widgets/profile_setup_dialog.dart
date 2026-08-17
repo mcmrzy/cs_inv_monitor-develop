@@ -294,7 +294,7 @@ class _ProfileSetupDialogState extends State<ProfileSetupDialog> {
                 l10n.completeProfileDesc,
                 style: TextStyle(
                   fontSize: 13.sp,
-                  color: AppColors.textSecondary,
+                  color: AppColor.textSecondary(context),
                   height: 1.5,
                 ),
               ),

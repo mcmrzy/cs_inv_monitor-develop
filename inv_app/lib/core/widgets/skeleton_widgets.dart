@@ -157,7 +157,6 @@ class SkeletonCard extends StatelessWidget {
   final double height;
 
   const SkeletonCard({super.key, this.height = 120});
-
   @override
   Widget build(BuildContext context) {
     return ShimmerSkeleton(
@@ -668,9 +667,9 @@ class OfflineDataBanner extends StatelessWidget {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
       decoration: const BoxDecoration(
-        color: Color(0xFFFEF3C7),
+        color: AppColors.warningSoft,
         border: Border(
-          bottom: BorderSide(color: Color(0xFFFDE68A), width: 0.5),
+          bottom: BorderSide(color: AppColors.warningBorder, width: 0.5),
         ),
       ),
       child: Row(
@@ -678,14 +677,14 @@ class OfflineDataBanner extends StatelessWidget {
           Icon(
             Icons.cloud_off_rounded,
             size: 16.sp,
-            color: const Color(0xFFD97706),
+            color: AppColors.warningStrong,
           ),
           SizedBox(width: 8.w),
           Expanded(
             child: Text(
               AppLocalizations.of(context)?.noNetworkCached ??
                   'No network, showing cached data',
-              style: TextStyle(fontSize: 12.sp, color: const Color(0xFF92400E)),
+              style: TextStyle(fontSize: 12.sp, color: AppColors.warningText),
             ),
           ),
           if (onRetry != null)
@@ -694,7 +693,7 @@ class OfflineDataBanner extends StatelessWidget {
               child: Container(
                 padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFBBF24).withValues(alpha: 0.3),
+                  color: AppColors.warning.withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(6.r),
                 ),
                 child: Text(
@@ -702,11 +701,38 @@ class OfflineDataBanner extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 12.sp,
                     fontWeight: FontWeight.w600,
-                    color: const Color(0xFF92400E),
+                    color: AppColors.warningText,
                   ),
                 ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 通用页面级骨架屏：统一替代各页面的裸 CircularProgressIndicator，
+/// 保证加载态视觉一致（加载=骨架屏、错误=XiaoshuoStatePanel+重试）
+class PageSkeleton extends StatelessWidget {
+  /// 骨架卡片数量
+  final int cardCount;
+
+  /// 顶部标题条宽度
+  final double titleWidth;
+
+  const PageSkeleton({super.key, this.cardCount = 3, this.titleWidth = 120});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.all(16.w),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SkeletonBox(width: titleWidth.w, height: 16.h),
+          SizedBox(height: 14.h),
+          for (var i = 0; i < cardCount; i++) const SkeletonCard(height: 96),
         ],
       ),
     );

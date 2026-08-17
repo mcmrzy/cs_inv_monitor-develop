@@ -7,6 +7,7 @@ import 'package:inv_app/features/device_protocol/domain/entities/device_protocol
 import 'package:inv_app/features/device_protocol/domain/repositories/device_protocol_repository.dart';
 import 'package:inv_app/features/device_protocol/presentation/bloc/device_protocol_bloc.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
+import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 
 class DeviceProtocolPage extends StatelessWidget {
   const DeviceProtocolPage({super.key, required this.sn});
@@ -54,7 +55,7 @@ class _DeviceProtocolView extends StatelessWidget {
       body: BlocBuilder<DeviceProtocolBloc, DeviceProtocolState>(
         builder: (context, state) {
           if (state is! DeviceProtocolLoaded) {
-            return const Center(child: CircularProgressIndicator());
+            return const PageSkeleton();
           }
           return RefreshIndicator(
             onRefresh: () async {
@@ -124,7 +125,7 @@ class _DeviceProtocolView extends StatelessWidget {
         body = _message(
           Icons.inbox_outlined,
           emptyText,
-          AppColors.textHint,
+          AppColor.textHint(context),
         );
       case ProtocolSectionStatus.forbidden:
         body = _message(

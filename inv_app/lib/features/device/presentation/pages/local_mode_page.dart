@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:inv_app/core/data/local_cache_database.dart';
 import 'package:inv_app/core/services/connection_mode_service.dart';
 import 'package:inv_app/core/services/local_communication_service.dart';
@@ -186,7 +187,7 @@ class _LocalModePageState extends State<LocalModePage> {
         elevation: 0,
         scrolledUnderElevation: 0.5,
         backgroundColor: AppColor.surfaceContainer(context),
-        foregroundColor: AppColors.textPrimary,
+        foregroundColor: AppColor.textPrimary(context),
       ),
       body: Column(
         children: [
@@ -243,7 +244,7 @@ class _LocalModePageState extends State<LocalModePage> {
             style: TextStyle(
               fontSize: 17.sp,
               fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
+              color: AppColor.textPrimary(context),
             ),
           ),
           SizedBox(height: 4.h),
@@ -254,7 +255,7 @@ class _LocalModePageState extends State<LocalModePage> {
                 : AppLocalizations.of(context)!.remoteModeCloud,
             style: TextStyle(
               fontSize: 13.sp,
-              color: AppColors.textHint,
+              color: AppColor.textHint(context),
             ),
           ),
           SizedBox(height: 20.h),
@@ -403,7 +404,7 @@ class _LocalModePageState extends State<LocalModePage> {
               style: TextStyle(
                 fontSize: 13.sp,
                 fontWeight: FontWeight.w600,
-                color: AppColors.textSecondary,
+                color: AppColor.textSecondary(context),
               ),
             ),
           ),
@@ -418,7 +419,7 @@ class _LocalModePageState extends State<LocalModePage> {
               style: TextStyle(
                 fontSize: 13.sp,
                 fontWeight: FontWeight.w600,
-                color: AppColors.textSecondary,
+                color: AppColor.textSecondary(context),
               ),
             ),
           ),
@@ -454,7 +455,7 @@ class _LocalModePageState extends State<LocalModePage> {
             style: TextStyle(
               fontSize: 13.sp,
               fontWeight: FontWeight.w600,
-              color: AppColors.textSecondary,
+              color: AppColor.textSecondary(context),
             ),
           ),
         ),
@@ -462,11 +463,55 @@ class _LocalModePageState extends State<LocalModePage> {
           padding: EdgeInsets.only(bottom: 8.h),
           child: Text(
             l10n.str('local_cached_devices_hint'),
-            style: TextStyle(fontSize: 11.sp, color: AppColors.textHint),
+            style: TextStyle(fontSize: 11.sp, color: AppColor.textHint(context)),
           ),
         ),
+        // 快照时效提示：updated_at 参与时效判断，
+        // 避免用户把陈旧快照当当前设备状态
+        _buildSnapshotFreshness(),
         ..._cachedDevices.map((d) => _buildCachedDeviceCard(d, onlineSNs)),
       ],
+    );
+  }
+
+  /// 快照时效提示：展示最新快照时间，超过 24 小时以警示色提醒
+  Widget _buildSnapshotFreshness() {
+    if (_cachedDevices.isEmpty) return const SizedBox.shrink();
+    DateTime? latest;
+    for (final d in _cachedDevices) {
+      final raw = d['updated_at']?.toString() ?? '';
+      final parsed = raw.isEmpty ? null : DateTime.tryParse(raw);
+      if (parsed != null && (latest == null || parsed.isAfter(latest))) {
+        latest = parsed;
+      }
+    }
+    if (latest == null) return const SizedBox.shrink();
+
+    final l10n = AppLocalizations.of(context)!;
+    final stale = DateTime.now().difference(latest.toLocal()) >
+        const Duration(hours: 24);
+    final timeStr = DateFormat('MM-dd HH:mm').format(latest.toLocal());
+    return Padding(
+      padding: EdgeInsets.only(bottom: 8.h),
+      child: Row(
+        children: [
+          Icon(
+            stale ? Icons.history_rounded : Icons.schedule_rounded,
+            size: 13.sp,
+            color: stale ? AppColors.warning : AppColor.textHint(context),
+          ),
+          SizedBox(width: 4.w),
+          Expanded(
+            child: Text(
+              l10n.str('local_snapshot_time', {'time': timeStr}),
+              style: TextStyle(
+                fontSize: 11.sp,
+                color: stale ? AppColors.warning : AppColor.textHint(context),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -505,7 +550,7 @@ class _LocalModePageState extends State<LocalModePage> {
                   child: Icon(
                     isOnline ? Icons.solar_power : Icons.solar_power_outlined,
                     size: 20.sp,
-                    color: isOnline ? AppColors.successLight : AppColors.textHint,
+                    color: isOnline ? AppColors.successLight : AppColor.textHint(context),
                   ),
                 ),
                 SizedBox(width: 12.w),
@@ -518,7 +563,7 @@ class _LocalModePageState extends State<LocalModePage> {
                         style: TextStyle(
                           fontSize: 14.sp,
                           fontWeight: FontWeight.w600,
-                          color: isOnline ? AppColors.textPrimary : AppColors.textSecondary,
+                          color: isOnline ? AppColor.textPrimary(context) : AppColor.textSecondary(context),
                         ),
                       ),
                       SizedBox(height: 2.h),
@@ -526,7 +571,7 @@ class _LocalModePageState extends State<LocalModePage> {
                         '$sn${model.isNotEmpty ? ' · $model' : ''}',
                         style: TextStyle(
                           fontSize: 11.sp,
-                          color: AppColors.textHint,
+                          color: AppColor.textHint(context),
                         ),
                       ),
                     ],
@@ -547,7 +592,7 @@ class _LocalModePageState extends State<LocalModePage> {
                     style: TextStyle(
                       fontSize: 11.sp,
                       fontWeight: FontWeight.w600,
-                      color: isOnline ? AppColors.successLight : AppColors.textHint,
+                      color: isOnline ? AppColors.successLight : AppColor.textHint(context),
                     ),
                   ),
                 ),
@@ -603,7 +648,7 @@ class _LocalModePageState extends State<LocalModePage> {
                         style: TextStyle(
                           fontSize: 14.sp,
                           fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
+                          color: AppColor.textPrimary(context),
                         ),
                       ),
                       SizedBox(height: 2.h),
@@ -615,7 +660,7 @@ class _LocalModePageState extends State<LocalModePage> {
                             '${device.rssi} dBm',
                             style: TextStyle(
                               fontSize: 11.sp,
-                              color: AppColors.textHint,
+                              color: AppColor.textHint(context),
                             ),
                           ),
                           if (device.isEncrypted) ...[
@@ -623,7 +668,7 @@ class _LocalModePageState extends State<LocalModePage> {
                             Icon(
                               Icons.lock_outline,
                               size: 12.sp,
-                              color: AppColors.textHint,
+                              color: AppColor.textHint(context),
                             ),
                           ],
                         ],
@@ -658,7 +703,7 @@ class _LocalModePageState extends State<LocalModePage> {
                   Icon(
                     Icons.chevron_right_rounded,
                     size: 18.sp,
-                    color: AppColors.textHint,
+                    color: AppColor.textHint(context),
                   ),
               ],
             ),
@@ -723,7 +768,7 @@ class _LocalModePageState extends State<LocalModePage> {
                         style: TextStyle(
                           fontSize: 14.sp,
                           fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
+                          color: AppColor.textPrimary(context),
                         ),
                       ),
                       SizedBox(height: 2.h),
@@ -731,7 +776,7 @@ class _LocalModePageState extends State<LocalModePage> {
                         '${device.host}${device.port > 0 ? ':${device.port}' : ''}${device.sn != null ? ' · SN: ${device.sn}' : ''}',
                         style: TextStyle(
                           fontSize: 11.sp,
-                          color: AppColors.textHint,
+                          color: AppColor.textHint(context),
                         ),
                       ),
                     ],
@@ -740,7 +785,7 @@ class _LocalModePageState extends State<LocalModePage> {
                 Icon(
                   Icons.chevron_right_rounded,
                   size: 18.sp,
-                  color: AppColors.textHint,
+                  color: AppColor.textHint(context),
                 ),
               ],
             ),

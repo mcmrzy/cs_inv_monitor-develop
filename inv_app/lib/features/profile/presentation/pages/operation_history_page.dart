@@ -9,6 +9,7 @@ import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/core/widgets/pagination_bar.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
+import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 
 /// 用户操作历史页（需求 15）
 ///
@@ -254,7 +255,7 @@ class _OperationHistoryPageState extends State<OperationHistoryPage> {
 
   Widget _buildBody(BuildContext context, AppLocalizations l10n) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const PageSkeleton();
     }
     if (_error != null && _items.isEmpty) {
       return Center(

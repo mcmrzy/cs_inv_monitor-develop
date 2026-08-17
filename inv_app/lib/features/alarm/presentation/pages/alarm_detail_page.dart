@@ -52,7 +52,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
       case 'normal':
         return AppColors.success;
       default:
-        return AppColors.textHint;
+        return AppColor.textHint(context);
     }
   }
 
@@ -295,7 +295,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
                   isHandled ? l10n.processed : l10n.unprocessed,
                   style: TextStyle(
                     fontSize: 13.sp,
-                    color: AppColors.textSecondary,
+                    color: AppColor.textSecondary(context),
                   ),
                 ),
               ],
@@ -304,7 +304,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
           Icon(
             isHandled ? Icons.check_circle : Icons.circle_outlined,
             size: 24.sp,
-            color: isHandled ? AppColors.success : AppColors.textHint,
+            color: isHandled ? AppColors.success : AppColor.textHint(context),
           ),
         ],
       ),
@@ -352,7 +352,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
                 style: TextStyle(
                   fontSize: 15.sp,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
+                  color: AppColor.textPrimary(context),
                 ),
               ),
             ],
@@ -363,7 +363,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
             style: TextStyle(
               fontSize: 17.sp,
               fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
+              color: AppColor.textPrimary(context),
               height: 1.4,
             ),
           ),
@@ -383,7 +383,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
                   '${l10n.faultCodeLabel}: ',
                   style: TextStyle(
                     fontSize: 13.sp,
-                    color: AppColors.textSecondary,
+                    color: AppColor.textSecondary(context),
                   ),
                 ),
                 Text(
@@ -413,7 +413,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
         entry.description,
         style: TextStyle(
           fontSize: 14.sp,
-          color: AppColors.textSecondary,
+          color: AppColor.textSecondary(context),
           height: 1.7,
         ),
       ),
@@ -456,7 +456,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
                         cause.trim(),
                         style: TextStyle(
                           fontSize: 13.sp,
-                          color: AppColors.textSecondary,
+                          color: AppColor.textSecondary(context),
                           height: 1.6,
                         ),
                       ),
@@ -515,7 +515,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
                     suggestions[index].trim(),
                     style: TextStyle(
                       fontSize: 13.sp,
-                      color: AppColors.textSecondary,
+                      color: AppColor.textSecondary(context),
                       height: 1.6,
                     ),
                   ),
@@ -560,7 +560,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
                 style: TextStyle(
                   fontSize: 15.sp,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
+                  color: AppColor.textPrimary(context),
                 ),
               ),
             ],
@@ -599,7 +599,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
                 style: TextStyle(
                   fontSize: 15.sp,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
+                  color: AppColor.textPrimary(context),
                 ),
               ),
             ],
@@ -644,7 +644,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
                 style: TextStyle(
                   fontSize: 15.sp,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
+                  color: AppColor.textPrimary(context),
                 ),
               ),
               const Spacer(),
@@ -795,7 +795,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
               label,
               style: TextStyle(
                 fontSize: 13.sp,
-                color: AppColors.textHint,
+                color: AppColor.textHint(context),
               ),
             ),
           ),
@@ -804,7 +804,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
               value,
               style: TextStyle(
                 fontSize: 13.sp,
-                color: AppColors.textPrimary,
+                color: AppColor.textPrimary(context),
                 fontWeight: FontWeight.w500,
               ),
             ),

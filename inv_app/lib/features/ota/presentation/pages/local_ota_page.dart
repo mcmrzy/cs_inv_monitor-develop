@@ -14,8 +14,10 @@ import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/widgets/wifi_enable_dialog.dart';
 import 'package:inv_app/features/ota/data/datasources/ble_communication_service.dart';
 import 'package:inv_app/features/ota/data/datasources/wifi_ap_communication_service.dart';
+import 'package:inv_app/features/ota/presentation/controller/local_ota_controller.dart';
 import 'package:inv_app/features/ota/domain/entities/local_channel.dart';
 import 'package:inv_app/features/ota/domain/repositories/local_communication_repository.dart';
+import 'package:inv_app/features/ota/domain/repositories/ota_repository.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -82,6 +84,10 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   List<DownloadedFirmwareInfo> _downloadedFirmwares = [];
   bool _firmwareListLoading = true;
 
+  /// 当前选中的已下载固件（离线升级时提供签名元数据；
+  /// 为 null 表示使用路由参数传入的元数据）
+  DownloadedFirmwareInfo? _selectedDownloaded;
+
   double _uploadProgress = 0.0;
   double _upgradeProgress = 0.0;
   String _upgradeStatus = '';
@@ -97,7 +103,30 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   late final FirmwareDownloadService _downloadService;
   late final LocalCommunicationRepository _communicationService;
 
-  StreamSubscription<double>? _downloadProgressSub;
+  StreamSubscription<DownloadProgressEvent>? _downloadProgressSub;
+
+  /// 本地 OTA 执行引擎（上传→触发→轮询→上报的状态机下沉层）
+  LocalOTAController? _otaController;
+
+  /// 按固件 ID 从服务端拉取的元数据（路由仅传 firmware_id 时的链路）；
+  /// 与路由参数兼容：路由参数优先，缺失时用拉取结果兜底
+  Map<String, dynamic>? _firmwareMeta;
+
+  // 固件元数据有效值：路由参数优先，其次服务端拉取结果
+  String? get _metaFirmwareUrl =>
+      widget.firmwareUrl ?? (_firmwareMeta?['download_url'] as String?);
+  String? get _metaFileName =>
+      widget.firmwareFileName ?? (_firmwareMeta?['file_name'] as String?);
+  String? get _metaTargetChip =>
+      widget.targetChip ?? (_firmwareMeta?['target_chip'] as String?);
+  String? get _metaFirmwareVersion => widget.firmwareVersion ??
+      (_firmwareMeta?['firmware_version'] as String?);
+  String? get _metaFileSha256 =>
+      widget.fileSha256 ?? (_firmwareMeta?['file_sha256'] as String?);
+  int? get _metaSecurityVersion => widget.securityVersion ??
+      (_firmwareMeta?['security_version'] as num?)?.toInt();
+  String? get _metaReleaseSignature =>
+      widget.releaseSignature ?? (_firmwareMeta?['release_signature'] as String?);
 
   @override
   void initState() {
@@ -118,10 +147,12 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     }
 
     _downloadProgressSub =
-        _downloadService.downloadProgressStream.listen((progress) {
-      if (mounted) {
+        _downloadService.progressStream.listen((event) {
+      // 只关注本页固件任务的进度（进度流已按 firmwareId 分流）
+      if (mounted &&
+          (widget.firmwareId == null || event.firmwareId == widget.firmwareId)) {
         setState(() {
-          _downloadProgress = progress;
+          _downloadProgress = event.progress;
         });
       }
     });
@@ -140,8 +171,36 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         if (path != null && mounted) {
           setState(() {
             _selectedFilePath = path;
+            // 走路由参数元数据链路
+            _selectedDownloaded = null;
           });
         }
+      }
+    }
+
+    // 路由仅传 firmware_id 时，按 ID 拉取升级元数据
+    // （替代旧版 9 个 query 参数传复杂元数据）
+    if (widget.firmwareUrl == null && widget.firmwareId != null) {
+      try {
+        final result =
+            await getIt<OtaRepository>().getFirmwareInfo(widget.firmwareId!);
+        result.fold(
+          (failure) {
+            if (mounted) {
+              setState(() {
+                _errorMessage = AppLocalizations.of(context)!
+                    .str('download_failed', {'error': failure.message});
+              });
+            }
+          },
+          (meta) {
+            if (mounted) {
+              setState(() => _firmwareMeta = meta);
+            }
+          },
+        );
+      } catch (_) {
+        // 拉取失败时保留离线选择链路兜底
       }
     }
   }
@@ -159,6 +218,9 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   @override
   void dispose() {
     _downloadProgressSub?.cancel();
+    _otaController
+      ?..removeListener(_onControllerChanged)
+      ..dispose();
     _downloadService.dispose();
     // 清理通信服务资源
     if (_communicationService case BleCommunicationService service) {
@@ -187,6 +249,42 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
           _autoScanAndConnect();
           break;
       }
+    }
+  }
+
+  /// 是否处于不可退出的升级阶段：固件上传中或刷写轮询中。
+  /// 此时退出会断开设备热点/BLE 连接，中断刷写有变砖风险
+  bool get _upgradeInProgress =>
+      _currentStep == LocalOTAStep.triggerUpgrade ||
+      (_currentStep == LocalOTAStep.pushFirmware && _isProcessing);
+
+  /// 升级中误触返回时弹出二次确认（PopScope canPop=false 时由
+  /// 系统返回手势/导航栏返回键触发）
+  Future<void> _confirmExitWhileUpgrading() async {
+    final l10n = AppLocalizations.of(context)!;
+    final shouldExit = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.str('ota_exit_confirm_title', {})),
+        content: Text(l10n.str('ota_exit_confirm_message', {})),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.str('ota_keep_upgrading', {})),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              l10n.str('ota_exit_anyway', {}),
+              style: TextStyle(color: Theme.of(ctx).colorScheme.error),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (shouldExit == true && mounted) {
+      // 用户确认退出：程序式 pop 不受 PopScope canPop 限制
+      Navigator.of(context).pop();
     }
   }
 
@@ -281,9 +379,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
 
       final currentSsid = await WiFiForIoTPlugin.getSSID();
       if (!mounted) return;
-      if (currentSsid == null ||
-          !(currentSsid.toUpperCase().contains('CS_INV') ||
-              currentSsid.toUpperCase().contains('CS-INV'))) {
+      if (currentSsid == null || !_isDeviceHotspotSsid(currentSsid)) {
         final l10n = AppLocalizations.of(context)!;
         setState(() {
           _scanningWifi = false;
@@ -372,8 +468,8 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   }
 
   Future<void> _startDownload() async {
-    if (widget.firmwareUrl == null ||
-        widget.firmwareFileName == null ||
+    if (_metaFirmwareUrl == null ||
+        _metaFileName == null ||
         widget.firmwareId == null) {
       return;
     }
@@ -386,13 +482,20 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
 
     try {
       final path = await _downloadService.downloadFirmware(
-        url: widget.firmwareUrl!,
-        fileName: widget.firmwareFileName!,
+        url: _metaFirmwareUrl!,
+        fileName: _metaFileName!,
         firmwareId: widget.firmwareId!,
+        // 持久化离线升级元数据，下次无网时也可从已下载列表选择升级
+        expectedSha256: _metaFileSha256,
+        targetChip: _metaTargetChip,
+        version: _metaFirmwareVersion,
+        signature: _metaReleaseSignature,
+        securityVersion: _metaSecurityVersion,
       );
       if (mounted) {
         setState(() {
           _selectedFilePath = path;
+          _selectedDownloaded = null;
           _isDownloading = false;
         });
       }
@@ -425,7 +528,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         final isConnected = await WiFiForIoTPlugin.isConnected();
         debugPrint('Current SSID: $currentSsid, isConnected: $isConnected');
 
-        if (currentSsid == null || !currentSsid.startsWith('CS_INV')) {
+        if (!_isDeviceHotspotSsid(currentSsid)) {
           setState(() {
             _isProcessing = false;
             _errorMessage =
@@ -531,11 +634,21 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       _errorMessage = null;
     });
 
-    final target = (widget.targetChip ?? 'esp').trim().toLowerCase();
-    final version = widget.firmwareVersion?.trim() ?? '';
-    final sha256 = widget.fileSha256?.trim().toLowerCase() ?? '';
-    final signature = widget.releaseSignature?.trim() ?? '';
-    final securityVersion = widget.securityVersion ?? 0;
+    // 升级元数据：优先取选中的已下载固件（离线升级链路），
+    // 缺失时回退路由参数（双 Tab 入口不传固件参数时，
+    // 仅靠路由参数会导致校验必败，故必须支持离线元数据）
+    final offline = _selectedDownloaded;
+    final target =
+        ((offline?.targetChip ?? _metaTargetChip) ?? 'esp')
+            .trim()
+            .toLowerCase();
+    final version = (offline?.version ?? _metaFirmwareVersion)?.trim() ?? '';
+    final sha256 =
+        (offline?.sha256 ?? _metaFileSha256)?.trim().toLowerCase() ?? '';
+    final signature =
+        (offline?.signature ?? _metaReleaseSignature)?.trim() ?? '';
+    final securityVersion =
+        offline?.securityVersion ?? _metaSecurityVersion ?? 0;
 
     if ((target != 'esp' && target != 'arm') ||
         version.isEmpty ||
@@ -545,78 +658,106 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       setState(() {
         _isProcessing = false;
         _result = LocalOTAResult.failed;
-        _resultMessage = '固件缺少签名、安全版本或 SHA-256，请从升级列表重新下载。';
+        _resultMessage = l10n.str('ota_missing_metadata');
         _currentStep = LocalOTAStep.result;
       });
       return;
     }
 
-    final isEsp = target == 'esp';
     final manifest = LocalOtaManifest(
       target: target,
       taskId:
-          'local-${widget.firmwareId ?? 0}-${DateTime.now().millisecondsSinceEpoch}',
+          'local-${offline?.firmwareId ?? widget.firmwareId ?? 0}-${DateTime.now().millisecondsSinceEpoch}',
       version: version,
       sha256: sha256,
       signature: signature,
       securityVersion: securityVersion,
     );
 
-    try {
-      // 上传固件文件到设备（使用统一通信接口）
-      await _communicationService.uploadFirmware(
-        deviceIP: widget.deviceIP,
-        filePath: _selectedFilePath!,
-        manifest: {
-          'target': manifest.target,
-          'task_id': manifest.taskId,
-          'version': manifest.version,
-          'sha256': manifest.sha256,
-          'signature': manifest.signature,
-          'security_version': manifest.securityVersion,
-          'timeout_seconds': manifest.timeoutSeconds,
-        },
-        onProgress: (sent, total) {
-          if (total > 0 && mounted) {
-            setState(() {
-              _uploadProgress = sent / total;
-            });
-          }
-        },
-      );
+    // 执行引擎下沉：上传 → 触发 → 轮询 → 上报由 LocalOTAController 承担，
+    // 页面仅渲染状态并提供热点重连等 UI 回调
+    final controller = LocalOTAController(
+      communication: _communicationService,
+      repository: getIt<OtaRepository>(),
+      channel: widget.channel,
+      deviceSN: widget.deviceSN,
+      deviceIP: widget.deviceIP,
+      isHotspotConnected:
+          widget.channel == LocalCommunicationChannel.wifiAp
+              ? _isDeviceHotspotConnected
+              : null,
+      reconnectHotspot: widget.channel == LocalCommunicationChannel.wifiAp
+          ? _reconnectDeviceHotspot
+          : null,
+      onTerminateConnection: _disconnectDeviceHotspot,
+    );
+    _otaController
+      ?..removeListener(_onControllerChanged)
+      ..dispose();
+    _otaController = controller;
+    controller.addListener(_onControllerChanged);
+    await controller.execute(
+      filePath: _selectedFilePath!,
+      manifest: manifest,
+      fallbackVersion: _metaFirmwareVersion ?? '',
+    );
+  }
 
-      setState(() {
-        _uploadProgress = 1.0;
-      });
+  /// 执行引擎状态 → 页面 UI 状态映射（页面仅渲染，不含流程逻辑）
+  void _onControllerChanged() {
+    final controller = _otaController;
+    if (!mounted || controller == null) return;
+    final s = controller.state;
+    final l10n = AppLocalizations.of(context)!;
 
-      _goToStep(LocalOTAStep.triggerUpgrade);
+    setState(() {
+      _uploadProgress = s.uploadProgress;
+      _upgradeProgress = s.upgradeProgress;
 
-      if (isEsp) {
-        // ESP自升级：传完固件 → ESP写Flash → HTTP 200 → 立即重启(~500ms)
-        // ESP重启极快，仅短暂等待后立即开始轮询
-        setState(() {
-          _upgradeStatus = l10n.str('push_complete_wait_reboot', {});
-        });
-        await Future.delayed(const Duration(milliseconds: 500));
-      } else {
-        // ARM升级：ESP作为桥接转发固件给ARM，ESP不重启
-        // 直接轮询 /ota/progress 获取实时进度
-        setState(() {
-          _upgradeStatus = l10n.uploadingStatus;
-        });
+      if (s.statusOverrideKey != null) {
+        _upgradeStatus = l10n.str(s.statusOverrideKey!, s.statusOverrideParams);
+      } else if (s.deviceMessage.isNotEmpty) {
+        _upgradeStatus = s.deviceMessage;
+      } else if (s.deviceStatus.isNotEmpty) {
+        _upgradeStatus = _mapStatus(s.deviceStatus);
       }
 
-      // 统一轮询 /ota/progress
-      _pollUpgradeProgress();
-    } catch (e) {
-      setState(() {
-        _isProcessing = false;
-        _result = LocalOTAResult.failed;
-        _resultMessage = l10n.str('upload_firmware_failed', {'error': '$e'});
-        _currentStep = LocalOTAStep.result;
-      });
-      _disconnectDeviceHotspot();
-    }
+      switch (s.phase) {
+        case LocalOTAPhase.idle:
+        case LocalOTAPhase.uploading:
+          break;
+        case LocalOTAPhase.upgrading:
+          if (_currentStep != LocalOTAStep.triggerUpgrade) {
+            _currentStep = LocalOTAStep.triggerUpgrade;
+            _errorMessage = null;
+          }
+        case LocalOTAPhase.success:
+          _isProcessing = false;
+          _result = LocalOTAResult.success;
+          _newVersion = s.newVersion;
+          _currentStep = LocalOTAStep.result;
+        case LocalOTAPhase.failed:
+          _isProcessing = false;
+          _result = LocalOTAResult.failed;
+          final err = s.error;
+          _resultMessage = err != null
+              ? (OtaErrorMapper.carriesDetail(err)
+                    ? l10n.str(
+                        OtaErrorMapper.l10nKeyOf(err),
+                        {'error': '$err'},
+                      )
+                    : l10n.str(OtaErrorMapper.l10nKeyOf(err)))
+              : (s.deviceMessage.isNotEmpty
+                    ? s.deviceMessage
+                    : l10n.upgradeFailed);
+          _currentStep = LocalOTAStep.result;
+        case LocalOTAPhase.timedOut:
+          _isProcessing = false;
+          _result = LocalOTAResult.failed;
+          _resultMessage = l10n.upgradeTimeout;
+          _currentStep = LocalOTAStep.result;
+      }
+    });
   }
 
   /// 升级结束后断开连接，恢复正常网络
@@ -631,46 +772,24 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     }
   }
 
-  /// 本地OTA成功后，上报结果到后端
-  /// POST /ota/devices/:sn/local-ota-result
-  /// 请求: {target_chip, new_version, main_version}
-  /// 响应: {code: 0, data: {task_id: int64}}
-  Future<void> _reportLocalOTAResult(
-    String sn,
-    String targetChip,
-    String newVersion, [
-    String? mainVersion,
-  ]) async {
-    try {
-      // 等待网络恢复（断开热点后需要几秒切回移动网络/普通WiFi）
-      await Future.delayed(const Duration(seconds: 3));
-
-      await getIt<Dio>().post(
-        '/ota/devices/$sn/local-ota-result',
-        data: {
-          'target_chip': targetChip,
-          'new_version': newVersion,
-          if (mainVersion != null) 'main_version': mainVersion,
-        },
-      );
-    } catch (e) {
-      debugPrint('Report local OTA result failed: $e');
-      // 上报失败不影响用户体验，静默处理
-    }
-  }
-
   /// 检测当前 WiFi 是否仍连接到设备热点
   Future<bool> _isDeviceHotspotConnected() async {
     try {
       final ssid = await WiFiForIoTPlugin.getSSID();
-      if (ssid == null || ssid.isEmpty || ssid == '<unknown ssid>') {
-        return false;
-      }
-      final upper = ssid.toUpperCase();
-      return upper.contains('CS_INV') || upper.contains('CS-INV');
+      return _isDeviceHotspotSsid(ssid);
     } catch (_) {
       return false;
     }
+  }
+
+  /// 设备热点 SSID 统一判定（兼容 CS_INV_xxx / CS-INV-xxx 两种格式），
+  /// 避免各入口用 startsWith/contains 不一致导致误判"未连接热点"
+  static bool _isDeviceHotspotSsid(String? ssid) {
+    if (ssid == null || ssid.isEmpty || ssid == '<unknown ssid>') {
+      return false;
+    }
+    final upper = ssid.toUpperCase();
+    return upper.contains('CS_INV') || upper.contains('CS-INV');
   }
 
   /// 尝试重新连接设备热点
@@ -708,200 +827,6 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     } catch (_) {
       return false;
     }
-  }
-
-  /// 统一轮询 /ota/progress，ESP和ARM走同一套逻辑
-  /// ESP: NVS持久化结果，重启后首次请求返回 done/error
-  /// ARM: 实时返回 uploading → verifying → done
-  Future<void> _pollUpgradeProgress() async {
-    final l10n = AppLocalizations.of(context)!;
-    final isEsp = (widget.targetChip ?? 'esp').toLowerCase() == 'esp';
-    final versionKey = isEsp ? 'esp_version' : 'arm_version';
-    final firmwareKey = isEsp ? 'firmware_esp' : 'firmware_arm';
-
-    int totalWaitSeconds = 0;
-    int offlineCount = 0; // 连续离线计数
-    const maxTotalWait = 180; // 总超时 3 分钟
-    bool isFirstPoll = true; // 首次轮询跳过初始延迟
-
-    while (totalWaitSeconds < maxTotalWait) {
-      // 首次轮询不等待，后续每次间隔 1 秒
-      if (!isFirstPoll) {
-        await Future.delayed(const Duration(seconds: 1));
-        if (!mounted) return;
-        totalWaitSeconds += 1;
-      }
-      isFirstPoll = false;
-
-      // 1. 检查连接状态（仅WiFi通道需要检查热点）
-      if (widget.channel == LocalCommunicationChannel.wifiAp) {
-        final wifiConnected = await _isDeviceHotspotConnected();
-
-        if (!wifiConnected) {
-          offlineCount++;
-          // 设备热点断开 = 正在重启
-          if (mounted) {
-            setState(() {
-              _upgradeStatus = l10n.str(
-                'waiting_hotspot_recovery',
-                {'seconds': '$totalWaitSeconds'},
-              );
-            });
-          }
-
-          // 每 2 次离线检测（约 2 秒）尝试一次重连
-          if (offlineCount % 2 == 0) {
-            final reconnected = await _reconnectDeviceHotspot();
-            if (reconnected && mounted) {
-              setState(() {
-                _upgradeStatus = l10n.str('hotspot_reconnected', {});
-              });
-              offlineCount = 0;
-              // 重连成功，继续下面的轮询
-            } else {
-              continue; // 重连失败，继续等待
-            }
-          } else {
-            continue; // 热点未恢复，继续等待
-          }
-        } else {
-          offlineCount = 0;
-        }
-      }
-
-      // 2. 已连接，尝试获取升级进度
-      try {
-        // 使用统一通信接口获取进度
-        final progress = await _communicationService.getProgress(widget.deviceIP);
-        final status = (progress['state'] as String? ??
-                progress['status'] as String? ??
-                '')
-            .toLowerCase();
-        final percent = (progress['progress'] as num?)?.toDouble() ?? 0.0;
-        final message = progress['message'] as String? ?? '';
-        // 版本获取优先级：main_version > version > 芯片专属字段
-        final mainVer = progress['main_version'] as String? ?? '';
-        final chipVer = (progress['version'] as String? ?? '').isNotEmpty
-            ? (progress['version'] as String)
-            : (progress[versionKey] as String? ?? '');
-
-        // 优先使用 main_version 作为展示版本
-        final displayVersion = mainVer.isNotEmpty
-            ? mainVer
-            : (chipVer.isNotEmpty ? chipVer : (widget.firmwareVersion ?? ''));
-
-        debugPrint(
-          'OTA progress: status=$status, main_version=$mainVer, chip_version=$chipVer, raw=$progress',
-        );
-
-        if (mounted) {
-          setState(() {
-            _upgradeProgress = percent / 100.0;
-            _upgradeStatus = message.isNotEmpty ? message : _mapStatus(status);
-          });
-        }
-
-        if (status == 'done' || status == 'succeeded') {
-          // 优先使用 main_version，回退到芯片版本号
-          String? newVersion =
-              displayVersion.isNotEmpty ? displayVersion : null;
-          // 保存芯片版本用于后端上报（优先固件专属字段，回退到旧字段名）
-          final chipNewVersion =
-              (progress[firmwareKey] as String? ?? '').isNotEmpty
-                  ? (progress[firmwareKey] as String)
-                  : chipVer.isNotEmpty
-                      ? chipVer
-                      : (progress[versionKey] as String? ??
-                          widget.firmwareVersion ??
-                          '');
-          if (newVersion == null) {
-            try {
-              // 使用统一通信接口获取设备信息
-              final info = await _communicationService.getDeviceInfo(widget.deviceIP);
-              debugPrint('Device info response: $info');
-              // 同样优先 main_version
-              final infoMainVer = info['main_version'] as String? ?? '';
-              final infoChipVer =
-                  (info[firmwareKey] as String? ?? '').isNotEmpty
-                      ? (info[firmwareKey] as String)
-                      : (info[versionKey] as String? ?? '').isNotEmpty
-                          ? (info[versionKey] as String)
-                          : (info['version'] as String? ?? '');
-              newVersion = infoMainVer.isNotEmpty
-                  ? infoMainVer
-                  : (infoChipVer.isNotEmpty ? infoChipVer : null);
-            } catch (e) {
-              debugPrint('Failed to get device info: $e');
-            }
-          }
-          debugPrint(
-            'Final newVersion: $newVersion, chipNewVersion: $chipNewVersion',
-          );
-          if (mounted) {
-            setState(() {
-              _isProcessing = false;
-              _result = LocalOTAResult.success;
-              _newVersion = newVersion;
-              _currentStep = LocalOTAStep.result;
-            });
-          }
-          _disconnectDeviceHotspot();
-          // 本地OTA成功后，通知后端更新版本号
-          if (newVersion != null) {
-            _reportLocalOTAResult(
-              widget.deviceSN,
-              widget.targetChip ?? 'esp',
-              chipNewVersion.isNotEmpty ? chipNewVersion : '',
-              mainVer.isNotEmpty ? mainVer : null,
-            );
-          }
-          return;
-        }
-
-        if (status == 'error' ||
-            status == 'failed' ||
-            status == 'rolled_back' ||
-            status == 'cancelled') {
-          if (mounted) {
-            setState(() {
-              _isProcessing = false;
-              _result = LocalOTAResult.failed;
-              _resultMessage =
-                  message.isNotEmpty ? message : l10n.upgradeFailed;
-              _currentStep = LocalOTAStep.result;
-            });
-          }
-          _disconnectDeviceHotspot();
-          return;
-        }
-      } on DeviceConnectionException {
-        // 连接失败，设备可能刚重启完还在初始化 HTTP 服务
-        offlineCount++;
-        if (mounted) {
-          setState(() {
-            _upgradeStatus = l10n.str(
-              'waiting_device_response',
-              {'seconds': '$totalWaitSeconds'},
-            );
-          });
-        }
-        continue;
-      } catch (_) {
-        // 其他异常，继续等待
-        continue;
-      }
-    }
-
-    // 总超时
-    if (mounted) {
-      setState(() {
-        _isProcessing = false;
-        _result = LocalOTAResult.failed;
-        _resultMessage = l10n.upgradeTimeout;
-        _currentStep = LocalOTAStep.result;
-      });
-    }
-    _disconnectDeviceHotspot();
   }
 
   String _mapStatus(String status) {
@@ -952,20 +877,28 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     if (widget.embedded) {
       return body;
     }
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: Text(
-          l10n.localFirmwareUpgrade,
-          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17.sp),
-        ),
-        centerTitle: true,
-        elevation: 0,
-        scrolledUnderElevation: 0.5,
-        actions: [
-          // 显示当前使用的通道类型
-          Padding(
-            padding: EdgeInsets.only(right: 16.w),
+    // 升级中拦截返回（系统手势/导航栏返回键/AppBar 返回按钮），
+    // 二次确认后才允许退出，防止误退断热点导致设备变砖
+    return PopScope(
+      canPop: !_upgradeInProgress,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _confirmExitWhileUpgrading();
+      },
+      child: Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        appBar: AppBar(
+          title: Text(
+            l10n.localFirmwareUpgrade,
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17.sp),
+          ),
+          centerTitle: true,
+          elevation: 0,
+          scrolledUnderElevation: 0.5,
+          actions: [
+            // 显示当前使用的通道类型
+            Padding(
+              padding: EdgeInsets.only(right: 16.w),
             child: Chip(
               label: Text(
                 widget.channel == LocalCommunicationChannel.ble ? 'BLE' : 'WiFi',
@@ -987,7 +920,8 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
           ),
         ],
       ),
-      body: body,
+        body: body,
+      ),
     );
   }
 
@@ -1011,7 +945,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
           } else if (isCurrent) {
             stepColor = AppColors.primary;
           } else {
-            stepColor = AppColors.textHint;
+            stepColor = AppColor.textHint(context);
           }
 
           return Expanded(
@@ -1047,8 +981,8 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                         style: TextStyle(
                           fontSize: 10.sp,
                           color: isCurrent || isCompleted
-                              ? AppColors.textPrimary
-                              : AppColors.textHint,
+                              ? AppColor.textPrimary(context)
+                              : AppColor.textHint(context),
                           fontWeight:
                               isCurrent ? FontWeight.w600 : FontWeight.w400,
                         ),
@@ -1134,7 +1068,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                 style: TextStyle(
                   fontSize: 15.sp,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
+                  color: AppColor.textPrimary(context),
                 ),
               ),
               SizedBox(height: 12.h),
@@ -1149,7 +1083,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
               else
                 Text(
                   l10n.firmwareDownloadHint,
-                  style: TextStyle(fontSize: 13.sp, color: AppColors.textHint),
+                  style: TextStyle(fontSize: 13.sp, color: AppColor.textHint(context)),
                 ),
               if (_errorMessage != null) ...[
                 SizedBox(height: 8.h),
@@ -1164,7 +1098,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         SizedBox(height: 24.h),
         if (_selectedFilePath == null &&
             !_isDownloading &&
-            widget.firmwareUrl != null)
+            _metaFirmwareUrl != null)
           SizedBox(
             width: double.infinity,
             height: 48.h,
@@ -1270,7 +1204,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                       _selectedFilePath!.split('/').last,
                   style: TextStyle(
                     fontSize: 11.sp,
-                    color: AppColors.textSecondary,
+                    color: AppColor.textSecondary(context),
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -1308,7 +1242,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         SizedBox(width: 8.w),
         Text(
           l10n.loading,
-          style: TextStyle(fontSize: 13.sp, color: AppColors.textHint),
+          style: TextStyle(fontSize: 13.sp, color: AppColor.textHint(context)),
         ),
       ],
     );
@@ -1325,7 +1259,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
           style: TextStyle(
             fontSize: 13.sp,
             fontWeight: FontWeight.w600,
-            color: AppColors.textSecondary,
+            color: AppColor.textSecondary(context),
           ),
         ),
         SizedBox(height: 8.h),
@@ -1353,6 +1287,8 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         borderRadius: BorderRadius.circular(10.r),
         onTap: () => setState(() {
           _selectedFilePath = item.filePath;
+          // 离线升级链路：升级元数据取自持久化的下载记录
+          _selectedDownloaded = item;
           _errorMessage = null;
         }),
         child: Padding(
@@ -1362,7 +1298,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
               Icon(
                 Icons.memory_rounded,
                 size: 18.sp,
-                color: selected ? AppColors.primary : AppColors.textHint,
+                color: selected ? AppColors.primary : AppColor.textHint(context),
               ),
               SizedBox(width: 8.w),
               Expanded(
@@ -1376,7 +1312,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                       style: TextStyle(
                         fontSize: 12.sp,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
+                        color: AppColor.textPrimary(context),
                       ),
                     ),
                     SizedBox(height: 2.h),
@@ -1384,7 +1320,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                       _formatFirmwareSize(item.fileSize),
                       style: TextStyle(
                         fontSize: 11.sp,
-                        color: AppColors.textHint,
+                        color: AppColor.textHint(context),
                       ),
                     ),
                   ],
@@ -1473,7 +1409,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                                 : l10n.scanningDeviceHotspot),
                     style: TextStyle(
                       fontSize: 14.sp,
-                      color: AppColors.textSecondary,
+                      color: AppColor.textSecondary(context),
                     ),
                   ),
                 ] else if (_selectedAp != null && _errorMessage == null) ...[
@@ -1500,7 +1436,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                         : (_selectedAp!.ssid ?? ''),
                     style: TextStyle(
                       fontSize: 13.sp,
-                      color: AppColors.textSecondary,
+                      color: AppColor.textSecondary(context),
                     ),
                   ),
                 ] else ...[
@@ -1517,7 +1453,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                     style: TextStyle(
                       fontSize: 16.sp,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
+                      color: AppColor.textPrimary(context),
                     ),
                   ),
                   SizedBox(height: 8.h),
@@ -1525,7 +1461,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                     l10n.autoScanHint,
                     style: TextStyle(
                       fontSize: 13.sp,
-                      color: AppColors.textSecondary,
+                      color: AppColor.textSecondary(context),
                     ),
                     textAlign: TextAlign.center,
                   ),
@@ -1611,7 +1547,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
             onPressed: isInProgress ? null : _checkConnectionAndProceed,
             style: ElevatedButton.styleFrom(
               backgroundColor:
-                  isInProgress ? AppColors.textHint : AppColors.primary,
+                  isInProgress ? AppColor.textHint(context) : AppColors.primary,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12.r),
@@ -1673,7 +1609,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                 style: TextStyle(
                   fontSize: 16.sp,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
+                  color: AppColor.textPrimary(context),
                 ),
               ),
               SizedBox(height: 20.h),
@@ -1693,7 +1629,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                 style: TextStyle(
                   fontSize: 24.sp,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
+                  color: AppColor.textPrimary(context),
                 ),
               ),
             ],
@@ -1736,7 +1672,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                 style: TextStyle(
                   fontSize: 16.sp,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
+                  color: AppColor.textPrimary(context),
                 ),
               ),
               SizedBox(height: 20.h),
@@ -1756,7 +1692,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                 style: TextStyle(
                   fontSize: 24.sp,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
+                  color: AppColor.textPrimary(context),
                 ),
               ),
               SizedBox(height: 8.h),
@@ -1806,7 +1742,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                   style: TextStyle(
                     fontSize: 20.sp,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
+                    color: AppColor.textPrimary(context),
                   ),
                 ),
                 if (_newVersion != null) ...[
@@ -1815,7 +1751,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                     l10n.str('new_version_label', {'version': _newVersion!}),
                     style: TextStyle(
                       fontSize: 14.sp,
-                      color: AppColors.textSecondary,
+                      color: AppColor.textSecondary(context),
                     ),
                   ),
                 ],
@@ -1824,7 +1760,8 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                   width: double.infinity,
                   height: 48.h,
                   child: ElevatedButton(
-                    onPressed: () => Navigator.of(context).pop(),
+                    // pop(true)：供升级包串行编排器链式推进下一芯片
+                    onPressed: () => Navigator.of(context).pop(true),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.successLight,
                       foregroundColor: Colors.white,
@@ -1857,7 +1794,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                   style: TextStyle(
                     fontSize: 20.sp,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
+                    color: AppColor.textPrimary(context),
                   ),
                 ),
                 SizedBox(height: 8.h),
@@ -1865,7 +1802,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                   _resultMessage ?? l10n.unknown,
                   style: TextStyle(
                     fontSize: 14.sp,
-                    color: AppColors.textSecondary,
+                    color: AppColor.textSecondary(context),
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -1913,7 +1850,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                   style: TextStyle(
                     fontSize: 20.sp,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
+                    color: AppColor.textPrimary(context),
                   ),
                 ),
                 SizedBox(height: 8.h),
@@ -1921,7 +1858,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                   l10n.firmwareCorruptedHint,
                   style: TextStyle(
                     fontSize: 14.sp,
-                    color: AppColors.textSecondary,
+                    color: AppColor.textSecondary(context),
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -2007,13 +1944,13 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                   style: TextStyle(
                     fontSize: 14.sp,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
+                    color: AppColor.textPrimary(context),
                   ),
                 ),
                 SizedBox(height: 2.h),
                 Text(
                   widget.deviceSN,
-                  style: TextStyle(fontSize: 12.sp, color: AppColors.textHint),
+                  style: TextStyle(fontSize: 12.sp, color: AppColor.textHint(context)),
                 ),
               ],
             ),

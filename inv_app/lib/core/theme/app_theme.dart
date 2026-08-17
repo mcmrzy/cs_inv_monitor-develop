@@ -600,6 +600,14 @@ class AppColor {
   static Color border(BuildContext context) =>
       _isDark(context) ? const Color(0xFF2A2D35) : AppColors.border;
 
+  /// 页面级背景色（与 AppColors.background 对应，支持暗色模式）
+  static Color background(BuildContext context) =>
+      _isDark(context) ? const Color(0xFF0F1115) : const Color(0xFFF7F8FA);
+
+  /// 分割线颜色（与 AppColors.divider 对应，支持暗色模式）
+  static Color divider(BuildContext context) =>
+      _isDark(context) ? const Color(0xFF2A2D35) : const Color(0xFFE5E7EB);
+
   /// Soft brand-tint background for info panels and selected states.
   static Color primarySoft(BuildContext context) => _isDark(context)
       ? const Color(0xFF42A5F5).withValues(alpha: 0.12)
@@ -662,8 +670,10 @@ class AppColor {
       );
 }
 
-/// Semantic color constants that work in both light and dark modes.
-/// Use these for status indicators, badges, and semantic coloring.
+/// 语义色常量（状态色/品牌色）。
+/// 主题相关颜色（文本/表面/边框/背景）统一使用 [AppColor] 的
+/// context 语义取色（支持暗色模式），本类的 text*/surface*/border*
+/// 成员仅供 [AppColor] 浅色模式取值与历史兼容，新代码不应直接使用。
 class AppColors {
   // Brand colors
   static const Color primary = Color(0xFF1565C0);
@@ -711,4 +721,16 @@ class AppColors {
   static const Color orange = Color(0xFFF59E0B);
   static const Color purple = Color(0xFF8B5CF6);
   static const Color indigo = Color(0xFF6366F1);
+  static const Color cyan = Color(0xFF06B6D4);
+  static const Color lime = Color(0xFF84CC16);
+
+  // 图表/能流品牌色（单一定义，各图表组件统一引用，
+  // 避免同一色值在多处硬编码漂移）
+  static const Color energyTrend = Color(0xFFF5A623);
+
+  // 警示横幅色系（软背景/描边/强调/深文字）
+  static const Color warningSoft = Color(0xFFFEF3C7);
+  static const Color warningBorder = Color(0xFFFDE68A);
+  static const Color warningStrong = Color(0xFFD97706);
+  static const Color warningText = Color(0xFF92400E);
 }

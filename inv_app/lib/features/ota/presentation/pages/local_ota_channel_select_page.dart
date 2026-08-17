@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/features/ota/config/device_local_capabilities.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 /// 本地OTA升级通道类型
@@ -11,35 +12,6 @@ enum LocalOTAChannel {
 
   /// 蓝牙低功耗
   ble,
-}
-
-/// 设备本地通信能力判断工具类
-///
-/// 根据设备型号判断是否支持BLE本地升级。
-/// TODO: 后续可从设备属性或后端接口获取实际能力
-class DeviceLocalCapabilities {
-  /// 判断指定型号的设备是否支持BLE本地升级
-  ///
-  /// 当前已知支持BLE的型号列表，后续可扩展或从服务端获取
-  static bool supportsBle(String deviceModel) {
-    if (deviceModel.isEmpty) return false;
-
-    // 规范化型号：去除空格、转大写
-    final normalizedModel = deviceModel.trim().toUpperCase();
-
-    // 已知支持BLE的设备型号前缀
-    const bleSupportedPrefixes = [
-      'INV-6K',
-      'INV-8K',
-      'INV-10K',
-      'CS-6K2',
-      'CS-8K',
-    ];
-
-    return bleSupportedPrefixes.any(
-      (prefix) => normalizedModel.startsWith(prefix),
-    );
-  }
 }
 
 /// 本地OTA通道选择页面

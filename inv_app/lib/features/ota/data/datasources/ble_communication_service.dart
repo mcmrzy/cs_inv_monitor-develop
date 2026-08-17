@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:inv_app/core/services/ble/ble_adapter.dart';
+import 'package:inv_app/core/services/local_communication_service.dart';
 import 'package:inv_app/features/ota/domain/repositories/local_communication_repository.dart';
 
 /// BLE OTA 通信服务
@@ -50,6 +51,13 @@ class BleCommunicationService implements LocalCommunicationRepository {
 
   /// BLE 有效载荷上限（协商 MTU 512 - 3 ATT 头字节）
   static const int _chunkSize = 509;
+
+  /// 数据包偏移头长度（字节）
+  static const int _offsetHeaderSize = 4;
+
+  /// 每包固件数据上限：有效载荷减去偏移头，
+  /// 保证 [4字节偏移 + 数据] 整包不超过 MTU 有效载荷
+  static const int _dataChunkSize = _chunkSize - _offsetHeaderSize;
 
   /// 扫描超时
   static const Duration _scanTimeout = Duration(seconds: 15);
@@ -194,13 +202,14 @@ class BleCommunicationService implements LocalCommunicationRepository {
   Future<void> uploadFirmware({
     required String deviceIP,
     required String filePath,
-    required Map<String, dynamic> manifest,
+    required LocalOtaManifest manifest,
     void Function(int sent, int total)? onProgress,
   }) async {
     _assertConnected();
 
     debugPrint('[BleOTA] uploadFirmware: $filePath');
-    debugPrint('[BleOTA] manifest: $manifest');
+    debugPrint('[BleOTA] manifest: target=${manifest.target} '
+        'taskId=${manifest.taskId} version=${manifest.version}');
 
     // 1. 读取固件文件
     final file = File(filePath);
@@ -210,16 +219,17 @@ class BleCommunicationService implements LocalCommunicationRepository {
     final bytes = await file.readAsBytes();
     debugPrint('[BleOTA] firmware size: ${bytes.length} bytes');
 
-    // 2. 构造 OTA 初始化命令
+    // 2. 构造 OTA 初始化命令（强类型 manifest 直取字段，
+    // 与 WiFi 通道共用同一套元数据，避免键名不一致）
     final initCommand = utf8.encode(jsonEncode({
       'cmd': 'ota_init',
-      'target': manifest['target'] ?? 'esp',
-      'task_id': manifest['task_id'] ?? '',
-      'version': manifest['version'] ?? '',
+      'target': manifest.target,
+      'task_id': manifest.taskId,
+      'version': manifest.version,
       'size': bytes.length,
-      'sha256': manifest['sha256'] ?? '',
-      'signature': manifest['signature'] ?? '',
-      'security_version': manifest['security_version'] ?? 0,
+      'sha256': manifest.sha256,
+      'signature': manifest.signature,
+      'security_version': manifest.securityVersion,
     }));
 
     // 3. 发送初始化命令
@@ -235,8 +245,9 @@ class BleCommunicationService implements LocalCommunicationRepository {
     // 4. 分片发送固件数据
     int offset = 0;
     while (offset < bytes.length) {
-      final end =
-          (offset + _chunkSize < bytes.length) ? offset + _chunkSize : bytes.length;
+      final end = (offset + _dataChunkSize < bytes.length)
+          ? offset + _dataChunkSize
+          : bytes.length;
       final chunk = bytes.sublist(offset, end);
 
       // 构造带序号的数据包
@@ -272,6 +283,8 @@ class BleCommunicationService implements LocalCommunicationRepository {
   /// 构造带偏移量的数据包
   ///
   /// 格式: [4字节偏移量(大端)] [固件数据...]
+  /// 数据段长度由调用方限制为 [_dataChunkSize]，
+  /// 确保整包不超过 BLE 协商 MTU 有效载荷
   List<int> _buildDataPacket(int offset, List<int> data) {
     final packet = <int>[
       (offset >> 24) & 0xFF,

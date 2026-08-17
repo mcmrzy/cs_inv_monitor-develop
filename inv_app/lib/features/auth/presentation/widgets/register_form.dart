@@ -140,13 +140,13 @@ class _RegisterFormState extends State<RegisterForm> {
           style: TextStyle(
             fontSize: 24.sp,
             fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
+            color: AppColor.textPrimary(context),
           ),
         ),
         SizedBox(height: 6.h),
         Text(
           l10n.registerToUseAll,
-          style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary),
+          style: TextStyle(fontSize: 14.sp, color: AppColor.textSecondary(context)),
         ),
       ],
     );
@@ -206,8 +206,8 @@ class _RegisterFormState extends State<RegisterForm> {
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
-              disabledBackgroundColor: AppColors.surfaceHover,
-              disabledForegroundColor: AppColors.textHint,
+              disabledBackgroundColor: AppColor.surfaceHover(context),
+              disabledForegroundColor: AppColor.textHint(context),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12.r),
               ),
