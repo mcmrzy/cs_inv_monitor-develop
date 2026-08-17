@@ -85,6 +85,13 @@ dev_dependencies:
   bloc_test: ^10.0.0
   fake_async: ^1.3.3
 
+# wifi_iot 已停更（0.3.19+2），其 android/build.gradle 仍调用 Gradle 9 已移除的
+# jcenter() 导致 CI 构建失败。收编打过补丁的版本（去 jcenter、补 namespace）到
+# third_party/，等上游修复后可移除此 override。
+dependency_overrides:
+  wifi_iot:
+    path: third_party/wifi_iot
+
 flutter:
   uses-material-design: true
 
