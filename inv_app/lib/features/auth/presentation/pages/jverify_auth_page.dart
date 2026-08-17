@@ -190,7 +190,7 @@ class _JVerifyAuthPageState extends State<JVerifyAuthPage> {
               l10n?.jverifyLaunching ?? '正在拉起运营商认证...',
               style: TextStyle(
                 fontSize: 14.sp,
-                color: AppColors.textPrimary,
+                color: AppColor.textPrimary(context),
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -201,7 +201,7 @@ class _JVerifyAuthPageState extends State<JVerifyAuthPage> {
                 l10n?.jverifySecureTip ??
                     '运营商安全认证 · 本机号码一键登录',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12.sp, color: AppColors.textHint),
+                style: TextStyle(fontSize: 12.sp, color: AppColor.textHint(context)),
               ),
             ),
           ],
@@ -271,7 +271,7 @@ class _JVerifyAuthPageState extends State<JVerifyAuthPage> {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 15.sp,
-                      color: AppColors.textPrimary,
+                      color: AppColor.textPrimary(context),
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -282,7 +282,7 @@ class _JVerifyAuthPageState extends State<JVerifyAuthPage> {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 12.sp,
-                      color: AppColors.textHint,
+                      color: AppColor.textHint(context),
                     ),
                   ),
                 ],

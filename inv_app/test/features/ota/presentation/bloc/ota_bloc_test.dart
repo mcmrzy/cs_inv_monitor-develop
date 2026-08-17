@@ -134,9 +134,15 @@ void main() {
   // OTAProgressPollRequested
   // ---------------------------------------------------------------------------
   group('OTAProgressPollRequested', () {
+    // 轮询事件需先触发升级（启动轮询定时器）才会被处理，
+    // 以下用例统一先 trigger 再 poll
+
     blocTest<OtaBloc, OtaState>(
       'emits [OTAProgress] with current progress',
       build: () {
+        when(() => mockOtaRepository.triggerOTA(any(), any())).thenAnswer(
+          (_) async => right<Failure, Map<String, dynamic>>({'task_id': 1}),
+        );
         when(() => mockOtaRepository.getDeviceOTAStatus(any())).thenAnswer(
           (_) async => right<Failure, Map<String, dynamic>>({
             'status': 'in_progress',
@@ -145,10 +151,13 @@ void main() {
         );
         return otaBloc;
       },
-      act: (bloc) => bloc.add(
-        const OTAProgressPollRequested(deviceSn: 'TEST_SN_1'),
-      ),
+      act: (bloc) async {
+        bloc.add(const OTATriggerRequested(sn: 'TEST_SN_1', packageId: 1));
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        bloc.add(const OTAProgressPollRequested(deviceSn: 'TEST_SN_1'));
+      },
       expect: () => [
+        isA<OTATriggered>(),
         isA<OTAProgress>().having(
           (s) => s.progress,
           'progress',
@@ -160,6 +169,9 @@ void main() {
     blocTest<OtaBloc, OtaState>(
       'emits [OTAProgress, OTAComplete] when status is completed',
       build: () {
+        when(() => mockOtaRepository.triggerOTA(any(), any())).thenAnswer(
+          (_) async => right<Failure, Map<String, dynamic>>({'task_id': 1}),
+        );
         when(() => mockOtaRepository.getDeviceOTAStatus(any())).thenAnswer(
           (_) async => right<Failure, Map<String, dynamic>>({
             'status': 'completed',
@@ -168,10 +180,13 @@ void main() {
         );
         return otaBloc;
       },
-      act: (bloc) => bloc.add(
-        const OTAProgressPollRequested(deviceSn: 'TEST_SN_1'),
-      ),
+      act: (bloc) async {
+        bloc.add(const OTATriggerRequested(sn: 'TEST_SN_1', packageId: 1));
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        bloc.add(const OTAProgressPollRequested(deviceSn: 'TEST_SN_1'));
+      },
       expect: () => [
+        isA<OTATriggered>(),
         isA<OTAProgress>(),
         isA<OTAComplete>(),
       ],
@@ -180,6 +195,9 @@ void main() {
     blocTest<OtaBloc, OtaState>(
       'emits [OTAProgress, OTAError] when status is failed',
       build: () {
+        when(() => mockOtaRepository.triggerOTA(any(), any())).thenAnswer(
+          (_) async => right<Failure, Map<String, dynamic>>({'task_id': 1}),
+        );
         when(() => mockOtaRepository.getDeviceOTAStatus(any())).thenAnswer(
           (_) async => right<Failure, Map<String, dynamic>>({
             'status': 'failed',
@@ -189,10 +207,13 @@ void main() {
         );
         return otaBloc;
       },
-      act: (bloc) => bloc.add(
-        const OTAProgressPollRequested(deviceSn: 'TEST_SN_1'),
-      ),
+      act: (bloc) async {
+        bloc.add(const OTATriggerRequested(sn: 'TEST_SN_1', packageId: 1));
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        bloc.add(const OTAProgressPollRequested(deviceSn: 'TEST_SN_1'));
+      },
       expect: () => [
+        isA<OTATriggered>(),
         isA<OTAProgress>(),
         isA<OTAError>().having(
           (s) => s.message,
@@ -203,8 +224,11 @@ void main() {
     );
 
     blocTest<OtaBloc, OtaState>(
-      'emits [OTAError] on API failure',
+      'tolerates a single poll failure without error state',
       build: () {
+        when(() => mockOtaRepository.triggerOTA(any(), any())).thenAnswer(
+          (_) async => right<Failure, Map<String, dynamic>>({'task_id': 1}),
+        );
         when(() => mockOtaRepository.getDeviceOTAStatus(any())).thenAnswer(
           (_) async => left<Failure, Map<String, dynamic>>(
             createTestServerFailure(),
@@ -212,10 +236,41 @@ void main() {
         );
         return otaBloc;
       },
-      act: (bloc) => bloc.add(
-        const OTAProgressPollRequested(deviceSn: 'TEST_SN_1'),
-      ),
+      act: (bloc) async {
+        bloc.add(const OTATriggerRequested(sn: 'TEST_SN_1', packageId: 1));
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        bloc.add(const OTAProgressPollRequested(deviceSn: 'TEST_SN_1'));
+      },
+      // 单次失败容忍（弱网抖动），不进入错误态
       expect: () => [
+        isA<OTATriggered>(),
+      ],
+    );
+
+    blocTest<OtaBloc, OtaState>(
+      'emits [OTAError] after consecutive poll failures reach threshold',
+      build: () {
+        when(() => mockOtaRepository.triggerOTA(any(), any())).thenAnswer(
+          (_) async => right<Failure, Map<String, dynamic>>({'task_id': 1}),
+        );
+        when(() => mockOtaRepository.getDeviceOTAStatus(any())).thenAnswer(
+          (_) async => left<Failure, Map<String, dynamic>>(
+            createTestServerFailure(),
+          ),
+        );
+        return otaBloc;
+      },
+      act: (bloc) async {
+        bloc.add(const OTATriggerRequested(sn: 'TEST_SN_1', packageId: 1));
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        // 连续失败达阈值（3 次）才进错误态
+        for (var i = 0; i < 3; i++) {
+          bloc.add(const OTAProgressPollRequested(deviceSn: 'TEST_SN_1'));
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+        }
+      },
+      expect: () => [
+        isA<OTATriggered>(),
         isA<OTAError>(),
       ],
     );

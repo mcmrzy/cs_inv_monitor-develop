@@ -45,11 +45,11 @@ class _DeviceSearchBarState extends State<DeviceSearchBar> {
         style: TextStyle(fontSize: 15.sp),
         decoration: InputDecoration(
           hintText: widget.hintText ?? l10n.searchDeviceHint,
-          hintStyle: TextStyle(fontSize: 14.sp, color: AppColors.textHint),
-          prefixIcon: const Icon(Icons.search_rounded, size: 20, color: AppColors.textHint),
+          hintStyle: TextStyle(fontSize: 14.sp, color: AppColor.textHint(context)),
+          prefixIcon: Icon(Icons.search_rounded, size: 20, color: AppColor.textHint(context)),
           suffixIcon: _controller.text.isNotEmpty
               ? IconButton(
-                  icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.textHint),
+                  icon: Icon(Icons.close_rounded, size: 18, color: AppColor.textHint(context)),
                   onPressed: () {
                     _controller.clear();
                     widget.onSearchChanged?.call('');
@@ -57,7 +57,7 @@ class _DeviceSearchBarState extends State<DeviceSearchBar> {
                 )
               : null,
           filled: true,
-          fillColor: AppColors.surfaceHover,
+          fillColor: AppColor.surfaceHover(context),
           contentPadding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 12.h),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: BorderSide.none),
           enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: BorderSide.none),
@@ -92,7 +92,7 @@ class DeviceFilterBar extends StatelessWidget {
           l10n.deviceTypeCollector,
           l10n.deviceTypeStorage,
         ];
-    final bgColor = backgroundColor ?? AppColors.background;
+    final bgColor = backgroundColor ?? AppColor.background(context);
     return Container(
       color: bgColor,
       padding: EdgeInsets.fromLTRB(12.w, 8.h, 12.w, 10.h),
@@ -125,7 +125,7 @@ class DeviceFilterBar extends StatelessWidget {
                         fontWeight: active ? FontWeight.w600 : FontWeight.w500,
                         color: active
                             ? AppColors.primary
-                            : AppColors.textHint,
+                            : AppColor.textHint(context),
                       ),
                     ),
                   ),
@@ -277,14 +277,14 @@ class _DeviceCardState extends State<DeviceCard>
                     decoration: BoxDecoration(
                       color: isFault
                           ? AppColors.errorLight
-                          : (isOnline ? AppColors.successLight : AppColors.textHint),
+                          : (isOnline ? AppColors.successLight : AppColor.textHint(context)),
                       shape: BoxShape.circle,
                     ),
                   ),
                   SizedBox(width: 6.w),
                   // 设备名称：优先别名，回退 SN
                   Text(alias.isNotEmpty ? alias : sn,
-                      style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                      style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w700, color: AppColor.textPrimary(context))),
                   Spacer(),
                   Container(
                     padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 3.h),
@@ -294,19 +294,19 @@ class _DeviceCardState extends State<DeviceCard>
                   ),
                 ],
               ),
-              if (model != '--') ...[SizedBox(height: 4.h), Text(model, style: TextStyle(fontSize: 13.sp, color: AppColors.textSecondary))],
+              if (model != '--') ...[SizedBox(height: 4.h), Text(model, style: TextStyle(fontSize: 13.sp, color: AppColor.textSecondary(context)))],
               SizedBox(height: 12.h),
-              Row(children: [Text(l10n.deviceTypeLabelKey, style: TextStyle(fontSize: 13.sp, color: AppColors.textHint)), SizedBox(width: 12.w), Expanded(child: Text(_getDeviceTypeLabel(l10n), style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600), textAlign: TextAlign.right))]),
+              Row(children: [Text(l10n.deviceTypeLabelKey, style: TextStyle(fontSize: 13.sp, color: AppColor.textHint(context))), SizedBox(width: 12.w), Expanded(child: Text(_getDeviceTypeLabel(l10n), style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600), textAlign: TextAlign.right))]),
               if (ratedPower > 0)
                 // 信息行统一为“标签左、值右”
                 Padding(
                   padding: EdgeInsets.only(top: 4.h),
-                  child: Row(children: [Text(l10n.ratedPowerLabel, style: TextStyle(fontSize: 13.sp, color: AppColors.textHint)), SizedBox(width: 12.w), Expanded(child: Text('${ratedPower.toStringAsFixed(0)} W', style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600), textAlign: TextAlign.right))]),
+                  child: Row(children: [Text(l10n.ratedPowerLabel, style: TextStyle(fontSize: 13.sp, color: AppColor.textHint(context))), SizedBox(width: 12.w), Expanded(child: Text('${ratedPower.toStringAsFixed(0)} W', style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600), textAlign: TextAlign.right))]),
                 ),
               if (firmwareArm != '--')
                 Padding(
                   padding: EdgeInsets.only(top: 8.h),
-                  child: Text('$firmwareArm', style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
+                  child: Text('$firmwareArm', style: TextStyle(fontSize: 11.sp, color: AppColor.textHint(context))),
                 ),
             ],
           ),

@@ -185,7 +185,7 @@ class _DeviceEditPageState extends State<DeviceEditPage> {
                 onPressed: () => context.pop(),
                 child: Text(
                   l10n.cancel,
-                  style: TextStyle(fontSize: 14.sp, color: AppColors.textHint),
+                  style: TextStyle(fontSize: 14.sp, color: AppColor.textHint(context)),
                 ),
               ),
             ],
@@ -234,7 +234,7 @@ class _DeviceEditPageState extends State<DeviceEditPage> {
         children: [
           Text(
             label,
-            style: TextStyle(fontSize: 13.sp, color: AppColors.textHint),
+            style: TextStyle(fontSize: 13.sp, color: AppColor.textHint(context)),
           ),
           SizedBox(width: 12.w),
           Expanded(
@@ -244,7 +244,7 @@ class _DeviceEditPageState extends State<DeviceEditPage> {
               style: TextStyle(
                 fontSize: 13.sp,
                 fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
+                color: AppColor.textPrimary(context),
               ),
             ),
           ),
@@ -365,14 +365,14 @@ class _DeviceEditPageState extends State<DeviceEditPage> {
                     style: TextStyle(
                       fontSize: 14.sp,
                       fontWeight: FontWeight.w500,
-                      color: isDanger ? color : AppColors.textPrimary,
+                      color: isDanger ? color : AppColor.textPrimary(context),
                     ),
                   ),
                 ),
                 Icon(
                   Icons.chevron_right_rounded,
                   size: 20.sp,
-                  color: AppColors.textHint,
+                  color: AppColor.textHint(context),
                 ),
               ],
             ),
@@ -390,7 +390,7 @@ class _DeviceEditPageState extends State<DeviceEditPage> {
       style: TextStyle(
         fontSize: 13.sp,
         fontWeight: FontWeight.w500,
-        color: AppColors.textPrimary,
+        color: AppColor.textPrimary(context),
       ),
     );
   }
@@ -407,11 +407,11 @@ class _DeviceEditPageState extends State<DeviceEditPage> {
       maxLength: maxLength,
       maxLengthEnforcement: MaxLengthEnforcement.enforced,
       cursorColor: AppColors.primary,
-      style: TextStyle(fontSize: 14.sp, color: AppColors.textPrimary),
+      style: TextStyle(fontSize: 14.sp, color: AppColor.textPrimary(context)),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: TextStyle(fontSize: 14.sp, color: AppColors.textHint),
-        counterStyle: TextStyle(fontSize: 11.sp, color: AppColors.textHint),
+        hintStyle: TextStyle(fontSize: 14.sp, color: AppColor.textHint(context)),
+        counterStyle: TextStyle(fontSize: 11.sp, color: AppColor.textHint(context)),
         filled: true,
         fillColor: AppColor.surfaceHover(context),
         contentPadding:
@@ -537,7 +537,7 @@ class _DeviceEditPageState extends State<DeviceEditPage> {
                       style: TextStyle(
                         fontSize: 15.sp,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
+                        color: AppColor.textPrimary(context),
                       ),
                     ),
                     if (subtitle.isNotEmpty) ...[
@@ -546,7 +546,7 @@ class _DeviceEditPageState extends State<DeviceEditPage> {
                         subtitle,
                         style: TextStyle(
                           fontSize: 11.sp,
-                          color: AppColors.textHint,
+                          color: AppColor.textHint(context),
                         ),
                       ),
                     ],

@@ -1,3 +1,5 @@
+import 'package:inv_app/core/services/local_communication_service.dart';
+
 /// 本地OTA通信接口
 /// 定义与设备WiFi AP通信的抽象方法
 ///
@@ -15,10 +17,13 @@ abstract class LocalCommunicationRepository {
 
   /// 上传固件到设备
   /// HTTP POST 上传固件到 http://{device_ip}:80/ota/upload
+  ///
+  /// [manifest] 强类型升级元数据，避免各通道实现用字符串键名
+  /// 读取 Map 导致键名不一致（如 task_id vs taskId）
   Future<void> uploadFirmware({
     required String deviceIP,
     required String filePath,
-    required Map<String, dynamic> manifest,
+    required LocalOtaManifest manifest,
     void Function(int sent, int total)? onProgress,
   });
 

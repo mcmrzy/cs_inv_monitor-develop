@@ -7,6 +7,7 @@ import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
+import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 
 class HistoryChartPage extends StatefulWidget {
   final String deviceSN;
@@ -186,7 +187,7 @@ class _HistoryChartPageState extends State<HistoryChartPage>
             child: TabBar(
               controller: _tabController,
               labelColor: AppColors.primary,
-              unselectedLabelColor: AppColors.textHint,
+              unselectedLabelColor: AppColor.textHint(context),
               indicatorColor: AppColors.primary,
               tabs: [
                 Tab(text: l10n.day),
@@ -250,14 +251,14 @@ class _HistoryChartPageState extends State<HistoryChartPage>
                   selectedColor: metric.$3.withValues(alpha: 0.15),
                   checkmarkColor: metric.$3,
                   labelStyle: TextStyle(
-                    color: selected ? metric.$3 : AppColors.textSecondary,
+                    color: selected ? metric.$3 : AppColor.textSecondary(context),
                     fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
                     fontSize: 12.sp,
                   ),
                   side: BorderSide(
                     color: selected
                         ? metric.$3.withValues(alpha: 0.4)
-                        : AppColors.divider,
+                        : AppColor.divider(context),
                   ),
                   onSelected: (_) {
                     setState(() {
@@ -274,7 +275,7 @@ class _HistoryChartPageState extends State<HistoryChartPage>
             child: BlocBuilder<DeviceBloc, DeviceState>(
               builder: (context, state) {
                 if (state is DeviceLoading) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const PageSkeleton();
                 }
                 if (state is DeviceError) {
                   // 小烁离线动作插画：历史数据加载失败（美术路由 C4/offline）
@@ -335,11 +336,11 @@ class _HistoryChartPageState extends State<HistoryChartPage>
             drawVerticalLine: true,
             horizontalInterval: maxY > 5 ? (maxY / 5) : 1,
             getDrawingHorizontalLine: (value) => FlLine(
-              color: AppColors.divider.withValues(alpha: 0.5),
+              color: AppColor.divider(context).withValues(alpha: 0.5),
               strokeWidth: 1,
             ),
             getDrawingVerticalLine: (value) => FlLine(
-              color: AppColors.divider.withValues(alpha: 0.3),
+              color: AppColor.divider(context).withValues(alpha: 0.3),
               strokeWidth: 1,
             ),
           ),
@@ -364,16 +365,16 @@ class _HistoryChartPageState extends State<HistoryChartPage>
                 interval: (maxY - minY) > 5 ? (maxY - minY) / 5 : 1,
                 getTitlesWidget: (value, meta) => Text(
                   value.toStringAsFixed(1),
-                  style: TextStyle(fontSize: 10.sp, color: AppColors.textHint),
+                  style: TextStyle(fontSize: 10.sp, color: AppColor.textHint(context)),
                 ),
               ),
             ),
           ),
           borderData: FlBorderData(
             show: true,
-            border: const Border(
-              bottom: BorderSide(color: AppColors.divider),
-              left: BorderSide(color: AppColors.divider),
+            border: Border(
+              bottom: BorderSide(color: AppColor.divider(context)),
+              left: BorderSide(color: AppColor.divider(context)),
             ),
           ),
           minX: spots.first.x,
@@ -408,7 +409,7 @@ class _HistoryChartPageState extends State<HistoryChartPage>
               getTooltipColor: (spot) =>
                   Theme.of(context).brightness == Brightness.dark
                       ? AppColor.surfaceContainer(context)
-                      : AppColors.textPrimary,
+                      : AppColor.textPrimary(context),
               tooltipBorderRadius: BorderRadius.circular(8),
               getTooltipItems: (touchedSpots) {
                 return touchedSpots.map((spot) {
@@ -454,7 +455,7 @@ class _HistoryChartPageState extends State<HistoryChartPage>
       meta: meta,
       child: Text(
         text,
-        style: TextStyle(fontSize: 10.sp, color: AppColors.textHint),
+        style: TextStyle(fontSize: 10.sp, color: AppColor.textHint(context)),
       ),
     );
   }

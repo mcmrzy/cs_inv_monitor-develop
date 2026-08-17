@@ -365,7 +365,7 @@ class _AddDevicePageState extends State<AddDevicePage>
         bottom: TabBar(
           controller: _tabController,
           labelColor: AppColors.primary,
-          unselectedLabelColor: AppColors.textHint,
+          unselectedLabelColor: AppColor.textHint(context),
           indicatorColor: AppColors.primary,
           tabs: [
             Tab(
@@ -543,7 +543,7 @@ class _AddDevicePageState extends State<AddDevicePage>
                     style: TextStyle(
                       fontSize: 13.sp,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
+                      color: AppColor.textPrimary(context),
                     ),
                   ),
                   if (_scannedPin.isNotEmpty)
@@ -563,7 +563,7 @@ class _AddDevicePageState extends State<AddDevicePage>
                     AppLocalizations.of(context)!.pointSnAtScan,
                     style: TextStyle(
                       fontSize: 14.sp,
-                      color: AppColors.textSecondary,
+                      color: AppColor.textSecondary(context),
                     ),
                   ),
               ],
@@ -591,7 +591,7 @@ class _AddDevicePageState extends State<AddDevicePage>
                       decoration: BoxDecoration(
                         color: _autoFlash
                             ? AppColors.primary.withValues(alpha: 0.1)
-                            : AppColors.surfaceHover,
+                            : AppColor.surfaceHover(context),
                         borderRadius: BorderRadius.circular(20.r),
                         border: _autoFlash
                             ? Border.all(
@@ -607,7 +607,7 @@ class _AddDevicePageState extends State<AddDevicePage>
                             size: 16.sp,
                             color: _autoFlash
                                 ? AppColors.primary
-                                : AppColors.textSecondary,
+                                : AppColor.textSecondary(context),
                           ),
                           SizedBox(width: 4.w),
                           Text(
@@ -616,7 +616,7 @@ class _AddDevicePageState extends State<AddDevicePage>
                               fontSize: 12.sp,
                               color: _autoFlash
                                   ? AppColors.primary
-                                  : AppColors.textSecondary,
+                                  : AppColor.textSecondary(context),
                             ),
                           ),
                         ],
@@ -642,7 +642,7 @@ class _AddDevicePageState extends State<AddDevicePage>
                     style: TextStyle(
                       fontSize: 12.sp,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.textSecondary,
+                      color: AppColor.textSecondary(context),
                     ),
                   ),
                 ),
@@ -669,7 +669,7 @@ class _AddDevicePageState extends State<AddDevicePage>
                           style: TextStyle(
                             fontSize: 12.sp,
                             fontWeight: FontWeight.w500,
-                            color: AppColors.textPrimary,
+                            color: AppColor.textPrimary(context),
                           ),
                         ),
                         trailing: Text(
@@ -700,17 +700,17 @@ class _AddDevicePageState extends State<AddDevicePage>
       child: Container(
         padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
         decoration: BoxDecoration(
-          color: AppColors.surfaceHover,
+          color: AppColor.surfaceHover(context),
           borderRadius: BorderRadius.circular(20.r),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 16.sp, color: AppColors.textSecondary),
+            Icon(icon, size: 16.sp, color: AppColor.textSecondary(context)),
             SizedBox(width: 4.w),
             Text(
               label,
-              style: TextStyle(fontSize: 12.sp, color: AppColors.textSecondary),
+              style: TextStyle(fontSize: 12.sp, color: AppColor.textSecondary(context)),
             ),
           ],
         ),
@@ -742,12 +742,12 @@ class _AddDevicePageState extends State<AddDevicePage>
         SizedBox(height: 8.h),
         Text(
           AppLocalizations.of(context)!.snFormatDesc,
-          style: TextStyle(fontSize: 11.sp, color: AppColors.textHint),
+          style: TextStyle(fontSize: 11.sp, color: AppColor.textHint(context)),
         ),
         SizedBox(height: 4.h),
         Text(
           AppLocalizations.of(context)!.snFormatHint,
-          style: TextStyle(fontSize: 11.sp, color: AppColors.textHint),
+          style: TextStyle(fontSize: 11.sp, color: AppColor.textHint(context)),
         ),
         SizedBox(height: 16.h),
         TextField(
@@ -755,7 +755,7 @@ class _AddDevicePageState extends State<AddDevicePage>
           decoration: InputDecoration(
             labelText: AppLocalizations.of(context)!.deviceSnLabel,
             hintText: AppLocalizations.of(context)!.input16DigitSn,
-            prefixIcon: const Icon(Icons.devices, color: AppColors.textHint),
+            prefixIcon: Icon(Icons.devices, color: AppColor.textHint(context)),
             border:
                 OutlineInputBorder(borderRadius: BorderRadius.circular(12.r)),
             focusedBorder: OutlineInputBorder(
@@ -774,7 +774,7 @@ class _AddDevicePageState extends State<AddDevicePage>
           decoration: InputDecoration(
             labelText: AppLocalizations.of(context)!.manualPinLabel,
             hintText: AppLocalizations.of(context)!.pinInputHint,
-            prefixIcon: const Icon(Icons.pin_outlined, color: AppColors.textHint),
+            prefixIcon: Icon(Icons.pin_outlined, color: AppColor.textHint(context)),
             counterText: '',
             border:
                 OutlineInputBorder(borderRadius: BorderRadius.circular(12.r)),
@@ -790,7 +790,7 @@ class _AddDevicePageState extends State<AddDevicePage>
           alignment: Alignment.centerLeft,
           child: Text(
             AppLocalizations.of(context)!.manualPinDesc,
-            style: TextStyle(fontSize: 11.sp, color: AppColors.textHint),
+            style: TextStyle(fontSize: 11.sp, color: AppColor.textHint(context)),
           ),
         ),
         SizedBox(height: 20.h),

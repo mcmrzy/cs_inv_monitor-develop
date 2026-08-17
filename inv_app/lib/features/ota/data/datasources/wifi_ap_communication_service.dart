@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:inv_app/core/errors/ota_error_types.dart';
+import 'package:inv_app/core/services/local_communication_service.dart';
 import 'package:inv_app/core/services/wifi_scan_service.dart';
 import 'package:inv_app/features/ota/domain/repositories/local_communication_repository.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -128,7 +129,7 @@ class WifiApCommunicationService implements LocalCommunicationRepository {
   Future<void> uploadFirmware({
     required String deviceIP,
     required String filePath,
-    required Map<String, dynamic> manifest,
+    required LocalOtaManifest manifest,
     void Function(int sent, int total)? onProgress,
   }) async {
     await _ensureWifiUsage();
@@ -141,7 +142,6 @@ class WifiApCommunicationService implements LocalCommunicationRepository {
     final bytes = await file.readAsBytes();
     debugPrint('Uploading firmware: ${bytes.length} bytes to $deviceIP');
 
-    final target = manifest['target'] as String? ?? 'esp';
     final socket = await Socket.connect(
       deviceIP,
       80,
@@ -149,19 +149,22 @@ class WifiApCommunicationService implements LocalCommunicationRepository {
     );
 
     try {
+      // 强类型 manifest 直取字段，根治此前 Map 键名错位
+      // （页面传 task_id/timeout_seconds 而此处读 taskId/timeoutSeconds，
+      // 导致 X-OTA-Task-Id 恒为空、X-OTA-Timeout 恒为默认值）
       final requestHeader = 'POST /ota/upload HTTP/1.1\r\n'
           'Host: $deviceIP\r\n'
           'Connection: close\r\n'
           'Content-Type: application/octet-stream\r\n'
           'Content-Length: ${bytes.length}\r\n'
           'X-OTA-Size: ${bytes.length}\r\n'
-          'X-OTA-Target: $target\r\n'
-          'X-OTA-Task-Id: ${manifest['taskId'] ?? ''}\r\n'
-          'X-OTA-Version: ${manifest['version'] ?? ''}\r\n'
-          'X-OTA-SHA256: ${manifest['sha256'] ?? ''}\r\n'
-          'X-OTA-Signature: ${manifest['signature'] ?? ''}\r\n'
-          'X-OTA-Security-Version: ${manifest['securityVersion'] ?? 0}\r\n'
-          'X-OTA-Timeout: ${manifest['timeoutSeconds'] ?? 300}\r\n'
+          'X-OTA-Target: ${manifest.target}\r\n'
+          'X-OTA-Task-Id: ${manifest.taskId}\r\n'
+          'X-OTA-Version: ${manifest.version}\r\n'
+          'X-OTA-SHA256: ${manifest.sha256}\r\n'
+          'X-OTA-Signature: ${manifest.signature}\r\n'
+          'X-OTA-Security-Version: ${manifest.securityVersion}\r\n'
+          'X-OTA-Timeout: ${manifest.timeoutSeconds}\r\n'
           '\r\n';
 
       socket.write(requestHeader);
@@ -235,7 +238,9 @@ class WifiApCommunicationService implements LocalCommunicationRepository {
     if (statusCode == null || statusCode < 200 || statusCode >= 300) {
       final bodyStart = response.indexOf('\r\n\r\n');
       final responseBody = bodyStart >= 0 ? response.substring(bodyStart + 4) : response;
-      throw Exception('Upload rejected (${statusCode ?? 'invalid response'}): $responseBody');
+      throw OtaUploadRejectedException(
+        'Upload rejected (${statusCode ?? 'invalid response'}): $responseBody',
+      );
     }
   }
 
@@ -245,44 +250,16 @@ class WifiApCommunicationService implements LocalCommunicationRepository {
     debugPrint('Trigger upgrade on: $deviceIP');
 
     try {
-      final socket = await Socket.connect(
-        deviceIP,
-        80,
-        timeout: const Duration(seconds: 5),
-      );
-
-      const request = 'POST /ota/trigger HTTP/1.0\r\n\r\n';
-      socket.write(request);
-      await socket.flush();
-
-      final completer = Completer<String>();
-      final buffer = StringBuffer();
-
-      socket.listen(
-        (data) {
-          buffer.write(utf8.decode(data));
-        },
-        onDone: () {
-          if (!completer.isCompleted) completer.complete(buffer.toString());
-        },
-        onError: (e) {
-          if (!completer.isCompleted) completer.completeError(e!);
-        },
-      );
-
-      final response = await completer.future.timeout(
-        const Duration(seconds: 5),
-        onTimeout: () => buffer.toString(),
-      );
-
-      try {
-        socket.destroy();
-      } catch (_) {}
-
+      final response = await _rawHttpPost(deviceIP, 80, '/ota/trigger', '');
       debugPrint('Trigger upgrade response: $response');
 
-      if (!response.contains('200')) {
-        throw Exception('Trigger upgrade failed: $response');
+      // 解析 HTTP 状态行判定成功，不再用 contains('200') 弱校验
+      // （响应体含 "200" 字样会误判成功）
+      final statusCode = _parseStatusCode(response);
+      if (statusCode == null || statusCode < 200 || statusCode >= 300) {
+        throw OtaUploadRejectedException(
+          'Trigger upgrade failed (${statusCode ?? 'invalid response'})',
+        );
       }
     } catch (e) {
       debugPrint('triggerUpgrade error: $e');
@@ -296,59 +273,11 @@ class WifiApCommunicationService implements LocalCommunicationRepository {
     debugPrint('Getting OTA progress from: http://$deviceIP/ota/progress');
 
     try {
-      final socket = await Socket.connect(
-        deviceIP,
-        80,
-        timeout: const Duration(seconds: 5),
-      );
-
-      const request = 'GET /ota/progress HTTP/1.0\r\n\r\n';
-      socket.write(request);
-      await socket.flush();
-
-      final completer = Completer<String>();
-      final buffer = StringBuffer();
-
-      socket.listen(
-        (data) {
-          buffer.write(utf8.decode(data));
-        },
-        onDone: () {
-          if (!completer.isCompleted) {
-            completer.complete(buffer.toString());
-          }
-        },
-        onError: (e) {
-          if (!completer.isCompleted) {
-            completer.completeError(e!);
-          }
-        },
-      );
-
-      final response = await completer.future.timeout(
-        const Duration(seconds: 5),
-        onTimeout: () {
-          return buffer.toString();
-        },
-      );
-
+      final response = await _rawHttpGet(deviceIP, 80, '/ota/progress');
       debugPrint('OTA progress response: $response');
-
-      try {
-        socket.destroy();
-      } catch (_) {}
-
-      final jsonStart = response.indexOf('{');
-      final jsonEnd = response.lastIndexOf('}');
-      if (jsonStart >= 0 && jsonEnd > jsonStart) {
-        final jsonStr = response.substring(jsonStart, jsonEnd + 1);
-        return json.decode(jsonStr) as Map<String, dynamic>;
-      }
-      return {};
+      return _extractJson(response);
     } on SocketException catch (e) {
       throw DeviceConnectionException('设备连接失败: $e');
-    } on TimeoutException catch (e) {
-      throw DeviceConnectionException('设备响应超时: $e');
     } catch (e) {
       debugPrint('Get OTA progress failed: $e');
       return {};
@@ -360,47 +289,8 @@ class WifiApCommunicationService implements LocalCommunicationRepository {
     await _ensureWifiUsage();
 
     try {
-      final socket = await Socket.connect(
-        deviceIP,
-        80,
-        timeout: const Duration(seconds: 5),
-      );
-
-      const request = 'GET /ota/info HTTP/1.0\r\n\r\n';
-      socket.write(request);
-      await socket.flush();
-
-      final completer = Completer<String>();
-      final buffer = StringBuffer();
-
-      socket.listen(
-        (data) {
-          buffer.write(utf8.decode(data));
-        },
-        onDone: () {
-          if (!completer.isCompleted) completer.complete(buffer.toString());
-        },
-        onError: (e) {
-          if (!completer.isCompleted) completer.completeError(e!);
-        },
-      );
-
-      final response = await completer.future.timeout(
-        const Duration(seconds: 5),
-        onTimeout: () => buffer.toString(),
-      );
-
-      try {
-        socket.destroy();
-      } catch (_) {}
-
-      final jsonStart = response.indexOf('{');
-      final jsonEnd = response.lastIndexOf('}');
-      if (jsonStart >= 0 && jsonEnd > jsonStart) {
-        return json.decode(response.substring(jsonStart, jsonEnd + 1))
-            as Map<String, dynamic>;
-      }
-      return {};
+      final response = await _rawHttpGet(deviceIP, 80, '/ota/info');
+      return _extractJson(response);
     } catch (e) {
       debugPrint('getDeviceInfo failed: $e');
       return {};
@@ -411,52 +301,14 @@ class WifiApCommunicationService implements LocalCommunicationRepository {
   Future<bool> testConnection(String deviceIP) async {
     try {
       await _ensureWifiUsage();
-      final url = 'http://$deviceIP/ota/info';
-      debugPrint('Testing connection to: $url');
+      debugPrint('Testing connection to: http://$deviceIP/ota/info');
 
-      final socket = await Socket.connect(
-        deviceIP,
-        80,
-        timeout: const Duration(seconds: 5),
-      );
-
-      const request = 'GET /ota/info HTTP/1.0\r\n\r\n';
-      socket.write(request);
-      await socket.flush();
-
-      final completer = Completer<String>();
-      final buffer = StringBuffer();
-
-      socket.listen(
-        (data) {
-          buffer.write(utf8.decode(data));
-        },
-        onDone: () {
-          if (!completer.isCompleted) {
-            completer.complete(buffer.toString());
-          }
-        },
-        onError: (e) {
-          if (!completer.isCompleted) {
-            completer.completeError(e!);
-          }
-        },
-      );
-
-      final response = await completer.future.timeout(
-        const Duration(seconds: 5),
-        onTimeout: () {
-          return buffer.toString();
-        },
-      );
-
+      final response = await _rawHttpGet(deviceIP, 80, '/ota/info');
       debugPrint('Response received (${response.length} chars)');
 
-      try {
-        socket.destroy();
-      } catch (_) {}
-
-      return response.contains('200');
+      // 解析 HTTP 状态行：2xx 才视为连接可用
+      final statusCode = _parseStatusCode(response);
+      return statusCode != null && statusCode >= 200 && statusCode < 300;
     } catch (e) {
       debugPrint('Test connection failed: $e');
       return false;
@@ -482,6 +334,21 @@ class WifiApCommunicationService implements LocalCommunicationRepository {
 
   // ============ 参数读写 / 控制命令 ============
 
+  /// 设备直连会话鉴权协议头预留（固件团队协同项）：
+  /// 设备端实现会话鉴权后，在连接/绑定后获取会话凭证，
+  /// 此处统一为控制/参数/配网接口附加 `X-Device-Session` 请求头；
+  /// 当前返回 null 表示不携带鉴权头，保留协议接入点。
+  String? _deviceSessionToken() {
+    // TODO(固件团队): 设备端会话鉴权落地后接入会话凭证
+    return null;
+  }
+
+  /// 组装含预留鉴权头的公共请求头行
+  String _authHeaderLines() {
+    final token = _deviceSessionToken();
+    return token == null ? '' : 'X-Device-Session: $token\r\n';
+  }
+
   /// 简易 HTTP GET（Socket 实现，与 getDeviceInfo 同模式）
   Future<String> _rawHttpGet(String host, int port, String path) async {
     await _ensureWifiUsage();
@@ -490,7 +357,12 @@ class WifiApCommunicationService implements LocalCommunicationRepository {
       port,
       timeout: const Duration(seconds: 5),
     );
-    socket.write('GET $path HTTP/1.0\r\nHost: $host\r\n\r\n');
+    socket.write(
+      'GET $path HTTP/1.0\r\n'
+      'Host: $host\r\n'
+      '${_authHeaderLines()}'
+      '\r\n',
+    );
     await socket.flush();
     final completer = Completer<String>();
     final buffer = StringBuffer();
@@ -525,6 +397,7 @@ class WifiApCommunicationService implements LocalCommunicationRepository {
     socket.write(
       'POST $path HTTP/1.0\r\n'
       'Host: $host\r\n'
+      '${_authHeaderLines()}'
       'Content-Type: application/json\r\n'
       'Content-Length: ${bodyBytes.length}\r\n'
       '\r\n'
@@ -559,6 +432,16 @@ class WifiApCommunicationService implements LocalCommunicationRepository {
           as Map<String, dynamic>;
     }
     return {};
+  }
+
+  /// 解析 HTTP 响应状态行中的状态码（如 "HTTP/1.1 200 OK" → 200）；
+  /// 无法解析时返回 null，调用方不应视为成功
+  int? _parseStatusCode(String response) {
+    final statusLineEnd = response.indexOf('\r\n');
+    final statusLine =
+        statusLineEnd >= 0 ? response.substring(0, statusLineEnd) : response;
+    final match = RegExp(r'^HTTP/\d(?:\.\d)?\s+(\d{3})').firstMatch(statusLine);
+    return match == null ? null : int.tryParse(match.group(1)!);
   }
 
   @override

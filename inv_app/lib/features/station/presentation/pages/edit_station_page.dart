@@ -376,8 +376,8 @@ class _EditStationPageState extends State<EditStationPage> {
                                     style: TextStyle(
                                       fontSize: 14.sp,
                                       color: _province != null
-                                          ? AppColors.textPrimary
-                                          : AppColors.textHint,
+                                          ? AppColor.textPrimary(context)
+                                          : AppColor.textHint(context),
                                       fontWeight: _province != null
                                           ? FontWeight.w500
                                           : FontWeight.normal,
@@ -389,7 +389,7 @@ class _EditStationPageState extends State<EditStationPage> {
                                 Icon(
                                   Icons.chevron_right_rounded,
                                   size: 20.sp,
-                                  color: AppColors.textHint,
+                                  color: AppColor.textHint(context),
                                 ),
                               ],
                             ),
@@ -519,7 +519,7 @@ class _EditStationPageState extends State<EditStationPage> {
                       AppLocalizations.of(context)!.cancel,
                       style: TextStyle(
                         fontSize: 14.sp,
-                        color: AppColors.textHint,
+                        color: AppColor.textHint(context),
                       ),
                     ),
                   ),
@@ -591,7 +591,7 @@ class _EditStationPageState extends State<EditStationPage> {
           style: TextStyle(
             fontSize: 13.sp,
             fontWeight: FontWeight.w500,
-            color: AppColors.textPrimary,
+            color: AppColor.textPrimary(context),
           ),
         ),
         SizedBox(height: 8.h),
@@ -667,7 +667,7 @@ class _EditStationPageState extends State<EditStationPage> {
                                     child: Icon(
                                       Icons.broken_image_outlined,
                                       size: 36.sp,
-                                      color: AppColors.textHint,
+                                      color: AppColor.textHint(context),
                                     ),
                                   ),
                                 ),
@@ -710,7 +710,7 @@ class _EditStationPageState extends State<EditStationPage> {
             AppLocalizations.of(context)!.stationImageUploadHint,
             style: TextStyle(
               fontSize: 12.sp,
-              color: AppColors.textHint,
+              color: AppColor.textHint(context),
             ),
           ),
         ),
@@ -755,7 +755,7 @@ class _EditStationPageState extends State<EditStationPage> {
                     style: TextStyle(
                       fontSize: 15.sp,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
+                      color: AppColor.textPrimary(context),
                     ),
                   ),
                   SizedBox(height: 1.h),
@@ -763,7 +763,7 @@ class _EditStationPageState extends State<EditStationPage> {
                     subtitle,
                     style: TextStyle(
                       fontSize: 11.sp,
-                      color: AppColors.textHint,
+                      color: AppColor.textHint(context),
                     ),
                   ),
                 ],
@@ -790,7 +790,7 @@ class _EditStationPageState extends State<EditStationPage> {
           style: TextStyle(
             fontSize: 13.sp,
             fontWeight: FontWeight.w500,
-            color: AppColors.textPrimary,
+            color: AppColor.textPrimary(context),
           ),
         ),
         SizedBox(height: 8.h),
@@ -798,7 +798,7 @@ class _EditStationPageState extends State<EditStationPage> {
           controller: controller,
           keyboardType: inputType,
           cursorColor: AppColors.primary,
-          style: TextStyle(fontSize: 14.sp, color: AppColors.textPrimary),
+          style: TextStyle(fontSize: 14.sp, color: AppColor.textPrimary(context)),
           decoration: InputDecoration(
             filled: true,
             fillColor: AppColor.surfaceHover(context),

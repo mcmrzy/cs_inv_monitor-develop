@@ -375,8 +375,8 @@ class _CreateStationPageState extends State<CreateStationPage> {
                                     style: TextStyle(
                                       fontSize: 14.sp,
                                       color: _province != null
-                                          ? AppColors.textPrimary
-                                          : AppColors.textHint,
+                                          ? AppColor.textPrimary(context)
+                                          : AppColor.textHint(context),
                                       fontWeight: _province != null
                                           ? FontWeight.w500
                                           : FontWeight.normal,
@@ -386,7 +386,7 @@ class _CreateStationPageState extends State<CreateStationPage> {
                                 Icon(
                                   Icons.chevron_right_rounded,
                                   size: 20.sp,
-                                  color: AppColors.textHint,
+                                  color: AppColor.textHint(context),
                                 ),
                               ],
                             ),
@@ -498,7 +498,7 @@ class _CreateStationPageState extends State<CreateStationPage> {
                       AppLocalizations.of(context)!.cancel,
                       style: TextStyle(
                         fontSize: 14.sp,
-                        color: AppColors.textHint,
+                        color: AppColor.textHint(context),
                       ),
                     ),
                   ),
@@ -547,7 +547,7 @@ class _CreateStationPageState extends State<CreateStationPage> {
                     style: TextStyle(
                       fontSize: 15.sp,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
+                      color: AppColor.textPrimary(context),
                     ),
                   ),
                   SizedBox(height: 1.h),
@@ -555,7 +555,7 @@ class _CreateStationPageState extends State<CreateStationPage> {
                     subtitle,
                     style: TextStyle(
                       fontSize: 11.sp,
-                      color: AppColors.textHint,
+                      color: AppColor.textHint(context),
                     ),
                   ),
                 ],
@@ -578,7 +578,7 @@ class _CreateStationPageState extends State<CreateStationPage> {
           style: TextStyle(
             fontSize: 13.sp,
             fontWeight: FontWeight.w500,
-            color: AppColors.textPrimary,
+            color: AppColor.textPrimary(context),
           ),
         ),
         SizedBox(height: 8.h),
@@ -654,7 +654,7 @@ class _CreateStationPageState extends State<CreateStationPage> {
             AppLocalizations.of(context)!.stationImageUploadHint,
             style: TextStyle(
               fontSize: 12.sp,
-              color: AppColors.textHint,
+              color: AppColor.textHint(context),
             ),
           ),
         ),
@@ -679,7 +679,7 @@ class _CreateStationPageState extends State<CreateStationPage> {
               style: TextStyle(
                 fontSize: 13.sp,
                 fontWeight: FontWeight.w500,
-                color: AppColors.textPrimary,
+                color: AppColor.textPrimary(context),
               ),
             ),
             if (required)
@@ -694,10 +694,10 @@ class _CreateStationPageState extends State<CreateStationPage> {
           controller: ctl,
           keyboardType: keyboard,
           cursorColor: AppColors.primary,
-          style: TextStyle(fontSize: 14.sp, color: AppColors.textPrimary),
+          style: TextStyle(fontSize: 14.sp, color: AppColor.textPrimary(context)),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: TextStyle(fontSize: 14.sp, color: AppColors.textHint),
+            hintStyle: TextStyle(fontSize: 14.sp, color: AppColor.textHint(context)),
             filled: true,
             fillColor: AppColor.surfaceHover(context),
             contentPadding:

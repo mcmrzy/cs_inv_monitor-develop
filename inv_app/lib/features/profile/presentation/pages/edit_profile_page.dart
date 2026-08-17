@@ -403,7 +403,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                   '请输入新的手机号码',
                   style: TextStyle(
                     fontSize: 14.sp,
-                    color: AppColors.textSecondary,
+                    color: AppColor.textSecondary(context),
                   ),
                 ),
                 SizedBox(height: 24.h),
@@ -686,7 +686,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                   '请输入新的邮箱地址',
                   style: TextStyle(
                     fontSize: 14.sp,
-                    color: AppColors.textSecondary,
+                    color: AppColor.textSecondary(context),
                   ),
                 ),
                 SizedBox(height: 24.h),
@@ -994,10 +994,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
       appBar: AppBar(
         title: Text(
           l10n.editProfile,
-          style: const TextStyle(
+          style: TextStyle(
             fontWeight: FontWeight.w600,
             fontSize: 17,
-            color: AppColors.textPrimary,
+            color: AppColor.textPrimary(context),
           ),
         ),
         centerTitle: true,
@@ -1152,7 +1152,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
             l10n.changeAvatar,
             style: TextStyle(
               fontSize: 13.sp,
-              color: AppColors.textSecondary,
+              color: AppColor.textSecondary(context),
             ),
           ),
         ],
@@ -1177,12 +1177,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
       child: Container(
         padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
         decoration: BoxDecoration(
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: AppColor.border(context)),
           borderRadius: BorderRadius.circular(12.r),
         ),
         child: Row(
           children: [
-            Icon(icon, size: 20.sp, color: AppColors.textSecondary),
+            Icon(icon, size: 20.sp, color: AppColor.textSecondary(context)),
             SizedBox(width: 12.w),
             Expanded(
               child: Column(
@@ -1192,7 +1192,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     label,
                     style: TextStyle(
                       fontSize: 12.sp,
-                      color: AppColors.textSecondary,
+                      color: AppColor.textSecondary(context),
                     ),
                   ),
                   SizedBox(height: 4.h),
@@ -1200,7 +1200,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     displayValue,
                     style: TextStyle(
                       fontSize: 14.sp,
-                      color: value.isNotEmpty ? AppColors.textPrimary : AppColors.textHint,
+                      color: value.isNotEmpty ? AppColor.textPrimary(context) : AppColor.textHint(context),
                     ),
                   ),
                 ],
@@ -1248,7 +1248,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
       child: Container(
         padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
         decoration: BoxDecoration(
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: AppColor.border(context)),
           borderRadius: BorderRadius.circular(12.r),
         ),
         child: Row(
@@ -1256,7 +1256,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
             Icon(
               Icons.location_on_outlined,
               size: 20.sp,
-              color: AppColors.textSecondary,
+              color: AppColor.textSecondary(context),
             ),
             SizedBox(width: 12.w),
             Expanded(
@@ -1267,7 +1267,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     l10n.locationInfo,
                     style: TextStyle(
                       fontSize: 12.sp,
-                      color: AppColors.textSecondary,
+                      color: AppColor.textSecondary(context),
                     ),
                   ),
                   SizedBox(height: 4.h),
@@ -1276,8 +1276,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     style: TextStyle(
                       fontSize: 14.sp,
                       color: country.isNotEmpty
-                          ? AppColors.textPrimary
-                          : AppColors.textHint,
+                          ? AppColor.textPrimary(context)
+                          : AppColor.textHint(context),
                     ),
                   ),
                 ],

@@ -49,11 +49,13 @@ class _HomePageState extends State<HomePage> {
     return [l10n.all, l10n.normal, l10n.fault, l10n.offline];
   }
 
-  static const _filterColors = [
+  // 改为实例 getter：textHint 需 context 语义取色（支持暗色模式），
+  // static 字段无法访问 context
+  List<Color> get _filterColors => [
     AppColors.primary,
     AppColors.successLight,
     AppColors.errorLight,
-    AppColors.textHint,
+    AppColor.textHint(context),
   ];
 
   @override
@@ -298,7 +300,7 @@ class _HomePageState extends State<HomePage> {
                                 Icon(
                                   Icons.swap_vert_rounded,
                                   size: 13.sp,
-                                  color: AppColors.textHint,
+                                  color: AppColor.textHint(context),
                                 ),
                                 SizedBox(width: 4.w),
                                 Expanded(
@@ -306,7 +308,7 @@ class _HomePageState extends State<HomePage> {
                                     l10n.sortModeHint,
                                     style: TextStyle(
                                       fontSize: 12.sp,
-                                      color: AppColors.textHint,
+                                      color: AppColor.textHint(context),
                                     ),
                                   ),
                                 ),
@@ -340,7 +342,7 @@ class _HomePageState extends State<HomePage> {
                                   style: TextStyle(
                                     fontSize: 13.sp,
                                     fontWeight: FontWeight.w600,
-                                    color: AppColors.textSecondary,
+                                    color: AppColor.textSecondary(context),
                                   ),
                                 ),
                                 const Spacer(),
@@ -484,14 +486,14 @@ class _HomePageState extends State<HomePage> {
                   style: TextStyle(
                     fontSize: 22.sp,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
+                    color: AppColor.textPrimary(context),
                     letterSpacing: -0.3,
                   ),
                 ),
                 SizedBox(height: 2.h),
                 Text(
                   l10n.pvInverterMonitor,
-                  style: TextStyle(fontSize: 11.sp, color: AppColors.textHint),
+                  style: TextStyle(fontSize: 11.sp, color: AppColor.textHint(context)),
                 ),
               ],
             ),
@@ -537,10 +539,10 @@ class _HomePageState extends State<HomePage> {
         width: 38.w,
         height: 38.w,
         decoration: BoxDecoration(
-          color: AppColors.surfaceHover,
+          color: AppColor.surfaceHover(context),
           borderRadius: BorderRadius.circular(12.r),
         ),
-        child: Icon(icon, size: 20.sp, color: AppColors.textSecondary),
+        child: Icon(icon, size: 20.sp, color: AppColor.textSecondary(context)),
       ),
     );
   }
@@ -556,21 +558,21 @@ class _HomePageState extends State<HomePage> {
           autofocus: true,
           onChanged: (_) => setState(() => _stationPage = 1),
           cursorColor: AppColors.primary,
-          style: TextStyle(fontSize: 14.sp, color: AppColors.textPrimary),
+          style: TextStyle(fontSize: 14.sp, color: AppColor.textPrimary(context)),
           decoration: InputDecoration(
             hintText: l10n.searchStation,
-            hintStyle: TextStyle(fontSize: 14.sp, color: AppColors.textHint),
-            prefixIcon: const Icon(
+            hintStyle: TextStyle(fontSize: 14.sp, color: AppColor.textHint(context)),
+            prefixIcon: Icon(
               Icons.search_rounded,
               size: 20,
-              color: AppColors.textHint,
+              color: AppColor.textHint(context),
             ),
             suffixIcon: _searchCtl.text.isNotEmpty
                 ? IconButton(
-                    icon: const Icon(
+                    icon: Icon(
                       Icons.close_rounded,
                       size: 18,
-                      color: AppColors.textHint,
+                      color: AppColor.textHint(context),
                     ),
                     onPressed: () {
                       _searchCtl.clear();
@@ -579,7 +581,7 @@ class _HomePageState extends State<HomePage> {
                   )
                 : null,
             filled: true,
-            fillColor: AppColors.surfaceHover,
+            fillColor: AppColor.surfaceHover(context),
             contentPadding:
                 EdgeInsets.symmetric(horizontal: 14.w, vertical: 12.h),
             border: OutlineInputBorder(
@@ -641,12 +643,12 @@ class _HomePageState extends State<HomePage> {
                     decoration: BoxDecoration(
                       color: active
                           ? _filterColors[i].withValues(alpha: 0.1)
-                          : AppColors.surfaceHover,
+                          : AppColor.surfaceHover(context),
                       borderRadius: BorderRadius.circular(12.r),
                       border: Border.all(
                         color: active
                             ? _filterColors[i].withValues(alpha: 0.4)
-                            : AppColors.divider,
+                            : AppColor.divider(context),
                         width: active ? 1.5 : 1,
                       ),
                     ),
@@ -668,7 +670,7 @@ class _HomePageState extends State<HomePage> {
                             fontSize: 11.sp,
                             fontWeight: FontWeight.w600,
                             color:
-                                active ? _filterColors[i] : AppColors.textHint,
+                                active ? _filterColors[i] : AppColor.textHint(context),
                           ),
                         ),
                       ],
@@ -871,10 +873,10 @@ class _AnimatedHdrBtnState extends State<_AnimatedHdrBtn>
           width: 38.w,
           height: 38.w,
           decoration: BoxDecoration(
-            color: AppColors.surfaceHover,
+            color: AppColor.surfaceHover(context),
             borderRadius: BorderRadius.circular(12.r),
           ),
-          child: Icon(widget.icon, size: 20.sp, color: AppColors.textSecondary),
+          child: Icon(widget.icon, size: 20.sp, color: AppColor.textSecondary(context)),
         ),
       ),
     );
@@ -991,7 +993,7 @@ class _StationActionSheetState extends State<_StationActionSheet>
                       style: TextStyle(
                         fontSize: 16.sp,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
+                        color: AppColor.textPrimary(context),
                       ),
                     ),
                     SizedBox(height: 2.h),
@@ -999,7 +1001,7 @@ class _StationActionSheetState extends State<_StationActionSheet>
                       subtitle,
                       style: TextStyle(
                         fontSize: 12.sp,
-                        color: AppColors.textHint,
+                        color: AppColor.textHint(context),
                       ),
                     ),
                   ],
@@ -1008,7 +1010,7 @@ class _StationActionSheetState extends State<_StationActionSheet>
               Icon(
                 Icons.arrow_forward_ios,
                 size: 14.sp,
-                color: AppColors.textHint,
+                color: AppColor.textHint(context),
               ),
             ],
           ),
@@ -1071,7 +1073,7 @@ class _StationActionSheetState extends State<_StationActionSheet>
                           style: TextStyle(
                             fontSize: 16.sp,
                             fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
+                            color: AppColor.textPrimary(context),
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -1081,7 +1083,7 @@ class _StationActionSheetState extends State<_StationActionSheet>
                           widget.addressText,
                           style: TextStyle(
                             fontSize: 12.sp,
-                            color: AppColors.textHint,
+                            color: AppColor.textHint(context),
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -1092,7 +1094,7 @@ class _StationActionSheetState extends State<_StationActionSheet>
                 ],
               ),
               SizedBox(height: 16.h),
-              const Divider(height: 1, color: AppColors.divider),
+              Divider(height: 1, color: AppColor.divider(context)),
               SizedBox(height: 6.h),
               _animatedItem(
                 0,
@@ -1151,7 +1153,7 @@ class _StationActionSheetState extends State<_StationActionSheet>
                         style: TextStyle(
                           fontSize: 16.sp,
                           fontWeight: FontWeight.w600,
-                          color: AppColors.textSecondary,
+                          color: AppColor.textSecondary(context),
                         ),
                       ),
                     ),
@@ -1294,7 +1296,7 @@ class _StationCardState extends State<_StationCard>
                         style: TextStyle(
                           fontSize: 16.sp,
                           fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
+                          color: AppColor.textPrimary(context),
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -1325,7 +1327,7 @@ class _StationCardState extends State<_StationCard>
                   widget.addressText,
                   style: TextStyle(
                     fontSize: 11.sp,
-                    color: AppColors.textHint,
+                    color: AppColor.textHint(context),
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -1373,7 +1375,7 @@ class _StationCardState extends State<_StationCard>
                   style: TextStyle(
                     fontSize: 18.sp,
                     fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
+                    color: AppColor.textPrimary(context),
                     height: 1.1,
                   ),
                 ),
@@ -1382,7 +1384,7 @@ class _StationCardState extends State<_StationCard>
                   style: TextStyle(
                     fontSize: 11.sp,
                     fontWeight: FontWeight.w500,
-                    color: AppColors.textHint,
+                    color: AppColor.textHint(context),
                   ),
                 ),
               ],
@@ -1392,7 +1394,7 @@ class _StationCardState extends State<_StationCard>
         SizedBox(height: 2.h),
         Text(
           label,
-          style: TextStyle(fontSize: 10.sp, color: AppColors.textHint),
+          style: TextStyle(fontSize: 10.sp, color: AppColor.textHint(context)),
         ),
       ],
     );
@@ -1515,7 +1517,7 @@ class _AddMenuSheetState extends State<_AddMenuSheet>
                           style: TextStyle(
                             fontSize: 16.sp,
                             fontWeight: FontWeight.w600,
-                            color: AppColors.textSecondary,
+                            color: AppColor.textSecondary(context),
                           ),
                         ),
                       ),
@@ -1568,7 +1570,7 @@ class _AddMenuSheetState extends State<_AddMenuSheet>
                       item.subtitle,
                       style: TextStyle(
                         fontSize: 12.sp,
-                        color: AppColors.textHint,
+                        color: AppColor.textHint(context),
                       ),
                     ),
                   ],
@@ -1577,7 +1579,7 @@ class _AddMenuSheetState extends State<_AddMenuSheet>
               Icon(
                 Icons.arrow_forward_ios,
                 size: 14.sp,
-                color: AppColors.textHint,
+                color: AppColor.textHint(context),
               ),
             ],
           ),

@@ -303,8 +303,8 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
-              disabledBackgroundColor: AppColors.surfaceHover,
-              disabledForegroundColor: AppColors.textHint,
+              disabledBackgroundColor: AppColor.surfaceHover(context),
+              disabledForegroundColor: AppColor.textHint(context),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8.r),
               ),
@@ -435,7 +435,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       children: [
         Text(
           l10n.rememberPassword,
-          style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary),
+          style: TextStyle(fontSize: 14.sp, color: AppColor.textSecondary(context)),
         ),
         TextButton(
           onPressed: () => context.go('/login'),

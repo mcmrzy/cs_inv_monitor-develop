@@ -114,7 +114,7 @@ class _DeviceActionSheetState extends State<DeviceActionSheet>
                       style: TextStyle(
                         fontSize: 16.sp,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
+                        color: AppColor.textPrimary(context),
                       ),
                     ),
                     SizedBox(height: 2.h),
@@ -122,7 +122,7 @@ class _DeviceActionSheetState extends State<DeviceActionSheet>
                       subtitle,
                       style: TextStyle(
                         fontSize: 12.sp,
-                        color: AppColors.textHint,
+                        color: AppColor.textHint(context),
                       ),
                     ),
                   ],
@@ -131,7 +131,7 @@ class _DeviceActionSheetState extends State<DeviceActionSheet>
               Icon(
                 Icons.arrow_forward_ios,
                 size: 14.sp,
-                color: AppColors.textHint,
+                color: AppColor.textHint(context),
               ),
             ],
           ),
@@ -370,7 +370,7 @@ class _DeviceActionSheetState extends State<DeviceActionSheet>
                           style: TextStyle(
                             fontSize: 16.sp,
                             fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
+                            color: AppColor.textPrimary(context),
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -380,7 +380,7 @@ class _DeviceActionSheetState extends State<DeviceActionSheet>
                           model.isNotEmpty ? '$model · $_sn' : _sn,
                           style: TextStyle(
                             fontSize: 12.sp,
-                            color: AppColors.textHint,
+                            color: AppColor.textHint(context),
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -391,7 +391,7 @@ class _DeviceActionSheetState extends State<DeviceActionSheet>
                 ],
               ),
               SizedBox(height: 16.h),
-              const Divider(height: 1, color: AppColors.divider),
+              Divider(height: 1, color: AppColor.divider(context)),
               SizedBox(height: 6.h),
               _animatedItem(
                 0,
@@ -467,7 +467,7 @@ class _DeviceActionSheetState extends State<DeviceActionSheet>
                         style: TextStyle(
                           fontSize: 16.sp,
                           fontWeight: FontWeight.w600,
-                          color: AppColors.textSecondary,
+                          color: AppColor.textSecondary(context),
                         ),
                       ),
                     ),

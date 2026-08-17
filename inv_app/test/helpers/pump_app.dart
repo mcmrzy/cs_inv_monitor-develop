@@ -16,6 +16,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
@@ -103,6 +104,14 @@ MaterialApp _buildMaterialApp(
       GlobalCupertinoLocalizations.delegate,
     ],
     supportedLocales: AppLocalizations.supportedLocales,
-    home: Material(child: child),
+    // 与生产一致：初始化 ScreenUtil，支持依赖 .w/.h 的组件（如骨架屏）
+    home: Material(
+      child: ScreenUtilInit(
+        designSize: const Size(375, 812),
+        minTextAdapt: true,
+        builder: (context, screenUtilChild) => screenUtilChild!,
+        child: child,
+      ),
+    ),
   );
 }

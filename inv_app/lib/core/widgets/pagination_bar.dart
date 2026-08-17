@@ -6,7 +6,7 @@ import 'package:inv_app/l10n/app_localizations.dart';
 /// 通用分页栏：上一页 / 第 X 页 / 共 Y 页 / 下一页。
 ///
 /// - [currentPage] 为 1-based 页码
-/// - 禁用态按钮为灰色 [AppColors.textHint]，可用态为 [AppColors.primary]
+/// - 禁用态按钮为灰色 [AppColor.textHint(context)]，可用态为 [AppColors.primary]
 /// - totalPages <= 1 时返回 SizedBox.shrink()（组件自身兜底，
 ///   调用方也可自行判断 totalPages > 1 再决定是否渲染）
 class PaginationBar extends StatelessWidget {
@@ -40,7 +40,7 @@ class PaginationBar extends StatelessWidget {
           Text(
             AppLocalizations.of(context)!
                 .paginationInfo(currentPage, totalPages),
-            style: TextStyle(fontSize: 13.sp, color: AppColors.textSecondary),
+            style: TextStyle(fontSize: 13.sp, color: AppColor.textSecondary(context)),
           ),
           SizedBox(width: 14.w),
           _PageButton(
@@ -67,14 +67,14 @@ class _PageButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = enabled ? AppColors.primary : AppColors.textHint;
+    final color = enabled ? AppColors.primary : AppColor.textHint(context);
     return GestureDetector(
       onTap: onTap,
       child: Container(
         width: 32.w,
         height: 32.w,
         decoration: BoxDecoration(
-          color: AppColors.surfaceHover,
+          color: AppColor.surfaceHover(context),
           borderRadius: BorderRadius.circular(10.r),
         ),
         child: Icon(icon, size: 20.sp, color: color),

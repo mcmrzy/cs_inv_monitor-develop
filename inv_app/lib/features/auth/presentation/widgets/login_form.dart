@@ -202,7 +202,7 @@ class _LoginFormState extends State<LoginForm> {
                 l10n.rememberPassword,
                 style: TextStyle(
                   fontSize: 14.sp,
-                  color: AppColors.textSecondary,
+                  color: AppColor.textSecondary(context),
                 ),
               ),
             ],

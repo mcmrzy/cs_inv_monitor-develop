@@ -32,8 +32,19 @@ import 'package:inv_app/l10n/app_localizations.dart';
 import 'package:inv_app/core/data/china_regions.dart';
 import 'package:inv_app/core/data/regions_data.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+void main() {
+  // 全局错误边界：捕获框架异常与异步未捕获异常，
+  // 避免未处理异常直接红屏/崩溃且无日志可查
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    _reportError(
+      'FlutterError: ${details.exceptionAsString()}',
+      details.stack,
+    );
+  };
+
+  runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
 
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
@@ -87,6 +98,17 @@ void main() async {
 
   // 桌面小组件：初始化共享数据分组 + 点击深链监听（invapp://notifications）
   unawaited(_initWidgetDeepLinks());
+  }, (error, stack) {
+    _reportError('Uncaught zone error: $error', stack);
+  });
+}
+
+/// 错误上报钩子：当前输出结构化日志，后续可接入远程崩溃上报服务
+void _reportError(String message, StackTrace? stack) {
+  debugPrint('[CrashReport] $message');
+  if (stack != null) {
+    debugPrint('[CrashReport] stack: $stack');
+  }
 }
 
 Future<void> _restoreBleServices() async {

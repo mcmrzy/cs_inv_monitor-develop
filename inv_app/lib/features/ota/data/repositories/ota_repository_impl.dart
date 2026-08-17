@@ -96,6 +96,20 @@ class OtaRepositoryImpl implements OtaRepository {
   }
 
   @override
+  Future<Either<Failure, Map<String, dynamic>>> getFirmwareInfo(
+    int firmwareId,
+  ) async {
+    try {
+      final response = await remoteDataSource.getFirmwareInfo(firmwareId);
+      return _parseData(response);
+    } on DioException catch (e) {
+      return Left(_mapError(e));
+    } catch (e) {
+      return Left(UnknownFailure(e.toString()));
+    }
+  }
+
+  @override
   Future<Either<Failure, Map<String, dynamic>>> triggerOTA(
     String sn,
     int packageId,

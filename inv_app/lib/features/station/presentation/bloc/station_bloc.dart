@@ -299,7 +299,11 @@ class StationBloc extends Bloc<StationEvent, StationState> {
     final result = await repository.delete(event.stationId);
     result.fold(
       (failure) => emit(StationError(message: failure.message)),
-      (_) {
+      (_) async {
+        // 联动删除本地快照（含下属设备），避免离网模式展示已删除的电站
+        try {
+          await localCache?.deleteStation('${event.stationId}');
+        } catch (_) {}
         emit(StationDeleteSuccess());
         add(StationSummaryRequested());
       },
@@ -314,7 +318,8 @@ class StationBloc extends Bloc<StationEvent, StationState> {
     result.fold(
       (failure) => emit(StationError(message: failure.message)),
       (_) async {
-        // 解绑副作用：清本地 BLE 凭证 + 记录解绑操作日志（本地完成，失败不影响解绑结果）
+        // 解绑副作用：清本地 BLE 凭证 + 记录解绑操作日志 + 删本地快照
+        // （本地完成，失败不影响解绑结果）
         try {
           final keyStore = bleKeyStore ?? getIt<BleDeviceKeyStore>();
           await keyStore.delete(event.sn);
@@ -328,6 +333,7 @@ class StationBloc extends Bloc<StationEvent, StationState> {
               opTime: DateTime.now(),
             ),
           );
+          await localCache?.deleteDevice(event.sn);
         } catch (_) {
           // 本地副作用失败不阻塞解绑结果
         }
@@ -369,7 +375,11 @@ class StationBloc extends Bloc<StationEvent, StationState> {
     final result = await repository.deleteDevice(event.sn);
     result.fold(
       (failure) => emit(StationError(message: failure.message)),
-      (_) {
+      (_) async {
+        // 联动删除本地快照，避免离网模式展示已删除的设备
+        try {
+          await localCache?.deleteDevice(event.sn);
+        } catch (_) {}
         emit(DeviceDeleteSuccess(sn: event.sn));
       },
     );

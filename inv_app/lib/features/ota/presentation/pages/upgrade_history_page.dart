@@ -9,6 +9,7 @@ import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/core/widgets/pagination_bar.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
+import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 
 /// 设备升级历史页（需求 16：OTA 四卡片 Hub 的"升级历史"入口）
 ///
@@ -176,7 +177,7 @@ class _UpgradeHistoryPageState extends State<UpgradeHistoryPage> {
         elevation: 0,
         scrolledUnderElevation: 0.5,
         backgroundColor: AppColor.surfaceContainer(context),
-        foregroundColor: AppColor.textPrimary(context),
+        foregroundColor: AppColors.textPrimary,
       ),
       body: _buildBody(context, l10n),
     );
@@ -184,7 +185,7 @@ class _UpgradeHistoryPageState extends State<UpgradeHistoryPage> {
 
   Widget _buildBody(BuildContext context, AppLocalizations l10n) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const PageSkeleton();
     }
     if (_error != null && _items.isEmpty) {
       return Center(

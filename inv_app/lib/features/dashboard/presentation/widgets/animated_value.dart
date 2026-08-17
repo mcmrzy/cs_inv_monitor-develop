@@ -159,7 +159,7 @@ class TrendValue extends StatelessWidget {
     IconData trendIcon;
 
     if (isNeutral) {
-      trendColor = AppColors.textSecondary;
+      trendColor = AppColor.textSecondary(context);
       trendIcon = Icons.trending_flat;
     } else if (isPositive) {
       trendColor = isPositiveGood ? AppColors.success : AppColors.error;

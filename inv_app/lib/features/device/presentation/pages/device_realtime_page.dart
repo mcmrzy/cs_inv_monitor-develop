@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
+import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/realtime_data_service.dart';
 import 'package:inv_app/core/services/connection_mode_service.dart';
@@ -41,6 +43,16 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
   bool _apiUnavailable = false;
   bool _isLocalMode = false;
 
+  /// 遥测数据时间戳（用于滞后提示；null 表示未知）
+  DateTime? _dataUpdatedAt;
+
+  /// 周期性刷新滞后状态：设备离线后数据不再更新，
+  /// 需要定时器驱动 UI 进入"数据滞后"态
+  Timer? _staleRefreshTimer;
+
+  /// 超过该时长未更新的遥测数据视为滞后
+  static const Duration _staleThreshold = Duration(minutes: 5);
+
   // 分组定义（颜色和图标）
   static const _groupStyles = {
     'ac_params': {'icon': Icons.bolt_rounded, 'color': AppColors.purple},
@@ -59,6 +71,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
     },
     'device_info': {
       'icon': Icons.device_hub_rounded,
+      // 静态映射无 BuildContext，保留浅色固定值（主题色统一入口见 AppColor）
       'color': AppColors.textSecondary,
     },
     'control_cmd': {'icon': Icons.tune_rounded, 'color': AppColors.errorLight},
@@ -159,6 +172,12 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
     _subscribeMqttData();
     _listenOnlineStatus();
     _fetchDeviceDetail();
+    // 每 30 秒刷新一次，保证数据停更后滞后提示能及时出现
+    _staleRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted && _dataUpdatedAt != null) {
+        setState(() {});
+      }
+    });
   }
 
   /// 检测本地模式并启动 bloc 本地轮询（含逆变器连接监控）
@@ -208,6 +227,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
     }
     _statusSub?.cancel();
     _realtimeSub?.cancel();
+    _staleRefreshTimer?.cancel();
     try {
       getIt<RealtimeDataService>().stopPolling(widget.sn);
     } catch (_) {}
@@ -267,6 +287,16 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
         setState(() {
           // 合并 API 数据到现有数据（MQTT 实时数据优先）
           _realtimeData.addAll(flatData);
+          // 提取遥测时间戳（后端字段兼容 updated_at / data_time）
+          final updatedAtStr = (data['updated_at'] ??
+                  data['data_time'] ??
+                  realtimeRaw['updated_at'])
+              as String?;
+          final parsed =
+              updatedAtStr == null ? null : DateTime.tryParse(updatedAtStr);
+          if (parsed != null) {
+            _dataUpdatedAt = parsed;
+          }
           // 始终使用 API 返回的字段配置（比默认更完整）
           if (fields.isNotEmpty) {
             _modelFields = fields;
@@ -311,6 +341,9 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
           final newMqttData = _inverterToFlatMap(cached);
           _realtimeData.addAll(newMqttData);
           _hasMqttData = true;
+          if (cached.updatedAt != null) {
+            _dataUpdatedAt = cached.updatedAt;
+          }
           if (_modelFields.isEmpty) {
             _modelFields = _buildDefaultModelFields();
           }
@@ -334,6 +367,9 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
             final newMqttData = _inverterToFlatMap(rt);
             _realtimeData.addAll(newMqttData);
             _hasMqttData = true;
+            if (rt.updatedAt != null) {
+              _dataUpdatedAt = rt.updatedAt;
+            }
             if (_apiUnavailable) {
               _error = null;
             }
@@ -690,7 +726,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
           elevation: 0,
           scrolledUnderElevation: 0.5,
           backgroundColor: AppColor.surfaceContainer(context),
-          foregroundColor: AppColors.textPrimary,
+          foregroundColor: AppColor.textPrimary(context),
           actions: [
             IconButton(
               icon: const Icon(Icons.refresh_rounded),
@@ -702,7 +738,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
           ],
         ),
         body: _loading
-            ? const Center(child: CircularProgressIndicator())
+            ? const PageSkeleton(cardCount: 4)
             : _error != null
                 ? _buildError()
                 : _buildContent(),
@@ -740,6 +776,8 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
         padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 40.h),
         children: [
           if (_apiUnavailable && _hasMqttData) _buildMqttFallbackBanner(),
+          // 数据滞后提示：设备离线时陈旧数据不再被误当实时值
+          _buildStaleDataBanner(),
           // 顶部状态卡片
           _buildStatusCard(),
           SizedBox(height: 12.h),
@@ -756,6 +794,44 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
           // 动态分组
           ...groups.entries
               .map((entry) => _buildGroupCard(entry.key, entry.value)),
+        ],
+      ),
+    );
+  }
+
+  /// 数据滞后提示：遥测时间戳超过阈值时展示，
+  /// 避免设备离线时用户把陈旧功率/SOC 等数值当实时值
+  Widget _buildStaleDataBanner() {
+    final updatedAt = _dataUpdatedAt;
+    if (updatedAt == null) return const SizedBox.shrink();
+    final stale = DateTime.now().difference(updatedAt.toLocal()) >
+        _staleThreshold;
+    if (!stale) return const SizedBox.shrink();
+
+    final l10n = AppLocalizations.of(context)!;
+    final timeStr = DateFormat('HH:mm:ss').format(updatedAt.toLocal());
+    return Container(
+      margin: EdgeInsets.only(bottom: 12.h),
+      padding: EdgeInsets.all(12.w),
+      decoration: BoxDecoration(
+        color: AppColors.warning.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(10.r),
+        border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.hourglass_bottom_rounded,
+            size: 18.sp,
+            color: AppColors.warning,
+          ),
+          SizedBox(width: 8.w),
+          Expanded(
+            child: Text(
+              l10n.str('realtime_data_stale', {'time': timeStr}),
+              style: TextStyle(fontSize: 12.sp, color: AppColors.warning),
+            ),
+          ),
         ],
       ),
     );
@@ -915,7 +991,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
                 style: TextStyle(
                   fontSize: 14.sp,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
+                  color: AppColor.textPrimary(context),
                 ),
               ),
               const Spacer(),
@@ -930,7 +1006,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
               SizedBox(width: 4.w),
               Text(
                 '/100',
-                style: TextStyle(fontSize: 12.sp, color: AppColors.textHint),
+                style: TextStyle(fontSize: 12.sp, color: AppColor.textHint(context)),
               ),
               SizedBox(width: 8.w),
               _healthChip(
@@ -962,7 +1038,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
                 Expanded(
                   child: _healthChip(
                     '${l10n.str('health_work_time')}: $workHours${l10n.str('health_hours')}',
-                    AppColors.textSecondary,
+                    AppColor.textSecondary(context),
                     icon: Icons.schedule_rounded,
                   ),
                 ),
@@ -1066,14 +1142,14 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
                     style: TextStyle(
                       fontSize: 14.sp,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
+                      color: AppColor.textPrimary(context),
                     ),
                   ),
                   SizedBox(height: 2.h),
                   Text(
                     l10n.settingsEntryDesc,
                     style:
-                        TextStyle(fontSize: 12.sp, color: AppColors.textHint),
+                        TextStyle(fontSize: 12.sp, color: AppColor.textHint(context)),
                   ),
                 ],
               ),
@@ -1081,7 +1157,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
             Icon(
               Icons.chevron_right_rounded,
               size: 20.sp,
-              color: AppColors.textHint,
+              color: AppColor.textHint(context),
             ),
           ],
         ),
@@ -1094,7 +1170,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
     final protocolVersion = _realtimeData['protocol_version'];
     final quality = decodeTelemetryQuality(_realtimeData['quality_flags']);
     final qualityColor = quality.isNormal == null
-        ? AppColors.textHint
+        ? AppColor.textHint(context)
         : quality.isNormal!
             ? AppColors.success
             : AppColors.warning;
@@ -1134,7 +1210,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
                 style: TextStyle(
                   fontSize: 14.sp,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
+                  color: AppColor.textPrimary(context),
                 ),
               ),
             ],
@@ -1161,7 +1237,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
           SizedBox(height: 12.h),
           Text(
             l10n.str('telemetry_data_quality'),
-            style: TextStyle(fontSize: 12.sp, color: AppColors.textHint),
+            style: TextStyle(fontSize: 12.sp, color: AppColor.textHint(context)),
           ),
           SizedBox(height: 4.h),
           Text(
@@ -1183,7 +1259,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
       children: [
         Text(
           label,
-          style: TextStyle(fontSize: 12.sp, color: AppColors.textHint),
+          style: TextStyle(fontSize: 12.sp, color: AppColor.textHint(context)),
         ),
         SizedBox(height: 3.h),
         Text(
@@ -1191,7 +1267,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
           style: TextStyle(
             fontSize: 14.sp,
             fontWeight: FontWeight.w600,
-            color: AppColors.textPrimary,
+            color: AppColor.textPrimary(context),
           ),
         ),
       ],
@@ -1228,14 +1304,14 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
                     style: TextStyle(
                       fontSize: 14.sp,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
+                      color: AppColor.textPrimary(context),
                     ),
                   ),
                   SizedBox(height: 2.h),
                   Text(
                     AppLocalizations.of(context)!.protocolTelemetryDesc,
                     style:
-                        TextStyle(fontSize: 12.sp, color: AppColors.textHint),
+                        TextStyle(fontSize: 12.sp, color: AppColor.textHint(context)),
                   ),
                 ],
               ),
@@ -1243,7 +1319,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
             Icon(
               Icons.chevron_right_rounded,
               size: 20.sp,
-              color: AppColors.textHint,
+              color: AppColor.textHint(context),
             ),
           ],
         ),
@@ -1283,13 +1359,13 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
                   style: TextStyle(
                     fontSize: 14.sp,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
+                    color: AppColor.textPrimary(context),
                   ),
                 ),
               ],
             ),
           ),
-          const Divider(height: 1, color: AppColors.divider),
+          Divider(height: 1, color: AppColor.divider(context)),
           // 字段列表
           ...fields.map((field) => _buildFieldRow(field)),
         ],
@@ -1308,7 +1384,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
         children: [
           Text(
             _displayName(field),
-            style: TextStyle(fontSize: 13.sp, color: AppColors.textSecondary),
+            style: TextStyle(fontSize: 13.sp, color: AppColor.textSecondary(context)),
           ),
           Row(
             mainAxisSize: MainAxisSize.min,
@@ -1318,14 +1394,14 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
                 style: TextStyle(
                   fontSize: 14.sp,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
+                  color: AppColor.textPrimary(context),
                 ),
               ),
               if (field.unit.isNotEmpty) ...[
                 SizedBox(width: 4.w),
                 Text(
                   field.unit,
-                  style: TextStyle(fontSize: 11.sp, color: AppColors.textHint),
+                  style: TextStyle(fontSize: 11.sp, color: AppColor.textHint(context)),
                 ),
               ],
             ],

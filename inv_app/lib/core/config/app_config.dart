@@ -1,16 +1,18 @@
-// 环境配置：修改 apiBaseUrl 的 defaultValue 切换环境
-// 模拟器：http://localhost:8888/api/v1 (经 API Gateway)
-// 真机：  http://192.168.8.57:8888/api/v1 (电脑局域网 IP，经 API Gateway)
-// 生产环境（构建时注入）: --dart-define=API_BASE_URL=https://api.jiuxiaoyw.online/api/v1
+// 环境配置：本地开发时通过 --dart-define=API_BASE_URL 注入开发环境地址
+// 模拟器：--dart-define=API_BASE_URL=http://localhost:8888/api/v1 (经 API Gateway)
+// 真机：  --dart-define=API_BASE_URL=http://192.168.8.57:8888/api/v1 (电脑局域网 IP，经 API Gateway)
+// 生产环境（默认值，无需注入）: https://api.jiuxiaoyw.online/api/v1
 //                         --dart-define=FRONTEND_BASE_URL=https://www.jiuxiaoyw.online
 class AppConfig {
   static const String appName = '辰烁光伏';
   static const String version = '1.0.0';
   static const int versionCode = 1; // 与 pubspec.yaml 中的 build number 一致
 
+  // 默认值必须是生产 https 地址：避免构建时漏注入 --dart-define
+  // 导致登录密码/JWT 等凭据经明文 HTTP 传输
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://192.168.8.57:8888/api/v1',
+    defaultValue: 'https://api.jiuxiaoyw.online/api/v1',
   );
 
   /// 管理后台（Web）外部访问地址，用于邀请链接等分享场景；

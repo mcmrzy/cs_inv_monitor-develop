@@ -5,6 +5,7 @@ import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/features/ota/presentation/bloc/ota_bloc.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
+import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 
 class OTADetailPage extends StatefulWidget {
   final String deviceSN;
@@ -79,7 +80,7 @@ class _OTADetailPageState extends State<OTADetailPage> {
       case 'upgrading':
         return AppColors.primary;
       default:
-        return AppColors.textHint;
+        return AppColor.textHint(context);
     }
   }
 
@@ -152,7 +153,7 @@ class _OTADetailPageState extends State<OTADetailPage> {
           }
 
           if (state is OTALoading) {
-            return const Center(child: CircularProgressIndicator());
+            return const PageSkeleton();
           }
 
           return Center(child: Text(l10n.loadingData));
@@ -200,13 +201,13 @@ class _OTADetailPageState extends State<OTADetailPage> {
                   style: TextStyle(
                     fontSize: 14.sp,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
+                    color: AppColor.textPrimary(context),
                   ),
                 ),
                 SizedBox(height: 2.h),
                 Text(
                   widget.deviceSN,
-                  style: TextStyle(fontSize: 12.sp, color: AppColors.textHint),
+                  style: TextStyle(fontSize: 12.sp, color: AppColor.textHint(context)),
                 ),
               ],
             ),
@@ -262,7 +263,7 @@ class _OTADetailPageState extends State<OTADetailPage> {
             style: TextStyle(
               fontSize: 24.sp,
               fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
+              color: AppColor.textPrimary(context),
             ),
           ),
         ],
@@ -301,7 +302,7 @@ class _OTADetailPageState extends State<OTADetailPage> {
           } else if (isCurrent) {
             stepColor = AppColors.primary;
           } else {
-            stepColor = AppColors.textHint;
+            stepColor = AppColor.textHint(context);
           }
 
           return Row(
@@ -335,7 +336,7 @@ class _OTADetailPageState extends State<OTADetailPage> {
                     fontSize: 13.sp,
                     fontWeight: isCurrent ? FontWeight.w600 : FontWeight.w400,
                     color:
-                        isPending ? AppColors.textHint : AppColors.textPrimary,
+                        isPending ? AppColor.textHint(context) : AppColor.textPrimary(context),
                   ),
                 ),
               ),
@@ -360,10 +361,7 @@ class _OTADetailPageState extends State<OTADetailPage> {
       width: double.infinity,
       height: 48.h,
       child: OutlinedButton(
-        onPressed: () {
-          context.read<OtaBloc>().add(const OTAProgressStopPoll());
-          Navigator.of(context).pop();
-        },
+        onPressed: () => _confirmExitWhileUpgrading(l10n),
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.error,
           side: const BorderSide(color: AppColors.error),
@@ -371,11 +369,38 @@ class _OTADetailPageState extends State<OTADetailPage> {
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
         ),
         child: Text(
-          l10n.cancelUpgrade,
+          // 设备协议无取消命令：退出页面仅停止本地轮询，升级仍在后台进行，
+          // 文案如实表达语义，避免用户误以为已取消升级
+          l10n.str('ota_exit_page'),
           style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600),
         ),
       ),
     );
+  }
+
+  /// 退出前二次确认：提示升级不会被中断
+  Future<void> _confirmExitWhileUpgrading(AppLocalizations l10n) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.str('ota_exit_page')),
+        content: Text(l10n.str('ota_exit_page_hint')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l10n.confirm),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      context.read<OtaBloc>().add(const OTAProgressStopPoll());
+      Navigator.of(context).pop();
+    }
   }
 
   Widget _buildCompleteCard(AppLocalizations l10n) {
@@ -407,13 +432,13 @@ class _OTADetailPageState extends State<OTADetailPage> {
             style: TextStyle(
               fontSize: 20.sp,
               fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
+              color: AppColor.textPrimary(context),
             ),
           ),
           SizedBox(height: 8.h),
           Text(
             l10n.firmwareUpdatedSuccess,
-            style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary),
+            style: TextStyle(fontSize: 14.sp, color: AppColor.textSecondary(context)),
           ),
           SizedBox(height: 24.h),
           SizedBox(
@@ -469,13 +494,13 @@ class _OTADetailPageState extends State<OTADetailPage> {
             style: TextStyle(
               fontSize: 20.sp,
               fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
+              color: AppColor.textPrimary(context),
             ),
           ),
           SizedBox(height: 8.h),
           Text(
             l10n.translateError(state.message),
-            style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary),
+            style: TextStyle(fontSize: 14.sp, color: AppColor.textSecondary(context)),
             textAlign: TextAlign.center,
           ),
           SizedBox(height: 24.h),

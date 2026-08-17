@@ -163,7 +163,7 @@ class _AboutPageState extends State<AboutPage> {
             SizedBox(height: 4.h),
             Text(
               '${l10n.versionNumber}: ${AppConfig.version}',
-              style: TextStyle(fontSize: 13.sp, color: AppColors.textHint),
+              style: TextStyle(fontSize: 13.sp, color: AppColor.textHint(context)),
             ),
           ],
         ),
@@ -216,7 +216,7 @@ class _AboutPageState extends State<AboutPage> {
                         {'version': AppConfig.version},
                       ),
                       style:
-                          TextStyle(fontSize: 13.sp, color: AppColors.textHint),
+                          TextStyle(fontSize: 13.sp, color: AppColor.textHint(context)),
                     ),
                     if (info.changelog.isNotEmpty) ...[
                       SizedBox(height: 12.h),
@@ -233,7 +233,7 @@ class _AboutPageState extends State<AboutPage> {
                         style: TextStyle(
                           fontSize: 12.sp,
                           height: 1.5,
-                          color: AppColors.textSecondary,
+                          color: AppColor.textSecondary(context),
                         ),
                       ),
                     ],
@@ -245,7 +245,7 @@ class _AboutPageState extends State<AboutPage> {
                         '${l10n.downloadProgress} ${(_downloadProgress * 100).toStringAsFixed(0)}%',
                         style: TextStyle(
                           fontSize: 12.sp,
-                          color: AppColors.textHint,
+                          color: AppColor.textHint(context),
                         ),
                       ),
                     ],
@@ -309,7 +309,7 @@ class _AboutPageState extends State<AboutPage> {
             SizedBox(height: 8.h),
             Text(
               info.downloadUrl,
-              style: TextStyle(fontSize: 11.sp, color: AppColors.textHint),
+              style: TextStyle(fontSize: 11.sp, color: AppColor.textHint(context)),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
@@ -356,6 +356,8 @@ class _AboutPageState extends State<AboutPage> {
       await updateService.downloadAndInstall(
         info.downloadUrl,
         fileName,
+        expectedSha256: info.fileSha256,
+        expectedMd5: info.fileMd5,
         cancelToken: _cancelToken,
         onProgress: (progress) {
           setState(() => _downloadProgress = progress);
@@ -516,7 +518,7 @@ class _AboutPageState extends State<AboutPage> {
           Center(
             child: Text(
               l10n.copyright,
-              style: TextStyle(fontSize: 12.sp, color: AppColors.textHint),
+              style: TextStyle(fontSize: 12.sp, color: AppColor.textHint(context)),
             ),
           ),
         ],

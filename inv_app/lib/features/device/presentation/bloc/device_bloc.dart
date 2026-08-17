@@ -7,11 +7,9 @@ import 'package:inv_app/core/errors/failures.dart';
 import 'package:inv_app/core/services/realtime_data_service.dart';
 import 'package:inv_app/core/services/local_communication_service.dart';
 import 'package:inv_app/core/services/connection_mode_service.dart';
-import 'package:inv_app/core/services/offline_cache_service.dart';
 import 'package:inv_app/core/services/data_cache_service.dart';
 import 'package:inv_app/core/services/inverter_connection_monitor.dart';
 import 'package:inv_app/core/entities/inverter_data.dart';
-import 'package:inv_app/core/entities/offline_action.dart';
 import 'package:inv_app/core/services/ble/ble_device_manager.dart';
 import 'package:inv_app/core/services/offline/offline_op_log_store.dart';
 import 'package:inv_app/core/services/service_locator.dart';
@@ -26,7 +24,6 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
   final RealtimeDataService realtimeDataService; // 用于远程实时数据
   final LocalCommunicationService? localCommunicationService;
   final ConnectionModeService? connectionModeService;
-  final OfflineCacheService? offlineCacheService;
   final DataCacheService? dataCacheService;
   final BleDeviceKeyStore? bleKeyStore;
   final OfflineOpLogStore? offlineLogStore;
@@ -43,7 +40,6 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     required this.realtimeDataService,
     this.localCommunicationService,
     this.connectionModeService,
-    this.offlineCacheService,
     this.dataCacheService,
     this.bleKeyStore,
     this.offlineLogStore,
@@ -247,30 +243,22 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
         await localCommunicationService!.connect(_localPollIP!);
         await localCommunicationService!
             .sendCommand(event.cmdType, event.params);
-        if (offlineCacheService != null) {
-          await offlineCacheService!.saveAction(
-            OfflineAction(
-              id: DateTime.now().millisecondsSinceEpoch.toString(),
-              type: 'control',
-              sn: event.sn,
-              data: {'cmd_type': event.cmdType, 'params': event.params},
-              timestamp: DateTime.now(),
-            ),
-          );
-        }
+        // 记录操作日志（op-log 路线：仅记录不重放，
+        // 避免联网后控制命令被二次下发）
+        await _recordOfflineOpLog(
+          sn: event.sn,
+          action: 'control',
+          params: {'cmd_type': event.cmdType, 'params': event.params},
+          result: 'ok',
+        );
         emit(const DeviceControlSuccess(message: 'Command sent'));
       } catch (e) {
-        if (offlineCacheService != null) {
-          await offlineCacheService!.saveAction(
-            OfflineAction(
-              id: DateTime.now().millisecondsSinceEpoch.toString(),
-              type: 'control',
-              sn: event.sn,
-              data: {'cmd_type': event.cmdType, 'params': event.params},
-              timestamp: DateTime.now(),
-            ),
-          );
-        }
+        await _recordOfflineOpLog(
+          sn: event.sn,
+          action: 'control',
+          params: {'cmd_type': event.cmdType, 'params': event.params},
+          result: 'failed',
+        );
         emit(DeviceError(message: e.toString()));
       }
       return;
@@ -298,30 +286,21 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
         await localCommunicationService!.connect(_localPollIP!);
       }
       await localCommunicationService!.updateParams(event.params);
-      if (offlineCacheService != null) {
-        await offlineCacheService!.saveAction(
-          OfflineAction(
-            id: DateTime.now().millisecondsSinceEpoch.toString(),
-            type: 'param_update',
-            sn: event.sn,
-            data: event.params,
-            timestamp: DateTime.now(),
-          ),
-        );
-      }
+      // 记录操作日志（op-log 路线：仅记录不重放）
+      await _recordOfflineOpLog(
+        sn: event.sn,
+        action: 'param_update',
+        params: event.params,
+        result: 'ok',
+      );
       emit(DeviceParamsUpdateSuccess());
     } catch (e) {
-      if (offlineCacheService != null) {
-        await offlineCacheService!.saveAction(
-          OfflineAction(
-            id: DateTime.now().millisecondsSinceEpoch.toString(),
-            type: 'param_update',
-            sn: event.sn,
-            data: event.params,
-            timestamp: DateTime.now(),
-          ),
-        );
-      }
+      await _recordOfflineOpLog(
+        sn: event.sn,
+        action: 'param_update',
+        params: event.params,
+        result: 'failed',
+      );
       emit(DeviceError(message: e.toString()));
     }
   }
@@ -361,6 +340,8 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
               opTime: DateTime.now(),
             ),
           );
+          // 联动删除本地快照，避免离网模式展示已解绑的设备
+          await localCache?.deleteDevice(event.sn);
         } catch (_) {
           // 本地副作用失败不阻塞解绑结果
         }
@@ -444,7 +425,7 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     _localPollTimer?.cancel();
     _localPollIP = event.deviceIP;
 
-    // 启动逆变器连接监控：30秒后检测 AC 电流/功率，无响应则自动断开热点
+    // 启动逆变器连接监控：30秒后检测通信应答，持续无响应则自动断开热点
     _connectionMonitor.start(
       onAutoDisconnected: () {
         if (!isClosed) {
@@ -460,11 +441,16 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
         final rawData = await localCommunicationService!.getRealtimeData();
         final realtime = InverterRealtime.fromJson(rawData);
         if (!isClosed) {
-          // 将实时数据喂给连接监控器检测 AC 输出
+          // 轮询成功：喂给监控器作为通信应答正常的信号
           _connectionMonitor.feedRealtime(realtime);
           add(DeviceLocalRealtimeUpdate(realtime));
         }
-      } catch (_) {}
+      } catch (_) {
+        // 轮询失败：喂失败信号，设备真正无响应时由监控器累计并自动断开
+        if (!isClosed) {
+          _connectionMonitor.feedFailure();
+        }
+      }
     });
   }
 
@@ -503,8 +489,8 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     _localPollIP = null;
     _connectionMonitor.stop();
 
-    // 切换回远程模式
-    connectionModeService?.switchToRemote();
+    // 切换回远程模式（系统兜底切换：不置手动锁，保留断网自动切本地的能力）
+    connectionModeService?.switchToRemote(byUser: false);
     localCommunicationService?.disconnect();
 
     emit(
@@ -532,6 +518,34 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     }
   }
 
+  /// 记录本地直连操作日志（op-log 路线：UUID 幂等，
+  /// 联网后由 OfflineLogSyncService 上报）。
+  /// 仅记录不重放：控制/参数命令已直发设备，
+  /// 不会在联网后经云端再次下发（避免双重执行）
+  Future<void> _recordOfflineOpLog({
+    required String sn,
+    required String action,
+    required Map<String, dynamic> params,
+    required String result,
+  }) async {
+    try {
+      final logStore = offlineLogStore ?? getIt<OfflineOpLogStore>();
+      await logStore.add(
+        OfflineOpLog(
+          logId: newOfflineLogId(),
+          deviceSn: sn,
+          action: action,
+          params: params,
+          result: result,
+          channel: 'wifi_ap',
+          opTime: DateTime.now(),
+        ),
+      );
+    } catch (_) {
+      // 日志记录失败不影响操作本身
+    }
+  }
+
   Future<void> _onLocalParamsUpdateRequested(
     DeviceLocalParamsUpdateRequested event,
     Emitter<DeviceState> emit,
@@ -543,28 +557,23 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     try {
       await localCommunicationService!.connect(event.deviceIP);
       await localCommunicationService!.updateParams(event.params);
-      if (offlineCacheService != null && _activeSN != null) {
-        await offlineCacheService!.saveAction(
-          OfflineAction(
-            id: DateTime.now().millisecondsSinceEpoch.toString(),
-            type: 'param_update',
-            sn: _activeSN ?? '',
-            data: event.params,
-            timestamp: DateTime.now(),
-          ),
+      // 记录操作日志（op-log 路线：仅记录不重放）
+      if (_activeSN != null) {
+        await _recordOfflineOpLog(
+          sn: _activeSN!,
+          action: 'param_update',
+          params: event.params,
+          result: 'ok',
         );
       }
       emit(DeviceParamsUpdateSuccess());
     } catch (e) {
-      if (offlineCacheService != null && _activeSN != null) {
-        await offlineCacheService!.saveAction(
-          OfflineAction(
-            id: DateTime.now().millisecondsSinceEpoch.toString(),
-            type: 'param_update',
-            sn: _activeSN ?? '',
-            data: event.params,
-            timestamp: DateTime.now(),
-          ),
+      if (_activeSN != null) {
+        await _recordOfflineOpLog(
+          sn: _activeSN!,
+          action: 'param_update',
+          params: event.params,
+          result: 'failed',
         );
       }
       emit(DeviceError(message: e.toString()));

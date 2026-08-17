@@ -164,6 +164,17 @@ class OfflineOpLogStore {
     await _updateStatus(logIds, 'syncing');
   }
 
+  /// 启动时把僵死的 syncing 日志恢复为 pending：
+  /// markSyncing 后若进程被杀/ack 丢失，日志会停在 syncing，
+  /// 而 pending() 只查 pending，不恢复则永久不可重试
+  Future<void> resetSyncingToPending() async {
+    final db = await _database;
+    await db.rawUpdate(
+      "UPDATE local_op_logs SET sync_status = 'pending' "
+      "WHERE sync_status = 'syncing'",
+    );
+  }
+
   Future<void> markSynced(List<String> logIds) async {
     await _updateStatus(logIds, 'synced');
   }
@@ -207,5 +218,11 @@ class OfflineOpLogStore {
         )
       )
     ''');
+  }
+
+  /// 清空全部操作日志（登出时调用，隐私：不残留上一账号的离线操作记录）
+  Future<void> clearAll() async {
+    final db = await _database;
+    await db.delete('local_op_logs');
   }
 }

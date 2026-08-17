@@ -55,7 +55,7 @@ class StationRankingList extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 15.sp,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
+                  color: AppColor.textPrimary(context),
                 ),
               ),
             ],
@@ -71,7 +71,7 @@ class StationRankingList extends StatelessWidget {
               const Color(0xFFC0C0C0), // 银色
               const Color(0xFFCD7F32), // 铜色
               AppColors.primary,
-              AppColors.textHint,
+              AppColor.textHint(context),
             ];
             final color = colors[index % colors.length];
 
@@ -113,7 +113,7 @@ class StationRankingList extends StatelessWidget {
                       station.stationName,
                       style: TextStyle(
                         fontSize: 13.sp,
-                        color: AppColors.textPrimary,
+                        color: AppColor.textPrimary(context),
                         fontWeight: FontWeight.w500,
                       ),
                       overflow: TextOverflow.ellipsis,
@@ -153,7 +153,7 @@ class StationRankingList extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 12.sp,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
+                        color: AppColor.textPrimary(context),
                       ),
                       textAlign: TextAlign.right,
                       overflow: TextOverflow.ellipsis,

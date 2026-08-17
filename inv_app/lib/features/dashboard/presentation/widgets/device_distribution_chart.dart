@@ -58,7 +58,7 @@ class DeviceDistributionChart extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 15.sp,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
+                  color: AppColor.textPrimary(context),
                 ),
               ),
             ],
@@ -90,14 +90,14 @@ class DeviceDistributionChart extends StatelessWidget {
                                 style: TextStyle(
                                   fontSize: 22.sp,
                                   fontWeight: FontWeight.w800,
-                                  color: AppColors.textPrimary,
+                                  color: AppColor.textPrimary(context),
                                 ),
                               ),
                               Text(
                                 '${l10n.unitDevices}${l10n.deviceLabel}',
                                 style: TextStyle(
                                   fontSize: 10.sp,
-                                  color: AppColors.textHint,
+                                  color: AppColor.textHint(context),
                                 ),
                               ),
                             ],
@@ -111,14 +111,14 @@ class DeviceDistributionChart extends StatelessWidget {
                             Icon(
                               Icons.devices_rounded,
                               size: 32.w,
-                              color: AppColors.textHint,
+                              color: AppColor.textHint(context),
                             ),
                             SizedBox(height: 4.h),
                             Text(
                               l10n.noDevicesYet,
                               style: TextStyle(
                                 fontSize: 12.sp,
-                                color: AppColors.textHint,
+                                color: AppColor.textHint(context),
                               ),
                             ),
                           ],
@@ -235,7 +235,7 @@ class DeviceDistributionChart extends StatelessWidget {
               Text(
                 label,
                 style:
-                    TextStyle(fontSize: 13.sp, color: AppColors.textSecondary),
+                    TextStyle(fontSize: 13.sp, color: AppColor.textSecondary(context)),
               ),
               SizedBox(height: 2.h),
               LinearProgressIndicator(
@@ -257,12 +257,12 @@ class DeviceDistributionChart extends StatelessWidget {
               style: TextStyle(
                 fontSize: 14.sp,
                 fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
+                color: AppColor.textPrimary(context),
               ),
             ),
             Text(
               '$percent%',
-              style: TextStyle(fontSize: 11.sp, color: AppColors.textHint),
+              style: TextStyle(fontSize: 11.sp, color: AppColor.textHint(context)),
             ),
           ],
         ),

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -34,6 +36,9 @@ class _OTAPageState extends State<OTAPage> {
   final Map<int, double> _downloadingProgress = {};
   final Set<int> _downloadingIds = {};
 
+  /// 下载进度订阅（页面生命周期内单一订阅，dispose 时 cancel）
+  StreamSubscription<DownloadProgressEvent>? _progressSub;
+
   OtaState? _cachedState;
   bool _triggering = false;
   final Set<int> _checkedDownloadIds = {};
@@ -42,6 +47,13 @@ class _OTAPageState extends State<OTAPage> {
   void initState() {
     super.initState();
     context.read<OtaBloc>().add(OTACheckRequested(sn: widget.deviceSN));
+    // 单一进度订阅：按 firmwareId 过滤，避免每次点下载新增订阅导致泄漏
+    _progressSub = _downloadService.progressStream.listen((event) {
+      if (!mounted || !_downloadingIds.contains(event.firmwareId)) return;
+      setState(() {
+        _downloadingProgress[event.firmwareId] = event.progress;
+      });
+    });
   }
 
   Future<void> _restoreDownloadState(int firmwareId) async {
@@ -96,6 +108,7 @@ class _OTAPageState extends State<OTAPage> {
 
   @override
   void dispose() {
+    _progressSub?.cancel();
     _downloadService.dispose();
     super.dispose();
   }
@@ -106,18 +119,14 @@ class _OTAPageState extends State<OTAPage> {
     String fileName, {
     int? expectedSize,
     String? expectedSha256,
+    String? targetChip,
+    String? firmwareVersion,
+    String? releaseSignature,
+    int? securityVersion,
   }) async {
     setState(() {
       _downloadingIds.add(firmwareId);
       _downloadingProgress[firmwareId] = 0.0;
-    });
-
-    _downloadService.downloadProgressStream.listen((progress) {
-      if (_downloadingIds.contains(firmwareId) && mounted) {
-        setState(() {
-          _downloadingProgress[firmwareId] = progress;
-        });
-      }
     });
 
     try {
@@ -127,6 +136,11 @@ class _OTAPageState extends State<OTAPage> {
         firmwareId: firmwareId,
         expectedSize: expectedSize,
         expectedSha256: expectedSha256,
+        // 持久化离线升级元数据，支持无网时从已下载列表直接本地升级
+        targetChip: targetChip,
+        version: firmwareVersion,
+        signature: releaseSignature,
+        securityVersion: securityVersion,
       );
       if (mounted) {
         setState(() {
@@ -161,14 +175,12 @@ class _OTAPageState extends State<OTAPage> {
         backgroundColor: AppColor.surfaceContainer(context),
         foregroundColor: AppColor.textPrimary(context),
       ),
-      body: BlocBuilder<OtaBloc, OtaState>(
-        builder: (context, state) {
-          final hasContent =
-              state is OTAUpdateAvailable || state is OTAUpToDate;
-          if (hasContent) {
-            {
-              _cachedState = state;
-            }
+      body: BlocListener<OtaBloc, OtaState>(
+        // 状态副作用（缓存/标志位/Toast）统一放 Listener，
+        // 避免在 build 期间写可变状态导致 UI 竞态
+        listener: (context, state) {
+          if (state is OTAUpdateAvailable || state is OTAUpToDate) {
+            _cachedState = state;
           }
           if (state is OTATriggered ||
               state is OTAProgress ||
@@ -177,54 +189,58 @@ class _OTAPageState extends State<OTAPage> {
           }
           if (state is OTAError && _cachedState != null) {
             _triggering = false;
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) {
-                AppToast.show(context, AppLocalizations.of(context)!.translateError(state.message), type: ToastType.error);
-              }
-            });
-          }
-
-          // 升级进行中或已完成
-          if (state is OTAProgress) {
-            return _buildProgress(state);
-          }
-          if (state is OTAComplete) {
-            return _buildComplete();
-          }
-          if (state is OTATriggered) {
-            return _buildTriggering();
-          }
-
-          if (_cachedState is OTAUpdateAvailable) {
-            return _buildUpdateAvailable(_cachedState as OTAUpdateAvailable);
-          }
-          if (_cachedState is OTAUpToDate) {
-            return _buildUpToDate(_cachedState as OTAUpToDate);
-          }
-          if (state is OTAError) {
-            // 小烁警告动作插画：升级查询失败/离线态（美术路由 C6/ota-failure）
-            return XiaoshuoStatePanel(
-              asset: CsergyAssets.xiaoshuoWarning,
-              title: AppLocalizations.of(context)!.translateError(state.message),
-              message: l10n.loadFailed,
-              size: 176,
-              action: ElevatedButton(
-                onPressed: () {
-                  context
-                      .read<OtaBloc>()
-                      .add(OTACheckRequested(sn: widget.deviceSN));
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                ),
-                child: Text(l10n.retry),
-              ),
+            AppToast.show(
+              context,
+              AppLocalizations.of(context)!.translateError(state.message),
+              type: ToastType.error,
             );
           }
-
-          return _buildSkeletonBody();
         },
+        child: BlocBuilder<OtaBloc, OtaState>(
+          builder: (context, state) {
+            // 升级进行中或已完成
+            if (state is OTAProgress) {
+              return _buildProgress(state);
+            }
+            if (state is OTAComplete) {
+              return _buildComplete();
+            }
+            if (state is OTATriggered) {
+              return _buildTriggering();
+            }
+
+            if (_cachedState is OTAUpdateAvailable) {
+              return _buildUpdateAvailable(_cachedState as OTAUpdateAvailable);
+            }
+            if (_cachedState is OTAUpToDate) {
+              return _buildUpToDate(_cachedState as OTAUpToDate);
+            }
+            if (state is OTAError) {
+              // 小烁警告动作插画：升级查询失败/离线态（美术路由 C6/ota-failure）
+              return XiaoshuoStatePanel(
+                asset: CsergyAssets.xiaoshuoWarning,
+                title:
+                    AppLocalizations.of(context)!.translateError(state.message),
+                message: l10n.loadFailed,
+                size: 176,
+                action: ElevatedButton(
+                  onPressed: () {
+                    context
+                        .read<OtaBloc>()
+                        .add(OTACheckRequested(sn: widget.deviceSN));
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: Text(l10n.retry),
+                ),
+              );
+            }
+
+            return _buildSkeletonBody();
+          },
+        ),
       ),
     );
   }
@@ -319,7 +335,7 @@ class _OTAPageState extends State<OTAPage> {
                         style: TextStyle(
                           fontSize: 14.sp,
                           fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
+                          color: AppColor.textPrimary(context),
                         ),
                       ),
                       SizedBox(height: 2.h),
@@ -327,7 +343,7 @@ class _OTAPageState extends State<OTAPage> {
                         widget.deviceSN,
                         style: TextStyle(
                           fontSize: 12.sp,
-                          color: AppColors.textHint,
+                          color: AppColor.textHint(context),
                         ),
                       ),
                     ],
@@ -373,7 +389,7 @@ class _OTAPageState extends State<OTAPage> {
                       })}${targetChip.isNotEmpty ? ' ($targetChip)' : ''}',
                   style: TextStyle(
                     fontSize: 13.sp,
-                    color: AppColors.textSecondary,
+                    color: AppColor.textSecondary(context),
                   ),
                 ),
                 if (currentVersion.isNotEmpty)
@@ -383,7 +399,7 @@ class _OTAPageState extends State<OTAPage> {
                         })}${targetChip.isNotEmpty ? ' ($targetChip)' : ''}',
                     style: TextStyle(
                       fontSize: 13.sp,
-                      color: AppColors.textHint,
+                      color: AppColor.textHint(context),
                     ),
                   ),
               ],
@@ -410,7 +426,7 @@ class _OTAPageState extends State<OTAPage> {
                       l10n.chipFirmwareVersion,
                       style: TextStyle(
                         fontSize: 12.sp,
-                        color: AppColors.textHint,
+                        color: AppColor.textHint(context),
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -452,7 +468,7 @@ class _OTAPageState extends State<OTAPage> {
                     },
               style: ElevatedButton.styleFrom(
                 backgroundColor:
-                    _triggering ? AppColors.textHint : AppColors.primary,
+                    _triggering ? AppColor.textHint(context) : AppColors.primary,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12.r),
@@ -522,7 +538,7 @@ class _OTAPageState extends State<OTAPage> {
                   ),
                 ),
                 style: TextButton.styleFrom(
-                  foregroundColor: AppColors.textSecondary,
+                  foregroundColor: AppColor.textSecondary(context),
                 ),
               ),
             ),
@@ -614,7 +630,7 @@ class _OTAPageState extends State<OTAPage> {
                         style: TextStyle(
                           fontSize: 14.sp,
                           fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
+                          color: AppColor.textPrimary(context),
                         ),
                       ),
                       SizedBox(height: 2.h),
@@ -622,7 +638,7 @@ class _OTAPageState extends State<OTAPage> {
                         widget.deviceSN,
                         style: TextStyle(
                           fontSize: 12.sp,
-                          color: AppColors.textHint,
+                          color: AppColor.textHint(context),
                         ),
                       ),
                     ],
@@ -668,7 +684,7 @@ class _OTAPageState extends State<OTAPage> {
                   l10n.str('latest_version_label', {'version': mainVersion}),
                   style: TextStyle(
                     fontSize: 13.sp,
-                    color: AppColors.textSecondary,
+                    color: AppColor.textSecondary(context),
                   ),
                 ),
                 if (currentMainVersion.isNotEmpty)
@@ -679,7 +695,7 @@ class _OTAPageState extends State<OTAPage> {
                     ),
                     style: TextStyle(
                       fontSize: 13.sp,
-                      color: AppColors.textHint,
+                      color: AppColor.textHint(context),
                     ),
                   ),
               ],
@@ -703,7 +719,7 @@ class _OTAPageState extends State<OTAPage> {
                     style: TextStyle(
                       fontSize: 13.sp,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
+                      color: AppColor.textPrimary(context),
                     ),
                   ),
                   SizedBox(height: 8.h),
@@ -725,7 +741,7 @@ class _OTAPageState extends State<OTAPage> {
                             '$current → $target',
                             style: TextStyle(
                               fontSize: 12.sp,
-                              color: AppColors.textSecondary,
+                              color: AppColor.textSecondary(context),
                             ),
                           ),
                         ],
@@ -757,7 +773,7 @@ class _OTAPageState extends State<OTAPage> {
                       l10n.currentFirmwareVersion,
                       style: TextStyle(
                         fontSize: 12.sp,
-                        color: AppColors.textHint,
+                        color: AppColor.textHint(context),
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -799,7 +815,7 @@ class _OTAPageState extends State<OTAPage> {
                     style: TextStyle(
                       fontSize: 13.sp,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
+                      color: AppColor.textPrimary(context),
                     ),
                   ),
                   SizedBox(height: 4.h),
@@ -807,7 +823,7 @@ class _OTAPageState extends State<OTAPage> {
                     changelog,
                     style: TextStyle(
                       fontSize: 12.sp,
-                      color: AppColors.textSecondary,
+                      color: AppColor.textSecondary(context),
                     ),
                   ),
                 ],
@@ -829,7 +845,7 @@ class _OTAPageState extends State<OTAPage> {
                     },
               style: ElevatedButton.styleFrom(
                 backgroundColor:
-                    _triggering ? AppColors.textHint : AppColors.primary,
+                    _triggering ? AppColor.textHint(context) : AppColors.primary,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12.r),
@@ -897,7 +913,7 @@ class _OTAPageState extends State<OTAPage> {
                   ),
                 ),
                 style: TextButton.styleFrom(
-                  foregroundColor: AppColors.textSecondary,
+                  foregroundColor: AppColor.textSecondary(context),
                 ),
               ),
             ),
@@ -997,18 +1013,13 @@ class _OTAPageState extends State<OTAPage> {
                 const Spacer(),
                 GestureDetector(
                   onTap: () {
+                    // 路由仅携带 firmware_id，升级元数据由页面按 ID 拉取，
+                    // 避免在 URL query 中传递签名等复杂参数
                     final route = Uri(
                       path: '/ota/${widget.deviceSN}/local',
                       queryParameters: {
                         'ip': '192.168.4.1',
                         'firmware_id': '$firmwareId',
-                        'firmware_url': downloadUrl,
-                        'firmware_file_name': fileName,
-                        'target_chip': targetChip.toLowerCase(),
-                        'firmware_version': firmwareVersion,
-                        'file_sha256': expectedSha256 ?? '',
-                        'security_version': '${securityVersion ?? 0}',
-                        'release_signature': releaseSignature ?? '',
                       },
                     ).toString();
                     context.push(route);
@@ -1075,6 +1086,10 @@ class _OTAPageState extends State<OTAPage> {
                   fileName,
                   expectedSize: expectedSize,
                   expectedSha256: expectedSha256,
+                  targetChip: targetChip,
+                  firmwareVersion: firmwareVersion,
+                  releaseSignature: releaseSignature,
+                  securityVersion: securityVersion,
                 )
             : null,
         style: OutlinedButton.styleFrom(
@@ -1115,7 +1130,7 @@ class _OTAPageState extends State<OTAPage> {
           SizedBox(width: 8.w),
           Text(
             version,
-            style: TextStyle(fontSize: 12.sp, color: AppColors.textSecondary),
+            style: TextStyle(fontSize: 12.sp, color: AppColor.textSecondary(context)),
           ),
         ],
       ),
@@ -1172,7 +1187,7 @@ class _OTAPageState extends State<OTAPage> {
                         style: TextStyle(
                           fontSize: 14.sp,
                           fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
+                          color: AppColor.textPrimary(context),
                         ),
                       ),
                       SizedBox(height: 2.h),
@@ -1180,7 +1195,7 @@ class _OTAPageState extends State<OTAPage> {
                         widget.deviceSN,
                         style: TextStyle(
                           fontSize: 12.sp,
-                          color: AppColors.textHint,
+                          color: AppColor.textHint(context),
                         ),
                       ),
                     ],
@@ -1201,7 +1216,7 @@ class _OTAPageState extends State<OTAPage> {
               child: Text(
                 l10n.str('current_version_label', {'version': currentVersion}),
                 style:
-                    TextStyle(fontSize: 13.sp, color: AppColors.textSecondary),
+                    TextStyle(fontSize: 13.sp, color: AppColor.textSecondary(context)),
               ),
             ),
           ],
@@ -1226,7 +1241,7 @@ class _OTAPageState extends State<OTAPage> {
                       l10n.chipFirmwareVersion,
                       style: TextStyle(
                         fontSize: 12.sp,
-                        color: AppColors.textHint,
+                        color: AppColor.textHint(context),
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -1346,7 +1361,7 @@ class _OTAPageState extends State<OTAPage> {
           SizedBox(height: 16.h),
           Text(
             l10n.sendingUpgradeCommand,
-            style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary),
+            style: TextStyle(fontSize: 14.sp, color: AppColor.textSecondary(context)),
           ),
         ],
       ),
@@ -1373,13 +1388,13 @@ class _OTAPageState extends State<OTAPage> {
             style: TextStyle(
               fontSize: 18.sp,
               fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
+              color: AppColor.textPrimary(context),
             ),
           ),
           SizedBox(height: 8.h),
           Text(
             '${l10n.str('status_prefix')}: ${_localizedStatus(state.status, l10n)}',
-            style: TextStyle(fontSize: 13.sp, color: AppColors.textHint),
+            style: TextStyle(fontSize: 13.sp, color: AppColor.textHint(context)),
           ),
           SizedBox(height: 24.h),
           ClipRRect(
