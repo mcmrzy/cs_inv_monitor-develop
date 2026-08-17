@@ -247,6 +247,36 @@ func (h *OTAHandler) GetFirmware(c *gin.Context) {
 	response.Success(c, fw)
 }
 
+// GetFirmwareInfoForApp APP端本地 OTA 元数据查询（所有登录用户可访问）。
+// 仅返回本地升级所需字段（下载 URL/SHA-256/签名/安全版本等），
+// 供 App 路由仅携带 firmware_id、页面按 ID 拉取元数据，
+// 避免在 URL query 中传递签名等复杂参数。
+func (h *OTAHandler) GetFirmwareInfoForApp(c *gin.Context) {
+	id := parseID(c.Param("id"))
+	if id <= 0 {
+		response.Error(c, 400, "invalid id")
+		return
+	}
+	fw, err := h.otaService.GetFirmware(c.Request.Context(), id)
+	if err != nil {
+		response.Error(c, 404, "固件不存在")
+		return
+	}
+	response.Success(c, gin.H{
+		"firmware_id":       fw.ID,
+		"model":             fw.Model,
+		"target_chip":       fw.TargetChip,
+		"firmware_version":  fw.Version,
+		"main_version":      fw.MainVersion,
+		"download_url":      h.otaService.BuildDownloadURL(fw.FileURL),
+		"file_name":         fw.Model + "_" + fw.Version + ".bin",
+		"file_size":         fw.FileSize,
+		"file_sha256":       fw.FileSHA256,
+		"security_version":  fw.SecurityVersion,
+		"release_signature": fw.ReleaseSignature,
+	})
+}
+
 func (h *OTAHandler) DeleteFirmware(c *gin.Context) {
 	id := parseID(c.Param("id"))
 	if id <= 0 {

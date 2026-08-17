@@ -17,9 +17,12 @@ var offlineLogIDRegex = regexp.MustCompile(`^[0-9a-fA-F-]{8,64}$`)
 
 // offlineActionWhitelist mirrors the App's local op log actions
 // (design doc §3.5): bind/unbind, control commands, set_param, ota.
+// control/param_update 为 App 本地直连（WiFi AP）链路的通用动作名，
+// 携带具体命令/参数在 params 字段。
 var offlineActionWhitelist = map[string]bool{
 	"bind": true, "unbind": true, "power_on": true, "power_off": true,
 	"set_power": true, "set_param": true, "ota": true,
+	"control": true, "param_update": true,
 }
 
 // validOfflineLog validates a single offline log entry.
@@ -34,7 +37,7 @@ func validOfflineLog(log model.OfflineOpLog) bool {
 		return false
 	}
 	switch log.Channel {
-	case "", "cloud", "ble":
+	case "", "cloud", "ble", "wifi_ap":
 	default:
 		return false
 	}
