@@ -1213,6 +1213,8 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 
 			// APP绔帴鍙ｏ紙鎵€鏈夌櫥褰曠敤鎴峰彲璁块棶锛?
 			otaGroup.GET("/check/:sn", deps.OTAHandler.CheckUpdate)
+			// APP端本地 OTA 固件元数据（路由仅传 firmware_id，页面按 ID 拉取）
+			otaGroup.GET("/firmware-info/:id", deps.OTAHandler.GetFirmwareInfoForApp)
 			otaGroup.POST("/trigger", deps.OTAHandler.TriggerOTA)
 			otaGroup.POST("/resend/:sn", deps.OTAHandler.ResendUpgradeCommand)
 			otaGroup.GET("/devices/:sn/status", deps.OTAHandler.GetDeviceOTAStatus)
