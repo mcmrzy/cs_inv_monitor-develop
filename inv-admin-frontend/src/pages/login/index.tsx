@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Form, Input, Button, Typography, Checkbox, App, Space, Alert, Dropdown, Segmented } from 'antd'
+import { Form, Input, Button, Checkbox, App, Space, Alert, Dropdown, Segmented } from 'antd'
 import { UserOutlined, LockOutlined, MailOutlined, PhoneOutlined, SafetyOutlined, CloudOutlined, LineChartOutlined, GlobalOutlined } from '@ant-design/icons'
 import useAuthStore from '@/stores/authStore'
 import useLocaleStore from '@/stores/localeStore'
@@ -604,32 +604,72 @@ const LoginPage: React.FC = () => {
                 </Form>
               )}
 
-              {/* Reset */}
+              {/* Reset（邮箱 / 手机号双方式） */}
               {activeTab === 'reset' && (
-                <Form name="reset" form={resetForm} onFinish={onResetPassword} size="large">
-                  <Form.Item name="email" rules={[{ required: true, message: lang === 'zh' ? '请输入邮箱' : 'Email required' }, { type: 'email', message: t.errEmailFormat }]}>
-                    <Input prefix={<MailOutlined style={{ color: '#94a3b8' }} />} placeholder={t.emailPlaceholder} style={inputStyle} />
-                  </Form.Item>
-                  <Form.Item name="code" rules={[{ required: true, message: lang === 'zh' ? '请输入验证码' : 'Code required' }]}>
-                    <Space.Compact style={{ width: '100%' }}>
-                      <Input prefix={<MailOutlined style={{ color: '#94a3b8' }} />} placeholder={t.code} style={{ ...inputStyle, borderRadius: '10px 0 0 10px' }} />
-                      <CodeButton emailField="email" type="reset" form={resetForm} />
-                    </Space.Compact>
-                  </Form.Item>
-                  <Form.Item name="new_password" rules={[{ required: true, message: lang === 'zh' ? '请输入新密码' : 'New password required' }, { min: 6, message: t.errPwdMin }, { pattern: /^(?=.*[a-zA-Z])(?=.*\d).+$/, message: t.errPwdMin }]}>
-                    <Input.Password prefix={<LockOutlined style={{ color: '#94a3b8' }} />} placeholder={t.newPassword} style={inputStyle} />
-                  </Form.Item>
-                  <Form.Item name="confirm_new_password" dependencies={['new_password']}
-                    rules={[{ required: true, message: lang === 'zh' ? '请确认新密码' : 'Confirm new password' }, ({ getFieldValue }) => ({ validator(_, value) { if (!value || getFieldValue('new_password') === value) return Promise.resolve(); return Promise.reject(new Error(t.errPwdMismatch)) } })]}>
-                    <Input.Password prefix={<LockOutlined style={{ color: '#94a3b8' }} />} placeholder={t.confirmNewPwd} style={inputStyle} />
-                  </Form.Item>
-                  <Form.Item>
-                    <Button type="primary" htmlType="submit" loading={loading} block style={{ height: 56, borderRadius: 10, fontSize: 18, fontWeight: 600, background: 'linear-gradient(135deg, #0D47A1 0%, #1677ff 100%)', border: 'none', boxShadow: '0 2px 8px rgba(22,119,255,0.25)' }}>{t.submitReset}</Button>
-                  </Form.Item>
-                  <div style={{ textAlign: 'center' }}>
+                <div>
+                  <Segmented
+                    block
+                    value={resetChannel}
+                    onChange={(v) => { setResetChannel(v as 'email' | 'phone'); setCountdown(0) }}
+                    options={[
+                      { label: t.resetChannelEmail, value: 'email' },
+                      { label: t.resetChannelPhone, value: 'phone' },
+                    ]}
+                    style={{ marginBottom: 24 }}
+                  />
+                  {resetChannel === 'email' ? (
+                    <Form name="reset" form={resetForm} onFinish={onResetPassword} size="large">
+                      <Form.Item name="email" rules={[{ required: true, message: lang === 'zh' ? '请输入邮箱' : 'Email required' }, { type: 'email', message: t.errEmailFormat }]}>
+                        <Input prefix={<MailOutlined style={{ color: '#94a3b8' }} />} placeholder={t.emailPlaceholder} style={inputStyle} />
+                      </Form.Item>
+                      <Form.Item>
+                        <Space.Compact style={{ width: '100%' }}>
+                          <Form.Item name="code" noStyle rules={[{ required: true, message: lang === 'zh' ? '请输入验证码' : 'Code required' }]}>
+                            <Input prefix={<MailOutlined style={{ color: '#94a3b8' }} />} placeholder={t.code} style={{ ...inputStyle, borderRadius: '10px 0 0 10px' }} />
+                          </Form.Item>
+                          <CodeButton field="email" type="reset" form={resetForm} channel="email" />
+                        </Space.Compact>
+                      </Form.Item>
+                      <Form.Item name="new_password" rules={[{ required: true, message: lang === 'zh' ? '请输入新密码' : 'New password required' }, { min: 6, message: t.errPwdMin }, { pattern: /^(?=.*[a-zA-Z])(?=.*\d).+$/, message: t.errPwdMin }]}>
+                        <Input.Password prefix={<LockOutlined style={{ color: '#94a3b8' }} />} placeholder={t.newPassword} style={inputStyle} />
+                      </Form.Item>
+                      <Form.Item name="confirm_new_password" dependencies={['new_password']}
+                        rules={[{ required: true, message: lang === 'zh' ? '请确认新密码' : 'Confirm new password' }, ({ getFieldValue }) => ({ validator(_, value) { if (!value || getFieldValue('new_password') === value) return Promise.resolve(); return Promise.reject(new Error(t.errPwdMismatch)) } })]}>
+                        <Input.Password prefix={<LockOutlined style={{ color: '#94a3b8' }} />} placeholder={t.confirmNewPwd} style={inputStyle} />
+                      </Form.Item>
+                      <Form.Item>
+                        <Button type="primary" htmlType="submit" loading={loading} block style={{ height: 56, borderRadius: 10, fontSize: 18, fontWeight: 600, background: 'linear-gradient(135deg, #0D47A1 0%, #1677ff 100%)', border: 'none', boxShadow: '0 2px 8px rgba(22,119,255,0.25)' }}>{t.submitReset}</Button>
+                      </Form.Item>
+                    </Form>
+                  ) : (
+                    <Form name="phoneReset" form={phoneResetForm} onFinish={onPhoneResetPassword} size="large">
+                      <Form.Item name="phone" rules={[{ required: true, message: lang === 'zh' ? '请输入手机号' : 'Phone required' }, { pattern: /^1[3-9]\d{9}$/, message: t.errPhoneFormat }]}>
+                        <Input prefix={<PhoneOutlined style={{ color: '#94a3b8' }} />} placeholder={t.phone} style={inputStyle} />
+                      </Form.Item>
+                      <Form.Item>
+                        <Space.Compact style={{ width: '100%' }}>
+                          <Form.Item name="code" noStyle rules={[{ required: true, message: lang === 'zh' ? '请输入验证码' : 'Code required' }]}>
+                            <Input prefix={<SafetyOutlined style={{ color: '#94a3b8' }} />} placeholder={t.code} style={{ ...inputStyle, borderRadius: '10px 0 0 10px' }} />
+                          </Form.Item>
+                          <CodeButton field="phone" type="reset" form={phoneResetForm} channel="phone" />
+                        </Space.Compact>
+                      </Form.Item>
+                      <Form.Item name="new_password" rules={[{ required: true, message: lang === 'zh' ? '请输入新密码' : 'New password required' }, { min: 6, message: t.errPwdMin }, { pattern: /^(?=.*[a-zA-Z])(?=.*\d).+$/, message: t.errPwdMin }]}>
+                        <Input.Password prefix={<LockOutlined style={{ color: '#94a3b8' }} />} placeholder={t.newPassword} style={inputStyle} />
+                      </Form.Item>
+                      <Form.Item name="confirm_new_password" dependencies={['new_password']}
+                        rules={[{ required: true, message: lang === 'zh' ? '请确认新密码' : 'Confirm new password' }, ({ getFieldValue }) => ({ validator(_, value) { if (!value || getFieldValue('new_password') === value) return Promise.resolve(); return Promise.reject(new Error(t.errPwdMismatch)) } })]}>
+                        <Input.Password prefix={<LockOutlined style={{ color: '#94a3b8' }} />} placeholder={t.confirmNewPwd} style={inputStyle} />
+                      </Form.Item>
+                      <Form.Item>
+                        <Button type="primary" htmlType="submit" loading={loading} block style={{ height: 56, borderRadius: 10, fontSize: 18, fontWeight: 600, background: 'linear-gradient(135deg, #0D47A1 0%, #1677ff 100%)', border: 'none', boxShadow: '0 2px 8px rgba(22,119,255,0.25)' }}>{t.submitReset}</Button>
+                      </Form.Item>
+                    </Form>
+                  )}
+                  <div style={{ textAlign: 'center', marginTop: 8 }}>
                     <a onClick={() => setActiveTab('login')} style={{ color: '#1677ff', fontWeight: 500, fontSize: 17 }}>{t.goBack}</a>
                   </div>
-                </Form>
+                </div>
               )}
 
               <div style={{ textAlign: 'center', marginTop: 24 }}>
