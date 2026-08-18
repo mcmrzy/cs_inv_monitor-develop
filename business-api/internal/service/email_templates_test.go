@@ -44,7 +44,7 @@ func TestBuiltinTemplates_全部可渲染(t *testing.T) {
 
 			html, err := RenderEmailEnvelope("标题", body, "页脚说明")
 			require.NoError(t, err)
-			assert.Contains(t, html, "CS-INV")
+			assert.Contains(t, html, "CSERGY")
 			assert.Contains(t, html, "#1677ff")
 		})
 	}

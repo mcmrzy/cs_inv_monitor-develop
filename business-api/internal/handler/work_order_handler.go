@@ -210,6 +210,9 @@ func (h *WorkOrderHandler) Update(c *gin.Context) {
 		response.Error(c, 400, "invalid priority")
 		return
 	}
+	// SQL 占位符共 10 个：$1=id, $2~$8=字段, $9=数据范围(userID), $10=乐观锁版本。
+	// 注意参数个数必须与占位符一一对应，多传会导致 pgx 报
+	// "mismatched param and argument count"，接口直接 500。
 	result, err := h.db.Exec(c.Request.Context(), `UPDATE work_orders SET
 		title=COALESCE(NULLIF($2,''),title),description=COALESCE(NULLIF($3,''),description),
 		status=COALESCE(NULLIF($4,''),status),priority=COALESCE(NULLIF($5,''),priority),
@@ -219,8 +222,13 @@ func (h *WorkOrderHandler) Update(c *gin.Context) {
 		closed_at=CASE WHEN $4='closed' THEN NOW() ELSE closed_at END,
 		lock_version=lock_version+1 WHERE id::text=$1 AND `+workOrderDataScope("work_orders", middleware.GetIsSystemAdmin(c), 9)+`
 		AND ($10::bigint IS NULL OR lock_version=$10)`,
-		c.Param("id"), req.Title, req.Description, req.Status, req.Priority, req.DeviceSN, req.AssignedTo, req.Resolution, middleware.GetUserID(c), middleware.GetUserID(c), req.ExpectedVersion)
+		c.Param("id"), req.Title, req.Description, req.Status, req.Priority, req.DeviceSN, req.AssignedTo, req.Resolution, middleware.GetUserID(c), req.ExpectedVersion)
 	if err != nil {
+		logger.Error("update work order failed",
+			zap.String("id", c.Param("id")),
+			zap.String("status", req.Status),
+			zap.Int64("user_id", middleware.GetUserID(c)),
+			zap.Error(err))
 		response.Error(c, 500, "update work order failed")
 		return
 	}
