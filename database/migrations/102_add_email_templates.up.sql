@@ -1,6 +1,6 @@
 -- 102: 系统邮件模板表（统一品牌化邮件模板管理）
 -- email_templates 存放各邮件类型的「主题 + 内容块」，内容块为 Go template 语法，
--- 渲染时由 business-api 套上统一品牌信封（CS-INV，主色 #1677ff，点缀 #00D4FF）。
+-- 渲染时由 business-api 套上统一品牌信封（CSERGY，主色 #1677ff，点缀 #00D4FF）。
 -- 标准占位变量：{{.Title}} {{.Summary}} {{.Content}} {{.ButtonText}} {{.ButtonURL}} {{.Code}} {{.FooterNote}}
 
 CREATE TABLE IF NOT EXISTS email_templates (
@@ -20,7 +20,7 @@ COMMENT ON COLUMN email_templates.enabled IS '是否启用；禁用时回退内�
 -- 默认模板 seed（与 business-api 内置默认模板保持一致；ON CONFLICT DO NOTHING 防止覆盖已定制内容）
 INSERT INTO email_templates (template_key, subject, html_body, enabled) VALUES
 ('verification_code',
- '【CS-INV】{{.Title}}',
+ '【CSERGY】{{.Title}}',
  $$<p style="margin:0 0 14px 0;font-size:15px;line-height:1.7;color:#3E4A5E;">{{.Summary}}</p>
 {{if .Code}}
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0;">
@@ -36,7 +36,7 @@ INSERT INTO email_templates (template_key, subject, html_body, enabled) VALUES
  TRUE),
 
 ('invitation_email',
- '【CS-INV】邀请加入组织 · {{.OrganizationName}}',
+ '【CSERGY】邀请加入组织 · {{.OrganizationName}}',
  $$<p style="margin:0 0 14px 0;font-size:15px;line-height:1.7;color:#3E4A5E;">{{.Summary}}</p>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:18px 0;background-color:#F7F9FC;border-radius:10px;border-left:4px solid #1677ff;">
     <tr>
@@ -56,7 +56,7 @@ INSERT INTO email_templates (template_key, subject, html_body, enabled) VALUES
  TRUE),
 
 ('welcome_email',
- '【CS-INV】欢迎加入平台',
+ '【CSERGY】欢迎加入平台',
  $$<p style="margin:0 0 14px 0;font-size:15px;line-height:1.7;color:#3E4A5E;">{{.Summary}}</p>
 <p style="margin:0 0 14px 0;font-size:15px;line-height:1.7;color:#3E4A5E;">{{.Content}}</p>
 {{if and .ButtonText .ButtonURL}}
@@ -71,7 +71,7 @@ INSERT INTO email_templates (template_key, subject, html_body, enabled) VALUES
  TRUE),
 
 ('password_reset',
- '【CS-INV】重置密码',
+ '【CSERGY】重置密码',
  $$<p style="margin:0 0 14px 0;font-size:15px;line-height:1.7;color:#3E4A5E;">{{.Summary}}</p>
 <p style="margin:0 0 14px 0;font-size:15px;line-height:1.7;color:#3E4A5E;">{{.Content}}</p>
 {{if and .ButtonText .ButtonURL}}
@@ -87,7 +87,7 @@ INSERT INTO email_templates (template_key, subject, html_body, enabled) VALUES
  TRUE),
 
 ('transfer_notification',
- '【CS-INV】设备转移通知',
+ '【CSERGY】设备转移通知',
  $$<p style="margin:0 0 14px 0;font-size:15px;line-height:1.7;color:#3E4A5E;">{{.Summary}}</p>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:18px 0;background-color:#F7F9FC;border-radius:10px;border-left:4px solid #00D4FF;">
     <tr>
@@ -106,7 +106,7 @@ INSERT INTO email_templates (template_key, subject, html_body, enabled) VALUES
  TRUE),
 
 ('notification_email',
- '【CS-INV】{{.Title}}',
+ '【CSERGY】{{.Title}}',
  $${{if .DeviceSN}}
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 18px 0;">
     <tr>
@@ -128,7 +128,7 @@ INSERT INTO email_templates (template_key, subject, html_body, enabled) VALUES
  TRUE),
 
 ('daily_report',
- '【CS-INV】每日发电统计报告',
+ '【CSERGY】每日发电统计报告',
  $$<p style="margin:0 0 14px 0;font-size:15px;line-height:1.7;color:#3E4A5E;">{{.Summary}}</p>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:18px 0;background-color:#F7F9FC;border-radius:10px;border-left:4px solid #1677ff;">
     <tr>
@@ -138,7 +138,7 @@ INSERT INTO email_templates (template_key, subject, html_body, enabled) VALUES
  TRUE),
 
 ('test_email',
- '【CS-INV】测试邮件 / Test Email',
+ '【CSERGY】测试邮件 / Test Email',
  $$<p style="margin:0 0 14px 0;font-size:15px;line-height:1.7;color:#3E4A5E;">{{.Summary}}</p>
 <p style="margin:0 0 14px 0;font-size:15px;line-height:1.7;color:#3E4A5E;">{{.Content}}</p>
 {{if and .ButtonText .ButtonURL}}

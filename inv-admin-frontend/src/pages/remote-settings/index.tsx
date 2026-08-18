@@ -1,4 +1,4 @@
-// 远程设置 —— 三层结构：快捷设置首页（卡片）→ 功能分类页 → 高级参数（工程师模式）
+// 远程设置 —— 两层结构：设置首页（模块分组折叠列表，逐项点击展开）→ 高级参数（工程师模式）
 
 import React, { useState } from 'react'
 import { Empty, Typography, App } from 'antd'
@@ -7,14 +7,12 @@ import { queryKeys } from '@/utils/queryKeys'
 import useTranslation from '@/hooks/useTranslation'
 import DeviceSelector from './components/DeviceSelector'
 import SettingsHome from './components/SettingsHome'
-import ModulePage from './components/ModulePage'
 import AdvancedPanel from './components/AdvancedPanel'
 import { useDeviceConfig } from './hooks/useDeviceConfig'
-import { MODULES } from './config/fields'
 
 const { Title, Text } = Typography
 
-type View = { name: 'home' } | { name: 'module'; moduleId: string } | { name: 'advanced' }
+type View = { name: 'home' } | { name: 'advanced' }
 
 const RemoteSettingsPage: React.FC = () => {
   const { t } = useTranslation()
@@ -74,8 +72,6 @@ const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({ sn, onDeviceChang
     setTimeout(() => setReading(false), 1200)
   }
 
-  const activeModule = view.name === 'module' ? MODULES.find((m) => m.id === view.moduleId) : undefined
-
   return (
     <>
       <DeviceSelector
@@ -92,12 +88,8 @@ const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({ sn, onDeviceChang
         <SettingsHome
           cfg={cfg}
           loading={cfg.schemaLoading && cfg.stateLoading}
-          onOpenModule={(moduleId) => setView({ name: 'module', moduleId })}
           onOpenAdvanced={() => setView({ name: 'advanced' })}
         />
-      )}
-      {view.name === 'module' && activeModule && (
-        <ModulePage module={activeModule} cfg={cfg} onBack={() => setView({ name: 'home' })} />
       )}
       {view.name === 'advanced' && <AdvancedPanel cfg={cfg} onBack={() => setView({ name: 'home' })} />}
     </>

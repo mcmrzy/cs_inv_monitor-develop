@@ -1,16 +1,20 @@
-// 第一层：设置首页（Dashboard 卡片式）——每个模块一张卡片，显示模块名 + 关键值摘要
+// 第一层：设置首页 —— 模块级折叠卡片
+// 每个模块（工作模式/电池设置/…）一张可展开卡片：收起显示模块头（accent 图标 + 名称 + 描述），
+// 点击展开该模块全部设置项（v1 平铺字段行：左侧标签、右侧控件，行间分隔线，无需再逐项展开）。
 
-import React from 'react'
-import { Row, Col, Typography, Spin } from 'antd'
+import React, { useState } from 'react'
+import { Typography, Spin, Collapse, Empty } from 'antd'
 import {
-  RightOutlined, ControlOutlined, ExperimentOutlined, ThunderboltOutlined,
+  ControlOutlined, ExperimentOutlined, ThunderboltOutlined,
   ExportOutlined, PoweroffOutlined, BulbOutlined, ToolOutlined, AlertOutlined,
-  CodeOutlined,
+  CodeOutlined, RightOutlined,
 } from '@ant-design/icons'
 import useTranslation from '@/hooks/useTranslation'
+import QueryErrorAlert from '@/components/QueryErrorAlert'
 import { MODULES } from '../config/fields'
 import type { DeviceConfigApi } from '../hooks/useDeviceConfig'
-import { useFieldFormatter } from '../hooks/useFieldFormatter'
+import { FieldRow } from './FieldControl'
+import './modulePage.css'
 
 const { Text } = Typography
 
@@ -28,119 +32,106 @@ const MODULE_ICONS: Record<string, React.ReactNode> = {
 interface SettingsHomeProps {
   cfg: DeviceConfigApi
   loading: boolean
-  onOpenModule: (moduleId: string) => void
   onOpenAdvanced: () => void
 }
 
-const SettingsHome: React.FC<SettingsHomeProps> = ({ cfg, loading, onOpenModule, onOpenAdvanced }) => {
+const SettingsHome: React.FC<SettingsHomeProps> = ({ cfg, loading, onOpenAdvanced }) => {
   const { t } = useTranslation()
-  const formatValue = useFieldFormatter(cfg)
+  // 模块级展开状态（key = 模块 id），默认全部收起
+  const [activeKeys, setActiveKeys] = useState<string[]>([])
+
+  const sections = MODULES.map((m) => {
+    const visibleKeys = m.paramKeys.filter((key) => cfg.isVisible(cfg.getMeta(key)))
+    // 字段完全不在 schema 且无上报值时隐藏（扩展参数固件未实现），避免整页全是无法读取的项
+    const availableKeys = visibleKeys.filter(
+      (key) => cfg.schemaMap.has(key) || cfg.getSummaryValue(key) !== undefined,
+    )
+    return { module: m, keys: availableKeys }
+  }).filter((s) => s.keys.length > 0)
 
   return (
     <Spin spinning={loading}>
-      <Row gutter={[16, 16]}>
-        {MODULES.map((m) => (
-          <Col key={m.id} xs={24} sm={12} xl={8} xxl={6}>
-            <div
-              role="button"
-              tabIndex={0}
-              onClick={() => onOpenModule(m.id)}
-              onKeyDown={(e) => e.key === 'Enter' && onOpenModule(m.id)}
-              style={{
-                background: '#fff', borderRadius: 16, padding: 18,
-                border: '1px solid #edf0f5', cursor: 'pointer',
-                boxShadow: '0 1px 4px rgba(17,24,39,0.05)',
-                transition: 'all 0.2s ease', height: '100%',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'translateY(-2px)'
-                e.currentTarget.style.boxShadow = '0 8px 24px rgba(17,24,39,0.10)'
-                e.currentTarget.style.borderColor = m.accent
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'none'
-                e.currentTarget.style.boxShadow = '0 1px 4px rgba(17,24,39,0.05)'
-                e.currentTarget.style.borderColor = '#edf0f5'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      {(cfg.schemaError || cfg.stateError) && (
+        <div style={{ marginBottom: 12 }}>
+          <QueryErrorAlert error={cfg.schemaError ?? cfg.stateError} onRetry={cfg.refetchAll} />
+        </div>
+      )}
+
+      {sections.length > 0 ? (
+        <Collapse
+          ghost
+          className="rs-module-collapse"
+          expandIconPosition="end"
+          activeKey={activeKeys}
+          onChange={(keys) => setActiveKeys(Array.isArray(keys) ? (keys as string[]) : [keys])}
+          items={sections.map(({ module: m, keys }) => ({
+            key: m.id,
+            label: (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                 <div
                   style={{
-                    width: 44, height: 44, borderRadius: 12, flexShrink: 0,
+                    width: 30, height: 30, borderRadius: 9, flexShrink: 0,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 20, color: m.accent,
-                    background: `linear-gradient(135deg, ${m.accent}1f, ${m.accent}0a)`,
-                    border: `1px solid ${m.accent}33`,
+                    fontSize: 15, color: m.accent,
+                    background: `linear-gradient(135deg, ${m.accent}26, ${m.accent}0d)`,
+                    border: `1px solid ${m.accent}40`,
                   }}
                 >
                   {MODULE_ICONS[m.id]}
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <Text strong style={{ fontSize: 15, color: '#111827', display: 'block' }}>{t(m.nameKey)}</Text>
-                  <Text type="secondary" style={{ fontSize: 12 }}>{t(m.descKey)}</Text>
-                </div>
-                <RightOutlined style={{ color: '#c3cad6', fontSize: 12 }} />
+                <Text strong style={{ fontSize: 15, color: '#111827' }}>{t(m.nameKey)}</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>{t(m.descKey)}</Text>
               </div>
+            ),
+            children: keys.map((key) => <FieldRow key={key} cfg={cfg} paramKey={key} />),
+          }))}
+        />
+      ) : (
+        !loading && (
+          <Empty
+            description={t('remote3.moduleEmpty')}
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            style={{ padding: '40px 0', background: '#fff', borderRadius: 12, border: '1px solid #edf0f5' }}
+          />
+        )
+      )}
 
-              <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {m.summaryKeys.map((key) => {
-                  const summary = formatValue(key)
-                  return (
-                    <div key={key} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                      <Text type="secondary" ellipsis style={{ maxWidth: '55%' }}>{cfg.fieldLabel(key)}</Text>
-                      <Text strong style={{ color: summary ? '#111827' : '#c3cad6' }}>{summary ?? '--'}</Text>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          </Col>
-        ))}
-
-        {/* 高级参数入口（工程师模式） */}
-        <Col xs={24} sm={12} xl={8} xxl={6}>
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={onOpenAdvanced}
-            onKeyDown={(e) => e.key === 'Enter' && onOpenAdvanced()}
-            style={{
-              background: 'linear-gradient(135deg, #111827, #1f2937)', borderRadius: 16, padding: 18,
-              cursor: 'pointer', height: '100%',
-              boxShadow: '0 1px 4px rgba(17,24,39,0.2)', transition: 'all 0.2s ease',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-2px)'
-              e.currentTarget.style.boxShadow = '0 8px 24px rgba(17,24,39,0.3)'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'none'
-              e.currentTarget.style.boxShadow = '0 1px 4px rgba(17,24,39,0.2)'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div
-                style={{
-                  width: 44, height: 44, borderRadius: 12, flexShrink: 0,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 20, color: '#00D4FF', background: 'rgba(0,212,255,0.1)',
-                  border: '1px solid rgba(0,212,255,0.25)',
-                }}
-              >
-                <CodeOutlined />
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <Text strong style={{ fontSize: 15, color: '#fff', display: 'block' }}>{t('remote3.advancedEntry')}</Text>
-                <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)' }}>{t('remote3.advancedEntryDesc')}</Text>
-              </div>
-              <RightOutlined style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12 }} />
-            </div>
-            <div style={{ marginTop: 14, fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>
-              {t('remote3.advancedEntryHint')}
-            </div>
-          </div>
-        </Col>
-      </Row>
+      {/* 高级参数入口（工程师模式） */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onOpenAdvanced}
+        onKeyDown={(e) => e.key === 'Enter' && onOpenAdvanced()}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          background: 'linear-gradient(135deg, #111827, #1f2937)', borderRadius: 12, padding: '14px 18px',
+          cursor: 'pointer', boxShadow: '0 1px 4px rgba(17,24,39,0.2)', transition: 'all 0.2s ease',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = 'translateY(-2px)'
+          e.currentTarget.style.boxShadow = '0 8px 24px rgba(17,24,39,0.3)'
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = 'none'
+          e.currentTarget.style.boxShadow = '0 1px 4px rgba(17,24,39,0.2)'
+        }}
+      >
+        <div
+          style={{
+            width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 17, color: '#00D4FF', background: 'rgba(0,212,255,0.1)',
+            border: '1px solid rgba(0,212,255,0.25)',
+          }}
+        >
+          <CodeOutlined />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Text strong style={{ fontSize: 14, color: '#fff', display: 'block' }}>{t('remote3.advancedEntry')}</Text>
+          <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)' }}>{t('remote3.advancedEntryHint')}</Text>
+        </div>
+        <RightOutlined style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12 }} />
+      </div>
     </Spin>
   )
 }

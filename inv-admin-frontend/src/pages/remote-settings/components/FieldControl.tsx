@@ -1,9 +1,10 @@
-// 设置项折叠卡片：
+// 设置项渲染组件族（控件渲染沿用 v1：number = Slider + InputNumber 草稿态；boolean = Switch 即时下发；
+// enum = Segmented/Radio 即时下发；priority = 上移/下移排序列表）：
+// - FieldControlWidget（内部共用）：按 meta.kind 渲染设置控件
 // - FieldCardHeader（命名导出）：标题 + 当前值摘要 + 同步徽标 + 只读锁标（Collapse header 用）
-// - FieldCardBody（命名导出）：业务说明（i18n remote3.desc.*）+ 按类型渲染的控件
+// - FieldCardBody（命名导出）：业务说明（i18n remote3.desc.*）+ 控件（折叠卡片 body 用）
+// - FieldRow（命名导出）：v1 平铺字段行 —— 左侧「标签 + 徽标」、右侧控件，行间分隔线（模块展开区用）
 // - FieldControl（默认导出）：单条 Collapse 包装（AdvancedPanel 工程师模式沿用）
-// 控件渲染逻辑沿用 v1：number = Slider + InputNumber 草稿态；boolean = Switch 即时下发；
-// enum = Segmented/Radio 即时下发；priority = 上移/下移排序列表
 
 import React, { useEffect, useState } from 'react'
 import {
@@ -183,14 +184,13 @@ export const FieldCardHeader: React.FC<FieldCardProps> = ({ cfg, paramKey }) => 
   )
 }
 
-// ── Body：Collapse 的 children（业务说明 + 控件） ──
-export const FieldCardBody: React.FC<FieldCardProps> = ({ cfg, paramKey }) => {
-  const { t, hasTranslation } = useTranslation()
+// ── 控件渲染（FieldCardBody / FieldRow 共用）：按 meta.kind 分发 ──
+const FieldControlWidget: React.FC<FieldCardProps> = ({ cfg, paramKey }) => {
+  const { t } = useTranslation()
   const meta = cfg.getMeta(paramKey)
   const current = cfg.getEditValue(paramKey)
   const sending = cfg.sendingKey === paramKey
   const editable = cfg.canEdit(paramKey)
-  const descKey = `remote3.desc.${paramKey}`
 
   let control: React.ReactNode
 
@@ -269,6 +269,14 @@ export const FieldCardBody: React.FC<FieldCardProps> = ({ cfg, paramKey }) => {
     control = null
   }
 
+  return <>{control}</>
+}
+
+// ── Body：Collapse 的 children（业务说明 + 控件） ──
+export const FieldCardBody: React.FC<FieldCardProps> = ({ cfg, paramKey }) => {
+  const { t, hasTranslation } = useTranslation()
+  const descKey = `remote3.desc.${paramKey}`
+
   return (
     <div style={{ padding: '4px 4px 16px' }}>
       {hasTranslation(descKey) && (
@@ -276,7 +284,52 @@ export const FieldCardBody: React.FC<FieldCardProps> = ({ cfg, paramKey }) => {
           {t(descKey)}
         </Text>
       )}
-      <div style={{ marginTop: 4 }}>{control}</div>
+      <div style={{ marginTop: 4 }}>
+        <FieldControlWidget cfg={cfg} paramKey={paramKey} />
+      </div>
+    </div>
+  )
+}
+
+// ── Row：v1 平铺字段行（模块展开区用）—— 左侧「标签 + 徽标 + 锁标」，右侧控件，行间分隔线 ──
+export const FieldRow: React.FC<FieldCardProps> = ({ cfg, paramKey }) => {
+  const { t } = useTranslation()
+  const label = cfg.fieldLabel(paramKey)
+  const sync = cfg.isSynced(paramKey)
+  const readOnly = !cfg.canEdit(paramKey)
+
+  const syncTag =
+    sync === 'synced' ? (
+      <Tooltip title="desired = reported">
+        <Tag icon={<CheckCircleFilled />} color="success" style={{ marginInlineEnd: 0 }}>synced</Tag>
+      </Tooltip>
+    ) : sync === 'pending' ? (
+      <Tooltip title={t('remote3.pendingTooltip')}>
+        <Tag icon={<ClockCircleFilled />} color="processing" style={{ marginInlineEnd: 0 }}>pending</Tag>
+      </Tooltip>
+    ) : null
+
+  return (
+    <div
+      style={{
+        display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap',
+        padding: '14px 4px', borderBottom: '1px solid #f0f3f8',
+      }}
+    >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <Space size={8} wrap>
+          <Text strong style={{ fontSize: 14, color: '#111827' }}>{label}</Text>
+          {syncTag}
+          {readOnly && (
+            <Tooltip title={t('remote3.readOnly')}>
+              <LockOutlined style={{ fontSize: 12, color: '#9ca3af' }} />
+            </Tooltip>
+          )}
+        </Space>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <FieldControlWidget cfg={cfg} paramKey={paramKey} />
+      </div>
     </div>
   )
 }
