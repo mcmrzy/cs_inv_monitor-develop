@@ -78,7 +78,7 @@ var builtinEmailTemplates = map[string]emailBuiltinTemplate{
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0;">
     <tr>
         <td align="center" style="background-color:#F0F7FF;border:2px solid #BAE0FF;border-radius:12px;padding:32px 16px;">
-            <div style="font-size:32px;font-weight:800;letter-spacing:8px;color:#1677ff;font-family:Consolas,'Courier New',monospace;">{{.Code}}</div>
+            <div style="font-size:36px;font-weight:800;letter-spacing:10px;color:#1677ff;font-family:Consolas,'Courier New',monospace;">{{.Code}}</div>
             <div style="margin-top:14px;font-size:13px;color:#8A94A6;line-height:1.5;">验证码 5 分钟内有效，请勿泄露给他人</div>
         </td>
     </tr>
