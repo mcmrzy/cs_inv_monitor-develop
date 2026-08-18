@@ -1,0 +1,42 @@
+/* 模块页折叠卡片：ghost Collapse 卡片化（白底圆角、悬浮浅阴影、展开态高亮） */
+
+.rs-module-collapse.ant-collapse-ghost {
+  background: transparent;
+}
+
+.rs-module-collapse > .ant-collapse-item {
+  background: #fff;
+  border: 1px solid #edf0f5;
+  border-radius: 12px;
+  margin-bottom: 10px;
+  box-shadow: 0 1px 4px rgba(17, 24, 39, 0.05);
+  overflow: hidden;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.rs-module-collapse > .ant-collapse-item:hover {
+  box-shadow: 0 4px 14px rgba(17, 24, 39, 0.09);
+}
+
+.rs-module-collapse > .ant-collapse-item-active {
+  border-color: rgba(0, 212, 255, 0.5);
+  box-shadow: 0 4px 16px rgba(17, 24, 39, 0.08);
+}
+
+.rs-module-collapse > .ant-collapse-item > .ant-collapse-header {
+  padding: 13px 18px;
+  align-items: center;
+}
+
+.rs-module-collapse > .ant-collapse-item > .ant-collapse-header .ant-collapse-header-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.rs-module-collapse > .ant-collapse-item > .ant-collapse-content {
+  border-top: 1px solid #f0f3f8;
+}
+
+.rs-module-collapse > .ant-collapse-item > .ant-collapse-content > .ant-collapse-content-box {
+  padding: 14px 18px 6px;
+}

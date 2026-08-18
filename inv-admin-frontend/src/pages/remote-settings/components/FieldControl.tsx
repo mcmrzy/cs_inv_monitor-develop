@@ -1,13 +1,35 @@
-// 通用字段行：标签 + 同步徽标 + 按类型渲染的控件
-// number → Slider + InputNumber 联动（草稿态，点击「设置」下发）
-// boolean → Switch 即时下发；enum → Segmented 即时下发；priority → 上移/下移排序列表
+// 设置项折叠卡片：
+// - FieldCardHeader（命名导出）：标题 + 当前值摘要 + 同步徽标 + 只读锁标（Collapse header 用）
+// - FieldCardBody（命名导出）：业务说明（i18n remote3.desc.*）+ 按类型渲染的控件
+// - FieldControl（默认导出）：单条 Collapse 包装（AdvancedPanel 工程师模式沿用）
+// 控件渲染逻辑沿用 v1：number = Slider + InputNumber 草稿态；boolean = Switch 即时下发；
+// enum = Segmented/Radio 即时下发；priority = 上移/下移排序列表
 
 import React, { useEffect, useState } from 'react'
-import { Slider, InputNumber, Switch, Segmented, Radio, Button, Tag, Tooltip, Typography, Space } from 'antd'
-import { ArrowUpOutlined, ArrowDownOutlined, SendOutlined, CheckCircleFilled, ClockCircleFilled } from '@ant-design/icons'
+import {
+  Collapse,
+  Slider,
+  InputNumber,
+  Switch,
+  Segmented,
+  Radio,
+  Button,
+  Tag,
+  Tooltip,
+  Typography,
+  Space,
+} from 'antd'
+import {
+  ArrowUpOutlined,
+  ArrowDownOutlined,
+  SendOutlined,
+  CheckCircleFilled,
+  ClockCircleFilled,
+  LockOutlined,
+} from '@ant-design/icons'
 import useTranslation from '@/hooks/useTranslation'
 import type { DeviceConfigApi } from '../hooks/useDeviceConfig'
-import { decimalsFor, displayUnit } from '../config/conversion'
+import { decimalsFor, displayUnit, type ResolvedFieldMeta } from '../config/conversion'
 import { priorityEnumToOrder, priorityOrderToEnum, type PrioritySource } from '../config/fields'
 
 const { Text } = Typography
@@ -15,7 +37,7 @@ const { Text } = Typography
 const ACCENT = '#00D4FF'
 const GREEN = '#00E676'
 
-interface FieldControlProps {
+interface FieldCardProps {
   cfg: DeviceConfigApi
   paramKey: string
 }
@@ -26,23 +48,113 @@ const PRIORITY_LABEL_KEY: Record<PrioritySource, string> = {
   utility: 'remote3.priority.utility',
 }
 
-const FieldControl: React.FC<FieldControlProps> = ({ cfg, paramKey }) => {
+// ── 当前值摘要（收起态可见，一眼读出配置现状） ──
+const ValueSummary: React.FC<FieldCardProps> = ({ cfg, paramKey }) => {
   const { t, lang } = useTranslation()
+  const current = cfg.getEditValue(paramKey)
   const meta = cfg.getMeta(paramKey)
+
+  if (current === undefined) return <Text type="secondary">--</Text>
+
+  if (meta.kind === 'enum' && meta.enumOptions) {
+    const semanticKey = meta.enumOptions.find((o) => o.value === current)?.semanticKey
+    const label = semanticKey ? cfg.enumLabel(semanticKey) : ''
+    return <Text>{label || '--'}</Text>
+  }
+
+  if (meta.kind === 'boolean') {
+    return <Text>{current !== 0 ? t('remote3.enabled') : t('remote3.disabled')}</Text>
+  }
+
+  if (meta.kind === 'number') {
+    const unit = displayUnit(meta.unit, lang)
+    const decimals = decimalsFor(meta)
+    return <Text>{`${parseFloat(current.toFixed(decimals))}${unit ? ` ${unit}` : ''}`}</Text>
+  }
+
+  if (meta.kind === 'priority') {
+    const order = priorityEnumToOrder(Number(current))
+    const first = order[0] as PrioritySource
+    return <Text>{t(PRIORITY_LABEL_KEY[first])}</Text>
+  }
+
+  return <Text>--</Text>
+}
+
+// ── number 控件（独立组件：草稿态 Hooks 必须无条件调用） ──
+const NumberField: React.FC<{ cfg: DeviceConfigApi; meta: ResolvedFieldMeta }> = ({ cfg, meta }) => {
+  const { t, lang } = useTranslation()
+  const paramKey = meta.paramKey
   const current = cfg.getEditValue(paramKey)
   const sending = cfg.sendingKey === paramKey
   const editable = cfg.canEdit(paramKey)
-  const sync = cfg.isSynced(paramKey)
+  const hasRange = meta.min !== undefined && meta.max !== undefined
+  const decimals = decimalsFor(meta)
+  const unit = displayUnit(meta.unit, lang)
 
   const [draft, setDraft] = useState<number | undefined>(current)
   useEffect(() => {
     setDraft(current)
   }, [current])
-  const dirty = draft !== undefined && current !== undefined && draft !== current
-    || (draft !== undefined && current === undefined)
+  const dirty =
+    (draft !== undefined && current !== undefined && draft !== current) ||
+    (draft !== undefined && current === undefined)
 
+  const apply = () => {
+    if (draft !== undefined) cfg.sendValue(meta, draft)
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+      {hasRange && (
+        <Slider
+          style={{ flex: 1, minWidth: 140, maxWidth: 320 }}
+          min={meta.min}
+          max={meta.max}
+          step={meta.step ?? 1}
+          value={draft}
+          disabled={!editable || sending}
+          onChange={(v) => setDraft(v as number)}
+          tooltip={{
+            formatter: (v) => (v === undefined ? '' : `${v.toFixed(decimals)}${unit ? ` ${unit}` : ''}`),
+          }}
+          trackStyle={{ backgroundColor: ACCENT }}
+          handleStyle={{ borderColor: ACCENT, boxShadow: '0 0 0 4px rgba(0,212,255,0.12)' }}
+        />
+      )}
+      <InputNumber
+        style={{ width: 128 }}
+        min={meta.min}
+        max={meta.max}
+        step={meta.step ?? 1}
+        precision={decimals}
+        value={draft}
+        disabled={!editable || sending}
+        addonAfter={unit || undefined}
+        onChange={(v) => setDraft(v ?? undefined)}
+        onPressEnter={apply}
+      />
+      <Button
+        type="primary"
+        size="small"
+        icon={<SendOutlined />}
+        loading={sending}
+        disabled={!editable || !dirty}
+        onClick={apply}
+        style={dirty ? { background: ACCENT, borderColor: ACCENT, color: '#111827', fontWeight: 600 } : undefined}
+      >
+        {t('remote.set')}
+      </Button>
+    </div>
+  )
+}
+
+// ── Header：Collapse 的 label（收起态 + 展开态共用） ──
+export const FieldCardHeader: React.FC<FieldCardProps> = ({ cfg, paramKey }) => {
+  const { t } = useTranslation()
   const label = cfg.fieldLabel(paramKey)
-  const unit = displayUnit(meta.unit, lang)
+  const sync = cfg.isSynced(paramKey)
+  const readOnly = !cfg.canEdit(paramKey)
 
   const syncTag =
     sync === 'synced' ? (
@@ -54,6 +166,31 @@ const FieldControl: React.FC<FieldControlProps> = ({ cfg, paramKey }) => {
         <Tag icon={<ClockCircleFilled />} color="processing" style={{ marginInlineEnd: 0 }}>pending</Tag>
       </Tooltip>
     ) : null
+
+  return (
+    <div style={{ flex: 1, minWidth: 0, paddingBlock: 2 }}>
+      <Space size={8} wrap>
+        <Text strong style={{ fontSize: 14, color: '#111827' }}>{label}</Text>
+        <ValueSummary cfg={cfg} paramKey={paramKey} />
+        {syncTag}
+        {readOnly && (
+          <Tooltip title={t('remote3.readOnly')}>
+            <LockOutlined style={{ fontSize: 12, color: '#9ca3af' }} />
+          </Tooltip>
+        )}
+      </Space>
+    </div>
+  )
+}
+
+// ── Body：Collapse 的 children（业务说明 + 控件） ──
+export const FieldCardBody: React.FC<FieldCardProps> = ({ cfg, paramKey }) => {
+  const { t, hasTranslation } = useTranslation()
+  const meta = cfg.getMeta(paramKey)
+  const current = cfg.getEditValue(paramKey)
+  const sending = cfg.sendingKey === paramKey
+  const editable = cfg.canEdit(paramKey)
+  const descKey = `remote3.desc.${paramKey}`
 
   let control: React.ReactNode
 
@@ -126,74 +263,40 @@ const FieldControl: React.FC<FieldControlProps> = ({ cfg, paramKey }) => {
         <Text type="secondary" style={{ fontSize: 11 }}>{t('remote3.priorityHint')}</Text>
       </div>
     )
+  } else if (meta.kind === 'number') {
+    control = <NumberField cfg={cfg} meta={meta} />
   } else {
-    // number：Slider + InputNumber 联动（有量程才显示滑块）
-    const hasRange = meta.min !== undefined && meta.max !== undefined
-    const decimals = decimalsFor(meta)
-    const apply = () => {
-      if (draft !== undefined) cfg.sendValue(meta, draft)
-    }
-    control = (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 300 }}>
-        {hasRange && (
-          <Slider
-            style={{ flex: 1, minWidth: 140 }}
-            min={meta.min}
-            max={meta.max}
-            step={meta.step ?? 1}
-            value={draft}
-            disabled={!editable || sending}
-            onChange={(v) => setDraft(v as number)}
-            tooltip={{ formatter: (v) => (v === undefined ? '' : `${v.toFixed(decimals)}${unit ? ` ${unit}` : ''}`) }}
-            trackStyle={{ backgroundColor: ACCENT }}
-            handleStyle={{ borderColor: ACCENT, boxShadow: `0 0 0 4px rgba(0,212,255,0.12)` }}
-          />
-        )}
-        <InputNumber
-          style={{ width: 128 }}
-          min={meta.min}
-          max={meta.max}
-          step={meta.step ?? 1}
-          precision={decimals}
-          value={draft}
-          disabled={!editable || sending}
-          addonAfter={unit || undefined}
-          onChange={(v) => setDraft(v ?? undefined)}
-          onPressEnter={apply}
-        />
-        <Button
-          type="primary"
-          size="small"
-          icon={<SendOutlined />}
-          loading={sending}
-          disabled={!editable || !dirty}
-          onClick={apply}
-          style={dirty ? { background: ACCENT, borderColor: ACCENT, color: '#111827', fontWeight: 600 } : undefined}
-        >
-          {t('remote.set')}
-        </Button>
-      </div>
-    )
+    control = null
   }
 
   return (
-    <div
-      style={{
-        display: 'flex', alignItems: 'center', gap: 16,
-        padding: '14px 4px', borderBottom: '1px solid #f0f3f8',
-      }}
-    >
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <Space size={8} wrap>
-          <Text strong style={{ fontSize: 14, color: '#111827' }}>{label}</Text>
-          {syncTag}
-        </Space>
-        <div>
-          <Text code style={{ fontSize: 11, color: '#b3bcc9' }}>{paramKey}</Text>
-        </div>
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>{control}</div>
+    <div style={{ padding: '4px 4px 16px' }}>
+      {hasTranslation(descKey) && (
+        <Text type="secondary" style={{ display: 'block', marginBottom: 12, lineHeight: 1.7, maxWidth: 620 }}>
+          {t(descKey)}
+        </Text>
+      )}
+      <div style={{ marginTop: 4 }}>{control}</div>
     </div>
+  )
+}
+
+// ── 默认导出：单条 Collapse（AdvancedPanel 工程师模式沿用，默认收起） ──
+const FieldControl: React.FC<FieldCardProps> = ({ cfg, paramKey }) => {
+  const [activeKeys, setActiveKeys] = useState<string[]>([])
+  return (
+    <Collapse
+      ghost
+      activeKey={activeKeys}
+      onChange={(keys) => setActiveKeys(Array.isArray(keys) ? keys : [keys])}
+      items={[
+        {
+          key: paramKey,
+          label: <FieldCardHeader cfg={cfg} paramKey={paramKey} />,
+          children: <FieldCardBody cfg={cfg} paramKey={paramKey} />,
+        },
+      ]}
+    />
   )
 }
 
