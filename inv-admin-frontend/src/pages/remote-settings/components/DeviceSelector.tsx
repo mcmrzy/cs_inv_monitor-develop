@@ -42,7 +42,10 @@ const DeviceSelector: React.FC<DeviceSelectorProps> = ({ selectedSn, onDeviceCha
       }),
     staleTime: 120_000,
   })
-  const stations = stationsData ?? []
+  // 防御：该 queryKey 与 batch-settings 等页面共用，若他页 queryFn 写入过非数组形状的
+  // 缓存（如整个响应体对象），staleTime 内切换页面会直接读到脏缓存，stations.find 会抛
+  // "find is not a function"，消费侧必须校验数组形状后降级
+  const stations = Array.isArray(stationsData) ? stationsData : []
 
   // 设备列表（按电站过滤）
   const { data: devicesData, isLoading: devicesLoading } = useQuery({
@@ -59,7 +62,7 @@ const DeviceSelector: React.FC<DeviceSelectorProps> = ({ selectedSn, onDeviceCha
     staleTime: 60_000,
     enabled: selectedStationId !== null,
   })
-  const devices = devicesData ?? []
+  const devices = Array.isArray(devicesData) ? devicesData : []
   const selectedDevice = devices.find((d) => d.sn === selectedSn) ?? null
   const isOnline = selectedDevice ? selectedDevice.status === 1 : false
 
