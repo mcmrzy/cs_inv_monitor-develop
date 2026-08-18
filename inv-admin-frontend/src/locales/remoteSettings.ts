@@ -400,6 +400,7 @@ export default {
     'remote.otherSettings': '其他设置',
     'remote.battery': '电池',
     'remote.readingConfig': '正在读取设备配置参数',
+    'remote.readCommandSent': '读取指令已下发，设备回报后参数将自动刷新',
     // shared-styles
     'remote.enable': '启用',
     'remote.disable': '禁用',
@@ -1157,6 +1158,7 @@ export default {
     'remote.otherSettings': 'Other Settings',
     'remote.battery': 'Battery',
     'remote.readingConfig': 'Reading device configuration',
+    'remote.readCommandSent': 'Read command sent. Parameters will refresh once the device replies.',
     // shared-styles
     'remote.enable': 'Enable',
     'remote.disable': 'Disable',
