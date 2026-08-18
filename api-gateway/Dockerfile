@@ -4,7 +4,7 @@ ARG GOPROXY=https://goproxy.cn,https://goproxy.io,direct
 ENV GOPROXY=${GOPROXY}
 ENV GO111MODULE=on
 
-ARG ALPINE_MIRROR=dl-cdn.alpinelinux.org
+ARG ALPINE_MIRROR=mirrors.aliyun.com
 RUN sed -i "s/dl-cdn.alpinelinux.org/${ALPINE_MIRROR}/g" /etc/apk/repositories && \
     apk add --no-cache git ca-certificates tzdata
 
@@ -25,7 +25,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 
 FROM alpine:3.23
 
-ARG ALPINE_MIRROR=dl-cdn.alpinelinux.org
+ARG ALPINE_MIRROR=mirrors.aliyun.com
 RUN sed -i "s/dl-cdn.alpinelinux.org/${ALPINE_MIRROR}/g" /etc/apk/repositories && \
     apk --no-cache add ca-certificates tzdata wget
 

@@ -10,7 +10,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux go build -p=1 -ldflags="-s -w" -o inv-api-server ./cmd
 
 FROM alpine:3.23
-ARG ALPINE_MIRROR=dl-cdn.alpinelinux.org
+ARG ALPINE_MIRROR=mirrors.aliyun.com
 RUN sed -i "s/dl-cdn.alpinelinux.org/${ALPINE_MIRROR}/g" /etc/apk/repositories && \
     apk --no-cache add ca-certificates tzdata wget
 WORKDIR /app
