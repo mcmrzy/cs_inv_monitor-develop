@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
+import 'package:inv_app/core/services/connection_mode_service.dart';
 import 'package:inv_app/core/services/realtime_data_service.dart';
 import 'package:inv_app/core/services/network_status_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
@@ -794,52 +795,6 @@ class _HomePageState extends State<HomePage> {
       message: l10n.tapPlusToCreate,
       size: 180,
       padding: EdgeInsets.symmetric(vertical: 48.h),
-      action: Column(
-        children: [
-          SizedBox(height: 16.h),
-          _emptyActionButton(
-            icon: Icons.add_home_work_outlined,
-            label: l10n.createStation,
-            onTap: () => context.push('/station/create'),
-          ),
-          SizedBox(height: 10.h),
-          _emptyActionButton(
-            icon: Icons.solar_power,
-            label: l10n.addDevice,
-            onTap: () => context.push('/add-device'),
-          ),
-          SizedBox(height: 10.h),
-          _emptyActionButton(
-            icon: Icons.wifi,
-            label: l10n.wifiConfig,
-            onTap: () => context.push('/wifi-config'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// 空态快捷入口按钮（创建电站 / 添加设备 / 配网）
-  Widget _emptyActionButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return SizedBox(
-      width: 220.w,
-      height: 42.h,
-      child: OutlinedButton.icon(
-        onPressed: onTap,
-        icon: Icon(icon, size: 17.sp),
-        label: Text(label, style: TextStyle(fontSize: 14.sp)),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.primary,
-          side: BorderSide(color: AppColors.primary.withValues(alpha: 0.4)),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12.r),
-          ),
-        ),
-      ),
     );
   }
 
@@ -927,6 +882,11 @@ class _HomeOfflineNoticeState extends State<_HomeOfflineNotice> {
 
   @override
   Widget build(BuildContext context) {
+    // guest 离网模式：不访问云端是预期行为，隐藏「加载失败/离线」横幅
+    // （未登录请求必然 401 走缓存兜底，横幅会以「加载失败」常驻误导用户）
+    if (getIt<ConnectionModeService>().isGuestLocalMode) {
+      return const SizedBox.shrink();
+    }
     // 网络正常且非缓存数据：无需提示
     if (!_offline && !widget.fromCache) return const SizedBox.shrink();
 
@@ -1786,3 +1746,4 @@ class _MenuItemData {
     required this.path,
   });
 }
+
