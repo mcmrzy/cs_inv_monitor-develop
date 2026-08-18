@@ -21,6 +21,8 @@ void main() {
   late MockGetProfileUseCase mockGetProfileUseCase;
   late MockUpdateProfileUseCase mockUpdateProfileUseCase;
   late MockEmailLoginUseCase mockEmailLoginUseCase;
+  late MockPhoneCodeLoginUseCase mockPhoneCodeLoginUseCase;
+  late MockEmailCodeLoginUseCase mockEmailCodeLoginUseCase;
   late MockEmailRegisterUseCase mockEmailRegisterUseCase;
   late MockSendEmailCodeUseCase mockSendEmailCodeUseCase;
   late MockRefreshTokenUseCase mockRefreshTokenUseCase;
@@ -40,6 +42,8 @@ void main() {
     mockGetProfileUseCase = MockGetProfileUseCase();
     mockUpdateProfileUseCase = MockUpdateProfileUseCase();
     mockEmailLoginUseCase = MockEmailLoginUseCase();
+    mockPhoneCodeLoginUseCase = MockPhoneCodeLoginUseCase();
+    mockEmailCodeLoginUseCase = MockEmailCodeLoginUseCase();
     mockEmailRegisterUseCase = MockEmailRegisterUseCase();
     mockSendEmailCodeUseCase = MockSendEmailCodeUseCase();
     mockRefreshTokenUseCase = MockRefreshTokenUseCase();
@@ -85,6 +89,8 @@ void main() {
       getProfileUseCase: mockGetProfileUseCase,
       updateProfileUseCase: mockUpdateProfileUseCase,
       emailLoginUseCase: mockEmailLoginUseCase,
+      phoneCodeLoginUseCase: mockPhoneCodeLoginUseCase,
+      emailCodeLoginUseCase: mockEmailCodeLoginUseCase,
       emailRegisterUseCase: mockEmailRegisterUseCase,
       sendEmailCodeUseCase: mockSendEmailCodeUseCase,
       refreshTokenUseCase: mockRefreshTokenUseCase,
@@ -280,7 +286,7 @@ void main() {
   // ---------------------------------------------------------------------------
   group('AuthLogoutRequested', () {
     blocTest<AuthBloc, AuthState>(
-      'emits [AuthUnauthenticated] and clears storage',
+      'emits [AuthLoading, AuthUnauthenticated] and clears storage',
       build: () {
         when(() => mockLogoutUseCase()).thenAnswer(
           (_) async => right<Failure, void>(null),
@@ -297,7 +303,9 @@ void main() {
         return authBloc;
       },
       act: (bloc) => bloc.add(AuthLogoutRequested()),
-      expect: () => [isA<AuthUnauthenticated>()],
+      // guest 离网模式下状态可能已是 AuthUnauthenticated（Equatable 去重），
+      // 实现先 emit 瞬时 AuthLoading 强制状态变化，确保登出跳转通知生效
+      expect: () => [isA<AuthLoading>(), isA<AuthUnauthenticated>()],
       verify: (_) {
         verify(() => mockStorageService.deleteToken()).called(1);
         verify(() => mockStorageService.deleteRefreshToken()).called(1);

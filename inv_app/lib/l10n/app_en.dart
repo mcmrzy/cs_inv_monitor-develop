@@ -635,6 +635,13 @@ const Map<String, String> en = {
   'err_captcha_failed': 'Captcha verification failed, please retry',
   'err_captcha_required': 'Complete slider verification first',
   'email_verification_code': 'Email Code',
+  'sms_verification_code': 'SMS Code',
+  'login_mode_password': 'Password',
+  'login_mode_code': 'Code Login',
+  'code_channel_phone': 'Phone SMS',
+  'code_channel_email': 'Email Code',
+  'register_channel_email': 'Email',
+  'register_channel_phone': 'Phone',
   'please_input_verification_code': 'Please enter code',
   'please_input_correct_code': 'Please enter a valid code',
   'please_input_phone': 'Please enter phone number',
@@ -1457,12 +1464,12 @@ const Map<String, String> en = {
   'qr_bind_try_ble': 'Try Bluetooth',
 
   // === Onboarding (first install / version upgrade) ===
-  'onboarding_page1_title': 'Smart Monitoring',
-  'onboarding_page1_desc': 'Monitor plant generation anytime, anywhere',
-  'onboarding_page2_title': 'Instant Alerts',
-  'onboarding_page2_desc': 'Real-time anomaly push notifications',
-  'onboarding_page3_title': 'Local Upgrade',
-  'onboarding_page3_desc': 'OTA works even without internet',
+  'onboarding_page1_title': 'Every Watt, Under Your Control',
+  'onboarding_page1_desc': 'Real-time generation data visible, remote monitoring made simple',
+  'onboarding_page2_title': 'First Alert, Peace of Mind',
+  'onboarding_page2_desc': 'Instant device fault notifications, prevent issues before they happen',
+  'onboarding_page3_title': 'No Internet? No Problem',
+  'onboarding_page3_desc': 'Complete upgrades via direct phone connection without network',
   'onboarding_start': 'Get Started',
 
   // === Quick start / Setup guide ===

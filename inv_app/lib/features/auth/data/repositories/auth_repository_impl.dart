@@ -130,6 +130,30 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<Either<Failure, LoginResponse>> phoneCodeLogin({
+    required String phone,
+    required String code,
+  }) async {
+    return apiService.post(
+      '/auth/phone-code-login',
+      data: {'phone': phone, 'code': code},
+      fromJson: (json) => LoginResponse.fromJson(json),
+    );
+  }
+
+  @override
+  Future<Either<Failure, LoginResponse>> emailCodeLogin({
+    required String email,
+    required String code,
+  }) async {
+    return apiService.post(
+      '/auth/email-code-login',
+      data: {'email': email, 'code': code},
+      fromJson: (json) => LoginResponse.fromJson(json),
+    );
+  }
+
+  @override
   Future<Either<Failure, LoginResponse>> emailRegister({
     required String email,
     required String password,

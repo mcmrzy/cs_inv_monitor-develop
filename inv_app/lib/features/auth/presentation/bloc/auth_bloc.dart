@@ -35,6 +35,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final WechatLoginUseCase wechatLoginUseCase;
   final GoogleLoginUseCase googleLoginUseCase;
   final JVerifyLoginUseCase jverifyLoginUseCase;
+  final PhoneCodeLoginUseCase phoneCodeLoginUseCase;
+  final EmailCodeLoginUseCase emailCodeLoginUseCase;
   final StorageService storageService;
   final JPushService jpushService;
 
@@ -55,6 +57,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     required this.getProfileUseCase,
     required this.updateProfileUseCase,
     required this.emailLoginUseCase,
+    required this.phoneCodeLoginUseCase,
+    required this.emailCodeLoginUseCase,
     required this.emailRegisterUseCase,
     required this.sendEmailCodeUseCase,
     required this.refreshTokenUseCase,
@@ -73,6 +77,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthChangePasswordRequested>(_onChangePasswordRequested);
     on<AuthUpdateProfileRequested>(_onUpdateProfileRequested);
     on<AuthEmailLoginRequested>(_onEmailLoginRequested);
+    on<AuthPhoneCodeLoginRequested>(_onPhoneCodeLoginRequested);
+    on<AuthEmailCodeLoginRequested>(_onEmailCodeLoginRequested);
     on<AuthEmailRegisterRequested>(_onEmailRegisterRequested);
     on<AuthSendEmailCodeRequested>(_onSendEmailCodeRequested);
     on<AuthContactChanged>(_onContactChanged);
@@ -290,8 +296,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     AuthLogoutRequested event,
     Emitter<AuthState> emit,
   ) async {
+    // 云端登出调用加超时保护：离网/弱网下 /auth/logout 可能长时间挂起，
+    // 阻塞后续本地清理与状态发射（表现为点退出后迟迟不回登录页）；
+    // 超时放弃调用即可，token 已删、云端会话自然过期
     try {
-      await logoutUseCase();
+      await logoutUseCase().timeout(const Duration(seconds: 3));
     } catch (_) {}
 
     await storageService.deleteToken();
@@ -324,12 +333,21 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       debugPrint('[AuthBloc] logout local cleanup error: $e');
     }
 
-    // 退出 guest 本地模式（Q4：登录页免登录入口的标志，登录/退出后清除）；
+    // 退出登录时同步退出 guest 本地模式并切回云端模式：
+    // 否则 isLocal 残留 true，main.dart 全局守卫会拦截 AuthUnauthenticated
+    // 的登录页跳转，用户无法退出（guest 离网与 BLE 本地直连共用此链路）。
+    // byUser=false：系统兑底切换，不置手动锁，不影响后续自动切换能力；
     // 副作用失败不阻塞登出状态转换
     try {
-      unawaited(getIt<ConnectionModeService>().exitGuestLocalMode());
+      await getIt<ConnectionModeService>().exitGuestLocalMode();
+      await getIt<ConnectionModeService>().switchToRemote(byUser: false);
     } catch (_) {}
 
+    // guest 离网模式下当前状态已是 AuthUnauthenticated（空 Equatable 类，
+    // 相等去重），直接 emit 同状态会被 bloc 忽略、listener 不触发，
+    // 导致退出后无法跳转登录页；先 emit 瞬时加载态强制状态变化，
+    // 确保后续 AuthUnauthenticated 能通知 main.dart 全局守卫完成跳转
+    emit(AuthLoading());
     emit(AuthUnauthenticated());
   }
 
@@ -612,6 +630,92 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           await storageService.saveSavedPhone('');
           await storageService.saveSavedPassword('');
         }
+
+        emit(
+          AuthAuthenticated(
+            userId: response.user.id,
+            phone: response.user.phone,
+            isSystemAdmin: response.user.isSystemAdmin,
+            permissions: response.permissions,
+            user: response.user,
+          ),
+        );
+
+        // 会话重建：退出 guest 本地模式、复位模式手动锁
+        await _onSessionEstablished();
+
+        jpushService.bindUser(response.user.id);
+      },
+    );
+  }
+
+  Future<void> _onPhoneCodeLoginRequested(
+    AuthPhoneCodeLoginRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    emit(AuthLoading());
+
+    final result = await phoneCodeLoginUseCase(
+      phone: event.phone,
+      code: event.code,
+    );
+
+    await result.fold<Future<void>>(
+      (failure) async {
+        emit(AuthError(message: failure.message));
+      },
+      (response) async {
+        await storageService.saveToken(response.token);
+        if (response.refreshToken != null) {
+          await storageService.saveRefreshToken(response.refreshToken!);
+        }
+        await storageService.saveUserId(response.user.id);
+        await storageService.saveUserPhone(response.user.phone);
+        await storageService.saveIsSystemAdmin(response.user.isSystemAdmin);
+        await storageService.savePermissions(response.permissions);
+
+        emit(
+          AuthAuthenticated(
+            userId: response.user.id,
+            phone: response.user.phone,
+            isSystemAdmin: response.user.isSystemAdmin,
+            permissions: response.permissions,
+            user: response.user,
+          ),
+        );
+
+        // 会话重建：退出 guest 本地模式、复位模式手动锁
+        await _onSessionEstablished();
+
+        jpushService.bindUser(response.user.id);
+      },
+    );
+  }
+
+  Future<void> _onEmailCodeLoginRequested(
+    AuthEmailCodeLoginRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    emit(AuthLoading());
+
+    final result = await emailCodeLoginUseCase(
+      email: event.email,
+      code: event.code,
+    );
+
+    await result.fold<Future<void>>(
+      (failure) async {
+        emit(AuthError(message: failure.message));
+      },
+      (response) async {
+        await storageService.saveToken(response.token);
+        if (response.refreshToken != null) {
+          await storageService.saveRefreshToken(response.refreshToken!);
+        }
+        await storageService.saveUserId(response.user.id);
+        await storageService.saveUserPhone(response.user.phone);
+        await storageService.saveIsSystemAdmin(response.user.isSystemAdmin);
+        await storageService.savePermissions(response.permissions);
 
         emit(
           AuthAuthenticated(

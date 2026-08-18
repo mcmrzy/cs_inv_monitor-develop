@@ -490,6 +490,8 @@ getIt.registerLazySingleton<NotifyPrefsService>(
     getIt.registerLazySingleton(() => GetProfileUseCase(getIt()));
     getIt.registerLazySingleton(() => UpdateProfileUseCase(getIt()));
     getIt.registerLazySingleton(() => EmailLoginUseCase(getIt()));
+    getIt.registerLazySingleton(() => PhoneCodeLoginUseCase(getIt()));
+    getIt.registerLazySingleton(() => EmailCodeLoginUseCase(getIt()));
     getIt.registerLazySingleton(() => EmailRegisterUseCase(getIt()));
     getIt.registerLazySingleton(() => SendEmailCodeUseCase(getIt()));
     getIt.registerLazySingleton(() => RefreshTokenUseCase(getIt()));
@@ -510,6 +512,8 @@ getIt.registerLazySingleton<NotifyPrefsService>(
         getProfileUseCase: getIt(),
         updateProfileUseCase: getIt(),
         emailLoginUseCase: getIt(),
+        phoneCodeLoginUseCase: getIt(),
+        emailCodeLoginUseCase: getIt(),
         emailRegisterUseCase: getIt(),
         sendEmailCodeUseCase: getIt(),
         refreshTokenUseCase: getIt(),
