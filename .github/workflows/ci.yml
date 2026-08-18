@@ -128,9 +128,19 @@ jobs:
       - name: Install frontend dependencies
         working-directory: inv-admin-frontend
         run: npm ci
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-chromium-${{ hashFiles('inv-admin-frontend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-chromium-
       - name: Install Playwright chromium
-        working-directory: inv-admin-frontend
-        run: npx playwright install --with-deps chromium
+        uses: playwright-community/github-action@v1
+        with:
+          browsers: chromium
+          install-deps: ${{ steps.playwright-cache.outputs.cache-hit != 'true' }}
       - name: Start isolated test stack
         run: docker compose -f deploy/docker-compose.test.yml up -d --build --wait --wait-timeout 300
       - name: Run E2E tests
