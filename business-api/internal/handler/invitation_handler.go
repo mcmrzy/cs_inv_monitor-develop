@@ -129,6 +129,8 @@ type InvitationListItem struct {
 	ExpiresAt      string    `json:"expires_at"`
 	CreatedAt      string    `json:"created_at"`
 	InviterName    string    `json:"inviter_name"`
+	TokenHint      string    `json:"token_hint"`      // First 8 chars of token for backup code display
+	InviteCode     string    `json:"invite_code"`     // Full raw invite code for copy operation
 }
 
 // ============================================================================
@@ -1128,6 +1130,17 @@ func convertInvitationItems(items []repository.ListInvitationsResponseItem) []In
 	result := make([]InvitationListItem, 0, len(items))
 	for _, item := range items {
 		roleID := int16(item.FirstRoleID())
+		// Generate token hint for display (first 8 chars)
+		var tokenHint string
+		if len(item.TokenDigest) > 0 {
+			hintBytes := item.TokenDigest[:min(8, len(item.TokenDigest))]
+			tokenHint = "" + hex.EncodeToString(hintBytes)
+		}
+		// Generate full invite code from digest (hex encoded)
+		inviteCode := ""
+		if len(item.TokenDigest) > 0 {
+			inviteCode = hex.EncodeToString(item.TokenDigest)
+		}
 		il := InvitationListItem{
 			ID:          item.ID,
 			Email:       item.Recipient,
@@ -1138,6 +1151,8 @@ func convertInvitationItems(items []repository.ListInvitationsResponseItem) []In
 			ExpiresAt:   item.ExpiresAt.Format(time.RFC3339),
 			CreatedAt:   item.CreatedAt.Format(time.RFC3339),
 			InviterName: item.InviterName,
+			TokenHint:   tokenHint,
+			InviteCode:  inviteCode,
 		}
 		if item.OrganizationID != nil {
 			orgID := *item.OrganizationID
