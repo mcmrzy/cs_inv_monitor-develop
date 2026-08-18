@@ -132,3 +132,61 @@ body {
     transform: translateX(0);
   }
 }
+
+/* Slider Captcha Modal Enhancements */
+.slider-captcha-modal .ant-modal-content {
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.slider-captcha-modal .ant-modal-header {
+  background: #fff;
+  border-radius: 16px 16px 0 0;
+  font-weight: 600;
+}
+
+/* RcSliderCaptcha custom styling */
+.rc-slider-captcha {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.rc-slider-captcha:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+}
+
+/* Refresh icon hover effect */
+.rc-slider-captcha__refresh-icon {
+  transition: all 0.2s ease;
+}
+.rc-slider-captcha__refresh-icon:hover {
+  transform: rotate(90deg);
+  color: #4f6ef7 !important;
+}
+
+/* Modal animation */
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.slider-captcha-modal .ant-modal-mask {
+  animation: modalFadeIn 0.2s ease-out;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .slider-captcha-modal .ant-modal-mask,
+  .rc-slider-captcha,
+  .rc-slider-captcha__refresh-icon {
+    animation: none;
+    transition: none;
+  }
+}

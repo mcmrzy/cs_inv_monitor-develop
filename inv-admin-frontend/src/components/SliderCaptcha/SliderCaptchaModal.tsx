@@ -85,62 +85,99 @@ const SliderCaptchaModal: React.FC<SliderCaptchaModalProps> = ({
   return (
     <Modal
       title={
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <SafetyOutlined style={{ color: '#4f6ef7' }} />
-          <span>{t('captcha.title')}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ 
+            width: 32, 
+            height: 32, 
+            borderRadius: 8, 
+            background: 'linear-gradient(135deg, #4f6ef7 0%, #6366f1 100%)', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            boxShadow: '0 2px 8px rgba(79,110,247,0.3)'
+          }}>
+            <SafetyOutlined style={{ color: '#fff', fontSize: 16 }} />
+          </div>
+          <span style={{ fontSize: 18, fontWeight: 600 }}>{t('captcha.title')}</span>
         </div>
       }
       open={open}
       onCancel={onCancel}
       footer={null}
-      width={400}
+      width={420}
       centered
       destroyOnClose
       styles={{
-        body: { padding: '16px 24px' },
+        body: { padding: 0 },
+        header: { 
+          marginBottom: 0,
+          padding: '20px 24px 24px',
+          borderBottom: '1px solid #e2e8f0',
+        },
       }}
+      className="slider-captcha-modal"
     >
-      <div>
-        <p style={{ color: '#666', marginBottom: 16, fontSize: 14 }}>
+      <div style={{ padding: '24px' }}>
+        {/* Tip Text */}
+        <p style={{ 
+          color: '#475569', 
+          marginBottom: 20, 
+          fontSize: 14,
+          textAlign: 'center',
+          fontWeight: 500
+        }}>
           {t('captcha.drag')}
         </p>
-        <SliderCaptcha
-          mode="embed"
-          request={request}
-          onVerify={onVerify}
-          bgSize={{ width: 320, height: 160 }}
-          puzzleSize={{ width: 60 }}
-          showRefreshIcon
-          autoRefreshOnError
-          errorHoldDuration={1000}
-          limitErrorCount={3}
-          tipText={{
-            default: t('captcha.drag'),
-            loading: t('captcha.loading'),
-            moving: t('captcha.moving'),
-            verifying: t('captcha.verifying'),
-            success: t('captcha.success'),
-            error: t('captcha.failed'),
-            errors: t('captcha.tooFrequent'),
-            loadFailed: t('captcha.loadFailed'),
-          }}
-          tipIcon={{
-            default: <SafetyOutlined style={{ fontSize: 18 }} />,
-            loading: <LoadingOutlined style={{ fontSize: 18 }} />,
-            success: <SmileOutlined style={{ fontSize: 18, color: '#52c41a' }} />,
-            error: <MehOutlined style={{ fontSize: 18, color: '#ff4d4f' }} />,
-            refresh: <RedoOutlined style={{ fontSize: 18 }} />,
-          }}
-          style={{
-            '--rcsc-primary': '#4f6ef7',
-            '--rcsc-primary-light': '#e0e7ff',
-            '--rcsc-success': '#52c41a',
-            '--rcsc-error': '#ff4d4f',
-            borderRadius: 8,
-            overflow: 'hidden',
-            boxShadow: '0 2px 12px rgba(0, 0, 0, 0.08)',
-          } as React.CSSProperties}
-        />
+
+        {/* Slider Captcha Container with Custom Styles */}
+        <div style={{
+          position: 'relative',
+          borderRadius: 16,
+          overflow: 'hidden',
+          boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08)',
+          border: '1px solid #e2e8f0',
+          background: '#fff',
+        }}>
+          <SliderCaptcha
+            mode="embed"
+            request={request}
+            onVerify={onVerify}
+            bgSize={{ width: 320, height: 160 }}
+            puzzleSize={{ width: 60 }}
+            showRefreshIcon
+            autoRefreshOnError
+            errorHoldDuration={1000}
+            limitErrorCount={3}
+            tipText={{
+              default: t('captcha.drag'),
+              loading: t('captcha.loading'),
+              moving: t('captcha.moving'),
+              verifying: t('captcha.verifying'),
+              success: t('captcha.success'),
+              error: t('captcha.failed'),
+              errors: t('captcha.tooFrequent'),
+              loadFailed: t('captcha.loadFailed'),
+            }}
+            tipIcon={{
+              default: <SafetyOutlined style={{ fontSize: 18 }} />,
+              loading: <LoadingOutlined style={{ fontSize: 18 }} />,
+              success: <SmileOutlined style={{ fontSize: 18, color: '#059669' }} />,
+              error: <MehOutlined style={{ fontSize: 18, color: '#dc2626' }} />,
+              refresh: <RedoOutlined style={{ fontSize: 18 }} />,
+            }}
+            style={{
+              '--rcsc-primary': '#4f6ef7',
+              '--rcsc-primary-light': '#e0e7ff',
+              '--rcsc-success': '#059669',
+              '--rcsc-error': '#dc2626',
+              '--rcsc-border-color': '#e2e8f0',
+              '--rcsc-track-height': '42px',
+              '--rcsc-handle-size': '42px',
+              borderRadius: 12,
+              overflow: 'hidden',
+            } as React.CSSProperties}
+          />
+        </div>
       </div>
     </Modal>
   )
