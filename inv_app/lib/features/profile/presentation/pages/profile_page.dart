@@ -473,6 +473,10 @@ class _ProfilePageState extends State<ProfilePage> {
                   onPressed: () {
                     Navigator.pop(ctx);
                     context.read<AuthBloc>().add(AuthLogoutRequested());
+                    // 主动回登录页，不依赖 Bloc 状态流：guest 离网模式下登出前
+                    // 状态本就是未登录，弱网时云端登出调用还可能长时间挂起；
+                    // 本地清理在后台继续，跳转幂等（守卫见已在 /login 不重复跳）
+                    context.go('/login');
                   },
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.errorLight,
