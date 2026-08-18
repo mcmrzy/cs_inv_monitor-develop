@@ -1,0 +1,48 @@
+package handler
+
+import (
+	"strings"
+	"testing"
+)
+
+// TestWorkOrderDataScopeParenthesized 防止回归：
+// 数据范围片段会与外部 AND 条件拼接（如 Update/Delete/Escalate 的
+// "WHERE id::text=$1 AND <scope> AND ..."），一旦片段本身未加括号，
+// SQL 解析时 AND 优先级高于 OR，会退化成 "(原条件) OR creator_id=$N"，
+// 导致对系统管理员误更新/误删除其创建的全部工单。
+func TestWorkOrderDataScopeParenthesized(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		isSystemAdmin bool
+	}{
+		{name: "system_admin", isSystemAdmin: true},
+		{name: "regular_user", isSystemAdmin: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			scope := workOrderDataScope("work_orders", tc.isSystemAdmin, 9)
+			if !strings.HasPrefix(scope, "(") || !strings.HasSuffix(scope, ")") {
+				t.Fatalf("workOrderDataScope must be fully parenthesized, got: %s", scope)
+			}
+
+			// 模拟 Update 的拼接形态，确认 OR 不会逃逸出括号
+			where := "id::text=$1 AND " + scope + " AND ($10::bigint IS NULL OR lock_version=$10)"
+			depth := 0
+			for i := 0; i < len(where); i++ {
+				switch where[i] {
+				case '(':
+					depth++
+				case ')':
+					depth--
+				case 'O', 'o':
+					// 顶层（depth==0）不允许出现 OR 关键字
+					if depth == 0 && strings.EqualFold(where[i:min(i+2, len(where))], "OR") {
+						t.Fatalf("top-level OR found outside parentheses: %s", where)
+					}
+				}
+				if depth < 0 {
+					t.Fatalf("unbalanced parentheses: %s", where)
+				}
+			}
+		})
+	}
+}

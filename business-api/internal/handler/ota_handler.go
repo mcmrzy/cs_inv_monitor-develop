@@ -681,6 +681,22 @@ func (h *OTAHandler) GetDeviceOTAHistory(c *gin.Context) {
 	response.Success(c, gin.H{"items": history, "total": total})
 }
 
+// GetAllOTAHistory 获取全设备升级历史（系统管理员查看全部，普通用户按数据权限过滤）
+func (h *OTAHandler) GetAllOTAHistory(c *gin.Context) {
+	page := parseInt(c.DefaultQuery("page", "1"))
+	pageSize := getPageSize(c, 20)
+
+	userID := middleware.GetUserID(c)
+	isSystemAdmin := middleware.GetIsSystemAdmin(c)
+
+	history, total, err := h.otaService.GetAllOTAHistory(c.Request.Context(), userID, isSystemAdmin, page, pageSize)
+	if err != nil {
+		response.Error(c, 500, "查询历史失败")
+		return
+	}
+	response.Success(c, gin.H{"items": history, "total": total})
+}
+
 // GetAllFirmware 获取所有固件（不分页，供APP选择）
 func (h *OTAHandler) GetAllFirmware(c *gin.Context) {
 	list, err := h.otaService.ListFirmware(c.Request.Context(), "")
@@ -1325,18 +1341,36 @@ func (h *OTAHandler) AppListUpgradePackages(c *gin.Context) {
 		return
 	}
 
-	// 过滤敏感字段，只返回 App 端需要的信息
+	// 只返回 App 端需要的信息：items 携带下载元数据（firmware_id/download_url 等），
+	// 支撑固件库「按型号浏览 + 下载到本地」；仍仅返回已发布包
+	response.Success(c, buildAppUpgradePackagesPayload(list, h.otaService.BuildDownloadURL))
+}
+
+// buildAppUpgradePackagesPayload 将升级包列表序列化为 App 端响应体：
+// 仅保留已发布包，items 携带下载元数据。抽出纯函数便于单测。
+func buildAppUpgradePackagesPayload(list []model.UpgradePackage, buildURL func(string) string) gin.H {
 	type safeItem struct {
-		TargetChip      string `json:"target_chip"`
-		FirmwareVersion string `json:"firmware_version"`
+		TargetChip       string `json:"target_chip"`
+		FirmwareVersion  string `json:"firmware_version"`
+		FirmwareID       int64  `json:"firmware_id"`
+		DownloadURL      string `json:"download_url"`
+		FileName         string `json:"file_name"`
+		FileSize         int64  `json:"file_size"`
+		FileMD5          string `json:"file_md5"`
+		FileSHA256       string `json:"file_sha256"`
+		SecurityVersion  uint32 `json:"security_version"`
+		ReleaseSignature string `json:"release_signature"`
 	}
 	type safePackage struct {
-		ID          int64      `json:"id"`
-		MainVersion string     `json:"main_version"`
-		Model       string     `json:"model"`
-		Changelog   string     `json:"changelog"`
-		CreatedAt   string     `json:"created_at"`
-		Items       []safeItem `json:"items"`
+		ID            int64      `json:"id"`
+		MainVersion   string     `json:"main_version"`
+		UserVersion   string     `json:"user_version"`
+		UserChangelog string     `json:"user_changelog"`
+		IsForce       bool       `json:"is_force"`
+		Model         string     `json:"model"`
+		Changelog     string     `json:"changelog"`
+		CreatedAt     string     `json:"created_at"`
+		Items         []safeItem `json:"items"`
 	}
 
 	packages := make([]safePackage, 0, len(list))
@@ -1348,21 +1382,32 @@ func (h *OTAHandler) AppListUpgradePackages(c *gin.Context) {
 		items := make([]safeItem, 0, len(pkg.Items))
 		for _, item := range pkg.Items {
 			items = append(items, safeItem{
-				TargetChip:      item.TargetChip,
-				FirmwareVersion: item.FirmwareVersion,
+				TargetChip:       item.TargetChip,
+				FirmwareVersion:  item.FirmwareVersion,
+				FirmwareID:       item.FirmwareID,
+				DownloadURL:      buildURL(item.FileURL),
+				FileName:         item.TargetChip + "_" + item.FirmwareVersion + ".bin",
+				FileSize:         item.FileSize,
+				FileMD5:          item.FileMD5,
+				FileSHA256:       item.FileSHA256,
+				SecurityVersion:  item.SecurityVersion,
+				ReleaseSignature: item.ReleaseSignature,
 			})
 		}
 		packages = append(packages, safePackage{
-			ID:          pkg.ID,
-			MainVersion: pkg.MainVersion,
-			Model:       pkg.Model,
-			Changelog:   pkg.Changelog,
-			CreatedAt:   pkg.CreatedAt.Format(time.RFC3339),
-			Items:       items,
+			ID:            pkg.ID,
+			MainVersion:   pkg.MainVersion,
+			UserVersion:   pkg.UserVersion,
+			UserChangelog: pkg.UserChangelog,
+			IsForce:       pkg.IsForce,
+			Model:         pkg.Model,
+			Changelog:     pkg.Changelog,
+			CreatedAt:     pkg.CreatedAt.Format(time.RFC3339),
+			Items:         items,
 		})
 	}
 
-	response.Success(c, gin.H{"packages": packages})
+	return gin.H{"packages": packages}
 }
 
 // AppInstallPackage APP端安装指定升级包

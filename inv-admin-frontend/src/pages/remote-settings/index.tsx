@@ -1,39 +1,34 @@
+// 远程设置 —— 三层结构：快捷设置首页（卡片）→ 功能分类页 → 高级参数（工程师模式）
+
 import React, { useState } from 'react'
 import { Empty, Typography, App } from 'antd'
-import { useQuery } from '@tanstack/react-query'
-import { deviceApi } from '@/services/deviceApi'
+import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/utils/queryKeys'
 import useTranslation from '@/hooks/useTranslation'
 import DeviceSelector from './components/DeviceSelector'
-import SchemaGroupPanel from './components/SchemaGroupPanel'
-import type { DeviceItem } from './types'
+import SettingsHome from './components/SettingsHome'
+import ModulePage from './components/ModulePage'
+import AdvancedPanel from './components/AdvancedPanel'
+import { useDeviceConfig } from './hooks/useDeviceConfig'
+import { MODULES } from './config/fields'
 
 const { Title, Text } = Typography
 
+type View = { name: 'home' } | { name: 'module'; moduleId: string } | { name: 'advanced' }
+
 const RemoteSettingsPage: React.FC = () => {
-  const { message } = App.useApp()
   const { t } = useTranslation()
   const [selectedSn, setSelectedSn] = useState<string | null>(() => {
     return localStorage.getItem('remote-settings-device-sn')
   })
-  const [reading, setReading] = useState(false)
 
-  const { data: devicesData } = useQuery({
-    queryKey: queryKeys.devices.list({ page: 1, page_size: 200 }),
-    queryFn: () =>
-      deviceApi.getDevices({ page: 1, page_size: 200 }).then((r) => {
-        const d = (r as any).data?.data ?? (r as any).data
-        return (Array.isArray(d?.items) ? d.items : (Array.isArray(d) ? d : [])) as DeviceItem[]
-      }),
-    staleTime: 60_000,
-  })
-
-  const devices = devicesData ?? []
-
-  const handleRead = () => {
-    setReading(true)
-    message.info(t('remote.readingConfig'))
-    setTimeout(() => setReading(false), 1500)
+  const handleDeviceChange = (sn: string) => {
+    setSelectedSn(sn || null)
+    if (sn) {
+      localStorage.setItem('remote-settings-device-sn', sn)
+    } else {
+      localStorage.removeItem('remote-settings-device-sn')
+    }
   }
 
   return (
@@ -43,25 +38,69 @@ const RemoteSettingsPage: React.FC = () => {
         {t('remote.pageDescription')}
       </Text>
 
-      <DeviceSelector selectedSn={selectedSn} onDeviceChange={(sn) => {
-        setSelectedSn(sn || null)
-        if (sn) {
-          localStorage.setItem('remote-settings-device-sn', sn)
-        } else {
-          localStorage.removeItem('remote-settings-device-sn')
-        }
-      }} onRead={handleRead} reading={reading} />
-
       {selectedSn ? (
-        /* 统一老款分组样式：设备信息头部（DeviceSelector）+ 通用/应用/混合/并联四分组 + 命令历史
-         * （由 device_config_schema 驱动：通用 12 / 应用 8 / 混合 21（充电/放电/SOC/发电机）/ 并联 1） */
-        <SchemaGroupPanel sn={selectedSn} />
+        <SettingsWorkspace sn={selectedSn} onDeviceChange={handleDeviceChange} />
       ) : (
-        <div style={{ borderRadius: 12, marginTop: 24, textAlign: 'center', padding: 48, background: '#fff' }}>
-          <Empty description={t('remote.pleaseSelectDeviceFirst')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
-        </div>
+        <>
+          <DeviceSelector selectedSn={null} onDeviceChange={handleDeviceChange} onRead={() => undefined} reading={false} />
+          <div style={{ borderRadius: 16, marginTop: 8, textAlign: 'center', padding: 48, background: '#fff' }}>
+            <Empty description={t('remote.pleaseSelectDeviceFirst')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+          </div>
+        </>
       )}
     </div>
+  )
+}
+
+interface SettingsWorkspaceProps {
+  sn: string
+  onDeviceChange: (sn: string) => void
+}
+
+/** 选中设备后的工作区：设备选择器 + 三层视图切换 */
+const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({ sn, onDeviceChange }) => {
+  const { message } = App.useApp()
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const cfg = useDeviceConfig(sn)
+  const [view, setView] = useState<View>({ name: 'home' })
+  const [reading, setReading] = useState(false)
+
+  const handleRead = () => {
+    setReading(true)
+    message.info(t('remote.readingConfig'))
+    cfg.refetchAll()
+    void queryClient.invalidateQueries({ queryKey: queryKeys.devices.controlState(sn) })
+    setTimeout(() => setReading(false), 1200)
+  }
+
+  const activeModule = view.name === 'module' ? MODULES.find((m) => m.id === view.moduleId) : undefined
+
+  return (
+    <>
+      <DeviceSelector
+        selectedSn={sn}
+        onDeviceChange={(next) => {
+          setView({ name: 'home' })
+          onDeviceChange(next)
+        }}
+        onRead={handleRead}
+        reading={reading}
+      />
+
+      {view.name === 'home' && (
+        <SettingsHome
+          cfg={cfg}
+          loading={cfg.schemaLoading && cfg.stateLoading}
+          onOpenModule={(moduleId) => setView({ name: 'module', moduleId })}
+          onOpenAdvanced={() => setView({ name: 'advanced' })}
+        />
+      )}
+      {view.name === 'module' && activeModule && (
+        <ModulePage module={activeModule} cfg={cfg} onBack={() => setView({ name: 'home' })} />
+      )}
+      {view.name === 'advanced' && <AdvancedPanel cfg={cfg} onBack={() => setView({ name: 'home' })} />}
+    </>
   )
 }
 

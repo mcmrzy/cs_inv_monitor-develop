@@ -8,5 +8,7 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         // 自研 WiFi 扫描通道（替代停更的 wifi_scan 插件，消除 KGP 警告）
         flutterEngine.plugins.add(WifiScanPlugin())
+        // 自研环境光通道（扫码页暗光补光检测用）
+        flutterEngine.plugins.add(AmbientLightPlugin())
     }
 }

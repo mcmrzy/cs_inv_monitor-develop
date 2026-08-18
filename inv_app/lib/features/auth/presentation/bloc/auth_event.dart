@@ -44,14 +44,16 @@ class AuthLogoutRequested extends AuthEvent {}
 class AuthSendCodeRequested extends AuthEvent {
   final String phone;
   final String type;
+  final String? captchaToken;
 
   const AuthSendCodeRequested({
     required this.phone,
     required this.type,
+    this.captchaToken,
   });
 
   @override
-  List<Object?> get props => [phone, type];
+  List<Object?> get props => [phone, type, captchaToken];
 }
 
 class AuthResetPasswordRequested extends AuthEvent {
@@ -140,14 +142,16 @@ class AuthEmailRegisterRequested extends AuthEvent {
 class AuthSendEmailCodeRequested extends AuthEvent {
   final String email;
   final String type;
+  final String? captchaToken;
 
   const AuthSendEmailCodeRequested({
     required this.email,
     required this.type,
+    this.captchaToken,
   });
 
   @override
-  List<Object?> get props => [email, type];
+  List<Object?> get props => [email, type, captchaToken];
 }
 
 /// 修改手机号/邮箱成功后，同步更新 AuthBloc 状态与本地缓存（无需重新请求服务器）

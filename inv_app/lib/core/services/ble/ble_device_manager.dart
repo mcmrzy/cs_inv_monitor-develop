@@ -668,8 +668,9 @@ class BleDeviceManager {
   /// 启动自动连接（Android 后台场景建议配合 autoConnect=true 挂起直连）
   ///
   /// 扫描过滤 CSIV-PR 服务 UUID（现有固件广播即携带），命中后：
-  /// 连接 → 读 SN → keyStore 有 device_key → 鉴权进入 ready；
-  /// 无 device_key（未绑定设备）跳过，交由配网/绑定流程处理。
+  /// 先从广播名解析 SN → keyStore 有 device_key（已绑定）才连接并鉴权；
+  /// 未绑定/无法解析 SN 的设备一律不连接，避免占用 BLE 链路
+  /// 导致配网/绑定流程扫描不到设备。
   Future<void> startAutoConnect() async {
     if (_autoConnectRunning) return;
     _autoConnectRunning = true;
@@ -688,6 +689,17 @@ class BleDeviceManager {
       if (existing != null && existing.state != BleDeviceState.disconnected) {
         return;
       }
+      // 仅自动连接已绑定设备：广播名解析 SN → keyStore 校验 device_key
+      final sn = parseSnFromAdvName(result.name);
+      if (sn.isEmpty) return;
+      String? deviceKey;
+      try {
+        deviceKey = await _keyStore.read(sn);
+      } catch (e) {
+        debugPrint('BleDeviceManager: keyStore read $sn failed: $e');
+        return;
+      }
+      if (deviceKey == null || !_autoConnectRunning) return;
       try {
         await connectDevice(result.macAddress, autoReconnect: true);
       } catch (e) {
@@ -695,6 +707,14 @@ class BleDeviceManager {
             'failed: $e');
       }
     });
+  }
+
+  /// 从广播名解析 SN（广播名形如 CS_INV_<SN> / CS-INV-<SN>）；
+  /// 无法解析时返回空串
+  static String parseSnFromAdvName(String name) {
+    return name
+        .replaceFirst(RegExp(r'^CS[-_]INV[-_]', caseSensitive: false), '')
+        .trim();
   }
 
   Future<void> stopAutoConnect() async {

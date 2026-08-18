@@ -1204,6 +1204,28 @@ func (r *StationRepository) ReorderStations(ctx context.Context, userID int64, i
 }
 
 func normalizeRealtimeData(data map[string]interface{}) map[string]interface{} {
+	// bat (V2) → 也展平到顶层（与 batt 同逻辑）
+	if bat, ok := data["bat"]; ok {
+		if batMap, ok := bat.(map[string]interface{}); ok {
+			for k, v := range batMap {
+				if _, exists := data[k]; !exists {
+					data[k] = v
+				}
+			}
+		}
+	}
+
+	// chr (V2 AC charge): 展平到顶层
+	if chr, ok := data["chr"]; ok {
+		if chrMap, ok := chr.(map[string]interface{}); ok {
+			for k, v := range chrMap {
+				if _, exists := data[k]; !exists {
+					data[k] = v
+				}
+			}
+		}
+	}
+
 	// batt → battery (前端期望 battery)，并展平到顶层
 	if batt, ok := data["batt"]; ok {
 		if battMap, ok := batt.(map[string]interface{}); ok {
@@ -1329,6 +1351,39 @@ func normalizeRealtimeData(data map[string]interface{}) map[string]interface{} {
 		if energyMap, ok := energy.(map[string]interface{}); ok {
 			for k, v := range energyMap {
 				data[k] = v
+			}
+		}
+	}
+
+	// eng (V2 协议): 同 energy，展平到顶层
+	if eng, ok := data["eng"]; ok {
+		if engMap, ok := eng.(map[string]interface{}); ok {
+			for k, v := range engMap {
+				if _, exists := data[k]; !exists {
+					data[k] = v
+				}
+			}
+		}
+	}
+
+	// fan: 展平到顶层
+	if fan, ok := data["fan"]; ok {
+		if fanMap, ok := fan.(map[string]interface{}); ok {
+			for k, v := range fanMap {
+				if _, exists := data[k]; !exists {
+					data[k] = v
+				}
+			}
+		}
+	}
+
+	// diag: 展平到顶层
+	if diag, ok := data["diag"]; ok {
+		if diagMap, ok := diag.(map[string]interface{}); ok {
+			for k, v := range diagMap {
+				if _, exists := data[k]; !exists {
+					data[k] = v
+				}
 			}
 		}
 	}

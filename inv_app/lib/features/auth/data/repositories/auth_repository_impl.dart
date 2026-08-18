@@ -48,10 +48,13 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<Either<Failure, void>> sendCode({
     required String phone,
     required String type,
+    String? captchaToken,
   }) async {
     return apiService.post(
       '/auth/send-code',
       data: {'phone': phone, 'type': type},
+      headers:
+          captchaToken != null ? {'X-Captcha-Token': captchaToken} : null,
       fromJson: (_) {},
     );
   }
@@ -151,10 +154,13 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<Either<Failure, void>> sendEmailCode({
     required String email,
     required String type,
+    String? captchaToken,
   }) async {
     return apiService.post(
       '/auth/send-email-code',
       data: {'email': email, 'type': type},
+      headers:
+          captchaToken != null ? {'X-Captcha-Token': captchaToken} : null,
       fromJson: (_) {},
     );
   }

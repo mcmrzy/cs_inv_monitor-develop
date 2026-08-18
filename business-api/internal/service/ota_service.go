@@ -38,13 +38,16 @@ type OTAService struct {
 	downloadURL  string // 固件下载CDN域名（download子域），优先于 serverURL 用于构造下载URL
 	httpClient   *http.Client
 	concurrency  int
+	taskTimeout  time.Duration // 升级任务超时阈值，pending/running 任务超过该时长无更新自动置为 failed；<=0 表示禁用
+
+	dataPermission *DataPermission // 数据权限：普通用户按可见设备 SN 过滤
 }
 
 func NewOTAService(repo *repository.OTARepository, rdb *redis.Client, deviceServer string, internalKey string, uploadDir string, serverURL string, downloadURL string, db *pgxpool.Pool, jpushService *JPushService) *OTAService {
 	if uploadDir == "" {
 		uploadDir = "/data/firmware"
 	}
-	return &OTAService{
+	svc := &OTAService{
 		repo:         repo,
 		rdb:          rdb,
 		db:           db,
@@ -56,7 +59,12 @@ func NewOTAService(repo *repository.OTARepository, rdb *redis.Client, deviceServ
 		downloadURL:  downloadURL,
 		httpClient:   &http.Client{Timeout: 30 * time.Second},
 		concurrency:  10,
+		taskTimeout:  DefaultOTATaskTimeoutMinutes * time.Minute,
 	}
+	if db != nil {
+		svc.dataPermission = NewDataPermission(db)
+	}
+	return svc
 }
 
 type CreateFirmwareReq struct {
@@ -645,6 +653,34 @@ func (s *OTAService) GetLatestTaskDevice(ctx context.Context, sn string) (*model
 // GetDeviceOTAHistory 兼容旧接口
 func (s *OTAService) GetDeviceOTAHistory(ctx context.Context, sn string, page, pageSize int) ([]model.DeviceUpgrade, int, error) {
 	return s.repo.GetDeviceUpgradeHistory(ctx, sn, page, pageSize)
+}
+
+// GetAllOTAHistory 全设备升级历史：系统管理员查看全部；普通用户按数据权限取可见设备 SN 后过滤查询。
+func (s *OTAService) GetAllOTAHistory(ctx context.Context, userID int64, isSystemAdmin bool, page, pageSize int) ([]model.DeviceUpgrade, int, error) {
+	if isSystemAdmin {
+		history, total, err := s.repo.GetAllUpgradeHistory(ctx, nil, page, pageSize)
+		if err != nil {
+			return nil, 0, fmt.Errorf("query all upgrade history: %w", err)
+		}
+		return history, total, nil
+	}
+
+	if s.dataPermission == nil {
+		return nil, 0, fmt.Errorf("data permission not initialized")
+	}
+	sns, err := s.dataPermission.GetAllowedDeviceSNs(ctx, userID)
+	if err != nil {
+		return nil, 0, fmt.Errorf("get allowed device sns: %w", err)
+	}
+	if len(sns) == 0 {
+		return []model.DeviceUpgrade{}, 0, nil
+	}
+
+	history, total, err := s.repo.GetAllUpgradeHistory(ctx, sns, page, pageSize)
+	if err != nil {
+		return nil, 0, fmt.Errorf("query upgrade history: %w", err)
+	}
+	return history, total, nil
 }
 
 // ========== App版本管理 ==========
@@ -1571,6 +1607,12 @@ func (s *OTAService) ExecuteTask(ctx context.Context, taskID int64) error {
 
 // ListUpgradeTasks 升级任务列表
 func (s *OTAService) ListUpgradeTasks(ctx context.Context, page, pageSize int, statusFilter string) ([]model.UpgradeTask, int, error) {
+	// 双保险收口：查询时顺带将超时任务置为 failed（幂等、单条带索引 UPDATE，开销小），
+	// 保证前端刷新立即看到最新状态；失败不阻断列表查询。
+	if _, err := s.FailTimedOutUpgradeTasks(ctx); err != nil {
+		logger.Warn("list upgrade tasks: timeout sweep failed", zap.Error(err))
+	}
+
 	tasks, total, err := s.repo.ListUpgradeTasks(ctx, page, pageSize, statusFilter)
 	if err != nil {
 		return nil, 0, err
@@ -1593,6 +1635,29 @@ func (s *OTAService) ListUpgradeTasks(ctx context.Context, page, pageSize int, s
 		}
 	}
 	return tasks, total, nil
+}
+
+// SetTaskTimeout 设置升级任务超时阈值；<=0 表示禁用超时收口。
+func (s *OTAService) SetTaskTimeout(d time.Duration) {
+	s.taskTimeout = d
+}
+
+// FailTimedOutUpgradeTasks 收口卡在非终态（pending/running）且超过阈值无任何
+// 更新的升级任务，将其置为 failed 并记录失败原因。幂等，可被后台定时器与
+// 列表查询重复调用。
+func (s *OTAService) FailTimedOutUpgradeTasks(ctx context.Context) (int64, error) {
+	if s.taskTimeout <= 0 {
+		return 0, nil
+	}
+	count, err := s.repo.MarkTimedOutUpgradeTasks(ctx, s.taskTimeout, TaskTimeoutReason)
+	if err != nil {
+		return 0, fmt.Errorf("fail timed-out upgrade tasks: %w", err)
+	}
+	if count > 0 {
+		logger.Warn("upgrade tasks marked failed due to timeout",
+			zap.Int64("task_count", count), zap.Duration("timeout", s.taskTimeout))
+	}
+	return count, nil
 }
 
 // GetUpgradeTask 获取任务详情

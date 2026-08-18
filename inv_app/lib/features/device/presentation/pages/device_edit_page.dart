@@ -258,7 +258,7 @@ class _DeviceEditPageState extends State<DeviceEditPage> {
     return _buildSection(
       icon: Icons.edit_outlined,
       title: l10n.editDevice,
-      subtitle: l10n.editStationHint,
+      subtitle: l10n.str('edit_device_hint'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

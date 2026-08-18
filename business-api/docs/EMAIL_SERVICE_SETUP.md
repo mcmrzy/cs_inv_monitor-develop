@@ -154,47 +154,30 @@ services:
 
 ## 邮件模板
 
-系统使用 Go `html/template` 引擎渲染邮件内容，模板文件位于 `business-api/internal/templates/` 目录：
+系统所有邮件使用统一的品牌化模板（CS-INV，主色 `#1677ff`，点缀 `#00D4FF`）：
+后端通过 `RenderEmailEnvelope` 渲染统一的「品牌信封」（顶部品牌区/正文区/主按钮/页脚），
+各邮件类型只提供「内容块」（Go `html/template` 语法）。模板持久化在数据库 `email_templates` 表
+（迁移 `database/migrations/102_add_email_templates`），渲染时优先读库内模板，
+缺失/禁用/损坏时自动回退内置默认模板，保证发信不因模板问题失败。
+管理后台可在「通知与文档配置 → 邮件模板配置」中编辑模板并发送测试邮件
+（`GET/PUT /api/v1/email/templates`、`POST /api/v1/email/test`，仅系统管理员）。
 
-| 模板文件 | 用途 | 触发场景 |
+| 模板标识 (template_key) | 用途 | 触发场景 |
 |----------|------|----------|
-| `invitation_email.tmpl` | 组织邀请 | 管理员发送邀请时 |
-| `transfer_notification.tmpl` | 设备转移通知 | 设备转移请求创建时 |
-| `verification_code.tmpl` | 验证码邮件 | 注册/登录发送验证码时 |
-| `welcome.tmpl`（预留） | 欢迎邮件 | 新用户首次注册时 |
-| `password_reset.tmpl`（预留） | 密码重置 | 用户请求重置密码时 |
+| `verification_code` | 验证码邮件（验证码大字号居中突出） | 注册/登录/重置密码/改邮箱发送验证码时 |
+| `invitation_email` | 组织邀请 | 管理员发送邀请时 |
+| `welcome_email` | 欢迎邮件 | 新用户创建时 |
+| `password_reset` | 密码重置 | 用户请求重置密码时 |
+| `transfer_notification` | 设备转移通知 | 设备转移请求创建时 |
+| `notification_email` | 告警/OTA/工单等系统通知 | 设备告警、升级任务下发等 |
+| `daily_report` | 每日发电统计报告 | 定时任务按用户时区推送 |
+| `test_email` | 测试邮件 | 管理后台验证 SMTP 配置 |
 
-### 模板变量
+### 标准占位变量
 
-**邀请邮件 (`invitation_email.tmpl`)**
-
-```go
-data := map[string]string{
-    "ToEmail":          "user@example.com",
-    "InviteLink":       "https://app.example.com/invite?token=xxx",
-    "RoleName":         "管理员",
-    "OrganizationName": "企业A",
-    "ExpiresHours":     "168",
-    "SenderName":       "逆变器监控平台",
-}
-```
-
-**转移通知 (`transfer_notification.tmpl`)**
-
-```go
-data := map[string]string{
-    "RequesterEmail": "admin@company.com",
-    "DeviceSN":       "CS6K2-001234",
-    "FromOrg":        "企业A",
-    "ToOrg":          "企业B",
-    "Reason":         "项目移交",
-    "SenderName":     "逆变器监控平台",
-}
-```
-
-### 自定义模板
-
-修改模板文件后重新编译或重启服务即可生效，无需重新部署。
+`{{.Title}}` 标题、`{{.Summary}}` 摘要、`{{.Content}}` 正文、`{{.ButtonText}}`/`{{.ButtonURL}}` 主按钮、
+`{{.Code}}` 验证码（大字号居中显示）、`{{.FooterNote}}` 页脚补充说明。
+各类型还可使用原有业务变量（如 `{{.OrganizationName}}`、`{{.DeviceSN}}`、`{{.RoleName}}` 等），语义不变。
 
 ---
 

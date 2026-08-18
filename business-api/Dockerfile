@@ -15,7 +15,6 @@ RUN sed -i "s/dl-cdn.alpinelinux.org/${ALPINE_MIRROR}/g" /etc/apk/repositories &
     apk --no-cache add ca-certificates tzdata wget
 WORKDIR /app
 COPY --from=builder /app/inv-api-server ./main
-COPY --from=builder /app/internal/templates ./internal/templates
 COPY business-api/config.docker.yaml ./config.yaml
 COPY database ./database
 RUN addgroup -S app && adduser -S -G app app && \

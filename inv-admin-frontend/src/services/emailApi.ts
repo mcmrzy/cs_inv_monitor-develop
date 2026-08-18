@@ -1,0 +1,34 @@
+import api from './api'
+
+/** 系统邮件模板（email_templates 表） */
+export interface EmailTemplate {
+  template_key: string
+  subject: string
+  html_body: string
+  enabled: boolean
+  updated_at: string
+}
+
+export interface UpdateEmailTemplatePayload {
+  subject: string
+  html_body: string
+  enabled: boolean
+}
+
+/**
+ * 邮件模板管理 API（仅系统管理员）
+ * 后端路由：/api/v1/email/templates、/api/v1/email/test
+ */
+export const emailApi = {
+  /** 获取全部邮件模板 */
+  listTemplates: () => api.get('/email/templates', { expectedDataShape: 'array' }),
+
+  /** 更新指定模板（主题 / HTML 内容块 / 启用状态） */
+  updateTemplate: (templateKey: string, data: UpdateEmailTemplatePayload) =>
+    api.put(`/email/templates/${templateKey}`, data),
+
+  /** 发送测试邮件（验证当前 SMTP 配置） */
+  sendTestEmail: (email: string) => api.post('/email/test', { email }),
+}
+
+export default emailApi

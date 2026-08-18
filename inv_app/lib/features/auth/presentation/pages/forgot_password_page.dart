@@ -6,6 +6,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
+import 'package:inv_app/core/widgets/slider_captcha_dialog.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
@@ -56,7 +57,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
     });
   }
 
-  void _handleSendCode() {
+  Future<void> _handleSendCode() async {
     final l10n = AppLocalizations.of(context)!;
     final phone = _phoneController.text.trim();
     if (phone.isEmpty || phone.length != 11) {
@@ -67,10 +68,14 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       );
       return;
     }
+    // 后端要求先通过滑块验证，获取 verifyToken 后随请求携带
+    final captchaToken = await showSliderCaptcha(context);
+    if (captchaToken == null || !mounted) return;
     context.read<AuthBloc>().add(
           AuthSendCodeRequested(
             phone: phone,
             type: 'reset',
+            captchaToken: captchaToken,
           ),
         );
   }

@@ -1,0 +1,33 @@
+package service
+
+import (
+	"time"
+
+	"inv-api-server/internal/model"
+)
+
+const (
+	// DefaultOTATaskTimeoutMinutes 升级任务默认超时阈值（分钟）。
+	DefaultOTATaskTimeoutMinutes = 30
+
+	// TaskTimeoutReason 写入超时任务的失败原因备注。
+	TaskTimeoutReason = "升级超时（设备未回报状态）"
+)
+
+// IsUpgradeTaskTimedOut 判定升级任务是否超时：
+// 任务处于非终态的等候/进行中状态（pending/running），且在 timeout 时长内
+// 没有任何状态更新（以 updated_at 为准）。
+//
+// 终态（completed/partial_success/failed/cancelled）任务永远不会被判超时；
+// draft（草稿未下发）与 scheduled（由定时调度器负责领取执行）也不参与超时收口。
+func IsUpgradeTaskTimedOut(status string, updatedAt time.Time, timeout time.Duration, now time.Time) bool {
+	if timeout <= 0 {
+		return false
+	}
+	switch status {
+	case model.TaskStatusPending, model.TaskStatusRunning:
+		return now.Sub(updatedAt) > timeout
+	default:
+		return false
+	}
+}

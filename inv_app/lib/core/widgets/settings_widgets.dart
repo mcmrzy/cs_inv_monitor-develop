@@ -18,11 +18,15 @@ class SettingsSectionTitle extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.accent,
+    this.trailing,
   });
 
   final IconData icon;
   final String title;
   final Color accent;
+
+  /// 行尾可选操作区（如「重新扫描」按钮）
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -32,14 +36,17 @@ class SettingsSectionTitle extends StatelessWidget {
         children: [
           Icon(icon, size: 16.sp, color: accent),
           SizedBox(width: 6.w),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 13.sp,
-              fontWeight: FontWeight.w600,
-              color: AppColor.textSecondary(context),
+          Expanded(
+            child: Text(
+              title,
+              style: TextStyle(
+                fontSize: 13.sp,
+                fontWeight: FontWeight.w600,
+                color: AppColor.textSecondary(context),
+              ),
             ),
           ),
+          if (trailing != null) trailing!,
         ],
       ),
     );

@@ -352,6 +352,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     final result = await sendCodeUseCase(
       phone: event.phone,
       type: event.type,
+      captchaToken: event.captchaToken,
     );
 
     result.fold(
@@ -685,6 +686,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     final result = await sendEmailCodeUseCase(
       email: event.email,
       type: event.type,
+      captchaToken: event.captchaToken,
     );
 
     result.fold(

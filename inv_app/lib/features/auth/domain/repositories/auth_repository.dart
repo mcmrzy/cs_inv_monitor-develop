@@ -19,6 +19,7 @@ abstract class AuthRepository {
   Future<Either<Failure, void>> sendCode({
     required String phone,
     required String type,
+    String? captchaToken,
   });
 
   Future<Either<Failure, void>> resetPassword({
@@ -60,6 +61,7 @@ abstract class AuthRepository {
   Future<Either<Failure, void>> sendEmailCode({
     required String email,
     required String type,
+    String? captchaToken,
   });
 
   Future<Either<Failure, LoginResponse>> refreshToken({

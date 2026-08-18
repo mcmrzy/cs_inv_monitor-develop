@@ -1,0 +1,247 @@
+// 远程设置三层结构 —— 模块定义与字段静态元数据兜底
+//
+// 元数据来源优先级：后端 device_config_schema（getConfigSchema 返回 scale/unit/min/max/step/enum_map）
+// 优先；后端缺失（如 0x002A+ 扩展参数区，V2.1 文档 9.2 脚注）时使用本文件静态定义兜底。
+//
+// scale 约定（与任务书一致的用户侧倍率）：raw = physical × scale，读取 raw/scale、写入 round(value×scale)。
+// 后端 schema.scale 为倒数约定（physical = raw × schemaScale），换算层统一归一，见 conversion.ts。
+
+export type ControlKind = 'number' | 'boolean' | 'enum' | 'priority'
+
+// ── 后端 config-schema 行结构（business-api /devices/by-sn/:sn/config-schema）──
+export interface ConfigSchemaItem {
+  param_key: string
+  group_code: string
+  sub_group: string
+  control_type: 'number' | 'enum' | 'boolean'
+  scale: number
+  unit: string
+  min?: number | null
+  max?: number | null
+  enum_map?: Record<string, string> | null
+  step?: number | null
+  permission_code?: string
+  confirmation_mode?: string | null
+  display_name_key: string
+  sort_order: number
+  visibility?: { param?: string; eq?: number; ne?: number } | null
+  validation?: Record<string, string> | null
+}
+
+// ── 静态兜底元数据（scale 为用户侧倍率：raw = physical × scale）──
+export interface StaticFieldMeta {
+  kind: ControlKind
+  scale: number
+  unit?: string
+  min?: number
+  max?: number
+  step?: number
+  enumKeys?: string[] // 枚举语义键（raw 值升序），标签走 config.enum.<key>
+  visibility?: { param: string; eq?: number; ne?: number }
+  confirm?: boolean // 下发前二次确认
+}
+
+export const STATIC_FIELD_META: Record<string, StaticFieldMeta> = {
+  // ── 工作模式 ──
+  set_output_priority: { kind: 'enum', scale: 1, enumKeys: ['solar_first', 'utility_first', 'solar_utility'] },
+  set_ac_output_mode: { kind: 'enum', scale: 1, enumKeys: ['battery_first', 'utility_first', 'hybrid'] },
+  set_master_slave: { kind: 'enum', scale: 1, enumKeys: ['slave', 'master'], confirm: true },
+  set_overload_use_city_power: { kind: 'boolean', scale: 1 },
+  set_overload_restart: { kind: 'boolean', scale: 1 },
+  set_high_temp_restart: { kind: 'boolean', scale: 1 },
+  // ── 电池设置 ──
+  set_battery_type: { kind: 'enum', scale: 1, enumKeys: ['LiFePO4', 'NCM', 'LeadAcid'] },
+  set_li_bat_material: { kind: 'enum', scale: 1, enumKeys: ['LiFePO4', 'NCM'], visibility: { param: 'set_battery_type', ne: 2 } },
+  set_li_bat_protocol_type: { kind: 'enum', scale: 1, enumKeys: ['pylontech', 'protoOther'], visibility: { param: 'set_battery_type', ne: 2 } },
+  set_battery_capacity: { kind: 'number', scale: 1, unit: 'Ah', min: 0, max: 2000, step: 1 },
+  set_cell_serial_lifepo4: { kind: 'number', scale: 1, unit: 'cells', min: 4, max: 32, step: 1, visibility: { param: 'set_battery_type', eq: 0 } },
+  set_cell_serial_li_nmc: { kind: 'number', scale: 1, unit: 'cells', min: 4, max: 32, step: 1, visibility: { param: 'set_battery_type', eq: 1 } },
+  // ── 充电设置 ──
+  set_charge_limit: { kind: 'boolean', scale: 1 },
+  set_max_chg_curr: { kind: 'number', scale: 10, unit: 'A', min: 0, max: 150, step: 0.1 },
+  set_ac_charge_current: { kind: 'number', scale: 10, unit: 'A', min: 0, max: 150, step: 0.1 },
+  set_equalize_enable: { kind: 'boolean', scale: 1, visibility: { param: 'set_battery_type', eq: 2 } },
+  set_equalize_voltage: { kind: 'number', scale: 10, unit: 'V', min: 40, max: 65, step: 0.1, visibility: { param: 'set_battery_type', eq: 2 } },
+  set_equalize_time: { kind: 'number', scale: 1, unit: 'min', min: 0, max: 720, step: 1, visibility: { param: 'set_battery_type', eq: 2 } },
+  set_equalize_interval: { kind: 'number', scale: 1, unit: 'day', min: 0, max: 90, step: 1, visibility: { param: 'set_battery_type', eq: 2 } },
+  set_charge_time: { kind: 'number', scale: 1, unit: 'min', min: 0, max: 1440, step: 1 },
+  set_close_charge_time: { kind: 'number', scale: 1, unit: 'min', min: 0, max: 1440, step: 1 },
+  // ── 放电设置 ──
+  set_max_discharge_current: { kind: 'number', scale: 10, unit: 'A', min: 0, max: 150, step: 0.1 },
+  set_low_volt_return_utl: { kind: 'number', scale: 10, unit: 'V', min: 40, max: 60, step: 0.1 },
+  set_high_volt_return_bat: { kind: 'number', scale: 10, unit: 'V', min: 40, max: 60, step: 0.1 },
+  set_recover_threshold_volt: { kind: 'number', scale: 10, unit: 'V', min: 40, max: 60, step: 0.1 },
+  set_soc_cutoff: { kind: 'number', scale: 1, unit: '%', min: 0, max: 100, step: 1 },
+  set_recover_threshold_soc: { kind: 'number', scale: 1, unit: '%', min: 0, max: 100, step: 1 },
+  // ── 输出设置 ──
+  set_output_voltage: { kind: 'number', scale: 10, unit: 'V', min: 200, max: 250, step: 0.1 },
+  set_output_frequency: { kind: 'number', scale: 100, unit: 'Hz', min: 45, max: 55, step: 0.01 },
+  set_ac_volt_range: { kind: 'enum', scale: 1, enumKeys: ['appliance', 'ups'] },
+  // ── 太阳能设置 ──
+  set_solar_power_balance: { kind: 'boolean', scale: 1 },
+  set_charge_priority: { kind: 'priority', scale: 1 },
+  // ── 发电机设置 ──
+  set_gen_start_voltage: { kind: 'number', scale: 10, unit: 'V', min: 40, max: 60, step: 0.1 },
+  set_gen_stop_voltage: { kind: 'number', scale: 10, unit: 'V', min: 40, max: 60, step: 0.1 },
+  set_soc_back_gen: { kind: 'number', scale: 1, unit: '%', min: 0, max: 100, step: 1 },
+  set_soc_close_gen: { kind: 'number', scale: 1, unit: '%', min: 0, max: 100, step: 1 },
+  set_gen_rate_watt: { kind: 'number', scale: 1, unit: 'W', min: 0, max: 12000, step: 100 },
+  set_ge_balance_en: { kind: 'boolean', scale: 1 },
+  // ── 告警与系统 ──
+  set_buzzer: { kind: 'boolean', scale: 1 },
+  set_alarm_control: { kind: 'number', scale: 1, unit: '', min: 0, max: 255, step: 1 },
+  set_backlight_ctrl: { kind: 'enum', scale: 1, enumKeys: ['off', 'on', 'auto', 'dim'] },
+  set_power_shutdown_alarm: { kind: 'boolean', scale: 1 },
+  set_manual_socket: { kind: 'number', scale: 1, unit: '', min: 0, max: 65535, step: 1 },
+  set_control_socket: { kind: 'number', scale: 1, unit: '', min: 0, max: 65535, step: 1 },
+}
+
+// ── 八大功能模块 ──
+export interface SettingsModule {
+  id: string
+  /** @ant-design/icons 图标在 ModuleIcons 中按 id 映射，避免本文件依赖 React */
+  nameKey: string
+  descKey: string
+  accent: string
+  /** 模块内参数键（展示顺序） */
+  paramKeys: string[]
+  /** 首页卡片摘要取值的参数键（按顺序取前 2 个可读值） */
+  summaryKeys: string[]
+}
+
+export const MODULES: SettingsModule[] = [
+  {
+    id: 'mode',
+    nameKey: 'remote3.module.mode',
+    descKey: 'remote3.module.modeDesc',
+    accent: '#00D4FF',
+    paramKeys: [
+      'set_output_priority',
+      'set_ac_output_mode',
+      'set_master_slave',
+      'set_overload_use_city_power',
+      'set_overload_restart',
+      'set_high_temp_restart',
+    ],
+    summaryKeys: ['set_output_priority', 'set_ac_output_mode'],
+  },
+  {
+    id: 'battery',
+    nameKey: 'remote3.module.battery',
+    descKey: 'remote3.module.batteryDesc',
+    accent: '#00E676',
+    paramKeys: [
+      'set_battery_type',
+      'set_li_bat_material',
+      'set_li_bat_protocol_type',
+      'set_battery_capacity',
+      'set_cell_serial_lifepo4',
+      'set_cell_serial_li_nmc',
+    ],
+    summaryKeys: ['set_battery_type', 'set_battery_capacity'],
+  },
+  {
+    id: 'charge',
+    nameKey: 'remote3.module.charge',
+    descKey: 'remote3.module.chargeDesc',
+    accent: '#FFB020',
+    paramKeys: [
+      'set_charge_limit',
+      'set_max_chg_curr',
+      'set_ac_charge_current',
+      'set_equalize_enable',
+      'set_equalize_voltage',
+      'set_equalize_time',
+      'set_equalize_interval',
+      'set_charge_time',
+      'set_close_charge_time',
+    ],
+    summaryKeys: ['set_max_chg_curr', 'set_ac_charge_current'],
+  },
+  {
+    id: 'discharge',
+    nameKey: 'remote3.module.discharge',
+    descKey: 'remote3.module.dischargeDesc',
+    accent: '#7C6CFF',
+    paramKeys: [
+      'set_max_discharge_current',
+      'set_low_volt_return_utl',
+      'set_high_volt_return_bat',
+      'set_recover_threshold_volt',
+      'set_soc_cutoff',
+      'set_recover_threshold_soc',
+    ],
+    summaryKeys: ['set_max_discharge_current', 'set_soc_cutoff'],
+  },
+  {
+    id: 'output',
+    nameKey: 'remote3.module.output',
+    descKey: 'remote3.module.outputDesc',
+    accent: '#00D4FF',
+    paramKeys: ['set_output_voltage', 'set_output_frequency', 'set_ac_volt_range'],
+    summaryKeys: ['set_output_voltage', 'set_output_frequency'],
+  },
+  {
+    id: 'solar',
+    nameKey: 'remote3.module.solar',
+    descKey: 'remote3.module.solarDesc',
+    accent: '#00E676',
+    paramKeys: ['set_solar_power_balance', 'set_charge_priority'],
+    summaryKeys: ['set_solar_power_balance', 'set_charge_priority'],
+  },
+  {
+    id: 'generator',
+    nameKey: 'remote3.module.generator',
+    descKey: 'remote3.module.generatorDesc',
+    accent: '#FF7A59',
+    paramKeys: [
+      'set_gen_start_voltage',
+      'set_gen_stop_voltage',
+      'set_soc_back_gen',
+      'set_soc_close_gen',
+      'set_gen_rate_watt',
+      'set_ge_balance_en',
+    ],
+    summaryKeys: ['set_gen_start_voltage', 'set_soc_close_gen'],
+  },
+  {
+    id: 'alarm',
+    nameKey: 'remote3.module.alarm',
+    descKey: 'remote3.module.alarmDesc',
+    accent: '#FF5470',
+    paramKeys: [
+      'set_buzzer',
+      'set_alarm_control',
+      'set_backlight_ctrl',
+      'set_power_shutdown_alarm',
+      'set_manual_socket',
+      'set_control_socket',
+    ],
+    summaryKeys: ['set_buzzer', 'set_backlight_ctrl'],
+  },
+]
+
+// ── 充电优先级可排序列表（set_charge_priority）──
+// 协议枚举仅 3 态：0=solar_first / 1=utility_first / 2=solar_utility，
+// 列表顺序按太阳能/市电相对位置映射回枚举值（电池项仅作展示顺序）。
+export type PrioritySource = 'solar' | 'utility' | 'battery'
+
+export const PRIORITY_SOURCES: PrioritySource[] = ['solar', 'battery', 'utility']
+
+export function priorityOrderToEnum(order: PrioritySource[]): number | null {
+  const si = order.indexOf('solar')
+  const ui = order.indexOf('utility')
+  if (si < 0 || ui < 0) return null
+  if (ui < si) return 1 // utility_first
+  return ui === order.length - 1 ? 0 : 2 // solar_first / solar_utility
+}
+
+export function priorityEnumToOrder(value: number): PrioritySource[] {
+  if (value === 1) return ['utility', 'solar', 'battery']
+  if (value === 2) return ['solar', 'utility', 'battery']
+  return ['solar', 'battery', 'utility']
+}
+
+// ── 高级参数（工程师模式）本地密码（仅前端会话校验，不传后端）──
+export const ADVANCED_PASSWORD = '888888'
+export const ADVANCED_UNLOCK_KEY = 'remote-settings-advanced-unlocked'

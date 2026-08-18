@@ -11,10 +11,15 @@ class ApiService {
   Future<Either<Failure, T>> get<T>(
     String path, {
     Map<String, dynamic>? queryParameters,
+    Map<String, dynamic>? headers,
     required T Function(dynamic) fromJson,
   }) async {
     try {
-      final response = await _dio.get(path, queryParameters: queryParameters);
+      final response = await _dio.get(
+        path,
+        queryParameters: queryParameters,
+        options: headers != null ? Options(headers: headers) : null,
+      );
       return _handleResponse(response, fromJson);
     } on DioException catch (e) {
       return Left(_handleDioError(e));
@@ -27,11 +32,16 @@ class ApiService {
     String path, {
     dynamic data,
     Map<String, dynamic>? queryParameters,
+    Map<String, dynamic>? headers,
     required T Function(dynamic) fromJson,
   }) async {
     try {
-      final response =
-          await _dio.post(path, data: data, queryParameters: queryParameters);
+      final response = await _dio.post(
+        path,
+        data: data,
+        queryParameters: queryParameters,
+        options: headers != null ? Options(headers: headers) : null,
+      );
       return _handleResponse(response, fromJson);
     } on DioException catch (e) {
       return Left(_handleDioError(e));

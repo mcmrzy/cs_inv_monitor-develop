@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { Suspense, useEffect, useState } from 'react'
 import lazyWithRetry from '@/utils/lazyWithRetry'
 import { ConfigProvider, App as AntApp, Spin } from 'antd'
@@ -99,6 +99,16 @@ const AppRoutes: React.FC = () => (
   </Routes>
 )
 
+/**
+ * 路由感知的错误边界：以路由路径作为 key，
+ * 某个页面发生渲染错误（如接口数据异常导致的 d.map is not a function）时，
+ * 切换到其他菜单/路由会自动重置错误状态恢复使用，避免整个应用卡死在错误页必须手动刷新。
+ */
+const RoutableErrorBoundary: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const location = useLocation()
+  return <ErrorBoundary key={location.pathname}>{children}</ErrorBoundary>
+}
+
 const App: React.FC = () => {
   const lang = useLocaleStore((s) => s.lang)
   const fetchTimezone = useTimezoneStore((s) => s.fetchTimezone)
@@ -162,13 +172,13 @@ const App: React.FC = () => {
       }}
     >
       <AntApp>
-        <ErrorBoundary>
-          <Suspense fallback={<div style={{ minHeight: 240, display: 'grid', placeItems: 'center' }}><Spin size="large" /></div>}>
-            <BrowserRouter>
+        <BrowserRouter>
+          <RoutableErrorBoundary>
+            <Suspense fallback={<div style={{ minHeight: 240, display: 'grid', placeItems: 'center' }}><Spin size="large" /></div>}>
               <AppRoutes />
-            </BrowserRouter>
-          </Suspense>
-        </ErrorBoundary>
+            </Suspense>
+          </RoutableErrorBoundary>
+        </BrowserRouter>
       </AntApp>
     </ConfigProvider>
   )

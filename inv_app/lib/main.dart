@@ -270,6 +270,9 @@ class _InvAppState extends State<InvApp> {
       child: BlocListener<AuthBloc, AuthState>(
         listener: (context, state) {
           if (state is AuthUnauthenticated) {
+            // 离网/本地直连模式（含登录页 guest 入口）下不强制跳登录页，
+            // 避免未登录使用本地功能时被云端 401/登出事件踢出
+            if (getIt<ConnectionModeService>().isLocal) return;
             // Splash 页自行处理未登录分流（一键登录/登录页）；
             // 此处仅兜底登出/Token 过期等场景
             final currentPath = GoRouterState.of(context).matchedLocation;

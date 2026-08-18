@@ -3,12 +3,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/services/service_locator.dart';
-import 'package:inv_app/core/widgets/param_confirm_dialog.dart';
+import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/utils/api_response.dart';
-import 'package:inv_app/features/device/domain/entities/device_setting_config.dart';
-import 'package:inv_app/l10n/app_localizations.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
+import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
+import 'package:inv_app/features/device/domain/entities/config_schema.dart';
+import 'package:inv_app/features/device/presentation/pages/device_settings_advanced_page.dart';
+import 'package:inv_app/features/device/presentation/widgets/config_param_controls.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
+/// 设备设置页（手风琴式）
+///
+/// 单页展示 8 大功能分类：点击分类卡片原地展开参数控件，
+/// 再点收起；修改项全局汇总，底部应用条一次性提交（set_params 仅写改动项）。
+/// 高级参数仍为独立页（工程师模式，参数多且按 group_code 分组）。
+/// 路由保持 /device/:sn/settings 不变。
 class DeviceSettingsPage extends StatefulWidget {
   final String sn;
 
@@ -18,227 +27,214 @@ class DeviceSettingsPage extends StatefulWidget {
   State<DeviceSettingsPage> createState() => _DeviceSettingsPageState();
 }
 
-class _DeviceSettingsPageState extends State<DeviceSettingsPage>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  Map<String, dynamic> _originalValues = {};
-  Map<String, dynamic> _modifiedValues = {};
-  bool _isOnline = false;
+class _DeviceSettingsPageState extends State<DeviceSettingsPage> {
+  /// 全量 schema（param_key → schema），用于摘要文案与参数渲染
+  Map<String, ConfigParamSchema> _schemaMap = {};
+
+  /// 原始值（最近一次服务端状态，desired 优先、reported 兜底）
+  Map<String, dynamic> _original = {};
+
+  /// 工作值（含未应用修改）
+  Map<String, dynamic> _pending = {};
+
+  /// 当前展开的分类 id（手风琴：同时只展开一个，null 表示全部收起）
+  String? _expandedId;
+
   bool _loading = true;
-  bool _isApplying = false;
-  bool _loadFailed = false;
+  bool _failed = false;
+  bool _applying = false;
+
+  /// control-state 拉取成功即视为设备可读（在线徽标）
+  bool _readable = false;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: settingGroups.length, vsync: this);
     _fetchData();
   }
 
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
+  // ==================== 数据加载 ====================
 
+  /// 并行拉取参数 schema 与当前值
   Future<void> _fetchData() async {
+    setState(() {
+      _loading = true;
+      _failed = false;
+    });
     final dio = getIt<Dio>();
-
-    // 并行获取在线状态和参数
-    bool online = false;
-    Map<String, dynamic> params = {};
-    var loadFailed = false;
-
     try {
-      final deviceRes = await dio.get('/devices/by-sn/${widget.sn}');
-      final data = unwrapApiResponse<Map<String, dynamic>>(
-        deviceRes.data,
-        validate: (value) => value is Map<String, dynamic>,
+      final results = await Future.wait([
+        dio.get('/devices/by-sn/${widget.sn}/config-schema'),
+        dio.get('/devices/by-sn/${widget.sn}/control-state'),
+      ]);
+      final schemaList = unwrapApiResponse<List<dynamic>>(
+        results[0].data,
+        validate: (v) => v is List,
+        expected: 'an array of config schema',
+      );
+      final state = unwrapApiResponse<Map<String, dynamic>>(
+        results[1].data,
+        validate: (v) => v is Map<String, dynamic>,
         expected: 'an object',
       );
-      online = data['online_status']?['online'] == true ||
-          data['device']?['status'] == 1;
+      final schemas = <String, ConfigParamSchema>{};
+      for (final item in schemaList) {
+        if (item is Map<String, dynamic>) {
+          final s = ConfigParamSchema.fromJson(item);
+          if (s.paramKey.isNotEmpty) schemas[s.paramKey] = s;
+        }
+      }
+      final values = mergeControlState(state);
+      if (!mounted) return;
+      setState(() {
+        _schemaMap = schemas;
+        _original = Map.from(values);
+        _pending = Map.from(values);
+        _readable = true;
+        _loading = false;
+      });
     } catch (_) {
-      loadFailed = true;
+      if (!mounted) return;
+      setState(() {
+        _readable = false;
+        _loading = false;
+        _failed = true;
+      });
     }
+  }
 
+  /// 仅刷新 control-state（应用成功后调用）
+  Future<void> _refreshState() async {
     try {
+      final dio = getIt<Dio>();
       final res = await dio.get('/devices/by-sn/${widget.sn}/control-state');
       final state = unwrapApiResponse<Map<String, dynamic>>(
         res.data,
-        validate: (value) => value is Map<String, dynamic>,
+        validate: (v) => v is Map<String, dynamic>,
         expected: 'an object',
       );
-      final desired = state['desired'];
-      final reported = state['reported'];
-      if (desired != null && desired is! Map) {
-        throw const FormatException('desired control state must be an object');
-      }
-      if (reported != null && reported is! Map) {
-        throw const FormatException('reported control state must be an object');
-      }
-      params = {
-        if (desired is Map) ...desired.cast<String, dynamic>(),
-        if (reported is Map) ...reported.cast<String, dynamic>(),
-      };
-    } catch (_) {
-      loadFailed = true;
-    }
-
-    if (mounted) {
+      final values = mergeControlState(state);
+      if (!mounted) return;
       setState(() {
-        _isOnline = online;
-        _originalValues = Map.from(params);
-        _modifiedValues = Map.from(params);
-        _loadFailed = loadFailed;
-        _loading = false;
+        _original = Map.from(values);
+        _pending = Map.from(values);
       });
-      if (params.isNotEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(AppLocalizations.of(context)!.settingReadSuccess),
-            backgroundColor: AppColors.success,
-            duration: const Duration(seconds: 1),
-          ),
-        );
-      }
-    }
-  }
-
-  int get _modifiedCount {
-    return _modifiedValues.entries
-        .where((e) => e.value != _originalValues[e.key])
-        .length;
-  }
-
-  bool _isModified(String key) {
-    return _modifiedValues.containsKey(key) &&
-        _modifiedValues[key] != _originalValues[key];
-  }
-
-  void _onValueChanged(String key, dynamic newValue) {
-    setState(() {
-      _modifiedValues[key] = newValue;
-    });
-  }
-
-  Future<void> _applyChanges() async {
-    final l10n = AppLocalizations.of(context)!;
-    final changes = <String, MapEntry<dynamic, dynamic>>{};
-    final dangerousKeys = <String>{};
-
-    for (final entry in _modifiedValues.entries) {
-      if (entry.value != _originalValues[entry.key]) {
-        // 使用本地化标签名作为显示名
-        final item =
-            deviceSettingItems.where((i) => i.key == entry.key).firstOrNull;
-        final label =
-            item != null ? l10n.settingLabel(item.labelKey) : entry.key;
-        changes[label] = MapEntry(_originalValues[entry.key], entry.value);
-        if (item?.isDangerous == true) {
-          dangerousKeys.add(label);
-        }
-      }
-    }
-    if (changes.isEmpty) return;
-
-    final confirmed = await ParamConfirmDialog.show(
-      context,
-      changes: changes,
-      dangerousKeys: dangerousKeys,
-    );
-    if (confirmed != true) return;
-    if (!mounted) return;
-
-    setState(() => _isApplying = true);
-
-    try {
-      final dio = getIt<Dio>();
-      final paramsToWrite = <String, dynamic>{};
-      for (final entry in _modifiedValues.entries) {
-        if (entry.value != _originalValues[entry.key]) {
-          paramsToWrite[entry.key] = entry.value;
-        }
-      }
-      final response = await dio.post(
-        '/devices/by-sn/${widget.sn}/control',
-        data: {
-          'command': 'set_params',
-          'params': paramsToWrite,
-        },
-      );
-      unwrapApiResponse<Map<String, dynamic>>(
-        response.data,
-        validate: (value) =>
-            value is Map<String, dynamic> && value['task_id'] is String,
-        expected: 'an object containing task_id',
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l10n.settingSetSuccess),
-            backgroundColor: AppColors.success,
-          ),
-        );
-        setState(() {
-          _originalValues = Map.from(_modifiedValues);
-          _isApplying = false;
-        });
-      }
     } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l10n.settingSetFailed),
-            backgroundColor: AppColors.error,
-          ),
-        );
-        setState(() => _isApplying = false);
-      }
+      // 刷新失败静默：保留本地已应用状态
     }
   }
 
-  Future<void> _sendSingleCommand(String command) async {
+  // ==================== 摘要 / 参数集合 ====================
+
+  /// 分类卡片摘要文案（无值显示 '—'）
+  String _categorySummary(SettingsCategory category) {
     final l10n = AppLocalizations.of(context)!;
-    try {
-      final dio = getIt<Dio>();
-      final response = await dio.post(
-        '/devices/by-sn/${widget.sn}/control',
-        data: {'command': command, 'params': {}},
-      );
-      unwrapApiResponse<Map<String, dynamic>>(
-        response.data,
-        validate: (value) =>
-            value is Map<String, dynamic> && value['task_id'] is String,
-        expected: 'an object containing task_id',
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l10n.commandSent),
-            backgroundColor: AppColors.success,
-          ),
+    final empty = l10n.str('settings_summary_empty');
+    final parts = <String>[];
+    switch (category.id) {
+      case 'work_mode':
+        final t = configEnumSummaryText(
+          l10n,
+          _schemaMap,
+          _original,
+          'set_output_priority',
         );
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l10n.settingSetFailed),
-            backgroundColor: AppColors.error,
-          ),
+        if (t != null) parts.add(t);
+      case 'battery':
+        final t = configEnumSummaryText(
+          l10n,
+          _schemaMap,
+          _original,
+          'set_battery_type',
         );
-      }
+        if (t != null) parts.add(t);
+        final c = configNumberSummaryText(
+          _schemaMap,
+          _original,
+          'set_battery_capacity',
+        );
+        if (c != null) parts.add(c);
+      case 'charge':
+        final t = configNumberSummaryText(
+          _schemaMap,
+          _original,
+          'set_max_chg_curr',
+        );
+        if (t != null) parts.add(t);
+      case 'discharge':
+        final t = configNumberSummaryText(
+          _schemaMap,
+          _original,
+          'set_max_discharge_current',
+        );
+        if (t != null) parts.add(t);
+      case 'output':
+        final v = configNumberSummaryText(
+          _schemaMap,
+          _original,
+          'set_output_voltage',
+        );
+        if (v != null) parts.add(v);
+        final f = configNumberSummaryText(
+          _schemaMap,
+          _original,
+          'set_output_frequency',
+        );
+        if (f != null) parts.add(f);
+      case 'solar':
+        final t = configBoolSummaryText(
+          l10n,
+          _original,
+          'set_solar_power_balance',
+        );
+        if (t != null) parts.add(t);
+      case 'generator':
+        final t = configNumberSummaryText(
+          _schemaMap,
+          _original,
+          'set_gen_start_voltage',
+        );
+        if (t != null) parts.add(t);
+      case 'alarm':
+        final t = configBoolSummaryText(l10n, _original, 'set_buzzer');
+        if (t != null) parts.add(t);
     }
+    return parts.isEmpty ? empty : parts.join(' / ');
   }
 
-  void _showDangerousConfirm(
-    String labelKey,
-    String confirmKey,
-    String command, {
-    Map<String, dynamic>? params,
-  }) {
+  /// 分类内可见参数：按映射顺序取 schema（缺失跳过），按 visibility 过滤
+  List<ConfigParamSchema> _visibleParams(SettingsCategory category) {
+    final result = <ConfigParamSchema>[];
+    for (final key in category.paramKeys) {
+      final schema = _schemaMap[key];
+      if (schema == null) continue;
+      if (!configParamVisible(schema, _pending)) continue;
+      result.add(schema);
+    }
+    return result;
+  }
+
+  /// 全局待提交项数量（跨分类汇总）
+  int get _modifiedCount =>
+      _pending.keys.where((k) => _pending[k] != _original[k]).length;
+
+  bool _isModified(String key) =>
+      _pending.containsKey(key) && _pending[key] != _original[key];
+
+  // ==================== 修改与应用 ====================
+
+  /// 请求修改：confirmation_mode=='modal' 的参数先弹确认框再纳入
+  void _requestChange(ConfigParamSchema schema, dynamic newValue) {
+    if (schema.needsModalConfirm) {
+      _showModalConfirm(schema, newValue);
+      return;
+    }
+    setState(() => _pending[schema.paramKey] = newValue);
+  }
+
+  void _showModalConfirm(ConfigParamSchema schema, dynamic newValue) {
     final l10n = AppLocalizations.of(context)!;
+    final name = configParamName(l10n, schema);
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -246,32 +242,25 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
           children: [
             Icon(
               Icons.warning_amber_rounded,
-              color: AppColors.error,
+              color: AppColors.warning,
               size: 24.sp,
             ),
             SizedBox(width: 8.w),
-            Expanded(
-              child: Text(l10n.settingForceConfirmTitle),
-            ),
+            Expanded(child: Text(l10n.str('config_confirm_title'))),
           ],
         ),
-        content: Text(l10n.str(confirmKey)),
+        content: Text(
+          l10n.str('config_confirm_body', {'param': name}),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: Text(l10n.cancel),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
             onPressed: () {
               Navigator.pop(ctx);
-              if (params != null) {
-                // Switch 类型：设置参数值
-                _onValueChanged(command, params['value']);
-              } else {
-                // Button 类型：发送单命令
-                _sendSingleCommand(command);
-              }
+              setState(() => _pending[schema.paramKey] = newValue);
             },
             child: Text(l10n.confirm),
           ),
@@ -280,636 +269,400 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
     );
   }
 
+  /// 应用修改：POST set_params 仅写改动项（跨分类汇总）
+  Future<void> _applyChanges() async {
+    final l10n = AppLocalizations.of(context)!;
+    final paramsToWrite = <String, dynamic>{
+      for (final key in _pending.keys)
+        if (_pending[key] != _original[key]) key: _pending[key],
+    };
+    if (paramsToWrite.isEmpty) return;
+
+    setState(() => _applying = true);
+    try {
+      final dio = getIt<Dio>();
+      final response = await dio.post(
+        '/devices/by-sn/${widget.sn}/control',
+        data: {'command': 'set_params', 'params': paramsToWrite},
+      );
+      unwrapApiResponse<Map<String, dynamic>>(
+        response.data,
+        validate: (value) =>
+            value is Map<String, dynamic> && value['task_id'] is String,
+        expected: 'an object containing task_id',
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.settingSetSuccess),
+          backgroundColor: AppColors.success,
+        ),
+      );
+      setState(() {
+        _original = Map.from(_pending);
+        _applying = false;
+      });
+      // 成功后刷新 control-state，同步服务端 desired
+      _refreshState();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.settingSetFailed),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      setState(() => _applying = false);
+    }
+  }
+
   // ==================== 渲染 ====================
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(
-          l10n.paramSettings,
+          l10n.str('device_settings_title'),
           style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17.sp),
         ),
         centerTitle: true,
         elevation: 0,
         scrolledUnderElevation: 0.5,
         actions: [
+          // 设备可读（在线）小徽标：control-state 拉取成功即视为可读
+          if (!_loading) _buildReadableBadge(l10n),
           IconButton(
             icon: Icon(Icons.refresh_rounded, size: 22.sp),
-            onPressed: _loading
-                ? null
-                : () => setState(() {
-                      _loading = true;
-                      _fetchData();
-                    }),
+            onPressed: _loading ? null : _fetchData,
           ),
         ],
       ),
-      body: _loading
-          ? const PageSkeleton()
-          : Column(
-              children: [
-                if (_loadFailed) _buildLoadErrorBanner(l10n),
-                // 离线警告条
-                if (!_isOnline) _buildOfflineBanner(l10n),
-                // Tab 栏
-                _buildTabBar(theme, l10n),
-                // Tab 内容
-                Expanded(
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: settingGroups
-                        .map((g) => _buildTabContent(g, l10n, theme))
-                        .toList(),
-                  ),
-                ),
-                // 底部浮动栏
-                if (_modifiedCount > 0 && _isOnline) _buildBottomBar(l10n),
-              ],
-            ),
+      body: _buildBody(l10n),
+      bottomNavigationBar: _modifiedCount > 0
+          ? ConfigApplyBar(
+              modifiedCount: _modifiedCount,
+              applying: _applying,
+              onApply: _applyChanges,
+            )
+          : null,
     );
   }
 
-  Widget _buildOfflineBanner(AppLocalizations l10n) {
+  /// 在线/离线小徽标
+  Widget _buildReadableBadge(AppLocalizations l10n) {
+    final online = _readable;
+    final color = online ? AppColors.online : AppColors.offline;
     return Container(
-      margin: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 0),
-      padding: EdgeInsets.all(12.w),
+      margin: EdgeInsets.only(right: 4.w),
+      padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
       decoration: BoxDecoration(
-        color: AppColors.warning.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(10.r),
-        border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.wifi_off_rounded, size: 18.w, color: AppColors.warning),
-          SizedBox(width: 10.w),
-          Expanded(
-            child: Text(
-              l10n.deviceOfflineWarning,
-              style: TextStyle(fontSize: 12.sp, color: AppColors.warning),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLoadErrorBanner(AppLocalizations l10n) {
-    return Container(
-      margin: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 0),
-      padding: EdgeInsets.all(12.w),
-      decoration: BoxDecoration(
-        color: AppColors.error.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(10.r),
-        border: Border.all(color: AppColors.error.withValues(alpha: 0.25)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.error_outline, size: 18.w, color: AppColors.error),
-          SizedBox(width: 10.w),
-          Expanded(
-            child: Text(
-              l10n.str('setting_load_failed'),
-              style: TextStyle(fontSize: 12.sp, color: AppColors.error),
-            ),
-          ),
-          TextButton(
-            onPressed: _fetchData,
-            child: Text(l10n.retry),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTabBar(ThemeData theme, AppLocalizations l10n) {
-    return Container(
-      margin: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 8.h),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(12.r),
       ),
-      child: TabBar(
-        controller: _tabController,
-        labelColor: theme.colorScheme.primary,
-        unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
-        indicatorColor: theme.colorScheme.primary,
-        indicatorSize: TabBarIndicatorSize.tab,
-        labelStyle: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600),
-        unselectedLabelStyle: TextStyle(fontSize: 13.sp),
-        dividerColor: Colors.transparent,
-        tabs: settingGroups.map((g) {
-          String title;
-          switch (g.key) {
-            case 'charge_discharge':
-              title = l10n.tabChargeDischarge;
-              break;
-            case 'work_mode':
-              title = l10n.tabWorkMode;
-              break;
-            case 'advanced':
-              title = l10n.tabAdvanced;
-              break;
-            default:
-              title = g.key;
-          }
-          return Tab(text: title);
-        }).toList(),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6.w,
+            height: 6.w,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          SizedBox(width: 4.w),
+          Text(
+            online ? l10n.str('online') : l10n.str('offline'),
+            style: TextStyle(
+              fontSize: 11.sp,
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildTabContent(
-    SettingGroup group,
-    AppLocalizations l10n,
-    ThemeData theme,
-  ) {
-    final items =
-        deviceSettingItems.where((i) => i.groupKey == group.key).toList();
+  Widget _buildBody(AppLocalizations l10n) {
+    if (_loading) return const PageSkeleton();
+    if (_failed) {
+      return XiaoshuoStatePanel(
+        asset: CsergyAssets.xiaoshuoOffline,
+        title: l10n.str('settings_load_failed'),
+        size: 168,
+        action: OutlinedButton(
+          onPressed: _fetchData,
+          child: Text(l10n.retry),
+        ),
+      );
+    }
 
     return ListView(
-      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 4.h),
+      padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 24.h),
       children: [
-        // 高级设置提示
-        if (group.key == 'advanced')
-          Container(
-            margin: EdgeInsets.only(bottom: 12.h),
-            padding: EdgeInsets.all(12.w),
-            decoration: BoxDecoration(
-              color: AppColors.error.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(10.r),
-              border: Border.all(color: AppColors.error.withValues(alpha: 0.2)),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.info_outline_rounded,
-                  size: 18.w,
-                  color: AppColors.error,
-                ),
-                SizedBox(width: 10.w),
-                Expanded(
-                  child: Text(
-                    l10n.settingAdvancedHint,
-                    style: TextStyle(
-                      fontSize: 12.sp,
-                      color: AppColors.error,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        // 参数列表
-        ...items.map((item) => _buildSettingItem(item, l10n, theme)),
-        SizedBox(height: 80.h), // 底部留白
+        // 8 大功能分类：点击原地展开参数控件（手风琴）
+        for (final category in settingsCategories)
+          _buildCategoryCard(l10n, category),
+        SizedBox(height: 6.h),
+        // 高级参数入口（独立页：工程师模式）
+        _buildAdvancedEntry(l10n),
       ],
     );
   }
 
-  Widget _buildSettingItem(
-    DeviceSettingItem item,
-    AppLocalizations l10n,
-    ThemeData theme,
-  ) {
-    final currentValue = _modifiedValues[item.key];
-    final modified = _isModified(item.key);
-    final disabled = !_isOnline;
+  /// 分类卡片：彩色图标圆底 + 标题 + 摘要/已修改数 + 展开箭头
+  ///
+  /// 点击切换展开：展开后内嵌该分类的参数控件（visibility 联动）。
+  Widget _buildCategoryCard(AppLocalizations l10n, SettingsCategory category) {
+    final theme = Theme.of(context);
+    final expanded = _expandedId == category.id;
+    final modifiedInCategory = category.paramKeys
+        .where((k) => _isModified(k))
+        .length;
 
-    return Container(
+    return Card(
+      elevation: 0,
       margin: EdgeInsets.only(bottom: 10.h),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(12.r),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 4.r,
-            offset: Offset(0, 1.h),
-          ),
-        ],
-        border: item.isDangerous
-            ? Border.all(color: AppColors.error.withValues(alpha: 0.3))
-            : null,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14.r),
+        side: BorderSide(
+          color: expanded
+              ? category.color.withValues(alpha: 0.45)
+              : AppColor.border(context),
+          width: expanded ? 1 : 0.6,
+        ),
       ),
-      child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 标签行
-            Row(
-              children: [
-                if (item.isDangerous)
-                  Padding(
-                    padding: EdgeInsets.only(right: 6.w),
-                    child: Icon(
-                      Icons.warning_amber_rounded,
-                      color: AppColors.error,
-                      size: 16.sp,
-                    ),
-                  ),
-                Expanded(
-                  child: Text(
-                    l10n.settingLabel(item.labelKey),
-                    style: TextStyle(
-                      fontSize: 14.sp,
-                      fontWeight: FontWeight.w500,
-                      color: item.isDangerous
-                          ? AppColors.error
-                          : theme.colorScheme.onSurface,
-                    ),
-                  ),
-                ),
-                if (modified)
+      color: theme.colorScheme.surface,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 仅标题行可点击切换展开，避免展开区内误触收起
+          InkWell(
+            onTap: () {
+              setState(() => _expandedId = expanded ? null : category.id);
+            },
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 14.h),
+              child: Row(
+                children: [
+                  // 彩色图标圆底
                   Container(
-                    padding:
-                        EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
+                    width: 40.w,
+                    height: 40.w,
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(4.r),
+                      color: category.color.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
                     ),
-                    child: Text(
-                      l10n.paramModified,
-                      style: TextStyle(
-                        fontSize: 10.sp,
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w600,
+                    child: Icon(
+                      category.icon,
+                      size: 22.sp,
+                      color: category.color,
+                    ),
+                  ),
+                  SizedBox(width: 12.w),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          l10n.str(category.titleKey),
+                          style: TextStyle(
+                            fontSize: 15.sp,
+                            fontWeight: FontWeight.w600,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                        SizedBox(height: 3.h),
+                        Text(
+                          _categorySummary(category),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12.sp,
+                            color: AppColor.textSecondary(context),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (modifiedInCategory > 0) ...[
+                    Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 6.w,
+                        vertical: 2.h,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(4.r),
+                      ),
+                      child: Text(
+                        l10n.paramModifiedCount('$modifiedInCategory'),
+                        style: TextStyle(
+                          fontSize: 10.sp,
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
-                  ),
-              ],
-            ),
-            SizedBox(height: 10.h),
-            // 控件
-            _buildControl(item, currentValue, disabled, l10n, theme),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildControl(
-    DeviceSettingItem item,
-    dynamic currentValue,
-    bool disabled,
-    AppLocalizations l10n,
-    ThemeData theme,
-  ) {
-    switch (item.controlType) {
-      case SettingControlType.switchToggle:
-        return _buildSwitch(item, currentValue, disabled, l10n);
-      case SettingControlType.slider:
-        return _buildSlider(item, currentValue, disabled, theme);
-      case SettingControlType.numberInput:
-        return _buildNumberInput(item, currentValue, disabled, theme, l10n);
-      case SettingControlType.enumChoice:
-        return _buildEnumChoice(item, currentValue, disabled, l10n, theme);
-      case SettingControlType.button:
-        return _buildButton(item, disabled, l10n);
-    }
-  }
-
-  // ==================== Switch ====================
-
-  Widget _buildSwitch(
-    DeviceSettingItem item,
-    dynamic currentValue,
-    bool disabled,
-    AppLocalizations l10n,
-  ) {
-    final val = currentValue is bool
-        ? currentValue
-        : currentValue == 1 ||
-            currentValue == '1' ||
-            currentValue == 'true' ||
-            currentValue == true;
-    return Row(
-      children: [
-        Text(
-          val ? l10n.paramOn : l10n.paramOff,
-          style: TextStyle(
-            fontSize: 14.sp,
-            color: val ? AppColors.success : AppColor.textSecondary(context),
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const Spacer(),
-        Switch(
-          value: val,
-          onChanged: disabled
-              ? null
-              : (v) {
-                  if (item.isDangerous) {
-                    final confirmKey = item.key == 'force_charge'
-                        ? 'setting_force_charge_confirm'
-                        : 'setting_force_discharge_confirm';
-                    _showDangerousConfirm(
-                      item.labelKey,
-                      confirmKey,
-                      item.key,
-                      params: {'value': v},
-                    );
-                  } else {
-                    _onValueChanged(item.key, v);
-                  }
-                },
-        ),
-      ],
-    );
-  }
-
-  // ==================== Slider ====================
-
-  Widget _buildSlider(
-    DeviceSettingItem item,
-    dynamic currentValue,
-    bool disabled,
-    ThemeData theme,
-  ) {
-    final minVal = item.min ?? 0;
-    final maxVal = item.max ?? 100;
-    double val = (currentValue is num ? currentValue.toDouble() : minVal)
-        .clamp(minVal, maxVal);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(
-              '${val.toInt()}${item.unit ?? ''}',
-              style: TextStyle(
-                fontSize: 18.sp,
-                fontWeight: FontWeight.w700,
-                color: _isModified(item.key)
-                    ? AppColors.primary
-                    : theme.colorScheme.onSurface,
-              ),
-            ),
-          ],
-        ),
-        SizedBox(height: 4.h),
-        Slider(
-          value: val,
-          min: minVal,
-          max: maxVal,
-          divisions: maxVal > minVal ? (maxVal - minVal).toInt() : null,
-          label: val.toInt().toString(),
-          onChanged:
-              disabled ? null : (v) => _onValueChanged(item.key, v.toInt()),
-        ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              '${minVal.toInt()}${item.unit ?? ''}',
-              style: TextStyle(fontSize: 11.sp, color: AppColor.textHint(context)),
-            ),
-            Text(
-              '${maxVal.toInt()}${item.unit ?? ''}',
-              style: TextStyle(fontSize: 11.sp, color: AppColor.textHint(context)),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  // ==================== NumberInput ====================
-
-  Widget _buildNumberInput(
-    DeviceSettingItem item,
-    dynamic currentValue,
-    bool disabled,
-    ThemeData theme,
-    AppLocalizations l10n,
-  ) {
-    final displayVal = currentValue ?? '-';
-
-    return Row(
-      children: [
-        Expanded(
-          child: Row(
-            children: [
-              Text(
-                '$displayVal',
-                style: TextStyle(
-                  fontSize: 16.sp,
-                  fontWeight: FontWeight.bold,
-                  color: _isModified(item.key)
-                      ? AppColors.primary
-                      : theme.colorScheme.onSurface,
-                ),
-              ),
-              if (item.unit != null)
-                Padding(
-                  padding: EdgeInsets.only(left: 4.w),
-                  child: Text(
-                    item.unit!,
-                    style: TextStyle(
-                      fontSize: 12.sp,
-                      color: theme.colorScheme.onSurfaceVariant,
+                    SizedBox(width: 6.w),
+                  ],
+                  AnimatedRotation(
+                    turns: expanded ? 0.25 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Icon(
+                      Icons.chevron_right_rounded,
+                      size: 22.sp,
+                      color: AppColor.textHint(context),
                     ),
                   ),
-                ),
-            ],
-          ),
-        ),
-        IconButton(
-          icon: Icon(Icons.edit, size: 20.sp, color: theme.colorScheme.primary),
-          onPressed: disabled ? null : () => _showNumberEditDialog(item, l10n),
-          style: IconButton.styleFrom(
-            backgroundColor:
-                theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
-            minimumSize: Size(36.w, 36.w),
-          ),
-        ),
-      ],
-    );
-  }
-
-  void _showNumberEditDialog(DeviceSettingItem item, AppLocalizations l10n) {
-    final minVal = item.min ?? 0;
-    final maxVal = item.max ?? 100000;
-    final currentVal = _modifiedValues[item.key];
-    final controller = TextEditingController(text: '${currentVal ?? minVal}');
-    double sliderVal = (currentVal is num ? currentVal.toDouble() : minVal)
-        .clamp(minVal, maxVal);
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: Text(l10n.settingLabel(item.labelKey)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '${sliderVal.toInt()} ${item.unit ?? ''}',
-                style: TextStyle(
-                  fontSize: 24.sp,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.primary,
-                ),
+                ],
               ),
-              SizedBox(height: 16.h),
-              if (maxVal - minVal <= 200 && maxVal - minVal > 1)
-                Slider(
-                  value: sliderVal,
-                  min: minVal,
-                  max: maxVal,
-                  divisions: (maxVal - minVal).toInt(),
-                  label: sliderVal.toInt().toString(),
-                  onChanged: (v) {
-                    setDialogState(() => sliderVal = v);
-                    controller.text = v.toInt().toString();
-                  },
-                ),
-              SizedBox(height: 8.h),
-              TextField(
-                controller: controller,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: false),
-                decoration: InputDecoration(
-                  hintText: '${minVal.toInt()} ~ ${maxVal.toInt()}',
-                  suffixText: item.unit,
-                ),
-                onChanged: (v) {
-                  final parsed = double.tryParse(v);
-                  if (parsed != null) {
-                    setDialogState(
-                      () => sliderVal = parsed.clamp(minVal, maxVal),
-                    );
-                  }
-                },
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(l10n.cancel),
             ),
-            FilledButton(
-              onPressed: () {
-                final val = num.tryParse(controller.text);
-                if (val != null) {
-                  _onValueChanged(item.key, val);
-                  Navigator.pop(ctx);
-                }
-              },
-              child: Text(l10n.confirm),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ==================== EnumChoice ====================
-
-  Widget _buildEnumChoice(
-    DeviceSettingItem item,
-    dynamic currentValue,
-    bool disabled,
-    AppLocalizations l10n,
-    ThemeData theme,
-  ) {
-    final options = item.options ?? [];
-    return Wrap(
-      spacing: 8.w,
-      runSpacing: 8.h,
-      children: options.map((opt) {
-        final selected = opt.value.toString() == currentValue.toString();
-        return ChoiceChip(
-          label: Text(
-            l10n.enumLabel(opt.labelKey),
-            style: TextStyle(fontSize: 13.sp),
           ),
-          selected: selected,
-          onSelected:
-              disabled ? null : (_) => _onValueChanged(item.key, opt.value),
-          selectedColor: theme.colorScheme.primaryContainer,
-        );
-      }).toList(),
-    );
-  }
-
-  // ==================== Button ====================
-
-  Widget _buildButton(
-    DeviceSettingItem item,
-    bool disabled,
-    AppLocalizations l10n,
-  ) {
-    return OutlinedButton.icon(
-      icon: Icon(Icons.restart_alt_rounded, size: 18.sp),
-      label: Text(l10n.settingRestartBtn),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: AppColors.error,
-        side: const BorderSide(color: AppColors.error),
-        padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 12.h),
-      ),
-      onPressed: disabled
-          ? null
-          : () => _showDangerousConfirm(
-                item.labelKey,
-                'setting_restart_confirm',
-                item.commandKey ?? 'restart',
-              ),
-    );
-  }
-
-  // ==================== 底部栏 ====================
-
-  Widget _buildBottomBar(AppLocalizations l10n) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 8.r,
-            offset: Offset(0, -2.h),
+          // 展开区：分类描述 + 参数控件（AnimatedSize 平滑伸缩）
+          AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: expanded
+                ? _buildExpandedParams(l10n, category)
+                : const SizedBox(width: double.infinity),
           ),
         ],
       ),
-      child: SafeArea(
-        child: Row(
-          children: [
-            Expanded(
+    );
+  }
+
+  /// 展开区内容：分类描述 + 参数控件列表
+  Widget _buildExpandedParams(
+    AppLocalizations l10n,
+    SettingsCategory category,
+  ) {
+    final params = _visibleParams(category);
+    return Padding(
+      padding: EdgeInsets.fromLTRB(14.w, 0, 14.w, 14.h),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Divider(height: 1, color: AppColor.border(context)),
+          SizedBox(height: 10.h),
+          Text(
+            l10n.str(category.descKey),
+            style: TextStyle(
+              fontSize: 12.sp,
+              color: AppColor.textSecondary(context),
+            ),
+          ),
+          SizedBox(height: 10.h),
+          if (params.isEmpty)
+            Padding(
+              padding: EdgeInsets.symmetric(vertical: 8.h),
               child: Text(
-                l10n.paramModifiedCount('$_modifiedCount'),
+                l10n.str('no_params'),
                 style: TextStyle(
                   fontSize: 13.sp,
                   color: AppColor.textSecondary(context),
                 ),
               ),
-            ),
-            FilledButton(
-              onPressed: _isApplying ? null : _applyChanges,
-              style: FilledButton.styleFrom(
-                padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 12.h),
+            )
+          else
+            for (final schema in params)
+              ConfigParamControl(
+                schema: schema,
+                value: _pending[schema.paramKey],
+                modified: _isModified(schema.paramKey),
+                onRequestChange: (v) => _requestChange(schema, v),
               ),
-              child: _isApplying
-                  ? SizedBox(
-                      width: 18.w,
-                      height: 18.w,
-                      child: const CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : Text(l10n.applyChanges),
-            ),
-          ],
+        ],
+      ),
+    );
+  }
+
+  /// 高级参数入口：描边样式（工程师模式，独立页）
+  Widget _buildAdvancedEntry(AppLocalizations l10n) {
+    final theme = Theme.of(context);
+    // 主题自适应的深色调：亮色用石墨灰、暗色用浅灰，避免硬编码色在暗色模式下失配
+    final accent = theme.brightness == Brightness.dark
+        ? theme.colorScheme.onSurfaceVariant
+        : const Color(0xFF374151);
+    return Card(
+      elevation: 0,
+      margin: EdgeInsets.only(bottom: 10.h),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14.r),
+        side: BorderSide(
+          color: AppColor.outline(context).withValues(alpha: 0.6),
+          width: 1,
         ),
+      ),
+      color: theme.colorScheme.surface.withValues(alpha: 0.6),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14.r),
+        onTap: _openAdvanced,
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 14.h),
+          child: Row(
+            children: [
+              Container(
+                width: 40.w,
+                height: 40.w,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.08),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.construction_rounded,
+                  size: 22.sp,
+                  color: accent,
+                ),
+              ),
+              SizedBox(width: 12.w),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.str('settings_cat_advanced'),
+                      style: TextStyle(
+                        fontSize: 15.sp,
+                        fontWeight: FontWeight.w600,
+                        color: accent,
+                      ),
+                    ),
+                    SizedBox(height: 3.h),
+                    Text(
+                      l10n.str('settings_cat_advanced_desc'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12.sp,
+                        color: AppColor.textSecondary(context),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 22.sp,
+                color: AppColor.textHint(context),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ==================== 导航 ====================
+
+  /// 进入高级参数页（第 2 层，参数多且按 group_code 分组，保持独立页）
+  void _openAdvanced() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => DeviceSettingsAdvancedPage(sn: widget.sn),
       ),
     );
   }

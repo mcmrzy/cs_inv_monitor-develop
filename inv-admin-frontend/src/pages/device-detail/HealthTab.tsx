@@ -4,7 +4,7 @@ import {
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
-  HeartOutlined, FireOutlined, ThunderboltOutlined, ToolOutlined, ApartmentOutlined,
+  HeartOutlined, ThunderboltOutlined, ToolOutlined, ApartmentOutlined,
 } from '@ant-design/icons'
 import { deviceApi } from '@/services/deviceApi'
 import { queryKeys } from '@/utils/queryKeys'
@@ -12,6 +12,7 @@ import { formatInTimezone } from '@/utils/timezone'
 import useTimezoneStore from '@/stores/timezoneStore'
 import useTranslation from '@/hooks/useTranslation'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
+import { toRtEnvelope } from './energyUtils'
 
 const { Text, Title: AntTitle } = Typography
 
@@ -58,9 +59,9 @@ const HealthTab: React.FC<HealthTabProps> = ({ sn }) => {
   const { t } = useTranslation()
   const { timezone } = useTimezoneStore()
 
-  const { data: realtime, isLoading: rtLoading, error: rtError, refetch: refetchRt } = useQuery({
+  const { data: env, isLoading: rtLoading, error: rtError, refetch: refetchRt } = useQuery({
     queryKey: queryKeys.devices.realtime(sn),
-    queryFn: () => deviceApi.getRealtime(sn).then((r) => (r.data?.data ?? null) as Record<string, any> | null),
+    queryFn: () => deviceApi.getRealtime(sn).then((r) => toRtEnvelope(r.data?.data ?? r.data)),
     refetchInterval: 10_000,
   })
 
@@ -80,14 +81,43 @@ const HealthTab: React.FC<HealthTabProps> = ({ sn }) => {
   const loadError = rtError || diagError || histError
   const retryAll = () => { void refetchRt(); void refetchDiag(); void refetchHist() }
 
-  const derived = (realtime?.derived?.data ?? {}) as Record<string, any>
-  const fan = (realtime?.fan?.data ?? {}) as Record<string, any>
-  const diag = (realtime?.diag?.data ?? {}) as Record<string, any>
-  const sock = (realtime?.sock?.data ?? {}) as Record<string, any>
-  const sys = (realtime?.sys?.data ?? {}) as Record<string, any>
+  // realtime 为 envelope { online, data_time, realtime }，嵌套分组在 realtime 内层；
+  // 兼容分组对象仍带 { data: {...} } 包裹的情况
+  const rt = env?.realtime ?? {}
+  const unwrap = (g: any) => (g?.data ?? g ?? {}) as Record<string, any>
+  const derived = unwrap(rt.derived)
+  const fan = unwrap(rt.fan)
+  const diag = unwrap(rt.diag)
+  const sock = unwrap(rt.sock)
+  const sys = unwrap(rt.sys)
 
-  const healthScore = derived.health_score ?? healthHistory?.[0]?.score ?? null
-  const healthLevel = derived.health_level ?? healthHistory?.[0]?.level ?? null
+  // 温度：逆变器 / Boost / 变压器（展平字段优先，嵌套分组回退）
+  const invTemp = sys.inverter_temperature ?? rt.inverter_temperature ?? rt.inverter_temp ?? rt.temp_inv ?? null
+  const boostTemp = rt.temp_boost ?? sys.temp_boost ?? rt.boost_temp ?? rt.boost_temperature ?? sys.boost_temperature ?? null
+  const transformerTemp = rt.temp_transformer ?? sys.temp_transformer ?? rt.transformer_temp ?? rt.transformer_temperature ?? sys.transformer_temperature ?? null
+  const invFanSpeed = fan.inv_fan_speed ?? rt.fan_speed_percent ?? null
+  const mpptFanSpeed = fan.mppt_fan_speed ?? null
+  const ambientTemp = rt.ambient_temperature ?? sys.ambient_temperature ?? null
+
+  const activeDiagCount = (diagnostics ?? []).filter((e) => e.status === 'active').length
+  const faultDiagCount = (diagnostics ?? []).filter((e) => e.status === 'active' && e.level === 'fault').length
+
+  // 后端无 health-history/derived 评分时，由温度 + 活跃告警数简单推导（标注「估算」）
+  const backendScore = derived.health_score ?? healthHistory?.[0]?.score ?? null
+  const estimatedScore = (() => {
+    let score = 100
+    score -= faultDiagCount * 15
+    score -= (activeDiagCount - faultDiagCount) * 8
+    const maxTemp = Math.max(Number(invTemp ?? -999), Number(boostTemp ?? -999))
+    if (maxTemp >= 75) score -= 20
+    else if (maxTemp >= 65) score -= 10
+    else if (maxTemp >= 55) score -= 5
+    return Math.max(Math.min(score, 100), 40)
+  })()
+  const healthScore = backendScore != null ? Number(backendScore) : estimatedScore
+  const scoreEstimated = backendScore == null
+  const healthLevel = derived.health_level ?? healthHistory?.[0]?.level
+    ?? (healthScore >= 90 ? 'healthy' : healthScore >= 70 ? 'good' : healthScore >= 50 ? 'attention' : 'maintenance')
   const thermalStatus = derived.thermal_status ?? 'unknown'
 
   const paired = sock.paired_socket != null ? popcount(Number(sock.paired_socket)) : null
@@ -136,34 +166,36 @@ const HealthTab: React.FC<HealthTabProps> = ({ sn }) => {
     },
   ]
 
-  const thermalCard = () => {
-    const statusColor = thermalStatus === 'fault' ? '#ff4d4f' : thermalStatus === 'warning' ? '#faad14' : '#52c41a'
-    const statusKey = `deviceDetail.health.thermal.${thermalStatus}`
+  // 温度小卡（2×2 网格用）
+  const tempCard = (label: string, value: number | null | undefined) => {
+    const v = value != null ? Number(value) : null
+    const color = v != null && v >= 65 ? '#ff4d4f' : v != null && v >= 50 ? '#faad14' : '#1f2937'
     return (
-      <Card size="small" title={<Space><FireOutlined style={{ color: statusColor }} /><span>{t('deviceDetail.health.thermalTitle')}</span></Space>} bordered={false} style={{ borderRadius: 12, marginBottom: 16 }}>
-        <Space direction="vertical" size={8} style={{ width: '100%' }}>
-          <Space>
-            <span>{t('deviceDetail.health.thermalStatus')}:</span>
-            <Tag color={statusColor}>{t(statusKey) !== statusKey ? t(statusKey) : thermalStatus}</Tag>
-          </Space>
-          {thermalStatus !== 'normal' && thermalStatus !== 'unknown' && (
-            <Alert type="warning" showIcon message={t('deviceDetail.health.thermalAlert')} style={{ marginBottom: 8 }} />
-          )}
-          <Row gutter={16}>
-            <Col span={8}>
-              <Statistic title={t('deviceDetail.health.invFan')} value={fan.inv_fan_speed != null ? `${fan.inv_fan_speed}%` : '-'} />
-            </Col>
-            <Col span={8}>
-              <Statistic title={t('deviceDetail.health.mpptFan')} value={fan.mppt_fan_speed != null ? `${fan.mppt_fan_speed}%` : '-'} />
-            </Col>
-            <Col span={8}>
-              <Statistic title={t('deviceDetail.health.invTemp')} value={sys.inverter_temperature != null ? `${sys.inverter_temperature}°C` : '-'} />
-            </Col>
-          </Row>
-        </Space>
+      <Card size="small" bordered={false} style={{ borderRadius: 12, height: '100%' }} bodyStyle={{ padding: 16 }}>
+        <Text type="secondary" style={{ fontSize: 12, display: 'block' }}>{label}</Text>
+        <div style={{ fontSize: 22, fontWeight: 700, color, marginTop: 4 }}>
+          {v != null ? `${v.toFixed(1)} °C` : '--'}
+        </div>
       </Card>
     )
   }
+
+  // 风扇转速进度条行
+  const fanRow = (label: string, value: number | null | undefined) => (
+    <div style={{ marginBottom: 10 }}>
+      <Row justify="space-between" style={{ marginBottom: 4 }}>
+        <Text type="secondary" style={{ fontSize: 12 }}>{label}</Text>
+        <Text strong style={{ fontSize: 12 }}>{value != null ? `${value}%` : '--'}</Text>
+      </Row>
+      <Progress
+        percent={value != null ? Math.min(Math.round(Number(value)), 100) : 0}
+        showInfo={false}
+        size="small"
+        strokeColor="#00D4FF"
+        style={{ marginBottom: 0 }}
+      />
+    </div>
+  )
 
   const parallelCard = () => (
     <Card size="small" title={<Space><ApartmentOutlined /><span>{t('deviceDetail.health.parallelTitle')}</span></Space>} bordered={false} style={{ borderRadius: 12, marginBottom: 16 }}>
@@ -191,24 +223,10 @@ const HealthTab: React.FC<HealthTabProps> = ({ sn }) => {
     </Card>
   )
 
-  const maintenanceCard = () => (
-    <Card size="small" title={<Space><ToolOutlined /><span>{t('deviceDetail.health.maintenanceTitle')}</span></Space>} bordered={false} style={{ borderRadius: 12, marginBottom: 16 }}>
-      <Row gutter={16}>
-        <Col span={8}>
-          <Statistic title={t('deviceDetail.health.workTime')} value={workHours ?? '-'} suffix={workHours ? t('deviceDetail.health.hours') : ''} />
-        </Col>
-        <Col span={8}>
-          <Statistic title={t('deviceDetail.health.invCurrent')} value={diag.inv_current != null ? `${diag.inv_current} A` : '-'} />
-        </Col>
-        <Col span={8}>
-          <Statistic title={t('deviceDetail.health.parallelChargeCurrent')} value={diag.parallel_charge_current != null ? `${diag.parallel_charge_current} A` : '-'} />
-        </Col>
-      </Row>
-      {(diagnostics ?? []).some((e) => e.rule_code === 'MAINTENANCE_DUE' && e.status === 'active') && (
-        <Alert type="warning" showIcon message={t('deviceDetail.health.maintenanceAlert')} style={{ marginTop: 12 }} />
-      )}
-    </Card>
-  )
+  const maintenanceAlert = (diagnostics ?? []).some((e) => e.rule_code === 'MAINTENANCE_DUE' && e.status === 'active')
+
+  const thermalStatusColor = thermalStatus === 'fault' ? '#ff4d4f' : thermalStatus === 'warning' ? '#faad14' : '#52c41a'
+  const thermalStatusKey = `deviceDetail.health.thermal.${thermalStatus}`
 
   return (
     <Spin spinning={loading}>
@@ -216,41 +234,96 @@ const HealthTab: React.FC<HealthTabProps> = ({ sn }) => {
         <QueryErrorAlert error={loadError} onRetry={retryAll} style={{ marginBottom: 16 }} />
       )}
 
-      <Row gutter={16}>
-        {/* 健康度评分环 */}
-        <Col xs={24} md={8}>
-          <Card size="small" bordered={false} style={{ borderRadius: 12, marginBottom: 16 }}>
-            <div style={{ textAlign: 'center' }}>
-              <AntTitle level={5}><HeartOutlined style={{ marginRight: 6, color: '#ff4d4f' }} />{t('deviceDetail.health.scoreTitle')}</AntTitle>
-              {healthScore != null ? (
-                <>
-                  <Progress
-                    type="dashboard"
-                    size={150}
-                    percent={Math.round(Number(healthScore))}
-                    strokeColor={HEALTH_COLOR[healthLevel ?? 'maintenance'] ?? '#1677ff'}
-                    format={(p) => <span style={{ fontSize: 28, fontWeight: 700 }}>{p}</span>}
-                  />
-                  <div>
-                    <Tag color={HEALTH_COLOR[healthLevel ?? 'maintenance'] ?? 'default'}>
-                      {t(HEALTH_LEVEL_KEY(healthLevel ?? 'maintenance'))}
-                    </Tag>
-                  </div>
-                </>
-              ) : (
-                <Empty description={t('deviceDetail.status.noData')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+      {/* ── 顶部：健康度大圆环 ── */}
+      <Card size="small" bordered={false} style={{ borderRadius: 12, marginBottom: 16 }} bodyStyle={{ padding: '28px 24px' }}>
+        <div style={{ textAlign: 'center' }}>
+          <AntTitle level={5} style={{ marginBottom: 16 }}>
+            <HeartOutlined style={{ marginRight: 6, color: '#ff4d4f' }} />{t('deviceDetail.health.scoreTitle')}
+          </AntTitle>
+          {healthScore != null ? (
+            <>
+              <Progress
+                type="dashboard"
+                size={180}
+                percent={Math.round(Number(healthScore))}
+                strokeColor={HEALTH_COLOR[healthLevel ?? 'maintenance'] ?? '#1677ff'}
+                format={(p) => <span style={{ fontSize: 34, fontWeight: 700 }}>{p}</span>}
+              />
+              <div style={{ marginTop: 12 }}>
+                <Tag color={HEALTH_COLOR[healthLevel ?? 'maintenance'] ?? 'default'} style={{ borderRadius: 8, fontWeight: 600 }}>
+                  {t(HEALTH_LEVEL_KEY(healthLevel ?? 'maintenance'))}
+                </Tag>
+                {scoreEstimated && <Tag color="default">{t('deviceDetail.health.estimated')}</Tag>}
+              </div>
+              {scoreEstimated && (
+                <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 6 }}>
+                  {t('deviceDetail.health.estimatedHint')}
+                </Text>
               )}
-            </div>
+            </>
+          ) : (
+            <Empty description={t('deviceDetail.status.noData')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+          )}
+        </div>
+      </Card>
+
+      {/* ── 中部：2×2 温度小卡 ── */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+        <Col xs={12} lg={6}>{tempCard(t('deviceDetail.health.invTemp'), invTemp)}</Col>
+        <Col xs={12} lg={6}>{tempCard(t('deviceDetail.health.boostTemp'), boostTemp)}</Col>
+        <Col xs={12} lg={6}>{tempCard(t('deviceDetail.health.transformerTemp'), transformerTemp)}</Col>
+        <Col xs={12} lg={6}>{tempCard(t('deviceDetail.health.ambientTemp'), ambientTemp)}</Col>
+      </Row>
+
+      {/* ── 底部：风扇转速 + 累计运行 + 散热状态 ── */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+        <Col xs={24} lg={12}>
+          <Card
+            size="small"
+            title={<Space><ThunderboltOutlined style={{ color: '#00D4FF' }} /><span>{t('deviceDetail.health.fanTitle')}</span></Space>}
+            bordered={false}
+            style={{ borderRadius: 12, height: '100%' }}
+          >
+            {fanRow(t('deviceDetail.health.mpptFan'), mpptFanSpeed)}
+            {fanRow(t('deviceDetail.health.invFan'), invFanSpeed)}
           </Card>
         </Col>
-
-        {/* 散热状态 */}
-        <Col xs={24} md={16}>
-          {thermalCard()}
-          {parallelCard()}
-          {maintenanceCard()}
+        <Col xs={24} lg={12}>
+          <Card
+            size="small"
+            title={<Space><ToolOutlined /><span>{t('deviceDetail.health.maintenanceTitle')}</span></Space>}
+            bordered={false}
+            style={{ borderRadius: 12, height: '100%' }}
+          >
+            <Row gutter={16}>
+              <Col span={8}>
+                <Statistic title={t('deviceDetail.health.workTime')} value={workHours ?? '-'} suffix={workHours ? t('deviceDetail.health.hours') : ''} />
+              </Col>
+              <Col span={8}>
+                <Statistic title={t('deviceDetail.health.invCurrent')} value={diag.inv_current != null ? `${diag.inv_current} A` : '-'} />
+              </Col>
+              <Col span={8}>
+                <Statistic title={t('deviceDetail.health.parallelChargeCurrent')} value={diag.parallel_charge_current != null ? `${diag.parallel_charge_current} A` : '-'} />
+              </Col>
+            </Row>
+            <div style={{ marginTop: 10 }}>
+              <Space>
+                <span style={{ fontSize: 12 }}>{t('deviceDetail.health.thermalStatus')}:</span>
+                <Tag color={thermalStatusColor}>{t(thermalStatusKey) !== thermalStatusKey ? t(thermalStatusKey) : thermalStatus}</Tag>
+              </Space>
+            </div>
+            {(thermalStatus === 'fault' || thermalStatus === 'warning') && (
+              <Alert type="warning" showIcon message={t('deviceDetail.health.thermalAlert')} style={{ marginTop: 10 }} />
+            )}
+            {maintenanceAlert && (
+              <Alert type="warning" showIcon message={t('deviceDetail.health.maintenanceAlert')} style={{ marginTop: 10 }} />
+            )}
+          </Card>
         </Col>
       </Row>
+
+      {/* ── 并机拓扑 ── */}
+      {parallelCard()}
 
       {/* 诊断事件列表 */}
       <Card

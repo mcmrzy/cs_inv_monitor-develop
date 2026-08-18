@@ -10,13 +10,13 @@ import 'package:inv_app/core/services/widget_update_service.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/widgets/jiggle_once.dart';
-import 'package:inv_app/core/widgets/offline_banner.dart';
 import 'package:inv_app/core/widgets/pagination_bar.dart';
 import 'package:inv_app/core/widgets/pressable_gesture_detector.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
+import 'package:inv_app/features/onboarding/data/setup_guide_storage.dart';
 import 'package:inv_app/core/services/data_cache_service.dart';
 import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
@@ -43,6 +43,10 @@ class _HomePageState extends State<HomePage> {
   List<dynamic>? _sortStations;
   StreamSubscription<dynamic>? _statusSub;
   StreamSubscription<dynamic>? _alarmSub;
+
+  /// 首启向导：本会话只提示一次，避免反复弹出
+  bool _setupGuidePrompted = false;
+  final _setupGuideStorage = SetupGuideStorage();
 
   List<String> get _filters {
     final l10n = AppLocalizations.of(context)!;
@@ -229,6 +233,13 @@ class _HomePageState extends State<HomePage> {
           if (state is StationSummaryLoaded && !state.isFromCache) {
             _pushStationWidgets(state);
           }
+          // 首启向导：登录后无电站且未完成过向导时弹出
+          if (state is StationSummaryLoaded &&
+              state.stations.isEmpty &&
+              !_setupGuidePrompted) {
+            _setupGuidePrompted = true;
+            unawaited(_maybeShowSetupGuide());
+          }
         },
         builder: (context, state) {
           final l10n = AppLocalizations.of(context)!;
@@ -265,7 +276,6 @@ class _HomePageState extends State<HomePage> {
 
           return Column(
             children: [
-              const OfflineBanner(),
               Expanded(
                 child: StyledRefreshIndicator(
                   onRefresh: () async => context
@@ -275,20 +285,18 @@ class _HomePageState extends State<HomePage> {
                     controller: _stationListController,
                     physics: const AlwaysScrollableScrollPhysics(),
                     slivers: [
-                      if (isFromCache)
-                        SliverToBoxAdapter(
-                          child: SafeArea(
-                            bottom: false,
-                            child: OfflineDataBanner(
-                              onRetry: () => context
-                                  .read<StationBloc>()
-                                  .add(StationSummaryRequested()),
-                            ),
-                          ),
-                        ),
                       _buildHeader(),
                       if (_showSearch) _buildSearchBar(),
                       _buildFilterCards(ds),
+                      // 离线提示（统一横幅）：电站筛选下方、「还有 x 个电站」上方
+                      SliverToBoxAdapter(
+                        child: _HomeOfflineNotice(
+                          fromCache: isFromCache,
+                          onRetry: () => context
+                              .read<StationBloc>()
+                              .add(StationSummaryRequested()),
+                        ),
+                      ),
                       // 排序模式：提示 + 完成横条；否则电站数量行
                       if (_stationSortMode)
                         SliverToBoxAdapter(
@@ -770,6 +778,13 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// 首启向导触发：未完成过才弹出（跳过/完成后不再打扰）
+  Future<void> _maybeShowSetupGuide() async {
+    final done = await _setupGuideStorage.isDone();
+    if (done || !mounted) return;
+    context.push('/setup-guide');
+  }
+
   Widget _buildEmpty() {
     final l10n = AppLocalizations.of(context)!;
     // 小烁展示光伏模型插画：无电站引导态（美术路由 C2/empty-stations）
@@ -779,6 +794,52 @@ class _HomePageState extends State<HomePage> {
       message: l10n.tapPlusToCreate,
       size: 180,
       padding: EdgeInsets.symmetric(vertical: 48.h),
+      action: Column(
+        children: [
+          SizedBox(height: 16.h),
+          _emptyActionButton(
+            icon: Icons.add_home_work_outlined,
+            label: l10n.createStation,
+            onTap: () => context.push('/station/create'),
+          ),
+          SizedBox(height: 10.h),
+          _emptyActionButton(
+            icon: Icons.solar_power,
+            label: l10n.addDevice,
+            onTap: () => context.push('/add-device'),
+          ),
+          SizedBox(height: 10.h),
+          _emptyActionButton(
+            icon: Icons.wifi,
+            label: l10n.wifiConfig,
+            onTap: () => context.push('/wifi-config'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 空态快捷入口按钮（创建电站 / 添加设备 / 配网）
+  Widget _emptyActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return SizedBox(
+      width: 220.w,
+      height: 42.h,
+      child: OutlinedButton.icon(
+        onPressed: onTap,
+        icon: Icon(icon, size: 17.sp),
+        label: Text(label, style: TextStyle(fontSize: 14.sp)),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.primary,
+          side: BorderSide(color: AppColors.primary.withValues(alpha: 0.4)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12.r),
+          ),
+        ),
+      ),
     );
   }
 
@@ -792,7 +853,6 @@ class _HomePageState extends State<HomePage> {
     );
     return Column(
       children: [
-        const OfflineBanner(),
         Expanded(
           child: StyledRefreshIndicator(
             onRefresh: () async => context
@@ -801,18 +861,17 @@ class _HomePageState extends State<HomePage> {
             child: CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
-                SliverToBoxAdapter(
-                  child: SafeArea(
-                    bottom: false,
-                    child: OfflineDataBanner(
-                      onRetry: () => context
-                          .read<StationBloc>()
-                          .add(StationSummaryRequested()),
-                    ),
-                  ),
-                ),
                 _buildHeader(),
                 _buildFilterCards(empty),
+                // 离线提示（统一横幅）：筛选下方、空态引导上方
+                SliverToBoxAdapter(
+                  child: _HomeOfflineNotice(
+                    fromCache: true,
+                    onRetry: () => context
+                        .read<StationBloc>()
+                        .add(StationSummaryRequested()),
+                  ),
+                ),
                 SliverToBoxAdapter(child: _buildEmpty()),
                 const SliverToBoxAdapter(child: SizedBox(height: 100)),
               ],
@@ -820,6 +879,129 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// 首页统一离线提示横幅
+///
+/// 替代原来互相冲突的两个横幅（顶部 OfflineBanner「无网络连接」与
+/// 缓存数据 OfflineDataBanner）：网络断开或数据来自本地缓存时显示，
+/// 位置在电站筛选与「还有 x 个电站」行之间，合并断网提示、缓存数据
+/// 说明与重试入口为一张卡片。
+class _HomeOfflineNotice extends StatefulWidget {
+  /// 当前数据是否来自本地缓存
+  final bool fromCache;
+
+  /// 重试（重新请求电站汇总数据）
+  final VoidCallback onRetry;
+
+  const _HomeOfflineNotice({required this.fromCache, required this.onRetry});
+
+  @override
+  State<_HomeOfflineNotice> createState() => _HomeOfflineNoticeState();
+}
+
+class _HomeOfflineNoticeState extends State<_HomeOfflineNotice> {
+  late final NetworkStatusService _networkService;
+  StreamSubscription<bool>? _statusSub;
+  bool _offline = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _networkService = getIt<NetworkStatusService>();
+    _offline = _networkService.isOffline;
+    _statusSub = _networkService.statusStream.listen((isOnline) {
+      if (mounted) {
+        setState(() => _offline = !isOnline);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _statusSub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // 网络正常且非缓存数据：无需提示
+    if (!_offline && !widget.fromCache) return const SizedBox.shrink();
+
+    final l10n = AppLocalizations.of(context)!;
+    // 断网：显示缓存数据 / 功能受限提示；联网但缓存兜底（请求失败）：加载失败
+    final title = _offline ? l10n.offlineStatus : l10n.loadFailed;
+    final subtitle = _offline
+        ? (widget.fromCache ? l10n.noNetworkCached : l10n.offlineHint)
+        : '';
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16.w, 8.h, 16.w, 0),
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+        decoration: BoxDecoration(
+          color: AppColors.warningSoft,
+          borderRadius: BorderRadius.circular(12.r),
+          border: Border.all(color: AppColors.warningBorder, width: 0.5),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              _offline ? Icons.wifi_off_rounded : Icons.cloud_off_rounded,
+              size: 16.sp,
+              color: AppColors.warningStrong,
+            ),
+            SizedBox(width: 8.w),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 12.sp,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.warningText,
+                    ),
+                  ),
+                  if (subtitle.isNotEmpty) ...[
+                    SizedBox(height: 2.h),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 11.sp,
+                        color: AppColors.warningText.withValues(alpha: 0.8),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            SizedBox(width: 8.w),
+            GestureDetector(
+              onTap: widget.onRetry,
+              child: Container(
+                padding:
+                    EdgeInsets.symmetric(horizontal: 10.w, vertical: 5.h),
+                decoration: BoxDecoration(
+                  color: AppColors.warning.withValues(alpha: 0.25),
+                  borderRadius: BorderRadius.circular(8.r),
+                ),
+                child: Text(
+                  l10n.retry,
+                  style: TextStyle(
+                    fontSize: 12.sp,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.warningText,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

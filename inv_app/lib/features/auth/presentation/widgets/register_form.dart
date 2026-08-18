@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/widgets/slider_captcha_dialog.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
@@ -59,7 +60,7 @@ class _RegisterFormState extends State<RegisterForm> {
     });
   }
 
-  void _handleSendCode() {
+  Future<void> _handleSendCode() async {
     final l10n = AppLocalizations.of(context)!;
     final email = _emailController.text.trim();
     if (email.isEmpty || !email.contains('@') || !email.contains('.')) {
@@ -70,9 +71,16 @@ class _RegisterFormState extends State<RegisterForm> {
       );
       return;
     }
-    context
-        .read<AuthBloc>()
-        .add(AuthSendEmailCodeRequested(email: email, type: 'register'));
+    // 后端要求先通过滑块验证，获取 verifyToken 后随请求携带
+    final captchaToken = await showSliderCaptcha(context);
+    if (captchaToken == null || !mounted) return;
+    context.read<AuthBloc>().add(
+          AuthSendEmailCodeRequested(
+            email: email,
+            type: 'register',
+            captchaToken: captchaToken,
+          ),
+        );
   }
 
   void _handleRegister() {

@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:inv_app/core/config/app_config.dart';
 import 'package:inv_app/core/services/api_service.dart';
+import 'package:inv_app/core/services/captcha_service.dart';
 import 'package:inv_app/core/services/ble/ble_adapter.dart';
 import 'package:inv_app/core/services/ble/ble_binding_service.dart';
 import 'package:inv_app/core/services/ble/ble_device_manager.dart';
@@ -114,6 +115,12 @@ class ServiceLocator {
         },
         onError: (error, handler) async {
           if (error.response?.statusCode == 401) {
+            // 未携带 token 的请求（如离网 guest 模式误碰云端接口）必然 401：
+            // 直接透传错误由业务层展示离线态，不触发刷新/登出链路
+            // （登出会连带退出 guest 本地模式，导致用户被踢回登录页）
+            if (!error.requestOptions.headers.containsKey('Authorization')) {
+              return handler.next(error);
+            }
             if (error.requestOptions.path == '/auth/refresh') {
               getIt<AuthBloc>().add(AuthLogoutRequested());
               return handler.next(error);
@@ -271,6 +278,10 @@ class ServiceLocator {
 
     getIt.registerLazySingleton<ApiService>(
       () => ApiService(getIt()),
+    );
+
+    getIt.registerLazySingleton<CaptchaService>(
+      () => CaptchaService(getIt()),
     );
 
     getIt.registerLazySingleton<ApiClient>(

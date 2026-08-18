@@ -122,7 +122,7 @@ const DashboardPage: React.FC = () => {
     ? trend30DaysRes.data
     : (Array.isArray(trend30DaysRes?.data?.data) ? trend30DaysRes.data.data : []) as any[]
 
-  const recentAlerts = ((stats?.recentAlarms ?? []) as AlertItem[])
+  const recentAlerts = (Array.isArray(stats?.recentAlarms) ? stats.recentAlarms : []) as AlertItem[]
 
   const ds = stats?.deviceStats ?? stats
   const onlineCount = safeNum(ds?.online ?? distribution?.online ?? stats?.onlineDevices)
@@ -216,11 +216,12 @@ const DashboardPage: React.FC = () => {
   /* 电量概览柱状图配置 */
   const energyOverviewOption = useMemo(() => {
     const es = energyStatsRaw
-    const dates = es?.dates ?? []
+    // 接口异常时字段可能缺失或非数组，统一降级为空数组避免 .map 崩溃
+    const dates = Array.isArray(es?.dates) ? es.dates : []
     if (dates.length === 0) return {}
-    const pvArr = es.pv ?? []
-    const chargeArr = es.batteryCharge ?? []
-    const dischargeArr = es.batteryDischarge ?? []
+    const pvArr = Array.isArray(es?.pv) ? es.pv : []
+    const chargeArr = Array.isArray(es?.batteryCharge) ? es.batteryCharge : []
+    const dischargeArr = Array.isArray(es?.batteryDischarge) ? es.batteryDischarge : []
     const loadMap: Record<string, number> = {}
     for (const item of energyTrendData) {
       loadMap[item.date] = safeNum(item.load)
@@ -480,22 +481,15 @@ const DashboardPage: React.FC = () => {
         </ProCard>
       </ProCard>
 
-      {/* 快捷入口 */}
-      <ProCard gutter={[16, 16]} style={{ marginTop: 16 }}>
-        {[
-          { title: t('dash.entryDevices'), desc: t('dash.entryDevicesDesc'), icon: <DesktopOutlined style={{ fontSize: 28 }} />, color: '#1677ff', path: '/devices' },
-          { title: t('dash.entryAnalytics'), desc: t('dash.entryAnalyticsDesc'), icon: <BarChartOutlined style={{ fontSize: 28 }} />, color: '#722ed1', path: '/monitoring' },
-          { title: t('dash.entryAlerts'), desc: t('dash.entryAlertsDesc'), icon: <ExclamationCircleOutlined style={{ fontSize: 28 }} />, color: '#fa541c', path: '/alerts' },
-        ].map((item) => (
-          <ProCard colSpan={{ xs: 24, sm: 8 }} key={item.path} hoverable bordered={false} style={{ borderRadius: 12, textAlign: 'center' }}
-            onClick={() => navigate(item.path)}
-          >
-            <div style={{ color: item.color, marginBottom: 8 }}>{item.icon}</div>
-            <Text strong style={{ fontSize: 15 }}>{item.title}</Text>
-            <br />
-            <Text type="secondary" style={{ fontSize: 12 }}>{item.desc}</Text>
-          </ProCard>
-        ))}
+      {/* 快速上手引导（仅文字指引，不提供快捷按钮） */}
+      <ProCard bordered={false} style={{ borderRadius: 12, marginTop: 16 }}
+        title={<Space><ThunderboltOutlined style={{ color: '#1677ff' }} /><span>{t('dash.quickGuide')}</span></Space>}
+      >
+        <Space direction="vertical" size={10} style={{ width: '100%' }}>
+          <div><ThunderboltOutlined style={{ color: '#fa8c16', marginRight: 8 }} /><Text>{t('dash.guideCreateStation', { menu: t('menu.stationManage') })}</Text></div>
+          <div><DesktopOutlined style={{ color: '#1677ff', marginRight: 8 }} /><Text>{t('dash.guideAddDevice', { menu: t('menu.deviceManage') })}</Text></div>
+          <div><WifiOutlined style={{ color: '#52c41a', marginRight: 8 }} /><Text>{t('dash.guideProvision')}</Text></div>
+        </Space>
       </ProCard>
     </>
   )

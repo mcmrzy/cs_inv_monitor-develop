@@ -12,6 +12,7 @@ import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart'
     hide DeviceBindRequested, DeviceBindSuccess;
 import 'package:inv_app/core/services/service_locator.dart';
+import 'package:inv_app/core/services/ambient_light_service.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/utils/sn_utils.dart';
@@ -43,7 +44,35 @@ class _AddDevicePageState extends State<AddDevicePage>
   int _sessionBoundCount = 0;
   bool _bindSuccess = false;
   List<_ScanHistoryEntry> _scanHistory = [];
-  bool _autoFlash = true;
+
+  /// 暗光检测补光（默认开启）：持续扫不到码时自动点亮，
+  /// 扫码成功后自动熄灭并重新计时
+  bool _autoTorch = true;
+
+  /// 补光灯真实状态（来自 controller.value.torchState，非本地猜测）
+  bool _torchOn = false;
+  bool _torchAvailable = true;
+
+  /// 当前补光灯是否由暗光检测自动点亮（区别于手动点亮）
+  bool _autoTorchLit = false;
+
+  /// 最近一次成功解码时间（无传感器时的启发式基准）
+  DateTime _lastDetectAt = DateTime.now();
+
+  /// 暗光检测定时器：周期性判断是否需要自动点灯
+  Timer? _lowLightTimer;
+
+  /// 环境光照度订阅（有传感器时按真实亮度判断）
+  StreamSubscription<double>? _luxSub;
+
+  /// 连续无成功解码多久后判定为暗光并点亮补光灯（启发式兜底）
+  static const Duration _lowLightThreshold = Duration(seconds: 5);
+
+  /// 光照度低于该值（lux）判定为暗光，自动点亮补光灯
+  static const double _luxDarkThreshold = 12;
+
+  /// 光照度高于该值（lux）判定为光线恢复，熄灭自动补光（滞回防抖动）
+  static const double _luxBrightThreshold = 30;
 
   int? _selectedStationId;
   String? _selectedStationName;
@@ -53,9 +82,10 @@ class _AddDevicePageState extends State<AddDevicePage>
     super.initState();
     _selectedStationId = widget.stationId;
     _tabController = TabController(length: 2, vsync: this);
-    _cameraController = MobileScannerController(
-      torchEnabled: _autoFlash,
-    );
+    // 注意：不在构造期传 torchEnabled——此时相机尚未就绪，
+    // 部分机型不生效；改为相机初始化完成后按 _autoTorch 点亮
+    _cameraController = MobileScannerController();
+    _cameraController!.addListener(_onCameraStateChanged);
     _loadScanHistory();
     _loadStationName();
   }
@@ -84,11 +114,115 @@ class _AddDevicePageState extends State<AddDevicePage>
     } catch (_) {}
   }
 
+  /// 相机状态变化：同步补光灯真实状态到 UI；
+  /// 相机就绪且开启自动补光时点亮一次
+  void _onCameraStateChanged() {
+    final controller = _cameraController;
+    if (controller == null || !mounted) return;
+    final value = controller.value;
+    final available = value.torchState != TorchState.unavailable;
+    final torchOn = value.torchState == TorchState.on ||
+        value.torchState == TorchState.auto;
+
+    // 相机就绪后启动暗光检测（持续扫不到码才自动点灯）
+    if (value.isInitialized) {
+      _startLowLightWatch();
+    }
+
+    if (torchOn != _torchOn || available != _torchAvailable) {
+      setState(() {
+        _torchOn = torchOn;
+        _torchAvailable = available;
+      });
+    }
+  }
+
+  /// 显式设置补光灯开关（状态一致时不做无谓 toggle）
+  void _setTorch(bool enable) {
+    final controller = _cameraController;
+    if (controller == null) return;
+    final state = controller.value.torchState;
+    if (state == TorchState.unavailable) return;
+    final isOn = state == TorchState.on || state == TorchState.auto;
+    if (isOn != enable) {
+      unawaited(controller.toggleTorch());
+    }
+  }
+
+  /// 暗光检测补光开关：关闭时立即熄灭由检测自动点亮的灯
+  void _toggleAutoTorch() {
+    setState(() => _autoTorch = !_autoTorch);
+    if (!_autoTorch && _autoTorchLit) {
+      _autoTorchLit = false;
+      _setTorch(false);
+    }
+    // 切换开关视为重新开始观察，避免立即点灯
+    _lastDetectAt = DateTime.now();
+  }
+
+  /// 启动暗光检测：
+  /// 优先按环境光传感器的真实照度判断（lux 太低点灯、恢复后熄灯）；
+  /// 无传感器时回退「连续扫不到码达阈值即点灯」启发式
+  void _startLowLightWatch() {
+    if (_lowLightTimer != null) return;
+    _lastDetectAt = DateTime.now();
+    // 真实亮度信号（Android 环境光传感器）
+    AmbientLightService.start();
+    _luxSub ??= AmbientLightService.luxStream.listen(_onLuxChanged);
+    _lowLightTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted || !_autoTorch || _autoTorchLit) return;
+      // 传感器可用 → 完全按亮度判断，不走启发式
+      if (AmbientLightService.supported) return;
+      final controller = _cameraController;
+      if (controller == null || !controller.value.isInitialized) return;
+      final state = controller.value.torchState;
+      if (state == TorchState.unavailable) return;
+      if (DateTime.now().difference(_lastDetectAt) < _lowLightThreshold) {
+        return;
+      }
+      // 已亮（手动）则不重复操作
+      if (state == TorchState.on || state == TorchState.auto) return;
+      _autoTorchLit = true;
+      unawaited(controller.toggleTorch());
+    });
+  }
+
+  /// 环境光传感器事件：暗光点灯、亮度恢复熄掉自动补光（双阈值滞回防抖动）
+  void _onLuxChanged(double lux) {
+    if (!mounted || !_autoTorch) return;
+    final controller = _cameraController;
+    if (controller == null || !controller.value.isInitialized) return;
+    final state = controller.value.torchState;
+    if (state == TorchState.unavailable) return;
+    if (lux < _luxDarkThreshold && !_autoTorchLit) {
+      if (state != TorchState.on && state != TorchState.auto) {
+        _autoTorchLit = true;
+        unawaited(controller.toggleTorch());
+      }
+    } else if (lux > _luxBrightThreshold && _autoTorchLit) {
+      _autoTorchLit = false;
+      _setTorch(false);
+    }
+  }
+
+  /// 成功解码：重置暗光计时；补光灯若为暗光自动点亮则自动熄灭
+  void _onDetectSuccess() {
+    _lastDetectAt = DateTime.now();
+    if (_autoTorchLit) {
+      _autoTorchLit = false;
+      _setTorch(false);
+    }
+  }
+
   @override
   void dispose() {
+    _lowLightTimer?.cancel();
+    _luxSub?.cancel();
+    AmbientLightService.stop();
     _snController.dispose();
     _pinController.dispose();
     _tabController.dispose();
+    _cameraController?.removeListener(_onCameraStateChanged);
     _cameraController?.dispose();
     super.dispose();
   }
@@ -97,6 +231,8 @@ class _AddDevicePageState extends State<AddDevicePage>
     if (_scanning) return;
     final barcode = capture.barcodes.firstOrNull;
     if (barcode == null || barcode.rawValue == null) return;
+    // 识别到二维码即说明光线足够，重置暗光计时并熄灭自动补光
+    _onDetectSuccess();
     final raw = barcode.rawValue!.trim();
     if (raw.isEmpty || raw == _lastScanned) return;
 
@@ -571,57 +707,30 @@ class _AddDevicePageState extends State<AddDevicePage>
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _actionChip(
-                    Icons.flash_on,
-                    AppLocalizations.of(context)!.flashLight,
-                    () => _cameraController?.toggleTorch(),
-                  ),
-                  SizedBox(width: 12.w),
+                  // 补光灯：仅设备支持时显示，高亮反映真实点亮状态
+                  if (_torchAvailable)
+                    _toggleChip(
+                      _torchOn ? Icons.flashlight_on : Icons.flashlight_off,
+                      AppLocalizations.of(context)!.flashLight,
+                      _torchOn,
+                      () {
+                        // 手动操作覆盖暗光自动补光状态
+                        _autoTorchLit = false;
+                        _setTorch(!_torchOn);
+                      },
+                    ),
+                  if (_torchAvailable) SizedBox(width: 12.w),
                   _actionChip(
                     Icons.flip_camera_android,
                     AppLocalizations.of(context)!.flipCamera,
                     () => _cameraController?.switchCamera(),
                   ),
                   SizedBox(width: 12.w),
-                  GestureDetector(
-                    onTap: () => setState(() => _autoFlash = !_autoFlash),
-                    child: Container(
-                      padding:
-                          EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
-                      decoration: BoxDecoration(
-                        color: _autoFlash
-                            ? AppColors.primary.withValues(alpha: 0.1)
-                            : AppColor.surfaceHover(context),
-                        borderRadius: BorderRadius.circular(20.r),
-                        border: _autoFlash
-                            ? Border.all(
-                                color: AppColors.primary.withValues(alpha: 0.3),
-                              )
-                            : null,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.auto_fix_high,
-                            size: 16.sp,
-                            color: _autoFlash
-                                ? AppColors.primary
-                                : AppColor.textSecondary(context),
-                          ),
-                          SizedBox(width: 4.w),
-                          Text(
-                            AppLocalizations.of(context)!.autoFlash,
-                            style: TextStyle(
-                              fontSize: 12.sp,
-                              color: _autoFlash
-                                  ? AppColors.primary
-                                  : AppColor.textSecondary(context),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                  _toggleChip(
+                    Icons.brightness_low,
+                    AppLocalizations.of(context)!.autoFlash,
+                    _autoTorch,
+                    _toggleAutoTorch,
                   ),
                 ],
               ),
@@ -695,22 +804,50 @@ class _AddDevicePageState extends State<AddDevicePage>
   }
 
   Widget _actionChip(IconData icon, String label, VoidCallback onTap) {
+    return _toggleChip(icon, label, false, onTap, highlightWhenActive: false);
+  }
+
+  /// 可高亮的操作胶囊：[active] 为 true 时以主题色高亮（反映真实开关状态）
+  Widget _toggleChip(
+    IconData icon,
+    String label,
+    bool active,
+    VoidCallback onTap, {
+    bool highlightWhenActive = true,
+  }) {
+    final highlighted = highlightWhenActive && active;
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
         decoration: BoxDecoration(
-          color: AppColor.surfaceHover(context),
+          color: highlighted
+              ? AppColors.primary.withValues(alpha: 0.1)
+              : AppColor.surfaceHover(context),
           borderRadius: BorderRadius.circular(20.r),
+          border: highlighted
+              ? Border.all(color: AppColors.primary.withValues(alpha: 0.3))
+              : null,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 16.sp, color: AppColor.textSecondary(context)),
+            Icon(
+              icon,
+              size: 16.sp,
+              color: highlighted
+                  ? AppColors.primary
+                  : AppColor.textSecondary(context),
+            ),
             SizedBox(width: 4.w),
             Text(
               label,
-              style: TextStyle(fontSize: 12.sp, color: AppColor.textSecondary(context)),
+              style: TextStyle(
+                fontSize: 12.sp,
+                color: highlighted
+                    ? AppColors.primary
+                    : AppColor.textSecondary(context),
+              ),
             ),
           ],
         ),

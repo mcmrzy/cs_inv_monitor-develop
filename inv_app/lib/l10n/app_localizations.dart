@@ -435,6 +435,14 @@ class AppLocalizations {
       _localizedStrings['please_input_correct_email']!;
   String get verificationCodeSent =>
       _localizedStrings['verification_code_sent']!;
+  String get sliderCaptchaTitle =>
+      _localizedStrings['slider_captcha_title'] ?? '安全验证';
+  String get sliderCaptchaHint =>
+      _localizedStrings['slider_captcha_hint'] ?? '拖动滑块完成拼图';
+  String get sliderCaptchaVerifying =>
+      _localizedStrings['slider_captcha_verifying'] ?? '验证中...';
+  String get sliderCaptchaFailed =>
+      _localizedStrings['slider_captcha_failed'] ?? '验证失败，请重试';
   String get emailVerificationCode =>
       _localizedStrings['email_verification_code']!;
   String get pleaseInputVerificationCode =>
@@ -1409,6 +1417,8 @@ class AppLocalizations {
       4008: 'err_invalid_email',
       4009: 'err_email_registered',
       4029: 'err_too_many_attempts',
+      4031: 'err_captcha_failed',
+      4032: 'err_captcha_required',
       5002: 'err_device_already_bound',
       5010: 'err_invalid_pin',
     };
@@ -1623,6 +1633,9 @@ class AppLocalizations {
   String get bindRegisteredLater => _localizedStrings['bind_registered_later']!;
   String get pinRequired => _localizedStrings['pin_required']!;
   String get manualPinLabel => _localizedStrings['manual_pin_label']!;
+  String get qrBindCloudBinding => _localizedStrings['qr_bind_cloud_binding']!;
+  String get qrBindCloudFailed => _localizedStrings['qr_bind_cloud_failed']!;
+  String get qrBindTryBle => _localizedStrings['qr_bind_try_ble']!;
   String get manualPinDesc => _localizedStrings['manual_pin_desc']!;
   String get qrBindPinRequired => _localizedStrings['qr_bind_pin_required']!;
   String get qrBindBack => _localizedStrings['qr_bind_back']!;

@@ -399,7 +399,7 @@ class _DeviceActionSheetState extends State<DeviceActionSheet>
                   icon: Icons.edit_outlined,
                   color: AppColors.primary,
                   title: l10n.editDevice,
-                  subtitle: l10n.editStationHint,
+                  subtitle: l10n.str('edit_device_hint'),
                   onTap: _edit,
                 ),
               ),

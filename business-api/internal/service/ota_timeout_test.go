@@ -1,0 +1,115 @@
+package service
+
+import (
+	"testing"
+	"time"
+
+	"inv-api-server/internal/model"
+
+	"github.com/stretchr/testify/require"
+)
+
+func TestIsUpgradeTaskTimedOut(t *testing.T) {
+	now := time.Date(2026, 8, 17, 12, 0, 0, 0, time.UTC)
+	timeout := 30 * time.Minute
+
+	tests := []struct {
+		name      string
+		status    string
+		updatedAt time.Time
+		timeout   time.Duration
+		want      bool
+	}{
+		{
+			name:      "running 超过阈值判超时",
+			status:    model.TaskStatusRunning,
+			updatedAt: now.Add(-31 * time.Minute),
+			timeout:   timeout,
+			want:      true,
+		},
+		{
+			name:      "pending 超过阈值判超时",
+			status:    model.TaskStatusPending,
+			updatedAt: now.Add(-time.Hour),
+			timeout:   timeout,
+			want:      true,
+		},
+		{
+			name:      "running 未超阈值不判超时",
+			status:    model.TaskStatusRunning,
+			updatedAt: now.Add(-29 * time.Minute),
+			timeout:   timeout,
+			want:      false,
+		},
+		{
+			name:      "running 恰好等于阈值不判超时（严格大于）",
+			status:    model.TaskStatusRunning,
+			updatedAt: now.Add(-timeout),
+			timeout:   timeout,
+			want:      false,
+		},
+		{
+			name:      "终态 completed 永不判超时",
+			status:    model.TaskStatusCompleted,
+			updatedAt: now.Add(-24 * time.Hour),
+			timeout:   timeout,
+			want:      false,
+		},
+		{
+			name:      "终态 failed 永不判超时",
+			status:    model.TaskStatusFailed,
+			updatedAt: now.Add(-24 * time.Hour),
+			timeout:   timeout,
+			want:      false,
+		},
+		{
+			name:      "终态 partial_success 永不判超时",
+			status:    model.TaskStatusPartialSuccess,
+			updatedAt: now.Add(-24 * time.Hour),
+			timeout:   timeout,
+			want:      false,
+		},
+		{
+			name:      "终态 cancelled 永不判超时",
+			status:    model.TaskStatusCancelled,
+			updatedAt: now.Add(-24 * time.Hour),
+			timeout:   timeout,
+			want:      false,
+		},
+		{
+			name:      "draft 草稿不参与超时收口",
+			status:    model.TaskStatusDraft,
+			updatedAt: now.Add(-24 * time.Hour),
+			timeout:   timeout,
+			want:      false,
+		},
+		{
+			name:      "scheduled 由定时调度器处理，不参与超时收口",
+			status:    model.TaskStatusScheduled,
+			updatedAt: now.Add(-24 * time.Hour),
+			timeout:   timeout,
+			want:      false,
+		},
+		{
+			name:      "阈值 <=0 视为禁用超时收口",
+			status:    model.TaskStatusRunning,
+			updatedAt: now.Add(-24 * time.Hour),
+			timeout:   0,
+			want:      false,
+		},
+		{
+			name:      "updated_at 在未来（时钟偏差）不判超时",
+			status:    model.TaskStatusRunning,
+			updatedAt: now.Add(time.Minute),
+			timeout:   timeout,
+			want:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := IsUpgradeTaskTimedOut(tt.status, tt.updatedAt, tt.timeout, now)
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
