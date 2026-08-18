@@ -137,10 +137,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-playwright-chromium-
       - name: Install Playwright chromium
-        uses: playwright-community/github-action@v1
-        with:
-          browsers: chromium
-          install-deps: ${{ steps.playwright-cache.outputs.cache-hit != 'true' }}
+        working-directory: inv-admin-frontend
+        run: npx playwright install chromium
+      - name: Install Playwright system dependencies (only on cache miss)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install-deps chromium
       - name: Start isolated test stack
         run: docker compose -f deploy/docker-compose.test.yml up -d --build --wait --wait-timeout 300
       - name: Run E2E tests
