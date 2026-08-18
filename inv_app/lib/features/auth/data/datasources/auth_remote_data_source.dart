@@ -93,6 +93,26 @@ class AuthRemoteDataSource {
     );
   }
 
+  Future<Response> phoneCodeLogin(String phone, String code) async {
+    return await dio.post(
+      '/auth/phone-code-login',
+      data: {
+        'phone': phone,
+        'code': code,
+      },
+    );
+  }
+
+  Future<Response> emailCodeLogin(String email, String code) async {
+    return await dio.post(
+      '/auth/email-code-login',
+      data: {
+        'email': email,
+        'code': code,
+      },
+    );
+  }
+
   Future<Response> emailRegister(
     String email,
     String password,
