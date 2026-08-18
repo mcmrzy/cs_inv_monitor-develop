@@ -18,7 +18,7 @@ import 'package:inv_app/l10n/app_localizations.dart';
 /// 新流程：
 /// 1. 用户输入/确认 PIN
 /// 2. **云端绑定**（POST /devices/bind 带 PIN，~1 秒完成）
-///    - 成功 → 直接返回（DeviceBloc 监听 DeviceBindSuccess 刷新列表）
+///    - 成功 → 展示成功页，用户点击「完成」返回
 ///    - 失败（设备未注册/网络错误）→ 展示选择界面
 /// 3. 用户可选择：
 ///    - 重试云端绑定
@@ -165,14 +165,9 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
           _cloudErrorMessage = failure.message;
         });
       case Right():
-        // 云端绑定成功：通过 Bloc 通知成功
-        context.read<DeviceBloc>().add(
-          DeviceBindRequested(
-            sn: widget.sn,
-            stationId: widget.stationId,
-            pin: _pin,
-          ),
-        );
+        // 云端绑定成功：展示 done 页，用户点击「完成」返回
+        // （页面已直接经 repository 完成绑定，不再派发 DeviceBindRequested
+        // 触发 bloc 重复调用 bind API）
         setState(() {
           _cloudBindingPending = false;
           _doneOutcome = BindOutcome.bound;
@@ -285,13 +280,11 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    // 监听云端绑定成功结果：成功直接返回（入口页的 DeviceBindSuccess
-    // 监听负责刷新列表/提示）；失败留在本页展示错误。
+    // 绑定由本页直接经 repository 完成：成功停留 done 页由用户确认返回；
+    // 失败（bloc 层其它事件报错且本页正处于云端绑定中）留在本页展示错误。
     return BlocConsumer<DeviceBloc, DeviceState>(
       listener: (context, state) {
-        if (state is DeviceBindSuccess) {
-          Navigator.of(context).pop();
-        } else if (state is DeviceError) {
+        if (state is DeviceError) {
           // 云端绑定失败（bloc 层）：展示在 cloudFailed 界面
           if (_phase == _QrBindPhase.cloudBinding) {
             setState(() {
