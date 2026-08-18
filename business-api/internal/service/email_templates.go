@@ -42,11 +42,20 @@ type emailBuiltinTemplate struct {
 }
 
 // emailButtonBlock 主按钮 HTML 片段（内联样式，邮件客户端兼容）。
+// 移动端优化：100% 宽度，增大触控区域
 const emailButtonBlock = `{{if and .ButtonText .ButtonURL}}
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:26px 0 10px 0;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0 8px 0;">
     <tr>
-        <td align="center" style="background-color:#1677ff;border-radius:8px;">
-            <a href="{{.ButtonURL}}" target="_blank" style="display:inline-block;padding:12px 36px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;">{{.ButtonText}}</a>
+        <td align="center">
+            <!--[if mso]>
+            <v:shape xmlns:v="http://schemas.microsoft.com/vml/" href="{{.ButtonURL}}" fill="t" stroke="f" fillcolor="#1677ff" arcsize="6%" style="width:220px;height:44px;position:absolute;top:50%;transform:translateY(-50%);" type="button">
+                <v:textbox style="mso-fit-shape-to-text:true" inset="12px,0px,12px,0px">
+            <![endif]-->
+            <a href="{{.ButtonURL}}" target="_blank" style="display:inline-block;padding:14px 32px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;background-color:#1677ff;min-width:160px;">{{.ButtonText}}</a>
+            <!--[if mso]>
+                </v:textbox>
+            </v:shape>
+            <![endif]-->
         </td>
     </tr>
 </table>
@@ -68,9 +77,9 @@ var builtinEmailTemplates = map[string]emailBuiltinTemplate{
 {{if .Code}}
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0;">
     <tr>
-        <td align="center" style="background-color:#F0F7FF;border:1px solid #BAE0FF;border-radius:12px;padding:24px 16px;">
-            <div style="font-size:36px;font-weight:800;letter-spacing:10px;color:#1677ff;font-family:Consolas,'Courier New',monospace;">{{.Code}}</div>
-            <div style="margin-top:10px;font-size:13px;color:#8A94A6;">验证码 5 分钟内有效，请勿泄露给他人</div>
+        <td align="center" style="background-color:#F0F7FF;border:2px solid #BAE0FF;border-radius:12px;padding:32px 16px;">
+            <div style="font-size:32px;font-weight:800;letter-spacing:8px;color:#1677ff;font-family:Consolas,'Courier New',monospace;">{{.Code}}</div>
+            <div style="margin-top:14px;font-size:13px;color:#8A94A6;line-height:1.5;">验证码 5 分钟内有效，请勿泄露给他人</div>
         </td>
     </tr>
 </table>
@@ -84,11 +93,11 @@ var builtinEmailTemplates = map[string]emailBuiltinTemplate{
 		Body: `<p style="` + emailParagraphStyle + `">{{.Summary}}</p>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:18px 0;background-color:#F7F9FC;border-radius:10px;border-left:4px solid #1677ff;">
     <tr>
-        <td style="padding:16px 20px;font-size:14px;line-height:1.8;color:#3E4A5E;">{{.Content}}</td>
+        <td class="mobile-card" style="padding:20px;font-size:14px;line-height:1.8;color:#3E4A5E;">{{.Content}}</td>
     </tr>
 </table>
 ` + emailButtonBlock + `
-<p style="` + emailMutedStyle + `">如按钮无法点击，请复制以下链接到浏览器打开：<br>{{.ButtonURL}}</p>`,
+<p style="` + emailMutedStyle + `">如按钮无法点击，请复制以下链接到浏览器打开：<br><span style="word-break:break-all;">{{.ButtonURL}}</span></p>`,
 	},
 
 	// 欢迎邮件
@@ -105,7 +114,7 @@ var builtinEmailTemplates = map[string]emailBuiltinTemplate{
 		Body: `<p style="` + emailParagraphStyle + `">{{.Summary}}</p>
 <p style="` + emailParagraphStyle + `">{{.Content}}</p>
 ` + emailButtonBlock + `
-<p style="` + emailMutedStyle + `">出于安全考虑，重置链接中的令牌仅显示前缀；请勿将重置链接提供给他人。</p>`,
+<p style="` + emailMutedStyle + `;">出于安全考虑，重置链接中的令牌仅显示前缀；请勿将重置链接提供给他人。</p>`,
 	},
 
 	// 设备转移通知
@@ -114,19 +123,19 @@ var builtinEmailTemplates = map[string]emailBuiltinTemplate{
 		Body: `<p style="` + emailParagraphStyle + `">{{.Summary}}</p>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:18px 0;background-color:#F7F9FC;border-radius:10px;border-left:4px solid #00D4FF;">
     <tr>
-        <td style="padding:16px 20px;font-size:14px;line-height:1.8;color:#3E4A5E;">{{.Content}}</td>
+        <td class="mobile-card" style="padding:20px;font-size:14px;line-height:1.8;color:#3E4A5E;">{{.Content}}</td>
     </tr>
 </table>
 ` + emailButtonBlock,
 	},
 
-	// 设备告警 / OTA / 工单等系统通知
+	// 设备告警 / OTA/工单等系统通知
 	EmailTemplateKeyNotification: {
 		Subject: "【CS-INV】{{.Title}}",
 		Body: `{{if .DeviceSN}}
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 18px 0;">
     <tr>
-        <td style="background-color:#F0F7FF;border:1px solid #BAE0FF;border-radius:8px;padding:8px 16px;font-size:14px;font-weight:600;color:#1677ff;letter-spacing:1px;">设备 SN：{{.DeviceSN}}</td>
+        <td style="background-color:#F0F7FF;border:2px solid #BAE0FF;border-radius:8px;padding:10px 16px;font-size:14px;font-weight:600;color:#1677ff;letter-spacing:1px;">设备 SN：{{.DeviceSN}}</td>
     </tr>
 </table>
 {{end}}
@@ -141,7 +150,7 @@ var builtinEmailTemplates = map[string]emailBuiltinTemplate{
 		Body: `<p style="` + emailParagraphStyle + `">{{.Summary}}</p>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:18px 0;background-color:#F7F9FC;border-radius:10px;border-left:4px solid #1677ff;">
     <tr>
-        <td style="padding:16px 20px;font-size:14px;line-height:1.8;color:#3E4A5E;">{{.Content}}</td>
+        <td class="mobile-card" style="padding:20px;font-size:14px;line-height:1.8;color:#3E4A5E;">{{.Content}}</td>
     </tr>
 </table>`,
 	},
@@ -157,8 +166,9 @@ var builtinEmailTemplates = map[string]emailBuiltinTemplate{
 }
 
 // emailEnvelope 统一品牌信封模板。
-// 表格布局 + 内联 CSS，不使用外部资源、position/float，
+// 表格布局 + 内联 CSS + 响应式媒体查询，不使用外部资源、position/float，
 // 兼容 Gmail / Outlook / QQ 邮箱等主流客户端（渐变在 Outlook 下回退为纯色 #1677ff）。
+// 响应式设计：PC 端固定宽度，移动端全宽自适应。
 const emailEnvelope = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -166,19 +176,30 @@ const emailEnvelope = `<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <title>{{.Title}}</title>
+<style>
+/* 移动端响应式样式 */
+@media screen and (max-width: 600px) {
+  .mobile-padding { padding: 24px 20px !important; }
+  .mobile-button { width: 100% !important; box-sizing: border-box; padding: 14px 20px !important; font-size: 16px !important; }
+  .mobile-text { font-size: 14px !important; line-height: 1.6 !important; }
+  .mobile-card { padding: 14px 16px !important; }
+  .mobile-header { padding: 20px 20px !important; }
+  h1 { font-size: 20px !important; }
+}
+</style>
 </head>
 <body style="margin:0;padding:0;background-color:#F0F4FA;">
 <div style="display:none;max-height:0;overflow:hidden;">{{.Title}}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F0F4FA;">
 <tr>
-<td align="center" style="padding:32px 12px;">
-<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;font-family:'PingFang SC','Microsoft YaHei',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+<td align="center" style="padding:24px 12px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;font-family:'PingFang SC','Microsoft YaHei',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
     <!-- 顶部品牌区：主色 #1677ff，点缀 #00D4FF -->
     <tr>
-        <td style="background-color:#1677ff;background-image:linear-gradient(135deg,#1677ff 0%,#00D4FF 100%);border-radius:16px 16px 0 0;padding:26px 32px;">
+        <td class="mobile-header" style="background-color:#1677ff;background-image:linear-gradient(135deg,#1677ff 0%,#00D4FF 100%);border-radius:16px 16px 0 0;padding:20px 24px;">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                 <tr>
-                    <td style="color:#ffffff;font-size:22px;font-weight:700;letter-spacing:1px;">&#9728;&#65039; CS-INV</td>
+                    <td style="color:#ffffff;font-size:20px;font-weight:700;letter-spacing:1px;">&#9728;&#65039; CS-INV</td>
                     <td align="right" style="color:#E6F7FF;font-size:12px;letter-spacing:1px;">光伏逆变器监控平台</td>
                 </tr>
             </table>
@@ -186,17 +207,17 @@ const emailEnvelope = `<!DOCTYPE html>
     </tr>
     <!-- 正文区 -->
     <tr>
-        <td style="background-color:#ffffff;padding:36px 32px;">
-            <h1 style="margin:0 0 10px 0;font-size:22px;line-height:1.4;color:#1F2A3E;font-weight:700;">{{.Title}}</h1>
-            <div style="height:3px;width:48px;background-color:#1677ff;border-radius:2px;margin:0 0 22px 0;"></div>
+        <td class="mobile-padding" style="background-color:#ffffff;padding:32px 24px;">
+            <h1 style="margin:0 0 8px 0;font-size:20px;line-height:1.4;color:#1F2A3E;font-weight:700;">{{.Title}}</h1>
+            <div style="height:3px;width:48px;background-color:#1677ff;border-radius:2px;margin:0 0 18px 0;"></div>
             {{.Content}}
         </td>
     </tr>
     <!-- 页脚：版权 + 免回复提示 -->
     <tr>
-        <td style="background-color:#ffffff;border-radius:0 0 16px 16px;padding:18px 32px 26px;border-top:1px solid #EEF1F6;">
-            {{if .FooterNote}}<p style="margin:0 0 10px 0;font-size:12px;line-height:1.6;color:#8A94A6;">{{.FooterNote}}</p>{{end}}
-            <p style="margin:0;font-size:12px;line-height:1.6;color:#B0B8C4;">© {{.Year}} CS-INV · 光伏逆变器监控平台 Solar Inverter Monitoring<br>此邮件由系统自动发出，请勿直接回复。This is an automated message, please do not reply.</p>
+        <td style="background-color:#ffffff;border-radius:0 0 16px 16px;padding:16px 24px 20px;border-top:1px solid #EEF1F6;">
+            {{if .FooterNote}}<p style="margin:0 0 8px 0;font-size:12px;line-height:1.6;color:#8A94A6;">{{.FooterNote}}</p>{{end}}
+            <p style="margin:0;font-size:11px;line-height:1.5;color:#B0B8C4;">© {{.Year}} CS-INV · 光伏逆变器监控平台 Solar Inverter Monitoring<br>此邮件由系统自动发出，请勿直接回复。This is an automated message, please do not reply.</p>
         </td>
     </tr>
 </table>

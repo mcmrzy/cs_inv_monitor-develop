@@ -1,0 +1,94 @@
+package service
+
+import (
+	"fmt"
+	"os"
+	"testing"
+)
+
+// TestGenerateEmailPreviews 渲染各类邮件为 HTML 预览文件（仅本地验证响应式布局用，非 CI 测试）。
+// 运行：go test ./internal/service/ -run TestGenerateEmailPreviews -v
+// 输出：business-api/_email_preview/*.html
+func TestGenerateEmailPreviews(t *testing.T) {
+	cases := []struct {
+		name   string
+		key    string
+		vars   map[string]interface{}
+		footer string
+	}{
+		{
+			name: "verification",
+			key:  EmailTemplateKeyVerification,
+			vars: map[string]interface{}{
+				"Title":   "您的验证码",
+				"Summary": "您好！您正在进行邮箱验证操作，验证码如下：",
+				"Content": "如果您没有发起此操作，请忽略本邮件或联系管理员。",
+				"Code":    "836291",
+			},
+			footer: "验证码 5 分钟内有效。",
+		},
+		{
+			name: "invitation",
+			key:  EmailTemplateKeyInvitation,
+			vars: map[string]interface{}{
+				"Title":            "邀请加入组织",
+				"Summary":          "您好！系统管理员邀请您加入组织「华东运维一组」，角色为安装商。",
+				"OrganizationName": "华东运维一组",
+				"Content":          "组织：华东运维一组<br>角色：安装商（Installer）<br>有效期：7 天<br>接受邀请后将自动创建账号并加入该组织。",
+				"ButtonText":       "接受邀请",
+				"ButtonURL":        "https://cs-inv.example.com/invite/accept?code=abc123def456ghi789jkl012mno345pqr678stu901vwx234yz",
+			},
+			footer: "若您不认识邀请人，请勿点击链接。",
+		},
+		{
+			name: "notification",
+			key:  EmailTemplateKeyNotification,
+			vars: map[string]interface{}{
+				"Title":    "设备告警通知",
+				"Summary":  "告警等级：严重（Critical）",
+				"Content":  "逆变器 CS-INV-2100341 于 10:32 触发「直流过压」告警，当前母线电压 512V，超过阈值 500V。请尽快登录平台查看详情并处理。",
+				"DeviceSN": "CS-INV-2100341",
+			},
+			footer: "",
+		},
+		{
+			name: "password_reset",
+			key:  EmailTemplateKeyPasswordRst,
+			vars: map[string]interface{}{
+				"Title":      "重置密码",
+				"Summary":    "您好！我们收到了重置您账号密码的请求。",
+				"Content":    "请点击下方按钮设置新密码。链接 30 分钟内有效。",
+				"ButtonText": "重置密码",
+				"ButtonURL":  "https://cs-inv.example.com/reset-password?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.payload.signature",
+			},
+			footer: "出于安全考虑，重置链接中的令牌仅显示前缀。",
+		},
+	}
+
+	outDir := "_email_preview"
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		t.Fatalf("创建预览目录失败: %v", err)
+	}
+
+	for _, c := range cases {
+		subject, body, err := renderEmailParts(c.key, "", "", c.vars)
+		if err != nil {
+			t.Fatalf("渲染 %s 失败: %v", c.name, err)
+		}
+		title := c.key
+		if tv, ok := c.vars["Title"].(string); ok && tv != "" {
+			title = tv
+		} else {
+			title = subject
+		}
+		html, err := RenderEmailEnvelope(title, body, c.footer)
+		if err != nil {
+			t.Fatalf("渲染信封 %s 失败: %v", c.name, err)
+		}
+		path := fmt.Sprintf("%s/%s.html", outDir, c.name)
+		if err := os.WriteFile(path, []byte(html), 0o644); err != nil {
+			t.Fatalf("写入 %s 失败: %v", path, err)
+		}
+		t.Logf("已生成 %s", path)
+	}
+}

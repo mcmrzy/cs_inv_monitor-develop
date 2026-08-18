@@ -757,32 +757,35 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 	// 构建用户过滤条件
 	userFilter, userFilterArgs := h.buildDeviceUserFilter(ctx, userID, role, 3)
 
-	// 查询PV功率（time_bucket 做分钟级聚合）— 返回UTC时间，前端负责时区转换
+	// 查询 PV 功率（time_bucket 做分钟级聚合）— 返回 UTC 时间，前端负责时区转换
+	// 仅统计在线 (status=1) 或告警 (status=2) 的设备
 	pvQuery := fmt.Sprintf(`
 		SELECT time_bucket('3 minutes', dt.event_time) as time_slot, AVG(COALESCE(dt.pv_total_power,0))
 		FROM device_telemetry_3min dt
 		JOIN devices d ON d.sn = dt.device_sn
-		WHERE d.deleted_at IS NULL AND %s`+stationFilter+` AND dt.event_time >= $1::timestamptz AND dt.event_time < $2::timestamptz
+		WHERE d.deleted_at IS NULL AND %s AND d.status IN (1, 2)`+stationFilter+` AND dt.event_time >= $1::timestamptz AND dt.event_time < $2::timestamptz
 		GROUP BY time_slot ORDER BY time_slot
 	`, userFilter)
 	pvArgs := append([]interface{}{startUTC, endUTC}, userFilterArgs...)
 
 	// 查询电池功率
+	// 仅统计在线 (status=1) 或告警 (status=2) 的设备
 	battQuery := fmt.Sprintf(`
 		SELECT time_bucket('3 minutes', dt.event_time) as time_slot, AVG(COALESCE(dt.battery_power,0))
 		FROM device_telemetry_3min dt
 		JOIN devices d ON d.sn = dt.device_sn
-		WHERE d.deleted_at IS NULL AND %s`+stationFilter+` AND dt.event_time >= $1::timestamptz AND dt.event_time < $2::timestamptz
+		WHERE d.deleted_at IS NULL AND %s AND d.status IN (1, 2)`+stationFilter+` AND dt.event_time >= $1::timestamptz AND dt.event_time < $2::timestamptz
 		GROUP BY time_slot ORDER BY time_slot
 	`, userFilter)
 	battArgs := append([]interface{}{startUTC, endUTC}, userFilterArgs...)
 
 	// 查询负载功率
+	// 仅统计在线 (status=1) 或告警 (status=2) 的设备
 	loadQuery := fmt.Sprintf(`
 		SELECT time_bucket('3 minutes', dt.event_time) as time_slot, AVG(COALESCE(dt.ac_active_power,0))
 		FROM device_telemetry_3min dt
 		JOIN devices d ON d.sn = dt.device_sn
-		WHERE d.deleted_at IS NULL AND %s`+stationFilter+` AND dt.event_time >= $1::timestamptz AND dt.event_time < $2::timestamptz
+		WHERE d.deleted_at IS NULL AND %s AND d.status IN (1, 2)`+stationFilter+` AND dt.event_time >= $1::timestamptz AND dt.event_time < $2::timestamptz
 		GROUP BY time_slot ORDER BY time_slot
 	`, userFilter)
 	loadArgs := append([]interface{}{startUTC, endUTC}, userFilterArgs...)

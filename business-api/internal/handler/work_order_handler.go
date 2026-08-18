@@ -219,7 +219,7 @@ func (h *WorkOrderHandler) Update(c *gin.Context) {
 		closed_at=CASE WHEN $4='closed' THEN NOW() ELSE closed_at END,
 		lock_version=lock_version+1 WHERE id::text=$1 AND `+workOrderDataScope("work_orders", middleware.GetIsSystemAdmin(c), 9)+`
 		AND ($10::bigint IS NULL OR lock_version=$10)`,
-		c.Param("id"), req.Title, req.Description, req.Status, req.Priority, req.DeviceSN, req.AssignedTo, req.Resolution, middleware.GetUserID(c), req.ExpectedVersion)
+		c.Param("id"), req.Title, req.Description, req.Status, req.Priority, req.DeviceSN, req.AssignedTo, req.Resolution, middleware.GetUserID(c), middleware.GetUserID(c), req.ExpectedVersion)
 	if err != nil {
 		response.Error(c, 500, "update work order failed")
 		return
