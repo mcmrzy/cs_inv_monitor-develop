@@ -35,3 +35,45 @@ func TestValidateAndBuildCommandArgsRules(t *testing.T) {
 	_, err = validateAndBuildCommandArgs(raw, map[string]interface{}{"low_x10": 780, "high_x10": 800})
 	assert.ErrorContains(t, err, "rule failed")
 }
+
+func TestValidateAndBuildCommandArgsBoolean(t *testing.T) {
+	raw := []byte(`{"args":[{"key":"value","type":"boolean"}]}`)
+
+	// 数字 0/1（Web/App 前端下发形式）直接通过
+	args, err := validateAndBuildCommandArgs(raw, map[string]interface{}{"value": float64(1)})
+	require.NoError(t, err)
+	assert.Equal(t, []interface{}{float64(1)}, args)
+	args, err = validateAndBuildCommandArgs(raw, map[string]interface{}{"value": float64(0)})
+	require.NoError(t, err)
+	assert.Equal(t, []interface{}{float64(0)}, args)
+
+	// JSON true/false 归一化为 0/1 后下发
+	args, err = validateAndBuildCommandArgs(raw, map[string]interface{}{"value": true})
+	require.NoError(t, err)
+	assert.Equal(t, []interface{}{float64(1)}, args)
+	args, err = validateAndBuildCommandArgs(raw, map[string]interface{}{"value": false})
+	require.NoError(t, err)
+	assert.Equal(t, []interface{}{float64(0)}, args)
+
+	// 非布尔量（2、字符串等）仍然拒绝
+	_, err = validateAndBuildCommandArgs(raw, map[string]interface{}{"value": float64(2)})
+	assert.ErrorContains(t, err, "boolean")
+	_, err = validateAndBuildCommandArgs(raw, map[string]interface{}{"value": "on"})
+	assert.ErrorContains(t, err, "boolean")
+}
+
+// query 类命令在 device_model_commands 中注册为历史空数组 schema（'[]'），
+// 必须视为无参数命令而非解析失败。
+func TestValidateAndBuildCommandArgsLegacyEmptySchema(t *testing.T) {
+	args, err := validateAndBuildCommandArgs([]byte(`[]`), map[string]interface{}{})
+	require.NoError(t, err)
+	assert.Empty(t, args)
+
+	args, err = validateAndBuildCommandArgs([]byte(`null`), map[string]interface{}{})
+	require.NoError(t, err)
+	assert.Empty(t, args)
+
+	// 空 schema 仍然拒绝多余参数
+	_, err = validateAndBuildCommandArgs([]byte(`[]`), map[string]interface{}{"value": float64(1)})
+	assert.ErrorContains(t, err, "unknown")
+}

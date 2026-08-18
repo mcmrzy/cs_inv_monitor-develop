@@ -27,6 +27,7 @@ import {
   CheckCircleFilled,
   ClockCircleFilled,
   LockOutlined,
+  QuestionCircleOutlined,
 } from '@ant-design/icons'
 import useTranslation from '@/hooks/useTranslation'
 import type { DeviceConfigApi } from '../hooks/useDeviceConfig'
@@ -291,12 +292,18 @@ export const FieldCardBody: React.FC<FieldCardProps> = ({ cfg, paramKey }) => {
   )
 }
 
-// ── Row：v1 平铺字段行（模块展开区用）—— 左侧「标签 + 徽标 + 锁标」，右侧控件，行间分隔线 ──
+// ── Row：v1 平铺字段行（模块展开区用）—— 左侧「标签 + 徽标 + 锁标 + 问号」、右侧控件，行间分隔线 ──
 export const FieldRow: React.FC<FieldCardProps> = ({ cfg, paramKey }) => {
   const { t } = useTranslation()
   const label = cfg.fieldLabel(paramKey)
+  const meta = cfg.getMeta(paramKey)
   const sync = cfg.isSynced(paramKey)
   const readOnly = !cfg.canEdit(paramKey)
+
+  // 取 desc 说明（remote3.desc.{paramKey}），有的才显示问号
+  const descKey = `remote3.desc.${paramKey}`
+  const { hasTranslation } = useTranslation()
+  const hasDesc = hasTranslation(descKey) && meta.kind !== 'priority' // priority 无单个 desc
 
   const syncTag =
     sync === 'synced' ? (
@@ -319,6 +326,11 @@ export const FieldRow: React.FC<FieldCardProps> = ({ cfg, paramKey }) => {
       <div style={{ flex: 1, minWidth: 0 }}>
         <Space size={8} wrap>
           <Text strong style={{ fontSize: 14, color: '#111827' }}>{label}</Text>
+          {hasDesc && (
+            <Tooltip title={t(descKey)}>
+              <QuestionCircleOutlined style={{ fontSize: 14, color: '#9ca3af', cursor: 'help' }} />
+            </Tooltip>
+          )}
           {syncTag}
           {readOnly && (
             <Tooltip title={t('remote3.readOnly')}>

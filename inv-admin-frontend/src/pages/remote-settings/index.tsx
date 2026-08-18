@@ -4,6 +4,7 @@ import React, { useState } from 'react'
 import { Empty, Typography, App } from 'antd'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/utils/queryKeys'
+import { deviceApi } from '@/services/deviceApi'
 import useTranslation from '@/hooks/useTranslation'
 import DeviceSelector from './components/DeviceSelector'
 import SettingsHome from './components/SettingsHome'
@@ -67,9 +68,23 @@ const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({ sn, onDeviceChang
   const handleRead = () => {
     setReading(true)
     message.info(t('remote.readingConfig'))
-    cfg.refetchAll()
-    void queryClient.invalidateQueries({ queryKey: queryKeys.devices.controlState(sn) })
-    setTimeout(() => setReading(false), 1200)
+    // 下发 query_config 查询命令，让设备真实回报当前参数；
+    // 设备回报后 device_control_state.reported 更新，10s 轮询会自动刷新界面
+    deviceApi
+      .sendCommand(sn, { command: 'query_config', params: {} })
+      .then(() => {
+        message.success(t('remote.readCommandSent'))
+      })
+      .catch((err: any) => {
+        const detail =
+          err?.response?.data?.data?.reject_detail ?? err?.response?.data?.message ?? err?.message ?? ''
+        message.error(`${t('remote.commandSendFailed')}${detail ? `: ${detail}` : ''}`)
+      })
+      .finally(() => {
+        cfg.refetchAll()
+        void queryClient.invalidateQueries({ queryKey: queryKeys.devices.controlState(sn) })
+        setReading(false)
+      })
   }
 
   return (

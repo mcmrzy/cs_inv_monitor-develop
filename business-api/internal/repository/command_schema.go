@@ -29,7 +29,13 @@ func validateAndBuildCommandArgs(raw []byte, params map[string]interface{}) ([]i
 	decoder.UseNumber()
 	var schema commandParameterSchema
 	if err := decoder.Decode(&schema); err != nil {
-		return nil, fmt.Errorf("invalid parameter schema: %w", err)
+		// 兼容历史的空数组/null schema 形式（如 query 类命令注册为 '[]'），视为无参数
+		trimmed := bytes.TrimSpace(raw)
+		if len(trimmed) == 0 || string(trimmed) == "[]" || string(trimmed) == "null" {
+			schema = commandParameterSchema{}
+		} else {
+			return nil, fmt.Errorf("invalid parameter schema: %w", err)
+		}
 	}
 
 	known := make(map[string]struct{}, len(schema.Args))
@@ -51,7 +57,7 @@ func validateAndBuildCommandArgs(raw []byte, params map[string]interface{}) ([]i
 		if err := validateCommandArgument(spec, value); err != nil {
 			return nil, err
 		}
-		args = append(args, value)
+		args = append(args, normalizeCommandArgument(spec, value))
 	}
 	for key := range params {
 		if _, ok := known[key]; !ok {
@@ -79,9 +85,14 @@ func validateCommandArgument(spec commandArgumentSpec, value interface{}) error 
 			return fmt.Errorf("command argument %s must be a number", spec.Key)
 		}
 	case "boolean", "bool":
-		if _, ok := value.(bool); !ok {
-			return fmt.Errorf("command argument %s must be a boolean", spec.Key)
+		if _, ok := value.(bool); ok {
+			break
 		}
+		// 兼容 Web/App 前端以数字 0/1 表示开关量的约定
+		if n, ok := commandNumber(value); ok && (n == 0 || n == 1) {
+			break
+		}
+		return fmt.Errorf("command argument %s must be a boolean", spec.Key)
 	case "string":
 		if _, ok := value.(string); !ok {
 			return fmt.Errorf("command argument %s must be a string", spec.Key)
@@ -115,6 +126,21 @@ func validateCommandArgument(spec commandArgumentSpec, value interface{}) error 
 		}
 	}
 	return nil
+}
+
+// normalizeCommandArgument 将 boolean 参数的 true/false 归一化为 0/1 数字形式，
+// 与设备端协议的寄存器值风格及前端下发约定保持一致。
+func normalizeCommandArgument(spec commandArgumentSpec, value interface{}) interface{} {
+	switch strings.ToLower(spec.Type) {
+	case "boolean", "bool":
+		if b, ok := value.(bool); ok {
+			if b {
+				return float64(1)
+			}
+			return float64(0)
+		}
+	}
+	return value
 }
 
 func commandNumber(value interface{}) (float64, bool) {
