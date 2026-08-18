@@ -1,0 +1,36 @@
+// 字段当前值 → 人类可读摘要（首页卡片 / 模块页共用）；取不到值返回 null（UI 显示 "--"）
+
+import { useCallback } from 'react'
+import useTranslation from '@/hooks/useTranslation'
+import type { DeviceConfigApi } from './useDeviceConfig'
+import { formatNumber, displayUnit } from '../config/conversion'
+import { priorityEnumToOrder } from '../config/fields'
+
+const PRIORITY_LABEL_KEY = {
+  solar: 'remote3.priority.solar',
+  battery: 'remote3.priority.battery',
+  utility: 'remote3.priority.utility',
+} as const
+
+export function useFieldFormatter(cfg: DeviceConfigApi) {
+  const { t, lang } = useTranslation()
+
+  return useCallback(
+    (paramKey: string): string | null => {
+      const meta = cfg.getMeta(paramKey)
+      const value = cfg.getSummaryValue(paramKey)
+      if (value === undefined) return null
+      if (meta.kind === 'boolean') return value !== 0 ? t('common.on') : t('common.off')
+      if (meta.kind === 'priority') {
+        const top = priorityEnumToOrder(value)[0]
+        return t(PRIORITY_LABEL_KEY[top])
+      }
+      if (meta.kind === 'enum') {
+        const opt = meta.enumOptions?.find((o) => o.value === value)
+        return opt ? cfg.enumLabel(opt.semanticKey) : String(value)
+      }
+      return formatNumber(value, { ...meta, unit: displayUnit(meta.unit, lang) })
+    },
+    [cfg, t, lang],
+  )
+}

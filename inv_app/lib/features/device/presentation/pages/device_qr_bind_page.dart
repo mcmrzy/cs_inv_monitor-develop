@@ -1,21 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:fpdart/fpdart.dart' hide State;
 
+import 'package:inv_app/core/errors/failures.dart';
 import 'package:inv_app/core/services/ble/ble_adapter.dart';
 import 'package:inv_app/core/services/ble/ble_binding_service.dart';
 import 'package:inv_app/core/services/ble/ble_device_manager.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/features/device/domain/repositories/device_repository.dart';
 import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
-/// 智能链接二维码 BLE 扫码绑定页
+/// 智能链接二维码绑定页（云端优先，BLE 后备）
 ///
-/// 深链接 `csinv://bind?sn=&pin=` 或 App 内扫码（URL 格式）进入：
-/// 二维码只有 SN+PIN 没有 MAC → 扫描蓝牙设备 → 连接读 INFO 匹配 SN →
-/// 调 [BleBindingService.bindAfterProvision] 完成绑定（离网可用）。
-/// BLE 不可达时提供云端兑底（带 PIN，由后端校验所有权）。
+/// 新流程：
+/// 1. 用户输入/确认 PIN
+/// 2. **云端绑定**（POST /devices/bind 带 PIN，~1 秒完成）
+///    - 成功 → 直接返回（DeviceBloc 监听 DeviceBindSuccess 刷新列表）
+///    - 失败（设备未注册/网络错误）→ 展示选择界面
+/// 3. 用户可选择：
+///    - 重试云端绑定
+///    - **尝试 BLE 扫描**（扫描附近 BLE 设备 → 匹配 SN → 绑定）
+///    - 返回
 class DeviceQrBindPage extends StatefulWidget {
   final String sn;
   final String pin;
@@ -23,6 +31,7 @@ class DeviceQrBindPage extends StatefulWidget {
   final BleAdapter? adapter;
   final BleDeviceManager? manager;
   final BleBindingService? bindingService;
+  final DeviceRepository? deviceRepository;
 
   const DeviceQrBindPage({
     super.key,
@@ -32,6 +41,7 @@ class DeviceQrBindPage extends StatefulWidget {
     this.adapter,
     this.manager,
     this.bindingService,
+    this.deviceRepository,
   });
 
   @override
@@ -43,20 +53,26 @@ enum _QrBindPhase {
   /// 深链接/二维码未带 PIN：等待用户输入
   pinInput,
 
+  /// 正在云端绑定
+  cloudBinding,
+
+  /// 云端绑定失败，展示选择界面（重试云端 / 尝试 BLE / 返回）
+  cloudFailed,
+
   /// 检查蓝牙状态
-  checking,
+  bleChecking,
 
   /// 扫描附近 BLE 设备
-  scanning,
+  bleScanning,
 
   /// 逐个连接候选设备匹配 SN
-  matching,
+  bleMatching,
 
   /// 写入绑定信息
-  binding,
+  bleBinding,
 
-  /// 蓝牙关闭 / 未找到匹配设备（可重试）
-  failed,
+  /// BLE 失败（蓝牙关闭 / 未找到匹配设备）
+  bleFailed,
 
   /// 绑定流程结束（含各结果）
   done,
@@ -66,22 +82,26 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
   late final BleAdapter _adapter;
   late final BleDeviceManager _manager;
   late final BleBindingService _bindingService;
+  late final DeviceRepository _deviceRepository;
 
   /// 当前使用的 PIN（空时需用户输入，见 [_QrBindPhase.pinInput]）
   late String _pin;
   final _pinController = TextEditingController();
 
-  _QrBindPhase _phase = _QrBindPhase.checking;
+  _QrBindPhase _phase = _QrBindPhase.cloudBinding;
   BindOutcome? _doneOutcome;
 
-  /// 匹配到的设备名（matching 阶段显示当前候选，done 阶段显示最终匹配）
+  /// 匹配到的设备名（BLE matching 阶段显示当前候选，done 阶段显示最终匹配）
   String? _matchName;
 
-  /// 失败原因 l10n 键（蓝牙关闭 / 未找到匹配设备）
+  /// 云端绑定失败消息（用于展示在 cloudFailed 界面）
+  String? _cloudErrorMessage;
+
+  /// BLE 失败原因 l10n 键
   String? _failKey;
 
-  /// 云端兑底绑定进行中（防重复点击）
-  bool _cloudBinding = false;
+  /// 云端绑定防重复点击
+  bool _cloudBindingPending = false;
 
   @override
   void initState() {
@@ -90,6 +110,7 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
     _adapter = widget.adapter ?? getIt<BleAdapter>();
     _manager = widget.manager ?? getIt<BleDeviceManager>();
     _bindingService = widget.bindingService ?? getIt<BleBindingService>();
+    _deviceRepository = widget.deviceRepository ?? getIt<DeviceRepository>();
     // 延迟到首帧后启动流程：initState 阶段不能访问 InheritedWidget（Localizations）
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _start();
@@ -103,13 +124,12 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
   }
 
   Future<void> _start() async {
-    final l10n = AppLocalizations.of(context)!;
-
     setState(() {
-      _phase = _QrBindPhase.checking;
+      _phase = _QrBindPhase.cloudBinding;
       _doneOutcome = null;
       _matchName = null;
       _failKey = null;
+      _cloudErrorMessage = null;
     });
 
     // 深链接/二维码未带 PIN：先让用户输入（6 位数字，见设计文档 §5.4）
@@ -117,10 +137,59 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
       setState(() => _phase = _QrBindPhase.pinInput);
       return;
     }
-    await _bindFlow(l10n);
+    await _cloudBind();
   }
 
-  Future<void> _bindFlow(AppLocalizations l10n) async {
+  /// 云端绑定：POST /devices/bind 带 PIN，后端校验设备所有权。
+  Future<void> _cloudBind() async {
+    if (_cloudBindingPending) return;
+    setState(() {
+      _phase = _QrBindPhase.cloudBinding;
+      _cloudBindingPending = true;
+      _cloudErrorMessage = null;
+    });
+
+    final Either<Failure, void> result = await _deviceRepository.bind(
+      widget.sn,
+      widget.stationId,
+      pin: _pin,
+    );
+
+    if (!mounted) return;
+    // 使用 switch pattern matching 替代 fold（避免分析器误报）
+    switch (result) {
+      case Left(value: final failure):
+        setState(() {
+          _cloudBindingPending = false;
+          _phase = _QrBindPhase.cloudFailed;
+          _cloudErrorMessage = failure.message;
+        });
+      case Right():
+        // 云端绑定成功：通过 Bloc 通知成功
+        context.read<DeviceBloc>().add(
+          DeviceBindRequested(
+            sn: widget.sn,
+            stationId: widget.stationId,
+            pin: _pin,
+          ),
+        );
+        setState(() {
+          _cloudBindingPending = false;
+          _doneOutcome = BindOutcome.bound;
+          _phase = _QrBindPhase.done;
+        });
+    }
+  }
+
+  /// BLE 后备绑定流程
+  Future<void> _startBleFallback() async {
+    final l10n = AppLocalizations.of(context)!;
+    setState(() {
+      _phase = _QrBindPhase.bleChecking;
+      _doneOutcome = null;
+      _matchName = null;
+      _failKey = null;
+    });
 
     // 1. 检查蓝牙状态
     BleAdapterStatus status;
@@ -135,14 +204,14 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
         SnackBar(content: Text(l10n.str('ble_bluetooth_off'))),
       );
       setState(() {
-        _phase = _QrBindPhase.failed;
+        _phase = _QrBindPhase.bleFailed;
         _failKey = 'ble_bluetooth_off';
       });
       return;
     }
 
     // 2. 扫描附近设备（按 CSIV-CT 服务 UUID 过滤）
-    setState(() => _phase = _QrBindPhase.scanning);
+    setState(() => _phase = _QrBindPhase.bleScanning);
     List<BleScanResult> results;
     try {
       results = await _adapter
@@ -157,7 +226,7 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
     if (!mounted) return;
     if (results.isEmpty) {
       setState(() {
-        _phase = _QrBindPhase.failed;
+        _phase = _QrBindPhase.bleFailed;
         _failKey = 'qr_bind_not_found';
       });
       return;
@@ -168,7 +237,7 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
     for (final result in results) {
       if (!mounted) return;
       setState(() {
-        _phase = _QrBindPhase.matching;
+        _phase = _QrBindPhase.bleMatching;
         _matchName = result.name;
       });
       BleDeviceSession? session;
@@ -179,8 +248,6 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
         if (deviceSn == widget.sn.trim().toUpperCase()) {
           matchedMac = result.macAddress;
           // 断开本次匹配连接：让 bindAfterProvision 重新建立绑定会话
-          // （使用 disconnectDevice 而非 session.dispose：dispose 后会话仍留在
-          //   manager 缓存，复用会因已关闭的 state controller 抛错）
           await _manager.disconnectDevice(result.macAddress);
           break;
         }
@@ -195,14 +262,14 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
     if (!mounted) return;
     if (matchedMac == null) {
       setState(() {
-        _phase = _QrBindPhase.failed;
+        _phase = _QrBindPhase.bleFailed;
         _failKey = 'qr_bind_not_found';
       });
       return;
     }
 
-    // 5. 写入绑定信息（离网可用）
-    setState(() => _phase = _QrBindPhase.binding);
+    // 4. 写入绑定信息（离网可用）
+    setState(() => _phase = _QrBindPhase.bleBinding);
     final outcome = await _bindingService.bindAfterProvision(
       macAddress: matchedMac,
       knownSn: widget.sn,
@@ -218,20 +285,21 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    // 监听云端兑底绑定结果：成功直接返回（入口页的 DeviceBindSuccess
+    // 监听云端绑定成功结果：成功直接返回（入口页的 DeviceBindSuccess
     // 监听负责刷新列表/提示）；失败留在本页展示错误。
     return BlocConsumer<DeviceBloc, DeviceState>(
       listener: (context, state) {
-        if (!_cloudBinding) return;
         if (state is DeviceBindSuccess) {
-          _cloudBinding = false;
           Navigator.of(context).pop();
         } else if (state is DeviceError) {
-          _cloudBinding = false;
-          setState(() {});
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(l10n.translateError(state.message))),
-          );
+          // 云端绑定失败（bloc 层）：展示在 cloudFailed 界面
+          if (_phase == _QrBindPhase.cloudBinding) {
+            setState(() {
+              _cloudBindingPending = false;
+              _phase = _QrBindPhase.cloudFailed;
+              _cloudErrorMessage = l10n.translateError(state.message);
+            });
+          }
         }
       },
       builder: (context, state) => Scaffold(
@@ -245,19 +313,26 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
     switch (_phase) {
       case _QrBindPhase.pinInput:
         return _pinInputBody(l10n);
-      case _QrBindPhase.checking:
+      case _QrBindPhase.cloudBinding:
+        return _progressBody(
+          l10n.qrBindCloudBinding,
+          Icons.cloud_outlined,
+        );
+      case _QrBindPhase.cloudFailed:
+        return _cloudFailedBody(l10n);
+      case _QrBindPhase.bleChecking:
         return _progressBody(l10n.str('qr_bind_checking'), Icons.bluetooth_searching);
-      case _QrBindPhase.scanning:
+      case _QrBindPhase.bleScanning:
         return _progressBody(l10n.str('qr_bind_scanning'), Icons.bluetooth_searching);
-      case _QrBindPhase.matching:
+      case _QrBindPhase.bleMatching:
         return _progressBody(
           l10n.str('qr_bind_matching', {'name': _matchName ?? ''}),
           Icons.bluetooth,
         );
-      case _QrBindPhase.binding:
+      case _QrBindPhase.bleBinding:
         return _progressBody(l10n.str('qr_bind_binding'), Icons.link);
-      case _QrBindPhase.failed:
-        return _failedBody(l10n);
+      case _QrBindPhase.bleFailed:
+        return _bleFailedBody(l10n);
       case _QrBindPhase.done:
         return _doneBody(l10n);
     }
@@ -342,7 +417,55 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
     );
   }
 
-  Widget _failedBody(AppLocalizations l10n) {
+  /// 云端绑定失败：展示错误 + 三个选项
+  Widget _cloudFailedBody(AppLocalizations l10n) {
+    final errorMessage = _cloudErrorMessage ?? l10n.qrBindCloudFailed;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          Icons.cloud_off,
+          size: 56,
+          color: Theme.of(context).colorScheme.error,
+        ),
+        const SizedBox(height: 24),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Text(
+            errorMessage,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 14,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+        const SizedBox(height: 32),
+        // 主操作：重试云端绑定
+        FilledButton.icon(
+          onPressed: _cloudBind,
+          icon: const Icon(Icons.cloud_outlined),
+          label: Text(l10n.str('ble_retry')),
+        ),
+        const SizedBox(height: 12),
+        // 次操作：尝试 BLE 扫描
+        OutlinedButton.icon(
+          onPressed: _startBleFallback,
+          icon: const Icon(Icons.bluetooth_searching, size: 18),
+          label: Text(l10n.qrBindTryBle),
+        ),
+        const SizedBox(height: 12),
+        // 返回
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(l10n.qrBindBack),
+        ),
+      ],
+    );
+  }
+
+  /// BLE 失败：蓝牙关闭 / 未找到匹配设备
+  Widget _bleFailedBody(AppLocalizations l10n) {
     final message = _failKey == null
         ? l10n.str('qr_bind_not_found')
         : l10n.str(_failKey!);
@@ -361,47 +484,24 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
         ),
         const SizedBox(height: 24),
         FilledButton.icon(
-          onPressed: _start,
+          onPressed: _startBleFallback,
           icon: const Icon(Icons.refresh),
           label: Text(l10n.str('ble_retry')),
         ),
         const SizedBox(height: 12),
-        OutlinedButton(
+        // 回到云端选项
+        OutlinedButton.icon(
+          onPressed: _cloudBind,
+          icon: const Icon(Icons.cloud_outlined, size: 18),
+          label: Text(l10n.cloudBindFallback),
+        ),
+        const SizedBox(height: 12),
+        TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: Text(l10n.qrBindBack),
         ),
-        const SizedBox(height: 12),
-        // 云端兑底：带 PIN 由后端校验所有权（无蓝牙/未找到设备时仍可绑定）
-        if (_cloudBinding)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 8),
-            child: SizedBox(
-              width: 22,
-              height: 22,
-              child: CircularProgressIndicator(strokeWidth: 2.5),
-            ),
-          )
-        else
-          TextButton.icon(
-            onPressed: _cloudBinding ? null : () => _cloudBindFallback(),
-            icon: const Icon(Icons.cloud_outlined, size: 18),
-            label: Text(l10n.cloudBindFallback),
-          ),
       ],
     );
-  }
-
-  /// BLE 不可达时的云端绑定兑底：POST /devices/bind 带 PIN，
-  /// 后端按 HMAC-SHA256(PRODUCT_SECRET, SN) 校验设备所有权。
-  Future<void> _cloudBindFallback() async {
-    setState(() => _cloudBinding = true);
-    context.read<DeviceBloc>().add(
-          DeviceBindRequested(
-            sn: widget.sn,
-            stationId: widget.stationId,
-            pin: _pin,
-          ),
-        );
   }
 
   Widget _doneBody(AppLocalizations l10n) {

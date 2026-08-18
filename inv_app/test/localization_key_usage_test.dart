@@ -23,6 +23,16 @@ void main() {
       if (file is! File || !file.path.endsWith('.dart')) continue;
       final content = file.readAsStringSync();
       for (final match in keyPattern.allMatches(content)) {
+        // 跳过行注释/文档注释中的示例写法（如 /// l10n.str('config_enum_' + 值)）
+        final lineStart = match.start == 0
+            ? 0
+            : content.lastIndexOf('\n', match.start - 1) + 1;
+        final lineEnd = content.indexOf('\n', match.start);
+        final line = content.substring(
+          lineStart,
+          lineEnd == -1 ? content.length : lineEnd,
+        );
+        if (line.trimLeft().startsWith('//')) continue;
         final key = match.group(1)!;
         final inZh = zh_catalog.zh.containsKey(key);
         final inEn = en_catalog.en.containsKey(key);

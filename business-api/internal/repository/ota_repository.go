@@ -298,6 +298,57 @@ func (r *OTARepository) GetDeviceUpgradeHistory(ctx context.Context, deviceSN st
 	return result, total, nil
 }
 
+// GetAllUpgradeHistory 全设备升级历史（分页）
+// sns 为 nil 时不过滤设备（系统管理员查全部）；非 nil 但为空时直接返回空列表，不拼空 ANY。
+// SELECT 字段与 GetDeviceUpgradeHistory 一致，并补充 source 与 upgrade_package_id（App 依赖）。
+func (r *OTARepository) GetAllUpgradeHistory(ctx context.Context, sns []string, page, pageSize int) ([]model.DeviceUpgrade, int, error) {
+	if sns != nil && len(sns) == 0 {
+		return []model.DeviceUpgrade{}, 0, nil
+	}
+
+	countQuery := "SELECT COUNT(*) FROM device_upgrades"
+	query := `
+		SELECT id, device_sn, firmware_id, firmware_version, COALESCE(target_chip,''),
+		       COALESCE(old_version,''), status, COALESCE(progress,0), COALESCE(error_message,''),
+		       COALESCE(retry_count,0), pushed_by, started_at, completed_at, created_at, updated_at,
+		       COALESCE(source,''), upgrade_package_id
+		FROM device_upgrades
+	`
+	args := []interface{}{}
+	if sns != nil {
+		countQuery += " WHERE device_sn = ANY($1)"
+		query += " WHERE device_sn = ANY($1)"
+		args = append(args, sns)
+	}
+
+	var total int
+	r.db.QueryRow(ctx, countQuery, args...).Scan(&total)
+
+	query += fmt.Sprintf(" ORDER BY updated_at DESC LIMIT $%d OFFSET $%d", len(args)+1, len(args)+2)
+	args = append(args, pageSize, (page-1)*pageSize)
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	result := make([]model.DeviceUpgrade, 0)
+	for rows.Next() {
+		var du model.DeviceUpgrade
+		var pkgID *int64
+		if err := rows.Scan(&du.ID, &du.DeviceSN, &du.FirmwareID, &du.FirmwareVersion, &du.TargetChip,
+			&du.OldVersion, &du.Status, &du.Progress, &du.ErrorMessage,
+			&du.RetryCount, &du.PushedBy, &du.StartedAt, &du.CompletedAt, &du.CreatedAt, &du.UpdatedAt,
+			&du.Source, &pkgID); err != nil {
+			continue
+		}
+		du.UpgradePackageID = pkgID
+		result = append(result, du)
+	}
+	return result, total, nil
+}
+
 // RetryFailedUpgrades 重试失败的升级（批量重置为pending）
 func (r *OTARepository) RetryFailedUpgrades(ctx context.Context, firmwareID int64, deviceSNs []string) error {
 	_, err := r.db.Exec(ctx, `
@@ -1615,6 +1666,57 @@ func (r *OTARepository) UpdateUpgradeTaskStatus(ctx context.Context, id int64, s
 		WHERE id = $1
 	`, id, status, executedAt, completedAt)
 	return err
+}
+
+// MarkTimedOutUpgradeTasks 批量收口超时的升级任务：将处于非终态（pending/running）
+// 且 updated_at 超过 timeout 无任何更新的任务置为 failed，追加失败原因备注，
+// 并同步将这些任务下仍未终态的设备升级记录置为 failed。
+// 已终态任务不受影响，重复调用幂等。返回被收口的任务数量。
+func (r *OTARepository) MarkTimedOutUpgradeTasks(ctx context.Context, timeout time.Duration, reason string) (int64, error) {
+	minutes := int(timeout.Minutes())
+	if minutes < 1 {
+		minutes = 1
+	}
+	rows, err := r.db.Query(ctx, `
+		UPDATE upgrade_tasks SET
+		    status = 'failed',
+		    notes = CONCAT_WS(E'\n', NULLIF(notes, ''), $2),
+		    completed_at = COALESCE(completed_at, NOW()),
+		    updated_at = NOW()
+		WHERE status IN ('pending', 'running')
+		  AND updated_at < NOW() - make_interval(mins => $1)
+		RETURNING id
+	`, minutes, reason)
+	if err != nil {
+		return 0, fmt.Errorf("mark timed-out upgrade tasks: %w", err)
+	}
+	var taskIDs []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return 0, fmt.Errorf("scan timed-out task id: %w", err)
+		}
+		taskIDs = append(taskIDs, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("iterate timed-out task ids: %w", err)
+	}
+
+	if len(taskIDs) > 0 {
+		if _, err := r.db.Exec(ctx, `
+			UPDATE device_upgrades SET
+			    status = 'failed',
+			    error_message = $2,
+			    updated_at = NOW()
+			WHERE task_id = ANY($1)
+			  AND status IN ('pending', 'downloading', 'upgrading')
+		`, taskIDs, reason); err != nil {
+			return int64(len(taskIDs)), fmt.Errorf("mark device upgrades timed out: %w", err)
+		}
+	}
+	return int64(len(taskIDs)), nil
 }
 
 // UpdateUpgradeTaskCounts 更新任务统计

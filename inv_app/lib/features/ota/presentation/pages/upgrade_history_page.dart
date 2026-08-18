@@ -11,13 +11,14 @@ import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 
-/// 设备升级历史页（需求 16：OTA 四卡片 Hub 的"升级历史"入口）
+/// 全设备升级历史页（需求 16：OTA 四卡片 Hub 的“升级历史”入口）
 ///
-/// 数据源：GET /ota/devices/:sn/history（无权限要求，分页返回升级记录）。
+/// 数据源：GET /ota/history（分页返回当前用户可见的全部设备升级记录，
+/// 系统管理员返回全部，普通用户由后端按数据权限过滤）。
 /// 回退：POST /ota/rollback `{sn, package_id}`，后端要求 `ota:control` 权限，
-/// 终端用户无权限时按钮置灰并在点击时提示"联系代理商"，不伪造回退逻辑。
+/// 终端用户无权限时按钮置灰并在点击时提示“联系代理商”，不伪造回退逻辑。
 class UpgradeHistoryPage extends StatefulWidget {
-  /// 设备序列号
+  /// 设备序列号：仅为兼容旧路由保留，页面不再按设备过滤。
   final String deviceSN;
 
   const UpgradeHistoryPage({super.key, required this.deviceSN});
@@ -58,7 +59,7 @@ class _UpgradeHistoryPageState extends State<UpgradeHistoryPage> {
     try {
       final dio = getIt<Dio>();
       final response = await dio.get(
-        '/ota/devices/${widget.deviceSN}/history',
+        '/ota/history',
         queryParameters: {'page': _page, 'page_size': _pageSize},
       );
       final data = response.data;
@@ -135,7 +136,7 @@ class _UpgradeHistoryPageState extends State<UpgradeHistoryPage> {
       final dio = getIt<Dio>();
       final response = await dio.post(
         '/ota/rollback',
-        data: {'sn': widget.deviceSN, 'package_id': item.upgradePackageId},
+        data: {'sn': item.sn, 'package_id': item.upgradePackageId},
       );
       final data = response.data;
       if (data is Map<String, dynamic> && data['code'] == 0) {
@@ -166,6 +167,7 @@ class _UpgradeHistoryPageState extends State<UpgradeHistoryPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+
     return Scaffold(
       backgroundColor: AppColor.surface(context),
       appBar: AppBar(
@@ -246,6 +248,7 @@ class _UpgradeHistoryPageState extends State<UpgradeHistoryPage> {
 
 /// 单条升级记录（对应后端 DeviceUpgrade）
 class UpgradeHistoryItem {
+  final String sn; // 设备序列号（json tag: device_sn）
   final String firmwareVersion;
   final String oldVersion;
   final String status; // pending/downloading/upgrading/success/failed/cancelled
@@ -256,6 +259,7 @@ class UpgradeHistoryItem {
   final DateTime createdAt;
 
   const UpgradeHistoryItem({
+    required this.sn,
     required this.firmwareVersion,
     required this.oldVersion,
     required this.status,
@@ -268,6 +272,7 @@ class UpgradeHistoryItem {
 
   factory UpgradeHistoryItem.fromJson(Map<String, dynamic> json) {
     return UpgradeHistoryItem(
+      sn: (json['device_sn'] ?? '').toString(),
       firmwareVersion: json['firmware_version'] as String? ?? '',
       oldVersion: json['old_version'] as String? ?? '',
       status: json['status'] as String? ?? 'pending',
@@ -324,6 +329,19 @@ class _UpgradeTile extends StatelessWidget {
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (item.sn.isNotEmpty) ...[
+            Text(
+              item.sn,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 14.sp,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            SizedBox(height: 2.h),
+          ],
           Text(
             '${_sourceLabel(l10n, item.source)}'
             ' · ${_formatTime(item.createdAt)}',

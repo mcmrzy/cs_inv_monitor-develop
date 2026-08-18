@@ -79,8 +79,10 @@ const StationDevicesTab: React.FC<StationDevicesTabProps> = ({ stationId, timezo
   }, [devices, search, statusFilter])
 
   const getRealtimePower = (sn: string): number | null => {
-    const rt = realtimeData?.[sn]
-    if (!rt) return null
+    const env = realtimeData?.[sn]
+    // 设备离线时 Redis 会回退到陈旧缓存，不得作为实时功率展示
+    if (!env || env.online !== true) return null
+    const rt = env?.realtime ?? env
     // 尝试多种字段路径
     const acPower = rt?.ac?.data?.power ?? rt?.ac_power ?? rt?.power
     const pvPower = rt?.pv?.data?.pv_total_power ?? rt?.pv_total_power
@@ -88,8 +90,9 @@ const StationDevicesTab: React.FC<StationDevicesTabProps> = ({ stationId, timezo
   }
 
   const getDailyEnergy = (sn: string): number | null => {
-    const rt = realtimeData?.[sn]
-    if (!rt) return null
+    const env = realtimeData?.[sn]
+    if (!env || env.online !== true) return null
+    const rt = env?.realtime ?? env
     const dailyPV = safeNum(rt?.daily_pv ?? rt?.daily_energy ?? rt?.today_energy ?? 0)
     return dailyPV > 0 ? dailyPV : null
   }

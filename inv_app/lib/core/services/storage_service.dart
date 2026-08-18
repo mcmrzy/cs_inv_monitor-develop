@@ -5,6 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 abstract class StorageServiceLike {
   Future<bool> getIsBleDirectEnabled();
   Future<void> saveIsBleDirectEnabled(bool value);
+  Future<bool> getIsBleAutoConnect();
+  Future<void> saveIsBleAutoConnect(bool value);
 }
 
 abstract class StorageService implements StorageServiceLike {
@@ -138,6 +140,7 @@ class StorageServiceImpl implements StorageService {
   static const String _keyActiveOrgName = 'active_org_name';
   static const String _kBleDirectEnabled = 'ble_direct_enabled';
   static const String _kBlePollInterval = 'ble_poll_interval';
+  static const String _kBleAutoConnect = 'ble_auto_connect';
 
   @override
   Future<bool> getIsBleDirectEnabled() async {
@@ -147,6 +150,16 @@ class StorageServiceImpl implements StorageService {
   @override
   Future<void> saveIsBleDirectEnabled(bool value) async {
     await _sharedPreferences.setBool(_kBleDirectEnabled, value);
+  }
+
+  @override
+  Future<bool> getIsBleAutoConnect() async {
+    return _sharedPreferences.getBool(_kBleAutoConnect) ?? true;
+  }
+
+  @override
+  Future<void> saveIsBleAutoConnect(bool value) async {
+    await _sharedPreferences.setBool(_kBleAutoConnect, value);
   }
 
   @override

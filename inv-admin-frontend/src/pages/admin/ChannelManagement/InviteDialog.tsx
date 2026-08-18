@@ -82,7 +82,10 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
   // 我的组织（真实角色码）：roles 含 org_admin 的组织 = 我可管理的组织
   const { data: myOrgs } = useQuery({
     queryKey: queryKeys.channels.myOrganizations(user?.id),
-    queryFn: () => channelApi.getMyOrganizations().then((r) => r.data?.data ?? []),
+    queryFn: () => channelApi.getMyOrganizations().then((r) => {
+      const d = r.data?.data
+      return Array.isArray(d) ? d : []
+    }),
     enabled: !isSystemAdmin && open,
   })
 
@@ -99,7 +102,10 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
   // 组织树：系统管理员全量；普通管理员剪枝为"自己 org_admin 的组织 + 全部下级"
   const { data: orgHierarchy, isLoading: loadingOrgs } = useQuery({
     queryKey: queryKeys.channels.orgHierarchy(),
-    queryFn: () => channelApi.getOrgHierarchy().then((r) => r.data?.data ?? []),
+    queryFn: () => channelApi.getOrgHierarchy().then((r) => {
+      const d = r.data?.data
+      return Array.isArray(d) ? d : []
+    }),
     enabled: open,
   })
 
@@ -241,7 +247,8 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
     }) => channelApi.sendInvitation(data),
     onSuccess: (res) => {
       const data = res.data?.data
-      const results = data?.results ?? []
+      // 后端异常时 results 可能缺失或非数组，降级为空数组避免 .filter/.map 崩溃
+      const results = Array.isArray(data?.results) ? data.results : []
       const created = results.filter((r: any) => r.status === 'created')
       const failed = results.filter((r: any) => r.status !== 'created')
 

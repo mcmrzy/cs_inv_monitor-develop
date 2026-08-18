@@ -31,6 +31,11 @@ class ErrorBoundary extends React.Component<Props, State> {
     window.location.href = '/login';
   };
 
+  handleReload = () => {
+    this.setState({ hasError: false, error: null });
+    window.location.reload();
+  };
+
   render() {
     if (this.state.hasError) {
       const dictionary = locales[useLocaleStore.getState().lang];
@@ -48,7 +53,10 @@ class ErrorBoundary extends React.Component<Props, State> {
             title={t('error.pageTitle')}
             subTitle={this.state.error?.message || t('error.unknown')}
             extra={[
-              <Button type="primary" key="retry" onClick={this.handleReset}>
+              <Button type="primary" key="reload" onClick={this.handleReload}>
+                {t('error.reloadPage')}
+              </Button>,
+              <Button key="retry" onClick={this.handleReset}>
                 {t('error.backToLogin')}
               </Button>,
               <Button key="detail" onClick={() => alert(JSON.stringify({

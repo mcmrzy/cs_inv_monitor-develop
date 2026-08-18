@@ -282,23 +282,27 @@ class _LocalModePageState extends State<LocalModePage> {
     return Container(
       margin: EdgeInsets.fromLTRB(16.w, 8.h, 16.w, 0),
       padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
+      // 统一警告样式（与设备详情页横幅一致），暗色模式自适应
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF7ED),
+        color: AppColors.warning.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(10.r),
-        border: Border.all(color: const Color(0xFFFDBA74), width: 0.5),
+        border: Border.all(
+          color: AppColors.warning.withValues(alpha: 0.3),
+          width: 0.5,
+        ),
       ),
       child: Row(
         children: [
           Icon(
             Icons.warning_amber_rounded,
             size: 18.sp,
-            color: const Color(0xFFF97316),
+            color: AppColors.warning,
           ),
           SizedBox(width: 8.w),
           Expanded(
             child: Text(
               AppLocalizations.of(context)!.apDisconnectWarning,
-              style: TextStyle(fontSize: 12.sp, color: const Color(0xFF9A3412)),
+              style: TextStyle(fontSize: 12.sp, color: AppColors.warning),
             ),
           ),
         ],

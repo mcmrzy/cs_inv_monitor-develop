@@ -25,6 +25,7 @@ type Config struct {
 	JVerify     JVerifyConfig     `mapstructure:"jverify"`
 	RBAC        RBACConfig        `mapstructure:"rbac"`
 	EmailQueue  EmailQueueConfig  `mapstructure:"email_queue"`
+	OTA         OTAConfig         `mapstructure:"ota"`
 }
 
 type CORSConfig struct {
@@ -145,6 +146,12 @@ type RBACConfig struct {
 	MaxIdleConns int           `mapstructure:"max_idle_conns"` // Redis 最大空闲连接数
 }
 
+// OTAConfig OTA 升级相关配置
+type OTAConfig struct {
+	TaskTimeoutMinutes      int `mapstructure:"task_timeout_minutes"`       // 升级任务超时阈值（分钟），处于 pending/running 且超过该时长无任何更新的任务自动置为 failed，默认 30
+	TaskScanIntervalSeconds int `mapstructure:"task_scan_interval_seconds"` // 后台超时扫描间隔（秒），默认 60
+}
+
 // EmailQueueConfig 邮件队列配置
 type EmailQueueConfig struct {
 	Enabled      bool          `mapstructure:"enabled"`       // 是否启用邮件队列
@@ -237,6 +244,10 @@ func Load(configPath string) (*Config, error) {
 	viper.SetDefault("rbac.ttl_duration", 5*time.Minute)
 	viper.SetDefault("rbac.max_idle_conns", 10)
 
+	// OTA 升级任务超时收口
+	viper.SetDefault("ota.task_timeout_minutes", 30)
+	viper.SetDefault("ota.task_scan_interval_seconds", 60)
+
 	// Email Queue defaults
 	viper.SetDefault("email_queue.enabled", false)
 	viper.SetDefault("email_queue.kafka_brokers", []string{})
@@ -307,6 +318,9 @@ func Load(configPath string) (*Config, error) {
 	viper.BindEnv("migration.dir", "MIGRATION_DIR")
 	viper.BindEnv("migration.schema_file", "MIGRATION_SCHEMA_FILE")
 	viper.BindEnv("migration.baseline_version", "MIGRATION_BASELINE_VERSION")
+
+	viper.BindEnv("ota.task_timeout_minutes", "OTA_TASK_TIMEOUT_MINUTES")
+	viper.BindEnv("ota.task_scan_interval_seconds", "OTA_TASK_SCAN_INTERVAL_SECONDS")
 
 	var config Config
 	if err := viper.Unmarshal(&config); err != nil {

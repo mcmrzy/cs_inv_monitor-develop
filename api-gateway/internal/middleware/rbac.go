@@ -309,6 +309,11 @@ var appAllowedMethodPaths = []struct {
 	// hierarchy, inviter-only revoke) are enforced by business-api.
 	{"/api/v1/invitations/create", "POST"},
 	{"/api/v1/invitations", "DELETE"},
+	// 工单自助：登录用户可提交/上传附件/删除工单（含 App 端）；
+	// 创建人/受理人归属由 business-api workOrderDataScope 强制，
+	// 非本人/非受理的工单改派与状态变更仍需 work_orders:edit 权限。
+	{"/api/v1/work-orders", "POST"},
+	{"/api/v1/work-orders", "DELETE"},
 }
 
 // basicUserGETPrefixes defines GET endpoints that any authenticated user may access
@@ -368,14 +373,25 @@ func isAppAllowedPathWithMethod(path, method string) bool {
 // isSelfServiceDeviceOperation identifies device self-service operations that
 // any authenticated user may initiate. Ownership/tenant checks are enforced by
 // the downstream business-api service layer (bind only unbound devices,
-// unbind/transfer only own devices, claim requires a valid claim code).
+// unbind/transfer only own devices, claim requires a valid claim code,
+// update only own device and only alias/remark are sent by the App).
 func isSelfServiceDeviceOperation(path, method string) bool {
-	if method != http.MethodPost {
+	if method != http.MethodPost && method != http.MethodPut {
 		return false
 	}
 	switch path {
 	case "/api/v1/devices/bind", "/api/v1/devices/import-excel":
+		return method == http.MethodPost
+	}
+	// 本人设备资料更新（App 设备编辑页：别名/备注）；
+	// business-api Update 强制非管理员仅能改自己名下的设备
+	if method == http.MethodPut &&
+		strings.HasPrefix(path, "/api/v1/devices/by-sn/") &&
+		!strings.Contains(strings.TrimPrefix(path, "/api/v1/devices/by-sn/"), "/") {
 		return true
+	}
+	if method != http.MethodPost {
+		return false
 	}
 	if strings.HasPrefix(path, "/api/v1/devices/claim-code/") {
 		return true

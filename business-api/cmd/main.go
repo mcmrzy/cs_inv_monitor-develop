@@ -136,7 +136,8 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	}
 	smsService := service.NewSMSService(rdb, smsProvider)
 	configService := service.NewConfigService(db, rdb, *cfg)
-	emailService := service.NewEmailService(rdb, cfg.Email, configService, cfg.Backends.FrontendURL)
+	emailTemplateRepo := repository.NewEmailTemplateRepository(db)
+	emailService := service.NewEmailService(rdb, cfg.Email, configService, cfg.Backends.FrontendURL, emailTemplateRepo)
 	jpushService := service.NewJPushService(&cfg.JPush, rdb)
 	jverifyService, err := service.NewJVerifyService(&cfg.JVerify)
 	if err != nil {
@@ -188,6 +189,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	alertRuleHandler := handler.NewAlertRuleHandler(db)
 	workOrderHandler := handler.NewWorkOrderHandler(db)
 	configHandler := handler.NewConfigHandler(configService)
+	emailTemplateHandler := handler.NewEmailTemplateHandler(emailTemplateRepo, emailService)
 	userOpLogHandler := handler.NewUserOpLogHandler(db)
 	parallelRepo := repository.NewParallelRepository(db)
 	parallelService := service.NewParallelService(parallelRepo)
@@ -235,6 +237,9 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	go runOTATimeoutCleanup(db, heartbeatDone)
 	// OTA 瀹氭椂浠诲姟锛氶鍙栧苟鎵ц鍒版湡浠诲姟锛岄噸鍚悗涔熶細鎭㈠宸插埌鏈熶絾鏈墽琛岀殑浠诲姟銆?
 	go runOTAScheduler(db, otaService, heartbeatDone)
+	// OTA 升级任务超时收口：后台定时扫描卡住的 pending/running 任务并置为 failed
+	otaService.SetTaskTimeout(time.Duration(cfg.OTA.TaskTimeoutMinutes) * time.Minute)
+	go runOTATaskTimeoutWatcher(otaService, time.Duration(cfg.OTA.TaskScanIntervalSeconds)*time.Second, heartbeatDone)
 	// 每日统计报告：每 60 秒轮询，向到达推送时间（用户时区）的用户推送当日发电统计摘要
 	dailyReportSvc := service.NewDailyReportService(db, notifyPrefsRepo, jpushService, emailService)
 	go dailyReportSvc.Start(heartbeatDone)
@@ -266,6 +271,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 		AlertRuleHandler:              alertRuleHandler,
 		WorkOrderHandler:              workOrderHandler,
 		ConfigHandler:                 configHandler,
+		EmailTemplateHandler:          emailTemplateHandler,
 		UserOpLogHandler:              userOpLogHandler,
 		ParallelHandler:               parallelHandler,
 		OrganizationHandler:           organizationHandler,
@@ -527,6 +533,30 @@ func runOTATimeoutCleanup(db *pgxpool.Pool, done chan struct{}) {
 	}
 }
 
+// runOTATaskTimeoutWatcher 周期性收口卡住的 OTA 升级任务：
+// 处于 pending/running 且超过阈值无任何更新的任务会被置为 failed，
+// 避免任务永远卡在进行中。
+func runOTATaskTimeoutWatcher(otaService *service.OTAService, interval time.Duration, done chan struct{}) {
+	if interval <= 0 {
+		interval = 60 * time.Second
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-done:
+			logger.Info("OTA task timeout watcher stopped")
+			return
+		case <-ticker.C:
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			if _, err := otaService.FailTimedOutUpgradeTasks(ctx); err != nil {
+				logger.Error("OTA task timeout sweep failed", zap.Error(err))
+			}
+			cancel()
+		}
+	}
+}
+
 // runOTAScheduler atomically claims due scheduled tasks. A task left pending
 // by a process crash is reclaimable after five minutes.
 func runOTAScheduler(db *pgxpool.Pool, otaService *service.OTAService, done chan struct{}) {
@@ -757,6 +787,7 @@ type RouterDeps struct {
 	AlertRuleHandler              *handler.AlertRuleHandler
 	WorkOrderHandler              *handler.WorkOrderHandler
 	ConfigHandler                 *handler.ConfigHandler
+	EmailTemplateHandler          *handler.EmailTemplateHandler
 	UserOpLogHandler              *handler.UserOpLogHandler
 	ParallelHandler               *handler.ParallelHandler
 	OrganizationHandler           *handler.OrganizationHandler
@@ -1097,6 +1128,14 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			adminGroup.PUT("/organizations/:orgId/role-permissions/:roleCode", deps.AdminHandler.UpdateOrgRolePermissions)
 		}
 
+		// 系统邮件模板管理（仅系统管理员）
+		emailGroup := api.Group("/email").Use(middleware.Auth(deps.JWTService, deps.AuthorizationContextValidator), requireAdmin)
+		{
+			emailGroup.GET("/templates", deps.EmailTemplateHandler.List)
+			emailGroup.PUT("/templates/:key", deps.EmailTemplateHandler.Update)
+			emailGroup.POST("/test", deps.EmailTemplateHandler.SendTest)
+		}
+
 		usersGroup := api.Group("/users").Use(middleware.Auth(deps.JWTService, deps.AuthorizationContextValidator))
 		{
 			usersGroup.GET("", middleware.RequirePermission(deps.PermChecker, "users", "view"), deps.AdminHandler.ListUsers)
@@ -1218,6 +1257,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			otaGroup.POST("/trigger", deps.OTAHandler.TriggerOTA)
 			otaGroup.POST("/resend/:sn", deps.OTAHandler.ResendUpgradeCommand)
 			otaGroup.GET("/devices/:sn/status", deps.OTAHandler.GetDeviceOTAStatus)
+			otaGroup.GET("/history", deps.OTAHandler.GetAllOTAHistory)
 			otaGroup.GET("/devices/:sn/history", deps.OTAHandler.GetDeviceOTAHistory)
 			otaGroup.POST("/devices/:sn/local-ota-result", deps.OTAHandler.ReportLocalOTAResult)
 			otaGroup.GET("/app/packages", deps.OTAHandler.AppListUpgradePackages)

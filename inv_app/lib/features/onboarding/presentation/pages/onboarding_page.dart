@@ -92,11 +92,11 @@ class _OnboardingPageState extends State<OnboardingPage> {
                       _buildPageContent(context, pages[index]),
                 ),
               ),
-              // 底部：圆点指示器 + 最后一页「立即体验」
+              // 底部：圆点指示器；最后一页为「快速开始」三入口 + 立即体验
               Padding(
                 padding: EdgeInsets.fromLTRB(32.w, 8.h, 32.w, 28.h),
                 child: _currentPage == _pageCount - 1
-                    ? _buildStartButton(l10n)
+                    ? _buildQuickStart(l10n)
                     : _buildDotsIndicator(),
               ),
             ],
@@ -163,6 +163,69 @@ class _OnboardingPageState extends State<OnboardingPage> {
               color: Colors.white,
               fontWeight: FontWeight.w500,
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 尾屏快速开始：创建电站 / 添加设备 / 配网三入口 + 立即体验。
+  /// 未登录点击入口会被路由守卫重定向到登录页，登录后由首启向导接管
+  Widget _buildQuickStart(AppLocalizations l10n) {
+    return Column(
+      children: [
+        Text(
+          l10n.str('quick_start'),
+          style: TextStyle(
+            fontSize: 14.sp,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
+        ),
+        SizedBox(height: 12.h),
+        _quickStartButton(
+          icon: Icons.add_home_work_outlined,
+          label: l10n.createStation,
+          onTap: () => context.push('/station/create'),
+        ),
+        SizedBox(height: 8.h),
+        _quickStartButton(
+          icon: Icons.solar_power,
+          label: l10n.addDevice,
+          onTap: () => context.push('/add-device'),
+        ),
+        SizedBox(height: 8.h),
+        _quickStartButton(
+          icon: Icons.wifi,
+          label: l10n.wifiConfig,
+          onTap: () => context.push('/wifi-config'),
+        ),
+        SizedBox(height: 14.h),
+        _buildStartButton(l10n),
+      ],
+    );
+  }
+
+  Widget _quickStartButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return SizedBox(
+      width: double.infinity,
+      height: 44.h,
+      child: OutlinedButton.icon(
+        onPressed: onTap,
+        icon: Icon(icon, size: 18.sp),
+        label: Text(
+          label,
+          style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w500),
+        ),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: Colors.white,
+          side: BorderSide(color: Colors.white.withValues(alpha: 0.5)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12.r),
           ),
         ),
       ),

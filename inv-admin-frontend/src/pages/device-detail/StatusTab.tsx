@@ -1,10 +1,19 @@
+/**
+ * 实时数据（安装商视角）
+ *
+ * 默认只展示 PV / 电池 / 逆变器 三组精选字段（用户友好视图）；
+ * 全量 field_capabilities 参数表收进「全部参数」折叠区供调试，
+ * 位掩码字段（sys_status/warning/bms_warning）显示十六进制 + 激活位徽标。
+ * 底部保留配置快照 ProTable。
+ */
 import { useQuery } from '@tanstack/react-query'
-import { Statistic, Tag, Spin, Empty, Typography, Space, Card, Row, Col } from 'antd'
+import { Statistic, Tag, Spin, Empty, Typography, Space, Card, Row, Col, Alert, Collapse } from 'antd'
 import { ProCard, ProTable } from '@ant-design/pro-components'
 import type { ProColumns } from '@ant-design/pro-components'
-import { CheckCircleFilled, CloseCircleFilled } from '@ant-design/icons'
+import { CheckCircleFilled, CloseCircleFilled, SunOutlined, ThunderboltOutlined, DashboardOutlined } from '@ant-design/icons'
 
 import { deviceApi } from '@/services/deviceApi'
+import { toRtEnvelope, freshRealtime, extractEnergyMetrics, parseSysStatusBits, type SysStatusBits } from './energyUtils'
 import { modelApi, type ModelFieldCapability } from '@/services/modelApi'
 import { queryKeys } from '@/utils/queryKeys'
 import { formatInTimezone } from '@/utils/timezone'
@@ -18,7 +27,7 @@ interface StatusTabProps {
   sn: string
 }
 
-// 分组中文标题（field_capabilities.group_code）
+// 分组标题（field_capabilities.group_code，用于「全部参数」折叠区）
 const GROUP_TITLES_ZH: Record<string, string> = {
   sys: '系统',
   pv: 'PV',
@@ -63,6 +72,30 @@ function resolveRtValue(rt: Record<string, any>, fieldKey: string): unknown {
   return undefined
 }
 
+/** 数值格式化：null 显示 '--'，否则按 decimals 保留小数 */
+function num(v: number | null | undefined, decimals = 1): string {
+  return v == null ? '--' : v.toFixed(decimals)
+}
+
+/** 位掩码激活位徽标（sys_status 展开 12 位；warning/bms_warning 仅提示非 0） */
+const BitmaskBadges: React.FC<{ fieldKey: string; value: number }> = ({ fieldKey, value }) => {
+  const { t } = useTranslation()
+  if (fieldKey === 'sys_status') {
+    const bits: SysStatusBits | null = parseSysStatusBits(value)
+    if (!bits) return null
+    const activeKeys = (Object.keys(bits) as (keyof SysStatusBits)[]).filter((k) => bits[k])
+    return (
+      <span style={{ marginLeft: 8 }}>
+        {activeKeys.length === 0 && <Tag>{t('deviceDetail.realtime.noActiveBits')}</Tag>}
+        {activeKeys.map((k) => (
+          <Tag key={k} color="blue" style={{ borderRadius: 6 }}>{t(`deviceDetail.bits.${k}`)}</Tag>
+        ))}
+      </span>
+    )
+  }
+  return value !== 0 ? <Tag color="orange" style={{ marginLeft: 8 }}>{t('deviceDetail.realtime.bitsActive')}</Tag> : null
+}
+
 const StatusTab: React.FC<StatusTabProps> = ({ sn }) => {
   const { t, lang } = useTranslation()
   const { timezone } = useTimezoneStore()
@@ -73,10 +106,10 @@ const StatusTab: React.FC<StatusTabProps> = ({ sn }) => {
     refetchInterval: 15000,
   })
 
-  const { data: realtime, isLoading: rtLoading, error: realtimeError, refetch: refetchRealtime } = useQuery({
+  const { data: envelope, isLoading: rtLoading, error: realtimeError, refetch: refetchRealtime } = useQuery({
     queryKey: queryKeys.devices.realtime(sn),
-    queryFn: () => deviceApi.getRealtime(sn).then((r) => r.data?.data ?? null),
-    refetchInterval: 10000,
+    queryFn: () => deviceApi.getRealtime(sn).then((r) => toRtEnvelope(r.data?.data ?? r.data)),
+    refetchInterval: () => (document.visibilityState === 'visible' ? 10_000 : false),
   })
 
   const { data: deviceInfo, error: deviceError, refetch: refetchDevice } = useQuery({
@@ -84,7 +117,7 @@ const StatusTab: React.FC<StatusTabProps> = ({ sn }) => {
     queryFn: () => deviceApi.getDeviceBySn(sn).then((r) => r.data?.data ?? null),
   })
 
-  // 按型号字段能力动态渲染实时数据（show_realtime + is_visible）
+  // 按型号字段能力动态渲染全量参数（收进「全部参数」折叠区）
   const { data: fieldCaps } = useQuery({
     queryKey: ['model-field-caps', deviceInfo?.model_id],
     queryFn: () =>
@@ -96,18 +129,59 @@ const StatusTab: React.FC<StatusTabProps> = ({ sn }) => {
     staleTime: 60_000,
   })
 
-  const isOnline = deviceInfo?.status === 'online'
+  const isOnline = deviceInfo?.status === 'online' || envelope?.online === true
   const reported = controlState?.reported ?? {}
-  const rtData = (realtime ?? {}) as Record<string, any>
+  // 展平字段在 envelope.realtime 内层；离线/数据过期时不展示陈旧缓存值
+  const rtFresh = freshRealtime(envelope)
+  const rtData = (rtFresh ?? {}) as Record<string, any>
+  const m = extractEnergyMetrics(rtFresh)
+  const fresh = rtFresh != null
 
-  // Extract power-related fields from realtime data
-  const powerOutput = rtData.output_power ?? rtData.power_output ?? rtData.ac_active_power ?? '-'
-  const powerInput = rtData.input_power ?? rtData.power_input ?? rtData.ac_input_power ?? '-'
-  const loadPower = rtData.load_power ?? '-'
   const batterySoc = rtData.battery_soc ?? rtData.soc ?? reported.battery_soc ?? '-'
   const workMode = rtData.work_mode ?? reported.work_mode ?? '-'
 
-  // 动态字段：show_realtime 且 is_visible，按 group_code 分组
+  // ══ 精选三组（PV / 电池 / 逆变器）══
+  const battCharging = fresh && m.battPower > 5
+  const battDischarging = fresh && m.battPower < -5
+  const curatedGroups = [
+    {
+      key: 'pv',
+      icon: <SunOutlined style={{ color: '#F59E0B' }} />,
+      title: t('deviceDetail.realtime.groupPv'),
+      color: '#F59E0B',
+      fields: [
+        { label: t('deviceDetail.realtime.pv1Voltage'), value: fresh ? num(m.pv1Voltage) : '--', suffix: 'V' },
+        { label: t('deviceDetail.realtime.pv2Voltage'), value: fresh ? num(m.pv2Voltage) : '--', suffix: 'V' },
+        { label: t('deviceDetail.realtime.pvPower'), value: fresh ? Math.round(m.pvPower).toString() : '--', suffix: 'W' },
+      ],
+    },
+    {
+      key: 'battery',
+      icon: <DashboardOutlined style={{ color: '#00E676' }} />,
+      title: t('deviceDetail.realtime.groupBattery'),
+      color: '#00E676',
+      fields: [
+        { label: t('deviceDetail.realtime.battVoltage'), value: fresh ? num(m.battVoltage, 2) : '--', suffix: 'V' },
+        { label: 'SOC', value: fresh ? Math.round(m.battSoc).toString() : '--', suffix: '%' },
+        { label: t('deviceDetail.realtime.chargeCurrent'), value: fresh ? num(battCharging ? m.battCurrent : 0) : '--', suffix: 'A' },
+        { label: t('deviceDetail.realtime.dischargeCurrent'), value: fresh ? num(battDischarging ? Math.abs(m.battCurrent ?? 0) : 0) : '--', suffix: 'A' },
+      ],
+    },
+    {
+      key: 'inverter',
+      icon: <ThunderboltOutlined style={{ color: '#8B5CF6' }} />,
+      title: t('deviceDetail.realtime.groupInverter'),
+      color: '#8B5CF6',
+      fields: [
+        { label: t('deviceDetail.realtime.inverterTemp'), value: fresh ? num(m.inverterTemp) : '--', suffix: '℃' },
+        { label: t('deviceDetail.realtime.busVoltage'), value: fresh ? num(m.dcBusVoltage) : '--', suffix: 'V' },
+        { label: t('deviceDetail.realtime.loadRatio'), value: fresh ? num(m.loadPercent, 0) : '--', suffix: '%' },
+        { label: t('deviceDetail.realtime.efficiency'), value: fresh ? num(m.efficiency) : '--', suffix: '%' },
+      ],
+    },
+  ]
+
+  // ══ 全量参数（field_capabilities 动态渲染，收进折叠区）══
   const dynamicGroups = (() => {
     const caps = fieldCaps ?? []
     const visible = caps.filter((f) => f.show_realtime && f.is_supported !== false && f.is_visible !== false)
@@ -143,15 +217,17 @@ const StatusTab: React.FC<StatusTabProps> = ({ sn }) => {
     return translated !== key ? translated : f.field_key
   }
 
+  const isBitmaskField = (f: ModelFieldCapability) => BITMASK_FIELDS.has(f.field_key) || f.field_type === 'bitmask'
+
   const formatFieldValue = (f: ModelFieldCapability, raw: unknown): string => {
     if (raw === undefined || raw === null || raw === '') return '-'
-    const num = Number(raw)
-    if (Number.isNaN(num)) return String(raw)
-    if (BITMASK_FIELDS.has(f.field_key) || f.field_type === 'bitmask') {
-      return `0x${num.toString(16).toUpperCase()}`
+    const numVal = Number(raw)
+    if (Number.isNaN(numVal)) return String(raw)
+    if (isBitmaskField(f)) {
+      return `0x${numVal.toString(16).toUpperCase()}`
     }
-    const decimals = f.decimal_places ?? (Number.isInteger(num) ? 0 : 2)
-    return num.toFixed(decimals)
+    const decimals = f.decimal_places ?? (Number.isInteger(numVal) ? 0 : 2)
+    return numVal.toFixed(decimals)
   }
 
   const fieldSuffix = (f: ModelFieldCapability) => f.display_unit || f.base_unit || undefined
@@ -188,8 +264,18 @@ const StatusTab: React.FC<StatusTabProps> = ({ sn }) => {
           style={{ marginBottom: 16 }}
         />
       )}
+      {envelope && rtFresh == null && (
+        <Alert
+          type="warning"
+          showIcon
+          message={t('deviceDetail.status.staleData')}
+          style={{ marginBottom: 16, borderRadius: 12 }}
+        />
+      )}
+
+      {/* ── 顶部摘要 ── */}
       <ProCard gutter={16} style={{ marginBottom: 16 }}>
-        <ProCard colSpan={6} size="small" bordered={false} style={{ borderRadius: 12 }}>
+        <ProCard colSpan={8} size="small" bordered={false} style={{ borderRadius: 12 }}>
           <Space>
             {statusIcon(isOnline)}
             <span>{t('deviceDetail.status.onlineStatus')}</span>
@@ -198,14 +284,11 @@ const StatusTab: React.FC<StatusTabProps> = ({ sn }) => {
             <Tag color={isOnline ? 'green' : 'red'}>{isOnline ? t('admin.connected') : t('admin.disconnected')}</Tag>
           </div>
         </ProCard>
-        <ProCard colSpan={6} size="small" bordered={false} style={{ borderRadius: 12 }}>
+        <ProCard colSpan={8} size="small" bordered={false} style={{ borderRadius: 12 }}>
           <Statistic title={t('deviceDetail.status.workMode')} value={workMode} />
         </ProCard>
-        <ProCard colSpan={6} size="small" bordered={false} style={{ borderRadius: 12 }}>
+        <ProCard colSpan={8} size="small" bordered={false} style={{ borderRadius: 12 }}>
           <Statistic title={t('deviceDetail.status.batterySoc')} value={batterySoc} suffix={typeof batterySoc === 'number' ? '%' : ''} />
-        </ProCard>
-        <ProCard colSpan={6} size="small" bordered={false} style={{ borderRadius: 12 }}>
-          <Statistic title={t('deviceDetail.status.syncStatus')} value={controlState?.sync_status ?? '-'} />
           {controlState?.reported_at && (
             <div style={{ color: '#999', fontSize: 12, marginTop: 4 }}>
               {t('deviceDetail.status.reportedAt')}: {formatInTimezone(controlState.reported_at, timezone, 'YYYY-MM-DD HH:mm:ss')}
@@ -214,49 +297,83 @@ const StatusTab: React.FC<StatusTabProps> = ({ sn }) => {
         </ProCard>
       </ProCard>
 
-      {hasDynamic ? (
-        // 按模型字段能力动态渲染（CS-L10-6K2 等 V2 型号）
-        dynamicGroups.map((g) => (
-          <Card
-            key={g.code}
-            size="small"
-            title={<span style={{ fontSize: 14, fontWeight: 600 }}>{groupTitle(g.code)}</span>}
-            style={{ borderRadius: 12, marginBottom: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}
-          >
-            <Row gutter={[16, 12]}>
-              {g.fields.map((f) => {
-                const raw = resolveRtValue(rtData, f.field_key)
-                const value = formatFieldValue(f, raw)
-                const suffix = fieldSuffix(f)
-                return (
-                  <Col xs={12} md={8} xl={6} key={f.field_key}>
+      {/* ── 精选三组：PV / 电池 / 逆变器 ── */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+        {curatedGroups.map((g) => (
+          <Col xs={24} lg={8} key={g.key}>
+            <Card
+              size="small"
+              title={
+                <span style={{ fontSize: 14, fontWeight: 600 }}>
+                  {g.icon} <span style={{ marginLeft: 6 }}>{g.title}</span>
+                </span>
+              }
+              style={{ borderRadius: 12, height: '100%', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}
+            >
+              <Row gutter={[16, 12]}>
+                {g.fields.map((f) => (
+                  <Col span={12} key={f.label}>
                     <Statistic
-                      title={fieldLabel(f)}
-                      value={value}
-                      suffix={suffix && value !== '-' ? suffix : undefined}
-                      valueStyle={{ fontSize: 18, color: raw !== undefined && raw !== null ? '#1f2937' : '#9ca3af' }}
+                      title={f.label}
+                      value={f.value}
+                      suffix={f.value !== '--' ? f.suffix : undefined}
+                      valueStyle={{ fontSize: 18, color: f.value !== '--' ? '#1f2937' : '#9ca3af' }}
                     />
                   </Col>
-                )
-              })}
-            </Row>
-          </Card>
-        ))
-      ) : (
-        // 旧型号回退：功率卡片
-        <ProCard gutter={16} style={{ marginBottom: 16 }}>
-          <ProCard colSpan={8} size="small" bordered={false} style={{ borderRadius: 12 }}>
-            <Statistic title={t('deviceDetail.status.powerOutput')} value={powerOutput} suffix="W" />
-          </ProCard>
-          <ProCard colSpan={8} size="small" bordered={false} style={{ borderRadius: 12 }}>
-            <Statistic title={t('deviceDetail.status.powerInput')} value={powerInput} suffix="W" />
-          </ProCard>
-          <ProCard colSpan={8} size="small" bordered={false} style={{ borderRadius: 12 }}>
-            <Statistic title={t('deviceDetail.status.loadPower')} value={loadPower} suffix="W" />
-          </ProCard>
-        </ProCard>
+                ))}
+              </Row>
+            </Card>
+          </Col>
+        ))}
+      </Row>
+
+      {/* ── 全部参数（调试用，默认收起）── */}
+      {hasDynamic && (
+        <Collapse
+          size="small"
+          style={{ marginBottom: 16, borderRadius: 12, background: '#fff' }}
+          items={[{
+            key: 'all-params',
+            label: <span style={{ fontWeight: 600 }}>{t('deviceDetail.realtime.allParams')}</span>,
+            children: (
+              <>
+                {dynamicGroups.map((g) => (
+                  <Card
+                    key={g.code}
+                    size="small"
+                    title={<span style={{ fontSize: 13, fontWeight: 600 }}>{groupTitle(g.code)}</span>}
+                    style={{ borderRadius: 12, marginBottom: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}
+                  >
+                    <Row gutter={[16, 12]}>
+                      {g.fields.map((f) => {
+                        const raw = resolveRtValue(rtData, f.field_key)
+                        const value = formatFieldValue(f, raw)
+                        const suffix = fieldSuffix(f)
+                        const bitmask = isBitmaskField(f)
+                        return (
+                          <Col xs={12} md={8} xl={6} key={f.field_key}>
+                            <Statistic
+                              title={fieldLabel(f)}
+                              value={value}
+                              suffix={suffix && value !== '-' ? suffix : undefined}
+                              valueStyle={{ fontSize: 16, color: raw !== undefined && raw !== null ? '#1f2937' : '#9ca3af' }}
+                            />
+                            {bitmask && raw !== undefined && raw !== null && Number(raw) !== 0 && (
+                              <BitmaskBadges fieldKey={f.field_key} value={Number(raw)} />
+                            )}
+                          </Col>
+                        )
+                      })}
+                    </Row>
+                  </Card>
+                ))}
+              </>
+            ),
+          }]}
+        />
       )}
 
+      {/* ── 配置快照 ── */}
       <ProCard
         title={t('deviceDetail.diagnostics.configSnapshot')}
         size="small"

@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fpdart/fpdart.dart';
 
 import 'package:inv_app/core/entities/inverter_data.dart';
+import 'package:inv_app/core/errors/failures.dart';
 import 'package:inv_app/core/services/ble/ble_adapter.dart';
 import 'package:inv_app/core/services/ble/ble_binding_service.dart';
 import 'package:inv_app/core/services/ble/ble_device_manager.dart';
+import 'package:inv_app/features/device/domain/repositories/device_repository.dart';
 import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
 import 'package:inv_app/features/device/presentation/pages/device_qr_bind_page.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
@@ -23,11 +26,14 @@ class MockBleBindingService extends Mock implements BleBindingService {}
 
 class MockBleDeviceSession extends Mock implements BleDeviceSession {}
 
+class MockDeviceRepositoryBind extends Mock implements DeviceRepository {}
+
 void main() {
   late MockBleAdapter adapter;
   late MockBleDeviceManager manager;
   late MockBleBindingService bindingService;
   late MockBleDeviceSession session;
+  late MockDeviceRepositoryBind mockDeviceRepo;
   late DeviceBloc deviceBloc;
 
   // 16 位字母数字 SN（页面仅做长度/字符集与 INFO 对比，无需通过 parseSN 语义校验）
@@ -44,6 +50,12 @@ void main() {
     manager = MockBleDeviceManager();
     bindingService = MockBleBindingService();
     session = MockBleDeviceSession();
+    mockDeviceRepo = MockDeviceRepositoryBind();
+
+    // 默认：云端绑定成功
+    when(
+      () => mockDeviceRepo.bind(any(), any(), pin: any(named: 'pin')),
+    ).thenAnswer((_) async => const Right(null));
 
     when(() => adapter.status).thenAnswer((_) async => BleAdapterStatus.on);
     when(
@@ -96,36 +108,15 @@ void main() {
         adapter: adapter,
         manager: manager,
         bindingService: bindingService,
+        deviceRepository: mockDeviceRepo,
       );
 
-  testWidgets('蓝牙关闭 → 显示失败态（SnackBar + 重试按钮，不崩溃）', (tester) async {
-    final l10n = await AppLocalizations.delegate.load(const Locale('zh', 'CN'));
-    when(() => adapter.status).thenAnswer((_) async => BleAdapterStatus.off);
-
-    await pumpApp(tester, buildPage(), deviceBloc: deviceBloc);
-
-    // SnackBar 提示蓝牙未开启（失败态页面同样展示该文案，共 2 处）
-    expect(
-      find.descendant(
-        of: find.byType(SnackBar),
-        matching: find.text(l10n.str('ble_bluetooth_off')),
-      ),
-      findsOneWidget,
-    );
-    expect(find.text(l10n.str('ble_bluetooth_off')), findsNWidgets(2));
-    // 失败态展示重试按钮
-    expect(find.text(l10n.str('ble_retry')), findsOneWidget);
-
-    // 推进 SnackBar 生命周期，避免遗留 pending timer
-    await tester.pump(const Duration(seconds: 5));
-    await tester.pump(const Duration(milliseconds: 300));
-  });
-
-  testWidgets('扫描匹配成功 → 绑定成功文案', (tester) async {
+  testWidgets('云端绑定成功 → 直接显示成功文案', (tester) async {
     final l10n = await AppLocalizations.delegate.load(const Locale('zh', 'CN'));
 
     await pumpApp(tester, buildPage(), deviceBloc: deviceBloc);
 
+    // 云端绑定成功，显示 done 页面
     expect(find.text(l10n.str('qr_bind_title')), findsOneWidget);
     expect(find.text(l10n.str('ble_binding_success')), findsOneWidget);
     // 成功页展示 SN
@@ -134,6 +125,58 @@ void main() {
     expect(find.text(l10n.str('ble_retry')), findsOneWidget);
     expect(find.text(l10n.str('qr_bind_done')), findsOneWidget);
 
+    // 云端绑定被调用，BLE 未被调用
+    verify(
+      () => mockDeviceRepo.bind(testSn, null, pin: '123456'),
+    ).called(1);
+    verifyNever(
+      () => adapter.scan(
+        serviceUuids: any(named: 'serviceUuids'),
+        timeout: any(named: 'timeout'),
+      ),
+    );
+  });
+
+  testWidgets('云端绑定失败 → 显示 cloudFailed 界面（重试云端 / 尝试BLE / 返回）', (tester) async {
+    final l10n = await AppLocalizations.delegate.load(const Locale('zh', 'CN'));
+    // 云端绑定返回 404 设备未注册
+    when(
+      () => mockDeviceRepo.bind(any(), any(), pin: any(named: 'pin')),
+    ).thenAnswer((_) async => const Left(NotFoundFailure('device not found')));
+
+    await pumpApp(tester, buildPage(), deviceBloc: deviceBloc);
+
+    // cloudFailed 界面展示错误图标和按钮
+    expect(find.text(l10n.str('ble_retry')), findsOneWidget); // 重试云端
+    expect(find.text(l10n.qrBindTryBle), findsOneWidget); // 尝试 BLE
+    expect(find.text(l10n.qrBindBack), findsOneWidget); // 返回
+    // BLE 扫描未被调用
+    verifyNever(
+      () => adapter.scan(
+        serviceUuids: any(named: 'serviceUuids'),
+        timeout: any(named: 'timeout'),
+      ),
+    );
+  });
+
+  testWidgets('云端失败后点击「尝试BLE」→ BLE 扫描绑定成功', (tester) async {
+    final l10n = await AppLocalizations.delegate.load(const Locale('zh', 'CN'));
+    // 云端绑定失败
+    when(
+      () => mockDeviceRepo.bind(any(), any(), pin: any(named: 'pin')),
+    ).thenAnswer((_) async => const Left(NotFoundFailure('device not found')));
+
+    await pumpApp(tester, buildPage(), deviceBloc: deviceBloc);
+
+    // 点击「尝试BLE扫描」
+    await tester.tap(find.text(l10n.qrBindTryBle));
+    await tester.pumpAndSettle();
+
+    // BLE 绑定成功
+    expect(find.text(l10n.str('ble_binding_success')), findsOneWidget);
+    expect(find.text(testSn), findsOneWidget);
+
+    // 验证 BLE 流程被调用
     verify(
       () => adapter.scan(
         serviceUuids: any(named: 'serviceUuids'),
@@ -150,8 +193,13 @@ void main() {
     ).called(1);
   });
 
-  testWidgets('扫描无匹配设备 → 未找到文案', (tester) async {
+  testWidgets('云端失败后BLE扫描无匹配设备 → 未找到文案', (tester) async {
     final l10n = await AppLocalizations.delegate.load(const Locale('zh', 'CN'));
+    // 云端绑定失败
+    when(
+      () => mockDeviceRepo.bind(any(), any(), pin: any(named: 'pin')),
+    ).thenAnswer((_) async => const Left(NotFoundFailure('device not found')));
+    // BLE 扫描返回空
     when(
       () => adapter.scan(
         serviceUuids: any(named: 'serviceUuids'),
@@ -161,8 +209,14 @@ void main() {
 
     await pumpApp(tester, buildPage(), deviceBloc: deviceBloc);
 
+    // 点击「尝试BLE扫描」
+    await tester.tap(find.text(l10n.qrBindTryBle));
+    await tester.pumpAndSettle();
+
+    // BLE 失败，展示未找到
     expect(find.text(l10n.str('qr_bind_not_found')), findsOneWidget);
-    expect(find.text(l10n.str('ble_retry')), findsOneWidget);
+    expect(find.text(l10n.str('ble_retry')), findsOneWidget); // BLE 重试
+    expect(find.text(l10n.cloudBindFallback), findsOneWidget); // 回到云端
     verifyNever(
       () => bindingService.bindAfterProvision(
         macAddress: any(named: 'macAddress'),
@@ -172,20 +226,34 @@ void main() {
     );
   });
 
-  testWidgets('扫描匹配失败（无 SN 字段）→ 未找到文案', (tester) async {
+  testWidgets('云端失败后BLE匹配失败（无SN字段）→ 未找到文案', (tester) async {
     final l10n = await AppLocalizations.delegate.load(const Locale('zh', 'CN'));
+    // 云端绑定失败
+    when(
+      () => mockDeviceRepo.bind(any(), any(), pin: any(named: 'pin')),
+    ).thenAnswer((_) async => const Left(NotFoundFailure('device not found')));
+    // BLE 设备 INFO 无 SN 字段
     when(() => session.readInfo()).thenAnswer(
       (_) async => <String, dynamic>{'bound': false},
     );
 
     await pumpApp(tester, buildPage(), deviceBloc: deviceBloc);
 
+    // 点击「尝试BLE扫描」
+    await tester.tap(find.text(l10n.qrBindTryBle));
+    await tester.pumpAndSettle();
+
     expect(find.text(l10n.str('qr_bind_not_found')), findsOneWidget);
     verify(() => manager.connectDevice(any())).called(1);
   });
 
-  testWidgets('匹配后绑定失败 → 绑定失败文案', (tester) async {
+  testWidgets('云端失败后BLE匹配绑定失败 → 绑定失败文案', (tester) async {
     final l10n = await AppLocalizations.delegate.load(const Locale('zh', 'CN'));
+    // 云端绑定失败
+    when(
+      () => mockDeviceRepo.bind(any(), any(), pin: any(named: 'pin')),
+    ).thenAnswer((_) async => const Left(NotFoundFailure('device not found')));
+    // BLE 绑定返回失败
     when(
       () => bindingService.bindAfterProvision(
         macAddress: any(named: 'macAddress'),
@@ -195,6 +263,10 @@ void main() {
     ).thenAnswer((_) async => BindOutcome.failed);
 
     await pumpApp(tester, buildPage(), deviceBloc: deviceBloc);
+
+    // 点击「尝试BLE扫描」
+    await tester.tap(find.text(l10n.qrBindTryBle));
+    await tester.pumpAndSettle();
 
     expect(find.text(l10n.str('ble_binding_failed')), findsOneWidget);
     expect(find.text(l10n.str('qr_bind_done')), findsOneWidget);

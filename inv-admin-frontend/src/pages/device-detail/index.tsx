@@ -3,12 +3,15 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { Tabs, Button, Space, Typography } from 'antd'
 import { ArrowLeftOutlined } from '@ant-design/icons'
 import useTranslation from '@/hooks/useTranslation'
+import EnergyCenterTab from './EnergyCenterTab'
 import StatusTab from './StatusTab'
+import EnergyStatsTab from './EnergyStatsTab'
+import StateCenterTab from './StateCenterTab'
+import HealthTab from './HealthTab'
+import DiagnosticsTab from './DiagnosticsTab'
 import StrategyTab from './StrategyTab'
 import InstallTab from './InstallTab'
 import ParallelTab from './ParallelTab'
-import DiagnosticsTab from './DiagnosticsTab'
-import HealthTab from './HealthTab'
 import InfoTab from './InfoTab'
 
 const { Title, Text } = Typography
@@ -17,7 +20,7 @@ const DeviceDetailPage: React.FC = () => {
   const { t } = useTranslation()
   const { sn } = useParams<{ sn: string }>()
   const navigate = useNavigate()
-  const [activeTab, setActiveTab] = useState('status')
+  const [activeTab, setActiveTab] = useState('energy')
 
   if (!sn) {
     return (
@@ -50,12 +53,15 @@ const DeviceDetailPage: React.FC = () => {
         activeKey={activeTab}
         onChange={setActiveTab}
         items={[
-          { key: 'status', label: t('deviceDetail.tab.status'), children: <StatusTab sn={sn} /> },
+          { key: 'energy', label: t('deviceDetail.tab.energy'), children: <EnergyCenterTab sn={sn} /> },
+          { key: 'realtime', label: t('deviceDetail.tab.realtime'), children: <StatusTab sn={sn} /> },
+          { key: 'stats', label: t('deviceDetail.tab.stats'), children: <EnergyStatsTab sn={sn} /> },
+          { key: 'state', label: t('deviceDetail.tab.state'), children: <StateCenterTab sn={sn} /> },
+          { key: 'health', label: t('deviceDetail.tab.healthDevice'), children: <HealthTab sn={sn} /> },
+          { key: 'diagnostics', label: t('deviceDetail.tab.diagnostics'), children: <DiagnosticsTab sn={sn} /> },
           { key: 'strategy', label: t('deviceDetail.tab.strategy'), children: <StrategyTab sn={sn} /> },
           { key: 'install', label: t('deviceDetail.tab.install'), children: <InstallTab sn={sn} /> },
           { key: 'parallel', label: t('deviceDetail.tab.parallel'), children: <ParallelTab sn={sn} /> },
-          { key: 'diagnostics', label: t('deviceDetail.tab.diagnostics'), children: <DiagnosticsTab sn={sn} /> },
-          { key: 'health', label: t('deviceDetail.tab.health'), children: <HealthTab sn={sn} /> },
           { key: 'info', label: t('deviceDetail.tab.info'), children: <InfoTab sn={sn} /> },
         ]}
       />

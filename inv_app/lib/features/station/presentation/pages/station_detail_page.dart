@@ -495,6 +495,9 @@ class _StationDetailPageState extends State<StationDetailPage>
         (d) => d['sn'] == _selectedDeviceSn,
         orElse: () => {'sn': l10n.allDevices},
       );
+      // 优先自定义别名，回退 SN
+      final alias = (device['alias'] ?? '').toString();
+      if (alias.isNotEmpty) return alias;
       return device['sn'] as String? ?? l10n.allDevices;
     }
     

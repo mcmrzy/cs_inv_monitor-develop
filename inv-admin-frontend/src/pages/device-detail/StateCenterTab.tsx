@@ -1,0 +1,275 @@
+/**
+ * 状态中心：当前系统状态大卡片（正常/故障/待机/离线）+ 12 位状态位网格
+ * + 该设备历史告警时间线（按日期分组）。
+ * 状态来源：realtime envelope 的 online + work_state/fault_code（SysStatus 状态位取不到时按功率推导），
+ * 告警来源：GET /devices/by-sn/:sn/alarms（分页）。
+ */
+import { useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { Row, Col, Tag, Typography, Empty, Pagination } from 'antd'
+import { ProCard } from '@ant-design/pro-components'
+import {
+  CheckCircleFilled, CloseCircleFilled, ClockCircleFilled, DisconnectOutlined,
+  AlertOutlined,
+} from '@ant-design/icons'
+import dayjs from 'dayjs'
+
+import api from '@/services/api'
+import { deviceApi } from '@/services/deviceApi'
+import { queryKeys } from '@/utils/queryKeys'
+import { getAlarmLevelDisplay, getAlarmMessageI18nKey } from '@/utils/constants'
+import { formatInTimezone } from '@/utils/timezone'
+import useTimezoneStore from '@/stores/timezoneStore'
+import useTranslation from '@/hooks/useTranslation'
+import QueryErrorAlert from '@/components/QueryErrorAlert'
+import SysStatusBitsPanel from './SysStatusBitsPanel'
+import { toRtEnvelope, isRealtimeFresh, freshRealtime, extractEnergyMetrics, parseRtTimestamp, getSysBits } from './energyUtils'
+
+const { Text } = Typography
+
+interface StateCenterTabProps {
+  sn: string
+}
+
+interface DeviceAlarm {
+  id: number
+  device_sn?: string
+  alarm_level: number | string
+  fault_code?: string | number
+  fault_message?: string
+  status?: number | string
+  occurred_at?: string
+  recovered_at?: string | null
+  created_at?: string
+}
+
+const CARD_SHADOW = '0 2px 8px rgba(17,24,39,0.06)'
+
+type SystemState = 'normal' | 'fault' | 'standby' | 'offline'
+
+const StateCenterTab: React.FC<StateCenterTabProps> = ({ sn }) => {
+  const { t } = useTranslation()
+  const { timezone } = useTimezoneStore()
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+
+  const { data: envelope, error: rtError, refetch: refetchRt } = useQuery({
+    queryKey: queryKeys.devices.realtime(sn),
+    queryFn: () => deviceApi.getRealtime(sn).then((r) => toRtEnvelope(r.data?.data ?? r.data)),
+    refetchInterval: () => (document.visibilityState === 'visible' ? 10_000 : false),
+  })
+
+  const { data: detail } = useQuery({
+    queryKey: queryKeys.devices.detail(sn),
+    queryFn: () => deviceApi.getDeviceBySn(sn).then((r) => r.data?.data ?? null),
+  })
+
+  const { data: alarmRes, isLoading: alarmLoading, error: alarmError, refetch: refetchAlarms } = useQuery({
+    queryKey: ['device-alarms', sn, page, pageSize],
+    queryFn: () => api.get(`/devices/by-sn/${sn}/alarms`, {
+      params: { page, page_size: pageSize },
+      expectedDataShape: 'page',
+    }).then((r) => {
+      const d = r.data?.data ?? r.data ?? {}
+      return {
+        items: (Array.isArray(d) ? d : (d?.items ?? d?.list ?? [])) as DeviceAlarm[],
+        total: Number(d?.total ?? 0),
+      }
+    }),
+  })
+
+  const fresh = isRealtimeFresh(envelope)
+  const m = extractEnergyMetrics(freshRealtime(envelope))
+  const deviceOnline = envelope?.online === true || Number(detail?.device?.status ?? detail?.status) === 1
+  // 状态推导：离线 > 故障（fault_code 非 0）> 待机（work_state=0 或整机无功率）> 正常
+  const state: SystemState = (() => {
+    if (!deviceOnline || !envelope?.online) return 'offline'
+    if (fresh && m.faultCode != null && m.faultCode !== 0) return 'fault'
+    if (fresh && m.workState === 0) return 'standby'
+    if (fresh && m.pvPower <= 0 && Math.abs(m.battPower) <= 5 && m.loadPower <= 0) return 'standby'
+    return 'normal'
+  })()
+
+  const stateCfg: Record<SystemState, { label: string; color: string; icon: React.ReactNode; desc: string }> = {
+    normal: { label: t('deviceDetail.state.normal'), color: '#00E676', icon: <CheckCircleFilled />, desc: t('deviceDetail.state.normalDesc') },
+    fault: { label: t('deviceDetail.state.fault'), color: '#ff4d4f', icon: <CloseCircleFilled />, desc: t('deviceDetail.state.faultDesc') },
+    standby: { label: t('deviceDetail.state.standby'), color: '#00D4FF', icon: <ClockCircleFilled />, desc: t('deviceDetail.state.standbyDesc') },
+    offline: { label: t('deviceDetail.state.offline'), color: '#9ca3af', icon: <DisconnectOutlined />, desc: t('deviceDetail.state.offlineDesc') },
+  }
+  const cfg = stateCfg[state]
+
+  const lastTs = parseRtTimestamp(envelope?.dataTime)
+
+  // work_state 数字 → 文案（0 待机 / 1 逆变 / 2 旁路 / 4 故障，未知值直接显示数字）
+  const workStateLabel = (() => {
+    if (!fresh || m.workState == null) return '--'
+    const key = `deviceDetail.state.workState.${m.workState}`
+    const translated = t(key)
+    return translated !== key ? translated : String(m.workState)
+  })()
+
+  // 状态位（V2 位掩码优先，V1 功率推导兜底），仅数据新鲜时展示
+  const bits = fresh ? getSysBits(m) : null
+  const hasWarning = fresh && m.warning != null && m.warning !== 0
+  const hasBmsWarning = fresh && m.bmsWarning != null && m.bmsWarning !== 0
+
+  // 历史告警按日期分组（时间线展示，组内按时间倒序）
+  const groupedAlarms = useMemo(() => {
+    const map = new Map<string, DeviceAlarm[]>()
+    for (const a of alarmRes?.items ?? []) {
+      const raw = a.occurred_at ?? a.created_at
+      const day = raw ? dayjs(raw).format('YYYY-MM-DD') : '--'
+      if (!map.has(day)) map.set(day, [])
+      map.get(day)!.push(a)
+    }
+    return [...map.entries()]
+  }, [alarmRes])
+
+  const renderAlarmRow = (r: DeviceAlarm) => {
+    const time = r.occurred_at || r.created_at
+    const level = getAlarmLevelDisplay(r.fault_code, r.alarm_level)
+    const msgKey = getAlarmMessageI18nKey(r.fault_code)
+    const message = msgKey ? t(msgKey) : (r.fault_message || `#${r.fault_code ?? '-'}`)
+    const s = Number(r.status ?? 0)
+    const statusTag = s === 0
+      ? <Tag color="#ff4d4f">{t('alert.unprocessed')}</Tag>
+      : r.recovered_at
+        ? <Tag color="#52c41a">{t('deviceDetail.state.recovered')}</Tag>
+        : s === 2
+          ? <Tag color="#d9d9d9">{t('alert.ignored')}</Tag>
+          : <Tag color="#52c41a">{t('alert.processed')}</Tag>
+    return (
+      <div
+        key={r.id}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          padding: '10px 16px', background: '#fff', borderRadius: 10,
+          boxShadow: '0 1px 3px rgba(0,0,0,0.04)', marginBottom: 8,
+        }}
+      >
+        <Text type="secondary" style={{ fontSize: 12, flexShrink: 0, width: 60 }}>
+          {time ? formatInTimezone(time, timezone, 'HH:mm:ss') : '--'}
+        </Text>
+        <Tag color={level.color} style={{ flexShrink: 0 }}>{level.i18nKey ? t(level.i18nKey) : level.label}</Tag>
+        <Text style={{ flex: 1, fontSize: 13 }} ellipsis>{message}</Text>
+        {statusTag}
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {(rtError || alarmError) && (
+        <QueryErrorAlert
+          error={rtError || alarmError}
+          onRetry={() => { void (rtError ? refetchRt() : refetchAlarms()) }}
+        />
+      )}
+
+      {/* ── 系统状态大卡片 ── */}
+      <ProCard style={{ borderRadius: 12, background: '#111827', boxShadow: CARD_SHADOW }} bodyStyle={{ padding: '28px 32px' }}>
+        <Row align="middle" gutter={24} wrap={false}>
+          <Col>
+            <div style={{
+              width: 72, height: 72, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: `${cfg.color}22`, border: `2px solid ${cfg.color}`, fontSize: 34, color: cfg.color,
+            }}>
+              {cfg.icon}
+            </div>
+          </Col>
+          <Col flex={1}>
+            <div style={{ fontSize: 26, fontWeight: 700, color: '#fff' }}>
+              {cfg.label}
+              <span style={{
+                display: 'inline-block', width: 10, height: 10, borderRadius: '50%',
+                background: cfg.color, marginLeft: 12, verticalAlign: 'middle',
+                boxShadow: `0 0 8px ${cfg.color}`,
+              }} />
+            </div>
+            <div style={{ color: '#9ca3af', fontSize: 13, marginTop: 4 }}>{cfg.desc}</div>
+          </Col>
+          <Col>
+            <Row gutter={[28, 8]}>
+              <Col>
+                <Text style={{ color: '#9ca3af', fontSize: 12, display: 'block' }}>{t('deviceDetail.state.workState')}</Text>
+                <Text style={{ color: '#fff', fontWeight: 600 }}>{workStateLabel}</Text>
+              </Col>
+              <Col>
+                <Text style={{ color: '#9ca3af', fontSize: 12, display: 'block' }}>{t('deviceDetail.state.faultCode')}</Text>
+                <Text style={{ color: fresh && m.faultCode ? '#ff4d4f' : '#fff', fontWeight: 600 }}>
+                  {fresh && m.faultCode != null ? m.faultCode : '--'}
+                </Text>
+              </Col>
+              {hasWarning && (
+                <Col>
+                  <Text style={{ color: '#9ca3af', fontSize: 12, display: 'block' }}>{t('deviceDetail.state.warning')}</Text>
+                  <Text style={{ color: '#ff4d4f', fontWeight: 600 }}>0x{(m.warning ?? 0).toString(16).toUpperCase()}</Text>
+                </Col>
+              )}
+              {hasBmsWarning && (
+                <Col>
+                  <Text style={{ color: '#9ca3af', fontSize: 12, display: 'block' }}>{t('deviceDetail.state.bmsWarning')}</Text>
+                  <Text style={{ color: '#ff4d4f', fontWeight: 600 }}>0x{(m.bmsWarning ?? 0).toString(16).toUpperCase()}</Text>
+                </Col>
+              )}
+              <Col>
+                <Text style={{ color: '#9ca3af', fontSize: 12, display: 'block' }}>{t('deviceDetail.state.lastDataTime')}</Text>
+                <Text style={{ color: '#fff', fontWeight: 600 }}>
+                  {Number.isFinite(lastTs) ? formatInTimezone(new Date(lastTs).toISOString(), timezone, 'HH:mm:ss') : '--'}
+                </Text>
+              </Col>
+            </Row>
+          </Col>
+        </Row>
+      </ProCard>
+
+      {/* ── 12 位状态位网格（数据新鲜时展示）── */}
+      {bits && (
+        <ProCard
+          style={{ borderRadius: 12, boxShadow: CARD_SHADOW }}
+          title={<span style={{ fontWeight: 600 }}>{t('deviceDetail.state.statusBitsTitle')}</span>}
+          size="small"
+        >
+          <SysStatusBitsPanel bits={bits} />
+        </ProCard>
+      )}
+
+      {/* ── 历史告警时间线（按日期分组）── */}
+      <ProCard
+        style={{ borderRadius: 12, boxShadow: CARD_SHADOW }}
+        title={<span style={{ fontWeight: 600 }}><AlertOutlined style={{ color: '#ff4d4f', marginRight: 6 }} />{t('deviceDetail.state.alarmHistory')}</span>}
+        size="small"
+        loading={alarmLoading}
+      >
+        {groupedAlarms.length === 0 ? (
+          <Empty description={t('deviceDetail.state.noAlarms')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        ) : (
+          <>
+            {groupedAlarms.map(([day, items]) => (
+              <div key={day} style={{ marginBottom: 14 }}>
+                <div style={{
+                  display: 'inline-block', padding: '2px 10px', borderRadius: 6,
+                  background: '#f3f4f6', color: '#6b7280', fontSize: 12, fontWeight: 600, marginBottom: 8,
+                }}>
+                  {day}
+                </div>
+                {items.map(renderAlarmRow)}
+              </div>
+            ))}
+            <div style={{ textAlign: 'right', marginTop: 8 }}>
+              <Pagination
+                current={page}
+                pageSize={pageSize}
+                total={alarmRes?.total ?? 0}
+                showSizeChanger
+                onChange={(p, ps) => { setPage(p); setPageSize(ps) }}
+              />
+            </div>
+          </>
+        )}
+      </ProCard>
+    </div>
+  )
+}
+
+export default StateCenterTab

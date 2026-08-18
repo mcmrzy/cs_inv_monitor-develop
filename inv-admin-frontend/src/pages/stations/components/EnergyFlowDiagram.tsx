@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import useTranslation from '@/hooks/useTranslation';
+import type { SysStatusBits } from '@/pages/device-detail/energyUtils';
 
 interface EnergyFlowDiagramProps {
   pvPower: number;
@@ -9,6 +10,9 @@ interface EnergyFlowDiagramProps {
   battSoc: number;
   // 发电机功率（可选：CS-L10-6K2 等带发电机输入的型号上报时有值，否则路径隐藏）
   genPower?: number;
+  // sys_status 12 位状态位（可选，V2 设备）：传入时流动动画由状态位驱动；
+  // 未传入时维持原功率正负驱动逻辑（电站页等现有调用方零改动）
+  sysBits?: SysStatusBits | null;
 }
 
 interface FlowEdge {
@@ -68,16 +72,22 @@ function computeFlowEdges(
   battPower: number,
   gridPower: number,
   genPower = 0,
+  sysBits?: SysStatusBits | null,
 ): FlowEdge[] {
   const edges: FlowEdge[] = [];
+  // 位驱动安全阈值：位为 true 但对应功率≈ 0 时不点亮动画（防位残留误动画）
+  const MIN_FLOW_W = 5;
+  // 位驱动：bit 且功率超阈值；无 bits 时保持原功率正负判定（>0）
+  const bitOn = (bit: boolean | undefined, power: number) =>
+    sysBits ? Boolean(bit) && power > MIN_FLOW_W : power > 0;
 
   // 0. Generator → Inverter (curve, upper-left) — only when gen power data exists
-  if (genPower > 0) {
+  if (genPower > 0 || sysBits?.geInput) {
     edges.push({
       id: 'gen-inv',
       path: 'M 150 135 C 150 225, 200 240, 250 240',
       color: NODE_COLORS.gen,
-      active: genPower > 0,
+      active: bitOn(sysBits?.geInput ?? genPower > 0, genPower),
       power: genPower,
       markerId: 'arrow-gen',
     });
@@ -88,7 +98,7 @@ function computeFlowEdges(
     id: 'pv-inv',
     path: 'M 300 135 L 300 225',
     color: NODE_COLORS.pv,
-    active: pvPower > 0,
+    active: bitOn(sysBits?.pvInput ?? pvPower > 0, pvPower),
     power: pvPower,
     markerId: 'arrow-pv',
     noArrows: true, // 禁用末端静态大箭头，保留流动动画
@@ -99,7 +109,7 @@ function computeFlowEdges(
     id: 'inv-load',
     path: 'M 300 325 L 300 415',
     color: NODE_COLORS.inverter,
-    active: loadPower > 0,
+    active: bitOn(sysBits?.toLoad ?? loadPower > 0, loadPower),
     power: loadPower,
     markerId: 'arrow-inv',
   });
@@ -109,18 +119,19 @@ function computeFlowEdges(
     id: 'inv-batt',
     path: 'M 250 265 L 130 265',
     color: NODE_COLORS.battery,
-    active: battPower > 0,
+    active: bitOn(sysBits?.charge ?? battPower > 0, battPower > 0 ? battPower : 0),
     power: battPower > 0 ? battPower : 0,
     markerId: 'arrow-batt',
   });
 
   // 4. Battery → Inverter (curve, left-lower) — discharging via inverter
+  const disW = battPower < 0 ? Math.abs(battPower) : 0;
   edges.push({
     id: 'batt-inv',
     path: 'M 130 285 L 250 285',
     color: NODE_COLORS.battery,
-    active: battPower < 0,
-    power: battPower < 0 ? Math.abs(battPower) : 0,
+    active: bitOn(sysBits?.discharge ?? battPower < 0, disW),
+    power: disW,
     markerId: 'arrow-batt',
   });
 
@@ -129,17 +140,18 @@ function computeFlowEdges(
     id: 'grid-inv',
     path: 'M 470 265 L 350 265',
     color: NODE_COLORS.grid,
-    active: gridPower > 0,
-    power: gridPower,
+    active: bitOn(sysBits?.acInput ?? gridPower > 0, gridPower > 0 ? gridPower : 0),
+    power: gridPower > 0 ? gridPower : 0,
     markerId: 'arrow-grid',
   });
 
   // 6. Inverter → Grid (straight, center to right) — feeding
+  // 无专用状态位（协议未定义馈电位），始终按功率方向驱动
   edges.push({
     id: 'inv-grid',
     path: 'M 350 285 L 470 285',
     color: NODE_COLORS.inverter,
-    active: gridPower < 0,
+    active: gridPower < 0 && Math.abs(gridPower) > 0,
     power: gridPower < 0 ? Math.abs(gridPower) : 0,
     markerId: 'arrow-inv',
   });
@@ -399,13 +411,14 @@ const EnergyFlowDiagram: React.FC<EnergyFlowDiagramProps> = ({
   gridPower,
   battSoc,
   genPower = 0,
+  sysBits = null,
 }) => {
   const { t } = useTranslation();
   const NODES = useMemo(() => getNodes(t), [t]);
 
   const edges = useMemo(
-    () => computeFlowEdges(pvPower, loadPower, battPower, gridPower, genPower),
-    [pvPower, loadPower, battPower, gridPower, genPower],
+    () => computeFlowEdges(pvPower, loadPower, battPower, gridPower, genPower, sysBits),
+    [pvPower, loadPower, battPower, gridPower, genPower, sysBits],
   );
 
   const markerDefs = useMemo(

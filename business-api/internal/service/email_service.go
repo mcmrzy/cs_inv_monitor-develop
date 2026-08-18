@@ -1,18 +1,16 @@
 package service
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/tls"
 	"fmt"
-	"html/template"
 	"math/big"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"inv-api-server/internal/config"
+	"inv-api-server/internal/repository"
 	"inv-api-server/pkg/logger"
 
 	"github.com/redis/go-redis/v9"
@@ -20,17 +18,118 @@ import (
 	"gopkg.in/gomail.v2"
 )
 
+// EmailService 邮件发送服务。
+// 所有系统邮件统一走「品牌信封 + 类型内容块」渲染（见 email_templates.go）：
+// 渲染时优先读取 email_templates 表内的库内模板，读取失败/模板损坏时
+// 自动回退内置默认模板，保证不因模板问题导致发信失败。
 type EmailService struct {
-	cache       *redis.Client
-	cfg         config.EmailConfig
-	cfgSvc      *ConfigService
-	frontendURL string
+	cache        *redis.Client
+	cfg          config.EmailConfig
+	cfgSvc       *ConfigService
+	frontendURL  string
+	templateRepo *repository.EmailTemplateRepository
 }
 
-func NewEmailService(cache *redis.Client, cfg config.EmailConfig, cfgSvc *ConfigService, frontendURL string) *EmailService {
-	return &EmailService{cache: cache, cfg: cfg, cfgSvc: cfgSvc, frontendURL: frontendURL}
+func NewEmailService(cache *redis.Client, cfg config.EmailConfig, cfgSvc *ConfigService, frontendURL string, templateRepo *repository.EmailTemplateRepository) *EmailService {
+	return &EmailService{cache: cache, cfg: cfg, cfgSvc: cfgSvc, frontendURL: frontendURL, templateRepo: templateRepo}
 }
 
+// effectiveEmailConfig 获取生效的 SMTP 配置（优先运行时配置，回退启动配置）。
+func (s *EmailService) effectiveEmailConfig(ctx context.Context) config.EmailConfig {
+	if s.cfgSvc != nil {
+		return s.cfgSvc.GetEmailConfig(ctx)
+	}
+	return s.cfg
+}
+
+// isDevEmailConfig 未配置 SMTP 时视为开发模式（只记日志不实际发信）。
+func isDevEmailConfig(cfg config.EmailConfig) bool {
+	return cfg.Host == "" || cfg.Host == "smtp.example.com"
+}
+
+// validateSMTPConfig 校验 SMTP 认证信息完整性。
+func validateSMTPConfig(cfg config.EmailConfig) error {
+	if cfg.Username == "" || cfg.Password == "" || cfg.From == "" {
+		logger.Error("SMTP配置不完整",
+			zap.String("host", cfg.Host),
+			zap.Bool("username_empty", cfg.Username == ""),
+			zap.Bool("password_empty", cfg.Password == ""),
+			zap.Bool("from_empty", cfg.From == ""))
+		return fmt.Errorf("邮件服务配置错误：SMTP认证信息不完整")
+	}
+	return nil
+}
+
+// RenderEmail 渲染指定类型邮件的主题与完整 HTML。
+// 库内模板优先，缺失/禁用/损坏时回退内置默认模板。
+func (s *EmailService) RenderEmail(ctx context.Context, templateKey string, vars map[string]interface{}) (subject, html string, err error) {
+	var tplSubject, tplBody string
+	if s.templateRepo != nil {
+		tpl, rerr := s.templateRepo.Get(ctx, templateKey)
+		if rerr != nil {
+			logger.Warn("读取库内邮件模板失败，回退内置默认模板",
+				zap.String("template_key", templateKey), zap.Error(rerr))
+		} else if tpl != nil && tpl.Enabled {
+			tplSubject, tplBody = tpl.Subject, tpl.HTMLBody
+		}
+	}
+
+	subject, body, err := renderEmailParts(templateKey, tplSubject, tplBody, vars)
+	if err != nil {
+		return "", "", fmt.Errorf("渲染邮件 %s: %w", templateKey, err)
+	}
+
+	vars = normalizeEmailVars(vars)
+	html, err = RenderEmailEnvelope(asString(vars["Title"]), body, asString(vars["FooterNote"]))
+	if err != nil {
+		return "", "", fmt.Errorf("渲染邮件信封 %s: %w", templateKey, err)
+	}
+	return subject, html, nil
+}
+
+// renderAndSend 统一发送入口：渲染 + SMTP 发送。
+// dev 模式（未配置 SMTP）下仅记录日志并返回 nil，保持原有降级语义。
+func (s *EmailService) renderAndSend(ctx context.Context, templateKey, to string, vars map[string]interface{}) error {
+	emailCfg := s.effectiveEmailConfig(ctx)
+	if isDevEmailConfig(emailCfg) {
+		logger.Warn("Email service not properly configured, skipping email",
+			zap.String("template_key", templateKey))
+		return nil
+	}
+	if err := validateSMTPConfig(emailCfg); err != nil {
+		return err
+	}
+
+	subject, html, err := s.RenderEmail(ctx, templateKey, vars)
+	if err != nil {
+		return fmt.Errorf("渲染邮件失败: %w", err)
+	}
+	if err := s.sendHTML(to, subject, html, emailCfg); err != nil {
+		return fmt.Errorf("邮件发送失败: %w", err)
+	}
+	return nil
+}
+
+// sendHTML 通过 SMTP 发送一封 HTML 邮件。
+func (s *EmailService) sendHTML(to, subject, html string, cfg config.EmailConfig) error {
+	m := gomail.NewMessage()
+	m.SetHeader("From", cfg.From)
+	m.SetHeader("To", to)
+	m.SetHeader("Subject", subject)
+	m.SetBody("text/html", html)
+
+	d := gomail.NewDialer(cfg.Host, cfg.Port, cfg.Username, cfg.Password)
+	if cfg.UseSSL {
+		d.SSL = true
+		d.TLSConfig = &tls.Config{
+			ServerName: cfg.Host,
+		}
+	}
+
+	return d.DialAndSend(m)
+}
+
+// SendCode 发送验证码邮件（注册/重置密码等），验证码在邮件中大字号突出显示。
 func (s *EmailService) SendCode(ctx context.Context, email, codeType string) error {
 	key := fmt.Sprintf("email:%s:%s", email, codeType)
 	cooldownKey := fmt.Sprintf("email:%s:%s:cooldown", email, codeType)
@@ -47,29 +146,19 @@ func (s *EmailService) SendCode(ctx context.Context, email, codeType string) err
 
 	code := generateEmailCode(6)
 
-	emailCfg := s.cfg
-	if s.cfgSvc != nil {
-		emailCfg = s.cfgSvc.GetEmailConfig(ctx)
-	}
-
-	if emailCfg.Host != "" && emailCfg.Host != "smtp.example.com" {
-		// 验证SMTP配置完整性
-		if emailCfg.Username == "" || emailCfg.Password == "" || emailCfg.From == "" {
-			logger.Error("SMTP配置不完整",
-				zap.String("host", emailCfg.Host),
-				zap.Bool("username_empty", emailCfg.Username == ""),
-				zap.Bool("password_empty", emailCfg.Password == ""),
-				zap.Bool("from_empty", emailCfg.From == ""))
-			return fmt.Errorf("邮件服务配置错误：SMTP认证信息不完整")
+	emailCfg := s.effectiveEmailConfig(ctx)
+	if !isDevEmailConfig(emailCfg) {
+		title := getSubjectByCodeType(codeType)
+		vars := map[string]interface{}{
+			"ToEmail":    email,
+			"Code":       code,
+			"Title":      title,
+			"Summary":    "感谢您使用 CS-INV 光伏逆变器监控平台，请使用以下验证码完成账户验证：",
+			"Content":    "",
+			"FooterNote": "如果非本人操作，请忽略此邮件，您的账号依然安全。",
 		}
-		// Use template for better formatting
-		data := map[string]string{
-			"ToEmail": email,
-			"Code":    code,
-			"Subject": getSubjectByCodeType(codeType),
-		}
-		if err := s.sendMailWithTemplate(email, data, "verification_code.tmpl", data["Subject"], emailCfg); err != nil {
-			return fmt.Errorf("邮件发送失败：%v", err)
+		if err := s.renderAndSend(ctx, EmailTemplateKeyVerification, email, vars); err != nil {
+			return fmt.Errorf("邮件发送失败：%w", err)
 		}
 	} else {
 		logger.Debug("Email code generated (dev mode)", zap.String("email", maskEmail(email)), zap.String("type", codeType))
@@ -111,286 +200,6 @@ func (s *EmailService) VerifyCode(ctx context.Context, email, code, codeType str
 	return false
 }
 
-func (s *EmailService) sendMail(to, code, codeType string, cfg config.EmailConfig) error {
-	m := gomail.NewMessage()
-	m.SetHeader("From", cfg.From)
-	m.SetHeader("To", to)
-
-	subject := "验证码"
-	switch codeType {
-	case "register":
-		subject = "注册验证码"
-	case "reset_password":
-		subject = "重置密码验证码"
-	}
-
-	m.SetHeader("Subject", subject)
-	m.SetBody("text/html", fmt.Sprintf(`
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
-    <title>CSERGY 验证码</title>
-</head>
-<body style="margin:0; padding:0; background-color:#EFF2F7; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif;">
-    <div style="max-width:520px; margin:30px auto; padding:20px 16px;">
-        <!-- 主卡片：圆角+阴影+微光边框 -->
-        <div style="background:#FFFFFF; border-radius:32px; box-shadow:0 25px 45px -12px rgba(0,0,0,0.15), 0 2px 6px rgba(0,0,0,0.02); overflow:hidden; transition: all 0.2s;">
-            
-            <!-- 装饰条：科技蓝渐变光效 -->
-            <div style="height:6px; background: linear-gradient(90deg, #1E88E5, #64B5F6, #90CAF9, #1E88E5); background-size: 200%% auto;"></div>
-            
-            <!-- 内边距区域 -->
-            <div style="padding: 36px 32px 44px 32px;">
-                
-                <!-- 品牌区 + 太阳能标识 -->
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap;">
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <span style="font-size: 28px;">☀️</span>
-                        <span style="font-weight: 600; font-size: 20px; color: #1F2A3E; letter-spacing: 0.5px;">CSERGY</span>
-                        <span style="background:#EFF2F9; padding:4px 12px; border-radius:40px; font-size: 12px; font-weight:500; color:#1E88E5; margin-left:6px;">智慧能源</span>
-                    </div>
-                    <div style="display: flex; gap: 8px; margin-top: 8px;">
-                        <span style="font-size: 20px;">⚡</span>
-                        <span style="font-size: 20px;">🔋</span>
-                    </div>
-                </div>
-                
-                <!-- 动态标题 (subject) -->
-                <h2 style="font-size: 26px; font-weight: 700; color: #0A1C2F; margin: 12px 0 8px 0; letter-spacing: -0.3px;">%s</h2>
-                
-                <!-- 温馨分隔文字 -->
-                <div style="height: 2px; width: 60px; background: linear-gradient(90deg, #1E88E5, #B0D4FF); margin: 12px 0 20px 0; border-radius: 4px;"></div>
-                
-                <!-- 正文描述 -->
-                <p style="font-size: 16px; line-height: 1.5; color: #3E4A5E; margin: 0 0 16px 0; font-weight: 400;">
-                    感谢您注册<span style="font-weight:600; color:#1E88E5;"> CSERGY光伏逆变器智能监控APP</span>，请使用以下验证码完成账户验证：
-                </p>
-                
-                <!-- 验证码展示区：高端光晕 + 等宽字体 -->
-                <div style="background: linear-gradient(135deg, #F0F7FF 0%%, #FFFFFF 100%%); border-radius: 24px; padding: 24px 20px; margin: 28px 0 20px 0; text-align: center; border: 1px solid rgba(30,136,229,0.2); box-shadow: inset 0 1px 2px rgba(0,0,0,0.02), 0 6px 12px -6px rgba(30,136,229,0.12);">
-                    <div style="letter-spacing: 6px; font-size: 46px; font-weight: 800; font-family: 'SF Mono', 'JetBrains Mono', 'Fira Code', monospace; color: #1363B3; background: #FFFFFF; display: inline-block; padding: 8px 24px; border-radius: 60px; box-shadow: 0 2px 8px rgba(0,0,0,0.03);">
-                        %s
-                    </div>
-                </div>
-                
-                <!-- 安全提示卡片 -->
-                <div style="background: #F8F9FC; border-radius: 20px; padding: 16px 20px; margin: 16px 0 24px 0; border-left: 4px solid #1E88E5;">
-                    <p style="margin: 0 0 6px 0; font-size: 14px; font-weight: 500; color: #1F2A3E;">
-                        🔐 安全性提示
-                    </p>
-                    <p style="margin: 0; font-size: 14px; color: #5B6A84; line-height: 1.4;">
-                        验证码<span style="font-weight:600;"> 5分钟 </span>内有效，请勿将验证码告知他人。<br>
-                        CSERGY工作人员<span style="font-weight:600;">绝不会</span>向您索要任何验证码。
-                    </p>
-                </div>
-                
-                <!-- 操作指引（轻微淡化辅助） -->
-                <div style="margin: 20px 0 10px 0; text-align: center;">
-                    <span style="font-size: 13px; color: #9AA6B9;">如果非本人操作，请忽略此邮件，您的账号依然安全。</span>
-                </div>
-                
-                <!-- 底部公司信息 + 光伏场景 -->
-                <div style="margin-top: 32px; padding-top: 20px; border-top: 1px solid #ECF0F5; text-align: center;">
-                    <div style="display: flex; justify-content: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap;">
-                        <span style="font-size: 13px; color: #7E8A9E;">© CSERGY · 智慧光伏解决方案</span>
-                        <span style="width:4px; height:4px; background:#C0CCDA; border-radius:50%%; display:inline-block;"></span>
-                        <span style="font-size: 13px; color: #7E8A9E;">让能源更智能</span>
-                    </div>
-                    <div style="font-size: 12px; color: #B7C1D2;">
-                        CSERGY | 清洁能源 · 高效逆变
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- 额外占位自然留白 -->
-        <div style="text-align: center; margin-top: 24px;">
-            <p style="font-size: 12px; color: #A6B1C6; margin: 0;">此邮件由CSERGY系统自动发出，请勿直接回复</p>
-        </div>
-    </div>
-</body>
-</html>
-`, subject, code))
-
-	d := gomail.NewDialer(cfg.Host, cfg.Port, cfg.Username, cfg.Password)
-	if cfg.UseSSL {
-		d.SSL = true
-		d.TLSConfig = &tls.Config{
-			ServerName: cfg.Host,
-		}
-	}
-
-	return d.DialAndSend(m)
-}
-
-// sendMailWithTemplate sends email using HTML templates
-func (s *EmailService) sendMailWithTemplate(to string, data map[string]string, templateName, subject string, cfg config.EmailConfig) error {
-	// Get the directory of this file
-	currentDir := "./internal/templates"
-	templatePath := filepath.Join(currentDir, templateName)
-
-	// Check if template exists, if not use inline fallback
-	tmpl, err := template.ParseFiles(templatePath)
-	if err != nil {
-		logger.Warn("Template file not found, using inline verification code template",
-			zap.String("template", templateName), zap.Error(err))
-		// Use inline template for verification code as fallback
-		if templateName == "verification_code.tmpl" {
-			return s.sendInlineVerificationCode(to, data["Code"], data["Subject"], cfg)
-		}
-		// For other templates, create a minimal fallback
-		tmpl = template.Must(template.New("fallback").Parse(s.getFallbackHTML(data)))
-	}
-
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
-		return fmt.Errorf("execute template: %w", err)
-	}
-
-	m := gomail.NewMessage()
-	m.SetHeader("From", cfg.From)
-	m.SetHeader("To", to)
-	m.SetHeader("Subject", subject)
-	m.SetBody("text/html", buf.String())
-
-	d := gomail.NewDialer(cfg.Host, cfg.Port, cfg.Username, cfg.Password)
-	if cfg.UseSSL {
-		d.SSL = true
-		d.TLSConfig = &tls.Config{
-			ServerName: cfg.Host,
-		}
-	}
-
-	return d.DialAndSend(m)
-}
-
-// sendInlineVerificationCode is the original inline method for verification codes
-func (s *EmailService) sendInlineVerificationCode(to, code, subject string, cfg config.EmailConfig) error {
-	m := gomail.NewMessage()
-	m.SetHeader("From", cfg.From)
-	m.SetHeader("To", to)
-	m.SetHeader("Subject", subject)
-	m.SetBody("text/html", fmt.Sprintf(`
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
-    <title>CSERGY 验证码</title>
-</head>
-<body style="margin:0; padding:0; background-color:#EFF2F7; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif;">
-    <div style="max-width:520px; margin:30px auto; padding:20px 16px;">
-        <!-- 主卡片：圆角 + 阴影 + 微光边框 -->
-        <div style="background:#FFFFFF; border-radius:32px; box-shadow:0 25px 45px -12px rgba(0,0,0,0.15), 0 2px 6px rgba(0,0,0,0.02); overflow:hidden; transition: all 0.2s;">
-            
-            <!-- 装饰条：科技蓝渐变光效 -->
-            <div style="height:6px; background: linear-gradient(90deg, #1E88E5, #64B5F6, #90CAF9, #1E88E5); background-size: 200%% auto;"></div>
-            
-            <!-- 内边距区域 -->
-            <div style="padding: 36px 32px 44px 32px;">
-                
-                <!-- 品牌区 + 太阳能标识 -->
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap;">
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <span style="font-size: 28px;">☀️</span>
-                        <span style="font-weight: 600; font-size: 20px; color: #1F2A3E; letter-spacing: 0.5px;">CSERGY</span>
-                        <span style="background:#EFF2F9; padding:4px 12px; border-radius:40px; font-size: 12px; font-weight:500; color:#1E88E5; margin-left:6px;">智慧能源</span>
-                    </div>
-                    <div style="display: flex; gap: 8px; margin-top: 8px;">
-                        <span style="font-size: 20px;">⚡</span>
-                        <span style="font-size: 20px;">🔋</span>
-                    </div>
-                </div>
-                
-                <!-- 动态标题 (subject) -->
-                <h2 style="font-size: 26px; font-weight: 700; color: #0A1C2F; margin: 12px 0 8px 0; letter-spacing: -0.3px;">%s</h2>
-                
-                <!-- 温馨分隔文字 -->
-                <div style="height: 2px; width: 60px; background: linear-gradient(90deg, #1E88E5, #B0D4FF); margin: 12px 0 20px 0; border-radius: 4px;"></div>
-                
-                <!-- 正文描述 -->
-                <p style="font-size: 16px; line-height: 1.5; color: #3E4A5E; margin: 0 0 16px 0; font-weight: 400;">
-                    感谢您注册<span style="font-weight:600; color:#1E88E5;"> CSERGY 光伏逆变器智能监控 APP</span>，请使用以下验证码完成账户验证：
-                </p>
-                
-                <!-- 验证码展示区：高端光晕 + 等宽字体 -->
-                <div style="background: linear-gradient(135deg, #F0F7FF 0%%, #FFFFFF 100%%); border-radius: 24px; padding: 24px 20px; margin: 28px 0 20px 0; text-align: center; border: 1px solid rgba(30,136,229,0.2); box-shadow: inset 0 1px 2px rgba(0,0,0,0.02), 0 6px 12px -6px rgba(30,136,229,0.12);">
-                    <div style="letter-spacing: 6px; font-size: 46px; font-weight: 800; font-family: 'SF Mono', 'JetBrains Mono', 'Fira Code', monospace; color: #1363B3; background: #FFFFFF; display: inline-block; padding: 8px 24px; border-radius: 60px; box-shadow: 0 2px 8px rgba(0,0,0,0.03);">
-                        %s
-                    </div>
-                </div>
-                
-                <!-- 安全提示卡片 -->
-                <div style="background: #F8F9FC; border-radius: 20px; padding: 16px 20px; margin: 16px 0 24px 0; border-left: 4px solid #1E88E5;">
-                    <p style="margin: 0 0 6px 0; font-size: 14px; font-weight: 500; color: #1F2A3E;">
-                        🔐 安全性提示
-                    </p>
-                    <p style="margin: 0; font-size: 14px; color: #5B6A84; line-height: 1.4;">
-                        验证码<span style="font-weight:600;"> 5分钟 </span>内有效，请勿将验证码告知他人。<br>
-                        CSERGY 工作人员<span style="font-weight:600;">绝不会</span>向您索要任何验证码。
-                    </p>
-                </div>
-                
-                <!-- 操作指引（轻微淡化辅助） -->
-                <div style="margin: 20px 0 10px 0; text-align: center;">
-                    <span style="font-size: 13px; color: #9AA6B9;">如果非本人操作，请忽略此邮件，您的账号依然安全。</span>
-                </div>
-                
-                <!-- 底部公司信息 + 光伏场景 -->
-                <div style="margin-top: 32px; padding-top: 20px; border-top: 1px solid #ECF0F5; text-align: center;">
-                    <div style="display: flex; justify-content: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap;">
-                        <span style="font-size: 13px; color: #7E8A9E;">© CSERGY · 智慧光伏解决方案</span>
-                        <span style="width:4px; height:4px; background:#C0CCDA; border-radius:50%%; display:inline-block;"></span>
-                        <span style="font-size: 13px; color: #7E8A9E;">让能源更智能</span>
-                    </div>
-                    <div style="font-size: 12px; color: #B7C1D2;">
-                        CSERGY | 清洁能源 · 高效逆变
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- 额外占位自然留白 -->
-        <div style="text-align: center; margin-top: 24px;">
-            <p style="font-size: 12px; color: #A6B1C6; margin: 0;">此邮件由 CSERGY 系统自动发出，请勿直接回复</p>
-        </div>
-    </div>
-</body>
-</html>
-`, subject, code))
-
-	d := gomail.NewDialer(cfg.Host, cfg.Port, cfg.Username, cfg.Password)
-	if cfg.UseSSL {
-		d.SSL = true
-		d.TLSConfig = &tls.Config{
-			ServerName: cfg.Host,
-		}
-	}
-
-	return d.DialAndSend(m)
-}
-
-// getFallbackHTML provides a simple HTML fallback when template files are missing
-func (s *EmailService) getFallbackHTML(data map[string]string) string {
-	return fmt.Sprintf(`
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Email Notification</title>
-</head>
-<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-    <div style="background: #f9f9f9; padding: 20px; border-radius: 8px;">
-        <h2 style="color: #1E88E5;">Notification</h2>
-        <p>To: %s</p>
-        <p>Data: %v</p>
-    </div>
-</body>
-</html>`, data["ToEmail"], data)
-}
-
 func generateEmailCode(length int) string {
 	code := make([]byte, length)
 	for i := range code {
@@ -429,135 +238,134 @@ func maskEmail(email string) string {
 // SendInvitationEmail sends invitation emails to new users
 func (s *EmailService) SendInvitationEmail(toEmail, tokenHint, roleName, organizationName string, expiresHours int, senderName, invitePath string) error {
 	ctx := context.Background()
-	emailCfg := s.cfg
-	if s.cfgSvc != nil {
-		emailCfg = s.cfgSvc.GetEmailConfig(ctx)
-	}
-	if emailCfg.Host == "" || emailCfg.Host == "smtp.example.com" {
-		logger.Warn("Email service not properly configured, skipping invitation email")
-		return nil
-	}
-
-	data := map[string]string{
+	inviteURL := strings.TrimRight(s.frontendURL, "/") + invitePath
+	vars := map[string]interface{}{
 		"ToEmail":          toEmail,
 		"TokenHint":        tokenHint,
 		"RoleName":         roleName,
 		"OrganizationName": organizationName,
 		"ExpiresHours":     fmt.Sprintf("%d", expiresHours),
 		"SenderName":       senderName,
-		"CompanyName":      strings.Split(senderName, " ")[0], // Extract company name
-		"InviteURL":        strings.TrimRight(s.frontendURL, "/") + invitePath,
+		"CompanyName":      strings.Split(senderName, " ")[0],
+		"InviteURL":        inviteURL,
+		"Title":            "邀请加入组织",
+		"Summary":          fmt.Sprintf("%s 邀请您加入组织「%s」。", senderName, organizationName),
+		"Content":          fmt.Sprintf("分配角色：%s<br>邀请有效期：%d 小时<br>点击下方按钮即可接受邀请，注册或登录后自动加入该组织。", roleName, expiresHours),
+		"ButtonText":       "接受邀请",
+		"ButtonURL":        inviteURL,
+		"FooterNote":       "如果您并未发起此邀请，请忽略此邮件或联系管理员。",
 	}
-
-	return s.sendMailWithTemplate(toEmail, data, "invitation_email.tmpl", "【CSERGY】邀请加入组织 · "+organizationName, emailCfg)
+	return s.renderAndSend(ctx, EmailTemplateKeyInvitation, toEmail, vars)
 }
 
 // SendTransferNotification sends device transfer notification emails
 func (s *EmailService) SendTransferNotification(requesterEmail, deviceSN, fromOrg, toOrg, reason string, senderName string) error {
 	ctx := context.Background()
-	emailCfg := s.cfg
-	if s.cfgSvc != nil {
-		emailCfg = s.cfgSvc.GetEmailConfig(ctx)
-	}
-	if emailCfg.Host == "" || emailCfg.Host == "smtp.example.com" {
-		logger.Warn("Email service not properly configured, skipping transfer notification")
-		return nil
-	}
-
-	data := map[string]string{
+	actionURL := strings.TrimRight(s.frontendURL, "/") + "/organizations"
+	vars := map[string]interface{}{
 		"DeviceSN":   deviceSN,
 		"FromOrg":    fromOrg,
 		"ToOrg":      toOrg,
 		"Reason":     reason,
 		"SenderName": senderName,
-		"ActionURL":  strings.TrimRight(s.frontendURL, "/") + "/organizations",
+		"ActionURL":  actionURL,
+		"Title":      "设备转移通知",
+		"Summary":    fmt.Sprintf("操作人：%s", senderName),
+		"Content":    fmt.Sprintf("设备 SN：%s<br>转出组织：%s<br>转入组织：%s<br>转移原因：%s", deviceSN, fromOrg, toOrg, reason),
+		"ButtonText": "查看组织",
+		"ButtonURL":  actionURL,
+		"FooterNote": "如非本人操作，请尽快联系系统管理员。",
 	}
-
-	return s.sendMailWithTemplate("admin@example.com", data, "transfer_notification.tmpl", "设备转移通知", emailCfg)
+	return s.renderAndSend(ctx, EmailTemplateKeyTransfer, "admin@example.com", vars)
 }
 
 // SendWelcomeEmail sends welcome emails to new users
 func (s *EmailService) SendWelcomeEmail(toEmail, username string, senderName string) error {
 	ctx := context.Background()
-	emailCfg := s.cfg
-	if s.cfgSvc != nil {
-		emailCfg = s.cfgSvc.GetEmailConfig(ctx)
-	}
-	if emailCfg.Host == "" || emailCfg.Host == "smtp.example.com" {
-		logger.Warn("Email service not properly configured, skipping welcome email")
-		return nil
-	}
-
-	data := map[string]string{
+	homeURL := strings.TrimRight(s.frontendURL, "/")
+	vars := map[string]interface{}{
 		"ToEmail":    toEmail,
 		"Username":   username,
 		"SenderName": senderName,
+		"Title":      "欢迎加入 CS-INV",
+		"Summary":    fmt.Sprintf("您好，%s！", username),
+		"Content":    "您的账号已创建成功。CS-INV 光伏逆变器监控平台支持实时监控、告警通知、OTA 升级与工单管理，立即开始体验吧。",
+		"ButtonText": "进入平台",
+		"ButtonURL":  homeURL,
+		"FooterNote": "如果您并未注册此账号，请忽略此邮件。",
 	}
-
-	return s.sendMailWithTemplate(toEmail, data, "welcome_email.tmpl", "欢迎加入 CSERGY 平台", emailCfg)
+	return s.renderAndSend(ctx, EmailTemplateKeyWelcome, toEmail, vars)
 }
 
 // SendPasswordReset sends password reset emails
 func (s *EmailService) SendPasswordReset(token, username, userEmail string, senderName string) error {
 	ctx := context.Background()
-	emailCfg := s.cfg
-	if s.cfgSvc != nil {
-		emailCfg = s.cfgSvc.GetEmailConfig(ctx)
+	tokenDisplay := token
+	if len(tokenDisplay) > 8 {
+		tokenDisplay = tokenDisplay[:8] + "****" // Only show first 8 chars for security
 	}
-	if emailCfg.Host == "" || emailCfg.Host == "smtp.example.com" {
-		logger.Warn("Email service not properly configured, skipping password reset email")
-		return nil
-	}
-
-	data := map[string]string{
+	vars := map[string]interface{}{
 		"Username":   username,
-		"Token":      token[:8] + "****", // Only show first 8 chars for security
+		"Token":      tokenDisplay,
 		"ToEmail":    userEmail,
 		"SenderName": senderName,
+		"Title":      "重置密码",
+		"Summary":    fmt.Sprintf("您好，%s！", username),
+		"Content":    fmt.Sprintf("我们收到了您账号（%s）的密码重置请求。重置令牌：%s。请通过发起重置的页面继续操作。", userEmail, tokenDisplay),
+		"ButtonText": "",
+		"ButtonURL":  "",
+		"FooterNote": "如果非本人操作，请忽略此邮件并确认账号安全。",
 	}
-
-	return s.sendMailWithTemplate(userEmail, data, "password_reset.tmpl", "重置密码", emailCfg)
+	return s.renderAndSend(ctx, EmailTemplateKeyPasswordRst, userEmail, vars)
 }
 
-// SendNotificationEmail sends device alarm / online / offline notification emails
+// SendNotificationEmail sends device alarm / OTA / online / offline notification emails
 func (s *EmailService) SendNotificationEmail(toEmail, title, content, deviceSN string) error {
 	ctx := context.Background()
-	emailCfg := s.cfg
-	if s.cfgSvc != nil {
-		emailCfg = s.cfgSvc.GetEmailConfig(ctx)
-	}
-	if emailCfg.Host == "" || emailCfg.Host == "smtp.example.com" {
-		logger.Warn("Email service not properly configured, skipping notification email")
-		return nil
-	}
-
-	data := map[string]string{
+	vars := map[string]interface{}{
 		"ToEmail":  toEmail,
 		"Title":    title,
 		"Content":  content,
 		"DeviceSN": deviceSN,
+		"Summary":  "您可以在 App「通知中心」中查看详细记录。如不需要此类通知，可在 App「我的 - 消息通知设置」中关闭。",
 	}
-
-	return s.sendMailWithTemplate(toEmail, data, "notification_email.tmpl", "【CSERGY】"+title, emailCfg)
+	return s.renderAndSend(ctx, EmailTemplateKeyNotification, toEmail, vars)
 }
 
 // SendDailyReportEmail sends daily generation statistics report emails
 func (s *EmailService) SendDailyReportEmail(toEmail, username, content string) error {
 	ctx := context.Background()
-	emailCfg := s.cfg
-	if s.cfgSvc != nil {
-		emailCfg = s.cfgSvc.GetEmailConfig(ctx)
-	}
-	if emailCfg.Host == "" || emailCfg.Host == "smtp.example.com" {
-		logger.Warn("Email service not properly configured, skipping daily report email")
-		return nil
-	}
-
-	data := map[string]string{
+	vars := map[string]interface{}{
 		"ToEmail":  toEmail,
 		"Username": username,
 		"Content":  content,
+		"Title":    "每日发电统计报告",
+		"Summary":  fmt.Sprintf("您好，%s！以下是您昨日的发电统计摘要：", username),
+		"FooterNote": "报告数据来自设备上报记录，如有疑问请以 App 内数据为准。",
+	}
+	return s.renderAndSend(ctx, EmailTemplateKeyDailyReport, toEmail, vars)
+}
+
+// SendTestEmail 发送测试邮件（管理后台验证 SMTP 配置用），内容为通用模板示例。
+func (s *EmailService) SendTestEmail(ctx context.Context, to string) error {
+	emailCfg := s.effectiveEmailConfig(ctx)
+	if isDevEmailConfig(emailCfg) {
+		return fmt.Errorf("邮件服务未配置 SMTP，无法发送测试邮件")
+	}
+	if err := validateSMTPConfig(emailCfg); err != nil {
+		return err
 	}
 
-	return s.sendMailWithTemplate(toEmail, data, "daily_report.tmpl", "【CSERGY】每日发电统计报告", emailCfg)
+	vars := testEmailSampleVars()
+	vars["ButtonURL"] = strings.TrimRight(s.frontendURL, "/")
+	vars["ButtonText"] = "访问管理后台"
+
+	subject, html, err := s.RenderEmail(ctx, EmailTemplateKeyTest, vars)
+	if err != nil {
+		return fmt.Errorf("渲染测试邮件失败: %w", err)
+	}
+	if err := s.sendHTML(to, subject, html, emailCfg); err != nil {
+		return fmt.Errorf("测试邮件发送失败: %w", err)
+	}
+	return nil
 }

@@ -18,7 +18,6 @@ import { formatInTimezone } from '@/utils/timezone'
 import { safeNum } from '@/utils/format'
 import useTimezoneStore from '@/stores/timezoneStore'
 import useTranslation from '@/hooks/useTranslation'
-import useLocaleStore from '@/stores/localeStore'
 import EnergyFlowDiagram from './components/EnergyFlowDiagram'
 import SocialContribution from './components/SocialContribution'
 import StationStatisticsTab from './components/StationStatisticsTab'
@@ -84,6 +83,31 @@ const extractList = (res: any): any[] => {
   return d?.items ?? d?.list ?? []
 }
 
+/** 实时数据新鲜度窗口：后端 Redis 会在设备离线时回退到“最后有效数据”缓存，
+ *  陈旧数据不能当作实时值展示，需按在线状态 + 数据时间戳双重判断 */
+const REALTIME_FRESH_WINDOW_MS = 10 * 60 * 1000
+
+interface RtEnvelope {
+  online: boolean
+  dataTime: unknown
+  realtime: Record<string, any>
+}
+
+/** 解析数据时间戳（兼容秒/毫秒数字与字符串），无效返回 NaN */
+const parseRtTimestamp = (raw: unknown): number => {
+  if (raw == null || raw === '') return NaN
+  if (typeof raw === 'number') return raw > 1e12 ? raw : raw * 1000
+  return Date.parse(String(raw))
+}
+
+/** 判断设备实时数据是否可用：设备在线且数据时间戳未过期（无时间戳时退化为仅凭在线状态） */
+const isRealtimeFresh = (env?: RtEnvelope): env is RtEnvelope => {
+  if (!env || !env.online) return false
+  const ts = parseRtTimestamp(env.dataTime ?? env.realtime?.updated_at ?? env.realtime?.timestamp)
+  if (!Number.isFinite(ts)) return true
+  return Date.now() - ts <= REALTIME_FRESH_WINDOW_MS
+}
+
 const ENERGY_CARD_ICONS: Record<string, React.ReactNode> = {
   pv: (
     <div style={{ width: 48, height: 48, borderRadius: 12, background: '#3B82F615', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -111,7 +135,6 @@ const StationDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { t } = useTranslation()
-  const { lang } = useLocaleStore()
   const { timezone } = useTimezoneStore()
   const [activeTab, setActiveTab] = useState('overview')
   const [selectedDeviceSn, setSelectedDeviceSn] = useState<string>('all')
@@ -137,14 +160,18 @@ const StationDetailPage: React.FC = () => {
   const { data: realtimeData } = useQuery({
     queryKey: ['station-rt-overview', id],
     queryFn: async () => {
-      const results: Record<string, any> = {}
+      const results: Record<string, RtEnvelope> = {}
       await Promise.allSettled(
         devices.map(async (dev: any) => {
           try {
             const res = await deviceApi.getRealtime(dev.sn)
-            // API returns { code:0, data: { device_sn, online, realtime: {...flattened} } }
+            // API returns { code:0, data: { device_sn, data_time, online, realtime: {...flattened} } }
             const body = res.data?.data ?? res.data ?? {}
-            results[dev.sn] = body?.realtime ?? body
+            results[dev.sn] = {
+              online: body?.online === true,
+              dataTime: body?.data_time ?? null,
+              realtime: body?.realtime ?? body ?? {},
+            }
           } catch { /* ignore */ }
         })
       )
@@ -195,13 +222,14 @@ const StationDetailPage: React.FC = () => {
   // 从设备实时数据聚合能量值 + 实时功率（normalizeRealtimeData 展平后同时存在扁平和嵌套字段）
   // NOTE: useMemo 必须在条件早返回之前调用，否则违反 React Hooks 规则导致 #310 无限渲染
   const deviceEnergy = useMemo(() => {
-    // 根据 selectedDeviceSn 决定取单台设备还是聚合全部
+    // 根据 selectedDeviceSn 决定取单台设备还是聚合全部；
+    // 仅统计在线且数据未过期的设备，避免离线时展示 Redis 陈旧缓存值
     let rtList: any[] = []
     if (selectedDeviceSn === 'all') {
-      rtList = Object.values(realtimeData ?? {})
+      rtList = Object.values(realtimeData ?? {}).filter(isRealtimeFresh).map(env => env.realtime)
     } else {
-      const singleRt = realtimeData?.[selectedDeviceSn]
-      if (singleRt) rtList = [singleRt]
+      const singleEnv = realtimeData?.[selectedDeviceSn]
+      if (isRealtimeFresh(singleEnv)) rtList = [singleEnv.realtime]
     }
     if (rtList.length === 0) return null
     let dailyPv = 0, totalPv = 0
@@ -269,34 +297,43 @@ const StationDetailPage: React.FC = () => {
     ? (hasOnlineDevices ? 1 : (faultCount > 0 ? 2 : 0))
     : station.status
 
-  // 汇总实时功率（优先使用 deviceEnergy 聚合，回退到 station 级别字段）
-  const totalRealtimePower = (station.pv_power || 0) > 0
-    ? station.pv_power!
-    : (deviceEnergy?.pvPower ?? Object.values(realtimeData ?? {}).reduce((sum, rt) => {
-        const p = safeNum(rt?.total_active_power ?? rt?.ac_power ?? rt?.power ?? 0)
-        return sum + p
-      }, 0))
+  // 是否存在可用（在线且未过期）的实时数据；无则实时功率/能量流图不得展示陈旧缓存值
+  const hasFreshRealtime = !!deviceEnergy
+
+  // 汇总实时功率（station 级功率字段同样源自 Redis 缓存，仅在有新鲜实时数据时采信）
+  const totalRealtimePower = !hasFreshRealtime
+    ? 0
+    : (station.pv_power || 0) > 0
+      ? station.pv_power!
+      : (deviceEnergy?.pvPower ?? 0)
 
   // 汇总实时 PV 功率、负载功率、电池功率、电网功率（使用 deviceEnergy 聚合，回退到 station 级别）
-  const aggregatedPv = (station.pv_power || 0) > 0 ? station.pv_power! : (deviceEnergy?.pvPower ?? 0)
-  const aggregatedLoad = (station.load_power || 0) > 0 ? station.load_power! : (deviceEnergy?.loadPower ?? 0)
-  const aggregatedBatt = (station.batt_power || 0) !== 0 ? station.batt_power! : (deviceEnergy?.battPower ?? 0)
+  const aggregatedPv = !hasFreshRealtime ? 0 : ((station.pv_power || 0) > 0 ? station.pv_power! : (deviceEnergy?.pvPower ?? 0))
+  const aggregatedLoad = !hasFreshRealtime ? 0 : ((station.load_power || 0) > 0 ? station.load_power! : (deviceEnergy?.loadPower ?? 0))
+  const aggregatedBatt = !hasFreshRealtime ? 0 : ((station.batt_power || 0) !== 0 ? station.batt_power! : (deviceEnergy?.battPower ?? 0))
   // 电网功率：仅使用实际数据，不使用能量守恒公式计算（离网设备无电网数据）
-  const gridPowerRaw = (station.grid_power != null && station.grid_power !== 0)
-    ? station.grid_power
-    : (deviceEnergy?.gridPower ?? 0)
+  const gridPowerRaw = !hasFreshRealtime
+    ? 0
+    : (station.grid_power != null && station.grid_power !== 0)
+      ? station.grid_power
+      : (deviceEnergy?.gridPower ?? 0)
   const hasGridData = gridPowerRaw !== 0
   const aggregatedGrid = hasGridData ? gridPowerRaw : 0
   // 发电机功率：仅使用实际上报数据（无数据时能量流图隐藏发电机路径）
   const aggregatedGen = deviceEnergy?.genPower ?? 0
   const avgSoc = (() => {
+    if (!hasFreshRealtime) return 0
     const stationSoc = station.batt_soc || 0
     if (stationSoc > 0) return stationSoc
     return deviceEnergy?.battSoc ?? 0
   })()
 
-  // 从第一台设备实时数据中提取 PV1/PV2 分路、电池电压/电流（兼容扁平与嵌套字段）
-  const firstDeviceRt = (devices.length > 0 ? (realtimeData?.[devices[0]?.sn] || {}) : Object.values(realtimeData ?? {})[0] || {}) as any
+  // 从第一台「在线且数据未过期」的设备实时数据中提取 PV1/PV2 分路、电池电压/电流（兼容扁平与嵌套字段）
+  const freshEnvs = Object.entries(realtimeData ?? {}).filter(([, env]) => isRealtimeFresh(env))
+  const firstFreshEnv = (devices.length > 0
+    ? (freshEnvs.find(([sn]) => sn === devices[0]?.sn)?.[1] ?? freshEnvs[0]?.[1])
+    : freshEnvs[0]?.[1])
+  const firstDeviceRt = (firstFreshEnv?.realtime ?? {}) as any
   const pvPower1 = safeNum(firstDeviceRt?.pv1_power ?? firstDeviceRt?.pv?.pv1_power)
   const pvVoltage1 = safeNum(firstDeviceRt?.pv1_voltage ?? firstDeviceRt?.pv?.pv1_voltage)
   const pvPower2 = safeNum(firstDeviceRt?.pv2_power ?? firstDeviceRt?.pv?.pv2_power)
@@ -307,8 +344,15 @@ const StationDetailPage: React.FC = () => {
   const gridVoltage = safeNum(firstDeviceRt?.meter_voltage ?? firstDeviceRt?.grid_voltage)
   const gridFreq = safeNum(firstDeviceRt?.meter_frequency ?? firstDeviceRt?.grid_frequency)
 
-  // 最后更新时间
-  const lastUpdateTime = realtimeData ? new Date().toLocaleTimeString(lang === 'zh' ? 'zh-CN' : 'en-US', { hour: '2-digit', minute: '2-digit' }) : '--'
+  // 最后更新时间：取在线设备上报数据的最新时间戳（而非本地时钟），离线时显示 '--'
+  const lastUpdateTime = (() => {
+    const stamps = Object.values(realtimeData ?? {})
+      .filter(isRealtimeFresh)
+      .map(env => parseRtTimestamp(env.dataTime ?? env.realtime?.updated_at ?? env.realtime?.timestamp))
+      .filter(ts => Number.isFinite(ts))
+    if (stamps.length === 0) return '--'
+    return formatInTimezone(new Date(Math.max(...stamps)).toISOString(), timezone, 'HH:mm')
+  })()
 
   // 4宫格能量卡片数据
   const energyCards: Array<{
@@ -447,7 +491,7 @@ const StationDetailPage: React.FC = () => {
               ]}
             />
           } size="small">
-            {hasOnlineDevices || (deviceEnergy && (deviceEnergy.pvPower > 0 || deviceEnergy.loadPower > 0)) ? (
+            {hasFreshRealtime ? (
               <EnergyFlowDiagram
                 pvPower={aggregatedPv}
                 loadPower={aggregatedLoad}

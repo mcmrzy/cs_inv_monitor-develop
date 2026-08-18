@@ -62,7 +62,10 @@ func workOrderDataScope(alias string, isSystemAdmin bool, userArg int) string {
 	if isSystemAdmin {
 		// 系统管理员可见全部工单；仍需引用 $N 占位符，
 		// 否则 PostgreSQL 会报 "there is no parameter $N"（参数按位置绑定）。
-		return "TRUE OR " + alias + ".creator_id=" + userParam
+		// 必须整体加括号：该片段会与外部 AND 条件拼接，若不加括号，
+		// 由于 AND 优先级高于 OR，会退化成 "(原条件) OR creator_id=$N"，
+		// 导致 Update/Delete/Escalate 误伤当前用户创建的全部工单。
+		return "(TRUE OR " + alias + ".creator_id=" + userParam + ")"
 	}
 	return "(" + alias + ".creator_id=" + userParam + " OR " + alias + ".assigned_to=" + userParam + ")"
 }

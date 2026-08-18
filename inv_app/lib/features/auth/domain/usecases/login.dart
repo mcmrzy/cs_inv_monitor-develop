@@ -48,8 +48,13 @@ class SendCodeUseCase {
   Future<Either<Failure, void>> call({
     required String phone,
     required String type,
+    String? captchaToken,
   }) {
-    return repository.sendCode(phone: phone, type: type);
+    return repository.sendCode(
+      phone: phone,
+      type: type,
+      captchaToken: captchaToken,
+    );
   }
 }
 
@@ -166,8 +171,13 @@ class SendEmailCodeUseCase {
   Future<Either<Failure, void>> call({
     required String email,
     required String type,
+    String? captchaToken,
   }) {
-    return repository.sendEmailCode(email: email, type: type);
+    return repository.sendEmailCode(
+      email: email,
+      type: type,
+      captchaToken: captchaToken,
+    );
   }
 }
 

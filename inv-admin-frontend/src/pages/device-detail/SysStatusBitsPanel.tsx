@@ -1,0 +1,73 @@
+/**
+ * SysStatus 12 位状态徽标网格
+ *
+ * 展示 CS-L10-6K2 V2.1 协议 sys_status 位掩码的展开状态：
+ * 激活位用语义色高亮，未激活灰色。供状态中心 / 实时数据页复用。
+ */
+import { Row, Col, Tag } from 'antd'
+import {
+  PoweroffOutlined, CloseCircleOutlined, LoginOutlined, LogoutOutlined,
+  SunOutlined, ThunderboltOutlined, FireOutlined, ForkOutlined,
+  HomeOutlined,
+} from '@ant-design/icons'
+import type { SysStatusBits } from './energyUtils'
+import useTranslation from '@/hooks/useTranslation'
+
+interface SysStatusBitsPanelProps {
+  bits: SysStatusBits
+}
+
+interface BitItem {
+  key: keyof SysStatusBits
+  i18nKey: string
+  color: string
+  icon: React.ReactNode
+}
+
+const SysStatusBitsPanel: React.FC<SysStatusBitsPanelProps> = ({ bits }) => {
+  const { t } = useTranslation()
+
+  const items: BitItem[] = [
+    { key: 'standby', i18nKey: 'deviceDetail.bits.standby', color: '#00D4FF', icon: <PoweroffOutlined /> },
+    { key: 'fault', i18nKey: 'deviceDetail.bits.fault', color: '#ff4d4f', icon: <CloseCircleOutlined /> },
+    { key: 'charge', i18nKey: 'deviceDetail.bits.charge', color: '#00E676', icon: <LoginOutlined /> },
+    { key: 'discharge', i18nKey: 'deviceDetail.bits.discharge', color: '#F59E0B', icon: <LogoutOutlined /> },
+    { key: 'pvCharge', i18nKey: 'deviceDetail.bits.pvCharge', color: '#F59E0B', icon: <SunOutlined /> },
+    { key: 'acCharge', i18nKey: 'deviceDetail.bits.acCharge', color: '#8B5CF6', icon: <ThunderboltOutlined /> },
+    { key: 'geCharge', i18nKey: 'deviceDetail.bits.geCharge', color: '#F97316', icon: <FireOutlined /> },
+    { key: 'acBypass', i18nKey: 'deviceDetail.bits.acBypass', color: '#94A3B8', icon: <ForkOutlined /> },
+    { key: 'toLoad', i18nKey: 'deviceDetail.bits.toLoad', color: '#3B82F6', icon: <HomeOutlined /> },
+    { key: 'pvInput', i18nKey: 'deviceDetail.bits.pvInput', color: '#F59E0B', icon: <SunOutlined /> },
+    { key: 'acInput', i18nKey: 'deviceDetail.bits.acInput', color: '#8B5CF6', icon: <ThunderboltOutlined /> },
+    { key: 'geInput', i18nKey: 'deviceDetail.bits.geInput', color: '#F97316', icon: <FireOutlined /> },
+  ]
+
+  return (
+    <Row gutter={[8, 8]}>
+      {items.map((item) => {
+        const active = bits[item.key]
+        return (
+          <Col key={item.key} xs={12} sm={8} md={6} lg={4}>
+            <Tag
+              icon={item.icon}
+              style={{
+                width: '100%',
+                textAlign: 'center',
+                padding: '4px 0',
+                borderRadius: 8,
+                fontWeight: active ? 600 : 400,
+                color: active ? item.color : '#9ca3af',
+                background: active ? `${item.color}14` : '#f3f4f6',
+                borderColor: active ? `${item.color}66` : '#e5e7eb',
+              }}
+            >
+              {t(item.i18nKey)}
+            </Tag>
+          </Col>
+        )
+      })}
+    </Row>
+  )
+}
+
+export default SysStatusBitsPanel

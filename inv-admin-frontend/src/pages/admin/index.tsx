@@ -242,7 +242,9 @@ const PermissionTab: React.FC = () => {
   const { isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.admin.orgRolePermissions(selectedOrgId ?? 0, selectedRoleCode),
     queryFn: () => adminApi.getOrgRolePermissions(selectedOrgId!, selectedRoleCode).then((r) => {
-      const items = (r.data?.data ?? r.data ?? []) as OrgPermissionGrant[]
+      const raw = r.data?.data ?? r.data ?? []
+      // 接口异常时可能返回对象，降级为空数组避免遍历崩溃
+      const items = (Array.isArray(raw) ? raw : []) as OrgPermissionGrant[]
       const permSet: Record<string, Set<string>> = {}
       for (const item of items) {
         const [resource, action] = item.permission_code.split(':')
@@ -366,7 +368,7 @@ const APIOverviewTab: React.FC<{ onNavigateToPermissions?: () => void }> = ({ on
     queryFn: () => adminApi.getRouteGroups().then((r) => r.data?.data ?? r.data),
   })
 
-  const groups = (data as any)?.groups ?? []
+  const groups = Array.isArray((data as any)?.groups) ? (data as any).groups : []
 
   const groupColors: Record<string, string> = {
     public: '#52c41a',

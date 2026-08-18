@@ -84,7 +84,11 @@ const OrgCardTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
   const isSystemAdmin = !!user?.isSystemAdmin
   const { data: myOrgs } = useQuery({
     queryKey: queryKeys.channels.myOrganizations(user?.id),
-    queryFn: () => channelApi.getMyOrganizations().then((r) => r.data?.data ?? []),
+    queryFn: () => channelApi.getMyOrganizations().then((r) => {
+      const d = r.data?.data
+      // 接口异常/无数据时降级为空数组，避免后续 .map 崩溃
+      return Array.isArray(d) ? d : []
+    }),
     enabled: !isSystemAdmin,
   })
   const managedOrgIds = useMemo(() => {
@@ -116,7 +120,11 @@ const OrgCardTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
   // 树形数据源（后端已按可见范围剪枝）
   const { data: hierarchy, isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.channels.orgHierarchy(),
-    queryFn: () => channelApi.getOrgHierarchy().then((r) => r.data?.data ?? []),
+    queryFn: () => channelApi.getOrgHierarchy().then((r) => {
+      const d = r.data?.data
+      // 后端可能返回 null/对象（异常时），一律降级为空数组，避免 roots.map 崩溃
+      return Array.isArray(d) ? d : []
+    }),
   })
 
   const roots = (hierarchy ?? []) as OrgHierarchyNode[]

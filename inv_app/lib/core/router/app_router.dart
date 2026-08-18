@@ -16,6 +16,8 @@ import 'package:inv_app/features/auth/presentation/pages/forgot_password_page.da
 
 import 'package:inv_app/features/onboarding/presentation/pages/onboarding_page.dart';
 
+import 'package:inv_app/features/onboarding/presentation/pages/setup_guide_page.dart';
+
 import 'package:inv_app/features/station/presentation/pages/home_page.dart';
 
 import 'package:inv_app/features/station/presentation/pages/station_detail_page.dart';
@@ -72,6 +74,8 @@ import 'package:inv_app/features/ota/presentation/pages/ota_detail_page.dart';
 
 import 'package:inv_app/features/ota/presentation/pages/local_ota_page.dart';
 
+import 'package:inv_app/features/ota/domain/entities/local_channel.dart';
+
 import 'package:inv_app/features/ota/presentation/pages/ota_tab_page.dart';
 
 import 'package:inv_app/features/ota/presentation/pages/local_upgrade_page.dart';
@@ -79,6 +83,10 @@ import 'package:inv_app/features/ota/presentation/pages/local_upgrade_page.dart'
 import 'package:inv_app/features/ota/presentation/pages/upgrade_history_page.dart';
 
 import 'package:inv_app/features/ota/presentation/pages/firmware_list_page.dart';
+
+import 'package:inv_app/features/ota/presentation/pages/ota_check_all_page.dart';
+
+import 'package:inv_app/features/ota/presentation/pages/firmware_library_page.dart';
 
 import 'package:inv_app/features/ota/presentation/bloc/ota_bloc.dart';
 
@@ -134,6 +142,12 @@ class AppRouter {
         name: 'onboarding',
         pageBuilder: (context, state) =>
             _fadePage(state, const OnboardingPage()),
+      ),
+      GoRoute(
+        path: '/setup-guide',
+        name: 'setupGuide',
+        pageBuilder: (context, state) =>
+            _slidePage(state, const SetupGuidePage()),
       ),
       GoRoute(
         path: '/login',
@@ -224,6 +238,20 @@ class AppRouter {
           return _slidePage(state, EditStationPage(stationId: id));
         },
       ),
+      // 扫码绑定页：必须声明在 /device/:sn 之前，
+      // go_router 按声明顺序匹配，否则 qr-bind 会被 :sn 吞掉
+      GoRoute(
+        path: '/device/qr-bind',
+        name: 'deviceQrBind',
+        pageBuilder: (context, state) => _slidePage(
+          state,
+          DeviceQrBindPage(
+            sn: state.uri.queryParameters['sn'] ?? '',
+            pin: state.uri.queryParameters['pin'] ?? '',
+            stationId: int.tryParse(state.uri.queryParameters['station_id'] ?? ''),
+          ),
+        ),
+      ),
       GoRoute(
         path: '/device/:sn',
         name: 'deviceRealtime',
@@ -275,18 +303,6 @@ class AppRouter {
         pageBuilder: (context, state) => _slidePage(
           state,
           DeviceOpLogsPage(sn: state.pathParameters['sn']!),
-        ),
-      ),
-      GoRoute(
-        path: '/device/qr-bind',
-        name: 'deviceQrBind',
-        pageBuilder: (context, state) => _slidePage(
-          state,
-          DeviceQrBindPage(
-            sn: state.uri.queryParameters['sn'] ?? '',
-            pin: state.uri.queryParameters['pin'] ?? '',
-            stationId: int.tryParse(state.uri.queryParameters['station_id'] ?? ''),
-          ),
         ),
       ),
       GoRoute(
@@ -401,6 +417,14 @@ class AppRouter {
         pageBuilder: (context, state) =>
             _slidePage(state, const NotifySettingsPage()),
       ),
+      // 检查更新（全部设备）：必须声明在 /ota/:sn 之前，
+      // 避免 check-all 被 :sn 参数捕获
+      GoRoute(
+        path: '/ota/check-all',
+        name: 'otaCheckAll',
+        pageBuilder: (context, state) =>
+            _slidePage(state, const OtaCheckAllPage()),
+      ),
       GoRoute(
         path: '/ota/:sn',
         name: 'ota',
@@ -458,11 +482,17 @@ class AppRouter {
           final releaseSignature =
               state.uri.queryParameters['release_signature'];
 
+          // 通信通道：channel=ble 走蓝牙，缺省 WiFi 热点（本地升级双 Tab 页传入）
+          final channel = state.uri.queryParameters['channel'] == 'ble'
+              ? LocalCommunicationChannel.ble
+              : LocalCommunicationChannel.wifiAp;
+
           return _slidePage(
             state,
             LocalOTAPage(
               deviceSN: sn,
               deviceIP: deviceIP,
+              channel: channel,
               firmwareId: firmwareId,
               firmwareUrl: firmwareUrl,
               firmwareFileName: firmwareFileName,
@@ -518,6 +548,18 @@ class AppRouter {
                 currentMainVersion: version,
               ),
             ),
+          );
+        },
+      ),
+      // 固件库（按型号浏览发布版本，可预下载到本地）
+      GoRoute(
+        path: '/firmware-library',
+        name: 'firmwareLibrary',
+        pageBuilder: (context, state) {
+          final model = state.uri.queryParameters['model'];
+          return _slidePage(
+            state,
+            FirmwareLibraryPage(initialModel: model),
           );
         },
       ),

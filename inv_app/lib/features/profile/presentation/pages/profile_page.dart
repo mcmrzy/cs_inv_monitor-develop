@@ -108,7 +108,12 @@ class _ProfilePageState extends State<ProfilePage> {
       ),
       body: BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {
-          if (state is AuthUnauthenticated) context.go('/login');
+          // 离网/本地直连模式（含 guest 入口）下不强制跳登录页，
+          // 未登录使用本地功能时以「离线用户」形态展示
+          if (state is AuthUnauthenticated &&
+              !getIt<ConnectionModeService>().isLocal) {
+            context.go('/login');
+          }
           // 资料加载成功：取消超时兆底，复位失败态和重试计数
           if (state is AuthAuthenticated && state.user != null) {
             _loadTimeoutTimer?.cancel();
@@ -308,16 +313,16 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                     ),
                   ] else ...[ // 正常显示状态
-                    // 离网模式提示标签
+                    // 离网模式提示标签（统一警告色，暗色模式自适应）
                     if (isGuestLocalMode)
                       Container(
                         margin: EdgeInsets.only(bottom: 6.h),
                         padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 3.h),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFFF7ED).withValues(alpha: 0.8),
+                          color: AppColors.warning.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(6.r),
                           border: Border.all(
-                            color: const Color(0xFFFDBA74).withValues(alpha: 0.5),
+                            color: AppColors.warning.withValues(alpha: 0.4),
                             width: 0.5,
                           ),
                         ),
@@ -327,14 +332,14 @@ class _ProfilePageState extends State<ProfilePage> {
                             Icon(
                               Icons.wifi_off_rounded,
                               size: 12.sp,
-                              color: const Color(0xFFF97316),
+                              color: AppColors.warning,
                             ),
                             SizedBox(width: 4.w),
                             Text(
                               l10n.localMode,
                               style: TextStyle(
                                 fontSize: 10.sp,
-                                color: const Color(0xFF9A3412),
+                                color: AppColors.warning,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),

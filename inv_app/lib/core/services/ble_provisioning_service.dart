@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_ultra/flutter_blue_ultra.dart';
 import 'package:inv_app/core/services/ble/ble_device_manager.dart';
+import 'package:inv_app/core/services/ble/ble_direct_service.dart';
+import 'package:inv_app/core/services/service_locator.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 /// BLE配网状态枚举
@@ -113,6 +115,9 @@ class BleProvisioningService {
   bool _running = false;
   bool get isRunning => _running;
 
+  // 本轮配网是否挂起了 BLE 直连（退出时需恢复）
+  bool _directSuspended = false;
+
   /// 发射状态更新
   void _emitStatus(BleProvisioningStatus status) {
     _currentStatus = status;
@@ -172,11 +177,21 @@ class BleProvisioningService {
     _emitStatus(BleProvisioningStatus.scanning);
 
     try {
+      // 挂起 BLE 直连（自动连接/轮询/发现扫描）：
+      // 直连会话占用 GATT 链路会导致设备停止广播，配网扫描不到
+      try {
+        await getIt<BleDirectService>().suspendForProvisioning();
+        _directSuspended = true;
+      } catch (e) {
+        debugPrint('[BLE] suspend direct service failed (ignored): $e');
+      }
+
       // 请求权限
       final hasPermissions = await requestBluetoothPermissions();
       if (!hasPermissions) {
         _emitStatus(BleProvisioningStatus.error);
         _running = false;
+        _resumeDirectIfNeeded();
         return;
       }
 
@@ -185,6 +200,7 @@ class BleProvisioningService {
       if (!isAvailable) {
         _emitStatus(BleProvisioningStatus.error);
         _running = false;
+        _resumeDirectIfNeeded();
         return;
       }
 
@@ -243,11 +259,12 @@ class BleProvisioningService {
     } catch (e) {
       _emitStatus(BleProvisioningStatus.error);
       _running = false;
+      _resumeDirectIfNeeded();
     }
   }
 
-  /// 停止扫描
-  void stopScan() {
+  /// 停止扫描（不恢复直连，供连接流程内部使用）
+  void _stopScanInternal() {
     FlutterBlueUltra.stopScan();
     _scanTimer?.cancel();
     _running = false; // 重置运行标志
@@ -256,12 +273,31 @@ class BleProvisioningService {
     }
   }
 
+  /// 停止扫描；未进入配网连接时恢复此前挂起的 BLE 直连
+  void stopScan() {
+    _stopScanInternal();
+    if (_connectedDevice == null) {
+      _resumeDirectIfNeeded();
+    }
+  }
+
+  /// 恢复配网前挂起的 BLE 直连（幂等，失败不阻断配网流程）
+  void _resumeDirectIfNeeded() {
+    if (!_directSuspended) return;
+    _directSuspended = false;
+    unawaited(
+      getIt<BleDirectService>().resumeAfterProvisioning().catchError((e) {
+        debugPrint('[BLE] resume direct service failed (ignored): $e');
+      }),
+    );
+  }
+
   /// 连接到BLE设备
   Future<BleProvisioningResult> connectToDevice(
     BleDeviceInfo deviceInfo,
   ) async {
-    // 先停止扫描
-    stopScan();
+    // 先停止扫描（不恢复直连：配网连接即将占用设备）
+    _stopScanInternal();
 
     if (_connectedDevice != null) {
       await disconnectFromDevice();
@@ -604,6 +640,8 @@ class BleProvisioningService {
     }
 
     _emitStatus(BleProvisioningStatus.idle);
+    // 配网连接已释放，恢复此前挂起的 BLE 直连
+    _resumeDirectIfNeeded();
   }
 
   /// 重置服务

@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/config/app_config.dart';
+import 'package:inv_app/core/services/connection_mode_service.dart';
 import 'package:inv_app/core/services/jverify_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
@@ -21,12 +22,29 @@ class _SplashPageState extends State<SplashPage> {
   late final Future<void> _jverifyPrefetch;
   bool _canOneClick = false;
 
+  /// 进入时刻：用于保证开屏页最短展示时长
+  late final DateTime _enteredAt;
+
+  /// 开屏最短展示时长：登录态检查只读本地存储（毫秒级完成），
+  /// 不加最短展示会导致开屏图一闪而过、页面切换间隙露黑，
+  /// 与系统启动屏衔接保证品牌开屏可见
+  static const Duration _minDisplay = Duration(milliseconds: 1200);
+
   @override
   void initState() {
     super.initState();
+    _enteredAt = DateTime.now();
     // 并行启动：登录态检查 + 一键登录预检查，互不阻塞、互不等待
     _jverifyPrefetch = _prefetchJVerify();
     context.read<AuthBloc>().add(AuthCheckRequested());
+  }
+
+  /// 等待开屏最短展示时长结束（不足则补齐剩余时间）
+  Future<void> _waitMinDisplay() async {
+    final remaining = _minDisplay - DateTime.now().difference(_enteredAt);
+    if (remaining > Duration.zero) {
+      await Future.delayed(remaining);
+    }
   }
 
   /// 预检查一键登录可用性（与登录态检查并行；总时长 ≤1.2s，超时直接放弃走登录页）
@@ -74,6 +92,7 @@ class _SplashPageState extends State<SplashPage> {
   /// 登录分流前统一收口：首次安装/版本升级需先展示引导页，
   /// 通过 extra 将登录分流目标传给 /onboarding，完成后原路返回
   Future<void> _continueAfterSplash(String target) async {
+    await _waitMinDisplay();
     final needsOnboarding = await OnboardingStorage().needsOnboarding();
     if (!mounted) return;
     if (needsOnboarding) {
@@ -85,8 +104,15 @@ class _SplashPageState extends State<SplashPage> {
 
   /// 未登录分流：等待并行中的预检查收尾（≤1.2s），完成后跳转
   Future<void> _redirectUnauthenticated() async {
+    await _waitMinDisplay();
     await _jverifyPrefetch;
     if (!mounted) return;
+    // guest 离网会话保持：上次以免登录方式进入本地模式，
+    // 重启后直接回到主页（本地数据链路），不再要求登录
+    if (getIt<ConnectionModeService>().isGuestLocalMode) {
+      context.go('/home');
+      return;
+    }
     await _continueAfterSplash(_canOneClick ? '/jverify-login' : '/login');
   }
 

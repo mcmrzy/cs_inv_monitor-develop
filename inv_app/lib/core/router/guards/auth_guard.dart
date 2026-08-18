@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:inv_app/core/services/connection_mode_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 
@@ -69,6 +70,12 @@ class AuthGuard {
     if (!context.mounted) return null;
 
     if (token == null || token.isEmpty) {
+      // 离网/本地直连模式（含登录页 guest 入口）：未登录也放行全部路由。
+      // 本地功能直接可用；云端依赖页面在断网下自然进入离线错误态，
+      // 切回云端模式后本守卫恢复正常拦截
+      if (getIt<ConnectionModeService>().isLocal) {
+        return null;
+      }
       return '/login';
     }
 
