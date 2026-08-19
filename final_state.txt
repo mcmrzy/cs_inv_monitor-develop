@@ -1,0 +1,12 @@
+ST_diag_zh=1
+ST_diag_en=1
+ST_sel_zh=1
+ST_sel_en=1
+ST_lines=679
+MO_fields_zh=1
+MO_fields_en=1
+SH_oldSelect=0
+SH_renderFieldPicker=2
+SH_Typography=2
+SH_moveField=3
+SH_lines=555

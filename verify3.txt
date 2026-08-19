@@ -1,0 +1,10 @@
+
+=== TSC ===
+TSC_EXIT=0
+=== VITEST ===
+ ✓ src/utils/fieldI18n.test.ts (2 tests) 5ms
+ ✓ src/locales/index.test.ts (6 tests) 197ms
+ Test Files  2 passed (2)
+      Tests  8 passed (8)
+   Duration  2.73s (transform 1.00s, setup 779ms, import 1.03s, tests 201ms, environment 2.05s)
+VITEST_EXIT=0

@@ -1,0 +1,6 @@
+SH_lines=620
+drag_S=1
+grpOnly_1=2
+oldSel=0
+stats=679
+mo=420

@@ -1,0 +1,9 @@
+
+=== TSC ===
+TSC_EXIT=0
+=== VITEST ===
+ ✓ src/locales/index.test.ts (6 tests) 187ms
+ Test Files  1 passed (1)
+      Tests  6 passed (6)
+   Duration  2.39s (transform 715ms, setup 324ms, import 796ms, tests 187ms, environment 939ms)
+VITEST_EXIT=0
