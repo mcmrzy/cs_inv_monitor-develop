@@ -120,6 +120,32 @@ class AuthEmailLoginRequested extends AuthEvent {
   List<Object?> get props => [email, password, rememberPassword];
 }
 
+class AuthPhoneCodeLoginRequested extends AuthEvent {
+  final String phone;
+  final String code;
+
+  const AuthPhoneCodeLoginRequested({
+    required this.phone,
+    required this.code,
+  });
+
+  @override
+  List<Object?> get props => [phone, code];
+}
+
+class AuthEmailCodeLoginRequested extends AuthEvent {
+  final String email;
+  final String code;
+
+  const AuthEmailCodeLoginRequested({
+    required this.email,
+    required this.code,
+  });
+
+  @override
+  List<Object?> get props => [email, code];
+}
+
 class AuthEmailRegisterRequested extends AuthEvent {
   final String email;
   final String password;

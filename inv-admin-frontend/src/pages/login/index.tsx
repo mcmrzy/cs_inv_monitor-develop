@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Form, Input, Button, Typography, Checkbox, App, Space, Alert, Dropdown } from 'antd'
+import { Form, Input, Button, Checkbox, App, Space, Alert, Dropdown, Segmented } from 'antd'
 import { UserOutlined, LockOutlined, MailOutlined, PhoneOutlined, SafetyOutlined, CloudOutlined, LineChartOutlined, GlobalOutlined } from '@ant-design/icons'
 import useAuthStore from '@/stores/authStore'
 import useLocaleStore from '@/stores/localeStore'
@@ -42,13 +42,17 @@ const i18n: Record<Lang, Record<string, string>> = {
     f3Title: '深度数据分析', f3Desc: '发电效率统计，设备性能对比分析',
     stat1: '接入设备', stat2: '平台可用率', stat3: '实时监控',
     welcome: '欢迎回来', createAcc: '创建账号', resetPwd: '重置密码',
-    welcomeSub: '登录您的账户以继续', createSub: '注册新账户开始使用', resetSub: '通过邮箱重置密码',
+    welcomeSub: '登录您的账户以继续', createSub: '注册新账户开始使用', resetSub: '通过邮箱或手机号重置密码',
     login: '密码登录', loginByCode: '验证码登录', register: '注册', reset: '重置密码',
     account: '手机号 / 邮箱', password: '密码', remember: '记住账号', forgot: '忘记密码？',
     submitLogin: '登 录', noAccount: '还没有账号？', goRegister: '立即注册',
     phone: '手机号', email: '邮箱', code: '验证码', sendCode: '发送验证码', resendCode: 's 后重发',
     phoneCodeLogin: '手机号验证码登录', emailCodeLogin: '邮箱验证码登录',
     loginByPhoneCode: '手机号登录', loginByEmailCode: '邮箱登录',
+    useCodeLogin: '验证码登录', usePwdLogin: '密码登录',
+    codeChannelPhone: '手机号短信', codeChannelEmail: '邮箱验证码',
+    resetChannelEmail: '邮箱重置', resetChannelPhone: '手机号重置',
+    registerChannelEmail: '邮箱验证码', registerChannelPhone: '手机号短信',
     nickname: '昵称', confirmPassword: '确认密码', newPassword: '新密码', confirmNewPwd: '确认新密码',
     submitRegister: '注 册', hasAccount: '已有账号？', goLogin: '立即登录',
     submitReset: '重置密码', goBack: '返回登录', emailPlaceholder: '注册时使用的邮箱',
@@ -61,6 +65,7 @@ const i18n: Record<Lang, Record<string, string>> = {
     errPwdMismatch: '两次输入的密码不一致',
     successLogin: '登录成功', successRegister: '注册成功，请登录', successReset: '密码重置成功，请登录', successCodeSent: '验证码已发送到邮箱',
     errEmailFormat: '邮箱格式不正确', errPhoneFormat: '手机号格式不正确', errPwdMin: '密码至少6位，需包含字母和数字',
+    errPhoneFirst: '请先输入手机号', successCodeSentPhone: '验证码已发送到手机',
     captchaRequired: '请完成验证后重试',
     errUserNotFound: '用户不存在或账号未注册', errAccountDisabled: '账户已禁用', errWrongPassword: '密码错误',
     errPhoneRegistered: '该手机号已注册', errCodeInvalid: '验证码错误或已过期', errAlreadyRegistered: '该账号已注册',
@@ -74,13 +79,17 @@ const i18n: Record<Lang, Record<string, string>> = {
     f3Title: 'Data Analytics', f3Desc: 'Generation stats, device performance comparison',
     stat1: 'Devices', stat2: 'Uptime', stat3: 'Monitoring',
     welcome: 'Welcome Back', createAcc: 'Create Account', resetPwd: 'Reset Password',
-    welcomeSub: 'Sign in to your account', createSub: 'Register a new account', resetSub: 'Reset via email',
+    welcomeSub: 'Sign in to your account', createSub: 'Register a new account', resetSub: 'Reset via email or phone',
     login: 'Password Login', loginByCode: 'Code Login', register: 'Register', reset: 'Reset',
     account: 'Phone / Email', password: 'Password', remember: 'Remember account', forgot: 'Forgot password?',
     submitLogin: 'Sign In', noAccount: "Don't have an account? ", goRegister: 'Register',
     phone: 'Phone', email: 'Email', code: 'Verification Code', sendCode: 'Send Code', resendCode: 's',
     phoneCodeLogin: 'Phone Code Login', emailCodeLogin: 'Email Code Login',
     loginByPhoneCode: 'Phone Login', loginByEmailCode: 'Email Login',
+    useCodeLogin: 'Code Login', usePwdLogin: 'Password Login',
+    codeChannelPhone: 'Phone SMS', codeChannelEmail: 'Email Code',
+    resetChannelEmail: 'Via Email', resetChannelPhone: 'Via Phone',
+    registerChannelEmail: 'Email Code', registerChannelPhone: 'Phone SMS',
     nickname: 'Nickname', confirmPassword: 'Confirm Password', newPassword: 'New Password', confirmNewPwd: 'Confirm New Password',
     submitRegister: 'Sign Up', hasAccount: 'Already have an account? ', goLogin: 'Sign In',
     submitReset: 'Reset Password', goBack: 'Back to Login', emailPlaceholder: 'Your registered email',
@@ -93,6 +102,7 @@ const i18n: Record<Lang, Record<string, string>> = {
     errPwdMismatch: 'Passwords do not match',
     successLogin: 'Login successful', successRegister: 'Registered! Please sign in.', successReset: 'Password reset! Please sign in.', successCodeSent: 'Code sent to your email',
     errEmailFormat: 'Invalid email format', errPhoneFormat: 'Invalid phone number', errPwdMin: 'At least 6 chars with letters and numbers',
+    errPhoneFirst: 'Please enter your phone number first', successCodeSentPhone: 'Code sent to your phone',
     captchaRequired: 'Complete the security verification and try again.',
     errUserNotFound: 'User not found or account is not registered', errAccountDisabled: 'This account is disabled', errWrongPassword: 'Incorrect password',
     errPhoneRegistered: 'This phone number is already registered', errCodeInvalid: 'The verification code is invalid or expired', errAlreadyRegistered: 'This account is already registered',
@@ -106,6 +116,9 @@ const LoginPage: React.FC = () => {
   const [countdown, setCountdown] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [captchaOpen, setCaptchaOpen] = useState(false)
+  const [codeChannel, setCodeChannel] = useState<'phone' | 'email'>('phone')
+  const [resetChannel, setResetChannel] = useState<'email' | 'phone'>('email')
+  const [registerChannel, setRegisterChannel] = useState<'email' | 'phone'>('email')
   const [bgImage] = useState(() => getRandomBg())
   const captchaResolveRef = useRef<((token: string) => void) | null>(null)
   const captchaRejectRef = useRef<((reason?: any) => void) | null>(null)
@@ -117,6 +130,10 @@ const LoginPage: React.FC = () => {
   const [registerForm] = Form.useForm()
   const [resetForm] = Form.useForm()
   const [loginForm] = Form.useForm()
+  const [phoneCodeForm] = Form.useForm()
+  const [emailCodeForm] = Form.useForm()
+  const [phoneResetForm] = Form.useForm()
+  const [phoneRegisterForm] = Form.useForm()
 
   // 从 localStorage 读取保存的账号并自动填充
   useEffect(() => {
@@ -242,6 +259,7 @@ const LoginPage: React.FC = () => {
     }
   }
 
+  // 邮箱验证码注册
   const onRegister = async (values: { phone: string; email: string; password: string; nickname: string; code: string }) => {
     setLoading(true); setError(null)
     try {
@@ -253,10 +271,34 @@ const LoginPage: React.FC = () => {
     finally { setLoading(false) }
   }
 
+  // 手机号验证码注册（仅需手机号 + 短信验证码 + 密码）
+  const onPhoneRegister = async (values: { phone: string; code: string; password: string }) => {
+    setLoading(true); setError(null)
+    try {
+      const res = await api.post('/auth/register', values)
+      const d = res.data as Record<string, unknown>
+      if (d?.code !== undefined && d.code !== 0) { showError(localizeAuthError(d, t.errRegister)); return }
+      message.success(t.successRegister); setActiveTab('login')
+    } catch (err: any) { showError(localizeAuthError(err?.response?.data, t.errRegister)) }
+    finally { setLoading(false) }
+  }
+
   const onResetPassword = async (values: { email: string; code: string; new_password: string }) => {
     setLoading(true); setError(null)
     try {
       const res = await api.post('/auth/email-reset-password', values)
+      const d = res.data as Record<string, unknown>
+      if (d?.code !== undefined && d.code !== 0) { showError(localizeAuthError(d, t.errReset)); return }
+      message.success(t.successReset); setActiveTab('login')
+    } catch (err: any) { showError(localizeAuthError(err?.response?.data, t.errReset)) }
+    finally { setLoading(false) }
+  }
+
+  // 手机号验证码重置密码
+  const onPhoneResetPassword = async (values: { phone: string; code: string; new_password: string }) => {
+    setLoading(true); setError(null)
+    try {
+      const res = await api.post('/auth/reset-password', values)
       const d = res.data as Record<string, unknown>
       if (d?.code !== undefined && d.code !== 0) { showError(localizeAuthError(d, t.errReset)); return }
       message.success(t.successReset); setActiveTab('login')
@@ -314,12 +356,35 @@ const LoginPage: React.FC = () => {
     }
   }
 
+  // 发送短信验证码（需要先完成滑块验证；type: login/register/reset_password）
+  const sendSmsCode = async (phone: string, type: 'login' | 'reset' | 'register') => {
+    if (countdown > 0) return
+    try {
+      // 先弹出滑块验证
+      const captchaToken = await showCaptcha()
+      const apiType = type === 'reset' ? 'reset_password' : type
+      const headers = { 'X-Captcha-Token': captchaToken }
+      const res = await api.post('/auth/send-code', { phone, type: apiType }, { headers })
+      const d = res.data as Record<string, unknown>
+      if (d?.code !== undefined && d.code !== 0) { showError(localizeAuthError(d, t.errSendCode)); return }
+      message.success(t.successCodeSentPhone); setCountdown(60)
+    } catch (err: any) {
+      if (err?.message === '用户取消验证') return
+      showError(localizeAuthError(err?.response?.data, t.errSendCode))
+    }
+  }
+
   const inputStyle = { borderRadius: 10, height: 56, fontSize: 17 }
 
-  const CodeButton = ({ emailField, type, form }: { emailField: string; type: 'register' | 'reset' | 'login'; form: any }) => (
+  const CodeButton = ({ field, type, form, channel }: { field: string; type: 'register' | 'reset' | 'login'; form: any; channel: 'email' | 'phone' }) => (
     <Button disabled={countdown > 0}
-      onClick={() => { const val = form.getFieldValue(emailField); if (val) sendEmailCode(val, type); else showError(t.errEmailFirst) }}
-      style={{ height: 56, borderRadius: '0 10px 10px 0', borderColor: '#d9d9d9', minWidth: 110, fontSize: 15, color: countdown > 0 ? '#6b7280' : '#4f6ef7' }}>
+      onClick={() => {
+        const val = form.getFieldValue(field)
+        if (!val) { showError(channel === 'email' ? t.errEmailFirst : t.errPhoneFirst); return }
+        if (channel === 'email') sendEmailCode(val, type)
+        else sendSmsCode(val, type)
+      }}
+      style={{ height: 56, borderRadius: '0 10px 10px 0', borderColor: '#d9d9d9', minWidth: 110, fontSize: 15, color: countdown > 0 ? '#6b7280' : '#1677ff' }}>
       {countdown > 0 ? `${countdown}${t.resendCode}` : t.sendCode}
     </Button>
   )
@@ -427,7 +492,7 @@ const LoginPage: React.FC = () => {
                     flex: 1, padding: '10px 0', border: 'none', borderRadius: 8, cursor: 'pointer',
                     fontSize: 14, fontWeight: 500, transition: 'all 0.2s ease',
                     background: activeTab === tab ? '#fff' : 'transparent',
-                    color: activeTab === tab ? '#4f6ef7' : '#475569',
+                    color: activeTab === tab ? '#1677ff' : '#475569',
                     boxShadow: activeTab === tab ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
                   }}>{label}</button>
                 ))}
@@ -445,113 +510,225 @@ const LoginPage: React.FC = () => {
                   <Form.Item>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <Form.Item name="remember" valuePropName="checked" noStyle><Checkbox>{t.remember}</Checkbox></Form.Item>
-                      <a onClick={() => setActiveTab('reset')} style={{ color: '#4f6ef7', fontSize: 16, fontWeight: 500 }}>{t.forgot}</a>
+                      <Space size={12}>
+                        <a onClick={() => { setActiveTab('loginByCode'); setCountdown(0) }} style={{ color: '#1677ff', fontSize: 16, fontWeight: 500 }}>{t.useCodeLogin}</a>
+                        <a onClick={() => { setActiveTab('reset'); setCountdown(0) }} style={{ color: '#1677ff', fontSize: 16, fontWeight: 500 }}>{t.forgot}</a>
+                      </Space>
                     </div>
                   </Form.Item>
                   <Form.Item>
-                    <Button type="primary" htmlType="submit" loading={loading} block style={{ height: 56, borderRadius: 10, fontSize: 18, fontWeight: 600, background: 'linear-gradient(135deg, #4f6ef7 0%, #6366f1 100%)', border: 'none', boxShadow: '0 2px 8px rgba(79,110,247,0.25)' }}>{t.submitLogin}</Button>
+                    <Button type="primary" htmlType="submit" loading={loading} block style={{ height: 56, borderRadius: 10, fontSize: 18, fontWeight: 600, background: 'linear-gradient(135deg, #0D47A1 0%, #1677ff 100%)', border: 'none', boxShadow: '0 2px 8px rgba(22,119,255,0.25)' }}>{t.submitLogin}</Button>
                   </Form.Item>
                   <div style={{ textAlign: 'center' }}>
                     <span style={{ color: '#475569', fontSize: 17 }}>{t.noAccount}</span>
-                    <a onClick={() => setActiveTab('register')} style={{ color: '#4f6ef7', marginLeft: 4, fontWeight: 500, fontSize: 17 }}>{t.goRegister}</a>
+                    <a onClick={() => setActiveTab('register')} style={{ color: '#1677ff', marginLeft: 4, fontWeight: 500, fontSize: 17 }}>{t.goRegister}</a>
                   </div>
                 </Form>
               )}
 
-              {/* [暂时禁用] LoginByCode - 验证码登录功能暂时隐藏 */}
-              {/* {activeTab === 'loginByCode' && (
+              {/* LoginByCode - 验证码登录（手机号短信 / 邮箱双通道） */}
+              {activeTab === 'loginByCode' && (
                 <div>
-                  <Form name="phoneCodeLogin" onFinish={onPhoneCodeLogin} size="large">
+                  <Segmented
+                    block
+                    value={codeChannel}
+                    onChange={(v) => { setCodeChannel(v as 'phone' | 'email'); setCountdown(0) }}
+                    options={[
+                      { label: t.codeChannelPhone, value: 'phone' },
+                      { label: t.codeChannelEmail, value: 'email' },
+                    ]}
+                    style={{ marginBottom: 24 }}
+                  />
+                  {codeChannel === 'phone' ? (
+                    <Form form={phoneCodeForm} name="phoneCodeLogin" onFinish={onPhoneCodeLogin} size="large">
+                      <Form.Item name="phone" rules={[{ required: true, message: lang === 'zh' ? '请输入手机号' : 'Phone required' }, { pattern: /^1[3-9]\d{9}$/, message: t.errPhoneFormat }]}>
+                        <Input prefix={<PhoneOutlined style={{ color: '#94a3b8' }} />} placeholder={t.phone} style={inputStyle} />
+                      </Form.Item>
+                      <Form.Item>
+                        <Space.Compact style={{ width: '100%' }}>
+                          <Form.Item name="code" noStyle rules={[{ required: true, message: lang === 'zh' ? '请输入验证码' : 'Code required' }]}>
+                            <Input prefix={<SafetyOutlined style={{ color: '#94a3b8' }} />} placeholder={t.code} style={{ ...inputStyle, borderRadius: '10px 0 0 10px' }} />
+                          </Form.Item>
+                          <CodeButton field="phone" type="login" form={phoneCodeForm} channel="phone" />
+                        </Space.Compact>
+                      </Form.Item>
+                      <Form.Item>
+                        <Button type="primary" htmlType="submit" loading={loading} block style={{ height: 56, borderRadius: 10, fontSize: 18, fontWeight: 600, background: 'linear-gradient(135deg, #0D47A1 0%, #1677ff 100%)', border: 'none', boxShadow: '0 2px 8px rgba(22,119,255,0.25)' }}>{t.loginByPhoneCode}</Button>
+                      </Form.Item>
+                    </Form>
+                  ) : (
+                    <Form form={emailCodeForm} name="emailCodeLogin" onFinish={onEmailCodeLogin} size="large">
+                      <Form.Item name="email" rules={[{ required: true, message: lang === 'zh' ? '请输入邮箱' : 'Email required' }, { type: 'email', message: t.errEmailFormat }]}>
+                        <Input prefix={<MailOutlined style={{ color: '#94a3b8' }} />} placeholder={t.email} style={inputStyle} />
+                      </Form.Item>
+                      <Form.Item>
+                        <Space.Compact style={{ width: '100%' }}>
+                          <Form.Item name="code" noStyle rules={[{ required: true, message: lang === 'zh' ? '请输入验证码' : 'Code required' }]}>
+                            <Input prefix={<MailOutlined style={{ color: '#94a3b8' }} />} placeholder={t.code} style={{ ...inputStyle, borderRadius: '10px 0 0 10px' }} />
+                          </Form.Item>
+                          <CodeButton field="email" type="login" form={emailCodeForm} channel="email" />
+                        </Space.Compact>
+                      </Form.Item>
+                      <Form.Item>
+                        <Button type="primary" htmlType="submit" loading={loading} block style={{ height: 56, borderRadius: 10, fontSize: 18, fontWeight: 600, background: 'linear-gradient(135deg, #0D47A1 0%, #1677ff 100%)', border: 'none', boxShadow: '0 2px 8px rgba(22,119,255,0.25)' }}>{t.loginByEmailCode}</Button>
+                      </Form.Item>
+                    </Form>
+                  )}
+                  <div style={{ textAlign: 'center', marginTop: 8 }}>
+                    <a onClick={() => { setActiveTab('login'); setCountdown(0) }} style={{ color: '#1677ff', fontWeight: 500, fontSize: 16 }}>{t.usePwdLogin}</a>
+                  </div>
+                  <div style={{ textAlign: 'center', marginTop: 16 }}>
+                    <span style={{ color: '#475569', fontSize: 17 }}>{t.noAccount}</span>
+                    <a onClick={() => setActiveTab('register')} style={{ color: '#1677ff', marginLeft: 4, fontWeight: 500, fontSize: 17 }}>{t.goRegister}</a>
+                  </div>
+                </div>
+              )}
+
+              {/* Register（邮箱 / 手机号验证码双通道） */}
+              {activeTab === 'register' && (
+                <div>
+                  <Segmented
+                    block
+                    value={registerChannel}
+                    onChange={(v) => { setRegisterChannel(v as 'email' | 'phone'); setCountdown(0) }}
+                    options={[
+                      { label: t.registerChannelEmail, value: 'email' },
+                      { label: t.registerChannelPhone, value: 'phone' },
+                    ]}
+                    style={{ marginBottom: 24 }}
+                  />
+                  {registerChannel === 'email' ? (
+                  <Form form={registerForm} name="register" onFinish={onRegister} size="large">
+                    <Form.Item name="phone" rules={[{ required: true, message: lang === 'zh' ? '请输入手机号' : 'Phone required' }, { pattern: /^1[3-9]\d{9}$/, message: t.errPhoneFormat }]}>
+                      <Input prefix={<PhoneOutlined style={{ color: '#94a3b8' }} />} placeholder={t.phone} style={inputStyle} />
+                    </Form.Item>
+                    <Form.Item name="email" rules={[{ required: true, message: lang === 'zh' ? '请输入邮箱' : 'Email required' }, { type: 'email', message: t.errEmailFormat }]}>
+                      <Input prefix={<MailOutlined style={{ color: '#94a3b8' }} />} placeholder={t.email} style={inputStyle} />
+                    </Form.Item>
+                    <Form.Item>
+                      <Space.Compact style={{ width: '100%' }}>
+                        <Form.Item name="code" noStyle rules={[{ required: true, message: lang === 'zh' ? '请输入验证码' : 'Code required' }]}>
+                          <Input prefix={<MailOutlined style={{ color: '#94a3b8' }} />} placeholder={t.code} style={{ ...inputStyle, borderRadius: '10px 0 0 10px' }} />
+                        </Form.Item>
+                        <CodeButton field="email" type="register" form={registerForm} channel="email" />
+                      </Space.Compact>
+                    </Form.Item>
+                    <Form.Item name="nickname" rules={[{ required: true, message: lang === 'zh' ? '请输入昵称' : 'Nickname required' }]}>
+                      <Input prefix={<UserOutlined style={{ color: '#94a3b8' }} />} placeholder={t.nickname} style={inputStyle} />
+                    </Form.Item>
+                    <Form.Item name="password" rules={[{ required: true, message: lang === 'zh' ? '请输入密码' : 'Password required' }, { min: 6, message: t.errPwdMin }, { pattern: /^(?=.*[a-zA-Z])(?=.*\d).+$/, message: t.errPwdMin }]}>
+                      <Input.Password prefix={<LockOutlined style={{ color: '#94a3b8' }} />} placeholder={t.password} style={inputStyle} />
+                    </Form.Item>
+                    <Form.Item name="confirm_password" dependencies={['password']}
+                      rules={[{ required: true, message: lang === 'zh' ? '请确认密码' : 'Confirm password' }, ({ getFieldValue }) => ({ validator(_, value) { if (!value || getFieldValue('password') === value) return Promise.resolve(); return Promise.reject(new Error(t.errPwdMismatch)) } })]}>
+                      <Input.Password prefix={<LockOutlined style={{ color: '#94a3b8' }} />} placeholder={t.confirmPassword} style={inputStyle} />
+                    </Form.Item>
+                    <Form.Item>
+                      <Button type="primary" htmlType="submit" loading={loading} block style={{ height: 56, borderRadius: 10, fontSize: 18, fontWeight: 600, background: 'linear-gradient(135deg, #0D47A1 0%, #1677ff 100%)', border: 'none', boxShadow: '0 2px 8px rgba(22,119,255,0.25)' }}>{t.submitRegister}</Button>
+                    </Form.Item>
+                    <div style={{ textAlign: 'center' }}>
+                      <span style={{ color: '#475569', fontSize: 17 }}>{t.hasAccount}</span>
+                      <a onClick={() => setActiveTab('login')} style={{ color: '#1677ff', marginLeft: 4, fontWeight: 500, fontSize: 17 }}>{t.goLogin}</a>
+                    </div>
+                  </Form>
+                  ) : (
+                  <Form form={phoneRegisterForm} name="phoneRegister" onFinish={onPhoneRegister} size="large">
                     <Form.Item name="phone" rules={[{ required: true, message: lang === 'zh' ? '请输入手机号' : 'Phone required' }, { pattern: /^1[3-9]\d{9}$/, message: t.errPhoneFormat }]}>
                       <Input prefix={<PhoneOutlined style={{ color: '#94a3b8' }} />} placeholder={t.phone} style={inputStyle} />
                     </Form.Item>
                     <Form.Item>
-                      <Button type="primary" htmlType="submit" loading={loading} block style={{ height: 56, borderRadius: 10, fontSize: 18, fontWeight: 600, background: 'linear-gradient(135deg, #4f6ef7 0%, #6366f1 100%)', border: 'none', boxShadow: '0 2px 8px rgba(79,110,247,0.25)' }}>{t.loginByPhoneCode}</Button>
-                    </Form.Item>
-                  </Form>
-                  <div style={{ textAlign: 'center', margin: '16px 0', color: '#94a3b8' }}>───────── 或 ─────────</div>
-                  <Form name="emailCodeLogin" onFinish={onEmailCodeLogin} size="large">
-                    <Form.Item name="email" rules={[{ required: true, message: lang === 'zh' ? '请输入邮箱' : 'Email required' }, { type: 'email', message: t.errEmailFormat }]}>
-                      <Input prefix={<MailOutlined style={{ color: '#94a3b8' }} />} placeholder={t.email} style={inputStyle} />
-                    </Form.Item>
-                    <Form.Item name="code" rules={[{ required: true, message: lang === 'zh' ? '请输入验证码' : 'Code required' }]}>
                       <Space.Compact style={{ width: '100%' }}>
-                        <Input prefix={<MailOutlined style={{ color: '#94a3b8' }} />} placeholder={t.code} style={{ ...inputStyle, borderRadius: '10px 0 0 10px' }} />
-                        <CodeButton emailField="email" type="login" form={registerForm} />
+                        <Form.Item name="code" noStyle rules={[{ required: true, message: lang === 'zh' ? '请输入验证码' : 'Code required' }]}>
+                          <Input prefix={<SafetyOutlined style={{ color: '#94a3b8' }} />} placeholder={t.code} style={{ ...inputStyle, borderRadius: '10px 0 0 10px' }} />
+                        </Form.Item>
+                        <CodeButton field="phone" type="register" form={phoneRegisterForm} channel="phone" />
                       </Space.Compact>
                     </Form.Item>
-                    <Form.Item>
-                      <Button type="primary" htmlType="submit" loading={loading} block style={{ height: 56, borderRadius: 10, fontSize: 18, fontWeight: 600, background: 'linear-gradient(135deg, #4f6ef7 0%, #6366f1 100%)', border: 'none', boxShadow: '0 2px 8px rgba(79,110,247,0.25)' }}>{t.loginByEmailCode}</Button>
+                    <Form.Item name="password" rules={[{ required: true, message: lang === 'zh' ? '请输入密码' : 'Password required' }, { min: 6, message: t.errPwdMin }, { pattern: /^(?=.*[a-zA-Z])(?=.*\d).+$/, message: t.errPwdMin }]}>
+                      <Input.Password prefix={<LockOutlined style={{ color: '#94a3b8' }} />} placeholder={t.password} style={inputStyle} />
                     </Form.Item>
+                    <Form.Item name="confirm_password" dependencies={['password']}
+                      rules={[{ required: true, message: lang === 'zh' ? '请确认密码' : 'Confirm password' }, ({ getFieldValue }) => ({ validator(_, value) { if (!value || getFieldValue('password') === value) return Promise.resolve(); return Promise.reject(new Error(t.errPwdMismatch)) } })]}>
+                      <Input.Password prefix={<LockOutlined style={{ color: '#94a3b8' }} />} placeholder={t.confirmPassword} style={inputStyle} />
+                    </Form.Item>
+                    <Form.Item>
+                      <Button type="primary" htmlType="submit" loading={loading} block style={{ height: 56, borderRadius: 10, fontSize: 18, fontWeight: 600, background: 'linear-gradient(135deg, #0D47A1 0%, #1677ff 100%)', border: 'none', boxShadow: '0 2px 8px rgba(22,119,255,0.25)' }}>{t.submitRegister}</Button>
+                    </Form.Item>
+                    <div style={{ textAlign: 'center' }}>
+                      <span style={{ color: '#475569', fontSize: 17 }}>{t.hasAccount}</span>
+                      <a onClick={() => setActiveTab('login')} style={{ color: '#1677ff', marginLeft: 4, fontWeight: 500, fontSize: 17 }}>{t.goLogin}</a>
+                    </div>
                   </Form>
-                  <div style={{ textAlign: 'center' }}>
-                    <span style={{ color: '#475569', fontSize: 17 }}>{t.noAccount}</span>
-                    <a onClick={() => setActiveTab('register')} style={{ color: '#4f6ef7', marginLeft: 4, fontWeight: 500, fontSize: 17 }}>{t.goRegister}</a>
-                  </div>
+                  )}
                 </div>
-              )} */}
-
-              {/* Register */}
-              {activeTab === 'register' && (
-                <Form form={registerForm} name="register" onFinish={onRegister} size="large">
-                  <Form.Item name="phone" rules={[{ required: true, message: lang === 'zh' ? '请输入手机号' : 'Phone required' }, { pattern: /^1[3-9]\d{9}$/, message: t.errPhoneFormat }]}>
-                    <Input prefix={<PhoneOutlined style={{ color: '#94a3b8' }} />} placeholder={t.phone} style={inputStyle} />
-                  </Form.Item>
-                  <Form.Item name="email" rules={[{ required: true, message: lang === 'zh' ? '请输入邮箱' : 'Email required' }, { type: 'email', message: t.errEmailFormat }]}>
-                    <Input prefix={<MailOutlined style={{ color: '#94a3b8' }} />} placeholder={t.email} style={inputStyle} />
-                  </Form.Item>
-                  <Form.Item name="code" rules={[{ required: true, message: lang === 'zh' ? '请输入验证码' : 'Code required' }]}>
-                    <Space.Compact style={{ width: '100%' }}>
-                      <Input prefix={<MailOutlined style={{ color: '#94a3b8' }} />} placeholder={t.code} style={{ ...inputStyle, borderRadius: '10px 0 0 10px' }} />
-                      <CodeButton emailField="email" type="register" form={registerForm} />
-                    </Space.Compact>
-                  </Form.Item>
-                  <Form.Item name="nickname" rules={[{ required: true, message: lang === 'zh' ? '请输入昵称' : 'Nickname required' }]}>
-                    <Input prefix={<UserOutlined style={{ color: '#94a3b8' }} />} placeholder={t.nickname} style={inputStyle} />
-                  </Form.Item>
-                  <Form.Item name="password" rules={[{ required: true, message: lang === 'zh' ? '请输入密码' : 'Password required' }, { min: 6, message: t.errPwdMin }, { pattern: /^(?=.*[a-zA-Z])(?=.*\d).+$/, message: t.errPwdMin }]}>
-                    <Input.Password prefix={<LockOutlined style={{ color: '#94a3b8' }} />} placeholder={t.password} style={inputStyle} />
-                  </Form.Item>
-                  <Form.Item name="confirm_password" dependencies={['password']}
-                    rules={[{ required: true, message: lang === 'zh' ? '请确认密码' : 'Confirm password' }, ({ getFieldValue }) => ({ validator(_, value) { if (!value || getFieldValue('password') === value) return Promise.resolve(); return Promise.reject(new Error(t.errPwdMismatch)) } })]}>
-                    <Input.Password prefix={<LockOutlined style={{ color: '#94a3b8' }} />} placeholder={t.confirmPassword} style={inputStyle} />
-                  </Form.Item>
-                  <Form.Item>
-                    <Button type="primary" htmlType="submit" loading={loading} block style={{ height: 56, borderRadius: 10, fontSize: 18, fontWeight: 600, background: 'linear-gradient(135deg, #4f6ef7 0%, #6366f1 100%)', border: 'none', boxShadow: '0 2px 8px rgba(79,110,247,0.25)' }}>{t.submitRegister}</Button>
-                  </Form.Item>
-                  <div style={{ textAlign: 'center' }}>
-                    <span style={{ color: '#475569', fontSize: 17 }}>{t.hasAccount}</span>
-                    <a onClick={() => setActiveTab('login')} style={{ color: '#4f6ef7', marginLeft: 4, fontWeight: 500, fontSize: 17 }}>{t.goLogin}</a>
-                  </div>
-                </Form>
               )}
 
-              {/* Reset */}
+              {/* Reset（邮箱 / 手机号双方式） */}
               {activeTab === 'reset' && (
-                <Form name="reset" form={resetForm} onFinish={onResetPassword} size="large">
-                  <Form.Item name="email" rules={[{ required: true, message: lang === 'zh' ? '请输入邮箱' : 'Email required' }, { type: 'email', message: t.errEmailFormat }]}>
-                    <Input prefix={<MailOutlined style={{ color: '#94a3b8' }} />} placeholder={t.emailPlaceholder} style={inputStyle} />
-                  </Form.Item>
-                  <Form.Item name="code" rules={[{ required: true, message: lang === 'zh' ? '请输入验证码' : 'Code required' }]}>
-                    <Space.Compact style={{ width: '100%' }}>
-                      <Input prefix={<MailOutlined style={{ color: '#94a3b8' }} />} placeholder={t.code} style={{ ...inputStyle, borderRadius: '10px 0 0 10px' }} />
-                      <CodeButton emailField="email" type="reset" form={resetForm} />
-                    </Space.Compact>
-                  </Form.Item>
-                  <Form.Item name="new_password" rules={[{ required: true, message: lang === 'zh' ? '请输入新密码' : 'New password required' }, { min: 6, message: t.errPwdMin }, { pattern: /^(?=.*[a-zA-Z])(?=.*\d).+$/, message: t.errPwdMin }]}>
-                    <Input.Password prefix={<LockOutlined style={{ color: '#94a3b8' }} />} placeholder={t.newPassword} style={inputStyle} />
-                  </Form.Item>
-                  <Form.Item name="confirm_new_password" dependencies={['new_password']}
-                    rules={[{ required: true, message: lang === 'zh' ? '请确认新密码' : 'Confirm new password' }, ({ getFieldValue }) => ({ validator(_, value) { if (!value || getFieldValue('new_password') === value) return Promise.resolve(); return Promise.reject(new Error(t.errPwdMismatch)) } })]}>
-                    <Input.Password prefix={<LockOutlined style={{ color: '#94a3b8' }} />} placeholder={t.confirmNewPwd} style={inputStyle} />
-                  </Form.Item>
-                  <Form.Item>
-                    <Button type="primary" htmlType="submit" loading={loading} block style={{ height: 56, borderRadius: 10, fontSize: 18, fontWeight: 600, background: 'linear-gradient(135deg, #4f6ef7 0%, #6366f1 100%)', border: 'none', boxShadow: '0 2px 8px rgba(79,110,247,0.25)' }}>{t.submitReset}</Button>
-                  </Form.Item>
-                  <div style={{ textAlign: 'center' }}>
-                    <a onClick={() => setActiveTab('login')} style={{ color: '#4f6ef7', fontWeight: 500, fontSize: 17 }}>{t.goBack}</a>
+                <div>
+                  <Segmented
+                    block
+                    value={resetChannel}
+                    onChange={(v) => { setResetChannel(v as 'email' | 'phone'); setCountdown(0) }}
+                    options={[
+                      { label: t.resetChannelEmail, value: 'email' },
+                      { label: t.resetChannelPhone, value: 'phone' },
+                    ]}
+                    style={{ marginBottom: 24 }}
+                  />
+                  {resetChannel === 'email' ? (
+                    <Form name="reset" form={resetForm} onFinish={onResetPassword} size="large">
+                      <Form.Item name="email" rules={[{ required: true, message: lang === 'zh' ? '请输入邮箱' : 'Email required' }, { type: 'email', message: t.errEmailFormat }]}>
+                        <Input prefix={<MailOutlined style={{ color: '#94a3b8' }} />} placeholder={t.emailPlaceholder} style={inputStyle} />
+                      </Form.Item>
+                      <Form.Item>
+                        <Space.Compact style={{ width: '100%' }}>
+                          <Form.Item name="code" noStyle rules={[{ required: true, message: lang === 'zh' ? '请输入验证码' : 'Code required' }]}>
+                            <Input prefix={<MailOutlined style={{ color: '#94a3b8' }} />} placeholder={t.code} style={{ ...inputStyle, borderRadius: '10px 0 0 10px' }} />
+                          </Form.Item>
+                          <CodeButton field="email" type="reset" form={resetForm} channel="email" />
+                        </Space.Compact>
+                      </Form.Item>
+                      <Form.Item name="new_password" rules={[{ required: true, message: lang === 'zh' ? '请输入新密码' : 'New password required' }, { min: 6, message: t.errPwdMin }, { pattern: /^(?=.*[a-zA-Z])(?=.*\d).+$/, message: t.errPwdMin }]}>
+                        <Input.Password prefix={<LockOutlined style={{ color: '#94a3b8' }} />} placeholder={t.newPassword} style={inputStyle} />
+                      </Form.Item>
+                      <Form.Item name="confirm_new_password" dependencies={['new_password']}
+                        rules={[{ required: true, message: lang === 'zh' ? '请确认新密码' : 'Confirm new password' }, ({ getFieldValue }) => ({ validator(_, value) { if (!value || getFieldValue('new_password') === value) return Promise.resolve(); return Promise.reject(new Error(t.errPwdMismatch)) } })]}>
+                        <Input.Password prefix={<LockOutlined style={{ color: '#94a3b8' }} />} placeholder={t.confirmNewPwd} style={inputStyle} />
+                      </Form.Item>
+                      <Form.Item>
+                        <Button type="primary" htmlType="submit" loading={loading} block style={{ height: 56, borderRadius: 10, fontSize: 18, fontWeight: 600, background: 'linear-gradient(135deg, #0D47A1 0%, #1677ff 100%)', border: 'none', boxShadow: '0 2px 8px rgba(22,119,255,0.25)' }}>{t.submitReset}</Button>
+                      </Form.Item>
+                    </Form>
+                  ) : (
+                    <Form name="phoneReset" form={phoneResetForm} onFinish={onPhoneResetPassword} size="large">
+                      <Form.Item name="phone" rules={[{ required: true, message: lang === 'zh' ? '请输入手机号' : 'Phone required' }, { pattern: /^1[3-9]\d{9}$/, message: t.errPhoneFormat }]}>
+                        <Input prefix={<PhoneOutlined style={{ color: '#94a3b8' }} />} placeholder={t.phone} style={inputStyle} />
+                      </Form.Item>
+                      <Form.Item>
+                        <Space.Compact style={{ width: '100%' }}>
+                          <Form.Item name="code" noStyle rules={[{ required: true, message: lang === 'zh' ? '请输入验证码' : 'Code required' }]}>
+                            <Input prefix={<SafetyOutlined style={{ color: '#94a3b8' }} />} placeholder={t.code} style={{ ...inputStyle, borderRadius: '10px 0 0 10px' }} />
+                          </Form.Item>
+                          <CodeButton field="phone" type="reset" form={phoneResetForm} channel="phone" />
+                        </Space.Compact>
+                      </Form.Item>
+                      <Form.Item name="new_password" rules={[{ required: true, message: lang === 'zh' ? '请输入新密码' : 'New password required' }, { min: 6, message: t.errPwdMin }, { pattern: /^(?=.*[a-zA-Z])(?=.*\d).+$/, message: t.errPwdMin }]}>
+                        <Input.Password prefix={<LockOutlined style={{ color: '#94a3b8' }} />} placeholder={t.newPassword} style={inputStyle} />
+                      </Form.Item>
+                      <Form.Item name="confirm_new_password" dependencies={['new_password']}
+                        rules={[{ required: true, message: lang === 'zh' ? '请确认新密码' : 'Confirm new password' }, ({ getFieldValue }) => ({ validator(_, value) { if (!value || getFieldValue('new_password') === value) return Promise.resolve(); return Promise.reject(new Error(t.errPwdMismatch)) } })]}>
+                        <Input.Password prefix={<LockOutlined style={{ color: '#94a3b8' }} />} placeholder={t.confirmNewPwd} style={inputStyle} />
+                      </Form.Item>
+                      <Form.Item>
+                        <Button type="primary" htmlType="submit" loading={loading} block style={{ height: 56, borderRadius: 10, fontSize: 18, fontWeight: 600, background: 'linear-gradient(135deg, #0D47A1 0%, #1677ff 100%)', border: 'none', boxShadow: '0 2px 8px rgba(22,119,255,0.25)' }}>{t.submitReset}</Button>
+                      </Form.Item>
+                    </Form>
+                  )}
+                  <div style={{ textAlign: 'center', marginTop: 8 }}>
+                    <a onClick={() => setActiveTab('login')} style={{ color: '#1677ff', fontWeight: 500, fontSize: 17 }}>{t.goBack}</a>
                   </div>
-                </Form>
+                </div>
               )}
 
               <div style={{ textAlign: 'center', marginTop: 24 }}>

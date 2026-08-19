@@ -6,18 +6,19 @@ import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/features/onboarding/data/onboarding_storage.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
-/// 单页引导数据：主题插画 + 装饰图标组合 + 标题 + 副文案
+/// 单页引导数据：主题插画 + 标题 + 副文案
+///
+/// 精简结构：每页只保留吉祥物插画、大标题和一句话描述，
+/// 移除图标圆底和功能图标组合，视觉焦点更集中。
 class _OnboardingPageData {
   final String asset;
   final IconData icon;
-  final List<IconData> featureIcons;
   final String title;
   final String desc;
 
   const _OnboardingPageData({
     required this.asset,
     required this.icon,
-    required this.featureIcons,
     required this.title,
     required this.desc,
   });
@@ -63,11 +64,16 @@ class _OnboardingPageState extends State<OnboardingPage> {
     return Scaffold(
       backgroundColor: AppColors.primaryDark,
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
+          // 径向渐变：中心亮（42A5F5）→ 过渡层（1565C0）→ 边缘深（0D47A1）
           gradient: LinearGradient(
-            colors: [AppColors.primaryDark, AppColors.primary, AppColors.primaryLight],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF42A5F5),
+              Color(0xFF1565C0),
+              Color(0xFF0D47A1),
+            ],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
           ),
         ),
         child: SafeArea(
@@ -88,15 +94,20 @@ class _OnboardingPageState extends State<OnboardingPage> {
                   itemCount: _pageCount,
                   onPageChanged: (index) =>
                       setState(() => _currentPage = index),
-                  itemBuilder: (context, index) =>
-                      _buildPageContent(context, pages[index]),
+                  itemBuilder: (context, index) {
+                    final page = pages[index];
+                    return _SlideFadeContent(
+                      key: ValueKey('$index-${page.title}'),
+                      child: _buildPageContent(page),
+                    );
+                  },
                 ),
               ),
-              // 底部：圆点指示器；最后一页为「快速开始」三入口 + 立即体验
+              // 底部：圆点指示器；最后一页为单一 CTA 按钮
               Padding(
-                padding: EdgeInsets.fromLTRB(32.w, 8.h, 32.w, 28.h),
+                padding: EdgeInsets.all(32.w),
                 child: _currentPage == _pageCount - 1
-                    ? _buildQuickStart(l10n)
+                    ? _buildStartButton(l10n)
                     : _buildDotsIndicator(),
               ),
             ],
@@ -108,39 +119,24 @@ class _OnboardingPageState extends State<OnboardingPage> {
 
   List<_OnboardingPageData> _buildPages(AppLocalizations l10n) {
     return [
-      // 第 1 页：智能监控——随时随地掌握电站发电
+      // 第 1 页：智能监控 -> "每一度电，尽在掌握"
       _OnboardingPageData(
         asset: CsergyAssets.xiaoshuoStation,
         icon: Icons.solar_power,
-        featureIcons: const [
-          Icons.solar_power,
-          Icons.insights,
-          Icons.map_outlined,
-        ],
         title: l10n.onboardingPage1Title,
         desc: l10n.onboardingPage1Desc,
       ),
-      // 第 2 页：极速告警——异常实时推送
+      // 第 2 页：极速告警 -> "第一时间预警，安心无忧"
       _OnboardingPageData(
         asset: CsergyAssets.xiaoshuoWarning,
         icon: Icons.notifications_active,
-        featureIcons: const [
-          Icons.notifications_active,
-          Icons.bolt,
-          Icons.check_circle_outline,
-        ],
         title: l10n.onboardingPage2Title,
         desc: l10n.onboardingPage2Desc,
       ),
-      // 第 3 页：本地升级——OTA 无网也能升
+      // 第 3 页：本地升级 -> "断网也不怕，固件随心换"
       _OnboardingPageData(
         asset: CsergyAssets.xiaoshuoOtaGuide,
         icon: Icons.system_update,
-        featureIcons: const [
-          Icons.system_update,
-          Icons.wifi_off,
-          Icons.flash_on,
-        ],
         title: l10n.onboardingPage3Title,
         desc: l10n.onboardingPage3Desc,
       ),
@@ -169,69 +165,6 @@ class _OnboardingPageState extends State<OnboardingPage> {
     );
   }
 
-  /// 尾屏快速开始：创建电站 / 添加设备 / 配网三入口 + 立即体验。
-  /// 未登录点击入口会被路由守卫重定向到登录页，登录后由首启向导接管
-  Widget _buildQuickStart(AppLocalizations l10n) {
-    return Column(
-      children: [
-        Text(
-          l10n.str('quick_start'),
-          style: TextStyle(
-            fontSize: 14.sp,
-            fontWeight: FontWeight.w600,
-            color: Colors.white,
-          ),
-        ),
-        SizedBox(height: 12.h),
-        _quickStartButton(
-          icon: Icons.add_home_work_outlined,
-          label: l10n.createStation,
-          onTap: () => context.push('/station/create'),
-        ),
-        SizedBox(height: 8.h),
-        _quickStartButton(
-          icon: Icons.solar_power,
-          label: l10n.addDevice,
-          onTap: () => context.push('/add-device'),
-        ),
-        SizedBox(height: 8.h),
-        _quickStartButton(
-          icon: Icons.wifi,
-          label: l10n.wifiConfig,
-          onTap: () => context.push('/wifi-config'),
-        ),
-        SizedBox(height: 14.h),
-        _buildStartButton(l10n),
-      ],
-    );
-  }
-
-  Widget _quickStartButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return SizedBox(
-      width: double.infinity,
-      height: 44.h,
-      child: OutlinedButton.icon(
-        onPressed: onTap,
-        icon: Icon(icon, size: 18.sp),
-        label: Text(
-          label,
-          style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w500),
-        ),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: Colors.white,
-          side: BorderSide(color: Colors.white.withValues(alpha: 0.5)),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12.r),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildStartButton(AppLocalizations l10n) {
     return SizedBox(
       width: double.infinity,
@@ -241,6 +174,9 @@ class _OnboardingPageState extends State<OnboardingPage> {
           backgroundColor: Colors.white,
           foregroundColor: AppColors.primaryDark,
           elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12.r),
+          ),
         ),
         onPressed: _finish,
         child: Text(
@@ -274,30 +210,16 @@ class _OnboardingPageState extends State<OnboardingPage> {
     );
   }
 
-  Widget _buildPageContent(
-    BuildContext context,
-    _OnboardingPageData page,
-  ) {
+  Widget _buildPageContent(_OnboardingPageData page) {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 40.w),
       child: Column(
         children: [
-          // 主题图标（半透明圆底）
-          Container(
-            width: 64.w,
-            height: 64.w,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.18),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(page.icon, size: 32.w, color: Colors.white),
-          ),
-          SizedBox(height: 20.h),
-          // 小烁吉祥物插画
+          // 小烁吉祥物插画（统一尺寸，视觉焦点）
           Image.asset(
             page.asset,
-            width: 260.w,
-            height: 240.h,
+            width: 280.w,
+            height: 260.h,
             fit: BoxFit.contain,
             errorBuilder: (context, error, stackTrace) => Icon(
               page.icon,
@@ -305,19 +227,19 @@ class _OnboardingPageState extends State<OnboardingPage> {
               color: Colors.white.withValues(alpha: 0.7),
             ),
           ),
-          SizedBox(height: 28.h),
-          // 标题
+          SizedBox(height: 36.h),
+          // 标题：大标题，情感化场景文案
           Text(
             page.title,
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 24.sp,
+              fontSize: 26.sp,
               fontWeight: FontWeight.bold,
               color: Colors.white,
               letterSpacing: 0.5,
             ),
           ),
-          SizedBox(height: 10.h),
+          SizedBox(height: 12.h),
           // 副文案
           Text(
             page.desc,
@@ -328,27 +250,37 @@ class _OnboardingPageState extends State<OnboardingPage> {
               height: 1.5,
             ),
           ),
-          SizedBox(height: 24.h),
-          // 图标组合点缀
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: page.featureIcons
-                .map(
-                  (icon) => Container(
-                    width: 40.w,
-                    height: 40.w,
-                    margin: EdgeInsets.symmetric(horizontal: 6.w),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(12.r),
-                    ),
-                    child: Icon(icon, size: 20.w, color: Colors.white),
-                  ),
-                )
-                .toList(),
-          ),
         ],
       ),
+    );
+  }
+}
+
+/// 页面内容入场动画容器：淡入 + 轻微上移，提升页面切换质感。
+///
+/// 每次页面索引变化时重建（依赖 PageView itemBuilder 的 key 变化），
+/// 内容从下方 40 逻辑像素处淡入上移至目标位置。
+class _SlideFadeContent extends StatefulWidget {
+  final Widget child;
+
+  const _SlideFadeContent({super.key, required this.child});
+
+  @override
+  State<_SlideFadeContent> createState() => _SlideFadeContentState();
+}
+
+class _SlideFadeContentState extends State<_SlideFadeContent> {
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      duration: const Duration(milliseconds: 500),
+      curve: Curves.easeOutCubic,
+      tween: Tween(begin: 0.0, end: 1.0),
+      builder: (context, value, child) => Transform.translate(
+        offset: Offset(0, 40 * (1 - value)),
+        child: Opacity(opacity: value, child: child),
+      ),
+      child: widget.child,
     );
   }
 }

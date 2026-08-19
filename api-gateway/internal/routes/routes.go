@@ -225,6 +225,10 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 	adminGroup.Any("/api/v1/admin/tenants", p.Handler())
 	adminGroup.Any("/api/v1/admin/tenants/*action", p.Handler())
 	adminGroup.Any("/api/v1/admin/metrics", p.Handler())
+	// 系统邮件模板管理 — business-api emailGroup（仅系统管理员，逐条注册避免通配符冲突）
+	adminGroup.Any("/api/v1/email/templates", p.Handler())
+	adminGroup.Any("/api/v1/email/templates/*action", p.Handler())
+	adminGroup.Any("/api/v1/email/test", p.Handler())
 }
 
 func registerDeviceRoutes(userGroup *gin.RouterGroup, p *proxy.ReverseProxy) {

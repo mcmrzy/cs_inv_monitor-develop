@@ -85,20 +85,20 @@ const SliderCaptchaModal: React.FC<SliderCaptchaModalProps> = ({
   return (
     <Modal
       title={
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 20 }}>
           <div style={{ 
-            width: 32, 
-            height: 32, 
-            borderRadius: 8, 
-            background: 'linear-gradient(135deg, #4f6ef7 0%, #6366f1 100%)', 
+            width: 28, 
+            height: 28, 
+            borderRadius: 6, 
+            background: 'linear-gradient(135deg, #0D47A1 0%, #1677ff 100%)', 
             display: 'flex', 
             alignItems: 'center', 
             justifyContent: 'center',
-            boxShadow: '0 2px 8px rgba(79,110,247,0.3)'
+            boxShadow: '0 2px 8px rgba(22,119,255,0.3)'
           }}>
-            <SafetyOutlined style={{ color: '#fff', fontSize: 16 }} />
+            <SafetyOutlined style={{ color: '#fff', fontSize: 14 }} />
           </div>
-          <span style={{ fontSize: 18, fontWeight: 600 }}>{t('captcha.title')}</span>
+          <span style={{ fontSize: 16, fontWeight: 500 }}>{t('captcha.title')}</span>
         </div>
       }
       open={open}
@@ -111,7 +111,7 @@ const SliderCaptchaModal: React.FC<SliderCaptchaModalProps> = ({
         body: { padding: 0 },
         header: { 
           marginBottom: 0,
-          padding: '20px 24px 24px',
+          padding: '12px 20px 16px',
           borderBottom: '1px solid #e2e8f0',
         },
       }}
@@ -166,8 +166,8 @@ const SliderCaptchaModal: React.FC<SliderCaptchaModalProps> = ({
               refresh: <RedoOutlined style={{ fontSize: 18 }} />,
             }}
             style={{
-              '--rcsc-primary': '#4f6ef7',
-              '--rcsc-primary-light': '#e0e7ff',
+              '--rcsc-primary': '#1677ff',
+              '--rcsc-primary-light': '#e6f4ff',
               '--rcsc-success': '#059669',
               '--rcsc-error': '#dc2626',
               '--rcsc-border-color': '#e2e8f0',

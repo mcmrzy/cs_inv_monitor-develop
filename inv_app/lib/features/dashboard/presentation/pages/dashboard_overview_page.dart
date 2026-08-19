@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:inv_app/core/services/connection_mode_service.dart';
+import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
@@ -87,8 +89,10 @@ class _DashboardOverviewPageState extends State<DashboardOverviewPage> {
       child: ListView(
         padding: EdgeInsets.symmetric(vertical: 16.h),
         children: [
-          // 离线数据提示
-          if (data.isFromCache) _buildCacheBanner(),
+          // 离线数据提示（guest 离网模式走本地缓存是预期行为，不提示）
+          if (data.isFromCache &&
+              !getIt<ConnectionModeService>().isGuestLocalMode)
+            _buildCacheBanner(),
           if (state.failedSections.isNotEmpty)
             _buildPartialFailureBanner(context),
 

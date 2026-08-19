@@ -1,20 +1,19 @@
-// 远程设置 —— 三层结构：快捷设置首页（卡片）→ 功能分类页 → 高级参数（工程师模式）
+// 远程设置 —— 两层结构：设置首页（模块分组折叠列表，逐项点击展开）→ 高级参数（工程师模式）
 
 import React, { useState } from 'react'
 import { Empty, Typography, App } from 'antd'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/utils/queryKeys'
+import { deviceApi } from '@/services/deviceApi'
 import useTranslation from '@/hooks/useTranslation'
 import DeviceSelector from './components/DeviceSelector'
 import SettingsHome from './components/SettingsHome'
-import ModulePage from './components/ModulePage'
 import AdvancedPanel from './components/AdvancedPanel'
 import { useDeviceConfig } from './hooks/useDeviceConfig'
-import { MODULES } from './config/fields'
 
 const { Title, Text } = Typography
 
-type View = { name: 'home' } | { name: 'module'; moduleId: string } | { name: 'advanced' }
+type View = { name: 'home' } | { name: 'advanced' }
 
 const RemoteSettingsPage: React.FC = () => {
   const { t } = useTranslation()
@@ -69,12 +68,24 @@ const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({ sn, onDeviceChang
   const handleRead = () => {
     setReading(true)
     message.info(t('remote.readingConfig'))
-    cfg.refetchAll()
-    void queryClient.invalidateQueries({ queryKey: queryKeys.devices.controlState(sn) })
-    setTimeout(() => setReading(false), 1200)
+    // 下发 query_config 查询命令，让设备真实回报当前参数；
+    // 设备回报后 device_control_state.reported 更新，10s 轮询会自动刷新界面
+    deviceApi
+      .sendCommand(sn, { command: 'query_config', params: {} })
+      .then(() => {
+        message.success(t('remote.readCommandSent'))
+      })
+      .catch((err: any) => {
+        const detail =
+          err?.response?.data?.data?.reject_detail ?? err?.response?.data?.message ?? err?.message ?? ''
+        message.error(`${t('remote.commandSendFailed')}${detail ? `: ${detail}` : ''}`)
+      })
+      .finally(() => {
+        cfg.refetchAll()
+        void queryClient.invalidateQueries({ queryKey: queryKeys.devices.controlState(sn) })
+        setReading(false)
+      })
   }
-
-  const activeModule = view.name === 'module' ? MODULES.find((m) => m.id === view.moduleId) : undefined
 
   return (
     <>
@@ -92,12 +103,8 @@ const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({ sn, onDeviceChang
         <SettingsHome
           cfg={cfg}
           loading={cfg.schemaLoading && cfg.stateLoading}
-          onOpenModule={(moduleId) => setView({ name: 'module', moduleId })}
           onOpenAdvanced={() => setView({ name: 'advanced' })}
         />
-      )}
-      {view.name === 'module' && activeModule && (
-        <ModulePage module={activeModule} cfg={cfg} onBack={() => setView({ name: 'home' })} />
       )}
       {view.name === 'advanced' && <AdvancedPanel cfg={cfg} onBack={() => setView({ name: 'home' })} />}
     </>

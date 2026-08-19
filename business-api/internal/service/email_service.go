@@ -216,6 +216,8 @@ func getSubjectByCodeType(codeType string) string {
 		return "注册验证码"
 	case "reset_password":
 		return "重置密码验证码"
+	case "login":
+		return "登录验证码"
 	default:
 		return "验证码"
 	}

@@ -63,14 +63,14 @@ function buildPreviewHtml(subject: string, contentBlock: string): string {
 <tr><td align="center" style="padding:24px 12px;">
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;font-family:'PingFang SC','Microsoft YaHei',-apple-system,'Segoe UI',Roboto,Arial,sans-serif;">
 <tr><td style="background-color:#1677ff;background-image:linear-gradient(135deg,#1677ff 0%,#00D4FF 100%);border-radius:16px 16px 0 0;padding:22px 28px;">
-  <span style="color:#ffffff;font-size:20px;font-weight:700;">&#9728;&#65039; CS-INV</span>
+  <span style="color:#ffffff;font-size:20px;font-weight:700;">&#9728;&#65039; CSERGY</span>
   <span style="color:#E6F7FF;font-size:12px;float:right;">预览仅供示意 / Preview only</span>
 </td></tr>
 <tr><td style="background-color:#ffffff;padding:28px;">
   ${contentBlock || ''}
 </td></tr>
 <tr><td style="background-color:#ffffff;border-radius:0 0 16px 16px;padding:16px 28px;border-top:1px solid #EEF1F6;">
-  <span style="font-size:12px;color:#B0B8C4;">© CS-INV · 光伏逆变器监控平台（此邮件由系统自动发出，请勿直接回复）</span>
+  <span style="font-size:12px;color:#B0B8C4;">© CSERGY · 光伏逆变器监控平台（此邮件由系统自动发出，请勿直接回复）</span>
 </td></tr>
 </table>
 </td></tr>

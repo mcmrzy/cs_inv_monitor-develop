@@ -112,75 +112,68 @@ class _AuthPageState extends State<AuthPage>
                       ],
                     ),
                     // 登录/注册表单组件级切换动画
-                    child: AnimatedSwitcher(
+                    // AnimatedSize：两表单高度差大（登录~210dp / 注册~490dp），
+                    // 且 AnimatedSwitcher 切换瞬间 Stack 取 max 高度、结束时收缩，
+                    // 会造成底部内容上下跳动；用 AnimatedSize 让卡片高度平滑过渡
+                    child: AnimatedSize(
                       duration: const Duration(milliseconds: 350),
-                      switchInCurve: Curves.easeOutCubic,
-                      switchOutCurve: Curves.easeInCubic,
-                      transitionBuilder: _buildSwitchTransition,
-                      child: _mode == AuthMode.login
-                          ? const LoginForm(key: ValueKey('login-form'))
-                          : const RegisterForm(
-                              key: ValueKey('register-form'),
-                            ),
+                      curve: Curves.easeInOutCubic,
+                      alignment: Alignment.topCenter,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 350),
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        transitionBuilder: _buildSwitchTransition,
+                        child: _mode == AuthMode.login
+                            ? const LoginForm(key: ValueKey('login-form'))
+                            : const RegisterForm(
+                                key: ValueKey('register-form'),
+                              ),
+                      ),
                     ),
                   ),
                 ),
                 _buildSwitchRow(),
                 SizedBox(height: 16.h),
-                // 本地离网模式入口（需求 6：产品化，与登录卡片同风格的描边卡片）
-                GestureDetector(
-                  onTap: _enterGuestLocalMode,
-                  child: Container(
-                    margin: const EdgeInsets.fromLTRB(24, 0, 24, 0),
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 16.w,
-                      vertical: 13.h,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(14.r),
-                      border: Border.all(
-                        color: AppColors.primary.withValues(alpha: 0.35),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(
-                            0xFF1565C0,
-                          ).withValues(alpha: 0.06),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
+                // 本地离网模式入口：仅登录模式展示；居中轻量胶囊次级入口
+                // （主色浅底延续页面蓝白色系，弱化层级、不与渐变登录主按钮抢焦点）
+                if (_mode == AuthMode.login)
+                  Center(
+                    child: GestureDetector(
+                      onTap: _enterGuestLocalMode,
+                      child: Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 16.w,
+                          vertical: 9.h,
                         ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.wifi_off_rounded,
-                          size: 18.sp,
-                          color: AppColors.primary,
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(20.r),
                         ),
-                        SizedBox(width: 10.w),
-                        Expanded(
-                          child: Text(
-                            AppLocalizations.of(
-                              context,
-                            )!.str('auth_local_mode_link'),
-                            style: TextStyle(
-                              fontSize: 14.sp,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.wifi_off_rounded,
+                              size: 15.sp,
                               color: AppColors.primary,
-                              fontWeight: FontWeight.w500,
                             ),
-                          ),
+                            SizedBox(width: 6.w),
+                            Text(
+                              AppLocalizations.of(
+                                context,
+                              )!.str('auth_local_mode_link'),
+                              style: TextStyle(
+                                fontSize: 13.sp,
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
                         ),
-                        Icon(
-                          Icons.chevron_right_rounded,
-                          size: 18.sp,
-                          color: AppColor.textHint(context),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
-                ),
                 SizedBox(height: 32.h),
               ],
             ),
