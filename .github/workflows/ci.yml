@@ -16,6 +16,8 @@ jobs:
         module: [business-api, device-communication, api-gateway, mqtt-kafka-bridge]
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: true
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26.6'
@@ -95,6 +97,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: true
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26.6'
