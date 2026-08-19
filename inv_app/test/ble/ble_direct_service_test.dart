@@ -195,4 +195,48 @@ void main() {
 
     await service.dispose();
   });
+
+  test('forceReleaseResources releases resources regardless of enabled state',
+      () async {
+    final service = BleDirectService(
+      adapter: adapter,
+      manager: manager,
+      polling: polling,
+      storage: storage,
+    );
+
+    // 服务未启用时，forceReleaseResources 也应释放资源
+    expect(service.enabled, isFalse);
+    await service.forceReleaseResources();
+
+    verify(() => manager.stopAutoConnect()).called(1);
+    verify(() => manager.disconnectAll()).called(1);
+    verify(() => polling.stop()).called(1);
+    expect(service.enabled, isFalse);
+
+    await service.dispose();
+  });
+
+  test('forceReleaseResources stops enabled service without persisting',
+      () async {
+    final service = BleDirectService(
+      adapter: adapter,
+      manager: manager,
+      polling: polling,
+      storage: storage,
+    );
+    await service.setEnabled(true);
+    expect(service.enabled, isTrue);
+
+    await service.forceReleaseResources();
+
+    verify(() => manager.stopAutoConnect()).called(1);
+    verify(() => manager.disconnectAll()).called(1);
+    verify(() => polling.stop()).called(1);
+    expect(service.enabled, isFalse);
+    // 不应持久化关闭状态（与 setEnabled(false) 不同）
+    verifyNever(() => storage.saveIsBleDirectEnabled(false));
+
+    await service.dispose();
+  });
 }

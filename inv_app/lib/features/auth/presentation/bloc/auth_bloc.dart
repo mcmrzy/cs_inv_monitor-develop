@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:inv_app/core/data/local_cache_database.dart';
 import 'package:inv_app/core/services/ble/ble_device_manager.dart';
+import 'package:inv_app/core/services/ble/ble_direct_service.dart';
 import 'package:inv_app/core/services/offline/offline_op_log_store.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/services/connection_mode_service.dart';
@@ -332,6 +333,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       await getIt<BleDeviceKeyStore>().clearAll();
     } catch (e) {
       debugPrint('[AuthBloc] logout local cleanup error: $e');
+    }
+
+    // 停止 BLE 直连服务（释放 BLE 适配器、断开全部会话、停止扫描/轮询）：
+    // 否则上一账号启用的 BLE 直连会在后台持续占用适配器，
+    // 导致新注册用户进入配网/直连页时 BLE 扫描无结果。
+    // forceReleaseResources 不论 _enabled 标记状态，确保适配器彻底释放。
+    try {
+      await getIt<BleDirectService>().forceReleaseResources();
+    } catch (e) {
+      debugPrint('[AuthBloc] BLE direct cleanup error (ignored): $e');
     }
 
     // 退出登录时同步退出 guest 本地模式并切回云端模式：

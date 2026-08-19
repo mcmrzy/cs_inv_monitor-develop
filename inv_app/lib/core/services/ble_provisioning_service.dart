@@ -180,8 +180,15 @@ class BleProvisioningService {
       // 挂起 BLE 直连（自动连接/轮询/发现扫描）：
       // 直连会话占用 GATT 链路会导致设备停止广播，配网扫描不到
       try {
-        await getIt<BleDirectService>().suspendForProvisioning();
-        _directSuspended = true;
+        final directService = getIt<BleDirectService>();
+        if (directService.enabled) {
+          await directService.suspendForProvisioning();
+          _directSuspended = true;
+        } else {
+          // 防御性清理：上一账号登出后直连服务可能处于不一致状态
+          // （enabled=false 但底层扫描/连接仍在运行），强制释放资源
+          await directService.forceReleaseResources();
+        }
       } catch (e) {
         debugPrint('[BLE] suspend direct service failed (ignored): $e');
       }
@@ -189,6 +196,7 @@ class BleProvisioningService {
       // 请求权限
       final hasPermissions = await requestBluetoothPermissions();
       if (!hasPermissions) {
+        debugPrint('[BLE] Provisioning scan: Bluetooth permissions denied');
         _emitStatus(BleProvisioningStatus.error);
         _running = false;
         _resumeDirectIfNeeded();
@@ -198,6 +206,7 @@ class BleProvisioningService {
       // 检查蓝牙是否可用
       final isAvailable = await isBluetoothAvailable();
       if (!isAvailable) {
+        debugPrint('[BLE] Provisioning scan: Bluetooth adapter not available');
         _emitStatus(BleProvisioningStatus.error);
         _running = false;
         _resumeDirectIfNeeded();
