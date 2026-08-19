@@ -335,6 +335,10 @@ var basicUserGETPrefixes = []string{
 	"/api/v1/parallel-groups",
 	"/api/v1/work-orders",
 	"/api/v1/work-order-stats",
+	// 地理编码辅助（地址↔坐标，创建电站页地图选点依赖）：登录即可访问，
+	// 与 POST /api/v1/stations 的自助创建放行保持一致；无租户数据，
+	// 无需组织级 stations:view 授权（含 /geocode/reverse 逆向编码）。
+	"/api/v1/geocode",
 	// 用户操作历史：按当前用户维度聚合，数据范围由 business-api 过滤
 	"/api/v1/op-logs",
 	// 帮助中心配置：只读配置（文档 URL/客服电话/FAQ），登录即可获取
