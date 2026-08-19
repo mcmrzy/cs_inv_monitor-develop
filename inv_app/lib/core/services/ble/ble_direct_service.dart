@@ -143,6 +143,24 @@ class BleDirectService {
     _startScanLoop();
   }
 
+  /// 强制释放所有 BLE 资源（不论 _enabled 标记状态）。
+  ///
+  /// 用于会话切换（登出/注册）时确保 BLE 适配器被完全释放，
+  /// 防止上一账号残留的直连服务占用适配器导致新用户配网扫描失败。
+  /// 与 [setEnabled(false)] 不同，本方法忽略 _enabled 守卫。
+  Future<void> forceReleaseResources() async {
+    _enabled = false;
+    _suspended = false;
+    _scanTimer?.cancel();
+    _scanTimer = null;
+    await _scanSub?.cancel();
+    _scanSub = null;
+    polling.stop();
+    await manager.stopAutoConnect();
+    await manager.disconnectAll();
+    // 不改持久化状态：调用方（登出清理）不需要修改用户的 BLE 直连开关偏好
+  }
+
   Future<void> _start() async {
     final status = await adapter.status;
     if (status != BleAdapterStatus.on) {

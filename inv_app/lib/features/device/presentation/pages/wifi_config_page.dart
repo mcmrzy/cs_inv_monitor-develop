@@ -130,6 +130,22 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
     } catch (_) {}
   }
 
+  /// 在 deactivate 中取消所有流订阅，确保不会有回调在 element 被
+  /// deactivated 后触发 setState（framework.dart 断言错误的根因）。
+  /// deactivate 在 Navigator pop 时先于 dispose 调用，且 mounted 在
+  /// super.deactivate() 后变为 false；在此处取消订阅可封堵 deactivate
+  /// 与 dispose 之间的回调窗口。
+  @override
+  void deactivate() {
+    _bleStatusSub?.cancel();
+    _bleStatusSub = null;
+    _bleDevicesSub?.cancel();
+    _bleDevicesSub = null;
+    _bleResultSub?.cancel();
+    _bleResultSub = null;
+    super.deactivate();
+  }
+
   @override
   void dispose() {
     _workingSsidController.dispose();
@@ -137,9 +153,6 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
     _pinController.dispose();
     _scSsidController.dispose();
     _scPasswordController.dispose();
-    _bleStatusSub?.cancel();
-    _bleDevicesSub?.cancel();
-    _bleResultSub?.cancel();
     _bleProvisioningService.dispose();
     super.dispose();
   }
@@ -657,7 +670,11 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
     });
 
     final pinResult = await _bleProvisioningService.verifyPin(pin);
-    if (!pinResult.success && mounted) {
+    // widget 可能在 verifyPin（8s 超时）期间被 pop/dispose，
+    // 此时 mounted=false，继续调用 ScaffoldMessenger.of(context) 会触发
+    // framework.dart 断言错误（deactivated element 访问）
+    if (!mounted) return;
+    if (!pinResult.success) {
       setState(() {
         _provisioning = false;
       });
@@ -675,7 +692,8 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       password: password,
     );
 
-    if (!result.success && mounted) {
+    if (!mounted) return;
+    if (!result.success) {
       setState(() {
         _provisioning = false;
       });
@@ -705,6 +723,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
   Future<void> _triggerAutoBind() async {
     final device = _selectedBleDevice;
     if (device == null) return;
+    if (!mounted) return;
     if (!await getIt<StorageService>().getIsBleDirectEnabled()) return;
     final binding = getIt<BleBindingService>();
     await binding.bindAfterProvision(
