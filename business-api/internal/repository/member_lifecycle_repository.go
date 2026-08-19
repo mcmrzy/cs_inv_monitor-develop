@@ -632,7 +632,7 @@ func (r *MemberLifecycleRepository) ListMembersByOrgID(ctx context.Context, orgI
 			CASE WHEN o.org_type = 'manufacturer' THEN 'org_admin' ELSE o.org_type END as role,
 			m.status,
 			COALESCE(u.email, '') as email,
-			u.phone,
+			COALESCE(u.phone, '') as phone,
 			u.nickname,
 			m.joined_at
 		FROM organization_memberships m

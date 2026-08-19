@@ -58,7 +58,7 @@ func (r *AuthorizationRepository) ResolveAuthorizationSessionContext(ctx context
 	result.Actor.OrganizationID = organizationID
 	err := r.db.QueryRow(ctx, `
 		SELECT m.root_tenant_id,m.id,m.version,m.authorization_version,
-		       u.session_version,u.phone,u.is_system_admin
+		       u.session_version,COALESCE(u.phone,''),u.is_system_admin
 		FROM organization_memberships m
 		JOIN organizations o
 		  ON o.root_tenant_id=m.root_tenant_id AND o.id=m.organization_id
@@ -101,7 +101,7 @@ func (r *AuthorizationRepository) ResolveDefaultSessionContext(ctx context.Conte
 	result.Actor.UserID = userID
 	err := r.db.QueryRow(ctx, `
 		SELECT m.root_tenant_id, m.organization_id, m.id, m.version, m.authorization_version,
-		       u.session_version, u.phone, u.is_system_admin
+		       u.session_version, COALESCE(u.phone,''), u.is_system_admin
 		FROM organization_memberships m
 		JOIN organizations o
 		  ON o.root_tenant_id=m.root_tenant_id AND o.id=m.organization_id
