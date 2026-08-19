@@ -1,0 +1,14 @@
+
+ RUN  v4.1.10 D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv-admin-frontend
+
+stdout | src/locales/index.test.ts > locale catalogs > defines every literal translation key used by production code
+Ignored 0 remote.xxx keys (manual translation pending): []
+
+ ✓ src/locales/index.test.ts (6 tests) 202ms
+
+ Test Files  1 passed (1)
+      Tests  6 passed (6)
+   Start at  11:05:50
+   Duration  1.72s (transform 673ms, setup 177ms, import 753ms, tests 202ms, environment 468ms)
+
+EXIT=0

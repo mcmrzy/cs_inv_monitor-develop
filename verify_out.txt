@@ -1,0 +1,8 @@
+
+=== TSC ===
+TSC_EXIT=0
+=== VITEST ===
+ Test Files  2 passed (2)
+      Tests  8 passed (8)
+   Duration  2.15s (transform 800ms, setup 496ms, import 847ms, tests 190ms, environment 1.56s)
+VITEST_EXIT=0
