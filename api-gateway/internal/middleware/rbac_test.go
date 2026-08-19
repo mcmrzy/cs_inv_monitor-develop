@@ -431,6 +431,35 @@ func TestRBACGuard_AuthenticatedOnlyPath(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, w.Code)
 }
 
+func TestRBACGuard_Geocode_BasicUserGET_Pass(t *testing.T) {
+	// 回归：App 创建电站页地图选点依赖 GET /api/v1/geocode（及 /geocode/reverse），
+	// 普通注册用户无组织级 stations:view 授权，须在 basicUserGET 白名单放行
+	// （与 POST /api/v1/stations 的自助创建放行保持一致）。
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer rdb.Close()
+
+	// 用户 42 无任何权限授权（空权限缓存）
+	mr.Set("gw:user_perms:42:0:0", "[]")
+
+	router := gin.New()
+	router.Use(NewRBACMiddleware(rdb, nil, 300).RBACGuard())
+	router.GET("/api/v1/geocode", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+	router.GET("/api/v1/geocode/reverse", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+
+	for _, p := range []string{"/api/v1/geocode", "/api/v1/geocode/reverse"} {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, p, nil)
+		req.Header.Set("X-User-ID", "42")
+		router.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code, "GET %s should pass for basic user", p)
+	}
+}
+
 func TestRBACGuard_StaleNegativeCacheRefreshes(t *testing.T) {
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
