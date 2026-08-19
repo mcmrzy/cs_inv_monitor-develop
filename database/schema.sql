@@ -5391,8 +5391,17 @@ DROP VIEW IF EXISTS v_user_station_access CASCADE;
 DROP VIEW IF EXISTS v_user_hierarchy CASCADE;
 DROP VIEW IF EXISTS v_user_device_access CASCADE;
 
--- 组织体系设备访问视图：用户可访问本组织及下级组织成员拥有的设备，系统管理员可访问全部。
+-- 组织体系设备访问视图：用户可访问本组织及下级组织成员拥有的设备，
+-- 资源持有者（user_id）天然可访问自己的设备，系统管理员可访问全部（迁移 106 增加 owner 分支）。
 CREATE OR REPLACE VIEW v_user_device_access (user_id, device_sn) AS
+-- Owner branch: users can always access devices they own
+SELECT
+    d.user_id,
+    d.sn AS device_sn
+FROM devices d
+WHERE d.deleted_at IS NULL
+  AND d.sn IS NOT NULL
+UNION
 SELECT DISTINCT
     viewer_om.user_id,
     d.sn AS device_sn
@@ -5413,13 +5422,22 @@ FROM users u
 CROSS JOIN devices d
 WHERE u.is_system_admin = true
   AND u.deleted_at IS NULL
-  AND d.deleted_at IS NULL;
+  AND d.deleted_at IS NULL
+  AND d.sn IS NOT NULL;
 
 COMMENT ON VIEW v_user_device_access IS
-'Organization-based device access view: users can access devices owned by members of their organization and descendant organizations. System admins have access to all devices.';
+'Organization-based device access view: owners can always access their own devices; users can access devices owned by members of their organization and descendant organizations. System admins have access to all devices.';
 
--- 组织体系电站访问视图：用户可访问本组织及下级组织成员拥有的电站，系统管理员可访问全部。
+-- 组织体系电站访问视图：用户可访问本组织及下级组织成员拥有的电站，
+-- 资源持有者（user_id）天然可访问自己的电站，系统管理员可访问全部（迁移 106 增加 owner 分支）。
 CREATE OR REPLACE VIEW v_user_station_access (user_id, station_id) AS
+-- Owner branch: users can always access stations they own
+SELECT
+    s.user_id,
+    s.id AS station_id
+FROM stations s
+WHERE s.deleted_at IS NULL
+UNION
 SELECT DISTINCT
     viewer_om.user_id,
     s.id AS station_id
@@ -5442,7 +5460,7 @@ WHERE u.is_system_admin = true
   AND s.deleted_at IS NULL;
 
 COMMENT ON VIEW v_user_station_access IS
-'Organization-based station access view: users can access stations owned by members of their organization and descendant organizations. System admins have access to all stations.';
+'Organization-based station access view: owners can always access their own stations; users can access stations owned by members of their organization and descendant organizations. System admins have access to all stations.';
 
 -- 组织体系用户层级视图：将每个用户映射到其组织及下级组织内的所有用户（替代旧 parent_id 递归树）。
 -- depth=0 表示自身，depth>0 表示组织级后代。
@@ -7113,5 +7131,9 @@ INSERT INTO schema_migrations (version, name) VALUES (95, '095_device_alias_stat
 -- 4 张新表等）由 migrator 在服务器启动时按编号迁移执行。
 -- 096 设计为幂等可重放（ALTER IF NOT EXISTS / INSERT ON CONFLICT），
 -- 全新 initdb 库启动时执行一次即可与逐版本升级的旧库收敛一致。
+-- 097-107 同样由 migrator 按编号执行（本基线仅登记 0..95）；其中 105
+-- （member_transfer_requests 表）与 106（访问视图 owner 分支）的 DDL 已同步
+-- 进本基线，均为幂等定义，migrator 重放安全；107 为存量用户组织身份
+-- backfill，全新库无孤儿用户，执行为空操作。
 
--- Next migration version to use: 097
+-- Next migration version to use: 108

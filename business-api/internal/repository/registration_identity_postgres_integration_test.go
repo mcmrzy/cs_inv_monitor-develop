@@ -1,0 +1,290 @@
+//go:build integration
+
+package repository
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"inv-api-server/internal/model"
+)
+
+// setupIdentityTestDB 为注册身份测试创建独立临时库并加载 squash schema。
+func setupIdentityTestDB(t *testing.T) (*pgxpool.Pool, func()) {
+	t.Helper()
+	ctx := context.Background()
+	host := envOrFallback("TEST_DB_HOST", "localhost")
+	port := envOrFallback("TEST_DB_PORT", "15432")
+	user := envOrFallback("TEST_DB_USER", "testuser")
+	password := envOrFallback("TEST_DB_PASSWORD", "testpass")
+	admin, err := pgxpool.New(ctx, fmt.Sprintf("postgres://%s:%s@%s:%s/postgres?sslmode=disable", user, password, host, port))
+	require.NoError(t, err)
+	require.NoError(t, admin.Ping(ctx))
+
+	dbName := fmt.Sprintf("reg_identity_%d", time.Now().UnixNano())
+	_, err = admin.Exec(ctx, "CREATE DATABASE "+dbName)
+	require.NoError(t, err)
+	pool, err := pgxpool.New(ctx, fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", user, password, host, port, dbName))
+	require.NoError(t, err)
+
+	repoRoot := filepath.Clean(filepath.Join("..", "..", ".."))
+	schemaBytes, err := os.ReadFile(filepath.Join(repoRoot, "database", "schema.sql"))
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, string(schemaBytes))
+	require.NoError(t, err, "load schema.sql")
+
+	// manufacturer 根组织（id=root_tenant_id，closure/tenant_roots 由触发器维护）
+	_, err = pool.Exec(ctx, `
+		INSERT INTO organizations (id, root_tenant_id, parent_id, org_type, name, status)
+		VALUES (9100, 9100, NULL, 'manufacturer', 'Test Manufacturer', 'active')
+	`)
+	require.NoError(t, err)
+
+	// admin 连接池由 cleanup 末尾关闭：先断开测试库连接再删库
+	return pool, func() {
+		pool.Close()
+		_, _ = admin.Exec(ctx, `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname=$1`, dbName)
+		_, dropErr := admin.Exec(ctx, "DROP DATABASE IF EXISTS "+dbName)
+		assert.NoError(t, dropErr)
+		admin.Close()
+	}
+}
+
+func execMigrationFile(t *testing.T, pool *pgxpool.Pool, name string) {
+	t.Helper()
+	repoRoot := filepath.Clean(filepath.Join("..", "..", ".."))
+	content, err := os.ReadFile(filepath.Join(repoRoot, "database", "migrations", name))
+	require.NoError(t, err)
+	_, err = pool.Exec(context.Background(), string(content))
+	require.NoError(t, err, "execute migration %s", name)
+}
+
+// assertCustomerIdentity 断言用户拥有完整的个人 customer 组织身份：
+// customer 组织（code 标记 + 挂 manufacturer 下）+ 活跃 membership +
+// customer 角色分配 + RoleDefaultPermissions["customer"] 全量授权。
+func assertCustomerIdentity(t *testing.T, pool *pgxpool.Pool, userID int64) {
+	t.Helper()
+	ctx := context.Background()
+
+	var orgID, membershipID int64
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT o.id, m.id
+		FROM organization_memberships m
+		JOIN organizations o ON o.root_tenant_id = m.root_tenant_id AND o.id = m.organization_id
+		WHERE m.user_id = $1 AND m.status = 'active'
+		  AND o.org_type = 'customer' AND o.deleted_at IS NULL
+	`, userID).Scan(&orgID, &membershipID), "user %d must have an active customer org membership", userID)
+
+	var orgCode string
+	var parentID int64
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT code, parent_id FROM organizations WHERE id = $1
+	`, orgID).Scan(&orgCode, &parentID))
+	assert.Equal(t, fmt.Sprintf("personal-%d", userID), orgCode, "personal org must be tagged with code")
+	assert.Equal(t, int64(9100), parentID, "personal org must hang under the manufacturer root")
+
+	var roleCode, roleStatus string
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT ra.role_code, ra.status
+		FROM membership_role_assignments ra
+		WHERE ra.membership_id = $1 AND ra.status = 'active'
+	`, membershipID).Scan(&roleCode, &roleStatus))
+	assert.Equal(t, "customer", roleCode)
+	assert.Equal(t, "active", roleStatus)
+
+	var grantCount int
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM role_permission_grants pg
+		JOIN membership_role_assignments ra ON ra.id = pg.role_assignment_id
+		WHERE ra.membership_id = $1
+	`, membershipID).Scan(&grantCount))
+	assert.Equal(t, len(RoleDefaultPermissions["customer"]), grantCount,
+		"grants must match RoleDefaultPermissions[customer]")
+
+	var closureDepth int
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT depth FROM organization_closure
+		WHERE root_tenant_id = 9100 AND ancestor_id = 9100 AND descendant_id = $1
+	`, orgID).Scan(&closureDepth))
+	assert.Equal(t, 1, closureDepth, "personal org must be a direct child of manufacturer root")
+}
+
+func TestCreateUserWithOrgIdentityGrantsCustomerBaseline(t *testing.T) {
+	pool, cleanup := setupIdentityTestDB(t)
+	defer cleanup()
+
+	repo := NewUserRepository(pool, nil)
+	user := &model.User{
+		Email:        "register-test@example.com",
+		PasswordHash: "$2a$10$examplehash",
+		Nickname:     "Register Tester",
+		Status:       1,
+	}
+	require.NoError(t, repo.CreateUserWithOrgIdentity(context.Background(), user))
+	assert.NotZero(t, user.ID)
+	assertCustomerIdentity(t, pool, user.ID)
+
+	// 权限码与登录链路（GetUserPermissionCodes）一致
+	codes, err := repo.GetUserPermissionCodes(context.Background(), user.ID)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, RoleDefaultPermissions["customer"], codes)
+}
+
+func TestEnsureUserOrgIdentityIdempotent(t *testing.T) {
+	pool, cleanup := setupIdentityTestDB(t)
+	defer cleanup()
+
+	repo := NewUserRepository(pool, nil)
+	user := &model.User{
+		Email:        "idempotent-test@example.com",
+		PasswordHash: "$2a$10$examplehash",
+		Nickname:     "Idempotent Tester",
+		Status:       1,
+	}
+	require.NoError(t, repo.CreateUserWithOrgIdentity(context.Background(), user))
+
+	// 已有身份时再次补建必须无副作用
+	require.NoError(t, repo.EnsureUserOrgIdentity(context.Background(), user.ID, user.Nickname))
+	var membershipCount int
+	require.NoError(t, pool.QueryRow(context.Background(), `
+		SELECT COUNT(*) FROM organization_memberships WHERE user_id = $1
+	`, user.ID).Scan(&membershipCount))
+	assert.Equal(t, 1, membershipCount)
+}
+
+func TestMigration107BackfillsOrphanUsers(t *testing.T) {
+	pool, cleanup := setupIdentityTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// 两个孤儿用户（模拟迁移前的自助注册残留）+ 一个已有组织身份的用户
+	_, err := pool.Exec(ctx, `
+		INSERT INTO users (id, phone, email, password_hash, nickname, status) VALUES
+			(9201, '13800009201', 'orphan1@example.com', 'hash', 'Orphan One', 1),
+			(9202, NULL, 'orphan2@example.com', 'hash', '', 1)
+	`)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO organizations (id, root_tenant_id, parent_id, org_type, name, status)
+		VALUES (9210, 9100, 9100, 'customer', 'Existing Org', 'active')
+	`)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO users (id, phone, password_hash, nickname, status)
+		VALUES (9203, '13800009203', 'hash', 'Existing Member', 1)
+	`)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO organization_memberships (root_tenant_id, organization_id, user_id, status)
+		VALUES (9100, 9210, 9203, 'active')
+	`)
+	require.NoError(t, err)
+
+	execMigrationFile(t, pool, "107_backfill_personal_orgs_for_users.up.sql")
+
+	assertCustomerIdentity(t, pool, 9201)
+	assertCustomerIdentity(t, pool, 9202) // 空昵称用户兜底为 User_<id>
+
+	// 已有身份的用户保持原组织，不被 backfill 改写
+	var existingOrgID int64
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT organization_id FROM organization_memberships
+		WHERE user_id = 9203 AND status = 'active'
+	`).Scan(&existingOrgID))
+	assert.Equal(t, int64(9210), existingOrgID)
+
+	// 幂等重放不产生重复身份
+	execMigrationFile(t, pool, "107_backfill_personal_orgs_for_users.up.sql")
+	var totalMemberships int
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM organization_memberships
+		WHERE user_id IN (9201, 9202, 9203)
+	`).Scan(&totalMemberships))
+	assert.Equal(t, 3, totalMemberships)
+}
+
+func TestMigration106OwnerBranchGrantsStationAccess(t *testing.T) {
+	pool, cleanup := setupIdentityTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// 孤儿用户 + 其自建电站（无任何组织身份）
+	_, err := pool.Exec(ctx, `
+		INSERT INTO users (id, phone, email, password_hash, nickname, status)
+		VALUES (9301, NULL, 'owner@example.com', 'hash', 'Owner', 1)
+	`)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO stations (id, user_id, name, province, city, address, capacity)
+		VALUES (9301, 9301, 'Owner Station', '湖南省', '长沙市', '麓谷', 10.0)
+	`)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO users (id, phone, email, password_hash, nickname, status)
+		VALUES (9302, NULL, 'stranger@example.com', 'hash', 'Stranger', 1)
+	`)
+	require.NoError(t, err)
+
+	// 迁移 106 后 owner 分支生效：持有者可访问自己的电站，无关用户不可访问
+	execMigrationFile(t, pool, "106_add_owner_access_to_permission_views.up.sql")
+
+	var ownerAccess, strangerAccess bool
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT EXISTS(SELECT 1 FROM v_user_station_access WHERE user_id = 9301 AND station_id = 9301)
+	`).Scan(&ownerAccess))
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT EXISTS(SELECT 1 FROM v_user_station_access WHERE user_id = 9302 AND station_id = 9301)
+	`).Scan(&strangerAccess))
+	assert.True(t, ownerAccess, "owner branch must grant access to own stations without org identity")
+	assert.False(t, strangerAccess, "strangers must not gain access through the owner branch")
+}
+
+// TestResolveSessionContextHandlesNullPhone 迁移 104 允许 users.phone 为 NULL
+// （海外用户纯邮箱注册）。授权会话上下文查询必须容忍 NULL phone，
+// 否则此类用户登录在 generate token 阶段 scan 失败直接 500。
+func TestResolveSessionContextHandlesNullPhone(t *testing.T) {
+	pool, cleanup := setupIdentityTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	repo := NewUserRepository(pool, nil)
+	user := &model.User{
+		Email:        "null-phone@example.com",
+		PasswordHash: "$2a$10$examplehash",
+		Nickname:     "Null Phone Tester",
+		Status:       1,
+	}
+	require.NoError(t, repo.CreateUserWithOrgIdentity(ctx, user))
+
+	// 前置确认：纯邮箱注册的 phone 落库为 NULL（空串由 userCreateInsertSQL 转 NULL）
+	var phoneNull bool
+	require.NoError(t, pool.QueryRow(ctx, `SELECT phone IS NULL FROM users WHERE id=$1`, user.ID).Scan(&phoneNull))
+	require.True(t, phoneNull, "test precondition: users.phone must be NULL for email-only registration")
+
+	authRepo := NewAuthorizationRepository(pool)
+
+	resolved, err := authRepo.ResolveDefaultSessionContext(ctx, user.ID)
+	require.NoError(t, err, "default session context must resolve for NULL-phone users")
+	assert.True(t, resolved.Valid())
+	assert.Equal(t, int64(9100), resolved.Actor.RootTenantID)
+
+	explicit, err := authRepo.ResolveAuthorizationSessionContext(ctx, user.ID, resolved.Actor.OrganizationID)
+	require.NoError(t, err, "explicit session context must resolve for NULL-phone users")
+	assert.True(t, explicit.Valid())
+	assert.Empty(t, explicit.Phone)
+}
+
+func envOrFallback(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
+}

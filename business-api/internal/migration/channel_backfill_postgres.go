@@ -550,7 +550,7 @@ func (s *PostgresOrganizationBackfillStore) Complete(ctx context.Context, result
 	}
 	sourceRows, err := tx.Query(ctx, `
 		SELECT i.source_fingerprint,
-		       u.id,u.phone,COALESCE(u.email,''),COALESCE(u.nickname,''),u.role,u.parent_id,u.status,u.deleted_at IS NOT NULL
+		       u.id,COALESCE(u.phone,''),COALESCE(u.email,''),COALESCE(u.nickname,''),u.role,u.parent_id,u.status,u.deleted_at IS NOT NULL
 		FROM channel_migration_items i
 		JOIN users u ON u.id=i.source_user_id
 		WHERE i.run_id=$1 AND i.source_table='users'

@@ -389,7 +389,8 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		Country:      req.Country,
 	}
 
-	if err := h.userService.Create(c.Request.Context(), user); err != nil {
+	// 同步建立个人 customer 组织身份，保证注册用户拥有终端用户权限基线
+	if err := h.userService.CreateWithOrgIdentity(c.Request.Context(), user); err != nil {
 		response.Error(c, 500, "create user failed")
 		return
 	}
@@ -1086,8 +1087,8 @@ func (h *AuthHandler) EmailRegister(c *gin.Context) {
 		Country:      req.Country,
 	}
 
-	if err := h.userService.Create(c.Request.Context(), user); err != nil {
-		logger.Error("create user failed", zap.String("email", req.Email), zap.Error(err))
+	if err := h.userService.CreateWithOrgIdentity(c.Request.Context(), user); err != nil {
+		logger.Error("create user with org identity failed", zap.String("email", req.Email), zap.Error(err))
 		response.Error(c, 500, "创建用户失败，请稍后重试")
 		return
 	}
@@ -1338,13 +1339,13 @@ func (h *AuthHandler) JVerifyLogin(c *gin.Context) {
 		return
 	}
 
-	// 用户不存在则自动创建
+	// 用户不存在则自动创建（同步建立个人 customer 组织身份）
 	if user == nil {
 		user = &model.User{
 			Phone:  phone,
 			Status: 1,
 		}
-		if err := h.userService.Create(c.Request.Context(), user); err != nil {
+		if err := h.userService.CreateWithOrgIdentity(c.Request.Context(), user); err != nil {
 			response.Error(c, 500, "create user failed")
 			return
 		}

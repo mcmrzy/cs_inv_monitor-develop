@@ -84,6 +84,17 @@ func (s *UserService) Create(ctx context.Context, user *model.User) error {
 	return s.repo.Create(ctx, user)
 }
 
+// CreateWithOrgIdentity 创建用户并同步建立个人 customer 组织身份（注册主流程）。
+// 自助注册用户与邀请挂靠用户由此获得一致的 customer 权限基线。
+func (s *UserService) CreateWithOrgIdentity(ctx context.Context, user *model.User) error {
+	return s.repo.CreateUserWithOrgIdentity(ctx, user)
+}
+
+// EnsureOrgIdentity 为已存在用户补建组织身份（幂等），存量孤儿用户兑底。
+func (s *UserService) EnsureOrgIdentity(ctx context.Context, userID int64, nickname string) error {
+	return s.repo.EnsureUserOrgIdentity(ctx, userID, nickname)
+}
+
 func (s *UserService) UpdatePassword(ctx context.Context, userID int64, passwordHash string) error {
 	return s.repo.UpdatePassword(ctx, userID, passwordHash)
 }
