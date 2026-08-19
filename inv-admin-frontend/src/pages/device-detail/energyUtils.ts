@@ -89,8 +89,12 @@ export interface EnergyMetrics {
   gridVoltage: number | null
   gridFreq: number | null
   acInputPower: number | null
+  acInputApparentPower: number | null
   acChargePower: number | null
+  acChargeApparentPower: number | null
   acBypassPower: number | null
+  acBypassApparentPower: number | null
+  outputApparentPower: number | null
   // 发电机
   genPower: number
   // 今日/累计能量 kWh
@@ -104,6 +108,15 @@ export interface EnergyMetrics {
   totalLoad: number
   dailyFeedEnergy: number
   dailyGridImport: number
+  // V2 能量分项
+  dailyGenEnergy: number
+  totalGenEnergy: number
+  dailyAcChargeEnergy: number
+  totalAcChargeEnergy: number
+  dailyAcBypassEnergy: number
+  totalAcBypassEnergy: number
+  dailyOutputEnergy: number
+  totalOutputEnergy: number
   // 状态
   workState: number | null
   faultCode: number | null
@@ -128,65 +141,84 @@ export interface EnergyMetrics {
 export function extractEnergyMetrics(rt: Record<string, any> | null | undefined): EnergyMetrics {
   const r = rt ?? {}
   // V2 显式充/放电功率优先（方向明确），回退带符号 charge_power
-  const chgW = pick(r, 'battery_charge_power', 'bat.battery_charge_power')
-  const disW = pick(r, 'battery_discharge_power', 'bat.battery_discharge_power')
+  const chgW = pick(r, 'bat.battery_charge_power', 'battery_charge_power')
+  const disW = pick(r, 'bat.battery_discharge_power', 'battery_discharge_power')
   const battPower = (chgW != null || disW != null)
     ? (chgW ?? 0) - (disW ?? 0)
     : pick(r, 'charge_power', 'batt.power', 'battery_power', 'batt_power') ?? 0
   // 市电输入功率：grid_power/meter_power 优先，回退 V2 的 ac_input_power + ac_charge_power
-  const acInputPower = pick(r, 'ac_input_power', 'ac.ac_input_power')
-  const acChargePower = pick(r, 'ac_charge_power', 'chr.ac_charge_power', 'ac.ac_charge_power')
+  const acInputPower = pick(r, 'ac.ac_input_power', 'ac_input_power')
+  const acInputApparentPower = pick(r, 'ac.ac_input_apparent_power', 'ac_input_apparent_power')
+  const acChargePower = pick(r, 'chr.ac_charge_power', 'ac_charge_power')
+  const acChargeApparentPower = pick(r, 'chr.ac_charge_apparent_power', 'ac.ac_charge_apparent_power', 'ac_charge_apparent_power')
   const gridPower = pick(r, 'grid_power', 'meter_power')
     ?? ((acInputPower ?? 0) + (acChargePower ?? 0))
   return {
-    pvPower: pick(r, 'pv_total_power', 'pv.pv_power_total', 'total_power') ?? 0,
-    pv1Power: pick(r, 'pv1_power', 'pv.pv1_power') ?? 0,
-    pv1Voltage: pick(r, 'pv1_voltage', 'pv.pv1_voltage') ?? 0,
-    pv2Power: pick(r, 'pv2_power', 'pv.pv2_power') ?? 0,
-    pv2Voltage: pick(r, 'pv2_voltage', 'pv.pv2_voltage') ?? 0,
+    pvPower: pick(r, 'pv.pv_total_power', 'pv_total_power', 'pv.pv_power_total', 'total_power') ?? 0,
+    pv1Power: pick(r, 'pv.pv1_power', 'pv1_power') ?? 0,
+    pv1Voltage: pick(r, 'pv.pv1_voltage', 'pv1_voltage') ?? 0,
+    pv2Power: pick(r, 'pv.pv2_power', 'pv2_power') ?? 0,
+    pv2Voltage: pick(r, 'pv.pv2_voltage', 'pv2_voltage') ?? 0,
     battPower,
-    battSoc: pick(r, 'battery_soc', 'soc', 'batt.soc') ?? 0,
-    battVoltage: pick(r, 'battery_voltage', 'batt.voltage', 'voltage'),
-    battCurrent: pick(r, 'battery_current', 'batt_current', 'batt.current', 'current'),
+    battSoc: pick(r, 'bat.battery_soc', 'battery_soc', 'soc') ?? 0,
+    battVoltage: pick(r, 'bat.battery_voltage', 'battery_voltage', 'batt.voltage', 'voltage'),
+    battCurrent: pick(r, 'bat.battery_current', 'battery_current', 'batt_current', 'batt.current', 'current'),
     batteryChargePower: chgW,
     batteryDischargePower: disW,
-    loadPower: pick(r, 'ac_power', 'ac.power', 'output_power', 'ac_active_power') ?? 0,
-    loadPercent: pick(r, 'load_percent', 'load_rate', 'ac.load_percent'),
-    acVoltage: pick(r, 'ac_voltage', 'ac.voltage', 'output_voltage', 'ac_output_voltage'),
-    acCurrent: pick(r, 'ac_current', 'ac.current', 'output_current'),
-    acFrequency: pick(r, 'ac_frequency', 'ac.frequency', 'output_frequency'),
+    // V2 使用 ac.output_power，V1 使用 ac_power / ac_active_power
+    loadPower: pick(r, 'ac.output_power', 'output_power', 'ac_power', 'ac.power', 'ac_active_power') ?? 0,
+    loadPercent: pick(r, 'sys.load_percent', 'load_percent', 'load_rate', 'ac.load_percent'),
+    // V2 使用 ac.ac_output_voltage，V1 使用 ac_voltage
+    acVoltage: pick(r, 'ac.ac_output_voltage', 'ac_output_voltage', 'ac_voltage', 'ac.voltage', 'output_voltage'),
+    // V2 使用 ac.output_current，V1 使用 ac_current
+    acCurrent: pick(r, 'ac.output_current', 'output_current', 'ac_current', 'ac.current'),
+    // V2 使用 ac.ac_output_frequency，V1 使用 ac_frequency
+    acFrequency: pick(r, 'ac.ac_output_frequency', 'ac_output_frequency', 'ac_frequency', 'ac.frequency', 'output_frequency'),
     gridPower,
-    gridVoltage: pick(r, 'meter_voltage', 'grid_voltage'),
-    gridFreq: pick(r, 'meter_frequency', 'grid_frequency'),
+    gridVoltage: pick(r, 'ac.grid_voltage', 'grid_voltage', 'meter_voltage'),
+    gridFreq: pick(r, 'ac.grid_frequency', 'grid_frequency', 'meter_frequency'),
     acInputPower,
+    acInputApparentPower,
     acChargePower,
-    acBypassPower: pick(r, 'ac_bypass_power', 'ac.ac_bypass_power'),
+    acChargeApparentPower,
+    acBypassPower: pick(r, 'ac.ac_bypass_power', 'ac_bypass_power'),
+    acBypassApparentPower: pick(r, 'ac.ac_bypass_apparent_power', 'ac_bypass_apparent_power'),
+    outputApparentPower: pick(r, 'ac.output_apparent_power', 'output_apparent_power', 'ac_apparent_power', 'ac.apparent_power'),
     genPower: pick(r, 'gen_power', 'gen.power') ?? 0,
-    dailyPv: pick(r, 'daily_pv', 'energy.daily_pv', 'daily_pv_energy') ?? 0,
-    totalPv: pick(r, 'total_pv', 'energy.total_pv', 'total_pv_energy') ?? 0,
-    dailyCharge: pick(r, 'daily_charge', 'energy.daily_charge', 'daily_charge_energy') ?? 0,
-    totalCharge: pick(r, 'total_charge', 'energy.total_charge', 'total_charge_energy') ?? 0,
-    dailyDischarge: pick(r, 'daily_discharge', 'energy.daily_discharge', 'daily_discharge_energy') ?? 0,
-    totalDischarge: pick(r, 'total_discharge', 'energy.total_discharge', 'total_discharge_energy') ?? 0,
-    dailyLoad: pick(r, 'daily_load', 'energy.daily_load', 'daily_load_energy', 'output_energy_daily') ?? 0,
-    totalLoad: pick(r, 'total_load', 'energy.total_load', 'total_load_energy') ?? 0,
+    dailyPv: pick(r, 'eng.daily_pv_energy', 'daily_pv_energy', 'daily_pv', 'energy.daily_pv') ?? 0,
+    totalPv: pick(r, 'eng.total_pv_energy', 'total_pv_energy', 'total_pv', 'energy.total_pv') ?? 0,
+    dailyCharge: pick(r, 'eng.daily_charge_energy', 'daily_charge_energy', 'daily_charge', 'energy.daily_charge') ?? 0,
+    totalCharge: pick(r, 'eng.total_charge_energy', 'total_charge_energy', 'total_charge', 'energy.total_charge') ?? 0,
+    dailyDischarge: pick(r, 'eng.daily_discharge_energy', 'daily_discharge_energy', 'daily_discharge', 'energy.daily_discharge') ?? 0,
+    totalDischarge: pick(r, 'eng.total_discharge_energy', 'total_discharge_energy', 'total_discharge', 'energy.total_discharge') ?? 0,
+    dailyLoad: pick(r, 'eng.output_energy_daily', 'output_energy_daily', 'daily_load_energy', 'daily_load', 'energy.daily_load') ?? 0,
+    totalLoad: pick(r, 'eng.output_energy_total', 'output_energy_total', 'total_load_energy', 'total_load', 'energy.total_load') ?? 0,
     dailyFeedEnergy: pick(r, 'daily_feed_energy', 'feed_energy_daily', 'energy.daily_feed_energy') ?? 0,
     dailyGridImport: pick(r, 'daily_grid_import', 'grid_import_energy_daily', 'energy.daily_grid_import') ?? 0,
-    workState: pick(r, 'work_state', 'run_status', 'sys.state'),
-    faultCode: pick(r, 'fault_code'),
+    // V2 能量分项
+    dailyGenEnergy: pick(r, 'eng.gen_energy_daily', 'gen_energy_daily') ?? 0,
+    totalGenEnergy: pick(r, 'eng.gen_energy_total', 'gen_energy_total') ?? 0,
+    dailyAcChargeEnergy: pick(r, 'eng.ac_charge_energy_daily', 'ac_charge_energy_daily') ?? 0,
+    totalAcChargeEnergy: pick(r, 'eng.ac_charge_energy_total', 'ac_charge_energy_total') ?? 0,
+    dailyAcBypassEnergy: pick(r, 'eng.ac_bypass_energy_daily', 'ac_bypass_energy_daily') ?? 0,
+    totalAcBypassEnergy: pick(r, 'eng.ac_bypass_energy_total', 'ac_bypass_energy_total') ?? 0,
+    dailyOutputEnergy: pick(r, 'eng.output_energy_daily', 'output_energy_daily') ?? 0,
+    totalOutputEnergy: pick(r, 'eng.output_energy_total', 'output_energy_total') ?? 0,
+    workState: pick(r, 'sys.work_state', 'work_state', 'run_status', 'sys.state'),
+    faultCode: pick(r, 'sys.fault_code', 'fault_code'),
     runStatus: pick(r, 'run_status'),
-    sysStatusRaw: pick(r, 'sys_status', 'sys.sys_status'),
-    warning: pick(r, 'warning', 'sys.warning'),
-    bmsWarning: pick(r, 'bms_warning', 'sys.bms_warning'),
-    inverterTemp: pick(r, 'inverter_temperature', 'inverter_temp', 'temp_inv', 'sys.inverter_temperature'),
-    boostTemp: pick(r, 'temp_boost', 'boost_temp', 'boost_temperature', 'sys.boost_temperature'),
-    transformerTemp: pick(r, 'temp_transformer', 'transformer_temp', 'transformer_temperature', 'sys.transformer_temperature'),
-    pvTemp: pick(r, 'pv_temperature', 'temp_pv', 'sys.pv_temperature'),
+    sysStatusRaw: pick(r, 'sys.sys_status', 'sys_status'),
+    warning: pick(r, 'sys.warning', 'warning'),
+    bmsWarning: pick(r, 'sys.bms_warning', 'bms_warning'),
+    inverterTemp: pick(r, 'sys.inverter_temperature', 'inverter_temperature', 'inverter_temp', 'temp_inv'),
+    boostTemp: pick(r, 'sys.boost_temperature', 'boost_temperature', 'temp_boost', 'boost_temp'),
+    transformerTemp: pick(r, 'sys.transformer_temperature', 'transformer_temperature', 'temp_transformer', 'transformer_temp'),
+    pvTemp: pick(r, 'sys.pv_temperature', 'pv_temperature', 'temp_pv'),
     ambientTemp: pick(r, 'ambient_temperature', 'ambient_temp', 'temp_env'),
-    dcBusVoltage: pick(r, 'dc_bus_voltage', 'sys.dc_bus_voltage'),
-    fanSpeed: pick(r, 'fan_speed_percent', 'fan.inv_fan_speed', 'inv_fan_speed'),
+    dcBusVoltage: pick(r, 'sys.dc_bus_voltage', 'dc_bus_voltage'),
+    fanSpeed: pick(r, 'fan.inv_fan_speed', 'inv_fan_speed', 'fan_speed_percent'),
     mpptFanSpeed: pick(r, 'fan.mppt_fan_speed', 'mppt_fan_speed'),
-    efficiency: pick(r, 'efficiency'),
+    efficiency: pick(r, 'sys.efficiency', 'efficiency'),
     runtimeHours: pick(r, 'runtime_hours', 'energy.runtime_hours'),
   }
 }

@@ -170,6 +170,13 @@ export default {
     'fields.total_discharge_capacity': '总放电容量',
     'fields.total_charge_time': '总充电时长',
     'fields.total_discharge_time': '总放电时长',
+    // ── V2（CS-L10-6K2）AC 输出字段（protocol v2 键名） ──
+    'fields.ac_output_voltage': 'AC 输出电压',
+    'fields.ac_output_frequency': 'AC 输出频率',
+    'fields.output_power': '输出有功功率',
+    'fields.output_apparent_power': '输出视在功率',
+    'fields.output_current': '输出电流',
+
     // ── V2（CS-L10-6K2）新字段 ──
     'fields.sys_status': '系统状态位',
     'fields.warning': '告警位',
@@ -379,6 +386,13 @@ export default {
     'fields.total_discharge_capacity': 'Total Discharge Capacity',
     'fields.total_charge_time': 'Total Charge Time',
     'fields.total_discharge_time': 'Total Discharge Time',
+    // ── V2 (CS-L10-6K2) AC output fields (protocol v2 key names) ──
+    'fields.ac_output_voltage': 'AC Output Voltage',
+    'fields.ac_output_frequency': 'AC Output Frequency',
+    'fields.output_power': 'Output Active Power',
+    'fields.output_apparent_power': 'Output Apparent Power',
+    'fields.output_current': 'Output Current',
+
     // ── V2 (CS-L10-6K2) new fields ──
     'fields.sys_status': 'System Status',
     'fields.warning': 'Warning',

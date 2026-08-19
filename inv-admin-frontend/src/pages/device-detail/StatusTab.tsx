@@ -34,6 +34,9 @@ const GROUP_TITLES_ZH: Record<string, string> = {
   ac: 'AC',
   bat: '电池',
   eng: '能量',
+  fan: '风扇',
+  diag: '诊断',
+  sock: '插槽',
 }
 
 const GROUP_TITLES_EN: Record<string, string> = {
@@ -42,6 +45,9 @@ const GROUP_TITLES_EN: Record<string, string> = {
   ac: 'AC',
   bat: 'Battery',
   eng: 'Energy',
+  fan: 'Fan',
+  diag: 'Diagnostics',
+  sock: 'Socket',
 }
 
 // realtime 展平后的候选 key（兼容 V1 last_valid 旧 key 与 V2 协议字段名）

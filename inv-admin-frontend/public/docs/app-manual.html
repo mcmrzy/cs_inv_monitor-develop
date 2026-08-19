@@ -6,156 +6,618 @@
   <title>App 使用指南 - 辰烁光伏监控系统</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; line-height: 1.7; color: #333; background: #f7f8fa; }
-    .container { max-width: 780px; margin: 0 auto; padding: 24px 16px 60px; }
-    h1 { font-size: 22px; color: #1565C0; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #1565C0; }
-    h2 { font-size: 18px; color: #1F2937; margin: 28px 0 12px; padding-left: 10px; border-left: 4px solid #1565C0; }
-    h3 { font-size: 16px; color: #374151; margin: 20px 0 8px; }
-    p { margin: 8px 0; }
-    ol, ul { margin: 8px 0 8px 24px; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; line-height: 1.8; color: #333; background: #f7f8fa; }
+    .container { max-width: 820px; margin: 0 auto; padding: 24px 16px 80px; }
+    h1 { font-size: 24px; color: #1565C0; margin-bottom: 8px; }
+    .subtitle { color: #666; font-size: 14px; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid #1565C0; }
+    h2 { font-size: 18px; color: #1F2937; margin: 32px 0 14px; padding-left: 12px; border-left: 4px solid #1565C0; }
+    h3 { font-size: 16px; color: #374151; margin: 22px 0 10px; }
+    h4 { font-size: 14px; color: #4B5563; margin: 16px 0 8px; }
+    p { margin: 8px 0; font-size: 15px; }
+    ol, ul { margin: 8px 0 8px 24px; font-size: 15px; }
     li { margin: 6px 0; }
     .tip { background: #EFF6FF; border-left: 4px solid #1565C0; padding: 12px 16px; margin: 16px 0; border-radius: 4px; font-size: 14px; }
     .warn { background: #FEF3CD; border-left: 4px solid #F9A825; padding: 12px 16px; margin: 16px 0; border-radius: 4px; font-size: 14px; }
+    .info { background: #F0FDF4; border-left: 4px solid #22C55E; padding: 12px 16px; margin: 16px 0; border-radius: 4px; font-size: 14px; }
     .step { display: flex; gap: 12px; margin: 12px 0; }
-    .step-num { min-width: 28px; height: 28px; border-radius: 50%; background: #1565C0; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; }
-    .step-content { flex: 1; padding-top: 3px; }
-    table { width: 100%; border-collapse: collapse; margin: 12px 0; }
-    th, td { border: 1px solid #E5E7EB; padding: 8px 12px; text-align: left; font-size: 14px; }
+    .step-num { min-width: 28px; height: 28px; border-radius: 50%; background: #1565C0; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; flex-shrink: 0; }
+    .step-content { flex: 1; padding-top: 3px; font-size: 15px; }
+    table { width: 100%; border-collapse: collapse; margin: 14px 0; }
+    th, td { border: 1px solid #E5E7EB; padding: 10px 14px; text-align: left; font-size: 14px; }
     th { background: #F3F4F6; font-weight: 600; }
-    code { background: #F3F4F6; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
-    .nav { background: #fff; border: 1px solid #E5E7EB; border-radius: 8px; padding: 16px 20px; margin: 20px 0; }
-    .nav h3 { margin: 0 0 8px; font-size: 15px; color: #1565C0; }
-    .nav ul { margin: 0; list-style: none; }
-    .nav li { margin: 4px 0; }
-    .nav a { color: #1565C0; text-decoration: none; }
-    .nav a:hover { text-decoration: underline; }
+    code { background: #F3F4F6; padding: 2px 6px; border-radius: 4px; font-size: 13px; font-family: 'SF Mono', Consolas, monospace; }
+    .toc { background: #fff; border: 1px solid #E5E7EB; border-radius: 8px; padding: 20px 24px; margin: 20px 0; }
+    .toc h3 { margin: 0 0 12px; font-size: 16px; color: #1565C0; }
+    .toc ul { list-style: none; margin: 0; padding: 0; }
+    .toc li { margin: 6px 0; }
+    .toc a { color: #1565C0; text-decoration: none; font-size: 14px; }
+    .toc a:hover { text-decoration: underline; }
+    .toc .sub { padding-left: 20px; }
+    .section-divider { border: none; border-top: 1px dashed #D1D5DB; margin: 32px 0; }
+    .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }
+    .feature-card { background: #fff; border: 1px solid #E5E7EB; border-radius: 8px; padding: 16px; }
+    .feature-card h4 { margin: 0 0 6px; color: #1565C0; font-size: 15px; }
+    .feature-card p { margin: 0; font-size: 13px; color: #6B7280; }
+    .footer { text-align: center; color: #9CA3AF; font-size: 12px; margin-top: 48px; padding-top: 16px; border-top: 1px solid #E5E7EB; }
   </style>
 </head>
 <body>
 <div class="container">
   <h1>辰烁光伏 App 使用指南</h1>
-  <p>辰烁光伏 App 是您的光伏电站随身助手，支持实时监控、远程控制、固件升级等功能。本文档介绍各功能的使用方法。</p>
+  <p class="subtitle">适用于 iOS / Android 双平台 &nbsp;|&nbsp; 技术栈：Flutter + Dart<br>文档版本：V2.0 &nbsp;|&nbsp; 最后更新：2026年8月</p>
 
-  <div class="nav">
-    <h3>快速导航</h3>
+  <div class="toc">
+    <h3>📋 目录</h3>
     <ul>
-      <li><a href="#login">注册与登录</a></li>
-      <li><a href="#station">电站管理</a></li>
-      <li><a href="#monitor">实时监控</a></li>
-      <li><a href="#control">远程控制</a></li>
-      <li><a href="#alarm">告警通知</a></li>
-      <li><a href="#ota">固件升级</a></li>
-      <li><a href="#profile">个人设置</a></li>
+      <li><a href="#sec1">一、下载与安装</a></li>
+      <li><a href="#sec2">二、注册与登录</a></li>
+      <li><a href="#sec3">三、首页与导航</a></li>
+      <li><a href="#sec4">四、电站管理</a></li>
+      <li><a href="#sec5">五、设备管理</a></li>
+      <li><a href="#sec6">六、实时监控</a></li>
+      <li><a href="#sec7">七、历史数据</a></li>
+      <li><a href="#sec8">八、远程控制</a></li>
+      <li><a href="#sec9">九、告警与通知</a></li>
+      <li><a href="#sec10">十、OTA 固件升级</a></li>
+      <li><a href="#sec11">十一、WiFi 配网</a></li>
+      <li><a href="#sec12">十二、设备分享</a></li>
+      <li><a href="#sec13">十三、帮助与工单</a></li>
+      <li><a href="#sec14">十四、个人设置</a></li>
+      <li><a href="#sec15">十五、常见问题 FAQ</a></li>
     </ul>
   </div>
 
-  <h2 id="login">一、注册与登录</h2>
+  <!-- ========== 第一章 ========== -->
+  <h2 id="sec1">一、下载与安装</h2>
 
-  <h3>1.1 手机号登录</h3>
-  <div class="step"><div class="step-num">1</div><div class="step-content">打开 App，在登录页面输入手机号</div></div>
-  <div class="step"><div class="step-num">2</div><div class="step-content">点击「发送验证码」，收到短信后输入 6 位验证码</div></div>
-  <div class="step"><div class="step-num">3</div><div class="step-content">点击「登录」即可进入系统；首次登录会自动注册账号</div></div>
-
-  <h3>1.2 一键登录（推荐）</h3>
-  <p>如果您的手机号支持本机号码认证（移动/联通/电信），可以直接点击「一键登录」按钮，无需输入验证码，速度更快更安全。</p>
-
-  <div class="tip">
-    <strong>忘记密码？</strong>本系统使用验证码登录，无需记忆密码。如果收不到验证码，请检查手机号是否正确，或联系客服。
-  </div>
-
-  <h2 id="station">二、电站管理</h2>
-
-  <h3>2.1 创建电站</h3>
-  <div class="step"><div class="step-num">1</div><div class="step-content">进入「电站」页面，点击右上角 <strong>「+ 创建电站」</strong></div></div>
-  <div class="step"><div class="step-num">2</div><div class="step-content">填写电站名称（如"家庭光伏"、"厂房屋顶"）、装机容量、安装地址</div></div>
-  <div class="step"><div class="step-num">3</div><div class="step-content">点击「创建」，然后将设备绑定到该电站</div></div>
-
-  <h3>2.2 添加设备到电站</h3>
-  <ol>
-    <li>进入电站详情页，点击「添加设备」</li>
-    <li>扫描设备铭牌上的二维码，或手动输入设备序列号（SN）</li>
-    <li>确认绑定后，设备即出现在电站设备列表中</li>
-  </ol>
-
-  <h2 id="monitor">三、实时监控</h2>
-
-  <h3>3.1 电站概览</h3>
-  <p>进入电站详情页，可查看：</p>
-  <ul>
-    <li><strong>能量流图：</strong>直观展示 光伏板→逆变器→电网/负载/电池 的能量流动方向和实时功率</li>
-    <li><strong>今日发电：</strong>今日累计发电量和收益估算</li>
-    <li><strong>设备列表：</strong>该电站下所有逆变器的运行状态</li>
-  </ul>
-
-  <h3>3.2 设备详情</h3>
-  <p>点击设备可查看详细参数：</p>
+  <h3>1.1 系统要求</h3>
   <table>
-    <tr><th>数据项</th><th>说明</th></tr>
-    <tr><td>直流输入电压/电流</td><td>光伏板输出的直流电压（V）和电流（A）</td></tr>
-    <tr><td>交流输出电压/电流/频率</td><td>并网侧的交流参数</td></tr>
-    <tr><td>实时功率</td><td>当前发电功率（kW）</td></tr>
-    <tr><td>日/月/年/总发电量</td><td>各时段累计发电量（kWh）</td></tr>
-    <tr><td>内部温度</td><td>逆变器内部温度，超过 75°C 会触发高温保护</td></tr>
-    <tr><td>运行状态</td><td>正常/待机/故障/离线</td></tr>
+    <tr><th>平台</th><th>最低版本</th><th>推荐版本</th></tr>
+    <tr><td>Android</td><td>6.0 (API 23)</td><td>10.0 及以上</td></tr>
+    <tr><td>iOS</td><td>12.0</td><td>15.0 及以上</td></tr>
   </table>
 
-  <h3>3.3 历史数据</h3>
-  <p>在设备详情页切换到「历史数据」标签，可查看：</p>
+  <h3>1.2 下载方式</h3>
   <ul>
-    <li><strong>日视图：</strong>当天逐小时功率曲线</li>
-    <li><strong>月视图：</strong>当月每日发电量柱状图</li>
-    <li><strong>年视图：</strong>当年每月发电量柱状图</li>
+    <li><strong>Android：</strong>应用商店搜索「辰烁光伏」或扫描官网二维码下载 APK</li>
+    <li><strong>iOS：</strong>App Store 搜索「辰烁光伏」下载</li>
   </ul>
 
-  <h2 id="control">四、远程控制</h2>
-  <p>对于支持远程控制的设备型号，App 提供以下控制功能：</p>
+  <div class="tip">
+    <strong>权限说明：</strong>App 需要以下权限才能正常使用：<br>
+    • <strong>定位权限：</strong>WiFi 配网时扫描附近设备热点、电站位置选择<br>
+    • <strong>蓝牙权限：</strong>BLE 蓝牙配网和本地控制<br>
+    • <strong>通知权限：</strong>接收告警推送和升级提醒<br>
+    • <strong>相机权限：</strong>扫描设备二维码绑定
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- ========== 第二章 ========== -->
+  <h2 id="sec2">二、注册与登录</h2>
+
+  <h3>2.1 手机号验证码登录（推荐）</h3>
+  <div class="step"><div class="step-num">1</div><div class="step-content">打开 App，在登录页面输入手机号</div></div>
+  <div class="step"><div class="step-num">2</div><div class="step-content">点击「发送验证码」，收到短信后输入 6 位验证码</div></div>
+  <div class="step"><div class="step-num">3</div><div class="step-content">点击「登录」即可进入系统；首次登录自动注册账号</div></div>
+
+  <h3>2.2 一键登录（运营商认证）</h3>
+  <p>如果您的手机号支持本机号码认证（移动/联通/电信），可直接点击「一键登录」按钮，无需输入验证码，速度更快更安全。</p>
+
+  <h3>2.3 邮箱登录</h3>
+  <p>海外用户可使用邮箱 + 密码方式登录。</p>
+
+  <div class="info">
+    <strong>无需记密码：</strong>本系统主要使用验证码登录，无需记忆密码。如忘记密码，可通过验证码重置。
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- ========== 第三章 ========== -->
+  <h2 id="sec3">三、首页与导航</h2>
+  <p>App 底部导航栏包含 4 个主要标签页：</p>
+
+  <table>
+    <tr><th>标签</th><th>页面</th><th>功能</th></tr>
+    <tr><td>🏠 首页</td><td>Dashboard</td><td>电站总览、今日发电统计、快速入口、告警概览</td></tr>
+    <tr><td>🔌 设备</td><td>设备列表</td><td>所有绑定设备、添加设备、设备状态</td></tr>
+    <tr><td>📊 电站</td><td>电站详情</td><td>能量流图、实时数据、历史图表</td></tr>
+    <tr><td>👤 我的</td><td>个人中心</td><td>个人资料、设置、帮助中心、工单</td></tr>
+  </table>
+
+  <h3>3.1 首页概览</h3>
+  <p>首页（Dashboard）提供以下信息：</p>
   <ul>
-    <li><strong>开关机：</strong>远程开启或关闭设备并网</li>
-    <li><strong>功率限制：</strong>设置最大并网功率（适用于限电场景）</li>
-    <li><strong>时间校准：</strong>同步设备时钟</li>
-    <li><strong>参数配置：</strong>调整并网电压上下限、功率因数等（仅专业人员操作）</li>
+    <li><strong>今日发电统计：</strong>今日发电量、收益估算、等效减排量</li>
+    <li><strong>电站卡片：</strong>每个电站的实时功率、今日发电、设备在线率</li>
+    <li><strong>告警摘要：</strong>最新未处理告警数量和级别</li>
+    <li><strong>快速入口：</strong>添加设备、扫码绑定、OTA 升级、告警中心</li>
+  </ul>
+
+  <hr class="section-divider">
+
+  <!-- ========== 第四章 ========== -->
+  <h2 id="sec4">四、电站管理</h2>
+
+  <h3>4.1 创建电站</h3>
+  <div class="step"><div class="step-num">1</div><div class="step-content">进入「电站」页面，点击右上角 <strong>「+ 创建电站」</strong></div></div>
+  <div class="step"><div class="step-num">2</div><div class="step-content">填写电站信息：
+    <ul>
+      <li><strong>电站名称：</strong>如"家庭光伏"、"厂房屋顶"、"XX村3号电站"</li>
+      <li><strong>装机容量：</strong>光伏板总功率（kWp）</li>
+      <li><strong>安装地址：</strong>支持地图定位和手动输入</li>
+      <li><strong>时区：</strong>自动根据定位设置，也可手动调整</li>
+    </ul>
+  </div></div>
+  <div class="step"><div class="step-num">3</div><div class="step-content">点击「创建」，然后将设备绑定到该电站</div></div>
+
+  <h3>4.2 编辑电站</h3>
+  <p>在电站详情页点击「编辑」图标，可修改电站名称、地址、装机容量等信息。</p>
+
+  <h3>4.3 电站详情</h3>
+  <p>进入电站详情页，可查看：</p>
+  <ul>
+    <li><strong>能量流图：</strong>直观展示 光伏板 → 逆变器 → 电网/负载/电池 的能量流动方向和实时功率值</li>
+    <li><strong>今日发电：</strong>累计发电量和收益估算</li>
+    <li><strong>设备列表：</strong>该电站下所有逆变器的运行状态、实时功率</li>
+    <li><strong>发电趋势：</strong>当日逐小时功率曲线</li>
+  </ul>
+
+  <div class="tip">
+    <strong>多电站管理：</strong>一个账号可创建多个电站，适用于拥有多个安装地点的用户（如代理商、安装商）。
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- ========== 第五章 ========== -->
+  <h2 id="sec5">五、设备管理</h2>
+
+  <h3>5.1 添加设备</h3>
+  <p>进入「设备」页面，点击右上角「+ 添加设备」，支持以下方式：</p>
+  <table>
+    <tr><th>方式</th><th>说明</th></tr>
+    <tr><td>自动扫描</td><td>扫描同一 WiFi 下已配网的设备</td></tr>
+    <tr><td>扫码绑定</td><td>扫描设备铭牌上的二维码</td></tr>
+    <tr><td>手动输入 SN</td><td>输入设备序列号（16 位）</td></tr>
+  </table>
+
+  <h3>5.2 设备列表</h3>
+  <p>设备列表展示所有已绑定设备，支持：</p>
+  <ul>
+    <li><strong>状态筛选：</strong>在线 / 离线 / 故障 / 全部</li>
+    <li><strong>排序：</strong>按名称、功率、发电量、绑定时间</li>
+    <li><strong>搜索：</strong>按设备名称或 SN 搜索</li>
+    <li><strong>批量操作：</strong>OTA 升级、参数配置</li>
+  </ul>
+
+  <h3>5.3 设备详情</h3>
+  <p>点击设备进入详情页，包含以下标签页：</p>
+  <table>
+    <tr><th>标签</th><th>内容</th></tr>
+    <tr><td>实时数据</td><td>所有遥测参数实时展示（5 秒刷新）</td></tr>
+    <tr><td>历史数据</td><td>日/月/年发电曲线和统计数据</td></tr>
+    <tr><td>控制</td><td>远程控制面板（开关机、功率限制等）</td></tr>
+    <tr><td>告警</td><td>该设备的告警历史记录</td></tr>
+    <tr><td>设置</td><td>设备名称编辑、WiFi 配置、高级设置</td></tr>
+    <tr><td>OTA</td><td>固件版本、升级历史、检查更新</td></tr>
+  </table>
+
+  <h3>5.4 设备信息</h3>
+  <p>在设备详情 → 设置页面可查看：</p>
+  <ul>
+    <li>设备序列号（SN）</li>
+    <li>设备型号</li>
+    <li>ESP32 固件版本</li>
+    <li>ARM 固件版本</li>
+    <li>WiFi 信号强度（RSSI）</li>
+    <li>IP 地址</li>
+    <li>绑定时间</li>
+    <li>运行时长</li>
+  </ul>
+
+  <hr class="section-divider">
+
+  <!-- ========== 第六章 ========== -->
+  <h2 id="sec6">六、实时监控</h2>
+
+  <h3>6.1 数据面板</h3>
+  <p>设备详情 → 实时数据标签，展示以下实时参数：</p>
+  <table>
+    <tr><th>数据项</th><th>说明</th><th>单位</th><th>刷新频率</th></tr>
+    <tr><td>实时功率</td><td>当前发电功率</td><td>W / kW</td><td>5s</td></tr>
+    <tr><td>PV 输入电压 / 电流</td><td>光伏板输出直流参数</td><td>V / A</td><td>5s</td></tr>
+    <tr><td>AC 输出电压 / 电流 / 频率</td><td>并网侧交流参数</td><td>V / A / Hz</td><td>5s</td></tr>
+    <tr><td>日发电量</td><td>今日累计发电量</td><td>kWh</td><td>60s</td></tr>
+    <tr><td>月发电量</td><td>本月累计发电量</td><td>kWh</td><td>60s</td></tr>
+    <tr><td>总发电量</td><td>设备安装以来累计</td><td>kWh</td><td>60s</td></tr>
+    <tr><td>电池 SOC</td><td>电池电量百分比（储能型号）</td><td>%</td><td>5s</td></tr>
+    <tr><td>电池电压 / 电流</td><td>电池侧参数（储能型号）</td><td>V / A</td><td>5s</td></tr>
+    <tr><td>内部温度</td><td>逆变器内部温度</td><td>°C</td><td>5s</td></tr>
+    <tr><td>转换效率</td><td>DC→AC 转换效率</td><td>%</td><td>5s</td></tr>
+    <tr><td>运行状态</td><td>正常 / 待机 / 故障 / 离线</td><td>—</td><td>实时</td></tr>
+  </table>
+
+  <h3>6.2 并机数据</h3>
+  <p>对于多台逆变器并机运行的场景，可查看并机汇总数据：</p>
+  <ul>
+    <li>并机总功率</li>
+    <li>各台设备功率分配</li>
+    <li>并机通信状态</li>
+  </ul>
+
+  <h3>6.3 三相数据</h3>
+  <p>三相并网型号（CS-L10-10K）额外显示：</p>
+  <ul>
+    <li>A / B / C 三相电压、电流、功率</li>
+    <li>三相不平衡度</li>
+  </ul>
+
+  <hr class="section-divider">
+
+  <!-- ========== 第七章 ========== -->
+  <h2 id="sec7">七、历史数据</h2>
+  <p>在设备详情页切换到「历史数据」标签：</p>
+
+  <h3>7.1 日视图</h3>
+  <ul>
+    <li>当天逐小时功率曲线（折线图）</li>
+    <li>支持左右滑动切换日期</li>
+    <li>点击数据点查看精确数值和时间</li>
+  </ul>
+
+  <h3>7.2 月视图</h3>
+  <ul>
+    <li>当月每日发电量柱状图</li>
+    <li>月度总发电量和日均发电量</li>
+    <li>支持切换月份</li>
+  </ul>
+
+  <h3>7.3 年视图</h3>
+  <ul>
+    <li>当年每月发电量柱状图</li>
+    <li>年度总发电量和月均发电量</li>
+    <li>支持切换年份</li>
+  </ul>
+
+  <div class="tip">
+    <strong>数据精度：</strong>历史数据保留 1 分钟粒度（近 7 天），之后自动压缩为 5 分钟 / 1 小时粒度长期存储。
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- ========== 第八章 ========== -->
+  <h2 id="sec8">八、远程控制</h2>
+  <p>在设备详情 → 控制标签，可对支持远程控制的设备下发命令。</p>
+
+  <h3>8.1 基础控制</h3>
+  <table>
+    <tr><th>功能</th><th>说明</th><th>操作</th></tr>
+    <tr><td>开机</td><td>开启并网输出</td><td>点击「开机」→ 确认</td></tr>
+    <tr><td>关机</td><td>关闭并网输出</td><td>点击「关机」→ 确认</td></tr>
+    <tr><td>功率限制</td><td>设置最大并网功率</td><td>滑动条设置 → 确认</td></tr>
+  </table>
+
+  <h3>8.2 储能控制（CS-I10-6K2）</h3>
+  <table>
+    <tr><th>功能</th><th>说明</th></tr>
+    <tr><td>充电使能</td><td>开启/关闭电池充电功能</td></tr>
+    <tr><td>放电使能</td><td>开启/关闭电池放电功能</td></tr>
+    <tr><td>最大充电电流</td><td>设置充电电流上限（0~60A）</td></tr>
+    <tr><td>最大放电电流</td><td>设置放电电流上限（0~120A）</td></tr>
+  </table>
+
+  <h3>8.3 参数读写</h3>
+  <p>专业用户（安装商/管理员）可通过「参数设置」页面：</p>
+  <ul>
+    <li><strong>读取参数：</strong>从设备读取当前配置（并网电压上下限、功率因数等）</li>
+    <li><strong>写入参数：</strong>修改设备运行参数（需管理员权限）</li>
   </ul>
 
   <div class="warn">
-    <strong>注意：</strong>远程控制操作会记录在操作日志中，供审计和追溯。敏感参数修改需管理员权限。
+    <strong>操作安全：</strong><br>
+    • 所有控制命令均需二次确认<br>
+    • 敏感参数修改需要管理员权限<br>
+    • 所有操作记录在操作日志中，可供审计追溯<br>
+    • 命令执行超时时间为 30 秒
   </div>
 
-  <h2 id="alarm">五、告警通知</h2>
-  <h3>5.1 告警级别</h3>
-  <table>
-    <tr><th>级别</th><th>颜色</th><th>说明</th></tr>
-    <tr><td>紧急</td><td>红色</td><td>设备故障，需要立即处理</td></tr>
-    <tr><td>警告</td><td>橙色</td><td>异常参数，可能影响发电</td></tr>
-    <tr><td>信息</td><td>蓝色</td><td>状态变更通知，仅供参考</td></tr>
-  </table>
+  <hr class="section-divider">
 
-  <h3>5.2 通知设置</h3>
-  <p>进入「设置 → 消息通知」，可以按告警级别开关推送通知。建议至少开启「紧急」级别通知。</p>
+  <!-- ========== 第九章 ========== -->
+  <h2 id="sec9">九、告警与通知</h2>
 
-  <h2 id="ota">六、固件升级</h2>
-  <p>当设备有新固件可用时，App 会在设备详情页显示升级提示。</p>
-  <ol>
-    <li>点击「立即升级」按钮</li>
-    <li>确认升级后，设备开始下载固件（期间不影响正常发电）</li>
-    <li>下载完成后设备自动重启并应用新固件</li>
-    <li>升级过程中请勿断电或操作设备</li>
-  </ol>
-
-  <div class="tip">
-    <strong>本地 OTA：</strong>如果设备网络较差，App 支持通过 WiFi 热点直连设备进行本地固件升级，无需联网。在设备详情页选择「本地升级」即可。
-  </div>
-
-  <h2 id="profile">七、个人设置</h2>
+  <h3>9.1 告警中心</h3>
+  <p>在「我的」→「告警中心」或底部导航栏的告警图标，可查看所有告警记录：</p>
   <ul>
-    <li><strong>修改头像/昵称：</strong>进入「设置 → 个人资料」</li>
-    <li><strong>切换语言：</strong>支持中文/English</li>
-    <li><strong>时区设置：</strong>调整数据展示的时区</li>
-    <li><strong>帮助中心：</strong>查看文档、FAQ、提交工单</li>
-    <li><strong>关于我们：</strong>查看版本信息、用户协议、隐私政策</li>
+    <li>按级别筛选：紧急 / 警告 / 信息</li>
+    <li>按状态筛选：未处理 / 已确认 / 已关闭</li>
+    <li>按时间范围筛选</li>
+    <li>支持批量确认和批量关闭</li>
+  </ul>
+
+  <h3>9.2 告警详情</h3>
+  <p>点击告警记录查看详情：</p>
+  <ul>
+    <li>告警设备和设备名称</li>
+    <li>告警类型和级别</li>
+    <li>告警时间和持续时长</li>
+    <li>告警参数值（如电压超限值）</li>
+    <li>处理状态和处理记录</li>
+  </ul>
+
+  <h3>9.3 通知设置</h3>
+  <p>进入「设置 → 消息通知」，可以：</p>
+  <ul>
+    <li>按告警级别开关推送通知</li>
+    <li>设置免打扰时段</li>
+    <li>选择通知方式（App 推送 / 短信）</li>
   </ul>
 
   <div class="tip">
-    <strong>使用问题？</strong>在 App 内进入「帮助中心」，可查看常见问题或提交工单获取技术支持。
+    <strong>建议：</strong>至少开启「紧急」级别通知，确保设备故障时能第一时间收到提醒。
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- ========== 第十章 ========== -->
+  <h2 id="sec10">十、OTA 固件升级</h2>
+  <p>App 的 OTA 中心提供完整的固件升级管理能力。</p>
+
+  <h3>10.1 OTA 中心入口</h3>
+  <p>在「我的」→「固件升级」或设备详情 → OTA 标签，进入 OTA 中心：</p>
+
+  <div class="feature-grid">
+    <div class="feature-card">
+      <h4>🔍 检查更新</h4>
+      <p>检查所有设备是否有新固件可用，支持一键批量升级</p>
+    </div>
+    <div class="feature-card">
+      <h4>📱 本地升级</h4>
+      <p>WiFi 热点直连设备升级，无需云端网络</p>
+    </div>
+    <div class="feature-card">
+      <h4>📦 固件列表</h4>
+      <p>查看所有可用固件版本和发布说明</p>
+    </div>
+    <div class="feature-card">
+      <h4>📜 升级历史</h4>
+      <p>查看设备升级记录和结果</p>
+    </div>
+  </div>
+
+  <h3>10.2 远程升级</h3>
+  <ol>
+    <li>在 OTA 中心点击「检查更新」</li>
+    <li>系统列出所有可升级设备和对应固件版本</li>
+    <li>选择目标设备（支持多选批量升级）</li>
+    <li>点击「立即升级」，确认后开始</li>
+    <li>设备通过 WiFi 下载固件（不影响发电）</li>
+    <li>下载完成后自动重启并应用新固件</li>
+    <li>升级进度实时显示在 App 中</li>
+  </ol>
+
+  <h3>10.3 本地升级</h3>
+  <p>适用于设备网络较差或无法联网的场景：</p>
+  <ol>
+    <li>在 OTA 中心选择「本地升级」</li>
+    <li>选择要升级的通道（ESP32 或 ARM）</li>
+    <li>App 自动连接到设备的 WiFi 热点（<code>CS-INV-XXXX</code>）</li>
+    <li>选择本地固件文件或从云端下载</li>
+    <li>通过 HTTP 上传固件到设备</li>
+    <li>设备接收后自动执行升级</li>
+    <li>升级完成后结果自动上报云端</li>
+  </ol>
+
+  <h3>10.4 升级模式</h3>
+  <table>
+    <tr><th>模式</th><th>说明</th><th>适用场景</th></tr>
+    <tr><td>单固件升级</td><td>仅升级一个芯片（ESP32 或 ARM）</td><td>个别芯片需要更新</td></tr>
+    <tr><td>升级包升级</td><td>打包多个芯片固件，按顺序升级</td><td>系统性版本更新</td></tr>
+    <tr><td>本地 OTA</td><td>WiFi 热点直连升级</td><td>设备离线 / 网络差</td></tr>
+  </table>
+
+  <div class="warn">
+    <strong>升级注意：</strong><br>
+    • 升级期间确保设备供电稳定<br>
+    • 升级过程中请勿操作设备或关闭 App<br>
+    • 远程升级约需 2~5 分钟，本地升级约需 1~3 分钟<br>
+    • 升级失败时设备自动回退到上一版本
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- ========== 第十一章 ========== -->
+  <h2 id="sec11">十一、WiFi 配网</h2>
+
+  <h3>11.1 WiFi 配网</h3>
+  <div class="step"><div class="step-num">1</div><div class="step-content">长按设备面板 <strong>WiFi 按钮 5 秒</strong>，WiFi 指示灯快速闪烁</div></div>
+  <div class="step"><div class="step-num">2</div><div class="step-content">在 App「设备」→「+ 添加设备」→「WiFi 配网」</div></div>
+  <div class="step"><div class="step-num">3</div><div class="step-content">App 自动连接设备热点 <code>CS-INV-XXXX</code></div></div>
+  <div class="step"><div class="step-num">4</div><div class="step-content">输入家中 WiFi 名称和密码</div></div>
+  <div class="step"><div class="step-num">5</div><div class="step-content">点击「开始配置」，等待 30 秒左右</div></div>
+  <div class="step"><div class="step-num">6</div><div class="step-content">WiFi 指示灯常亮表示配网成功</div></div>
+
+  <h3>11.2 BLE 蓝牙配网</h3>
+  <p>适用于 iOS 系统或 WiFi 热点连接困难的场景：</p>
+  <div class="step"><div class="step-num">1</div><div class="step-content">长按 WiFi 按钮 5 秒进入配网模式</div></div>
+  <div class="step"><div class="step-num">2</div><div class="step-content">App 选择「蓝牙配网」</div></div>
+  <div class="step"><div class="step-num">3</div><div class="step-content">自动扫描附近 BLE 设备</div></div>
+  <div class="step"><div class="step-num">4</div><div class="step-content">选择目标设备（显示 SN 后四位）</div></div>
+  <div class="step"><div class="step-num">5</div><div class="step-content">输入 WiFi 信息，通过 BLE 发送给设备</div></div>
+  <div class="step"><div class="step-num">6</div><div class="step-content">设备连接 WiFi 后自动完成配网</div></div>
+
+  <h3>11.3 配网要求</h3>
+  <ul>
+    <li>仅支持 <strong>2.4GHz</strong> WiFi（不支持 5GHz）</li>
+    <li>支持 WPA/WPA2 加密</li>
+    <li>不支持需要网页认证的公共 WiFi</li>
+    <li>手机需开启定位权限（Android）</li>
+    <li>手机需开启蓝牙权限</li>
+  </ul>
+
+  <h3>11.4 重新配网</h3>
+  <p>更换 WiFi 路由器或密码时，需要重新配网：</p>
+  <ol>
+    <li>在设备详情 → 设置 → WiFi 配置</li>
+    <li>点击「重新配置 WiFi」</li>
+    <li>按照配网流程操作</li>
+  </ol>
+
+  <hr class="section-divider">
+
+  <!-- ========== 第十二章 ========== -->
+  <h2 id="sec12">十二、设备分享</h2>
+  <p>设备所有者可以邀请其他用户共享设备（只读权限）。</p>
+
+  <h3>12.1 分享设备</h3>
+  <ol>
+    <li>在设备详情 → 设置 → 设备分享</li>
+    <li>点击「邀请用户」</li>
+    <li>输入对方手机号或从通讯录选择</li>
+    <li>发送邀请，对方接受后即可查看设备数据</li>
+  </ol>
+
+  <h3>12.2 管理分享</h3>
+  <ul>
+    <li>查看当前已分享的用户列表</li>
+    <li>随时撤销分享权限</li>
+    <li>被分享用户只能查看数据，无法控制设备</li>
+  </ul>
+
+  <hr class="section-divider">
+
+  <!-- ========== 第十三章 ========== -->
+  <h2 id="sec13">十三、帮助与工单</h2>
+
+  <h3>13.1 帮助中心</h3>
+  <p>进入「我的」→「帮助中心」：</p>
+  <ul>
+    <li><strong>常见问题：</strong>按分类浏览 FAQ</li>
+    <li><strong>在线文档：</strong>查看设备说明书和使用指南</li>
+    <li><strong>提交工单：</strong>描述问题并附图，技术人员会跟进处理</li>
+  </ul>
+
+  <h3>13.2 提交工单</h3>
+  <ol>
+    <li>在帮助中心点击「提交工单」</li>
+    <li>选择工单类型：设备故障 / 定期维护 / 设备巡检 / 安装调试 / 其他</li>
+    <li>填写问题描述（尽可能详细）</li>
+    <li>上传照片或截图（最多 9 张）</li>
+    <li>选择关联设备（如有）</li>
+    <li>提交后可在「我的工单」中跟踪进度</li>
+  </ol>
+
+  <h3>13.3 工单模板</h3>
+  <table>
+    <tr><th>模板</th><th>描述</th><th>默认优先级</th></tr>
+    <tr><td>设备故障</td><td>设备运行异常，需要检修</td><td>高</td></tr>
+    <tr><td>定期维护</td><td>设备定期保养维护</td><td>中</td></tr>
+    <tr><td>设备巡检</td><td>设备运行状态巡检</td><td>低</td></tr>
+    <tr><td>安装调试</td><td>设备安装与参数调试</td><td>中</td></tr>
+  </table>
+
+  <hr class="section-divider">
+
+  <!-- ========== 第十四章 ========== -->
+  <h2 id="sec14">十四、个人设置</h2>
+
+  <h3>14.1 个人资料</h3>
+  <ul>
+    <li><strong>修改头像：</strong>拍照或从相册选择</li>
+    <li><strong>修改昵称：</strong>设置显示名称</li>
+    <li><strong>个人简介：</strong>填写个人简介信息</li>
+  </ul>
+
+  <h3>14.2 通用设置</h3>
+  <table>
+    <tr><th>设置项</th><th>说明</th></tr>
+    <tr><td>语言</td><td>支持中文 / English</td></tr>
+    <tr><td>时区</td><td>调整数据展示的时区（默认跟随系统）</td></tr>
+    <tr><td>深色模式</td><td>跟随系统 / 始终浅色 / 始终深色</td></tr>
+    <tr><td>消息通知</td><td>按告警级别开关推送、免打扰时段</td></tr>
+    <tr><td>离线模式</td><td>配置 BLE 本地连接偏好</td></tr>
+  </table>
+
+  <h3>14.3 关于</h3>
+  <ul>
+    <li>查看 App 版本号</li>
+    <li>检查 App 更新</li>
+    <li>用户协议</li>
+    <li>隐私政策</li>
+    <li>开源许可证</li>
+  </ul>
+
+  <h3>14.4 操作历史</h3>
+  <p>在「我的」→「操作历史」可查看所有操作记录：</p>
+  <ul>
+    <li>登录/登出记录</li>
+    <li>设备绑定/解绑</li>
+    <li>远程控制命令</li>
+    <li>OTA 升级记录</li>
+    <li>参数修改记录</li>
+  </ul>
+
+  <hr class="section-divider">
+
+  <!-- ========== 第十五章 ========== -->
+  <h2 id="sec15">十五、常见问题 FAQ</h2>
+
+  <h3>Q1：收不到验证码怎么办？</h3>
+  <ul>
+    <li>检查手机号是否正确</li>
+    <li>检查短信是否被拦截（查看垃圾短信文件夹）</li>
+    <li>等待 60 秒后重试</li>
+    <li>如仍无法收到，联系客服</li>
+  </ul>
+
+  <h3>Q2：设备添加后显示离线？</h3>
+  <ul>
+    <li>确认设备已通电且 WiFi 指示灯常亮</li>
+    <li>检查 WiFi 信号强度（RSSI 应 > -75dBm）</li>
+    <li>尝试重启设备（断电 30 秒后重新上电）</li>
+    <li>检查路由器是否正常</li>
+  </ul>
+
+  <h3>Q3：电量数据不更新？</h3>
+  <ul>
+    <li>确认设备在线状态</li>
+    <li>下拉刷新页面</li>
+    <li>检查网络连接</li>
+    <li>如持续不更新，提交工单</li>
+  </ul>
+
+  <h3>Q4：如何更换手机？</h3>
+  <ul>
+    <li>在新手机上下载 App 并登录同一账号</li>
+    <li>所有设备和数据自动同步</li>
+    <li>无需重新绑定设备</li>
+  </ul>
+
+  <h3>Q5：可以多个手机同时登录吗？</h3>
+  <ul>
+    <li>支持同一账号在多台设备同时登录</li>
+    <li>数据实时同步</li>
+    <li>控制命令会记录操作人信息</li>
+  </ul>
+
+  <h3>Q6：OTA 升级失败怎么办？</h3>
+  <ul>
+    <li>升级失败时设备会自动回退到上一版本</li>
+    <li>检查网络连接后重试</li>
+    <li>尝试使用本地 OTA 方式升级</li>
+    <li>如反复失败，提交工单并附上错误截图</li>
+  </ul>
+
+  <h3>Q7：如何解绑设备？</h3>
+  <ul>
+    <li>在设备详情 → 设置 → 解绑设备</li>
+    <li>解绑后设备将从列表中移除</li>
+    <li>解绑不影响设备运行，可重新绑定</li>
+    <li>代理商可通过管理后台强制解绑</li>
+  </ul>
+
+  <div class="footer">
+    <p>© 2026 辰烁能源科技有限公司 &nbsp;|&nbsp; 文档版本 V2.0 &nbsp;|&nbsp; 客服热线：400-888-8888</p>
   </div>
 </div>
 </body>

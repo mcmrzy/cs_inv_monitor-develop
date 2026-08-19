@@ -150,11 +150,15 @@ const EnergyStatsTab: React.FC<EnergyStatsTabProps> = ({ sn }) => {
     { key: 'load', icon: '🏠', label: t('deviceDetail.stats.dailyLoad'), value: m.dailyLoad, color: '#ef4444', bg: '#fef2f2' },
   ]
 
-  // 次级分项：仅在有值（>0）时展示，不铺全量 14 个能量字段
+  // 次级分项：仅在有值（>0）时展示，不铺全量能量字段
   const todaySecondary = [
     { key: 'discharge', label: t('deviceDetail.stats.dailyDischarge'), value: m.dailyDischarge },
     { key: 'feed', label: t('deviceDetail.stats.dailyFeed'), value: m.dailyFeedEnergy },
     { key: 'import', label: t('deviceDetail.stats.dailyGridImport'), value: m.dailyGridImport },
+    { key: 'gen', label: t('deviceDetail.stats.dailyGenEnergy'), value: m.dailyGenEnergy },
+    { key: 'acCharge', label: t('deviceDetail.stats.dailyAcChargeEnergy'), value: m.dailyAcChargeEnergy },
+    { key: 'acBypass', label: t('deviceDetail.stats.dailyAcBypassEnergy'), value: m.dailyAcBypassEnergy },
+    { key: 'output', label: t('deviceDetail.stats.dailyOutputEnergy'), value: m.dailyOutputEnergy },
   ].filter((s) => s.value > 0)
 
   return (
@@ -222,6 +226,26 @@ const EnergyStatsTab: React.FC<EnergyStatsTabProps> = ({ sn }) => {
               <Col span={12}>
                 <Statistic title={t('deviceDetail.stats.cumDischarge')} value={todayFresh ? m.totalDischarge : 0} precision={1} suffix="kWh" valueStyle={{ color: '#3b82f6', fontWeight: 700 }} />
               </Col>
+              {m.totalGenEnergy > 0 && (
+                <Col span={12}>
+                  <Statistic title={t('deviceDetail.stats.cumGenEnergy')} value={m.totalGenEnergy} precision={1} suffix="kWh" valueStyle={{ fontWeight: 700 }} />
+                </Col>
+              )}
+              {m.totalAcChargeEnergy > 0 && (
+                <Col span={12}>
+                  <Statistic title={t('deviceDetail.stats.cumAcChargeEnergy')} value={m.totalAcChargeEnergy} precision={1} suffix="kWh" valueStyle={{ fontWeight: 700 }} />
+                </Col>
+              )}
+              {m.totalAcBypassEnergy > 0 && (
+                <Col span={12}>
+                  <Statistic title={t('deviceDetail.stats.cumAcBypassEnergy')} value={m.totalAcBypassEnergy} precision={1} suffix="kWh" valueStyle={{ fontWeight: 700 }} />
+                </Col>
+              )}
+              {m.totalOutputEnergy > 0 && (
+                <Col span={12}>
+                  <Statistic title={t('deviceDetail.stats.cumOutputEnergy')} value={m.totalOutputEnergy} precision={1} suffix="kWh" valueStyle={{ fontWeight: 700 }} />
+                </Col>
+              )}
             </Row>
           </ProCard>
         </Col>

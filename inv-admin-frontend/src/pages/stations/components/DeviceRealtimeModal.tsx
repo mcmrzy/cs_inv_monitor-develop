@@ -46,8 +46,11 @@ const GROUP_TITLES: Record<string, string> = {
   sys: 'station.systemStatus',
   eng: 'station.energyStats',
   chr: 'station.chargerParams',
+  fan: 'station.fanParams',
+  diag: 'station.diagParams',
+  sock: 'station.sockParams',
 }
-const GROUP_ORDER = ['pv', 'bat', 'ac', 'sys', 'eng', 'chr', 'other']
+const GROUP_ORDER = ['pv', 'bat', 'ac', 'sys', 'eng', 'chr', 'fan', 'diag', 'sock', 'other']
 
 // 兜底：写死的精选分组（设备未注册型号字段能力时使用）
 const getGroupFields = (t: (key: string) => string): Record<string, { label: string; aliases: string[]; fields: FieldDef[] }> => ({
