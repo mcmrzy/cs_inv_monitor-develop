@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Button, Tag, Space, Modal, Input, Row, Col, App, Empty, Alert,
+  Button, Tag, Space, Modal, Input, Row, Col, App, Empty, Alert, Select,
 } from 'antd'
 import { ProTable } from '@ant-design/pro-components'
 import type { ProColumns } from '@ant-design/pro-components'
@@ -28,6 +28,7 @@ const TransferApprovals: React.FC = () => {
   const queryClient = useQueryClient()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
+  const [statusFilter, setStatusFilter] = useState<string>('pending')
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
   const [rejectModalOpen, setRejectModalOpen] = useState(false)
   const [rejectingId, setRejectingId] = useState<number | null>(null)
@@ -35,8 +36,8 @@ const TransferApprovals: React.FC = () => {
   const [rejectReason, setRejectReason] = useState('')
 
   const { data: listRes, isLoading, error, refetch } = useQuery({
-    queryKey: queryKeys.channels.transfers({ page, pageSize }),
-    queryFn: () => channelApi.getTransferRequests({ page, pageSize }).then((r) => ({
+    queryKey: queryKeys.channels.transfers({ page, pageSize, status: statusFilter }),
+    queryFn: () => channelApi.getTransferRequests({ page, pageSize, status: statusFilter }).then((r) => ({
       items: r.data?.data?.items ?? [] as TransferRequest[],
       total: r.data?.data?.total ?? 0,
     })),
@@ -116,6 +117,10 @@ const TransferApprovals: React.FC = () => {
         </Tag>
       ),
     },
+    {
+      title: t('channel.transfer.user'), dataIndex: 'user_email', width: 200, ellipsis: true,
+      render: (_, record: TransferRequest) => record.user_nickname || record.user_email || '-',
+    },
     { title: t('channel.transfer.fromOrg'), dataIndex: 'from_org_name', width: 150, ellipsis: true },
     { title: t('channel.transfer.toOrg'), dataIndex: 'to_org_name', width: 150, ellipsis: true },
     { title: t('channel.transfer.requester'), dataIndex: 'requester_email', width: 180, ellipsis: true },
@@ -170,6 +175,17 @@ const TransferApprovals: React.FC = () => {
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
         <Col>
           <Space>
+            <Select
+              value={statusFilter}
+              onChange={(v) => { setStatusFilter(v); setPage(1); setSelectedRowKeys([]) }}
+              style={{ width: 140 }}
+              options={[
+                { label: t('channel.transfer.filterPending'), value: 'pending' },
+                { label: t('channel.transfer.status.approved'), value: 'approved' },
+                { label: t('channel.transfer.status.rejected'), value: 'rejected' },
+                { label: t('channel.transfer.filterAll'), value: '' },
+              ]}
+            />
             {selectedRowKeys.length > 0 && (
               <>
                 <Alert

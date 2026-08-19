@@ -1,0 +1,21 @@
+package repository
+
+import (
+	"strings"
+	"testing"
+)
+
+// 注册时选择的国家/地区代码必须随用户落库。该契约锁住 INSERT 语句：
+// 一旦 country 列被意外移除（如重构列清单），本测试立即失败。
+func TestUserCreateInsertPersistsCountry(t *testing.T) {
+	insertSQL := strings.ToLower(userCreateInsertSQL)
+
+	if !strings.Contains(insertSQL, "country") {
+		t.Errorf("userCreateInsertSQL must persist the registration country: %q", userCreateInsertSQL)
+	}
+
+	// 八个占位符对应：phone/email/hash/nickname/avatar/admin/status/country
+	if got := strings.Count(insertSQL, "$"); got != 8 {
+		t.Errorf("userCreateInsertSQL placeholder mismatch: got %d, want 8", got)
+	}
+}

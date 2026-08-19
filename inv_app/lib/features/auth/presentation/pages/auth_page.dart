@@ -98,7 +98,7 @@ class _AuthPageState extends State<AuthPage>
                   offset: Offset(0, -30.h),
                   child: Container(
                     margin: const EdgeInsets.fromLTRB(24, 0, 24, 0),
-                    padding: EdgeInsets.fromLTRB(24.w, 32.h, 24.w, 8.h),
+                    padding: EdgeInsets.fromLTRB(24.w, 28.h, 24.w, 4.h),  // 顶部 padding 从 32 减到 28
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(20.r),
@@ -116,8 +116,8 @@ class _AuthPageState extends State<AuthPage>
                     // 且 AnimatedSwitcher 切换瞬间 Stack 取 max 高度、结束时收缩，
                     // 会造成底部内容上下跳动；用 AnimatedSize 让卡片高度平滑过渡
                     child: AnimatedSize(
-                      duration: const Duration(milliseconds: 350),
-                      curve: Curves.easeInOutCubic,
+                      duration: const Duration(milliseconds: 250),  // 从 350ms 缩短到 250ms，更快稳定
+                      curve: Curves.easeInOut,  // 改为更平缓的曲线
                       alignment: Alignment.topCenter,
                       child: AnimatedSwitcher(
                         duration: const Duration(milliseconds: 350),
@@ -174,7 +174,7 @@ class _AuthPageState extends State<AuthPage>
                       ),
                     ),
                   ),
-                SizedBox(height: 32.h),
+                SizedBox(height: 16.h), // 原 32.h → 降低高度
               ],
             ),
           );
@@ -216,6 +216,7 @@ class _AuthPageState extends State<AuthPage>
       child: SafeArea(
         bottom: false,
         child: Stack(
+          clipBehavior: isRegister ? Clip.hardEdge : Clip.none, // 注册时裁剪避免污染下方白底；登录模式允许圆环溢出
           children: [
             // 装饰：右上大圆环（缓慢呼吸：缩放 + 透明度脉动）
             Positioned(

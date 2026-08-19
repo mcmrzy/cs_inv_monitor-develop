@@ -37,10 +37,10 @@ const StationStatisticsTab: React.FC<StationStatisticsTabProps> = ({ stationId, 
     { key: 'daily_load', label: t('station.loadEnergy'), unit: 'kWh', color: '#ef4444', bg: '#fef2f2' },
   ], [t])
 
-  // 30日发电趋势
+  // 30 日发电趋势（带 stationId 过滤，确保与电站维度一致）
   const { data: trend30Res } = useQuery({
     queryKey: ['station-trend-30d', stationId],
-    queryFn: () => dashboardApi.getTrend('30days').then(r => r.data),
+    queryFn: () => dashboardApi.getTrend('30days', { stationId }).then(r => r.data),
     enabled: !!stationId,
   })
   const trend30Data = Array.isArray(trend30Res?.data) ? trend30Res.data :

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Button, Avatar, Dropdown, Badge, Typography, theme, Grid, Form, App, Select, Cascader, Modal, Input, Space,
+  Button, Avatar, Dropdown, Badge, Typography, theme, Grid, Form, App, Select, Cascader, Modal, Input, Space, Empty,
 } from 'antd'
 import { ProLayout, ModalForm, ProFormText, ProFormSelect } from '@ant-design/pro-components'
 import type { ProLayoutProps } from '@ant-design/pro-components'
@@ -102,41 +102,94 @@ const MainLayout: React.FC = () => {
 
   const isAdminRole = user && (user.isSystemAdmin || hasPermission('admin:manage'))
 
-  // 纯终端用户识别：非系统管理员且所有组织角色并集仅含 customer（无任何管理/渠道角色）
-  // 终端用户不可见组织架构（/organizations）入口；其余登录用户（含普通组织管理员）均可见
+  // 终端用户识别：非系统管理员且所有组织角色并集仅含 customer（无任何管理/渠道角色）
+  // 注意：无组织记录的用户无法获取 roles，保守地视为"有未知权限的普通用户"
+  // → 不应该能看到组织架构入口，除非他们有特定的角色权限
   const { data: myOrgsData } = useQuery({
     queryKey: queryKeys.channels.myOrganizations(user?.id),
-    queryFn: () => channelApi.getMyOrganizations().then((r) => r.data?.data ?? []),
+    queryFn: async () => {
+      try {
+        const r = await channelApi.getMyOrganizations()
+        // 兼容性处理：后端可能返回 null、单对象或数组
+        const d = r.data?.data
+        if (Array.isArray(d)) return d
+        if (d && typeof d === 'object') return [d] as any[] // 单个对象转为数组
+        return []
+      } catch {
+        // 接口失败（如无组织记录时返回 null）→ 降级为空数组，不阻塞页面渲染
+        return []
+      }
+    },
     enabled: !!user && !user.isSystemAdmin,
+    retry: false,
+    staleTime: 60_000,
   })
 
   const isEndUser = useMemo(() => {
     if (!user || user.isSystemAdmin) return false
+    // 无组织记录的情况（如新建账户、未邀请加入组织）→ 不属于纯终端用户
+    // 因为没有 roles 信息，保守地不允许访问 org management
     const orgs = (myOrgsData ?? []) as Array<{ roles?: string[]; role?: string }>
     if (!Array.isArray(orgs) || orgs.length === 0) return false
+    
     const roleSet = new Set<string>()
     for (const org of orgs) {
-      const roles = Array.isArray(org.roles) && org.roles.length > 0 ? org.roles : org.role ? [org.role] : []
+      // 优先使用 roles 数组，退化为 role 字段，都不存在则跳过
+      const roles = Array.isArray(org.roles) && org.roles.length > 0 
+        ? org.roles 
+        : org.role ? [org.role] : []
       roles.forEach((r) => roleSet.add(r))
     }
-    // 无角色信息（保守）或仅 customer 角色 → 视为终端用户
+    // 有角色且全部为 customer → 纯终端用户；无角色或有任何管理角色 → 不是终端用户
     return roleSet.size > 0 && [...roleSet].every((r) => r === 'customer')
   }, [user, myOrgsData])
+
+  // 检测用户的角色分布状态，用于调试和监控
+  const userRoleStatus = useMemo(() => {
+    if (!user || user.isSystemAdmin) return 'system_admin'
+    const orgs = (myOrgsData ?? []) as Array<{ roles?: string[]; role?: string }>
+    if (!Array.isArray(orgs) || orgs.length === 0) return 'no_organizations'
+    const roleSet = new Set<string>()
+    for (const org of orgs) {
+      const roles = Array.isArray(org.roles) && org.roles.length > 0 
+        ? org.roles 
+        : org.role ? [org.role] : []
+      roles.forEach((r) => roleSet.add(r))
+    }
+    if (roleSet.size === 0) return 'no_role_info'
+    if ([...roleSet].every((r) => r === 'customer')) return 'end_user'
+    return 'org_member' // 有非 customer 角色
+  }, [user, myOrgsData])
+
+  // 用户是否具备访问组织架构的资格：仅系统管理员或有非 customer 组织角色的成员
+  const canAccessOrgManagement = useMemo(
+    () => !userRoleStatus.includes('no_') && (userRoleStatus === 'system_admin' || userRoleStatus === 'org_member'),
+    [userRoleStatus],
+  )
 
   // Build ProLayout route config with permission filtering
   const routeConfig = useMemo((): ProLayoutProps['route'] => {
     const source = isAdminRole ? getAdminRoutes(t) : getUserRoutes(t)
-    // 终端用户不可见组织架构入口；其余菜单按权限过滤
+    
+    // 过滤规则：
+    // 1. 非终端用户但有组织成员身份 → 可见；纯终端用户（仅 customer 角色）→ 不可见
+    // 2. 无组织记录或角色信息 → 不可见
+    // 3. 其他菜单按权限过滤
     const filtered = source.filter(
-      (item) =>
-        !(item.path === '/organizations' && isEndUser) &&
-        (!item.permission || hasPermission(item.permission)),
+      (item) => {
+        if (item.path === '/organizations') {
+          // 组织架构只对有效组织成员开放
+          return canAccessOrgManagement && !isEndUser
+        }
+        // 其他菜单按权限过滤
+        return !item.permission || hasPermission(item.permission)
+      },
     )
     return {
       path: '/',
       routes: filtered.map(({ permission, ...rest }) => rest),
     }
-  }, [isAdminRole, isEndUser, hasPermission, lang, t])
+  }, [isAdminRole, isEndUser, canAccessOrgManagement, hasPermission, lang, t])
 
   const handleLogout = () => {
     logout()
@@ -280,12 +333,15 @@ const MainLayout: React.FC = () => {
 
   const siderCollapsed = isMobile ? mobileCollapsed : collapsed
 
-  // 路由级兑底：终端用户直达 /organizations 时重定向（菜单已隐藏入口，这里拦截 URL 直达）
+  // 路由级兜底：未授权用户直达 /organizations 时重定向（菜单已隐藏入口，这里拦截 URL 直达）
   useEffect(() => {
-    if (isEndUser && location.pathname.startsWith('/organizations')) {
-      navigate('/unauthorized', { replace: true })
+    if (location.pathname.startsWith('/organizations')) {
+      // 终端用户或无组织记录用户 → 重定向到未授权页
+      if (isEndUser || userRoleStatus === 'no_organizations' || userRoleStatus === 'no_role_info') {
+        navigate('/unauthorized', { replace: true })
+      }
     }
-  }, [isEndUser, location.pathname, navigate])
+  }, [isEndUser, userRoleStatus, location.pathname, navigate])
 
   return (
     <>
@@ -330,7 +386,7 @@ const MainLayout: React.FC = () => {
         avatarProps={{
           size: 'small',
           icon: <UserOutlined />,
-          src: resolveMediaUrl(user?.avatar),
+          src: resolveMediaUrl(user?.avatar, true), // Avatar 增加默认图回退
           title: user?.nickname || t('header.user'),
           render: (_, dom) => (
             <Dropdown menu={{ items: userMenuItemsDropdown }} placement="bottomRight">
@@ -340,7 +396,22 @@ const MainLayout: React.FC = () => {
         }}
         contentStyle={{ padding: isMobile ? 12 : 24 }}
       >
-        <Outlet />
+        {/* 无任何可见菜单（如无组织归属用户）：明确提示而非空白菜单死胡同 */}
+        {routeConfig?.routes && routeConfig.routes.length > 0 ? (
+          <Outlet />
+        ) : (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '80px 16px' }}>
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={
+                <span>
+                  {t('layout.emptyMenuTitle')}
+                  <div style={{ marginTop: 8, fontSize: 13, color: '#8c9cb0' }}>{t('layout.emptyMenuHint')}</div>
+                </span>
+              }
+            />
+          </div>
+        )}
       </ProLayout>
 
       <ModalForm

@@ -1088,6 +1088,12 @@ func (h *OrganizationHandler) GetOrgHierarchy(c *gin.Context) {
 		}
 	}
 
+	// Ensure JSON always serializes as an array (never null): callers with
+	// expectedDataShape=array would otherwise fail on a nil slice.
+	if roots == nil {
+		roots = []*HierarchyNode{}
+	}
+
 	if visibleIDs != nil {
 		log.Printf("[GetOrgHierarchy] scoped view: user=%d visible=%d total=%d roots=%d (pruned=%d)",
 			userID, len(nodeMap), len(visibleIDs), len(roots), len(visibleIDs)-len(nodeMap))

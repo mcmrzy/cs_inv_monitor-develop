@@ -5,6 +5,7 @@ import type { UploadProps } from 'antd'
 import useTranslation from '@/hooks/useTranslation'
 import useAuthStore from '@/stores/authStore'
 import { API_BASE } from '@/utils/urls'
+import { resolveMediaUrl } from '@/utils/urls'
 
 interface UploadAvatarProps {
   value?: string
@@ -144,7 +145,7 @@ const UploadAvatar: React.FC<UploadAvatarProps> = ({ value, onChange, size = 100
         <Spin spinning={loading}>
           <Avatar
             size={size}
-            src={localUrl || undefined}
+            src={resolveMediaUrl(localUrl, true) || '/images/avatar_default.webp'}
             icon={<UserOutlined />}
             style={{
               border: '2px solid #d9d9d9',

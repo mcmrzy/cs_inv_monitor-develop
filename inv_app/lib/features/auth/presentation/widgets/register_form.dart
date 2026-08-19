@@ -7,8 +7,8 @@ import 'package:inv_app/core/widgets/slider_captcha_dialog.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
-/// 注册通道：邮箱验证码 / 手机短信验证码
-enum _RegisterChannel { email, phone }
+/// 注册模式：中国大陆（手机号+短信验证码）/ 海外（邮箱+邮箱验证码）
+enum _RegisterMode { mainland, overseas }
 
 /// 注册表单组件（创建账号标题 / 通道切换 / 邮箱或手机验证码 / 密码 / 确认密码）
 /// 由 AuthPage 通过 AnimatedSwitcher 与登录表单切换展示
@@ -32,7 +32,7 @@ class _RegisterFormState extends State<RegisterForm> {
   bool _isSendingCode = false;
   int _countdownSeconds = 0;
   Timer? _countdownTimer;
-  _RegisterChannel _registerChannel = _RegisterChannel.email;
+  _RegisterMode _registerMode = _RegisterMode.mainland; // 默认中国大陆
 
   @override
   void dispose() {
@@ -64,20 +64,17 @@ class _RegisterFormState extends State<RegisterForm> {
     });
   }
 
-  /// 按通道发送注册验证码：先滑块验证，再调用短信/邮箱发送
   Future<void> _handleSendCode() async {
     final l10n = AppLocalizations.of(context)!;
-    if (_registerChannel == _RegisterChannel.email) {
+    if (_registerMode == _RegisterMode.overseas) {
+      // 海外模式：仅发送邮箱验证码
       final email = _emailController.text.trim();
       if (email.isEmpty || !email.contains('@') || !email.contains('.')) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l10n.pleaseInputCorrectEmail),
-          ),
+          SnackBar(content: Text(l10n.pleaseInputCorrectEmail)),
         );
         return;
       }
-      // 后端要求先通过滑块验证，获取 verifyToken 后随请求携带
       final captchaToken = await showSliderCaptcha(context);
       if (captchaToken == null || !mounted) return;
       context.read<AuthBloc>().add(
@@ -88,12 +85,11 @@ class _RegisterFormState extends State<RegisterForm> {
             ),
           );
     } else {
+      // 中国大陆模式：发送短信验证码到手机号
       final phone = _phoneController.text.trim();
       if (phone.isEmpty || phone.length < 5) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l10n.pleaseInputPhone),
-          ),
+          SnackBar(content: Text(l10n.pleaseInputPhone)),
         );
         return;
       }
@@ -112,23 +108,26 @@ class _RegisterFormState extends State<RegisterForm> {
   void _handleRegister() {
     if (!_formKey.currentState!.validate()) return;
 
-    if (_registerChannel == _RegisterChannel.email) {
+    if (_registerMode == _RegisterMode.overseas) {
+      // 海外模式：仅需邮箱 + 昵称（可选）+ 密码，不需要手机号
       context.read<AuthBloc>().add(
             AuthEmailRegisterRequested(
               email: _emailController.text.trim(),
               password: _passwordController.text,
               code: _codeController.text.trim(),
-              phone: _phoneController.text.trim(),
+              phone: '', // 海外模式不传手机号
               nickname: _nicknameController.text.trim(),
+              country: '', // 海外模式暂无具体国家选择，后端可选字段
             ),
           );
     } else {
-      // 手机号验证码注册：仅需手机号 + 短信验证码 + 密码
+      // 中国大陆模式：手机号 + 短信验证码 + 昵称 + 密码
       context.read<AuthBloc>().add(
             AuthRegisterRequested(
               phone: _phoneController.text.trim(),
               password: _passwordController.text,
               code: _codeController.text.trim(),
+              country: 'CN', // 注册时选择的国别/地区代码落库
             ),
           );
     }
@@ -136,6 +135,7 @@ class _RegisterFormState extends State<RegisterForm> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final state = context.watch<AuthBloc>().state;
     return BlocListener<AuthBloc, AuthState>(
       listener: (context, state) {
@@ -156,21 +156,31 @@ class _RegisterFormState extends State<RegisterForm> {
           children: [
             _buildHeader(),
             SizedBox(height: 24.h),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: EdgeInsets.only(left: 4.w),
+                child: Text(
+                  l10n.str('auth_country_region'),
+                  style: TextStyle(
+                    fontSize: 13.sp,
+                    color: AppColor.textSecondary(context),
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(height: 8.h),
             _buildChannelSwitcher(),
             SizedBox(height: 24.h),
-            if (_registerChannel == _RegisterChannel.email) ...[
+            if (_registerMode == _RegisterMode.mainland)
+              _buildPhoneField()
+            else ...[
               _buildEmailField(),
               SizedBox(height: 16.h),
-              _buildCodeField(state),
-              SizedBox(height: 16.h),
-              _buildPhoneField(),
-              SizedBox(height: 16.h),
               _buildNicknameField(),
-            ] else ...[
-              _buildPhoneField(),
-              SizedBox(height: 16.h),
-              _buildCodeField(state),
             ],
+            SizedBox(height: 16.h),
+            _buildCodeField(state),
             SizedBox(height: 16.h),
             _buildPasswordField(),
             SizedBox(height: 16.h),
@@ -205,7 +215,7 @@ class _RegisterFormState extends State<RegisterForm> {
     );
   }
 
-  /// 注册通道切换条：邮箱注册 / 手机注册（胶囊式，与登录表单切换条样式一致）
+  /// 注册模式切换条：中国大陆 / 海外（胶囊式，与登录表单切换条样式一致）
   Widget _buildChannelSwitcher() {
     final l10n = AppLocalizations.of(context)!;
     return Container(
@@ -219,20 +229,20 @@ class _RegisterFormState extends State<RegisterForm> {
         children: [
           Expanded(
             child: _buildChannelTab(
-              l10n.str('register_channel_email'),
-              _registerChannel == _RegisterChannel.email,
+              l10n.str('auth_mainland_china'),
+              _registerMode == _RegisterMode.mainland,
               () => setState(() {
-                _registerChannel = _RegisterChannel.email;
+                _registerMode = _RegisterMode.mainland;
                 _codeController.clear();
               }),
             ),
           ),
           Expanded(
             child: _buildChannelTab(
-              l10n.str('register_channel_phone'),
-              _registerChannel == _RegisterChannel.phone,
+              l10n.str('auth_overseas'),
+              _registerMode == _RegisterMode.overseas,
               () => setState(() {
-                _registerChannel = _RegisterChannel.phone;
+                _registerMode = _RegisterMode.overseas;
                 _codeController.clear();
               }),
             ),
@@ -301,7 +311,7 @@ class _RegisterFormState extends State<RegisterForm> {
   /// 验证码输入 + 发送按钮（按通道显示短信/邮箱验证码）
   Widget _buildCodeField(AuthState state) {
     final l10n = AppLocalizations.of(context)!;
-    final isEmail = _registerChannel == _RegisterChannel.email;
+    final isEmail = _registerMode == _RegisterMode.overseas;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -366,9 +376,10 @@ class _RegisterFormState extends State<RegisterForm> {
     );
   }
 
-  /// 手机号输入（邮箱注册时为补充联系方式，手机注册时为账号主体）
+  /// 手机号输入（中国大陆模式必填，海外模式不展示）
   Widget _buildPhoneField() {
     final l10n = AppLocalizations.of(context)!;
+    final isMainland = _registerMode == _RegisterMode.mainland;
     return TextFormField(
       controller: _phoneController,
       keyboardType: TextInputType.phone,
@@ -380,28 +391,31 @@ class _RegisterFormState extends State<RegisterForm> {
         counterText: '',
       ),
       validator: (value) {
-        if (value == null || value.trim().isEmpty) return l10n.pleaseInputPhone;
-        if (value.trim().length < 5) return l10n.phoneTooShort;
+        if (isMainland && (value == null || value.trim().isEmpty)) {
+          return l10n.pleaseInputPhone;
+        }
+        if (value != null && value.trim().isNotEmpty && value.trim().length < 5) {
+          return l10n.phoneTooShort;
+        }
         return null;
       },
     );
   }
 
-  /// 昵称输入（仅邮箱注册通道需要）
+  /// 昵称输入（两种模式均选填，海外模式留空时后端以邮箱前缀兜底）
   Widget _buildNicknameField() {
     final l10n = AppLocalizations.of(context)!;
     return TextFormField(
       controller: _nicknameController,
       decoration: InputDecoration(
-        labelText: l10n.pleaseInputUsername,
-        hintText: l10n.pleaseInputUsername,
+        labelText: l10n.nickname,
+        hintText: l10n.str('username_optional'),
         prefixIcon: const Icon(Icons.person_outlined),
       ),
       validator: (value) {
-        if (value == null || value.trim().isEmpty) {
-          return l10n.pleaseInputUsername;
+        if (value != null && value.trim().isNotEmpty && value.trim().length < 2) {
+          return l10n.usernameTooShort;
         }
-        if (value.trim().length < 2) return l10n.usernameTooShort;
         return null;
       },
     );

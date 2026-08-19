@@ -55,6 +55,7 @@ export default {
     'user.selectParent': '选择上级用户（可选）',
     'user.children': '下级用户',
     'user.noChildren': '暂无下级用户',
+    'user.noOrgIdentity': '未分配身份',
   },
   en: {
     'user.title': 'User Management',
@@ -112,5 +113,6 @@ export default {
     'user.selectParent': 'Select parent user (optional)',
     'user.children': 'Sub Users',
     'user.noChildren': 'No sub users',
+    'user.noOrgIdentity': 'No Identity',
   },
 }

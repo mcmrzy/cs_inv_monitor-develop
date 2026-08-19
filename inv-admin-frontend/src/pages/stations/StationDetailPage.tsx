@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
-  Tag, Button, Space, Spin, Tabs, Row, Col, Empty, Progress, Typography, Select,
+  Tag, Button, Space, Spin, Tabs, Row, Col, Empty, Progress, Typography, Select, Statistic,
 } from 'antd'
 import { ProTable, ProCard } from '@ant-design/pro-components'
 import type { ProColumns } from '@ant-design/pro-components'
@@ -23,6 +23,9 @@ import SocialContribution from './components/SocialContribution'
 import StationStatisticsTab from './components/StationStatisticsTab'
 import StationDevicesTab from './components/StationDevicesTab'
 import StationHistoryTab from './components/StationHistoryTab'
+import DeviceRealtimeModal from './components/DeviceRealtimeModal'
+import DeviceStatsCard from './components/DeviceStatsCard'
+import type { DeviceEnergyData } from './components/DeviceStatsCard'
 
 const { Title, Text } = Typography
 
@@ -138,6 +141,7 @@ const StationDetailPage: React.FC = () => {
   const { timezone } = useTimezoneStore()
   const [activeTab, setActiveTab] = useState('overview')
   const [selectedDeviceSn, setSelectedDeviceSn] = useState<string>('all')
+  const [modalDeviceSn, setModalDeviceSn] = useState<string | null>(null)
 
   const { data: station, isLoading: stationLoading, refetch: refetchStation } = useQuery({
     queryKey: ['station', id],
@@ -613,6 +617,45 @@ const StationDetailPage: React.FC = () => {
         </Col>
       </Row>
 
+      {/* 设备运行参数卡片：展示当日能量统计 + 运行时长 */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 0 }}>
+        <Col span={24}>
+          <ProCard 
+            style={{ borderRadius: 12 }} 
+            title={<><ThunderboltOutlined /> {t('station.deviceEnergyStats')}</>} 
+            size="small"
+          >
+            <DeviceStatsCard data={{
+              dailyPv: deviceEnergy?.dailyPv ?? 0,
+              totalPv: deviceEnergy?.totalPv ?? 0,
+              dailyCharge: deviceEnergy?.dailyCharge ?? 0,
+              totalCharge: deviceEnergy?.totalCharge ?? 0,
+              dailyDischarge: deviceEnergy?.dailyDischarge ?? 0,
+              totalDischarge: deviceEnergy?.totalDischarge ?? 0,
+              dailyLoad: deviceEnergy?.dailyLoad ?? 0,
+              totalLoad: deviceEnergy?.totalLoad ?? 0,
+              runtimeHours: safeNum(firstDeviceRt?.runtime_hours ?? firstDeviceRt?.energy?.runtime_hours),
+            } satisfies DeviceEnergyData} />
+          </ProCard>
+        </Col>
+      </Row>
+
+      {/* 查看实时数据详情按钮 */}
+      {hasFreshRealtime && (
+        <Row gutter={[16, 16]} style={{ marginBottom: 0 }}>
+          <Col span={24} style={{ textAlign: 'center' }}>
+            <Button
+              icon={<DesktopOutlined />}
+              onClick={() => {
+                if (devices?.[0]?.sn) setModalDeviceSn(devices[0].sn)
+              }}
+            >
+              {t('station.viewRealtimeData')}
+            </Button>
+          </Col>
+        </Row>
+      )}
+
       {/* 底部：社会贡献 + 最近告警 */}
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={14}>
@@ -709,6 +752,13 @@ const StationDetailPage: React.FC = () => {
           ]}
         />
       </ProCard>
+
+      {/* 设备实时数据弹窗 */}
+      <DeviceRealtimeModal
+        open={!!modalDeviceSn}
+        deviceSn={modalDeviceSn}
+        onClose={() => setModalDeviceSn(null)}
+      />
     </div>
   )
 }

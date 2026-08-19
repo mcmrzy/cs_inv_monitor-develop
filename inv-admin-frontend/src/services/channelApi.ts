@@ -54,7 +54,7 @@ export interface InvitationAssignment {
 export interface InvitationCreateResult {
   email: string
   invitation_id?: number
-  status: 'created' | 'duplicate' | 'failed'
+  status: 'created' | 'duplicate' | 'failed' | 'already_registered'
   error?: string
   invite_link?: string
 }
@@ -63,15 +63,37 @@ export interface TransferRequest {
   id: number
   resource_type: string // user/device
   resource_id: number
+  membership_id: number
   from_org_id: number
   to_org_id: number
   from_org_name: string
   to_org_name: string
   requester_id: number
   requester_email: string
+  user_email: string
+  user_nickname: string
   reason: string
   status: string // pending/approved/rejected
   created_at: string
+}
+
+// Organization the looked-up user currently belongs to
+export interface UserOrgInfo {
+  membership_id: number
+  organization_id: number
+  org_name: string
+  org_type: string
+  joined_at: string
+}
+
+// Result of GET /members/users/by-email (registered user + current orgs)
+export interface UserLookup {
+  user_id: number
+  email: string
+  nickname: string
+  phone: string
+  is_system_admin: boolean
+  memberships: UserOrgInfo[]
 }
 
 export interface OrgHierarchyNode {
@@ -124,8 +146,18 @@ export const channelApi = {
   getOrganizationMembers: (orgId: number, params?: any) =>
     api.get(`/organizations/${orgId}/members`, { params, expectedDataShape: 'page' }),
 
-  addMember: (data: { organization_id: number; email: string; role: string }) =>
+  addMember: (data: { organization_id: number; user_id: number; membership_type?: string }) =>
     api.post('/members/add', data),
+
+  // Look up a registered user by email, including their current organizations.
+  // Used by the add-member form to enforce the single-identity model.
+  getUserByEmail: (email: string) =>
+    api.get('/members/users/by-email', { params: { email }, expectedDataShape: 'object' }),
+
+  // Initiate an approval-based transfer: creates a pending request that must be
+  // approved by an admin of the target organization before the move takes effect.
+  transferMember: (data: { membership_ids: number[]; target_org_id: number; reason?: string }) =>
+    api.post('/members/transfer/initiate', data),
 
   removeMember: (membershipId: number) =>
     api.delete(`/members/memberships/${membershipId}/remove`),
@@ -196,5 +228,5 @@ export const channelApi = {
     api.post(`/organizations/${id}/approve-join`, data),
 
   getMyOrganizations: () =>
-    api.get('/my/organizations', { expectedDataShape: 'array' }),
+    api.get('/my/organizations'),
 }

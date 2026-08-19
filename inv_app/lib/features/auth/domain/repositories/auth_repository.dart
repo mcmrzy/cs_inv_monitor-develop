@@ -12,6 +12,7 @@ abstract class AuthRepository {
     required String phone,
     required String password,
     required String code,
+    String country = 'CN',
   });
 
   Future<Either<Failure, void>> logout();
@@ -66,6 +67,7 @@ abstract class AuthRepository {
     required String code,
     required String phone,
     required String nickname,
+    String country = '',
   });
 
   Future<Either<Failure, void>> sendEmailCode({

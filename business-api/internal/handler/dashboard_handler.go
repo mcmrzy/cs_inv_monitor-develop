@@ -299,6 +299,15 @@ func (h *DashboardHandler) GetTrend(c *gin.Context) {
 
 	trendType := c.DefaultQuery("type", "day")
 
+	// 可选 stationId 过滤（用于电站维度的趋势查询）
+	stationIDStr := c.Query("stationId")
+	var stationID int64
+	if stationIDStr != "" {
+		if v, err := strconv.ParseInt(stationIDStr, 10, 64); err == nil && v > 0 {
+			stationID = v
+		}
+	}
+
 	var startDate, endDate string
 	now := timezone.NowInTimezone(tz)
 
@@ -340,10 +349,17 @@ func (h *DashboardHandler) GetTrend(c *gin.Context) {
 	endUTCTime := endLocal.AddDate(0, 0, 1).UTC()
 
 	userFilter, filterArgs := h.buildDeviceUserFilter(ctx, userID, role, 4)
+
+	// 构建可选 station 过滤条件
+	stationFilter := ""
+	if stationID > 0 {
+		stationFilter = fmt.Sprintf(" AND d.station_id = %d", stationID)
+	}
+
 	query = fmt.Sprintf(`
 		SELECT TO_CHAR(e.stat_date,'YYYY-MM-DD'),ROUND(COALESCE(SUM(e.pv_energy),0)::numeric,2)::float8,ROUND(COALESCE(SUM(e.load_energy),0)::numeric,2)::float8,COALESCE(MAX(e.total_pv_energy),0)
 		FROM device_energy_day e JOIN devices d ON d.sn=e.device_sn
-		WHERE d.deleted_at IS NULL AND %s
+		WHERE d.deleted_at IS NULL AND %s`+stationFilter+`
 		AND e.stat_date >= ($1 AT TIME ZONE $3)::date
 		AND e.stat_date < ($2 AT TIME ZONE $3)::date
 		GROUP BY e.stat_date ORDER BY e.stat_date

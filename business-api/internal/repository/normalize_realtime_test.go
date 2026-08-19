@@ -1,0 +1,311 @@
+package repository
+
+import (
+	"testing"
+	"time"
+)
+
+// V1 协议：扁平字段 + 嵌套 energy/pv/ac/batt/sys 分组
+func TestNormalizeRealtimeData_V1FlatFields(t *testing.T) {
+	input := map[string]interface{}{
+		"pv1_voltage":  370.0,
+		"pv1_power":    1680.0,
+		"ac_voltage":   220.5,
+		"ac_power":     1500.0,
+		"fault_code":   0.0,
+		"charge_power": 500.0,
+		"soc":          75.0,
+	}
+	result := normalizeRealtimeData(input)
+	if result["pv1_voltage"] != 370.0 {
+		t.Errorf("expected pv1_voltage=370, got %v", result["pv1_voltage"])
+	}
+	if result["ac_power"] != 1500.0 {
+		t.Errorf("expected ac_power=1500, got %v", result["ac_power"])
+	}
+	if result["fault_code"] != 0.0 {
+		t.Errorf("expected fault_code=0, got %v", result["fault_code"])
+	}
+	if result["soc"] != 75.0 {
+		t.Errorf("expected soc=75, got %v", result["soc"])
+	}
+}
+
+// V2 协议：嵌套分组，验证展平到顶层
+func TestNormalizeRealtimeData_V2NestedGroups(t *testing.T) {
+	input := map[string]interface{}{
+		"pv": map[string]interface{}{
+			"pv1_voltage":     369.1,
+			"pv1_power":       1680.0,
+			"pv2_voltage":     364.5,
+			"pv2_power":       1685.0,
+			"pv_power_total":  3365.0,
+		},
+		"ac": map[string]interface{}{
+			"voltage":   220.5,
+			"current":   6.82,
+			"power":     1500.0,
+			"frequency": 50.02,
+			"pf":        0.985,
+		},
+		"batt": map[string]interface{}{
+			"voltage":   48.5,
+			"current":   10.2,
+			"power":     500.0,
+			"soc":       75.0,
+		},
+		"sys": map[string]interface{}{
+			"temp_inv":  45.2,
+			"state":     3,
+			"fault_code": 0,
+		},
+		"energy": map[string]interface{}{
+			"daily_pv":      142.4,
+			"total_pv":      12800.5,
+			"runtime_hours": 1680.0,
+		},
+	}
+	result := normalizeRealtimeData(input)
+
+	// PV 展平
+	if v, ok := result["pv1_voltage"]; !ok || v != 369.1 {
+		t.Errorf("expected pv1_voltage=369.1, got %v (exists=%v)", result["pv1_voltage"], ok)
+	}
+	if v, ok := result["pv_total_power"]; !ok || v != 3365.0 {
+		t.Errorf("expected pv_total_power=3365, got %v", result["pv_total_power"])
+	}
+	// AC 展平
+	if v, ok := result["ac_voltage"]; !ok || v != 220.5 {
+		t.Errorf("expected ac_voltage=220.5, got %v", result["ac_voltage"])
+	}
+	if v, ok := result["ac_power"]; !ok || v != 1500.0 {
+		t.Errorf("expected ac_power=1500, got %v", result["ac_power"])
+	}
+	if v, ok := result["ac_current"]; !ok || v != 6.82 {
+		t.Errorf("expected ac_current=6.82, got %v", result["ac_current"])
+	}
+	if v, ok := result["power_factor"]; !ok || v != 0.985 {
+		t.Errorf("expected power_factor=0.985, got %v", result["power_factor"])
+	}
+	// Battery 展平
+	if v, ok := result["battery"]; !ok {
+		t.Errorf("expected battery map to exist")
+	} else {
+		bMap := v.(map[string]interface{})
+		if bMap["soc"] != 75.0 {
+			t.Errorf("expected battery.soc=75, got %v", bMap["soc"])
+		}
+	}
+	if v, ok := result["battery_soc"]; !ok || v != 75.0 {
+		t.Errorf("expected battery_soc=75, got %v", result["battery_soc"])
+	}
+	if v, ok := result["battery_voltage"]; !ok || v != 48.5 {
+		t.Errorf("expected battery_voltage=48.5, got %v", result["battery_voltage"])
+	}
+	// Energy 展平 + runtime_hours
+	if v, ok := result["daily_pv"]; !ok || v != 142.4 {
+		t.Errorf("expected daily_pv=142.4, got %v", result["daily_pv"])
+	}
+	if v, ok := result["total_pv"]; !ok || v != 12800.5 {
+		t.Errorf("expected total_pv=12800.5, got %v", result["total_pv"])
+	}
+	if v, ok := result["runtime_hours"]; !ok || v != 1680.0 {
+		t.Errorf("expected runtime_hours=1680, got %v", result["runtime_hours"])
+	}
+	// Sys 展平
+	if v, ok := result["inverter_temp"]; !ok || v != 45.2 {
+		t.Errorf("expected inverter_temp=45.2, got %v", result["inverter_temp"])
+	}
+	// 嵌套分组保留
+	if _, ok := result["pv"]; !ok {
+		t.Errorf("expected original pv group to be preserved")
+	}
+	if _, ok := result["batt"]; !ok {
+		t.Errorf("expected original batt group to be preserved")
+	}
+	if _, ok := result["energy"]; !ok {
+		t.Errorf("expected original energy group to be preserved")
+	}
+}
+
+// V2 协议：bat (V2) + chr (AC充电) + eng (发电机) + bat → batt 别名映射
+func TestNormalizeRealtimeData_V2ExtraGroups(t *testing.T) {
+	input := map[string]interface{}{
+		"bat": map[string]interface{}{
+			"voltage": 12.5,
+			"soc":     80.0,
+		},
+		"chr": map[string]interface{}{
+			"ac_charge_power": 2000.0,
+		},
+		"eng": map[string]interface{}{
+			"power": 500.0,
+		},
+		"fan": map[string]interface{}{
+			"inv_fan_speed": 80.0,
+		},
+		"diag": map[string]interface{}{
+			"warning": 0.0,
+		},
+	}
+	result := normalizeRealtimeData(input)
+
+	// bat 展平到顶层
+	if v, ok := result["voltage"]; !ok || v != 12.5 {
+		t.Errorf("expected voltage=12.5 from bat, got %v", result["voltage"])
+	}
+	if v, ok := result["soc"]; !ok || v != 80.0 {
+		t.Errorf("expected soc=80.0 from bat, got %v", result["soc"])
+	}
+	// chr 展平
+	if v, ok := result["ac_charge_power"]; !ok || v != 2000.0 {
+		t.Errorf("expected ac_charge_power=2000, got %v", result["ac_charge_power"])
+	}
+	// eng 展平
+	if v, ok := result["power"]; !ok || v != 500.0 {
+		t.Errorf("expected power=500 from eng, got %v", result["power"])
+	}
+	// fan 展平
+	if v, ok := result["inv_fan_speed"]; !ok || v != 80.0 {
+		t.Errorf("expected inv_fan_speed=80, got %v", result["inv_fan_speed"])
+	}
+	// diag 展平
+	if v, ok := result["warning"]; !ok || v != 0.0 {
+		t.Errorf("expected warning=0, got %v", result["warning"])
+	}
+}
+
+// 幂等性：多次调用不应导致数据损坏
+func TestNormalizeRealtimeData_Idempotent(t *testing.T) {
+	input := map[string]interface{}{
+		"pv": map[string]interface{}{
+			"pv1_voltage": 369.1,
+			"pv1_power":   1680.0,
+		},
+		"ac": map[string]interface{}{
+			"power":   1500.0,
+			"voltage": 220.5,
+		},
+	}
+	r1 := normalizeRealtimeData(input)
+	// 深拷贝 r1 作为 r2 的输入
+	r2Input := make(map[string]interface{})
+	for k, v := range r1 {
+		if m, ok := v.(map[string]interface{}); ok {
+			cp := make(map[string]interface{})
+			for kk, vv := range m {
+				cp[kk] = vv
+			}
+			r2Input[k] = cp
+		} else {
+			r2Input[k] = v
+		}
+	}
+	r2 := normalizeRealtimeData(r2Input)
+
+	if r2["pv1_voltage"] != 369.1 {
+		t.Errorf("idempotency: expected pv1_voltage=369.1 after 2nd call, got %v", r2["pv1_voltage"])
+	}
+	if r2["ac_power"] != 1500.0 {
+		t.Errorf("idempotency: expected ac_power=1500 after 2nd call, got %v", r2["ac_power"])
+	}
+	if r2["pv"] == nil {
+		t.Errorf("idempotency: pv group should still exist after 2nd call")
+	}
+}
+
+// TestNormalizeRealtimeData_V2ChrEng 测试 V2 协议 chr (AC charging) + eng (generator) 字段解析
+func TestNormalizeRealtimeData_V2ChrEng(t *testing.T) {
+	input := map[string]interface{}{
+		"chr": map[string]interface{}{
+			"power":              500.0,             // AC 充电功率
+			"charging_current":   2.3,               // 充电电流
+			"input_voltage":      220.0,             // 输入电压
+			"efficiency":         0.95,              // 充电器效率
+		},
+		"eng": map[string]interface{}{
+			"power":       3000.0,  // 发电机功率
+			"rpu":         1500.0,  // 转速 (RPM)
+			"voltage":     220.0,   // 输出电压
+			"current":     13.6,    // 输出电流
+			"fuel_level":  78.5,    // 燃油液位
+		},
+	}
+
+	result := normalizeRealtimeData(input)
+
+	// 验证 chr 字段展平
+	if result["ac_charge_power"] != 500.0 {
+		t.Errorf("expected ac_charge_power=500, got %v", result["ac_charge_power"])
+	}
+	if result["ac_charge_current"] != 2.3 {
+		t.Errorf("expected ac_charge_current=2.3, got %v", result["ac_charge_current"])
+	}
+	if result["ac_charge_voltage"] != 220.0 {
+		t.Errorf("expected ac_charge_voltage=220, got %v", result["ac_charge_voltage"])
+	}
+	if result["efficiency"] != 0.95 {
+		t.Errorf("expected efficiency=0.95, got %v", result["efficiency"])
+	}
+
+	// 验证 eng 字段展平
+	if result["gen_power"] != 3000.0 {
+		t.Errorf("expected gen_power=3000, got %v", result["gen_power"])
+	}
+	if result["gen_rpm"] != 1500.0 {
+		t.Errorf("expected gen_rpm=1500, got %v", result["gen_rpm"])
+	}
+	if result["gen_voltage"] != 220.0 {
+		t.Errorf("expected gen_voltage=220, got %v", result["gen_voltage"])
+	}
+	if result["gen_current"] != 13.6 {
+		t.Errorf("expected gen_current=13.6, got %v", result["gen_current"])
+	}
+	if result["fuel_level"] != 78.5 {
+		t.Errorf("expected fuel_level=78.5, got %v", result["fuel_level"])
+	}
+}
+
+// TestDataFreshnessChecker 测试数据新鲜度检查器
+func TestDataFreshnessChecker(t *testing.T) {
+	checker := NewDataFreshnessChecker()
+
+	now := time.Now()
+
+	// 场景 1: 心跳 1 分钟，遥测 5 分钟 → 新鲜
+	reportTime1 := now.Add(-5 * time.Minute)
+	heartbeatTime1 := now.Add(-1 * time.Minute)
+	if !checker.IsDataFresh(reportTime1, heartbeatTime1, now) {
+		t.Error("expected data fresh when heartbeat<2min AND report<10min")
+	}
+
+	// 场景 2: 心跳 3 分钟 → 不新鲜（超过 2 分钟）
+	reportTime2 := now.Add(-5 * time.Minute)
+	heartbeatTime2 := now.Add(-3 * time.Minute)
+	if checker.IsDataFresh(reportTime2, heartbeatTime2, now) {
+		t.Error("expected data NOT fresh when heartbeat>2min")
+	}
+
+	// 场景 3: 遥测 15 分钟 → 不新鲜（超过 10 分钟）
+	reportTime3 := now.Add(-15 * time.Minute)
+	heartbeatTime3 := now.Add(-1 * time.Minute)
+	if checker.IsDataFresh(reportTime3, heartbeatTime3, now) {
+		t.Error("expected data NOT fresh when report>10min")
+	}
+
+	// 场景 4: 单独检查心跳
+	if !checker.IsHeartbeatFresh(now.Add(-1*time.Minute), now) {
+		t.Error("expected heartbeat fresh < 2min")
+	}
+	if checker.IsHeartbeatFresh(now.Add(-3*time.Minute), now) {
+		t.Error("expected heartbeat NOT fresh > 2min")
+	}
+
+	// 场景 5: 单独检查遥测
+	if !checker.IsReportFresh(now.Add(-5*time.Minute), now) {
+		t.Error("expected report fresh < 10min")
+	}
+	if checker.IsReportFresh(now.Add(-15*time.Minute), now) {
+		t.Error("expected report NOT fresh > 10min")
+	}
+}

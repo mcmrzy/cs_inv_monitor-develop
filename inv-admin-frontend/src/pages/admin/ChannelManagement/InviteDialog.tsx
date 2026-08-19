@@ -250,23 +250,45 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
       // 后端异常时 results 可能缺失或非数组，降级为空数组避免 .filter/.map 崩溃
       const results = Array.isArray(data?.results) ? data.results : []
       const created = results.filter((r: any) => r.status === 'created')
-      const failed = results.filter((r: any) => r.status !== 'created')
+      const alreadyRegistered = results.filter((r: any) => r.status === 'already_registered')
+      const failed = results.filter((r: any) => r.status !== 'created' && r.status !== 'already_registered')
 
       // 结果提示统一使用同一 key：同 key 的新提示会替换旧提示，
       // 保证同一时刻只有一条 toast，避免“成功/失败”同时叠加弹出。
       const resultKey = 'invite-send-result'
-      if (created.length > 0 && failed.length === 0) {
+
+      // 构建已注册邮箱提示
+      const registeredDetail = alreadyRegistered.length > 0
+        ? alreadyRegistered.map((r: any) => r.email).join('、')
+        : ''
+
+      if (created.length > 0 && failed.length === 0 && alreadyRegistered.length === 0) {
         message.success({ content: t('channel.invite.sendSuccess', { count: created.length }), key: resultKey })
-      } else if (created.length > 0) {
-        const detail = failed.map((r: any) => `${r.email}（${r.error || t('admin.operationFailed')}）`).join('、')
+      } else if (created.length > 0 || alreadyRegistered.length > 0) {
+        let detail = ''
+        if (failed.length > 0) {
+          detail += failed.map((r: any) => `${r.email}（${r.error || t('admin.operationFailed')}）`).join('、')
+        }
+        if (alreadyRegistered.length > 0) {
+          if (detail) detail += '；'
+          detail += t('channel.invite.alreadyRegisteredHint', { emails: registeredDetail, count: alreadyRegistered.length })
+        }
         message.warning({
-          content: `${t('channel.invite.sendPartialSuccess', { count: created.length, failed: failed.length })}：${detail}`,
+          content: `${t('channel.invite.sendPartialSuccess', { count: created.length, failed: failed.length + alreadyRegistered.length })}：${detail}`,
           key: resultKey,
-          duration: 6,
+          duration: 8,
         })
       } else {
-        const detail = failed.map((r: any) => `${r.email}（${r.error || t('admin.operationFailed')}）`).join('、')
-        message.error({ content: `${t('channel.invite.sendFailed')}：${detail}`, key: resultKey, duration: 6 })
+        // 全部失败或已注册
+        let detail = ''
+        if (failed.length > 0) {
+          detail += failed.map((r: any) => `${r.email}（${r.error || t('admin.operationFailed')}）`).join('、')
+        }
+        if (alreadyRegistered.length > 0) {
+          if (detail) detail += '；'
+          detail += t('channel.invite.alreadyRegisteredHint', { emails: registeredDetail, count: alreadyRegistered.length })
+        }
+        message.error({ content: `${t('channel.invite.sendFailed')}：${detail}`, key: resultKey, duration: 8 })
       }
 
       // 复制首个邀请链接（原始 token 仅在创建时返回一次）。

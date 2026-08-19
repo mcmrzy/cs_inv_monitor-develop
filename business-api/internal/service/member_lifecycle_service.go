@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"inv-api-server/internal/job"
@@ -51,21 +52,35 @@ type UpdateMembershipParams struct {
 }
 
 type TransferResult struct {
-	OrganizationID   int64
-	TransferredCount int
+	OrganizationID int64
+	PendingCount   int // 创建的待审批申请数
 }
 
-type PendingTransferInfo struct {
-	ID           int64     `json:"id"`
-	MembershipID int64     `json:"membership_id"`
-	UserID       int64     `json:"user_id"`
-	FromOrgID    int64     `json:"from_org_id"`
-	ToOrgID      int64     `json:"to_org_id"`
-	InitiatorID  int64     `json:"initiator_id"`
-	Status       string    `json:"status"`
-	Reason       string    `json:"reason"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+// TransferRequestInfo 转移申请展示信息（对齐前端 TransferRequest 类型）
+type TransferRequestInfo struct {
+	ID             int64     `json:"id"`
+	ResourceType   string    `json:"resource_type"` // 恒为 "user"
+	ResourceID     int64     `json:"resource_id"`   // 被转移用户 ID
+	MembershipID   int64     `json:"membership_id"`
+	FromOrgID      int64     `json:"from_org_id"`
+	FromOrgName    string    `json:"from_org_name"`
+	ToOrgID        int64     `json:"to_org_id"`
+	ToOrgName      string    `json:"to_org_name"`
+	RequesterID    int64     `json:"requester_id"`
+	RequesterEmail string    `json:"requester_email"`
+	UserEmail      string    `json:"user_email"`
+	UserNickname   string    `json:"user_nickname"`
+	Reason         string    `json:"reason"`
+	Status         string    `json:"status"` // pending/approved/rejected
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+// ListTransfersResult 转移申请分页结果
+type ListTransfersResult struct {
+	Items []TransferRequestInfo
+	Total int64
+	Page  int
+	Size  int
 }
 
 type BulkAddParams struct {
@@ -73,6 +88,25 @@ type BulkAddParams struct {
 	OrganizationID int64
 	MembershipType string
 	ExpiresAt      *time.Time
+}
+
+// UserLookupResult 按邮箱查用户结果（含当前所属组织，供添加成员表单展示）
+type UserLookupResult struct {
+	UserID        int64         `json:"user_id"`
+	Email         string        `json:"email"`
+	Nickname      string        `json:"nickname"`
+	Phone         string        `json:"phone"`
+	IsSystemAdmin bool          `json:"is_system_admin"`
+	Memberships   []UserOrgInfo `json:"memberships"`
+}
+
+// UserOrgInfo 用户所属组织信息
+type UserOrgInfo struct {
+	MembershipID   int64     `json:"membership_id"`
+	OrganizationID int64     `json:"organization_id"`
+	OrgName        string    `json:"org_name"`
+	OrgType        string    `json:"org_type"`
+	JoinedAt       time.Time `json:"joined_at"`
 }
 
 type BulkAddResult struct {
@@ -132,13 +166,31 @@ func (s *MemberLifecycleService) AddMember(ctx context.Context, actorUserID int6
 		return nil, newServiceError(404, "组织不存在")
 	}
 
-	// Tenant isolation: org must belong to the same tenant as the caller
+	// Tenant isolation & management permission:
+	// 系统管理员可跨租户管理任意组织；其他用户须与组织同租户且管理该组织
+	// （管理范围 = 目标组织自身或其祖先组织上的 active org_admin，与邀请流程一致）
 	if targetOrg.RootTenantID != tenantID {
-		return nil, newServiceError(403, "无权操作此组织")
+		isSysAdmin, aerr := s.repo.IsSystemAdmin(ctx, actorUserID)
+		if aerr != nil {
+			logger.Error("AddMember admin check failed", zap.Error(aerr))
+			return nil, newServiceError(500, "权限校验失败")
+		}
+		if !isSysAdmin {
+			return nil, newServiceError(403, "无权操作此组织")
+		}
+	} else {
+		canManage, cerr := s.repo.CanManageOrg(ctx, actorUserID, req.OrganizationID)
+		if cerr != nil {
+			logger.Error("AddMember permission check failed", zap.Error(cerr))
+			return nil, newServiceError(500, "权限校验失败")
+		}
+		if !canManage {
+			return nil, newServiceError(403, "无权管理该组织，无法添加成员")
+		}
 	}
 
-	// Check quota before adding
-	usage, err := s.repo.CheckQuota(ctx, tenantID)
+	// Check quota before adding（以组织所属租户计）
+	usage, err := s.repo.CheckQuota(ctx, targetOrg.RootTenantID)
 	if err != nil {
 		logger.Error("AddMember quota check failed", zap.Error(err))
 		return nil, newServiceError(500, "检查配额失败")
@@ -151,6 +203,15 @@ func (s *MemberLifecycleService) AddMember(ctx context.Context, actorUserID int6
 	existing, _ := s.repo.GetExistingMembership(ctx, req.UserID, req.OrganizationID)
 	if existing != nil && existing.Status == "active" {
 		return nil, newServiceError(409, "该用户已是此组织活跃成员")
+	}
+
+	// 单一身份约束：用户已属于其他组织的活跃成员时不允许直接添加，
+	// 需先在原组织移除或发起转移审批，避免击穿“一人一组织”身份模型
+	currentOrgs, _ := s.repo.GetUserActiveMembershipsWithOrgs(ctx, req.UserID)
+	for _, om := range currentOrgs {
+		if om.OrganizationID != req.OrganizationID {
+			return nil, newServiceError(409, fmt.Sprintf("该用户已属于组织「%s」，请先移除或发起转移审批", om.OrgName))
+		}
 	}
 
 	tx, err := s.repo.BeginTx(ctx)
@@ -455,6 +516,9 @@ func (s *MemberLifecycleService) ReactivateMember(ctx context.Context, actorUser
 
 // ==================== Transfer ====================
 
+// TransferInitiate 发起成员转移审批：校验发起人管理每个成员的源组织后，
+// 创建 pending 转移申请（不动 membership）；真实转移在目标组织管理员
+// 审批通过后由 TransferAccept 执行。
 func (s *MemberLifecycleService) TransferInitiate(ctx context.Context, actorUserID int64, membershipIDs []int64, targetOrgID int64, reason string) (*TransferResult, error) {
 	if len(membershipIDs) == 0 {
 		return nil, newServiceError(400, "请选择要转移的成员")
@@ -466,7 +530,7 @@ func (s *MemberLifecycleService) TransferInitiate(ctx context.Context, actorUser
 		return nil, newServiceError(404, "未找到有效的成员关系")
 	}
 
-	// Validate all memberships belong to same root_tenant
+	// Validate all memberships belong to same root_tenant and are active
 	rootTenantID := memberships[0].RootTenantID
 	sourceOrgID := memberships[0].OrganizationID
 
@@ -488,112 +552,247 @@ func (s *MemberLifecycleService) TransferInitiate(ctx context.Context, actorUser
 		return nil, newServiceError(403, "目标组织不在同一租户下")
 	}
 
+	// 发起人权限：须管理每个成员的源组织（源组织 org_admin 或系统管理员）
+	managedSources := make(map[int64]bool)
+	for _, m := range memberships {
+		if managedSources[m.OrganizationID] {
+			continue
+		}
+		canManage, cerr := s.repo.CanManageOrg(ctx, actorUserID, m.OrganizationID)
+		if cerr != nil {
+			logger.Error("TransferInitiate source permission check failed", zap.Error(cerr))
+			return nil, newServiceError(500, "权限校验失败")
+		}
+		if !canManage {
+			return nil, newServiceError(403, "无权转移其他组织的成员")
+		}
+		managedSources[m.OrganizationID] = true
+	}
+
 	tx, err := s.repo.BeginTx(ctx)
 	if err != nil {
 		return nil, newServiceError(500, "数据库事务开始失败")
 	}
 	defer tx.Rollback(ctx)
 
-	// Transfer each membership
-	transferredCount := 0
+	// 幂等：已在目标组织或已有待审批申请的成员跳过
+	pendingCount := 0
 	for _, membership := range memberships {
-		if err := s.repo.DeleteMembership(ctx, tx, membership.ID); err != nil {
-			return nil, newServiceError(500, "移除旧成员关系失败")
+		if membership.OrganizationID == targetOrg.ID {
+			continue
 		}
+		hasPending, herr := s.repo.HasPendingTransferRequest(ctx, membership.ID)
+		if herr != nil {
+			logger.Error("TransferInitiate pending check failed", zap.Error(herr))
+			return nil, newServiceError(500, "检查转移申请状态失败")
+		}
+		if hasPending {
+			continue
+		}
+		if err := s.repo.CreateTransferRequest(ctx, tx, rootTenantID, membership.ID, membership.UserID, membership.OrganizationID, targetOrg.ID, actorUserID, reason); err != nil {
+			return nil, newServiceError(500, "创建转移申请失败")
+		}
+		pendingCount++
+	}
 
-		rowsAffected, err := s.repo.CreateMembershipInOrg(ctx, tx, targetOrg.RootTenantID, targetOrg.ID, membership.UserID, membership.ExpiresAt)
-		if err != nil {
-			return nil, newServiceError(500, "添加到目标组织失败")
-		}
-		if rowsAffected > 0 {
-			transferredCount++
-		}
+	if pendingCount == 0 {
+		return nil, newServiceError(409, "所选成员均已在目标组织或已存在待审批的转移申请")
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return nil, newServiceError(500, "提交成员转移失败")
+		return nil, newServiceError(500, "提交转移申请失败")
 	}
 
-	// Invalidate authorization caches for both orgs
-	go func() {
-		s.repo.InvalidateAuthCache(rootTenantID, sourceOrgID)
-		s.repo.InvalidateAuthCache(rootTenantID, targetOrg.ID)
-	}()
-
 	s.auditLog(actorUserID, "member.transfer.initiate", targetOrg.ID, map[string]interface{}{
-		"source_org_id":     sourceOrgID,
-		"target_org_id":     targetOrg.ID,
-		"transferred_users": membershipIDsToUserIDs(memberships),
-		"count":             transferredCount,
-		"reason":            reason,
+		"source_org_id":   sourceOrgID,
+		"target_org_id":   targetOrg.ID,
+		"requested_users": membershipIDsToUserIDs(memberships),
+		"pending_count":   pendingCount,
+		"reason":          reason,
 	})
 
 	return &TransferResult{
-		OrganizationID:   targetOrg.ID,
-		TransferredCount: transferredCount,
+		OrganizationID: targetOrg.ID,
+		PendingCount:   pendingCount,
 	}, nil
 }
 
+// TransferAccept 审批通过转移申请：目标组织管理员（或系统管理员）审批后，
+// 在同一事务内执行真实的 membership 转移（删旧建新）并更新申请状态为 approved。
 func (s *MemberLifecycleService) TransferAccept(ctx context.Context, actorUserID int64, transferID int64) error {
-	transferStatus, err := s.repo.GetTransferRequestStatus(ctx, transferID)
+	req, err := s.repo.GetTransferRequestByID(ctx, transferID)
 	if err != nil {
-		return newServiceError(404, "转移请求不存在")
+		logger.Error("TransferAccept load failed", zap.Error(err))
+		return newServiceError(500, "读取转移申请失败")
 	}
-	if transferStatus != "initiated" {
-		return newServiceError(400, "转移请求状态不允许接受")
+	if req == nil {
+		return newServiceError(404, "转移申请不存在")
 	}
-
-	if err := s.repo.AcceptTransferRequest(ctx, transferID); err != nil {
-		return newServiceError(500, "更新转移请求失败")
-	}
-
-	return nil
-}
-
-func (s *MemberLifecycleService) TransferReject(ctx context.Context, actorUserID int64, transferID int64, reason string) error {
-	if reason == "" {
-		return newServiceError(400, "拒绝转移必须提供原因")
+	if req.Status != "pending" {
+		return newServiceError(400, "转移申请已被处理")
 	}
 
-	transferStatus, err := s.repo.GetTransferRequestStatus(ctx, transferID)
+	// 审批人权限：须管理目标组织（to_org 祖先链上的 active org_admin 或系统管理员）
+	can, cerr := s.repo.CanManageOrg(ctx, actorUserID, req.ToOrgID)
+	if cerr != nil {
+		logger.Error("TransferAccept permission check failed", zap.Error(cerr))
+		return newServiceError(500, "权限校验失败")
+	}
+	if !can {
+		return newServiceError(403, "仅目标组织管理员可审批此转移")
+	}
+
+	// 成员关系须仍为活跃且仍位于源组织（申请后可能已被移除/转移）
+	membership, merr := s.repo.GetMembershipByID(ctx, req.MembershipID)
+	if merr != nil || membership == nil || membership.Status != "active" || membership.OrganizationID != req.FromOrgID {
+		return newServiceError(409, "成员关系已失效，无法执行转移")
+	}
+
+	// 目标组织须仍存在且同租户
+	targetOrg, oerr := s.repo.GetOrgByID(ctx, req.ToOrgID)
+	if oerr != nil || targetOrg == nil || targetOrg.RootTenantID != membership.RootTenantID {
+		return newServiceError(409, "目标组织已失效，无法执行转移")
+	}
+
+	tx, err := s.repo.BeginTx(ctx)
 	if err != nil {
-		return newServiceError(404, "转移请求不存在")
+		return newServiceError(500, "数据库事务开始失败")
 	}
-	if transferStatus != "initiated" {
-		return newServiceError(400, "转移请求状态不允许拒绝")
-	}
+	defer tx.Rollback(ctx)
 
-	if err := s.repo.RejectTransferRequest(ctx, transferID, reason); err != nil {
-		return newServiceError(500, "更新转移请求失败")
+	if err := s.repo.DeleteMembership(ctx, tx, membership.ID); err != nil {
+		return newServiceError(500, "移除旧成员关系失败")
 	}
 
-	return nil
-}
-
-func (s *MemberLifecycleService) ListTransfers(ctx context.Context, userID int64) ([]PendingTransferInfo, error) {
-	transfers, err := s.repo.ListPendingTransfers(ctx, userID)
-	if err != nil {
-		logger.Error("ListTransfers query failed", zap.Error(err))
-		return []PendingTransferInfo{}, nil
-	}
-
-	result := make([]PendingTransferInfo, len(transfers))
-	for i, t := range transfers {
-		result[i] = PendingTransferInfo{
-			ID:           t.ID,
-			MembershipID: t.MembershipID,
-			UserID:       t.UserID,
-			FromOrgID:    t.FromOrgID,
-			ToOrgID:      t.ToOrgID,
-			InitiatorID:  t.InitiatorID,
-			Status:       t.Status,
-			Reason:       t.Reason,
-			CreatedAt:    t.CreatedAt,
-			UpdatedAt:    t.UpdatedAt,
+	// 若用户尚未存在于目标组织则创建（审批期间状态可能变化，避免唯一索引冲突）
+	existingInTarget, _ := s.repo.GetExistingMembership(ctx, membership.UserID, targetOrg.ID)
+	if existingInTarget == nil {
+		if _, err := s.repo.CreateMembershipInOrg(ctx, tx, targetOrg.RootTenantID, targetOrg.ID, membership.UserID, membership.ExpiresAt); err != nil {
+			return newServiceError(500, "添加到目标组织失败")
 		}
 	}
 
-	return result, nil
+	rowsAffected, err := s.repo.UpdateTransferRequestStatus(ctx, tx, transferID, "pending", "approved", "")
+	if err != nil {
+		return newServiceError(500, "更新转移申请失败")
+	}
+	if rowsAffected == 0 {
+		return newServiceError(409, "转移申请已被处理")
+	}
+
+	// Invalidate authorization caches for both orgs
+	s.repo.InvalidateAuthCache(membership.RootTenantID, membership.OrganizationID)
+	s.repo.InvalidateAuthCache(membership.RootTenantID, targetOrg.ID)
+
+	if err := tx.Commit(ctx); err != nil {
+		return newServiceError(500, "提交成员转移失败")
+	}
+
+	s.auditLog(actorUserID, "member.transfer.accept", targetOrg.ID, map[string]interface{}{
+		"transfer_id":   transferID,
+		"membership_id": req.MembershipID,
+		"user_id":       req.UserID,
+		"from_org_id":   req.FromOrgID,
+		"to_org_id":     req.ToOrgID,
+	})
+
+	return nil
+}
+
+// TransferReject 拒绝转移申请：目标组织管理员（或系统管理员）可拒绝，reason 可选。
+func (s *MemberLifecycleService) TransferReject(ctx context.Context, actorUserID int64, transferID int64, reason string) error {
+	req, err := s.repo.GetTransferRequestByID(ctx, transferID)
+	if err != nil {
+		logger.Error("TransferReject load failed", zap.Error(err))
+		return newServiceError(500, "读取转移申请失败")
+	}
+	if req == nil {
+		return newServiceError(404, "转移申请不存在")
+	}
+	if req.Status != "pending" {
+		return newServiceError(400, "转移申请已被处理")
+	}
+
+	can, cerr := s.repo.CanManageOrg(ctx, actorUserID, req.ToOrgID)
+	if cerr != nil {
+		logger.Error("TransferReject permission check failed", zap.Error(cerr))
+		return newServiceError(500, "权限校验失败")
+	}
+	if !can {
+		return newServiceError(403, "仅目标组织管理员可审批此转移")
+	}
+
+	tx, err := s.repo.BeginTx(ctx)
+	if err != nil {
+		return newServiceError(500, "数据库事务开始失败")
+	}
+	defer tx.Rollback(ctx)
+
+	rowsAffected, err := s.repo.UpdateTransferRequestStatus(ctx, tx, transferID, "pending", "rejected", reason)
+	if err != nil {
+		return newServiceError(500, "更新转移申请失败")
+	}
+	if rowsAffected == 0 {
+		return newServiceError(409, "转移申请已被处理")
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return newServiceError(500, "保存更新失败")
+	}
+
+	s.auditLog(actorUserID, "member.transfer.reject", req.ToOrgID, map[string]interface{}{
+		"transfer_id": transferID,
+		"user_id":     req.UserID,
+		"from_org_id": req.FromOrgID,
+		"to_org_id":   req.ToOrgID,
+		"reason":      reason,
+	})
+
+	return nil
+}
+
+// ListTransfers 查询当前用户可审批的转移申请（分页）：
+// 系统管理员可见全部；组织管理员可见目标组织在其管理范围内的申请。
+func (s *MemberLifecycleService) ListTransfers(ctx context.Context, viewerUserID int64, page, pageSize int, status string) (*ListTransfersResult, error) {
+	isSysAdmin, err := s.repo.IsSystemAdmin(ctx, viewerUserID)
+	if err != nil {
+		logger.Error("ListTransfers admin check failed", zap.Error(err))
+		return nil, newServiceError(500, "查询转移申请失败")
+	}
+
+	rows, total, err := s.repo.ListTransferRequests(ctx, viewerUserID, isSysAdmin, page, pageSize, status)
+	if err != nil {
+		logger.Error("ListTransfers query failed", zap.Error(err))
+		return nil, newServiceError(500, "查询转移申请失败")
+	}
+
+	items := make([]TransferRequestInfo, len(rows))
+	for i, t := range rows {
+		items[i] = TransferRequestInfo{
+			ID:             t.ID,
+			ResourceType:   "user",
+			ResourceID:     t.UserID,
+			MembershipID:   t.MembershipID,
+			FromOrgID:      t.FromOrgID,
+			FromOrgName:    t.FromOrgName,
+			ToOrgID:        t.ToOrgID,
+			ToOrgName:      t.ToOrgName,
+			RequesterID:    t.InitiatorID,
+			RequesterEmail: t.InitiatorEmail,
+			UserEmail:      t.UserEmail,
+			UserNickname:   t.UserNickname,
+			Reason:         t.Reason,
+			Status:         t.Status,
+			CreatedAt:      t.CreatedAt,
+		}
+	}
+
+	return &ListTransfersResult{
+		Items: items,
+		Total: total,
+		Page:  page,
+		Size:  pageSize,
+	}, nil
 }
 
 // ==================== List Members ====================
@@ -622,6 +821,68 @@ func (s *MemberLifecycleService) ListMembers(ctx context.Context, orgID int64, p
 	}, nil
 }
 
+// ==================== User Lookup ====================
+
+// GetUserByEmail 按邮箱查找系统用户及其当前所属组织（添加成员表单的查询接口）。
+// 权限：系统管理员或任意组织管理员可调用。
+func (s *MemberLifecycleService) GetUserByEmail(ctx context.Context, actorUserID int64, email string) (*UserLookupResult, error) {
+	email = strings.TrimSpace(email)
+	if email == "" {
+		return nil, newServiceError(400, "请输入邮箱")
+	}
+
+	isSysAdmin, err := s.repo.IsSystemAdmin(ctx, actorUserID)
+	if err != nil {
+		logger.Error("GetUserByEmail admin check failed", zap.Error(err))
+		return nil, newServiceError(500, "权限校验失败")
+	}
+	if !isSysAdmin {
+		isOrgAdmin, aerr := s.repo.IsAnyOrgAdmin(ctx, actorUserID)
+		if aerr != nil {
+			logger.Error("GetUserByEmail org admin check failed", zap.Error(aerr))
+			return nil, newServiceError(500, "权限校验失败")
+		}
+		if !isOrgAdmin {
+			return nil, newServiceError(403, "无权查询用户信息")
+		}
+	}
+
+	user, uerr := s.repo.GetUserByEmail(ctx, email)
+	if uerr != nil {
+		logger.Error("GetUserByEmail lookup failed", zap.Error(uerr))
+		return nil, newServiceError(500, "查询用户失败")
+	}
+	if user == nil {
+		return nil, newServiceError(404, "该邮箱未注册，请先发送邀请")
+	}
+
+	memberships, merr := s.repo.GetUserActiveMembershipsWithOrgs(ctx, user.ID)
+	if merr != nil {
+		logger.Error("GetUserByEmail memberships failed", zap.Error(merr))
+		return nil, newServiceError(500, "查询用户组织失败")
+	}
+
+	orgInfos := make([]UserOrgInfo, len(memberships))
+	for i, m := range memberships {
+		orgInfos[i] = UserOrgInfo{
+			MembershipID:   m.MembershipID,
+			OrganizationID: m.OrganizationID,
+			OrgName:        m.OrgName,
+			OrgType:        m.OrgType,
+			JoinedAt:       m.JoinedAt,
+		}
+	}
+
+	return &UserLookupResult{
+		UserID:        user.ID,
+		Email:         user.Email,
+		Nickname:      user.Nickname,
+		Phone:         user.Phone,
+		IsSystemAdmin: user.IsSystemAdmin,
+		Memberships:   orgInfos,
+	}, nil
+}
+
 // ==================== Bulk Operations ====================
 
 func (s *MemberLifecycleService) BulkAdd(ctx context.Context, actorUserID int64, tenantID int64, req BulkAddParams) (*BulkAddResult, error) {
@@ -637,12 +898,22 @@ func (s *MemberLifecycleService) BulkAdd(ctx context.Context, actorUserID int64,
 		return nil, newServiceError(404, "组织不存在")
 	}
 
+	// Tenant isolation & management permission（与 AddMember 一致：
+	// 系统管理员可跨租户；其他用户须同租户且管理该组织）
 	if targetOrg.RootTenantID != tenantID {
-		return nil, newServiceError(403, "组织不属于当前租户范围")
+		isSysAdmin, aerr := s.repo.IsSystemAdmin(ctx, actorUserID)
+		if aerr != nil || !isSysAdmin {
+			return nil, newServiceError(403, "组织不属于当前租户范围")
+		}
+	} else {
+		canManage, cerr := s.repo.CanManageOrg(ctx, actorUserID, req.OrganizationID)
+		if cerr != nil || !canManage {
+			return nil, newServiceError(403, "无权管理该组织，无法添加成员")
+		}
 	}
 
 	// Check quota
-	if _, err := s.repo.CheckQuota(ctx, tenantID); err != nil {
+	if _, err := s.repo.CheckQuota(ctx, targetOrg.RootTenantID); err != nil {
 		logger.Error("BulkAdd quota check failed", zap.Error(err))
 		return nil, newServiceError(500, "检查配额失败")
 	}
@@ -705,6 +976,20 @@ func (s *MemberLifecycleService) processBulkAddSync(ctx context.Context, actorUs
 			continue
 		}
 
+		// 单一身份约束：跳过已属于其他组织的用户（需先移除或走转移审批）
+		currentOrgs, _ := s.repo.GetUserActiveMembershipsWithOrgs(ctx, uid)
+		belongsToOther := false
+		for _, om := range currentOrgs {
+			if om.OrganizationID != req.OrganizationID {
+				belongsToOther = true
+				break
+			}
+		}
+		if belongsToOther {
+			logger.Warn("BulkAdd skipped user already in another org", zap.Int64("uid", uid))
+			continue
+		}
+
 		// Insert or reactivate
 		if existing != nil && existing.Status != "active" {
 			s.repo.ReactivateMembership(ctx, tx, existing.ID, req.ExpiresAt)
@@ -734,103 +1019,16 @@ func (s *MemberLifecycleService) processBulkAddSync(ctx context.Context, actorUs
 }
 
 func (s *MemberLifecycleService) BulkTransfer(ctx context.Context, actorUserID int64, req BulkTransferParams) (*BulkTransferResult, error) {
-	// Fetch memberships
-	memberships, err := s.repo.GetMembershipsByIDList(ctx, req.MembershipIDs)
-	if err != nil || len(memberships) == 0 {
-		return nil, newServiceError(404, "未找到有效成员")
-	}
-
-	// Validate same tenant
-	rootTenantID := memberships[0].RootTenantID
-	for _, m := range memberships {
-		if m.RootTenantID != rootTenantID {
-			return nil, newServiceError(409, "跨租户批量转移不支持")
-		}
-	}
-
-	// Validate target org
-	targetOrg, err := s.repo.GetOrgByID(ctx, req.TargetOrgID)
-	if err != nil || targetOrg.RootTenantID != rootTenantID {
-		return nil, newServiceError(403, "目标组织不在同一租户下")
-	}
-
-	// For small batches (<10 items), process synchronously
-	if len(req.MembershipIDs) < 10 {
-		return s.processBulkTransferSync(ctx, actorUserID, rootTenantID, targetOrg, memberships, req.Reason)
-	}
-
-	// For larger batches, create background job
-	bulkJob := job.CreateBulkTransferJob(actorUserID, req.MembershipIDs, req.TargetOrgID)
-	bulkJob.TotalItems = len(req.MembershipIDs)
-
-	if err := s.jobStore.CreateJob(ctx, bulkJob); err != nil {
-		logger.Error("BulkTransfer failed to create job", zap.Error(err))
-		return nil, newServiceError(500, "创建批量转移任务失败")
-	}
-
-	sourceOrgID := memberships[0].OrganizationID
-	go func() {
-		if err := bulkJob.WithRetry(job.MaxRetries); err != nil {
-			logger.Error("BulkTransfer job failed", zap.String("job_id", bulkJob.JobID), zap.Error(err))
-		}
-		go func() {
-			s.repo.InvalidateAuthCache(rootTenantID, sourceOrgID)
-			s.repo.InvalidateAuthCache(rootTenantID, targetOrg.ID)
-		}()
-		s.auditLog(actorUserID, "member.bulk_transfer", targetOrg.ID, map[string]interface{}{
-			"membership_ids":    req.MembershipIDs,
-			"target_org_id":     req.TargetOrgID,
-			"total_transferred": len(req.MembershipIDs),
-			"job_id":            bulkJob.JobID,
-			"reason":            req.Reason,
-		})
-	}()
-
-	return &BulkTransferResult{
-		IsAsync:    true,
-		JobID:      bulkJob.JobID,
-		StatusURL:  fmt.Sprintf("/api/v1/jobs/%s/status", bulkJob.JobID),
-		WSURL:      fmt.Sprintf("/ws/jobs/%s/progress?user_id=%d", bulkJob.JobID, actorUserID),
-		TotalItems: len(req.MembershipIDs),
-	}, nil
-}
-
-func (s *MemberLifecycleService) processBulkTransferSync(ctx context.Context, actorUserID int64, rootTenantID int64, targetOrg *model.Organization, memberships []*model.OrganizationMembership, reason string) (*BulkTransferResult, error) {
-	tx, err := s.repo.BeginTx(ctx)
+	// 审批制：批量发起即批量创建 pending 转移申请（同步，无需后台任务），
+	// 真实转移由目标组织管理员审批后执行。
+	result, err := s.TransferInitiate(ctx, actorUserID, req.MembershipIDs, req.TargetOrgID, req.Reason)
 	if err != nil {
-		return nil, newServiceError(500, "数据库事务开始失败")
+		return nil, err
 	}
-	defer tx.Rollback(ctx)
-
-	transferredCount := 0
-	for _, membership := range memberships {
-		if err := s.repo.DeleteMembership(ctx, tx, membership.ID); err != nil {
-			continue
-		}
-
-		rowsAffected, err := s.repo.CreateMembershipInOrg(ctx, tx, targetOrg.RootTenantID, targetOrg.ID, membership.UserID, membership.ExpiresAt)
-		if err == nil && rowsAffected > 0 {
-			transferredCount++
-		}
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return nil, newServiceError(500, "批量转移失败")
-	}
-
-	go func() {
-		s.repo.InvalidateAuthCache(rootTenantID, memberships[0].OrganizationID)
-		s.repo.InvalidateAuthCache(rootTenantID, targetOrg.ID)
-	}()
-
-	s.auditLog(actorUserID, "member.bulk_transfer", targetOrg.ID, map[string]interface{}{
-		"transferred_count": transferredCount,
-		"source_orgs":       membershipIDsToUserIDs(memberships),
-	})
 
 	return &BulkTransferResult{
-		OrganizationID:   targetOrg.ID,
-		TransferredCount: transferredCount,
+		OrganizationID:   result.OrganizationID,
+		TransferredCount: result.PendingCount,
 	}, nil
 }
 

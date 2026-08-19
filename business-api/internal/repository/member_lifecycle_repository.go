@@ -20,18 +20,34 @@ type QuotaUsage struct {
 	UserLimit int64 // -1 means unlimited
 }
 
-// PendingTransfer represents a pending transfer record
-type PendingTransfer struct {
-	ID           int64
-	MembershipID int64
-	UserID       int64
-	FromOrgID    int64
-	ToOrgID      int64
-	InitiatorID  int64
-	Status       string
-	Reason       string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+// MemberTransferRequestRow 成员转移审批记录（含组织与用户展示信息，供审批工作台展示）
+type MemberTransferRequestRow struct {
+	ID             int64
+	MembershipID   int64
+	RootTenantID   int64
+	UserID         int64
+	UserEmail      string
+	UserNickname   string
+	FromOrgID      int64
+	FromOrgName    string
+	ToOrgID        int64
+	ToOrgName      string
+	InitiatorID    int64
+	InitiatorEmail string
+	Status         string
+	Reason         string
+	RejectReason   string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+// UserMembershipOrg 用户所属组织信息（按邮箱查用户接口返回）
+type UserMembershipOrg struct {
+	MembershipID   int64     `json:"membership_id"`
+	OrganizationID int64     `json:"organization_id"`
+	OrgName        string    `json:"org_name"`
+	OrgType        string    `json:"org_type"`
+	JoinedAt       time.Time `json:"joined_at"`
 }
 
 // MemberLifecycleRepository encapsulates all data access for member lifecycle operations
@@ -203,6 +219,82 @@ func (r *MemberLifecycleRepository) IsSystemAdmin(ctx context.Context, userID in
 	return isSystemAdmin, nil
 }
 
+// CanManageOrg 判断用户是否可管理目标组织：
+// 系统管理员（users.is_system_admin）可管理全部组织；
+// 其他用户须为目标组织自身或其祖先组织（organization_closure）的 active org_admin
+// （与邀请流程 canCreateInvitationsFor 同款管理范围定义）。
+func (r *MemberLifecycleRepository) CanManageOrg(ctx context.Context, userID, orgID int64) (bool, error) {
+	var can bool
+	err := r.db.QueryRow(ctx, `
+		SELECT is_system_admin OR EXISTS(
+			SELECT 1
+			FROM organization_closure c
+			JOIN organization_memberships m
+			  ON m.organization_id = c.ancestor_id AND m.status = 'active'
+			JOIN membership_role_assignments ra
+			  ON ra.membership_id = m.id AND ra.organization_id = m.organization_id
+			WHERE c.descendant_id = $2
+			  AND m.user_id = $1
+			  AND ra.role_code = 'org_admin' AND ra.status = 'active'
+		)
+		FROM users
+		WHERE id = $1 AND deleted_at IS NULL
+	`, userID, orgID).Scan(&can)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return false, nil
+		}
+		return false, err
+	}
+	return can, nil
+}
+
+// IsAnyOrgAdmin 判断用户是否担任任意组织的 active org_admin（按邮箱查用户接口的门禁）
+func (r *MemberLifecycleRepository) IsAnyOrgAdmin(ctx context.Context, userID int64) (bool, error) {
+	var exists bool
+	err := r.db.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1
+			FROM organization_memberships m
+			JOIN membership_role_assignments ra
+			  ON ra.membership_id = m.id AND ra.organization_id = m.organization_id
+			WHERE m.user_id = $1 AND m.status = 'active'
+			  AND ra.role_code = 'org_admin' AND ra.status = 'active'
+		)
+	`, userID).Scan(&exists)
+	return exists, err
+}
+
+// GetUserByEmail 按邮箱查询用户（复用 UserRepository，未找到返回 nil, nil）
+func (r *MemberLifecycleRepository) GetUserByEmail(ctx context.Context, email string) (*model.User, error) {
+	return r.userRepo.GetByEmail(ctx, email)
+}
+
+// GetUserActiveMembershipsWithOrgs 查询用户全部活跃成员关系及所属组织信息
+func (r *MemberLifecycleRepository) GetUserActiveMembershipsWithOrgs(ctx context.Context, userID int64) ([]UserMembershipOrg, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT m.id, m.organization_id, o.name, o.org_type, m.joined_at
+		FROM organization_memberships m
+		JOIN organizations o ON o.id = m.organization_id AND o.deleted_at IS NULL
+		WHERE m.user_id = $1 AND m.status = 'active'
+		ORDER BY m.joined_at DESC
+	`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []UserMembershipOrg
+	for rows.Next() {
+		var item UserMembershipOrg
+		if err := rows.Scan(&item.MembershipID, &item.OrganizationID, &item.OrgName, &item.OrgType, &item.JoinedAt); err != nil {
+			return nil, err
+		}
+		result = append(result, item)
+	}
+	return result, nil
+}
+
 // ==================== Transaction Management ====================
 
 // BeginTx starts a new transaction
@@ -306,67 +398,139 @@ func (r *MemberLifecycleRepository) CreateMembershipInOrg(ctx context.Context, t
 
 // ==================== Transfer Request Operations ====================
 
-// GetTransferRequestStatus retrieves the status of a transfer request
-func (r *MemberLifecycleRepository) GetTransferRequestStatus(ctx context.Context, transferID int64) (string, error) {
-	var status string
+// memberTransferRequestSelect 转移审批记录统一查询（含组织/用户展示信息）
+const memberTransferRequestSelect = `
+	SELECT t.id, t.membership_id, t.root_tenant_id, t.user_id,
+	       COALESCE(tu.email, ''), COALESCE(tu.nickname, ''),
+	       t.from_org_id, fo.name, t.to_org_id, to2.name,
+	       t.initiator_id, COALESCE(iu.email, ''),
+	       t.status, COALESCE(t.reason, ''), COALESCE(t.reject_reason, ''),
+	       t.created_at, t.updated_at
+	FROM member_transfer_requests t
+	JOIN organizations fo ON fo.id = t.from_org_id
+	JOIN organizations to2 ON to2.id = t.to_org_id
+	JOIN users tu ON tu.id = t.user_id
+	JOIN users iu ON iu.id = t.initiator_id
+`
+
+// CreateTransferRequest 在事务内创建一条 pending 转移审批申请（不动 membership）
+func (r *MemberLifecycleRepository) CreateTransferRequest(ctx context.Context, tx pgx.Tx, rootTenantID, membershipID, userID, fromOrgID, toOrgID, initiatorID int64, reason string) error {
+	_, err := tx.Exec(ctx, `
+		INSERT INTO member_transfer_requests
+			(root_tenant_id, membership_id, user_id, from_org_id, to_org_id, initiator_id, status, reason)
+		VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7)
+	`, rootTenantID, membershipID, userID, fromOrgID, toOrgID, initiatorID, reason)
+	return err
+}
+
+// HasPendingTransferRequest 判断指定成员关系是否已有待审批的转移申请
+func (r *MemberLifecycleRepository) HasPendingTransferRequest(ctx context.Context, membershipID int64) (bool, error) {
+	var exists bool
 	err := r.db.QueryRow(ctx, `
-		SELECT status FROM member_transfer_requests
-		WHERE id = $1
-	`, transferID).Scan(&status)
+		SELECT EXISTS(
+			SELECT 1 FROM member_transfer_requests
+			WHERE membership_id = $1 AND status = 'pending'
+		)
+	`, membershipID).Scan(&exists)
+	return exists, err
+}
+
+// GetTransferRequestByID 按 ID 查询转移审批记录（未找到返回 nil, nil）
+func (r *MemberLifecycleRepository) GetTransferRequestByID(ctx context.Context, id int64) (*MemberTransferRequestRow, error) {
+	var row MemberTransferRequestRow
+	err := r.db.QueryRow(ctx, memberTransferRequestSelect+` WHERE t.id = $1`, id).Scan(
+		&row.ID, &row.MembershipID, &row.RootTenantID, &row.UserID,
+		&row.UserEmail, &row.UserNickname,
+		&row.FromOrgID, &row.FromOrgName, &row.ToOrgID, &row.ToOrgName,
+		&row.InitiatorID, &row.InitiatorEmail,
+		&row.Status, &row.Reason, &row.RejectReason,
+		&row.CreatedAt, &row.UpdatedAt,
+	)
 	if err != nil {
-		return "", err
-	}
-	return status, nil
-}
-
-// AcceptTransferRequest marks a transfer request as accepted
-func (r *MemberLifecycleRepository) AcceptTransferRequest(ctx context.Context, transferID int64) error {
-	_, err := r.db.Exec(ctx, `
-		UPDATE member_transfer_requests
-		SET status = 'accepted', updated_at = NOW()
-		WHERE id = $1
-	`, transferID)
-	return err
-}
-
-// RejectTransferRequest marks a transfer request as rejected
-func (r *MemberLifecycleRepository) RejectTransferRequest(ctx context.Context, transferID int64, reason string) error {
-	_, err := r.db.Exec(ctx, `
-		UPDATE member_transfer_requests
-		SET status = 'rejected', reason = $2, updated_at = NOW()
-		WHERE id = $1
-	`, transferID, reason)
-	return err
-}
-
-// ListPendingTransfers lists pending transfers for a user
-func (r *MemberLifecycleRepository) ListPendingTransfers(ctx context.Context, userID int64) ([]PendingTransfer, error) {
-	rows, err := r.db.Query(ctx, `
-		SELECT id, membership_id, from_org_id, to_org_id, initiator_id,
-		       status, reason, created_at, updated_at
-		FROM pending_transfers
-		WHERE user_id = $1 AND status = 'initiated'
-		ORDER BY created_at DESC
-	`, userID)
-	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
 		return nil, err
+	}
+	return &row, nil
+}
+
+// UpdateTransferRequestStatus 在事务内流转申请状态（带当前状态条件，乐观并发控制）；
+// rejectReason 非空时写入拒绝原因
+func (r *MemberLifecycleRepository) UpdateTransferRequestStatus(ctx context.Context, tx pgx.Tx, id int64, fromStatus, toStatus, rejectReason string) (int64, error) {
+	result, err := tx.Exec(ctx, `
+		UPDATE member_transfer_requests
+		SET status = $3,
+		    reject_reason = COALESCE(NULLIF($4, ''), reject_reason),
+		    updated_at = NOW()
+		WHERE id = $1 AND status = $2
+	`, id, fromStatus, toStatus, rejectReason)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+// ListTransferRequests 分页查询当前用户可审批的转移申请：
+// 系统管理员可见全部；组织管理员仅可见 to_org 位于其管理范围（祖先链）内的申请。
+func (r *MemberLifecycleRepository) ListTransferRequests(ctx context.Context, viewerUserID int64, isSystemAdmin bool, page, pageSize int, status string) ([]MemberTransferRequestRow, int64, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+	offset := (page - 1) * pageSize
+
+	where := "WHERE ($1 = '' OR t.status = $1)"
+	args := []interface{}{status}
+	if !isSystemAdmin {
+		where += ` AND EXISTS(
+			SELECT 1
+			FROM organization_closure c
+			JOIN organization_memberships m
+			  ON m.organization_id = c.ancestor_id AND m.status = 'active' AND m.user_id = $2
+			JOIN membership_role_assignments ra
+			  ON ra.membership_id = m.id AND ra.organization_id = m.organization_id
+			WHERE c.descendant_id = t.to_org_id
+			  AND ra.role_code = 'org_admin' AND ra.status = 'active'
+		)`
+		args = append(args, viewerUserID)
+	}
+
+	var total int64
+	countQuery := fmt.Sprintf(`SELECT COUNT(*) FROM member_transfer_requests t %s`, where)
+	if err := r.db.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	query := fmt.Sprintf(`%s %s ORDER BY t.created_at DESC LIMIT $%d OFFSET $%d`,
+		memberTransferRequestSelect, where, len(args)+1, len(args)+2)
+	args = append(args, pageSize, offset)
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, 0, err
 	}
 	defer rows.Close()
 
-	var transfers []PendingTransfer
+	var result []MemberTransferRequestRow
 	for rows.Next() {
-		var t PendingTransfer
+		var row MemberTransferRequestRow
 		if err := rows.Scan(
-			&t.ID, &t.MembershipID, &t.FromOrgID, &t.ToOrgID,
-			&t.InitiatorID, &t.Status, &t.Reason, &t.CreatedAt, &t.UpdatedAt,
+			&row.ID, &row.MembershipID, &row.RootTenantID, &row.UserID,
+			&row.UserEmail, &row.UserNickname,
+			&row.FromOrgID, &row.FromOrgName, &row.ToOrgID, &row.ToOrgName,
+			&row.InitiatorID, &row.InitiatorEmail,
+			&row.Status, &row.Reason, &row.RejectReason,
+			&row.CreatedAt, &row.UpdatedAt,
 		); err != nil {
-			logger.Error("ListPendingTransfers scan error", zap.Error(err))
+			logger.Error("ListTransferRequests scan error", zap.Error(err))
 			continue
 		}
-		transfers = append(transfers, t)
+		result = append(result, row)
 	}
-
-	return transfers, nil
+	return result, total, nil
 }
 
 // ==================== Redis Cache Operations ====================
