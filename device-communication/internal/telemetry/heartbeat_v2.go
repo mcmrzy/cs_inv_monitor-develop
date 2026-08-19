@@ -37,6 +37,9 @@ type heartbeatDataV2 struct {
 	Fan  []json.RawMessage `json:"fan"`
 	Diag []json.RawMessage `json:"diag"`
 	Sock []json.RawMessage `json:"sock"`
+	// V2.2+ 固件新增（ARM 在线标志，实测设备 H1CNA00135000014 已上报）；
+	// 暂无落库列，此处仅为通过 DisallowUnknownFields 严格校验，避免整条拒绝
+	ArmOnline *bool `json:"arm_online"`
 }
 
 // v2Scales 各组位置值的原始量纲 → 物理量 缩放系数（与迁移 096 device_protocol_fields.scale 一致；
@@ -81,16 +84,17 @@ func ParseHeartbeatV2(deviceSN string, payload []byte, receivedAt time.Time) (*S
 		s.EventTime = receivedAt.UTC()
 	}
 
-	// 六组精确校验（V2.0 位置冻结）
+	// 六组精确校验（V2.0 位置冻结）；chr 容忍 V2.2+ 固件 4 值扩展（第 4 值语义未发布，忽略）
 	for name, pair := range map[string]struct{ got, want int }{
 		"sys": {len(data.Sys), 11}, "pv": {len(data.PV), 5}, "ac": {len(data.AC), 11},
 		"chr": {len(data.Chr), 3}, "bat": {len(data.Bat), 5}, "eng": {len(data.Eng), 14},
 	} {
-		if pair.got != pair.want {
+		if pair.got != pair.want && !(name == "chr" && pair.got == 4) {
 			return nil, fmt.Errorf("%w: %s length %d, want %d", ErrInvalidHeartbeat, name, pair.got, pair.want)
 		}
 	}
-	// V2.1 新增组自适应：缺失或空组视为 49 值旧固件（QualityPartial）；存在则长度必须精确
+	// V2.1 新增组自适应：缺失或空组视为 49 值旧固件（QualityPartial）；存在则长度必须精确，
+	// fan 容忍 V2.2+ 固件 3 值扩展（第 3 值语义未发布，忽略）
 	for name, pair := range map[string]struct{ got, want int }{
 		"fan": {len(data.Fan), 2}, "diag": {len(data.Diag), 3}, "sock": {len(data.Sock), 3},
 	} {
@@ -98,7 +102,7 @@ func ParseHeartbeatV2(deviceSN string, payload []byte, receivedAt time.Time) (*S
 			s.QualityFlags |= QualityPartial
 			continue
 		}
-		if pair.got != pair.want {
+		if pair.got != pair.want && !(name == "fan" && pair.got == 3) {
 			return nil, fmt.Errorf("%w: %s length %d, want %d", ErrInvalidHeartbeat, name, pair.got, pair.want)
 		}
 	}
@@ -124,11 +128,12 @@ func ParseHeartbeatV2(deviceSN string, payload []byte, receivedAt time.Time) (*S
 	}
 
 	// scale 还原：原始量纲 → 物理量
+	// V2.2+ 固件扩展位（超出 v2Scales 表长）语义未发布，按 scale=1 透传，后续构造只取已知索引
 	scaled := func(group string, in []*float64) []*float64 {
 		scales := v2Scales[group]
 		out := make([]*float64, len(in))
 		for i, p := range in {
-			if p == nil || scales[i] == 1 {
+			if p == nil || i >= len(scales) || scales[i] == 1 {
 				out[i] = p
 				continue
 			}
@@ -286,7 +291,7 @@ func ParseHeartbeatV2(deviceSN string, payload []byte, receivedAt time.Time) (*S
 	}
 	// V2.1 新增组（57 值扩展）：风扇 / 诊断量 / 插座状态
 	// 旧固件缺组时 len=0，保留零值结构（与 49 值自适应一致）
-	if len(fan) == 2 {
+	if len(fan) >= 2 {
 		s.Fan = Fan{
 			MPPTSpeed: bounded(fan[0], 0, 100),
 			InvSpeed:  bounded(fan[1], 0, 100),

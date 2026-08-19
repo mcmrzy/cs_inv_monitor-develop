@@ -782,6 +782,13 @@ const Map<String, String> zh = {
   'err_captcha_failed': '验证码校验失败，请重试',
   'err_captcha_required': '请先完成滑块验证',
   'email_verification_code': '邮箱验证码',
+  'sms_verification_code': '短信验证码',
+  'login_mode_password': '密码登录',
+  'login_mode_code': '验证码登录',
+  'code_channel_phone': '手机验证码',
+  'code_channel_email': '邮箱验证码',
+  'register_channel_email': '邮箱注册',
+  'register_channel_phone': '手机注册',
   'please_input_verification_code': '请输入验证码',
   'please_input_correct_code': '请输入正确的验证码',
   'please_input_phone': '请输入手机号',
@@ -1407,12 +1414,12 @@ const Map<String, String> zh = {
   'qr_bind_try_ble': '尝试BLE扫描',
 
   // === 引导页（首次安装 / 版本升级）===
-  'onboarding_page1_title': '智能监控',
-  'onboarding_page1_desc': '随时随地掌握电站发电',
-  'onboarding_page2_title': '极速告警',
-  'onboarding_page2_desc': '异常实时推送',
-  'onboarding_page3_title': '本地升级',
-  'onboarding_page3_desc': 'OTA 无网也能升',
+  'onboarding_page1_title': '每一度电，尽在掌握',
+  'onboarding_page1_desc': '实时发电数据可视，远程监控更省心',
+  'onboarding_page2_title': '第一时间预警，安心无忧',
+  'onboarding_page2_desc': '设备故障即时通知，防患于未然',
+  'onboarding_page3_title': '断网也不怕，固件随心换',
+  'onboarding_page3_desc': '无需联网，手机直连即可完成升级',
   'onboarding_start': '立即体验',
 
   // === 首启快速开始 / 设置向导 ===

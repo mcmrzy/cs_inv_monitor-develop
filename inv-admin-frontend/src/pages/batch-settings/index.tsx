@@ -129,16 +129,19 @@ const BatchSettingsPage: React.FC = () => {
 
   /* ---------- 数据获取 ---------- */
 
-  const { data: stationsRes, error: stationsError, refetch: refetchStations } = useQuery({
+  const { data: stationsData, error: stationsError, refetch: refetchStations } = useQuery({
     queryKey: ['stations', 'all'],
-    queryFn: () => api.get('/stations', { params: { page_size: 999, all: true }, expectedDataShape: 'page' }).then((r) => r.data),
+    // queryFn 归一化返回数组：该 queryKey 与远程设置 DeviceSelector 等页面共用，
+    // 不同形状的缓存会互相污染（他页 find/map 崩溃），必须统一为纯数组形状
+    queryFn: () =>
+      api.get('/stations', { params: { page_size: 999, all: true }, expectedDataShape: 'page' }).then((r) => {
+        const d = (r as any).data?.data ?? (r as any).data
+        return (Array.isArray(d?.items) ? d.items : (Array.isArray(d) ? d : [])) as Station[]
+      }),
     staleTime: 300000,
   })
 
-  const stationList: Station[] = useMemo(() => {
-    const items = stationsRes?.data?.items ?? stationsRes?.data ?? []
-    return Array.isArray(items) ? items : []
-  }, [stationsRes])
+  const stationList: Station[] = Array.isArray(stationsData) ? stationsData : []
 
   const { data: devicesRes, isLoading: devicesLoading, error: devicesError, refetch: refetchDevices } = useQuery({
     queryKey: ['batch', 'devices', selectedStationIds],

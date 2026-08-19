@@ -72,13 +72,13 @@ const emailMutedStyle = "margin:0;font-size:13px;line-height:1.6;color:#8A94A6;"
 var builtinEmailTemplates = map[string]emailBuiltinTemplate{
 	// 验证码（注册/登录/重置密码等）：验证码大字号居中突出显示
 	EmailTemplateKeyVerification: {
-		Subject: "【CS-INV】{{.Title}}",
+		Subject: "【CSERGY】{{.Title}}",
 		Body: `<p style="` + emailParagraphStyle + `">{{.Summary}}</p>
 {{if .Code}}
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0;">
     <tr>
         <td align="center" style="background-color:#F0F7FF;border:2px solid #BAE0FF;border-radius:12px;padding:32px 16px;">
-            <div style="font-size:32px;font-weight:800;letter-spacing:8px;color:#1677ff;font-family:Consolas,'Courier New',monospace;">{{.Code}}</div>
+            <div style="font-size:36px;font-weight:800;letter-spacing:10px;color:#1677ff;font-family:Consolas,'Courier New',monospace;">{{.Code}}</div>
             <div style="margin-top:14px;font-size:13px;color:#8A94A6;line-height:1.5;">验证码 5 分钟内有效，请勿泄露给他人</div>
         </td>
     </tr>
@@ -89,7 +89,7 @@ var builtinEmailTemplates = map[string]emailBuiltinTemplate{
 
 	// 组织邀请
 	EmailTemplateKeyInvitation: {
-		Subject: "【CS-INV】邀请加入组织 · {{.OrganizationName}}",
+		Subject: "【CSERGY】邀请加入组织 · {{.OrganizationName}}",
 		Body: `<p style="` + emailParagraphStyle + `">{{.Summary}}</p>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:18px 0;background-color:#F7F9FC;border-radius:10px;border-left:4px solid #1677ff;">
     <tr>
@@ -102,7 +102,7 @@ var builtinEmailTemplates = map[string]emailBuiltinTemplate{
 
 	// 欢迎邮件
 	EmailTemplateKeyWelcome: {
-		Subject: "【CS-INV】欢迎加入平台",
+		Subject: "【CSERGY】欢迎加入平台",
 		Body: `<p style="` + emailParagraphStyle + `">{{.Summary}}</p>
 <p style="` + emailParagraphStyle + `">{{.Content}}</p>
 ` + emailButtonBlock,
@@ -110,7 +110,7 @@ var builtinEmailTemplates = map[string]emailBuiltinTemplate{
 
 	// 密码重置
 	EmailTemplateKeyPasswordRst: {
-		Subject: "【CS-INV】重置密码",
+		Subject: "【CSERGY】重置密码",
 		Body: `<p style="` + emailParagraphStyle + `">{{.Summary}}</p>
 <p style="` + emailParagraphStyle + `">{{.Content}}</p>
 ` + emailButtonBlock + `
@@ -119,7 +119,7 @@ var builtinEmailTemplates = map[string]emailBuiltinTemplate{
 
 	// 设备转移通知
 	EmailTemplateKeyTransfer: {
-		Subject: "【CS-INV】设备转移通知",
+		Subject: "【CSERGY】设备转移通知",
 		Body: `<p style="` + emailParagraphStyle + `">{{.Summary}}</p>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:18px 0;background-color:#F7F9FC;border-radius:10px;border-left:4px solid #00D4FF;">
     <tr>
@@ -131,7 +131,7 @@ var builtinEmailTemplates = map[string]emailBuiltinTemplate{
 
 	// 设备告警 / OTA/工单等系统通知
 	EmailTemplateKeyNotification: {
-		Subject: "【CS-INV】{{.Title}}",
+		Subject: "【CSERGY】{{.Title}}",
 		Body: `{{if .DeviceSN}}
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 18px 0;">
     <tr>
@@ -146,7 +146,7 @@ var builtinEmailTemplates = map[string]emailBuiltinTemplate{
 
 	// 每日发电统计报告
 	EmailTemplateKeyDailyReport: {
-		Subject: "【CS-INV】每日发电统计报告",
+		Subject: "【CSERGY】每日发电统计报告",
 		Body: `<p style="` + emailParagraphStyle + `">{{.Summary}}</p>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:18px 0;background-color:#F7F9FC;border-radius:10px;border-left:4px solid #1677ff;">
     <tr>
@@ -157,7 +157,7 @@ var builtinEmailTemplates = map[string]emailBuiltinTemplate{
 
 	// 测试邮件（管理后台验证 SMTP 配置）
 	EmailTemplateKeyTest: {
-		Subject: "【CS-INV】测试邮件 / Test Email",
+		Subject: "【CSERGY】测试邮件 / Test Email",
 		Body: `<p style="` + emailParagraphStyle + `">{{.Summary}}</p>
 <p style="` + emailParagraphStyle + `">{{.Content}}</p>
 ` + emailButtonBlock + `
@@ -199,7 +199,7 @@ const emailEnvelope = `<!DOCTYPE html>
         <td class="mobile-header" style="background-color:#1677ff;background-image:linear-gradient(135deg,#1677ff 0%,#00D4FF 100%);border-radius:16px 16px 0 0;padding:20px 24px;">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                 <tr>
-                    <td style="color:#ffffff;font-size:20px;font-weight:700;letter-spacing:1px;">&#9728;&#65039; CS-INV</td>
+                    <td style="color:#ffffff;font-size:20px;font-weight:700;letter-spacing:1px;">&#9728;&#65039; CSERGY</td>
                     <td align="right" style="color:#E6F7FF;font-size:12px;letter-spacing:1px;">光伏逆变器监控平台</td>
                 </tr>
             </table>
@@ -217,7 +217,7 @@ const emailEnvelope = `<!DOCTYPE html>
     <tr>
         <td style="background-color:#ffffff;border-radius:0 0 16px 16px;padding:16px 24px 20px;border-top:1px solid #EEF1F6;">
             {{if .FooterNote}}<p style="margin:0 0 8px 0;font-size:12px;line-height:1.6;color:#8A94A6;">{{.FooterNote}}</p>{{end}}
-            <p style="margin:0;font-size:11px;line-height:1.5;color:#B0B8C4;">© {{.Year}} CS-INV · 光伏逆变器监控平台 Solar Inverter Monitoring<br>此邮件由系统自动发出，请勿直接回复。This is an automated message, please do not reply.</p>
+            <p style="margin:0;font-size:11px;line-height:1.5;color:#B0B8C4;">© {{.Year}} CSERGY · 光伏逆变器监控平台 Solar Inverter Monitoring<br>此邮件由系统自动发出，请勿直接回复。This is an automated message, please do not reply.</p>
         </td>
     </tr>
 </table>
@@ -317,8 +317,8 @@ func ValidateEmailTemplate(subject, body string) error {
 func testEmailSampleVars() map[string]interface{} {
 	return map[string]interface{}{
 		"Title":      "测试邮件 / Test Email",
-		"Summary":    "这是一封来自 CS-INV 管理后台的测试邮件，用于验证 SMTP 配置与统一邮件模板。",
-		"Content":    "如果您收到这封邮件，说明当前 SMTP 配置可以正常发信。This is a test message from the CS-INV admin console.",
+		"Summary":    "这是一封来自 CSERGY 管理后台的测试邮件，用于验证 SMTP 配置与统一邮件模板。",
+		"Content":    "如果您收到这封邮件，说明当前 SMTP 配置可以正常发信。This is a test message from the CSERGY admin console.",
 		"ButtonText": "",
 		"ButtonURL":  "",
 		"Code":       "123456",

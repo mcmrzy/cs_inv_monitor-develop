@@ -3,14 +3,18 @@ package handler
 import (
 	"bytes"
 	"crypto/rand"
+	"embed"
 	"encoding/base64"
 	"fmt"
 	"image"
 	"image/color"
 	"image/draw"
+	"image/jpeg"
 	"image/png"
+	"math"
 	"math/big"
 	"strconv"
+	"sync"
 	"time"
 
 	"inv-api-server/pkg/logger"
@@ -164,21 +168,124 @@ func absFloat(value float64) float64 {
 	return value
 }
 
-func generateCaptchaImages(pieceX, pieceY int) (string, string, error) {
-	background := image.NewRGBA(image.Rect(0, 0, captchaWidth, captchaHeight))
-	seedBytes := make([]byte, 3)
-	if _, err := rand.Read(seedBytes); err != nil {
-		return "", "", err
+// captchaAssetFS 内嵌真实品牌光伏场景照片（640x320 JPEG，来源于登录页品牌图库），
+// 作为滑块验证码背景，避免程序化渐变的廉价观感。
+//
+//go:embed captcha_assets/*.jpg
+var captchaAssetFS embed.FS
+
+var (
+	captchaAssetOnce sync.Once
+	captchaAssetImgs []*image.RGBA
+)
+
+// loadCaptchaAssets 惰性解码内嵌照片（首次调用后缓存 RGBA 供快速访问）。
+func loadCaptchaAssets() []*image.RGBA {
+	captchaAssetOnce.Do(func() {
+		entries, err := captchaAssetFS.ReadDir("captcha_assets")
+		if err != nil {
+			logger.Error("read captcha assets dir failed", zap.Error(err))
+			return
+		}
+		for _, e := range entries {
+			data, err := captchaAssetFS.ReadFile("captcha_assets/" + e.Name())
+			if err != nil {
+				continue
+			}
+			img, err := jpeg.Decode(bytes.NewReader(data))
+			if err != nil {
+				continue
+		}
+			b := img.Bounds()
+			rgba := image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
+			draw.Draw(rgba, rgba.Bounds(), img, b.Min, draw.Src)
+			captchaAssetImgs = append(captchaAssetImgs, rgba)
+		}
+		if len(captchaAssetImgs) == 0 {
+			logger.Error("no captcha background asset decoded")
+		}
+	})
+	return captchaAssetImgs
+}
+
+// captchaBrandBackground 随机选取一张内嵌品牌照片，box 降采样到验证码
+// 尺寸并叠加确定性轻噪点。返回全新画布，不污染缓存的原图。
+func captchaBrandBackground() (*image.RGBA, error) {
+	assets := loadCaptchaAssets()
+	if len(assets) == 0 {
+		return nil, fmt.Errorf("captcha background assets unavailable")
 	}
+	idx, err := rand.Int(rand.Reader, big.NewInt(int64(len(assets))))
+	if err != nil {
+		return nil, err
+	}
+	src := assets[idx.Int64()]
+	var seedBytes [4]byte
+	if _, err := rand.Read(seedBytes[:]); err != nil {
+		return nil, err
+	}
+	noiseSeed := uint32(seedBytes[0]) | uint32(seedBytes[1])<<8 | uint32(seedBytes[2])<<16 | uint32(seedBytes[3])<<24
+
+	srcW, srcH := src.Rect.Dx(), src.Rect.Dy()
+	dst := image.NewRGBA(image.Rect(0, 0, captchaWidth, captchaHeight))
 	for y := 0; y < captchaHeight; y++ {
 		for x := 0; x < captchaWidth; x++ {
-			background.SetRGBA(x, y, color.RGBA{
-				R: uint8((x + int(seedBytes[0]) + y/2) % 256),
-				G: uint8((y*2 + int(seedBytes[1]) + x/3) % 256),
-				B: uint8((x/2 + y + int(seedBytes[2])) % 256),
+			// box 降采样：目标像素取源图对应矩形区域的平均值
+			sx0, sx1 := x*srcW/captchaWidth, (x+1)*srcW/captchaWidth
+			if sx1 <= sx0 {
+				sx1 = sx0 + 1
+			}
+			sy0, sy1 := y*srcH/captchaHeight, (y+1)*srcH/captchaHeight
+			if sy1 <= sy0 {
+				sy1 = sy0 + 1
+			}
+			var rSum, gSum, bSum uint64
+			for sy := sy0; sy < sy1; sy++ {
+				for sx := sx0; sx < sx1; sx++ {
+					p := src.RGBAAt(sx, sy)
+					rSum += uint64(p.R)
+					gSum += uint64(p.G)
+					bSum += uint64(p.B)
+				}
+			}
+			n := float64((sx1 - sx0) * (sy1 - sy0))
+			noise := float64(pixelHash(x, y, noiseSeed))
+			dst.SetRGBA(x, y, color.RGBA{
+				R: clampU8(float64(rSum)/n + noise),
+				G: clampU8(float64(gSum)/n + noise),
+				B: clampU8(float64(bSum)/n + noise),
 				A: 255,
 			})
 		}
+	}
+	return dst, nil
+}
+
+// pixelHash 确定性坐标 hash，用于轻噪点纹理（避免逐像素 crypto 调用）。
+func pixelHash(x, y int, seed uint32) int {
+	h := seed ^ uint32(x)*374761393 ^ uint32(y)*668265263
+	h ^= h >> 13
+	h *= 1274126177
+	h ^= h >> 16
+	return int(h % 13) - 6 // -6~+6
+}
+
+// roundedRectSDF 圆角矩形符号距离（负值在内部），用于挖洞/拼图块的平滑边缘。
+func roundedRectSDF(px, py, x0, y0, size, radius float64) float64 {
+	cx, cy := x0+size/2, y0+size/2
+	hw, hh := size/2, size/2
+	dx := math.Abs(px-cx) - (hw - radius)
+	dy := math.Abs(py-cy) - (hh - radius)
+	ax, ay := math.Max(dx, 0), math.Max(dy, 0)
+	return math.Hypot(ax, ay) + math.Min(math.Max(dx, dy), 0) - radius
+}
+// generateCaptchaImages 生成品牌化滑块拼图：
+// 背景 = 内嵌真实光伏品牌照片（随机选图 + box 降采样 + 轻噪点）；
+// 挖洞 = 圆角矩形深色半透明覆盖 + 半透明白描边；拼图块 = 同区域裁剪 + 圆角白边。
+func generateCaptchaImages(pieceX, pieceY int) (string, string, error) {
+	background, err := captchaBrandBackground()
+	if err != nil {
+		return "", "", err
 	}
 
 	puzzle := image.NewRGBA(image.Rect(0, 0, captchaPieceSize, captchaHeight))
@@ -190,20 +297,66 @@ func generateCaptchaImages(pieceX, pieceY int) (string, string, error) {
 		draw.Src,
 	)
 
-	hole := color.RGBA{R: 235, G: 238, B: 245, A: 255}
-	draw.Draw(
-		background,
-		image.Rect(pieceX, pieceY, pieceX+captchaPieceSize, pieceY+captchaPieceSize),
-		&image.Uniform{C: hole},
-		image.Point{},
-		draw.Src,
-	)
-	border := color.RGBA{R: 255, G: 255, B: 255, A: 255}
-	for i := 0; i < captchaPieceSize; i++ {
-		background.Set(pieceX+i, pieceY, border)
-		background.Set(pieceX+i, pieceY+captchaPieceSize-1, border)
-		background.Set(pieceX, pieceY+i, border)
-		background.Set(pieceX+captchaPieceSize-1, pieceY+i, border)
+	// 挖洞：圆角矩形（半径 12）深色半透明覆盖 + 1px 半透明白描边，
+	// 在照片背景上呈现深蓝缺口，保证拼图目标区域醒目。
+	holeCorner := 12.0
+	darkTint := [3]float64{0x08, 0x1C, 0x3D}
+	for y := pieceY - 2; y < pieceY+captchaPieceSize+2; y++ {
+		if y < 0 || y >= captchaHeight {
+			continue
+		}
+		for x := pieceX - 2; x < pieceX+captchaPieceSize+2; x++ {
+			if x < 0 || x >= captchaWidth {
+				continue
+			}
+			sdf := roundedRectSDF(float64(x)+0.5, float64(y)+0.5, float64(pieceX), float64(pieceY), float64(captchaPieceSize), holeCorner)
+			cur := background.RGBAAt(x, y)
+			var mixed color.RGBA
+			if sdf < 0 {
+				const holeAlpha = 0.42
+				alpha := holeAlpha * clamp01(-sdf) // 边缘 1px 内渐变，抗锯齿
+				mixed = color.RGBA{
+					R: clampU8(float64(cur.R)*(1-alpha) + darkTint[0]*alpha),
+					G: clampU8(float64(cur.G)*(1-alpha) + darkTint[1]*alpha),
+					B: clampU8(float64(cur.B)*(1-alpha) + darkTint[2]*alpha),
+					A: 255,
+				}
+			} else {
+				mixed = cur
+			}
+			// 描边：sdf 在 ±1 之间时叠一层半透明白
+			if math.Abs(sdf) < 1 {
+				strokeA := (1 - math.Abs(sdf)) * 0.75
+				mixed = color.RGBA{
+					R: clampU8(float64(mixed.R)*(1-strokeA) + 255*strokeA),
+					G: clampU8(float64(mixed.G)*(1-strokeA) + 255*strokeA),
+					B: clampU8(float64(mixed.B)*(1-strokeA) + 255*strokeA),
+					A: 255,
+				}
+			}
+			background.SetRGBA(x, y, mixed)
+		}
+	}
+
+	// 拼图块圆角化 + 白色描边（叠在裁剪出的像素上）
+	for y := pieceY; y < pieceY+captchaPieceSize; y++ {
+		for x := 0; x < captchaPieceSize; x++ {
+			sdf := roundedRectSDF(float64(x)+0.5, float64(y)+0.5, 0, float64(pieceY), float64(captchaPieceSize), holeCorner)
+			cur := puzzle.RGBAAt(x, y)
+			if sdf > 1 {
+				puzzle.SetRGBA(x, y, color.RGBA{A: 0}) // 圆角外裁空
+				continue
+			}
+			if sdf > -1 {
+				strokeA := (1 - math.Max(sdf, 0)) * 0.85 // 边缘 2px 白边
+				puzzle.SetRGBA(x, y, color.RGBA{
+					R: clampU8(float64(cur.R)*(1-strokeA) + 255*strokeA),
+					G: clampU8(float64(cur.G)*(1-strokeA) + 255*strokeA),
+					B: clampU8(float64(cur.B)*(1-strokeA) + 255*strokeA),
+					A: 255,
+			})
+			}
+		}
 	}
 
 	bgURL, err := encodePNGDataURL(background)
@@ -215,6 +368,26 @@ func generateCaptchaImages(pieceX, pieceY int) (string, string, error) {
 		return "", "", err
 	}
 	return bgURL, puzzleURL, nil
+}
+
+func clamp01(v float64) float64 {
+	if v < 0 {
+		return 0
+	}
+	if v > 1 {
+		return 1
+	}
+	return v
+}
+
+func clampU8(v float64) uint8 {
+	if v < 0 {
+		return 0
+	}
+	if v > 255 {
+		return 255
+	}
+	return uint8(v)
 }
 
 func encodePNGDataURL(img image.Image) (string, error) {

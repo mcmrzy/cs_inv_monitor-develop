@@ -7,7 +7,10 @@ import 'package:inv_app/core/widgets/slider_captcha_dialog.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
-/// 注册表单组件（创建账号标题 / 邮箱 / 验证码 / 手机 / 昵称 / 密码 / 确认密码）
+/// 注册通道：邮箱验证码 / 手机短信验证码
+enum _RegisterChannel { email, phone }
+
+/// 注册表单组件（创建账号标题 / 通道切换 / 邮箱或手机验证码 / 密码 / 确认密码）
 /// 由 AuthPage 通过 AnimatedSwitcher 与登录表单切换展示
 class RegisterForm extends StatefulWidget {
   const RegisterForm({super.key});
@@ -29,6 +32,7 @@ class _RegisterFormState extends State<RegisterForm> {
   bool _isSendingCode = false;
   int _countdownSeconds = 0;
   Timer? _countdownTimer;
+  _RegisterChannel _registerChannel = _RegisterChannel.email;
 
   @override
   void dispose() {
@@ -60,41 +64,74 @@ class _RegisterFormState extends State<RegisterForm> {
     });
   }
 
+  /// 按通道发送注册验证码：先滑块验证，再调用短信/邮箱发送
   Future<void> _handleSendCode() async {
     final l10n = AppLocalizations.of(context)!;
-    final email = _emailController.text.trim();
-    if (email.isEmpty || !email.contains('@') || !email.contains('.')) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.pleaseInputCorrectEmail),
-        ),
-      );
-      return;
-    }
-    // 后端要求先通过滑块验证，获取 verifyToken 后随请求携带
-    final captchaToken = await showSliderCaptcha(context);
-    if (captchaToken == null || !mounted) return;
-    context.read<AuthBloc>().add(
-          AuthSendEmailCodeRequested(
-            email: email,
-            type: 'register',
-            captchaToken: captchaToken,
+    if (_registerChannel == _RegisterChannel.email) {
+      final email = _emailController.text.trim();
+      if (email.isEmpty || !email.contains('@') || !email.contains('.')) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.pleaseInputCorrectEmail),
           ),
         );
+        return;
+      }
+      // 后端要求先通过滑块验证，获取 verifyToken 后随请求携带
+      final captchaToken = await showSliderCaptcha(context);
+      if (captchaToken == null || !mounted) return;
+      context.read<AuthBloc>().add(
+            AuthSendEmailCodeRequested(
+              email: email,
+              type: 'register',
+              captchaToken: captchaToken,
+            ),
+          );
+    } else {
+      final phone = _phoneController.text.trim();
+      if (phone.isEmpty || phone.length < 5) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.pleaseInputPhone),
+          ),
+        );
+        return;
+      }
+      final captchaToken = await showSliderCaptcha(context);
+      if (captchaToken == null || !mounted) return;
+      context.read<AuthBloc>().add(
+            AuthSendCodeRequested(
+              phone: phone,
+              type: 'register',
+              captchaToken: captchaToken,
+            ),
+          );
+    }
   }
 
   void _handleRegister() {
     if (!_formKey.currentState!.validate()) return;
 
-    context.read<AuthBloc>().add(
-          AuthEmailRegisterRequested(
-            email: _emailController.text.trim(),
-            password: _passwordController.text,
-            code: _codeController.text.trim(),
-            phone: _phoneController.text.trim(),
-            nickname: _nicknameController.text.trim(),
-          ),
-        );
+    if (_registerChannel == _RegisterChannel.email) {
+      context.read<AuthBloc>().add(
+            AuthEmailRegisterRequested(
+              email: _emailController.text.trim(),
+              password: _passwordController.text,
+              code: _codeController.text.trim(),
+              phone: _phoneController.text.trim(),
+              nickname: _nicknameController.text.trim(),
+            ),
+          );
+    } else {
+      // 手机号验证码注册：仅需手机号 + 短信验证码 + 密码
+      context.read<AuthBloc>().add(
+            AuthRegisterRequested(
+              phone: _phoneController.text.trim(),
+              password: _passwordController.text,
+              code: _codeController.text.trim(),
+            ),
+          );
+    }
   }
 
   @override
@@ -118,14 +155,22 @@ class _RegisterFormState extends State<RegisterForm> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _buildHeader(),
-            SizedBox(height: 28.h),
-            _buildEmailField(),
-            SizedBox(height: 16.h),
-            _buildCodeField(state),
-            SizedBox(height: 16.h),
-            _buildPhoneField(),
-            SizedBox(height: 16.h),
-            _buildNicknameField(),
+            SizedBox(height: 24.h),
+            _buildChannelSwitcher(),
+            SizedBox(height: 24.h),
+            if (_registerChannel == _RegisterChannel.email) ...[
+              _buildEmailField(),
+              SizedBox(height: 16.h),
+              _buildCodeField(state),
+              SizedBox(height: 16.h),
+              _buildPhoneField(),
+              SizedBox(height: 16.h),
+              _buildNicknameField(),
+            ] else ...[
+              _buildPhoneField(),
+              SizedBox(height: 16.h),
+              _buildCodeField(state),
+            ],
             SizedBox(height: 16.h),
             _buildPasswordField(),
             SizedBox(height: 16.h),
@@ -160,6 +205,79 @@ class _RegisterFormState extends State<RegisterForm> {
     );
   }
 
+  /// 注册通道切换条：邮箱注册 / 手机注册（胶囊式，与登录表单切换条样式一致）
+  Widget _buildChannelSwitcher() {
+    final l10n = AppLocalizations.of(context)!;
+    return Container(
+      height: 44.h,
+      padding: EdgeInsets.all(3.w),
+      decoration: BoxDecoration(
+        color: AppColor.surfaceContainer(context),
+        borderRadius: BorderRadius.circular(12.r),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _buildChannelTab(
+              l10n.str('register_channel_email'),
+              _registerChannel == _RegisterChannel.email,
+              () => setState(() {
+                _registerChannel = _RegisterChannel.email;
+                _codeController.clear();
+              }),
+            ),
+          ),
+          Expanded(
+            child: _buildChannelTab(
+              l10n.str('register_channel_phone'),
+              _registerChannel == _RegisterChannel.phone,
+              () => setState(() {
+                _registerChannel = _RegisterChannel.phone;
+                _codeController.clear();
+              }),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChannelTab(String label, bool selected, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+        decoration: BoxDecoration(
+          color: selected ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(10.r),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 4,
+                    offset: const Offset(0, 1),
+                  ),
+                ]
+              : null,
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 14.sp,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+              color: selected
+                  ? AppColors.primary
+                  : AppColor.textSecondary(context),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 邮箱注册时填写（手机注册通道不展示）
   Widget _buildEmailField() {
     final l10n = AppLocalizations.of(context)!;
     return TextFormField(
@@ -180,8 +298,10 @@ class _RegisterFormState extends State<RegisterForm> {
     );
   }
 
+  /// 验证码输入 + 发送按钮（按通道显示短信/邮箱验证码）
   Widget _buildCodeField(AuthState state) {
     final l10n = AppLocalizations.of(context)!;
+    final isEmail = _registerChannel == _RegisterChannel.email;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -191,9 +311,15 @@ class _RegisterFormState extends State<RegisterForm> {
             keyboardType: TextInputType.number,
             maxLength: 6,
             decoration: InputDecoration(
-              labelText: l10n.emailVerificationCode,
+              labelText: isEmail
+                  ? l10n.emailVerificationCode
+                  : l10n.str('sms_verification_code'),
               hintText: l10n.pleaseInputVerificationCode,
-              prefixIcon: const Icon(Icons.mark_email_read_outlined),
+              prefixIcon: Icon(
+                isEmail
+                    ? Icons.mark_email_read_outlined
+                    : Icons.sms_outlined,
+              ),
               counterText: '',
             ),
             validator: (value) {
@@ -240,6 +366,7 @@ class _RegisterFormState extends State<RegisterForm> {
     );
   }
 
+  /// 手机号输入（邮箱注册时为补充联系方式，手机注册时为账号主体）
   Widget _buildPhoneField() {
     final l10n = AppLocalizations.of(context)!;
     return TextFormField(
@@ -260,6 +387,7 @@ class _RegisterFormState extends State<RegisterForm> {
     );
   }
 
+  /// 昵称输入（仅邮箱注册通道需要）
   Widget _buildNicknameField() {
     final l10n = AppLocalizations.of(context)!;
     return TextFormField(

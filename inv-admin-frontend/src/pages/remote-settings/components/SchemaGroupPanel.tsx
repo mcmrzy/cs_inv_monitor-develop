@@ -358,7 +358,7 @@ const SchemaGroupPanel: React.FC<SchemaGroupPanelProps> = ({ sn }) => {
                   <Tag color="blue" style={{ marginLeft: 4 }}>{grouped[g].direct.length + SUBGROUP_ORDER.reduce((n, s) => n + (grouped[g].subs[s]?.length ?? 0), 0)}</Tag>
                 </Space>
               }
-              style={{ marginBottom: 12, background: '#fff', borderRadius: 12, borderLeft: '3px solid #4f6ef7', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}
+              style={{ marginBottom: 12, background: '#fff', borderRadius: 12, borderLeft: '3px solid #1677ff', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}
             >
               {renderGroup(g)}
             </Collapse.Panel>
@@ -370,7 +370,7 @@ const SchemaGroupPanel: React.FC<SchemaGroupPanelProps> = ({ sn }) => {
 
       <Card
         size="small"
-        title={<Space size={8}><HistoryOutlined style={{ color: '#4f6ef7' }} /><span>{t('remote.commandHistory')}</span></Space>}
+        title={<Space size={8}><HistoryOutlined style={{ color: '#1677ff' }} /><span>{t('remote.commandHistory')}</span></Space>}
         style={{ borderRadius: 12, marginTop: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}
       >
         <Table<CommandRecord>

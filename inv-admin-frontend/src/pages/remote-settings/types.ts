@@ -99,8 +99,8 @@ export const STAGE_MAP: Record<string, { color: string; label_zh: string }> = {
 
 // ── 统一视觉规范（保留供后续组件使用）──
 export const DS = {
-  primary: '#4f6ef7',
-  primaryLight: '#eef0ff',
+  primary: '#1677ff',
+  primaryLight: '#e6f4ff',
   secondary: '#7c3aed',
   success: '#10b981',
   warning: '#f59e0b',

@@ -118,6 +118,30 @@ func TestParseHeartbeatV2RejectsArrayLength(t *testing.T) {
 	require.ErrorIs(t, err, ErrInvalidHeartbeat)
 }
 
+// V2.2+ 固件扩展格式（实测 H1CNA00135000014）：data 内新增 arm_online、
+// chr 扩到 4 值、fan 扩到 3 值；新值语义未发布，仅容忍并忽略，已知索引正常映射
+func TestParseHeartbeatV2AcceptsV22Extensions(t *testing.T) {
+	payload := []byte(`{"v":2,"t":1786685655,"data":{
+	  "ac":[2205,5002,18703,18756,852,0,0,0,0,0,0],
+	  "arm_online":true,
+	  "bat":[5120,80,-255,0,13056],
+	  "chr":[1250,1300,85,999],
+	  "diag":[420,30,1800000],
+	  "eng":[0,0,1250,45678,0,0,1305,23456,0,0,0,0,1870,98765],
+	  "fan":[88,76,50],
+	  "pv":[1450,82,0,0,12400],
+	  "sock":[3,2,2],
+	  "sys":[2050,0,32,0,282,450,null,null,41000,624,0]
+	}}`)
+	s, err := ParseHeartbeatV2("sn", payload, time.Unix(1786685660, 0))
+	require.NoError(t, err)
+	// 已知索引正常映射（chr 前 3 值 / fan 前 2 值）
+	require.InDelta(t, 125.0, *s.AC.ACChargePower, 0.0001)
+	require.InDelta(t, 88.0, *s.Fan.MPPTSpeed, 0.0001)
+	require.InDelta(t, 76.0, *s.Fan.InvSpeed, 0.0001)
+	require.Equal(t, uint32(3), *s.Sock.PairedSocket)
+}
+
 // 新组存在但长度错误 → 格式错误（不按旧固件容忍）
 func TestParseHeartbeatV2RejectsBadFanLength(t *testing.T) {
 	payload := bytes.Replace([]byte(validHeartbeatV2), []byte(`"fan":[88,76]`), []byte(`"fan":[88]`), 1)

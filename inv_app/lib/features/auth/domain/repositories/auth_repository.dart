@@ -50,6 +50,16 @@ abstract class AuthRepository {
     required String password,
   });
 
+  Future<Either<Failure, LoginResponse>> phoneCodeLogin({
+    required String phone,
+    required String code,
+  });
+
+  Future<Either<Failure, LoginResponse>> emailCodeLogin({
+    required String email,
+    required String code,
+  });
+
   Future<Either<Failure, LoginResponse>> emailRegister({
     required String email,
     required String password,

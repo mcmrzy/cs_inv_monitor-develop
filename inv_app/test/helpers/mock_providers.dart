@@ -136,6 +136,12 @@ class MockUpdateProfileUseCase extends Mock implements UpdateProfileUseCase {}
 /// Mock implementation of [EmailLoginUseCase] for testing email login.
 class MockEmailLoginUseCase extends Mock implements EmailLoginUseCase {}
 
+/// Mock implementation of [PhoneCodeLoginUseCase] for testing phone code login.
+class MockPhoneCodeLoginUseCase extends Mock implements PhoneCodeLoginUseCase {}
+
+/// Mock implementation of [EmailCodeLoginUseCase] for testing email code login.
+class MockEmailCodeLoginUseCase extends Mock implements EmailCodeLoginUseCase {}
+
 /// Mock implementation of [EmailRegisterUseCase] for testing email registration.
 class MockEmailRegisterUseCase extends Mock implements EmailRegisterUseCase {}
 

@@ -141,6 +141,32 @@ class EmailLoginUseCase {
   }
 }
 
+class PhoneCodeLoginUseCase {
+  final AuthRepository repository;
+
+  PhoneCodeLoginUseCase(this.repository);
+
+  Future<Either<Failure, LoginResponse>> call({
+    required String phone,
+    required String code,
+  }) {
+    return repository.phoneCodeLogin(phone: phone, code: code);
+  }
+}
+
+class EmailCodeLoginUseCase {
+  final AuthRepository repository;
+
+  EmailCodeLoginUseCase(this.repository);
+
+  Future<Either<Failure, LoginResponse>> call({
+    required String email,
+    required String code,
+  }) {
+    return repository.emailCodeLogin(email: email, code: code);
+  }
+}
+
 class EmailRegisterUseCase {
   final AuthRepository repository;
 
