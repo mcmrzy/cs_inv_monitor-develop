@@ -766,28 +766,41 @@ class _RegionPickerPageState extends State<RegionPickerPage> {
                           ),
                         ),
                       ] else ...[
-                      Container(width: 1, color: AppColor.surfaceHover(context)),
-                      Expanded(
-                        flex: 3,
-                        child: _buildColumn(
-                          _cities,
-                          _cityCtrl,
-                          _cityIdx,
-                          _onCityChanged,
-                          colLabel: AppLocalizations.of(context)!.localCity,
+                        // 省/市/区三列：省份列不可缺（provinceOnly 改造时曾误删，
+                        // 导致无法切换省份、市/区恒为首省数据）
+                        Expanded(
+                          flex: 3,
+                          child: _buildColumn(
+                            widget.provinces,
+                            _provCtrl,
+                            _provIdx,
+                            _onProvChanged,
+                            colLabel:
+                                AppLocalizations.of(context)!.localProvince,
+                          ),
                         ),
-                      ),
-                      Container(width: 1, color: AppColor.surfaceHover(context)),
-                      Expanded(
-                        flex: 3,
-                        child: _buildColumn(
-                          _districts,
-                          _distCtrl,
-                          _distIdx,
-                          _onDistChanged,
-                          colLabel: AppLocalizations.of(context)!.localDistrict,
+                        Container(width: 1, color: AppColor.surfaceHover(context)),
+                        Expanded(
+                          flex: 3,
+                          child: _buildColumn(
+                            _cities,
+                            _cityCtrl,
+                            _cityIdx,
+                            _onCityChanged,
+                            colLabel: AppLocalizations.of(context)!.localCity,
+                          ),
                         ),
-                      ),
+                        Container(width: 1, color: AppColor.surfaceHover(context)),
+                        Expanded(
+                          flex: 3,
+                          child: _buildColumn(
+                            _districts,
+                            _distCtrl,
+                            _distIdx,
+                            _onDistChanged,
+                            colLabel: AppLocalizations.of(context)!.localDistrict,
+                          ),
+                        ),
                       ],
                     ],
                   ),
