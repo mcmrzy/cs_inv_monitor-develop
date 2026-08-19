@@ -240,6 +240,7 @@ class _LoginFormState extends State<LoginForm> {
   }
 
   /// 登录方式切换条：密码登录 / 验证码登录（胶囊式，与管理后台登录页一致）
+  /// 单个白色滑块在两个选项间平移，避免两侧背景交叉淡入淡出造成的闪烁
   Widget _buildModeSwitcher() {
     final l10n = AppLocalizations.of(context)!;
     return Container(
@@ -249,21 +250,51 @@ class _LoginFormState extends State<LoginForm> {
         color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.circular(12.r),
       ),
-      child: Row(
+      child: Stack(
+        fit: StackFit.expand,
         children: [
-          Expanded(
-            child: _buildModeTab(
-              l10n.str('login_mode_password'),
-              _loginMode == _LoginMode.password,
-              () => setState(() => _loginMode = _LoginMode.password),
+          // 滑动指示器：唯一白色圆角块，切换时左右平移（无双块交叉过渡）
+          AnimatedAlign(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            alignment: _loginMode == _LoginMode.password
+                ? Alignment.centerLeft
+                : Alignment.centerRight,
+            child: FractionallySizedBox(
+              widthFactor: 0.5,
+              heightFactor: 1,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10.r),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.06),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
-          Expanded(
-            child: _buildModeTab(
-              l10n.str('login_mode_code'),
-              _loginMode == _LoginMode.code,
-              () => setState(() => _loginMode = _LoginMode.code),
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: _buildModeTab(
+                  l10n.str('login_mode_password'),
+                  _loginMode == _LoginMode.password,
+                  () => setState(() => _loginMode = _LoginMode.password),
+                ),
+              ),
+              Expanded(
+                child: _buildModeTab(
+                  l10n.str('login_mode_code'),
+                  _loginMode == _LoginMode.code,
+                  () => setState(() => _loginMode = _LoginMode.code),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -273,32 +304,21 @@ class _LoginFormState extends State<LoginForm> {
   Widget _buildModeTab(String label, bool selected, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
-        decoration: BoxDecoration(
-          color: selected ? Colors.white : Colors.transparent,
-          borderRadius: BorderRadius.circular(10.r),
-          boxShadow: selected
-              ? [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.06),
-                    blurRadius: 4,
-                    offset: const Offset(0, 1),
-                  ),
-                ]
-              : null,
-        ),
-        child: Center(
+      behavior: HitTestBehavior.opaque,
+      child: Center(
+        child: AnimatedDefaultTextStyle(
+          duration: const Duration(milliseconds: 220),
+          style: TextStyle(
+            fontSize: 14.sp,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+            color: selected
+                ? AppColors.primary
+                : AppColor.textSecondary(context),
+          ),
           child: Text(
             label,
-            style: TextStyle(
-              fontSize: 14.sp,
-              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-              color: selected
-                  ? AppColors.primary
-                  : AppColor.textSecondary(context),
-            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
       ),
