@@ -255,3 +255,15 @@ const continents = [
     ],
   },
 ];
+
+/// 按国家/地区代码查找名称（如 'CN' → '中国'）；未找到返回 null
+String? countryNameByCode(String code) {
+  for (final continent in continents) {
+    for (final country in (continent['countries'] as List)) {
+      if (country['code'] == code) {
+        return country['name'] as String;
+      }
+    }
+  }
+  return null;
+}

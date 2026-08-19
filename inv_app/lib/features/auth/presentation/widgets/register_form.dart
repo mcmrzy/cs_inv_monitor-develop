@@ -2,15 +2,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:inv_app/core/data/continents_data.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/widgets/slider_captcha_dialog.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
-/// 注册模式：中国大陆（手机号+短信验证码）/ 海外（邮箱+邮箱验证码）
-enum _RegisterMode { mainland, overseas }
-
-/// 注册表单组件（创建账号标题 / 通道切换 / 邮箱或手机验证码 / 密码 / 确认密码）
+/// 注册表单组件（创建账号标题 / 国家地区选择 / 验证码 / 密码 / 确认密码）
+/// 仅中国大陆（CN）走手机号+短信验证码注册，其余国家/地区走邮箱注册；
+/// 注册不设昵称字段，海外昵称由后端以邮箱前缀兜底。
 /// 由 AuthPage 通过 AnimatedSwitcher 与登录表单切换展示
 class RegisterForm extends StatefulWidget {
   const RegisterForm({super.key});
@@ -23,7 +23,6 @@ class _RegisterFormState extends State<RegisterForm> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
-  final _nicknameController = TextEditingController();
   final _codeController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
@@ -32,13 +31,15 @@ class _RegisterFormState extends State<RegisterForm> {
   bool _isSendingCode = false;
   int _countdownSeconds = 0;
   Timer? _countdownTimer;
-  _RegisterMode _registerMode = _RegisterMode.mainland; // 默认中国大陆
+  String _selectedCountryCode = 'CN'; // 默认中国大陆；其余国家/地区走邮箱注册
+
+  /// 仅中国大陆走手机号注册，其他国家/地区走邮箱注册
+  bool get _isMainland => _selectedCountryCode == 'CN';
 
   @override
   void dispose() {
     _emailController.dispose();
     _phoneController.dispose();
-    _nicknameController.dispose();
     _codeController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
@@ -66,8 +67,8 @@ class _RegisterFormState extends State<RegisterForm> {
 
   Future<void> _handleSendCode() async {
     final l10n = AppLocalizations.of(context)!;
-    if (_registerMode == _RegisterMode.overseas) {
-      // 海外模式：仅发送邮箱验证码
+    if (!_isMainland) {
+      // 海外国家/地区：仅发送邮箱验证码
       final email = _emailController.text.trim();
       if (email.isEmpty || !email.contains('@') || !email.contains('.')) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -85,7 +86,7 @@ class _RegisterFormState extends State<RegisterForm> {
             ),
           );
     } else {
-      // 中国大陆模式：发送短信验证码到手机号
+      // 中国大陆：发送短信验证码到手机号
       final phone = _phoneController.text.trim();
       if (phone.isEmpty || phone.length < 5) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -108,34 +109,49 @@ class _RegisterFormState extends State<RegisterForm> {
   void _handleRegister() {
     if (!_formKey.currentState!.validate()) return;
 
-    if (_registerMode == _RegisterMode.overseas) {
-      // 海外模式：仅需邮箱 + 昵称（可选）+ 密码，不需要手机号
+    if (!_isMainland) {
+      // 海外国家/地区：邮箱 + 邮箱验证码 + 密码，不需要手机号与昵称
       context.read<AuthBloc>().add(
             AuthEmailRegisterRequested(
               email: _emailController.text.trim(),
               password: _passwordController.text,
               code: _codeController.text.trim(),
-              phone: '', // 海外模式不传手机号
-              nickname: _nicknameController.text.trim(),
-              country: '', // 海外模式暂无具体国家选择，后端可选字段
+              phone: '', // 海外纯邮箱注册不传手机号
+              nickname: '', // 注册不设昵称，后端以邮箱前缀兜底
+              country: _selectedCountryCode, // 注册时选择的国家/地区代码落库
             ),
           );
     } else {
-      // 中国大陆模式：手机号 + 短信验证码 + 昵称 + 密码
+      // 中国大陆：手机号 + 短信验证码 + 密码
       context.read<AuthBloc>().add(
             AuthRegisterRequested(
               phone: _phoneController.text.trim(),
               password: _passwordController.text,
               code: _codeController.text.trim(),
-              country: 'CN', // 注册时选择的国别/地区代码落库
+              country: _selectedCountryCode, // 注册时选择的国家/地区代码落库
             ),
           );
     }
   }
 
+  /// 打开国家/地区选择弹层；切换国家后验证码通道变化，清空验证码重新发送
+  Future<void> _showCountryPickerSheet() async {
+    final result = await showModalBottomSheet<Map<String, String>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _CountryPickerSheet(initialCode: _selectedCountryCode),
+    );
+    if (result != null && result['code'] != _selectedCountryCode) {
+      setState(() {
+        _selectedCountryCode = result['code']!;
+        _codeController.clear();
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     final state = context.watch<AuthBloc>().state;
     return BlocListener<AuthBloc, AuthState>(
       listener: (context, state) {
@@ -156,29 +172,12 @@ class _RegisterFormState extends State<RegisterForm> {
           children: [
             _buildHeader(),
             SizedBox(height: 24.h),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Padding(
-                padding: EdgeInsets.only(left: 4.w),
-                child: Text(
-                  l10n.str('auth_country_region'),
-                  style: TextStyle(
-                    fontSize: 13.sp,
-                    color: AppColor.textSecondary(context),
-                  ),
-                ),
-              ),
-            ),
-            SizedBox(height: 8.h),
-            _buildChannelSwitcher(),
-            SizedBox(height: 24.h),
-            if (_registerMode == _RegisterMode.mainland)
+            _buildCountrySelector(),
+            SizedBox(height: 16.h),
+            if (_isMainland)
               _buildPhoneField()
-            else ...[
+            else
               _buildEmailField(),
-              SizedBox(height: 16.h),
-              _buildNicknameField(),
-            ],
             SizedBox(height: 16.h),
             _buildCodeField(state),
             SizedBox(height: 16.h),
@@ -215,79 +214,35 @@ class _RegisterFormState extends State<RegisterForm> {
     );
   }
 
-  /// 注册模式切换条：中国大陆 / 海外（胶囊式，与登录表单切换条样式一致）
-  Widget _buildChannelSwitcher() {
+  /// 国家/地区选择：点击弹出可搜索的国家列表，仅中国大陆走手机号注册
+  Widget _buildCountrySelector() {
     final l10n = AppLocalizations.of(context)!;
-    return Container(
-      height: 44.h,
-      padding: EdgeInsets.all(3.w),
-      decoration: BoxDecoration(
-        color: AppColor.surfaceContainer(context),
-        borderRadius: BorderRadius.circular(12.r),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _buildChannelTab(
-              l10n.str('auth_mainland_china'),
-              _registerMode == _RegisterMode.mainland,
-              () => setState(() {
-                _registerMode = _RegisterMode.mainland;
-                _codeController.clear();
-              }),
-            ),
+    final countryName = countryNameByCode(_selectedCountryCode) ?? '';
+    return InkWell(
+      onTap: _showCountryPickerSheet,
+      borderRadius: BorderRadius.circular(12.r),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: l10n.str('auth_country_region'),
+          hintText: l10n.str('auth_select_country_hint'),
+          prefixIcon: const Icon(Icons.public_outlined),
+          suffixIcon: Icon(
+            Icons.keyboard_arrow_down_rounded,
+            color: AppColor.textSecondary(context),
           ),
-          Expanded(
-            child: _buildChannelTab(
-              l10n.str('auth_overseas'),
-              _registerMode == _RegisterMode.overseas,
-              () => setState(() {
-                _registerMode = _RegisterMode.overseas;
-                _codeController.clear();
-              }),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildChannelTab(String label, bool selected, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
-        decoration: BoxDecoration(
-          color: selected ? Colors.white : Colors.transparent,
-          borderRadius: BorderRadius.circular(10.r),
-          boxShadow: selected
-              ? [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.06),
-                    blurRadius: 4,
-                    offset: const Offset(0, 1),
-                  ),
-                ]
-              : null,
         ),
-        child: Center(
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 14.sp,
-              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-              color: selected
-                  ? AppColors.primary
-                  : AppColor.textSecondary(context),
-            ),
+        child: Text(
+          '$countryName ($_selectedCountryCode)',
+          style: TextStyle(
+            fontSize: 15.sp,
+            color: AppColor.textPrimary(context),
           ),
         ),
       ),
     );
   }
 
-  /// 邮箱注册时填写（手机注册通道不展示）
+  /// 邮箱注册时填写（中国大陆不展示）
   Widget _buildEmailField() {
     final l10n = AppLocalizations.of(context)!;
     return TextFormField(
@@ -308,10 +263,10 @@ class _RegisterFormState extends State<RegisterForm> {
     );
   }
 
-  /// 验证码输入 + 发送按钮（按通道显示短信/邮箱验证码）
+  /// 验证码输入 + 发送按钮（中国大陆为短信验证码，海外为邮箱验证码）
   Widget _buildCodeField(AuthState state) {
     final l10n = AppLocalizations.of(context)!;
-    final isEmail = _registerMode == _RegisterMode.overseas;
+    final isEmail = !_isMainland;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -376,10 +331,9 @@ class _RegisterFormState extends State<RegisterForm> {
     );
   }
 
-  /// 手机号输入（中国大陆模式必填，海外模式不展示）
+  /// 手机号输入（仅中国大陆注册展示，其他国家/地区不展示）
   Widget _buildPhoneField() {
     final l10n = AppLocalizations.of(context)!;
-    final isMainland = _registerMode == _RegisterMode.mainland;
     return TextFormField(
       controller: _phoneController,
       keyboardType: TextInputType.phone,
@@ -391,30 +345,11 @@ class _RegisterFormState extends State<RegisterForm> {
         counterText: '',
       ),
       validator: (value) {
-        if (isMainland && (value == null || value.trim().isEmpty)) {
+        if (_isMainland && (value == null || value.trim().isEmpty)) {
           return l10n.pleaseInputPhone;
         }
         if (value != null && value.trim().isNotEmpty && value.trim().length < 5) {
           return l10n.phoneTooShort;
-        }
-        return null;
-      },
-    );
-  }
-
-  /// 昵称输入（两种模式均选填，海外模式留空时后端以邮箱前缀兜底）
-  Widget _buildNicknameField() {
-    final l10n = AppLocalizations.of(context)!;
-    return TextFormField(
-      controller: _nicknameController,
-      decoration: InputDecoration(
-        labelText: l10n.nickname,
-        hintText: l10n.str('username_optional'),
-        prefixIcon: const Icon(Icons.person_outlined),
-      ),
-      validator: (value) {
-        if (value != null && value.trim().isNotEmpty && value.trim().length < 2) {
-          return l10n.usernameTooShort;
         }
         return null;
       },
@@ -520,6 +455,164 @@ class _RegisterFormState extends State<RegisterForm> {
                   ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// 国家/地区选择底部弹层：顶部搜索（按名称或代码过滤），按大洲分组的可选列表。
+/// 选择后通过 Navigator.pop 返回 {'code': ..., 'name': ...}
+class _CountryPickerSheet extends StatefulWidget {
+  const _CountryPickerSheet({required this.initialCode});
+
+  final String initialCode;
+
+  @override
+  State<_CountryPickerSheet> createState() => _CountryPickerSheetState();
+}
+
+class _CountryPickerSheetState extends State<_CountryPickerSheet> {
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  /// 搜索匹配：按国家名称或代码（不区分大小写）
+  bool _matches(Map<dynamic, dynamic> country) {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return true;
+    final name = (country['name'] as String).toLowerCase();
+    final code = (country['code'] as String).toLowerCase();
+    return name.contains(q) || code.contains(q);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
+    // 展开为「大洲分组头 + 国家行」的列表，过滤后无匹配时展示空态
+    final children = <Widget>[];
+    var matchCount = 0;
+    for (final continent in continents) {
+      final countries =
+          (continent['countries'] as List<Map<dynamic, dynamic>>)
+              .where(_matches)
+              .toList();
+      if (countries.isEmpty) continue;
+      matchCount += countries.length;
+      children.add(_buildContinentHeader(continent['name'] as String));
+      for (final country in countries) {
+        children.add(_buildCountryTile(country));
+      }
+    }
+
+    return Container(
+      height: 0.78.sh,
+      decoration: BoxDecoration(
+        color: AppColor.surface(context),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20.r)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            Padding(
+              padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 8.h),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      l10n.str('auth_country_region'),
+                      style: TextStyle(
+                        fontSize: 16.sp,
+                        fontWeight: FontWeight.w600,
+                        color: AppColor.textPrimary(context),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      Icons.close_rounded,
+                      size: 22.w,
+                      color: AppColor.textSecondary(context),
+                    ),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16.w),
+              child: TextField(
+                controller: _searchController,
+                onChanged: (value) => setState(() => _query = value),
+                decoration: InputDecoration(
+                  hintText: l10n.str('auth_search_country'),
+                  prefixIcon: const Icon(Icons.search),
+                  isDense: true,
+                ),
+              ),
+            ),
+            SizedBox(height: 8.h),
+            Expanded(
+              child: matchCount == 0
+                  ? Center(
+                      child: Text(
+                        l10n.str('auth_no_country_match'),
+                        style: TextStyle(
+                          fontSize: 14.sp,
+                          color: AppColor.textSecondary(context),
+                        ),
+                      ),
+                    )
+                  : ListView(children: children),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 大洲分组头
+  Widget _buildContinentHeader(String name) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 4.h),
+      child: Text(
+        name,
+        style: TextStyle(
+          fontSize: 12.sp,
+          fontWeight: FontWeight.w600,
+          color: AppColor.textSecondary(context),
+        ),
+      ),
+    );
+  }
+
+  /// 国家行：名称 (代码)，当前选中项高亮并打勾
+  Widget _buildCountryTile(Map<dynamic, dynamic> country) {
+    final code = country['code'] as String;
+    final name = country['name'] as String;
+    final selected = code == widget.initialCode;
+    return ListTile(
+      dense: true,
+      visualDensity: VisualDensity.compact,
+      title: Text(
+        '$name ($code)',
+        style: TextStyle(
+          fontSize: 14.sp,
+          fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+          color: AppColor.textPrimary(context),
+        ),
+      ),
+      trailing: selected
+          ? Icon(Icons.check_rounded, color: AppColors.primary, size: 20.w)
+          : null,
+      onTap: () => Navigator.of(context).pop(
+        <String, String>{'code': code, 'name': name},
       ),
     );
   }
