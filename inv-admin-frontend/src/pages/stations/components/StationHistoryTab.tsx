@@ -1,29 +1,50 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Row, Col, Select, DatePicker, Button, Space } from 'antd'
+import { Row, Col, Select, DatePicker, Button, Space, Alert, Popover, Input, Empty, Tooltip, Typography } from 'antd'
 import { ProTable, ProCard } from '@ant-design/pro-components'
 import type { ProColumns } from '@ant-design/pro-components'
-import { ReloadOutlined, DownloadOutlined } from '@ant-design/icons'
+import { ReloadOutlined, DownloadOutlined, SettingOutlined, UpOutlined, DownOutlined, CheckOutlined, SearchOutlined, HolderOutlined } from '@ant-design/icons'
 
 import dayjs from 'dayjs'
 import { deviceApi } from '@/services/deviceApi'
+import { modelApi, type ModelFieldCapability } from '@/services/modelApi'
 import { safeNum } from '@/utils/format'
 import { formatInTimezone } from '@/utils/timezone'
+import { humanizeFieldKey } from '@/utils/fieldI18n'
 import useTranslation from '@/hooks/useTranslation'
 
 const { RangePicker } = DatePicker
+const { Text } = Typography
 
 interface StationHistoryTabProps {
   stationId: number
   timezone: string
 }
 
-/** 默认可见的数据字段 */
+interface DeviceItem {
+  id: string
+  sn: string
+  model: string
+  model_id?: number
+  [key: string]: any
+}
+
+/** 从 field-capabilities 响应中解包数组 */
+function unwrapCaps(res: any): ModelFieldCapability[] {
+  const d = res?.data?.data ?? res?.data
+  return Array.isArray(d) ? d : (d?.items ?? [])
+}
+
+/** 默认可见的数据字段：仅作为「未注册为型号字段能力」时的兜底 */
 const DEFAULT_VISIBLE_FIELDS = [
   'pv_total_power', 'ac_active_power', 'battery_soc', 'battery_power', 'inverter_temperature',
 ]
 
-/** 字段标签映射 key —— 覆盖 device_telemetry_3min 所有数据列 */
+/**
+ * 旧版字段标签映射（无型号字段能力时的兜底）。
+ * 仅覆盖 V1 常用字段；当设备已注册 type 字段能力表（field_capabilities）时，
+ * 标签由 display_name_key + fields.* 字典动态解析，无需在此维护。
+ */
 const FIELD_LABEL_KEYS: Record<string, string> = {
   // ── AC 侧 ──
   ac_voltage: 'station.field_ac_voltage',
@@ -105,6 +126,39 @@ const FIELD_LABEL_KEYS: Record<string, string> = {
   charge_request_current_x10: 'station.field_charge_request_current_x10',
   charge_request_voltage_x10: 'station.field_charge_request_voltage_x10',
 
+  // ── V2 混合/储能机扩展字段（无型号字段能力时的兜底） ──
+  ac_input_power: 'station.field_ac_input_power',
+  ac_input_apparent_power: 'station.field_ac_input_apparent_power',
+  ac_charge_power: 'station.field_ac_charge_power',
+  ac_charge_apparent_power: 'station.field_ac_charge_apparent_power',
+  ac_charge_current: 'station.field_ac_charge_current',
+  ac_bypass_power: 'station.field_ac_bypass_power',
+  ac_bypass_apparent_power: 'station.field_ac_bypass_apparent_power',
+  battery_charge_power: 'station.field_battery_charge_power',
+  battery_discharge_power: 'station.field_battery_discharge_power',
+  ac_charge_energy_daily: 'station.field_ac_charge_energy_daily',
+  ac_charge_energy_total: 'station.field_ac_charge_energy_total',
+  ac_bypass_energy_daily: 'station.field_ac_bypass_energy_daily',
+  ac_bypass_energy_total: 'station.field_ac_bypass_energy_total',
+  gen_energy_daily: 'station.field_gen_energy_daily',
+  gen_energy_total: 'station.field_gen_energy_total',
+  output_energy_daily: 'station.field_output_energy_daily',
+  output_energy_total: 'station.field_output_energy_total',
+  boost_temperature: 'station.field_boost_temperature',
+  transformer_temperature: 'station.field_transformer_temperature',
+  pv_temperature: 'station.field_pv_temperature',
+  buck1_current: 'station.field_buck1_current',
+  buck2_current: 'station.field_buck2_current',
+  battery_overcharge: 'station.field_battery_overcharge',
+  work_time_total: 'station.field_work_time_total',
+  inv_current: 'station.field_inv_current',
+  parallel_charge_current: 'station.field_parallel_charge_current',
+  mppt_fan_speed: 'station.field_mppt_fan_speed',
+  inv_fan_speed: 'station.field_inv_fan_speed',
+  paired_socket: 'station.field_paired_socket',
+  online_socket: 'station.field_online_socket',
+  on_socket: 'station.field_on_socket',
+
   // ── 兼容旧字段名（部分 API / Redis 可能使用短名） ──
   daily_pv: 'station.field_daily_pv',
   daily_charge: 'station.field_daily_charge',
@@ -138,6 +192,10 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [visibleFields, setVisibleFields] = useState<string[]>(DEFAULT_VISIBLE_FIELDS)
+  const [fieldPickerOpen, setFieldPickerOpen] = useState(false)
+  const [fieldSearch, setFieldSearch] = useState('')
+  const [dragKey, setDragKey] = useState<string | null>(null)
+  const [overKey, setOverKey] = useState<string | null>(null)
 
   // 获取电站下设备列表
   const { data: devices } = useQuery({
@@ -156,6 +214,58 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
       setSelectedSn((devices[0] as any).sn)
     }
   }, [devices, selectedSn])
+
+  const selectedDevice = useMemo<DeviceItem | undefined>(
+    () => (devices as DeviceItem[])?.find((d) => d.sn === selectedSn),
+    [devices, selectedSn],
+  )
+
+  // ── 按所选设备的型号拉取字段能力表（动态、按型号）──
+  const { data: fieldCaps, error: capsError } = useQuery({
+    queryKey: ['history-model-field-caps', selectedDevice?.model_id],
+    queryFn: () => modelApi.getFieldCapabilities(selectedDevice!.model_id!).then(unwrapCaps),
+    enabled: Boolean(selectedDevice?.model_id),
+    staleTime: 60_000,
+  })
+
+  const capByKey = useMemo(() => {
+    const m = new Map<string, ModelFieldCapability>()
+    for (const c of fieldCaps ?? []) m.set(c.field_key, c)
+    return m
+  }, [fieldCaps])
+
+  // ── 统一字段标签解析 ──
+  // 优先级：field_capabilities(display_name_key→fields.* → humanize) > 旧 legacy映射 > fields.* > humanize
+  const resolveFieldLabel = React.useCallback((key: string): string => {
+    const cap = capByKey.get(key)
+    if (cap) {
+      const nameKey = cap.display_name_key || `fields.${cap.field_key}`
+      const name = t(nameKey)
+      const label = name !== nameKey ? name : humanizeFieldKey(key)
+      const unit = cap.display_unit || cap.base_unit
+      return unit ? `${label} (${unit})` : label
+    }
+    const legacyKey = FIELD_LABEL_KEYS[key]
+    if (legacyKey) return t(legacyKey)
+    const fieldsKey = `fields.${key}`
+    const fieldsTrans = t(fieldsKey)
+    if (fieldsTrans !== fieldsKey) return fieldsTrans
+    return humanizeFieldKey(key)
+  }, [capByKey, t])
+
+  // 默认可见字段：优先型号配置中 show_history 的字段，否则用基础默认
+  useEffect(() => {
+    const historyFields = (fieldCaps ?? [])
+      .filter((f) => f.show_history && f.is_supported !== false && f.is_visible !== false)
+      .map((f) => f.field_key)
+    if (historyFields.length > 0) {
+      setVisibleFields(historyFields)
+    } else if (visibleFields.length === 0) {
+      setVisibleFields(DEFAULT_VISIBLE_FIELDS)
+    }
+    // 仅当型号能力变化时更新，避免每次渲染重置用户勾选
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fieldCaps])
 
   // 获取历史遥测数据
   const { data: historyRes, isLoading } = useQuery({
@@ -207,7 +317,7 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
       render: (_: any, record: any) => formatInTimezone(record.time, timezone, 'YYYY-MM-DD HH:mm'),
     }
     const dataCols = visibleFields.map(field => ({
-      title: FIELD_LABEL_KEYS[field] ? t(FIELD_LABEL_KEYS[field]) : field,
+      title: resolveFieldLabel(field),
       dataIndex: field,
       key: field,
       width: 140,
@@ -220,7 +330,162 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
       },
     }))
     return [timeCol, ...dataCols]
-  }, [visibleFields, t, timezone])
+  }, [visibleFields, resolveFieldLabel, t, timezone])
+
+  // 点击卡片切换显示：未选→追加到末尾；已选→移除
+  const toggleField = React.useCallback((key: string) => {
+    setVisibleFields(prev => (prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]))
+  }, [])
+
+  // 上移/下移：调整显示顺序
+  const moveField = React.useCallback((index: number, dir: -1 | 1) => {
+    setVisibleFields(prev => {
+      const next = [...prev]
+      const target = index + dir
+      if (target < 0 || target >= next.length) return prev
+      ;[next[index], next[target]] = [next[target], next[index]]
+      return next
+    })
+  }, [])
+
+  // ── 分组定义：小标题复用已有 station.* 双语 key ──
+  const GROUP_META: { id: string; labelKey: string; test: (k: string) => boolean }[] = [
+    { id: 'pv', labelKey: 'station.pvParams', test: (k) => /^(pv|mppt)/i.test(k) },
+    { id: 'bat', labelKey: 'station.batteryParams', test: (k) => /^(batt|bat|bms|cell|soc|soh|overcharge)/i.test(k) || /^battery_/i.test(k) },
+    { id: 'ac', labelKey: 'station.acParams', test: (k) => /^(ac|grid|meter|load|output|feed|charge|bypass)/i.test(k) },
+    { id: 'sys', labelKey: 'station.systemStatus', test: (k) => /^(work_|inv_|fan_|temp_|effic|runtime|fault|alarm|sys|boost|transform|transform|buck|paired|online_socket|on_socket|dc_bus|mos_|ambient|parallel_charge)/i.test(k) },
+    { id: 'eng', labelKey: 'station.energyStats', test: (k) => /(energy|daily_|total_|gen_)/i.test(k) },
+    { id: 'other', labelKey: 'mon.other', test: () => true },
+  ]
+  const fieldGroupOf = (key: string): string => {
+    const cap = capByKey.get(key)
+    if (cap?.group_code) {
+      const g = cap.group_code.toLowerCase()
+      if (['pv', 'mppt'].includes(g)) return 'pv'
+      if (['bat', 'battery'].includes(g)) return 'bat'
+      if (['ac'].includes(g)) return 'ac'
+      if (['sys', 'diag', 'system'].includes(g)) return 'sys'
+      if (['eng', 'energy'].includes(g)) return 'eng'
+    }
+    for (const m of GROUP_META) {
+      if (m.id !== 'other' && m.test(key)) return m.id
+    }
+    return 'other'
+  }
+  const GROUP_ORDER = ['pv', 'bat', 'ac', 'sys', 'eng', 'other']
+  const groupLabel = (id: string) => t(GROUP_META.find((g) => g.id === id)!.labelKey)
+
+  // 拖拽排序：把 fromKey 移动到 toKey 所在位置（drop 到目标卡片前）
+  const reorderField = (fromKey: string, toKey: string) => {
+    setVisibleFields(prev => {
+      if (!fromKey || fromKey === toKey) return prev
+      const arr = [...prev]
+      const from = arr.indexOf(fromKey)
+      if (from < 0) return prev
+      arr.splice(from, 1)
+      const to = arr.indexOf(toKey)
+      arr.splice(to, 0, fromKey)
+      return arr
+    })
+  }
+
+  // 卡片式字段选择面板：搜索 + 已选列表（可调顺序）+ 未选卡片网格
+  const renderFieldPicker = () => {
+    const kw = fieldSearch.trim().toLowerCase()
+    const filtered = kw
+      ? allFields.filter(k => resolveFieldLabel(k).toLowerCase().includes(kw) || k.toLowerCase().includes(kw))
+      : allFields
+    const selectedKeys = filtered.filter(k => visibleFields.includes(k))
+    const unselectedKeys = filtered.filter(k => !visibleFields.includes(k))
+    return (
+      <div style={{ width: 520, padding: 4 }}>
+        <Input
+          allowClear
+          prefix={<SearchOutlined />}
+          placeholder={t('station.fieldSearchPlaceholder')}
+          value={fieldSearch}
+          onChange={(e) => setFieldSearch(e.target.value)}
+          style={{ marginBottom: 12 }}
+        />
+        <div style={{ maxHeight: 400, overflowY: 'auto', paddingRight: 4 }}>
+          {selectedKeys.length > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <Text style={{ fontSize: 12, fontWeight: 600, color: '#666' }}>{t('station.fieldSelected', { count: visibleFields.length })}</Text>
+              <div style={{ marginTop: 8 }}>
+                {selectedKeys.map((key) => {
+                  const vIdx = visibleFields.indexOf(key)
+                  const isOver = overKey === key
+                  return (
+                    <div
+                      key={key}
+                      draggable
+                      onDragStart={(e) => { setDragKey(key); e.dataTransfer.effectAllowed = 'move' }}
+                      onDragOver={(e) => { e.preventDefault(); setOverKey(key) }}
+                      onDrop={(e) => { e.preventDefault(); setOverKey(null); reorderField(dragKey!, key) }}
+                      onDragEnd={() => { setDragKey(null); setOverKey(null) }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, padding: '5px 8px',
+                        border: isOver ? '1px dashed #1677ff' : '1px solid #1677ff',
+                        borderRadius: 8, background: isOver ? '#f0f7ff' : '#e6f4ff',
+                        cursor: dragKey === key ? 'grabbing' : 'pointer',
+                      }}
+                      onClick={() => toggleField(key)}
+                    >
+                      <HolderOutlined style={{ color: '#91caff', cursor: 'grab' }} onClick={(e) => e.stopPropagation()} />
+                      <Tooltip title={t('station.fieldMoveUp')}>
+                        <Button size="small" type="text" icon={<UpOutlined />} disabled={vIdx === 0} onClick={(e) => { e.stopPropagation(); moveField(vIdx, -1) }} />
+                      </Tooltip>
+                      <Tooltip title={t('station.fieldMoveDown')}>
+                        <Button size="small" type="text" icon={<DownOutlined />} disabled={vIdx === visibleFields.length - 1} onClick={(e) => { e.stopPropagation(); moveField(vIdx, 1) }} />
+                      </Tooltip>
+                      <CheckOutlined style={{ color: '#1677ff' }} onClick={(e) => e.stopPropagation()} />
+                      <Text style={{ flex: 1, fontSize: 13 }}>{resolveFieldLabel(key)}</Text>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+          {unselectedKeys.length > 0 && (
+            <div>
+              <Text style={{ fontSize: 12, fontWeight: 600, color: '#666' }}>{t('station.fieldUnselected')}</Text>
+              <div style={{ marginTop: 8 }}>
+                {GROUP_ORDER.map((gid) => {
+                  const gFields = unselectedKeys.filter((k) => fieldGroupOf(k) === gid)
+                  if (gFields.length === 0) return null
+                  return (
+                    <div key={gid} style={{ marginBottom: 14 }}>
+                      <Text style={{ fontSize: 12, color: '#8c8c8c', fontWeight: 600, display: 'block', marginBottom: 6 }}>
+                        {groupLabel(gid)}
+                      </Text>
+                      <Row gutter={[8, 8]}>
+                        {gFields.map((key) => (
+                          <Col span={12} key={key}>
+                            <div
+                              style={{
+                                padding: '8px 10px', border: '1px solid #d9d9d9', borderRadius: 8, cursor: 'pointer',
+                                background: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                              }}
+                              onClick={() => toggleField(key)}
+                            >
+                              <Text style={{ fontSize: 13 }}>{resolveFieldLabel(key)}</Text>
+                            </div>
+                          </Col>
+                        ))}
+                      </Row>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+          {filtered.length === 0 && (
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('common.noData')} style={{ padding: '16px 0' }} />
+          )}
+        </div>
+      </div>
+    )
+  }
 
   // 导出
   const handleExport = async (format: 'csv' | 'excel') => {
@@ -294,22 +559,34 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
           </Col>
         </Row>
 
-        {/* 字段选择器 */}
+        {capsError && selectedDevice?.model_id && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginTop: 12 }}
+            message={t('station.fieldCapsLoadFailed')}
+          />
+        )}
+
+        {/* 字段选择器（卡片式） */}
         {allFields.length > 0 && (
-          <Row style={{ marginTop: 12 }}>
-            <Col span={24}>
-              <span style={{ marginRight: 8, fontSize: 13, color: '#666' }}>{t('station.selectFields')}:</span>
-              <Select
-                mode="multiple"
-                value={visibleFields}
-                onChange={setVisibleFields}
-                style={{ minWidth: 400 }}
-                maxTagCount={5}
-                options={allFields.map(f => ({
-                  label: FIELD_LABEL_KEYS[f] ? t(FIELD_LABEL_KEYS[f]) : f,
-                  value: f,
-                }))}
-              />
+          <Row style={{ marginTop: 12 }} align="middle">
+            <Col>
+              <Popover
+                trigger="click"
+                open={fieldPickerOpen}
+                onOpenChange={setFieldPickerOpen}
+                placement="bottomLeft"
+                content={renderFieldPicker}
+                destroyTooltipOnHide
+              >
+                <Button icon={<SettingOutlined />}>
+                  {t('station.selectFields')} ({visibleFields.length})
+                </Button>
+              </Popover>
+            </Col>
+            <Col style={{ marginLeft: 12 }}>
+              <Text type="secondary" style={{ fontSize: 12 }}>{t('station.fieldPickerHint')}</Text>
             </Col>
           </Row>
         )}

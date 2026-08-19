@@ -28,10 +28,16 @@ class AuthRepositoryImpl implements AuthRepository {
     required String phone,
     required String password,
     required String code,
+    String country = 'CN',
   }) async {
     return apiService.post(
       '/auth/register',
-      data: {'phone': phone, 'password': password, 'code': code},
+      data: {
+        'phone': phone,
+        'password': password,
+        'code': code,
+        'country': country,
+      },
       fromJson: (json) => LoginResponse.fromJson(json),
     );
   }
@@ -160,6 +166,7 @@ class AuthRepositoryImpl implements AuthRepository {
     required String code,
     required String phone,
     required String nickname,
+    String country = '',
   }) async {
     return apiService.post(
       '/auth/email-register',
@@ -169,6 +176,7 @@ class AuthRepositoryImpl implements AuthRepository {
         'code': code,
         'phone': phone,
         'nickname': nickname,
+        if (country.isNotEmpty) 'country': country,
       },
       fromJson: (json) => LoginResponse.fromJson(json),
     );

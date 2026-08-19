@@ -25,8 +25,14 @@ class RegisterUseCase {
     required String phone,
     required String password,
     required String code,
+    String country = 'CN',
   }) {
-    return repository.register(phone: phone, password: password, code: code);
+    return repository.register(
+      phone: phone,
+      password: password,
+      code: code,
+      country: country,
+    );
   }
 }
 
@@ -178,6 +184,7 @@ class EmailRegisterUseCase {
     required String code,
     required String phone,
     required String nickname,
+    String country = '',
   }) {
     return repository.emailRegister(
       email: email,
@@ -185,6 +192,7 @@ class EmailRegisterUseCase {
       code: code,
       phone: phone,
       nickname: nickname,
+      country: country,
     );
   }
 }

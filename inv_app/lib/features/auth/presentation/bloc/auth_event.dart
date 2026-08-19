@@ -28,15 +28,17 @@ class AuthRegisterRequested extends AuthEvent {
   final String phone;
   final String password;
   final String code;
+  final String country;
 
   const AuthRegisterRequested({
     required this.phone,
     required this.password,
     required this.code,
+    this.country = 'CN',
   });
 
   @override
-  List<Object?> get props => [phone, password, code];
+  List<Object?> get props => [phone, password, code, country];
 }
 
 class AuthLogoutRequested extends AuthEvent {}
@@ -152,6 +154,7 @@ class AuthEmailRegisterRequested extends AuthEvent {
   final String code;
   final String phone;
   final String nickname;
+  final String country;
 
   const AuthEmailRegisterRequested({
     required this.email,
@@ -159,10 +162,11 @@ class AuthEmailRegisterRequested extends AuthEvent {
     required this.code,
     required this.phone,
     required this.nickname,
+    this.country = '',
   });
 
   @override
-  List<Object?> get props => [email, password, code, phone, nickname];
+  List<Object?> get props => [email, password, code, phone, nickname, country];
 }
 
 class AuthSendEmailCodeRequested extends AuthEvent {

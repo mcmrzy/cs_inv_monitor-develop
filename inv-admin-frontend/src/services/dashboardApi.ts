@@ -2,7 +2,7 @@ import api from './api'
 
 export const dashboardApi = {
   getStatistics: () => api.get('/dashboard/statistics', { expectedDataShape: 'object' }),
-  getTrend: (type: string) => api.get('/dashboard/trend', { params: { type }, expectedDataShape: 'array' }),
+  getTrend: (type: string, params?: { stationId?: number }) => api.get('/dashboard/trend', { params: { type, ...params }, expectedDataShape: 'array' }),
   getDeviceDistribution: () => api.get('/dashboard/device-distribution', { expectedDataShape: 'object' }),
   getBigScreen: () => api.get('/dashboard/big-screen', { expectedDataShape: 'object' }),
   compareDevices: (params: any) => api.get('/dashboard/compare', { params }),

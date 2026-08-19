@@ -17,10 +17,57 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// DataFreshnessChecker 数据新鲜度检查器
+type DataFreshnessChecker struct {
+	ReportMaxAge   time.Duration // 遥测数据最大年龄（默认 10 分钟）
+	HeartbeatMaxAge time.Duration // 心跳数据最大年龄（默认 2 分钟）
+}
+
+// NewDataFreshnessChecker 创建新鲜度检查器
+func NewDataFreshnessChecker() *DataFreshnessChecker {
+	return &DataFreshnessChecker{
+		ReportMaxAge:    10 * time.Minute,
+		HeartbeatMaxAge: 2 * time.Minute,
+	}
+}
+
+// IsDataFresh 综合判断数据是否新鲜
+// reportTime: 最后一次遥测数据上报时间
+// heartbeatTime: 最后心跳包时间戳
+// now: 当前时间
+func (c *DataFreshnessChecker) IsDataFresh(reportTime, heartbeatTime, now time.Time) bool {
+	reportAge := now.Sub(reportTime)
+	heartbeatAge := now.Sub(heartbeatTime)
+
+	// 严格标准：心跳 < 2min 且 遥测 < 10min → 视为最新
+	if reportAge > c.ReportMaxAge || heartbeatAge > c.HeartbeatMaxAge {
+		return false
+	}
+	return true
+}
+
+// IsHeartbeatFresh 仅检查心跳新鲜度
+func (c *DataFreshnessChecker) IsHeartbeatFresh(heartbeatTime, now time.Time) bool {
+	return now.Sub(heartbeatTime) <= c.HeartbeatMaxAge
+}
+
+// IsReportFresh 仅检查遥测数据新鲜度
+func (c *DataFreshnessChecker) IsReportFresh(reportTime, now time.Time) bool {
+	return now.Sub(reportTime) <= c.ReportMaxAge
+}
+
 type UserRepository struct {
 	db    *pgxpool.Pool
 	cache *redis.Client
 }
+
+// userCreateInsertSQL 是用户注册入库的统一 INSERT 语句，Create 与
+// CreateWithTx 共用；country 为注册时选择的国家/地区代码，空串落 NULL。
+const userCreateInsertSQL = `
+	INSERT INTO users (phone, email, password_hash, nickname, avatar, is_system_admin, status, country, created_at, updated_at)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+	RETURNING id, created_at, updated_at
+`
 
 func NewUserRepository(db *pgxpool.Pool, cache *redis.Client) *UserRepository {
 	return &UserRepository{db: db, cache: cache}
@@ -39,7 +86,7 @@ func (r *UserRepository) IsUserInScope(ctx context.Context, actorID, targetID in
 
 func (r *UserRepository) GetByID(ctx context.Context, id int64) (*model.User, error) {
 	query := `
-		SELECT id, phone, COALESCE(email,''), password_hash, COALESCE(nickname,''), COALESCE(avatar,''), is_system_admin, region_id, status,
+		SELECT id, COALESCE(phone,''), COALESCE(email,''), password_hash, COALESCE(nickname,''), COALESCE(avatar,''), is_system_admin, region_id, status,
 			   COALESCE(timezone,'Asia/Shanghai'), COALESCE(country,''), COALESCE(region_name,''), COALESCE(bio,''), last_login_at, COALESCE(last_login_ip,''), created_at, updated_at
 		FROM users WHERE id = $1 AND deleted_at IS NULL
 	`
@@ -74,8 +121,8 @@ func (r *UserRepository) GetByID(ctx context.Context, id int64) (*model.User, er
 
 func (r *UserRepository) GetByPhone(ctx context.Context, phone string) (*model.User, error) {
 	query := `
-		SELECT id, phone, COALESCE(email,''), password_hash, nickname, avatar, is_system_admin, region_id, status,
-			   last_login_at, last_login_ip, created_at, updated_at
+		SELECT id, COALESCE(phone,''), COALESCE(email,''), password_hash, nickname, avatar, is_system_admin, region_id, status,
+			   COALESCE(country,''), last_login_at, last_login_ip, created_at, updated_at
 		FROM users WHERE phone = $1 AND deleted_at IS NULL
 	`
 
@@ -86,7 +133,7 @@ func (r *UserRepository) GetByPhone(ctx context.Context, phone string) (*model.U
 
 	err := r.db.QueryRow(ctx, query, phone).Scan(
 		&user.ID, &user.Phone, &user.Email, &user.PasswordHash, &nickname, &avatar,
-		&user.IsSystemAdmin, &regionID, &user.Status, &lastLoginAt, &lastLoginIP,
+		&user.IsSystemAdmin, &regionID, &user.Status, &user.Country, &lastLoginAt, &lastLoginIP,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -117,45 +164,57 @@ func (r *UserRepository) GetByPhone(ctx context.Context, phone string) (*model.U
 }
 
 func (r *UserRepository) Create(ctx context.Context, user *model.User) error {
-	query := `
-		INSERT INTO users (phone, email, password_hash, nickname, avatar, is_system_admin, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
-		RETURNING id, created_at, updated_at
-	`
+	query := userCreateInsertSQL
 
+	// 空串转 NULL：phone/email 均有 UNIQUE 约束，避免多个空串冲突
+	var phone interface{}
+	if user.Phone != "" {
+		phone = user.Phone
+	}
 	var email interface{}
 	if user.Email != "" {
 		email = user.Email
 	}
+	// 空串转 NULL：country 未选择时不落库
+	var country interface{}
+	if user.Country != "" {
+		country = user.Country
+	}
 
 	return r.db.QueryRow(ctx, query,
-		user.Phone, email, user.PasswordHash, user.Nickname, user.Avatar, user.IsSystemAdmin, user.Status,
+		phone, email, user.PasswordHash, user.Nickname, user.Avatar, user.IsSystemAdmin, user.Status, country,
 	).Scan(&user.ID, &user.CreatedAt, &user.UpdatedAt)
 }
 
 // CreateWithTx creates a user within a transaction
 func (r *UserRepository) CreateWithTx(ctx context.Context, tx pgx.Tx, user *model.User) error {
-	query := `
-		INSERT INTO users (phone, email, password_hash, nickname, avatar, is_system_admin, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
-		RETURNING id, created_at, updated_at
-	`
+	query := userCreateInsertSQL
 
+	// 空串转 NULL：phone/email 均有 UNIQUE 约束，避免多个空串冲突
+	var phone interface{}
+	if user.Phone != "" {
+		phone = user.Phone
+	}
 	var email interface{}
 	if user.Email != "" {
 		email = user.Email
 	}
+	// 空串转 NULL：country 未选择时不落库
+	var country interface{}
+	if user.Country != "" {
+		country = user.Country
+	}
 
 	return tx.QueryRow(ctx, query,
-		user.Phone, email, user.PasswordHash, user.Nickname, user.Avatar, user.IsSystemAdmin, user.Status,
+		phone, email, user.PasswordHash, user.Nickname, user.Avatar, user.IsSystemAdmin, user.Status, country,
 	).Scan(&user.ID, &user.CreatedAt, &user.UpdatedAt)
 }
 
 // GetByEmail 根据邮箱查询用户
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*model.User, error) {
 	query := `
-		SELECT id, phone, COALESCE(email,''), password_hash, nickname, avatar, is_system_admin, region_id, status,
-			   COALESCE(timezone,'Asia/Shanghai'), last_login_at, last_login_ip, created_at, updated_at
+		SELECT id, COALESCE(phone,''), COALESCE(email,''), password_hash, nickname, avatar, is_system_admin, region_id, status,
+			   COALESCE(timezone,'Asia/Shanghai'), COALESCE(country,''), last_login_at, last_login_ip, created_at, updated_at
 		FROM users WHERE email = $1 AND deleted_at IS NULL
 	`
 
@@ -166,7 +225,7 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*model.U
 
 	err := r.db.QueryRow(ctx, query, email).Scan(
 		&user.ID, &user.Phone, &user.Email, &user.PasswordHash, &nickname, &avatar,
-		&user.IsSystemAdmin, &regionID, &user.Status, &user.Timezone, &lastLoginAt, &lastLoginIP,
+		&user.IsSystemAdmin, &regionID, &user.Status, &user.Timezone, &user.Country, &lastLoginAt, &lastLoginIP,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -198,7 +257,7 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*model.U
 
 func (r *UserRepository) GetByNickname(ctx context.Context, nickname string) (*model.User, error) {
 	query := `
-		SELECT id, phone, COALESCE(email,''), password_hash, nickname, avatar, is_system_admin, region_id, status,
+		SELECT id, COALESCE(phone,''), COALESCE(email,''), password_hash, nickname, avatar, is_system_admin, region_id, status,
 			   last_login_at, last_login_ip, created_at, updated_at
 		FROM users WHERE nickname = $1 AND deleted_at IS NULL LIMIT 1
 	`
@@ -316,7 +375,7 @@ func (r *UserRepository) Delete(ctx context.Context, userID int64) error {
 
 func (r *UserRepository) ListAll(ctx context.Context) ([]model.User, error) {
 	query := `
-		SELECT id, phone, COALESCE(email,''), password_hash, COALESCE(nickname,''), COALESCE(avatar,''), is_system_admin, region_id, status,
+		SELECT id, COALESCE(phone,''), COALESCE(email,''), password_hash, COALESCE(nickname,''), COALESCE(avatar,''), is_system_admin, region_id, status,
 		       last_login_at, COALESCE(last_login_ip,''), created_at, updated_at
 		FROM users WHERE deleted_at IS NULL ORDER BY id DESC
 	`
@@ -339,7 +398,7 @@ func (r *UserRepository) List(ctx context.Context, params ListUsersParams) (*Lis
 	offset := (params.Page - 1) * params.PageSize
 
 	baseQuery := `
-		SELECT id, phone, COALESCE(email,''), password_hash, COALESCE(nickname,''), COALESCE(avatar,''), is_system_admin, region_id, status,
+		SELECT id, COALESCE(phone,''), COALESCE(email,''), password_hash, COALESCE(nickname,''), COALESCE(avatar,''), is_system_admin, region_id, status,
 		       last_login_at, COALESCE(last_login_ip,''), created_at, updated_at
 		FROM users WHERE deleted_at IS NULL
 	`
@@ -1346,22 +1405,62 @@ func normalizeRealtimeData(data map[string]interface{}) map[string]interface{} {
 		}
 	}
 
-	// energy: 展平到顶层
+	// energy: 展平到顶层，同时提取 runtime_hours、efficiency 等关键累计字段
 	if energy, ok := data["energy"]; ok {
 		if energyMap, ok := energy.(map[string]interface{}); ok {
 			for k, v := range energyMap {
 				data[k] = v
 			}
+			// 提升运行时长到顶层
+			if v, exists := energyMap["runtime_hours"]; exists {
+				data["runtime_hours"] = v
+			}
 		}
 	}
 
-	// eng (V2 协议): 同 energy，展平到顶层
+	// chr (V2 AC charge): 展平到顶层并提取关键字段
+	if chr, ok := data["chr"]; ok {
+		if chrMap, ok := chr.(map[string]interface{}); ok {
+			// 展平所有字段到顶层
+			for k, v := range chrMap {
+				if _, exists := data[k]; !exists {
+					data[k] = v
+				}
+			}
+			// 提取关键字段：power, current, voltage
+			if v, exists := chrMap["power"]; exists {
+				data["ac_charge_power"] = v // AC 充电功率
+			}
+			if v, exists := chrMap["charging_current"]; exists {
+				data["ac_charge_current"] = v
+			}
+			if v, exists := chrMap["input_voltage"]; exists {
+				data["ac_charge_voltage"] = v
+			}
+		}
+	}
+
+	// eng (V2 generator): 同 energy，展平到顶层并提取关键字段
 	if eng, ok := data["eng"]; ok {
 		if engMap, ok := eng.(map[string]interface{}); ok {
+			// 展平所有字段到顶层
 			for k, v := range engMap {
 				if _, exists := data[k]; !exists {
 					data[k] = v
 				}
+			}
+			// 提取发电机相关字段
+			if v, exists := engMap["power"]; exists {
+				data["gen_power"] = v // 发电机功率
+			}
+			if v, exists := engMap["rpu"]; exists { // RPM 可能被压缩为 rpu
+				data["gen_rpm"] = v
+			}
+			if v, exists := engMap["voltage"]; exists {
+				data["gen_voltage"] = v
+			}
+			if v, exists := engMap["current"]; exists {
+				data["gen_current"] = v
 			}
 		}
 	}

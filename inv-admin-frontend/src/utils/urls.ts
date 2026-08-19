@@ -24,8 +24,12 @@ function apiOrigin(): string {
  * - 注入 API 域名后，/uploads/ 资源指向 API 域（图片跨域加载不受 CORS 限制）
  * - 未注入时保持相对路径（由部署方 nginx 转发）
  */
-export function resolveMediaUrl(path?: string | null): string | undefined {
-  if (!path) return undefined
+export function resolveMediaUrl(path?: string | null, isAvatar = false): string | undefined {
+  // Avatar 使用默认图
+  if (!path) {
+    if (isAvatar) return '/images/avatar_default.webp'
+    return undefined
+  }
   if (/^https?:\/\//.test(path)) return path
   if (path.startsWith('/uploads/')) {
     const origin = apiOrigin()

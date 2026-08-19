@@ -36,12 +36,13 @@ describe('LoginPage', () => {
     expect(screen.getByRole('button', { name: 'Sign In' })).toBeInTheDocument()
   })
 
-  it('should render login tab, register tab, and reset tab', () => {
+  it('should render password login tab and code login tab only', () => {
     renderWithProviders(<LoginPage />)
 
     expect(screen.getByText('密码登录')).toBeInTheDocument()
-    expect(screen.getByText('注册')).toBeInTheDocument()
-    expect(screen.getByText('重置密码')).toBeInTheDocument()
+    expect(screen.getByText('验证码登录')).toBeInTheDocument()
+    // 注册 / 重置密码为独立视图（链接触发），不在 Tab 栏
+    expect(screen.queryByText('注册')).not.toBeInTheDocument()
   })
 
   it('should show account and password input fields', () => {
@@ -105,37 +106,75 @@ describe('LoginPage', () => {
     })
   })
 
-  it('should navigate to register tab when clicking register', async () => {
+  it('should switch to register view with mainland china phone form by default', async () => {
     const user = userEvent.setup()
     renderWithProviders(<LoginPage />)
 
-    await user.click(screen.getByText('注册'))
+    await user.click(screen.getByText('立即注册'))
 
+    // 表单区切换为注册视图：标题 + 默认中国大陆手机注册表单
     expect(screen.getByText('创建账号')).toBeInTheDocument()
+    expect(screen.getByText('注册新账户开始使用')).toBeInTheDocument()
     expect(screen.getByPlaceholderText('手机号')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('邮箱')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('昵称')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('验证码')).toBeInTheDocument()
+    expect(screen.getByText('中国 (CN)')).toBeInTheDocument()
+    // Tab 栏在注册视图隐藏
+    expect(screen.queryByText('密码登录')).not.toBeInTheDocument()
   })
 
-  it('should navigate to reset tab when clicking reset tab', async () => {
+  it('should submit phone register with selected country code', async () => {
+    let capturedBody: Record<string, unknown> | undefined
+    server.use(
+      http.post('/api/v1/auth/register', async ({ request }) => {
+        capturedBody = (await request.json()) as Record<string, unknown>
+        return HttpResponse.json({ code: 0, message: 'success', data: { token: 't', user: { id: 9, nickname: 'u' } } })
+      }),
+    )
     const user = userEvent.setup()
     renderWithProviders(<LoginPage />)
 
-    // Click the reset tab button (not the link)
-    const resetTabButton = screen.getAllByText('重置密码')[0]
-    await user.click(resetTabButton)
+    await user.click(screen.getByText('立即注册'))
+    await user.type(screen.getByPlaceholderText('手机号'), '13800000099')
+    await user.type(screen.getByPlaceholderText('验证码'), '123456')
+    await user.type(screen.getByPlaceholderText('密码'), 'Admin123')
+    await user.type(screen.getByPlaceholderText('确认密码'), 'Admin123')
+    await user.click(screen.getByRole('button', { name: '注 册' }))
 
-    expect(screen.getByText('通过邮箱或手机号重置密码')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(capturedBody).toBeDefined()
+    })
+    // 默认选中中国大陆，注册请求必须携带国家代码供后端落库
+    expect(capturedBody).toMatchObject({ phone: '13800000099', country: 'CN' })
   })
 
-  it('should navigate to reset when clicking forgot password link', async () => {
+  it('should return to login view from register view via login link', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<LoginPage />)
+
+    await user.click(screen.getByText('立即注册'))
+    expect(screen.getByText('创建账号')).toBeInTheDocument()
+
+    await user.click(screen.getByText('立即登录'))
+
+    // 回到登录视图：标题恢复 + Tab 栏恢复
+    expect(screen.getByText('欢迎回来')).toBeInTheDocument()
+    expect(screen.getByText('密码登录')).toBeInTheDocument()
+  })
+
+  it('should switch to reset view when clicking forgot password link', async () => {
     const user = userEvent.setup()
     renderWithProviders(<LoginPage />)
 
     await user.click(screen.getByText('忘记密码？'))
 
-    // Should switch to reset form
+    // 表单区切换为重置视图：标题 + 邮箱/手机号双通道 Segmented
+    expect(screen.getAllByText('重置密码').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('通过邮箱或手机号重置密码')).toBeInTheDocument()
+    expect(screen.getByText('邮箱重置')).toBeInTheDocument()
+    expect(screen.getByText('手机号重置')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('注册时使用的邮箱')).toBeInTheDocument()
+    // Tab 栏在重置视图隐藏
+    expect(screen.queryByText('密码登录')).not.toBeInTheDocument()
   })
 
   it('should show brand information', () => {
@@ -160,27 +199,29 @@ describe('LoginPage', () => {
     expect(screen.getByText('立即注册')).toBeInTheDocument()
   })
 
-  it('should show code login entry link in password login form', () => {
+  it('should not show code login link in password login form', () => {
     renderWithProviders(<LoginPage />)
 
-    expect(screen.getByText('验证码登录')).toBeInTheDocument()
+    // 「验证码登录」仅存在于顶部 Tab 栏，密码表单内不再重复出现
+    expect(screen.getAllByText('验证码登录').length).toBe(1)
   })
 
   it('should enter code login view with phone channel by default and switch to email channel', async () => {
     const user = userEvent.setup()
     renderWithProviders(<LoginPage />)
 
+    // 点击 Tab 栏的「验证码登录」（唯一）
     await user.click(screen.getByText('验证码登录'))
 
-    // 默认手机号短信通道：存在手机号输入、验证码输入与发码按钮（修复旧版缺验证码输入框的缺陷）
-    expect(screen.getByText('手机号短信')).toBeInTheDocument()
-    expect(screen.getByText('邮箱验证码')).toBeInTheDocument()
+    // 默认手机通道：Segmented 显示 手机号 / 邮箱，存在手机号输入、验证码输入与发码按钮
+    expect(screen.getByText('手机号')).toBeInTheDocument()
+    expect(screen.getByText('邮箱')).toBeInTheDocument()
     expect(screen.getByPlaceholderText('手机号')).toBeInTheDocument()
     expect(screen.getByPlaceholderText('验证码')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '发送验证码' })).toBeInTheDocument()
 
-    // 切换到邮箱验证码通道
-    await user.click(screen.getByText('邮箱验证码'))
+    // 切换到邮箱通道
+    await user.click(screen.getByText('邮箱'))
     expect(screen.getByPlaceholderText('邮箱')).toBeInTheDocument()
     expect(screen.queryByPlaceholderText('手机号')).not.toBeInTheDocument()
   })
@@ -219,7 +260,7 @@ describe('LoginPage', () => {
     })
   })
 
-  it('should reset password via phone channel', async () => {
+  it('should reset password via phone channel in reset view', async () => {
     server.use(
       http.post('/api/v1/auth/reset-password', () => {
         return HttpResponse.json({ code: 0, message: 'success', data: null })
@@ -228,8 +269,8 @@ describe('LoginPage', () => {
     const user = userEvent.setup()
     renderWithProviders(<LoginPage />)
 
-    // 切到重置 Tab 并选择手机号重置方式
-    await user.click(screen.getAllByText('重置密码')[0])
+    // 切换到重置视图并选择手机号重置方式
+    await user.click(screen.getByText('忘记密码？'))
     await user.click(screen.getByText('手机号重置'))
 
     expect(screen.getByPlaceholderText('手机号')).toBeInTheDocument()
@@ -238,13 +279,14 @@ describe('LoginPage', () => {
     await user.type(screen.getByPlaceholderText('新密码'), 'Admin123')
     await user.type(screen.getByPlaceholderText('确认新密码'), 'Admin123')
 
-    // 提交按钮与主 Tab 按钮同名，取 DOM 靠后的表单提交按钮
+    // 视图内提交按钮
     const submitBtn = screen.getAllByRole('button', { name: '重置密码' }).pop()!
     await user.click(submitBtn)
 
-    // 重置成功后回到登录视图
+    // 重置成功后显示成功提示，自动切回登录视图
     await waitFor(() => {
-      expect(screen.getByText('欢迎回来')).toBeInTheDocument()
-    })
+      expect(screen.getByText('密码重置成功，请登录')).toBeInTheDocument()
+    }, { timeout: 3000 })
+    expect(screen.getByText('欢迎回来')).toBeInTheDocument()
   })
 })

@@ -351,6 +351,21 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 		}
 	}
 
+	// 已注册邮箱预检查（鉴权通过后执行）：已注册用户不发邀请，
+	// 直接在 results 中标记 already_registered，避免接受时因 email 唯一约束冲突
+	alreadyRegistered := make(map[string]bool)
+	for _, email := range emails {
+		existingUser, uerr := h.userRepo.GetByEmail(ctx, email)
+		if uerr != nil {
+			logger.Error("Failed to check existing user", zap.String("email", email), zap.Error(uerr))
+			response.Error(c, 500, "检查用户状态失败")
+			return
+		}
+		if existingUser != nil {
+			alreadyRegistered[email] = true
+		}
+	}
+
 	// Get inviter info
 	inviter, err := h.userRepo.GetByID(ctx, userID)
 	if err != nil || inviter == nil {
@@ -401,6 +416,14 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 
 	for _, email := range emails {
 		result := CreateInvitationResult{Email: email}
+
+		// Skip if email is already registered as a system user
+		if alreadyRegistered[email] {
+			result.Status = "already_registered"
+			result.Error = "该邮箱已注册为系统用户"
+			results = append(results, result)
+			continue
+		}
 
 		// Generate secure token (crypto/rand)
 		tokenBytes := make([]byte, 32)

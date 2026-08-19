@@ -1,0 +1,139 @@
+import { Row, Col, Statistic, Typography } from 'antd'
+import {
+  ThunderboltOutlined, SunOutlined, HomeOutlined,
+  SwapRightOutlined, SwapLeftOutlined,
+} from '@ant-design/icons'
+import { safeNum } from '@/utils/format'
+import useTranslation from '@/hooks/useTranslation'
+
+const { Text } = Typography
+
+export interface DeviceEnergyData {
+  dailyPv: number
+  totalPv: number
+  dailyCharge: number
+  totalCharge: number
+  dailyDischarge: number
+  totalDischarge: number
+  dailyLoad: number
+  totalLoad: number
+  runtimeHours?: number
+}
+
+interface DeviceStatsCardProps {
+  data: DeviceEnergyData | null
+}
+
+const StatBlock: React.FC<{
+  icon: React.ReactNode
+  color: string
+  label: string
+  today: number
+  total: number
+  unit?: string
+}> = ({ icon, color, label, today, total, unit = 'kWh' }) => (
+  <div style={{
+    background: `${color}08`,
+    borderRadius: 10,
+    padding: '12px 16px',
+    borderLeft: `3px solid ${color}`,
+  }}>
+    <Text type="secondary" style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4, marginBottom: 8 }}>
+      <span style={{ color }}>{icon}</span> {label}
+    </Text>
+    <Row gutter={8}>
+      <Col span={12}>
+        <Statistic
+          title={<Text style={{ fontSize: 11, color: '#999' }}>今日</Text>}
+          value={today?.toFixed(1) ?? 0}
+          precision={1}
+          suffix={unit}
+          valueStyle={{ color, fontSize: 18, fontWeight: 600 }}
+        />
+      </Col>
+      <Col span={12}>
+        <Statistic
+          title={<Text style={{ fontSize: 11, color: '#999' }}>累计</Text>}
+          value={total?.toFixed(0) ?? 0}
+          precision={0}
+          suffix={unit}
+          valueStyle={{ color, fontSize: 18, fontWeight: 600 }}
+        />
+      </Col>
+    </Row>
+  </div>
+)
+
+const DeviceStatsCard: React.FC<DeviceStatsCardProps> = ({ data }) => {
+  const { t } = useTranslation()
+  if (!data) return null
+
+  return (
+    <Row gutter={[12, 12]}>
+      {/* 光伏发电 */}
+      <Col xs={12} sm={6}>
+        <StatBlock
+          icon={<SunOutlined />}
+          color="#f59e0b"
+          label={t('station.solarProduction')}
+          today={data.dailyPv}
+          total={data.totalPv}
+        />
+      </Col>
+
+      {/* 电池充电 */}
+      <Col xs={12} sm={6}>
+        <StatBlock
+          icon={<SwapRightOutlined />}
+          color="#22c55e"
+          label={t('station.battChargeEnergy')}
+          today={data.dailyCharge}
+          total={data.totalCharge}
+        />
+      </Col>
+
+      {/* 电池放电 */}
+      <Col xs={12} sm={6}>
+        <StatBlock
+          icon={<SwapLeftOutlined />}
+          color="#3b82f6"
+          label={t('station.battDischargeEnergy')}
+          today={data.dailyDischarge}
+          total={data.totalDischarge}
+        />
+      </Col>
+
+      {/* 负载用电 */}
+      <Col xs={12} sm={6}>
+        <StatBlock
+          icon={<HomeOutlined />}
+          color="#ef4444"
+          label={t('station.loadConsumption')}
+          today={data.dailyLoad}
+          total={data.totalLoad}
+        />
+      </Col>
+
+      {/* 运行时长 */}
+      {data.runtimeHours != null && data.runtimeHours > 0 && (
+        <Col span={24}>
+          <div style={{
+            background: '#fafafa',
+            borderRadius: 10,
+            padding: '8px 16px',
+            textAlign: 'center',
+          }}>
+            <Text type="secondary" style={{ fontSize: 12, marginRight: 8 }}>
+              <ThunderboltOutlined /> {t('station.runtimeHours')}:
+            </Text>
+            <Text strong style={{ color: '#595959', fontSize: 16 }}>
+              {safeNum(data.runtimeHours).toFixed(0)} h
+            </Text>
+          </div>
+        </Col>
+      )}
+    </Row>
+  )
+}
+
+export default DeviceStatsCard

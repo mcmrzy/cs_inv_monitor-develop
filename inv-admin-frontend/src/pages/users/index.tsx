@@ -198,7 +198,8 @@ const UsersPage: React.FC = () => {
         if (roles.length > 0) {
           return <Space size={2}>{roles.map((r) => <Tag key={r} color='#1677ff'>{roleLabel(r, t)}</Tag>)}</Space>
         }
-        return <Tag color='#1677ff'>{t('header.member')}</Tag>
+        // 无组织归属（如未走邀请流程直接创建的账号）：不是任何身份，明确提示未分配
+        return <Tag color='#1677ff'>{t('user.noOrgIdentity')}</Tag>
       },
     },
     {
@@ -369,7 +370,7 @@ const UsersPage: React.FC = () => {
                   if (roles.length > 0) {
                     return <Space size={2}>{roles.map((r) => <Tag key={r} color='#1677ff'>{roleLabel(r, t)}</Tag>)}</Space>
                   }
-                  return <Tag color='#1677ff'>{t('header.member')}</Tag>
+                  return <Tag color='#1677ff'>{t('user.noOrgIdentity')}</Tag>
                 },
               },
               {

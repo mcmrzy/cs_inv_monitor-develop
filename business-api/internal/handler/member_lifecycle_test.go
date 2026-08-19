@@ -26,7 +26,8 @@ type mockMemberLifecycleService struct {
 	transferInitiateFn func(ctx context.Context, actorUserID int64, membershipIDs []int64, targetOrgID int64, reason string) (*service.TransferResult, error)
 	transferAcceptFn   func(ctx context.Context, actorUserID int64, transferID int64) error
 	transferRejectFn   func(ctx context.Context, actorUserID int64, transferID int64, reason string) error
-	listTransfersFn    func(ctx context.Context, userID int64) ([]service.PendingTransferInfo, error)
+	listTransfersFn    func(ctx context.Context, viewerUserID int64, page, pageSize int, status string) (*service.ListTransfersResult, error)
+	getUserByEmailFn   func(ctx context.Context, actorUserID int64, email string) (*service.UserLookupResult, error)
 	listMembersFn     func(ctx context.Context, orgID int64, page, pageSize int, roleFilter string) (*service.ListMembersResult, error)
 	bulkAddFn          func(ctx context.Context, actorUserID int64, tenantID int64, req service.BulkAddParams) (*service.BulkAddResult, error)
 	bulkTransferFn     func(ctx context.Context, actorUserID int64, req service.BulkTransferParams) (*service.BulkTransferResult, error)
@@ -79,7 +80,7 @@ func (m *mockMemberLifecycleService) TransferInitiate(ctx context.Context, a int
 	if m.transferInitiateFn != nil {
 		return m.transferInitiateFn(ctx, a, mi, to, r)
 	}
-	return &service.TransferResult{OrganizationID: 200, TransferredCount: 3}, nil
+	return &service.TransferResult{OrganizationID: 200, PendingCount: 3}, nil
 }
 func (m *mockMemberLifecycleService) TransferAccept(ctx context.Context, a int64, ti int64) error {
 	if m.transferAcceptFn != nil {
@@ -93,11 +94,17 @@ func (m *mockMemberLifecycleService) TransferReject(ctx context.Context, a int64
 	}
 	return nil
 }
-func (m *mockMemberLifecycleService) ListTransfers(ctx context.Context, u int64) ([]service.PendingTransferInfo, error) {
+func (m *mockMemberLifecycleService) ListTransfers(ctx context.Context, u int64, page, pageSize int, status string) (*service.ListTransfersResult, error) {
 	if m.listTransfersFn != nil {
-		return m.listTransfersFn(ctx, u)
+		return m.listTransfersFn(ctx, u, page, pageSize, status)
 	}
-	return []service.PendingTransferInfo{}, nil
+	return &service.ListTransfersResult{Items: []service.TransferRequestInfo{}, Page: page, Size: pageSize}, nil
+}
+func (m *mockMemberLifecycleService) GetUserByEmail(ctx context.Context, a int64, email string) (*service.UserLookupResult, error) {
+	if m.getUserByEmailFn != nil {
+		return m.getUserByEmailFn(ctx, a, email)
+	}
+	return &service.UserLookupResult{UserID: 10, Email: email, Nickname: "User10"}, nil
 }
 func (m *mockMemberLifecycleService) BulkAdd(ctx context.Context, a int64, t int64, r service.BulkAddParams) (*service.BulkAddResult, error) {
 	if m.bulkAddFn != nil {
@@ -279,9 +286,19 @@ func (suite *MemberLifecycleHandlerTestSuite) TestAddMember_MissingTenantContext
 	c, w := createTestGinContext("/api/v1/members/add", "POST", AddMemberRequest{
 		UserID: 10, OrganizationID: 100, MembershipType: "full",
 	})
-	setAuthWithoutTenant(c, 1, true)
+	setAuthWithoutTenant(c, 1, false)
 	suite.handler.AddMember(c)
 	assertBizResponse(suite.T(), w, 403, "tenant context missing")
+}
+
+func (suite *MemberLifecycleHandlerTestSuite) TestAddMember_SystemAdminWithoutTenantAllowed() {
+	// 系统管理员可能没有租户上下文（RootTenantID=0），应放行由 service 层校验
+	c, w := createTestGinContext("/api/v1/members/add", "POST", AddMemberRequest{
+		UserID: 10, OrganizationID: 100, MembershipType: "full",
+	})
+	setAuthWithoutTenant(c, 1, true)
+	suite.handler.AddMember(c)
+	assertBizResponse(suite.T(), w, 0, "")
 }
 
 // ============================================================================
@@ -678,6 +695,16 @@ func (suite *MemberLifecycleHandlerTestSuite) TestTransferInitiate_TargetOrgDiff
 
 func (suite *MemberLifecycleHandlerTestSuite) TestTransferAccept_Success() {
 	c, w := createTestGinContext("/api/v1/members/transfer/accept", "POST", map[string]interface{}{
+		"transfer_id": 1,
+	})
+	setAuthClaimsInContext(c, 1, true, 1)
+	suite.handler.TransferAccept(c)
+	assertBizResponse(suite.T(), w, 0, "")
+}
+
+func (suite *MemberLifecycleHandlerTestSuite) TestTransferAccept_LegacyApprovedFieldIgnored() {
+	// 旧前端可能仍传 approved 字段，多余字段应被忽略而非报错
+	c, w := createTestGinContext("/api/v1/members/transfer/accept", "POST", map[string]interface{}{
 		"transfer_id": 1, "approved": true,
 	})
 	setAuthClaimsInContext(c, 1, true, 1)
@@ -694,18 +721,33 @@ func (suite *MemberLifecycleHandlerTestSuite) TestTransferAccept_InvalidRequest(
 	assertBizResponse(suite.T(), w, 400, "")
 }
 
-func (suite *MemberLifecycleHandlerTestSuite) TestTransferAccept_RejectedNeedsReason() {
+func (suite *MemberLifecycleHandlerTestSuite) TestTransferAccept_NotPending() {
+	suite.mockSvc.transferAcceptFn = func(context.Context, int64, int64) error {
+		return svcErr(409, "该申请已被处理")
+	}
 	c, w := createTestGinContext("/api/v1/members/transfer/accept", "POST", map[string]interface{}{
-		"transfer_id": 1, "approved": false,
+		"transfer_id": 1,
 	})
 	setAuthClaimsInContext(c, 1, true, 1)
 	suite.handler.TransferAccept(c)
-	assertBizResponse(suite.T(), w, 400, "transfer/reject")
+	assertBizResponse(suite.T(), w, 409, "")
+}
+
+func (suite *MemberLifecycleHandlerTestSuite) TestTransferAccept_NotTargetOrgAdmin() {
+	suite.mockSvc.transferAcceptFn = func(context.Context, int64, int64) error {
+		return svcErr(403, "仅目标组织管理员可审批此转移")
+	}
+	c, w := createTestGinContext("/api/v1/members/transfer/accept", "POST", map[string]interface{}{
+		"transfer_id": 1,
+	})
+	setAuthClaimsInContext(c, 1, true, 1)
+	suite.handler.TransferAccept(c)
+	assertBizResponse(suite.T(), w, 403, "")
 }
 
 func (suite *MemberLifecycleHandlerTestSuite) TestTransferReject_Success() {
 	c, w := createTestGinContext("/api/v1/members/transfer/reject", "POST", map[string]interface{}{
-		"transfer_id": 1, "approved": false, "reason": "Not acceptable",
+		"transfer_id": 1, "reason": "Not acceptable",
 	})
 	setAuthClaimsInContext(c, 1, true, 1)
 	suite.handler.TransferReject(c)
@@ -721,25 +763,14 @@ func (suite *MemberLifecycleHandlerTestSuite) TestTransferReject_InvalidRequest(
 	assertBizResponse(suite.T(), w, 400, "")
 }
 
-func (suite *MemberLifecycleHandlerTestSuite) TestTransferReject_ApprovedTrue() {
+func (suite *MemberLifecycleHandlerTestSuite) TestTransferReject_ReasonOptional() {
+	// 拒绝原因改为可选字段，空 reason 也能正常拒绝
 	c, w := createTestGinContext("/api/v1/members/transfer/reject", "POST", map[string]interface{}{
-		"transfer_id": 1, "approved": true,
+		"transfer_id": 1, "reason": "",
 	})
 	setAuthClaimsInContext(c, 1, true, 1)
 	suite.handler.TransferReject(c)
-	assertBizResponse(suite.T(), w, 400, "approved=false")
-}
-
-func (suite *MemberLifecycleHandlerTestSuite) TestTransferReject_MissingReason() {
-	suite.mockSvc.transferRejectFn = func(context.Context, int64, int64, string) error {
-		return svcErr(400, "拒绝原因不能为空")
-	}
-	c, w := createTestGinContext("/api/v1/members/transfer/reject", "POST", map[string]interface{}{
-		"transfer_id": 1, "approved": false, "reason": "",
-	})
-	setAuthClaimsInContext(c, 1, true, 1)
-	suite.handler.TransferReject(c)
-	assertBizResponse(suite.T(), w, 400, "")
+	assertBizResponse(suite.T(), w, 0, "")
 }
 
 // ============================================================================
@@ -747,8 +778,11 @@ func (suite *MemberLifecycleHandlerTestSuite) TestTransferReject_MissingReason()
 // ============================================================================
 
 func (suite *MemberLifecycleHandlerTestSuite) TestListTransfers_Success() {
-	suite.mockSvc.listTransfersFn = func(context.Context, int64) ([]service.PendingTransferInfo, error) {
-		return []service.PendingTransferInfo{{ID: 1, MembershipID: 10, Status: "pending"}}, nil
+	suite.mockSvc.listTransfersFn = func(context.Context, int64, int, int, string) (*service.ListTransfersResult, error) {
+		return &service.ListTransfersResult{
+			Items: []service.TransferRequestInfo{{ID: 1, MembershipID: 10, Status: "pending", ResourceType: "user"}},
+			Total: 1, Page: 1, Size: 20,
+		}, nil
 	}
 	c, w := createTestGinContext("/api/v1/members/transfers/list", "GET", nil)
 	setAuthClaimsInContext(c, 1, true, 1)
@@ -756,9 +790,35 @@ func (suite *MemberLifecycleHandlerTestSuite) TestListTransfers_Success() {
 	assertBizResponse(suite.T(), w, 0, "")
 }
 
+func (suite *MemberLifecycleHandlerTestSuite) TestListTransfers_StatusFilterPassed() {
+	var capturedStatus string
+	suite.mockSvc.listTransfersFn = func(_ context.Context, _ int64, _ int, _ int, status string) (*service.ListTransfersResult, error) {
+		capturedStatus = status
+		return &service.ListTransfersResult{Items: []service.TransferRequestInfo{}, Page: 1, Size: 20}, nil
+	}
+	c, w := createTestGinContext("/api/v1/members/transfers/list?status=pending", "GET", nil)
+	setAuthClaimsInContext(c, 1, true, 1)
+	suite.handler.ListTransfers(c)
+	assertBizResponse(suite.T(), w, 0, "")
+	assert.Equal(suite.T(), "pending", capturedStatus)
+}
+
+func (suite *MemberLifecycleHandlerTestSuite) TestListTransfers_InvalidStatusIgnored() {
+	var capturedStatus string
+	suite.mockSvc.listTransfersFn = func(_ context.Context, _ int64, _ int, _ int, status string) (*service.ListTransfersResult, error) {
+		capturedStatus = status
+		return &service.ListTransfersResult{Items: []service.TransferRequestInfo{}, Page: 1, Size: 20}, nil
+	}
+	c, w := createTestGinContext("/api/v1/members/transfers/list?status=whatever", "GET", nil)
+	setAuthClaimsInContext(c, 1, true, 1)
+	suite.handler.ListTransfers(c)
+	assertBizResponse(suite.T(), w, 0, "")
+	assert.Equal(suite.T(), "", capturedStatus)
+}
+
 func (suite *MemberLifecycleHandlerTestSuite) TestListTransfers_EmptyResult() {
-	suite.mockSvc.listTransfersFn = func(context.Context, int64) ([]service.PendingTransferInfo, error) {
-		return nil, nil
+	suite.mockSvc.listTransfersFn = func(context.Context, int64, int, int, string) (*service.ListTransfersResult, error) {
+		return &service.ListTransfersResult{Items: []service.TransferRequestInfo{}, Page: 1, Size: 20}, nil
 	}
 	c, w := createTestGinContext("/api/v1/members/transfers/list", "GET", nil)
 	setAuthClaimsInContext(c, 1, true, 1)
@@ -767,13 +827,124 @@ func (suite *MemberLifecycleHandlerTestSuite) TestListTransfers_EmptyResult() {
 }
 
 func (suite *MemberLifecycleHandlerTestSuite) TestListTransfers_QueryFailed() {
-	suite.mockSvc.listTransfersFn = func(context.Context, int64) ([]service.PendingTransferInfo, error) {
+	suite.mockSvc.listTransfersFn = func(context.Context, int64, int, int, string) (*service.ListTransfersResult, error) {
 		return nil, svcErr(500, "查询失败")
 	}
 	c, w := createTestGinContext("/api/v1/members/transfers/list", "GET", nil)
 	setAuthClaimsInContext(c, 1, true, 1)
 	suite.handler.ListTransfers(c)
 	assertBizResponse(suite.T(), w, 500, "")
+}
+
+// ============================================================================
+// Batch Accept/Reject Transfers Tests
+// ============================================================================
+
+func (suite *MemberLifecycleHandlerTestSuite) TestBatchAcceptTransfers_Success() {
+	c, w := createTestGinContext("/api/v1/members/transfers/batch-accept", "POST", map[string]interface{}{
+		"transfer_ids": []int64{1, 2, 3},
+	})
+	setAuthClaimsInContext(c, 1, true, 1)
+	suite.handler.BatchAcceptTransfers(c)
+	assertBizResponse(suite.T(), w, 0, "已批准 3 项")
+}
+
+func (suite *MemberLifecycleHandlerTestSuite) TestBatchAcceptTransfers_InvalidRequest() {
+	c, w := createTestGinContext("/api/v1/members/transfers/batch-accept", "POST", map[string]interface{}{
+		"invalid": "field",
+	})
+	setAuthClaimsInContext(c, 1, true, 1)
+	suite.handler.BatchAcceptTransfers(c)
+	assertBizResponse(suite.T(), w, 400, "")
+}
+
+func (suite *MemberLifecycleHandlerTestSuite) TestBatchAcceptTransfers_PartialFailure() {
+	suite.mockSvc.transferAcceptFn = func(_ context.Context, _ int64, transferID int64) error {
+		if transferID == 2 {
+			return svcErr(409, "该申请已被处理")
+		}
+		return nil
+	}
+	c, w := createTestGinContext("/api/v1/members/transfers/batch-accept", "POST", map[string]interface{}{
+		"transfer_ids": []int64{1, 2, 3},
+	})
+	setAuthClaimsInContext(c, 1, true, 1)
+	suite.handler.BatchAcceptTransfers(c)
+	assertBizResponse(suite.T(), w, 0, "已批准 2 项")
+}
+
+func (suite *MemberLifecycleHandlerTestSuite) TestBatchAcceptTransfers_AllFailed() {
+	suite.mockSvc.transferAcceptFn = func(context.Context, int64, int64) error {
+		return svcErr(409, "该申请已被处理")
+	}
+	c, w := createTestGinContext("/api/v1/members/transfers/batch-accept", "POST", map[string]interface{}{
+		"transfer_ids": []int64{1, 2},
+	})
+	setAuthClaimsInContext(c, 1, true, 1)
+	suite.handler.BatchAcceptTransfers(c)
+	assertBizResponse(suite.T(), w, 409, "该申请已被处理")
+}
+
+func (suite *MemberLifecycleHandlerTestSuite) TestBatchRejectTransfers_Success() {
+	c, w := createTestGinContext("/api/v1/members/transfers/batch-reject", "POST", map[string]interface{}{
+		"transfer_ids": []int64{1, 2}, "reason": "Batch cleanup",
+	})
+	setAuthClaimsInContext(c, 1, true, 1)
+	suite.handler.BatchRejectTransfers(c)
+	assertBizResponse(suite.T(), w, 0, "已拒绝 2 项")
+}
+
+func (suite *MemberLifecycleHandlerTestSuite) TestBatchRejectTransfers_InvalidRequest() {
+	c, w := createTestGinContext("/api/v1/members/transfers/batch-reject", "POST", map[string]interface{}{
+		"transfer_ids": []int64{},
+	})
+	setAuthClaimsInContext(c, 1, true, 1)
+	suite.handler.BatchRejectTransfers(c)
+	assertBizResponse(suite.T(), w, 400, "")
+}
+
+// ============================================================================
+// Get User By Email Tests
+// ============================================================================
+
+func (suite *MemberLifecycleHandlerTestSuite) TestGetUserByEmail_Success() {
+	suite.mockSvc.getUserByEmailFn = func(_ context.Context, _ int64, email string) (*service.UserLookupResult, error) {
+		return &service.UserLookupResult{
+			UserID: 10, Email: email, Nickname: "User10",
+			Memberships: []service.UserOrgInfo{{OrganizationID: 100, OrgName: "Org A"}},
+		}, nil
+	}
+	c, w := createTestGinContext("/api/v1/members/users/by-email?email=user10@example.com", "GET", nil)
+	setAuthClaimsInContext(c, 1, true, 1)
+	suite.handler.GetUserByEmail(c)
+	assertBizResponse(suite.T(), w, 0, "")
+}
+
+func (suite *MemberLifecycleHandlerTestSuite) TestGetUserByEmail_MissingEmail() {
+	c, w := createTestGinContext("/api/v1/members/users/by-email", "GET", nil)
+	setAuthClaimsInContext(c, 1, true, 1)
+	suite.handler.GetUserByEmail(c)
+	assertBizResponse(suite.T(), w, 400, "请输入邮箱")
+}
+
+func (suite *MemberLifecycleHandlerTestSuite) TestGetUserByEmail_NotFound() {
+	suite.mockSvc.getUserByEmailFn = func(context.Context, int64, string) (*service.UserLookupResult, error) {
+		return nil, svcErr(404, "该邮箱未注册")
+	}
+	c, w := createTestGinContext("/api/v1/members/users/by-email?email=nobody@example.com", "GET", nil)
+	setAuthClaimsInContext(c, 1, true, 1)
+	suite.handler.GetUserByEmail(c)
+	assertBizResponse(suite.T(), w, 404, "")
+}
+
+func (suite *MemberLifecycleHandlerTestSuite) TestGetUserByEmail_Forbidden() {
+	suite.mockSvc.getUserByEmailFn = func(context.Context, int64, string) (*service.UserLookupResult, error) {
+		return nil, svcErr(403, "无权查询用户信息")
+	}
+	c, w := createTestGinContext("/api/v1/members/users/by-email?email=user10@example.com", "GET", nil)
+	setAuthClaimsInContext(c, 1, true, 1)
+	suite.handler.GetUserByEmail(c)
+	assertBizResponse(suite.T(), w, 403, "")
 }
 
 // ============================================================================

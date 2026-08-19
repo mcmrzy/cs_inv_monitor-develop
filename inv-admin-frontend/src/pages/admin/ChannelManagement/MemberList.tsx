@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Button, Tag, Space, Modal, Form, Input, Select, Row, Col, App, Empty, Alert,
+  Button, Tag, Space, Modal, Form, Input, Select, Row, Col, App, Empty, Alert, Descriptions,
 } from 'antd'
 import { ProTable } from '@ant-design/pro-components'
 import type { ProColumns } from '@ant-design/pro-components'
-import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, RedoOutlined } from '@ant-design/icons'
+import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, RedoOutlined, SwapOutlined, SearchOutlined } from '@ant-design/icons'
 
-import { channelApi, type OrgMember } from '@/services/channelApi'
+import { channelApi, type OrgMember, type UserLookup } from '@/services/channelApi'
 import { queryKeys } from '@/utils/queryKeys'
 import useTranslation from '@/hooks/useTranslation'
 import useTimezoneStore from '@/stores/timezoneStore'
@@ -34,6 +34,11 @@ const MemberList: React.FC<Props> = ({ selectedOrgId }) => {
   const [editingMember, setEditingMember] = useState<OrgMember | null>(null)
   const [addForm] = Form.useForm()
   const [editForm] = Form.useForm()
+  // Add-member flow: email lookup → user info → single-identity checks
+  const [lookupResult, setLookupResult] = useState<UserLookup | null>(null)
+  const [transferOpen, setTransferOpen] = useState(false)
+  const [transferringMember, setTransferringMember] = useState<OrgMember | null>(null)
+  const [transferForm] = Form.useForm()
 
   const { data: listRes, isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.channels.members(selectedOrgId ?? 0, { page, pageSize }),
@@ -51,10 +56,60 @@ const MemberList: React.FC<Props> = ({ selectedOrgId }) => {
   }
 
   const addMutation = useMutation({
-    mutationFn: (values: any) => channelApi.addMember({ ...values, organization_id: selectedOrgId! }),
-    onSuccess: () => { message.success(t('channel.member.addSuccess')); setAddOpen(false); addForm.resetFields(); invalidate() },
-    onError: (err: any) => message.error(err?.response?.data?.message || t('admin.operationFailed')),
+    mutationFn: (userId: number) =>
+      channelApi.addMember({ organization_id: selectedOrgId!, user_id: userId }),
+    onSuccess: () => {
+      message.success(t('channel.member.addSuccess'))
+      setAddOpen(false)
+      addForm.resetFields()
+      setLookupResult(null)
+      invalidate()
+    },
+    onError: (err: any) => message.error(err?.response?.data?.message || err?.message || t('admin.operationFailed')),
   })
+
+  // Email lookup: backend enforces org-admin permission; 404 means not registered
+  const lookupMutation = useMutation({
+    mutationFn: (email: string) =>
+      channelApi.getUserByEmail(email).then((r) => r.data?.data as UserLookup),
+    onSuccess: (user) => setLookupResult(user ?? null),
+    onError: (err: any) => {
+      setLookupResult(null)
+      message.error(err?.response?.data?.message || err?.message || t('admin.operationFailed'))
+    },
+  })
+
+  // Target-org options for the transfer modal (flat list, current org excluded)
+  const { data: orgOptions } = useQuery({
+    queryKey: queryKeys.channels.organizations(),
+    queryFn: () => channelApi.getOrganizations().then((r) => (r.data?.data ?? []) as { id: number; name: string }[]),
+    enabled: transferOpen,
+  })
+
+  const transferMutation = useMutation({
+    mutationFn: ({ targetOrgId, reason }: { targetOrgId: number; reason?: string }) =>
+      channelApi.transferMember({
+        membership_ids: [transferringMember!.id],
+        target_org_id: targetOrgId,
+        reason: reason || undefined,
+      }),
+    onSuccess: () => {
+      message.success(t('channel.member.transferSubmitted'))
+      setTransferOpen(false)
+      setTransferringMember(null)
+      transferForm.resetFields()
+      invalidate()
+    },
+    onError: (err: any) => message.error(err?.response?.data?.message || err?.message || t('admin.operationFailed')),
+  })
+
+  // Single-identity checks for the looked-up user:
+  // - already a member of the current org → block with warning
+  // - belongs to another org → block, suggest removal or transfer approval
+  // - no org at all → allowed to add directly
+  const isAlreadyMember = !!lookupResult?.memberships?.some((m) => m.organization_id === selectedOrgId)
+  const otherOrgs = (lookupResult?.memberships ?? []).filter((m) => m.organization_id !== selectedOrgId)
+  const canAdd = !!lookupResult && !isAlreadyMember && otherOrgs.length === 0
 
   const removeMutation = useMutation({
     mutationFn: (membershipId: number) => channelApi.removeMember(membershipId),
@@ -107,7 +162,7 @@ const MemberList: React.FC<Props> = ({ selectedOrgId }) => {
       render: (_, record: OrgMember) => record.joined_at ? formatInTimezone(record.joined_at, timezone, 'YYYY-MM-DD HH:mm') : '-',
     },
     {
-      title: t('common.actions'), key: 'actions', width: 240,
+      title: t('common.actions'), key: 'actions', width: 280,
       render: (_: unknown, record: OrgMember) => (
         <Space size={[4, 4]} wrap>
           <Button
@@ -122,6 +177,20 @@ const MemberList: React.FC<Props> = ({ selectedOrgId }) => {
           >
             {t('channel.member.edit')}
           </Button>
+          {record.status === 'active' && (
+            <Button
+              size="small"
+              type="link"
+              icon={<SwapOutlined />}
+              onClick={() => {
+                setTransferringMember(record)
+                transferForm.resetFields()
+                setTransferOpen(true)
+              }}
+            >
+              {t('channel.member.transfer')}
+            </Button>
+          )}
           {record.status === 'inactive' && (
             <Popconfirm
               title={t('channel.member.reactivate') + '?'}
@@ -161,7 +230,7 @@ const MemberList: React.FC<Props> = ({ selectedOrgId }) => {
       {error && <QueryErrorAlert error={error} onRetry={() => { void refetch() }} style={{ marginBottom: 16 }} />}
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
         <Col>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => { addForm.resetFields(); setAddOpen(true) }}>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => { addForm.resetFields(); setLookupResult(null); setAddOpen(true) }}>
             {t('channel.member.add')}
           </Button>
         </Col>
@@ -189,21 +258,126 @@ const MemberList: React.FC<Props> = ({ selectedOrgId }) => {
         }}
       />
 
-      {/* Add Member Modal */}
+      {/* Add Member Modal (email lookup → single-identity check → add) */}
       <Modal
         title={t('channel.member.add')}
         open={addOpen}
-        onOk={async () => { try { addMutation.mutate(await addForm.validateFields()) } catch {} }}
-        onCancel={() => { setAddOpen(false); addForm.resetFields() }}
+        onOk={() => { if (lookupResult) addMutation.mutate(lookupResult.user_id) }}
+        onCancel={() => { setAddOpen(false); addForm.resetFields(); setLookupResult(null) }}
+        okButtonProps={{ disabled: !canAdd }}
+        okText={t('common.confirm')}
         confirmLoading={addMutation.isPending}
         destroyOnHidden
       >
+        <Alert type="info" showIcon message={t('channel.member.addHint')} style={{ marginBottom: 16 }} />
         <Form form={addForm} layout="vertical" preserve={false}>
-          <Form.Item name="email" label={t('channel.member.email')} rules={[{ required: true, type: 'email' }]}>
-            <Input placeholder="user@example.com" />
+          <Form.Item noStyle>
+            <Space.Compact style={{ width: '100%', marginBottom: 16 }}>
+              <Form.Item
+                name="email"
+                noStyle
+                rules={[{ required: true, type: 'email', message: t('channel.invite.emailRequired') }]}
+                style={{ flex: 1 }}
+              >
+                <Input
+                  placeholder="user@example.com"
+                  onChange={() => setLookupResult(null)}
+                  onPressEnter={() => {
+                    addForm.validateFields().then((v) => lookupMutation.mutate(v.email)).catch(() => {})
+                  }}
+                />
+              </Form.Item>
+              <Button
+                icon={<SearchOutlined />}
+                loading={lookupMutation.isPending}
+                onClick={() => {
+                  addForm.validateFields().then((v) => lookupMutation.mutate(v.email)).catch(() => {})
+                }}
+              >
+                {t('channel.member.lookup')}
+              </Button>
+            </Space.Compact>
           </Form.Item>
-          <Form.Item name="role" label={t('channel.member.role')} rules={[{ required: true }]}>
-            <Select options={MEMBER_ROLES.map((r) => ({ label: roleLabel(r, t), value: r }))} />
+        </Form>
+        {lookupResult && (
+          <>
+            <Descriptions
+              size="small"
+              bordered
+              column={1}
+              style={{ marginBottom: 16 }}
+              items={[
+                { key: 'nickname', label: t('channel.member.nickname'), children: lookupResult.nickname || '-' },
+                { key: 'phone', label: t('channel.member.phone'), children: lookupResult.phone || '-' },
+                {
+                  key: 'orgs',
+                  label: t('channel.member.currentOrgs'),
+                  children: lookupResult.memberships?.length
+                    ? (
+                      <Space size={[4, 4]} wrap>
+                        {lookupResult.memberships.map((m) => (
+                          <Tag key={m.membership_id} color="blue">{m.org_name}</Tag>
+                        ))}
+                      </Space>
+                    )
+                    : t('channel.member.noOrgTag'),
+                },
+              ]}
+            />
+            {isAlreadyMember && (
+              <Alert type="warning" showIcon message={t('channel.member.alreadyMember')} />
+            )}
+            {!isAlreadyMember && otherOrgs.length > 0 && (
+              <Alert
+                type="error"
+                showIcon
+                message={t('channel.member.belongsToOtherOrg', {
+                  orgs: otherOrgs.map((m) => m.org_name).join('、'),
+                })}
+              />
+            )}
+            {!isAlreadyMember && otherOrgs.length === 0 && (
+              <Alert type="success" showIcon message={t('channel.member.noOrg')} />
+            )}
+          </>
+        )}
+      </Modal>
+
+      {/* Transfer Member Modal (approval-based) */}
+      <Modal
+        title={t('channel.member.transferTitle')}
+        open={transferOpen}
+        onOk={async () => {
+          try {
+            const values = await transferForm.validateFields()
+            transferMutation.mutate({ targetOrgId: values.target_org_id, reason: values.reason })
+          } catch {}
+        }}
+        onCancel={() => { setTransferOpen(false); setTransferringMember(null); transferForm.resetFields() }}
+        confirmLoading={transferMutation.isPending}
+        destroyOnHidden
+      >
+        <div style={{ marginBottom: 16 }}>
+          <strong>{transferringMember?.email}</strong>
+          <div style={{ color: '#999', marginTop: 4 }}>{t('channel.member.transferHint')}</div>
+        </div>
+        <Form form={transferForm} layout="vertical" preserve={false}>
+          <Form.Item
+            name="target_org_id"
+            label={t('channel.member.transferTargetOrg')}
+            rules={[{ required: true, message: t('channel.member.transferTargetOrgPlaceholder') }]}
+          >
+            <Select
+              showSearch
+              optionFilterProp="label"
+              placeholder={t('channel.member.transferTargetOrgPlaceholder')}
+              options={(orgOptions ?? [])
+                .filter((o) => o.id !== selectedOrgId)
+                .map((o) => ({ label: o.name, value: o.id }))}
+            />
+          </Form.Item>
+          <Form.Item name="reason" label={t('channel.member.transferReason')}>
+            <Input.TextArea rows={3} placeholder={t('channel.member.transferReasonPlaceholder')} />
           </Form.Item>
         </Form>
       </Modal>

@@ -209,6 +209,24 @@ const ROLE_CODE_TABS = [
   { key: 'customer', label: 'admin.role.customer' },
 ]
 
+// ── 身份模型（与后端 orgTypeIdentityRoles 一致）：成员身份 = 组织类型 ──
+// 代理商组织只承载 agent 身份，经销商组织只承载 distributor 身份……
+// manufacturer（根）组织成员身份为 org_admin；
+// org_admin 是唯一可叠加的管理角色，可叠加于任意组织。
+const ORG_TYPE_BASE_IDENTITY: Record<string, string> = {
+  manufacturer: 'org_admin',
+  agent: 'agent',
+  distributor: 'distributor',
+  installer: 'installer',
+  customer: 'customer',
+}
+
+// 某组织类型下可配置权限的角色：基础身份 + 可叠加的 org_admin
+const roleCodesForOrgType = (type: string): string[] => {
+  const base = ORG_TYPE_BASE_IDENTITY[type] ?? type
+  return base === 'org_admin' ? ['org_admin'] : [base, 'org_admin']
+}
+
 const PermissionTab: React.FC = () => {
   const { t } = useTranslation()
   const { message } = App.useApp()
@@ -237,6 +255,11 @@ const PermissionTab: React.FC = () => {
     }
   }
   if (orgs) collectOrgs(orgs)
+
+  // 当前所选组织类型 → 可配置的角色列表（身份 = 组织类型，org_admin 可叠加）
+  const selectedOrgType = flatOrgs.find((o) => o.id === selectedOrgId)?.type ?? ''
+  const availableRoleCodes = roleCodesForOrgType(selectedOrgType)
+  const roleOptions = ROLE_CODE_TABS.filter((r) => availableRoleCodes.includes(r.key))
 
   // Load permission grants for selected org + role_code
   const { isLoading, error, refetch } = useQuery({
@@ -318,7 +341,16 @@ const PermissionTab: React.FC = () => {
                 placeholder={t('admin.selectOrganization')}
                 style={{ width: 240 }}
                 value={selectedOrgId ?? undefined}
-                onChange={(val) => { setSelectedOrgId(val) }}
+                onChange={(val) => {
+                  setSelectedOrgId(val)
+                  // 切换组织后校正角色：身份 = 组织类型，
+                  // 若当前角色不属于新组织的可配置角色则回退到基础身份
+                  const nextType = flatOrgs.find((o) => o.id === val)?.type ?? ''
+                  const allowed = roleCodesForOrgType(nextType)
+                  if (!allowed.includes(selectedRoleCode)) {
+                    setSelectedRoleCode(allowed[0])
+                  }
+                }}
                 options={flatOrgs.map((o) => ({ label: `${o.name} (${t(`channel.org.type.${o.type}`)})`, value: o.id }))}
                 showSearch
                 optionFilterProp="label"
@@ -327,7 +359,7 @@ const PermissionTab: React.FC = () => {
               <Select value={selectedRoleCode} virtual={false} onChange={(val) => {
                 if (hasChanged()) Modal.confirm({ title: t('admin.unsavedChanges'), content: t('admin.unsavedHint'), onOk: () => setSelectedRoleCode(val) })
                 else setSelectedRoleCode(val)
-              }} style={{ width: 180 }} options={ROLE_CODE_TABS.map((r) => ({ label: t(r.label), value: r.key }))} />
+              }} style={{ width: 180 }} options={roleOptions.map((r) => ({ label: t(r.label), value: r.key }))} />
             </Space>
           </Col>
           <Col><Button type="primary" onClick={handleSave} loading={saving} disabled={!selectedOrgId || !hasChanged()}>{t('admin.savePermissions')}</Button></Col>

@@ -118,7 +118,58 @@ describe('channelApi', () => {
           return HttpResponse.json({ code: 0, data: { id: 3, ...body } })
         }),
       )
-      const res = await channelApi.addMember({ organization_id: 1, email: 'new@test.com', role: 'member' })
+      const res = await channelApi.addMember({ organization_id: 1, user_id: 3, membership_type: 'member' })
+      expect(res.data.code).toBe(0)
+    })
+
+    it('addMember should send user_id (not email/role)', async () => {
+      let requestBody: any = null
+      server.use(
+        http.post('/api/v1/members/add', async ({ request }) => {
+          requestBody = await request.json()
+          return HttpResponse.json({ code: 0, data: { organization_id: 1, user_id: 3 } })
+        }),
+      )
+      await channelApi.addMember({ organization_id: 1, user_id: 3 })
+      expect(requestBody).toEqual({ organization_id: 1, user_id: 3 })
+      expect(requestBody).not.toHaveProperty('email')
+      expect(requestBody).not.toHaveProperty('role')
+    })
+
+    it('getUserByEmail should call GET /members/users/by-email with email param', async () => {
+      let requestQuery = ''
+      server.use(
+        http.get('/api/v1/members/users/by-email', ({ request }) => {
+          requestQuery = new URL(request.url).searchParams.get('email') ?? ''
+          return HttpResponse.json({
+            code: 0,
+            data: {
+              user_id: 10,
+              email: 'user@test.com',
+              nickname: 'User',
+              phone: '',
+              is_system_admin: false,
+              memberships: [{ membership_id: 1, organization_id: 2, org_name: 'Other Org', org_type: 'installer', joined_at: '2026-01-01T00:00:00Z' }],
+            },
+          })
+        }),
+      )
+      const res = await channelApi.getUserByEmail('user@test.com')
+      expect(requestQuery).toBe('user@test.com')
+      expect(res.data.code).toBe(0)
+      expect(res.data.data.memberships).toHaveLength(1)
+    })
+
+    it('transferMember should call POST /members/transfer/initiate', async () => {
+      let requestBody: any = null
+      server.use(
+        http.post('/api/v1/members/transfer/initiate', async ({ request }) => {
+          requestBody = await request.json()
+          return HttpResponse.json({ code: 0, data: { message: 'pending approval', pending_count: 1 } })
+        }),
+      )
+      const res = await channelApi.transferMember({ membership_ids: [5], target_org_id: 2, reason: 'reorg' })
+      expect(requestBody).toEqual({ membership_ids: [5], target_org_id: 2, reason: 'reorg' })
       expect(res.data.code).toBe(0)
     })
 
@@ -280,6 +331,32 @@ describe('channelApi', () => {
         }),
       )
       const res = await channelApi.rejectTransfer(1, 'Not authorized')
+      expect(res.data.code).toBe(0)
+    })
+
+    it('batchApproveTransfers should call POST /members/transfers/batch-accept', async () => {
+      let requestBody: any = null
+      server.use(
+        http.post('/api/v1/members/transfers/batch-accept', async ({ request }) => {
+          requestBody = await request.json()
+          return HttpResponse.json({ code: 0, data: { processed: 2, failures: [] } })
+        }),
+      )
+      const res = await channelApi.batchApproveTransfers([1, 2])
+      expect(requestBody).toEqual({ transfer_ids: [1, 2] })
+      expect(res.data.code).toBe(0)
+    })
+
+    it('batchRejectTransfers should call POST /members/transfers/batch-reject', async () => {
+      let requestBody: any = null
+      server.use(
+        http.post('/api/v1/members/transfers/batch-reject', async ({ request }) => {
+          requestBody = await request.json()
+          return HttpResponse.json({ code: 0, data: { processed: 1, failures: [] } })
+        }),
+      )
+      const res = await channelApi.batchRejectTransfers([1], 'cleanup')
+      expect(requestBody).toEqual({ transfer_ids: [1], reason: 'cleanup' })
       expect(res.data.code).toBe(0)
     })
   })

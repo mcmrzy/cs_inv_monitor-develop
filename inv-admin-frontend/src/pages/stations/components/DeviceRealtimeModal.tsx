@@ -7,7 +7,9 @@ import {
   BarChartOutlined,
 } from '@ant-design/icons'
 import { deviceApi } from '@/services/deviceApi'
+import { modelApi, type ModelFieldCapability } from '@/services/modelApi'
 import { safeNum } from '@/utils/format'
+import { humanizeFieldKey } from '@/utils/fieldI18n'
 import useTranslation from '@/hooks/useTranslation'
 
 const { Text } = Typography
@@ -36,32 +38,19 @@ interface FieldDef {
   precision?: number
 }
 
+// 分组顺序与标题（型号字段能力缺失 / 无型号时的兜底分组标题）
+const GROUP_TITLES: Record<string, string> = {
+  pv: 'station.pvParams',
+  bat: 'station.batteryParams',
+  ac: 'station.acParams',
+  sys: 'station.systemStatus',
+  eng: 'station.energyStats',
+  chr: 'station.chargerParams',
+}
+const GROUP_ORDER = ['pv', 'bat', 'ac', 'sys', 'eng', 'chr', 'other']
+
+// 兜底：写死的精选分组（设备未注册型号字段能力时使用）
 const getGroupFields = (t: (key: string) => string): Record<string, { label: string; aliases: string[]; fields: FieldDef[] }> => ({
-  ac: {
-    label: t('station.acParams'),
-    aliases: ['ac', 'AC', 'ac_phase'],
-    fields: [
-      { key: 'voltage', label: t('station.voltage'), unit: 'V', precision: 1 },
-      { key: 'current', label: t('station.current'), unit: 'A', precision: 2 },
-      { key: 'power', label: t('station.power'), unit: 'W', precision: 0 },
-      { key: 'frequency', label: t('station.frequency'), unit: 'Hz', precision: 2 },
-      { key: 'load_percent', label: t('station.loadRate'), unit: '%', precision: 1 },
-      { key: 'power_factor', label: t('station.powerFactor'), precision: 3 },
-    ],
-  },
-  batt: {
-    label: t('station.batteryParams'),
-    aliases: ['batt', 'battery', 'bat', 'BAT'],
-    fields: [
-      { key: 'soc', label: 'SOC', unit: '%', precision: 1 },
-      { key: 'voltage', label: t('station.voltage'), unit: 'V', precision: 2 },
-      { key: 'current', label: t('station.current'), unit: 'A', precision: 2 },
-      { key: 'power', label: t('station.power'), unit: 'W', precision: 0 },
-      { key: 'temperature', label: t('station.temperature'), unit: '°C', precision: 1 },
-      { key: 'cycle_count', label: t('station.cycleCount'), precision: 0 },
-      { key: 'capacity', label: t('station.capacity'), unit: '%', precision: 1 },
-    ],
-  },
   pv: {
     label: t('station.pvParams'),
     aliases: ['pv', 'PV', 'solar'],
@@ -73,6 +62,36 @@ const getGroupFields = (t: (key: string) => string): Record<string, { label: str
       { key: 'pv_total_power', label: t('station.pvTotalPower'), unit: 'W', precision: 0 },
     ],
   },
+  bat: {
+    label: t('station.batteryParams'),
+    aliases: ['batt', 'battery', 'bat'],
+    fields: [
+      { key: 'soc', label: 'SOC', unit: '%', precision: 1 },
+      { key: 'battery_soc', label: 'SOC', unit: '%', precision: 1 },
+      { key: 'voltage', label: t('station.voltage'), unit: 'V', precision: 2 },
+      { key: 'battery_voltage', label: t('station.voltage'), unit: 'V', precision: 2 },
+      { key: 'current', label: t('station.current'), unit: 'A', precision: 2 },
+      { key: 'battery_current', label: t('station.current'), unit: 'A', precision: 2 },
+      { key: 'power', label: t('station.power'), unit: 'W', precision: 0 },
+      { key: 'battery_power', label: t('station.power'), unit: 'W', precision: 0 },
+      { key: 'temperature', label: t('station.temperature'), unit: '°C', precision: 1 },
+      { key: 'temp_battery', label: t('station.temperature'), unit: '°C', precision: 1 },
+      { key: 'cycle_count', label: t('station.cycleCount'), precision: 0 },
+    ],
+  },
+  ac: {
+    label: t('station.acParams'),
+    aliases: ['ac', 'AC', 'ac_phase'],
+    fields: [
+      { key: 'voltage', label: t('station.voltage'), unit: 'V', precision: 1 },
+      { key: 'current', label: t('station.current'), unit: 'A', precision: 2 },
+      { key: 'power', label: t('station.power'), unit: 'W', precision: 0 },
+      { key: 'frequency', label: t('station.frequency'), unit: 'Hz', precision: 2 },
+      { key: 'load_percent', label: t('station.loadRate'), unit: '%', precision: 1 },
+      { key: 'pf', label: t('station.powerFactor'), precision: 3 },
+      { key: 'power_factor', label: t('station.powerFactor'), precision: 3 },
+    ],
+  },
   sys: {
     label: t('station.systemStatus'),
     aliases: ['sys', 'system', 'SYS', 'inverter'],
@@ -82,35 +101,38 @@ const getGroupFields = (t: (key: string) => string): Record<string, { label: str
       { key: 'run_status', label: t('station.field_run_status') },
       { key: 'fault_code', label: t('station.faultCode') },
       { key: 'total_run_time', label: t('station.totalRunTime'), unit: 'h', precision: 0 },
+      { key: 'runtime_hours', label: t('station.runtimeHours'), unit: 'h', precision: 0 },
     ],
   },
 })
 
-const getNestedValue = (data: any, category: string, field: string): any => {
-  if (!data) return undefined
-  const cat = data[category]
-  if (cat?.data?.[field] !== undefined) return cat.data[field]
-  if (cat?.[field] !== undefined) return cat[field]
-  if (data[field] !== undefined) return data[field]
-  return undefined
+// 从 field-capabilities 响应中解包数组
+function unwrapCaps(res: any): ModelFieldCapability[] {
+  const d = res?.data?.data ?? res?.data
+  return Array.isArray(d) ? d : (d?.items ?? [])
 }
 
-const findGroupData = (data: any, aliases: string[]): Record<string, any> | null => {
-  if (!data) return null
+const BITMASK_FIELDS = new Set(['sys_status', 'warning', 'bms_warning'])
+
+// 从信封中解析字段值：优先展平键，其次按分组别名取嵌套
+function resolveValue(rt: any, fieldKey: string, aliases: string[]): any {
+  if (rt == null) return undefined
+  if (rt[fieldKey] !== undefined && rt[fieldKey] !== null) return rt[fieldKey]
   for (const alias of aliases) {
-    const cat = data[alias]
-    if (cat) {
-      if (cat.data && typeof cat.data === 'object') return cat.data
-      if (typeof cat === 'object' && !Array.isArray(cat)) return cat
+    const cat = rt[alias]
+    if (cat && typeof cat === 'object' && !Array.isArray(cat)) {
+      if (cat.data?.[fieldKey] !== undefined) return cat.data[fieldKey]
+      if (cat[fieldKey] !== undefined) return cat[fieldKey]
     }
   }
-  return null
+  return undefined
 }
 
 const DeviceRealtimeModal: React.FC<DeviceRealtimeModalProps> = ({ open, deviceSn, onClose }) => {
   const { t } = useTranslation()
   const GROUP_FIELDS = useMemo(() => getGroupFields(t), [t])
 
+  // 实时数据
   const { data: rtData, isLoading } = useQuery({
     queryKey: ['device-realtime-modal', deviceSn],
     queryFn: () => deviceApi.getRealtime(deviceSn!).then(res => {
@@ -121,28 +143,94 @@ const DeviceRealtimeModal: React.FC<DeviceRealtimeModalProps> = ({ open, deviceS
     refetchInterval: open ? 10000 : false,
   })
 
-  const groupedDisplay = useMemo(() => {
+  // 设备详情 → 型号字段能力表（动态、按型号）
+  const { data: fieldCaps } = useQuery({
+    queryKey: ['device-realtime-modal-caps', deviceSn],
+    queryFn: async () => {
+      const detailRes = await deviceApi.getDeviceBySn(deviceSn!)
+      const detail = detailRes.data?.data ?? null
+      const modelId = detail?.model_id ?? (detail?.device && detail.device.model_id)
+      if (!modelId) return null
+      return modelApi.getFieldCapabilities(modelId).then(unwrapCaps)
+    },
+    enabled: !!deviceSn && open,
+    staleTime: 60_000,
+  })
+
+  // 兜底分组（写死精选）仅用于字段能力缺失时
+  const dynamicGroups = useMemo(() => {
+    if (!rtData || !fieldCaps || fieldCaps.length === 0) return null
+    const caps = fieldCaps.filter((f) => f.show_realtime && f.is_supported !== false && f.is_visible !== false)
+    if (caps.length === 0) return null
+
+    const byGroup = new Map<string, ModelFieldCapability[]>()
+    for (const c of caps) {
+      const g = c.group_code || 'other'
+      if (!byGroup.has(g)) byGroup.set(g, [])
+      byGroup.get(g)!.push(c)
+    }
+    const order = ['pv', 'bat', 'ac', 'sys', 'eng', 'chr', 'system', 'battery', 'energy', 'diag']
+    const groups: { code: string; fields: { cap: ModelFieldCapability; label: string; value: any }[] }[] = []
+    for (const [code, list] of [...byGroup.entries()].sort((a, b) => {
+      const ia = order.indexOf(a[0])
+      const ib = order.indexOf(b[0])
+      return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib)
+    })) {
+      const sorted = [...list].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+      const aliases = [code, code === 'sys' ? 'system' : '', code === 'bat' ? 'battery' : ''].filter(Boolean)
+      const fields = sorted
+        .map((cap) => {
+          const labelKey = cap.display_name_key || `fields.${cap.field_key}`
+          const label = t(labelKey) !== labelKey ? t(labelKey) : humanizeFieldKey(cap.field_key)
+          return {
+            cap,
+            label,
+            value: resolveValue(rtData, cap.field_key, aliases),
+          }
+        })
+        .filter((f) => f.value !== undefined && f.value !== null && f.value !== '')
+      if (fields.length > 0) groups.push({ code, fields })
+    }
+    return groups
+  }, [rtData, fieldCaps, t])
+
+  // 兜底渲染（写死分组）
+  const fallbackDisplay = useMemo(() => {
     if (!rtData) return []
     const result: { groupKey: string; label: string; fields: { def: FieldDef; value: any }[] }[] = []
-
     for (const [groupKey, groupDef] of Object.entries(GROUP_FIELDS) as [string, { label: string; aliases: string[]; fields: FieldDef[] }][]) {
-      const groupData = findGroupData(rtData, groupDef.aliases)
+      const aliases = groupKey === 'pv' ? ['pv', 'PV', 'solar']
+        : groupKey === 'bat' ? ['batt', 'battery', 'bat']
+        : groupKey === 'ac' ? ['ac', 'AC', 'ac_phase']
+        : ['sys', 'system', 'SYS', 'inverter']
       const fieldValues = groupDef.fields
-        .map(def => {
-          let value = getNestedValue(rtData, groupKey, def.key)
-          if (value === undefined && groupData) {
-            value = groupData[def.key]
-          }
-          return { def, value }
-        })
-        .filter(f => f.value !== undefined && f.value !== null && f.value !== '')
-
-      if (fieldValues.length > 0) {
-        result.push({ groupKey, label: groupDef.label, fields: fieldValues })
-      }
+        .map((def) => ({ def, value: resolveValue(rtData, def.key, aliases) }))
+        .filter((f) => f.value !== undefined && f.value !== null && f.value !== '')
+      if (fieldValues.length > 0) result.push({ groupKey, label: groupDef.label, fields: fieldValues })
     }
     return result
   }, [rtData, GROUP_FIELDS])
+
+  const useDynamic = dynamicGroups != null && dynamicGroups.length > 0
+  const hasData = (useDynamic ? dynamicGroups.length : fallbackDisplay.length) > 0
+
+  const groupLabel = (code: string) => {
+    const fallback = GROUP_TITLES[code] || `group.${code}`
+    const translated = t(fallback)
+    return translated !== fallback ? translated : code
+  }
+
+  const formatNumber = (cap: ModelFieldCapability, raw: any): string => {
+    const numVal = Number(raw)
+    if (Number.isNaN(numVal)) return String(raw)
+    if (BITMASK_FIELDS.has(cap.field_key) || cap.field_type === 'bitmask') {
+      return `0x${numVal.toString(16).toUpperCase()}`
+    }
+    const decimals = cap.decimal_places ?? (Number.isInteger(numVal) ? 0 : 2)
+    return numVal.toFixed(decimals)
+  }
+
+  const unitOf = (cap: ModelFieldCapability) => cap.display_unit || cap.base_unit || undefined
 
   return (
     <Modal
@@ -155,36 +243,51 @@ const DeviceRealtimeModal: React.FC<DeviceRealtimeModalProps> = ({ open, deviceS
       open={open}
       onCancel={onClose}
       footer={null}
-      width={720}
+      width={960}
       destroyOnHidden
     >
       <Spin spinning={isLoading}>
-        {groupedDisplay.length === 0 && !isLoading ? (
+        {!hasData && !isLoading ? (
           <Empty description={t('station.noRealtimeData')} style={{ padding: '24px 0' }} />
         ) : (
           <Row gutter={[16, 16]}>
-            {groupedDisplay.map((group, groupIdx) => {
+            {(useDynamic ? dynamicGroups : fallbackDisplay).map((group: any, groupIdx: number) => {
               const palette = GROUP_COLOR_PALETTE[groupIdx % GROUP_COLOR_PALETTE.length]
+              const label = useDynamic ? groupLabel(group.code) : (group.label as string)
+              const fields = useDynamic
+                ? group.fields
+                : (group as { fields: { def: FieldDef; value: any }[] }).fields
               return (
-                <Col xs={24} sm={12} key={group.groupKey}>
+                <Col xs={24} sm={12} lg={8} key={useDynamic ? group.code : group.groupKey}>
                   <Card
                     bordered={false}
                     size="small"
-                    title={<span style={{ color: palette.color }}>{palette.icon} {group.label}</span>}
+                    title={<span style={{ color: palette.color }}>{palette.icon} {label}</span>}
                     style={{ borderRadius: 12, background: palette.bg, height: '100%' }}
                   >
                     <Row gutter={[12, 12]}>
-                      {group.fields.map(({ def, value }) => (
-                        <Col span={Math.floor(24 / Math.min(group.fields.length, 3))} key={def.key}>
-                          <Statistic
-                            title={<Text style={{ fontSize: 12 }}>{def.label}</Text>}
-                            value={typeof value === 'number' ? value : safeNum(value) || value}
-                            precision={def.precision ?? (typeof value === 'number' ? 1 : undefined)}
-                            suffix={def.unit}
-                            valueStyle={{ color: palette.color, fontSize: 18 }}
-                          />
-                        </Col>
-                      ))}
+                      {useDynamic
+                        ? fields.map((f: { cap: ModelFieldCapability; label: string; value: any }) => (
+                            <Col span={Math.floor(24 / Math.min(fields.length, 3))} key={f.cap.field_key}>
+                              <Statistic
+                                title={<Text style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>{f.label}</Text>}
+                                value={formatNumber(f.cap, f.value)}
+                                suffix={f.value !== undefined && f.value !== null ? unitOf(f.cap) : undefined}
+                                valueStyle={{ color: palette.color, fontSize: 16 }}
+                              />
+                            </Col>
+                          ))
+                        : fields.map((f: { def: FieldDef; value: any }) => (
+                            <Col span={Math.floor(24 / Math.min(fields.length, 3))} key={f.def.key}>
+                              <Statistic
+                                title={<Text style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>{f.def.label}</Text>}
+                                value={typeof f.value === 'number' ? f.value : safeNum(f.value) || f.value}
+                                precision={f.def.precision ?? (typeof f.value === 'number' ? 1 : undefined)}
+                                suffix={f.def.unit}
+                                valueStyle={{ color: palette.color, fontSize: 16 }}
+                              />
+                            </Col>
+                          ))}
                     </Row>
                   </Card>
                 </Col>

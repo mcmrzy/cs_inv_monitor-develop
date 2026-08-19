@@ -258,6 +258,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       phone: event.phone,
       password: event.password,
       code: event.code,
+      country: event.country,
     );
 
     await result.fold<Future<void>>(
@@ -747,6 +748,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       code: event.code,
       phone: event.phone,
       nickname: event.nickname,
+      country: event.country,
     );
 
     await result.fold<Future<void>>(

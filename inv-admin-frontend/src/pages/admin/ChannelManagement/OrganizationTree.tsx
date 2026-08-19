@@ -84,12 +84,22 @@ const OrgCardTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
   const isSystemAdmin = !!user?.isSystemAdmin
   const { data: myOrgs } = useQuery({
     queryKey: queryKeys.channels.myOrganizations(user?.id),
-    queryFn: () => channelApi.getMyOrganizations().then((r) => {
-      const d = r.data?.data
-      // 接口异常/无数据时降级为空数组，避免后续 .map 崩溃
-      return Array.isArray(d) ? d : []
-    }),
+    queryFn: async () => {
+      try {
+        const r = await channelApi.getMyOrganizations()
+        // 兼容性处理：后端可能返回 null、单对象或数组
+        const d = r.data?.data
+        if (Array.isArray(d)) return d
+        if (d && typeof d === 'object') return [d] as any[] // 单个对象转为数组
+        return []
+      } catch {
+        // 接口异常/无数据时降级为空数组，避免后续 .map 崩溃
+        return []
+      }
+    },
     enabled: !isSystemAdmin,
+    retry: false,
+    staleTime: 60_000,
   })
   const managedOrgIds = useMemo(() => {
     if (isSystemAdmin) return null

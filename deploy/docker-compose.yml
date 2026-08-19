@@ -94,7 +94,7 @@ services:
       - uploads_data:/data/uploads  # 头像上传文件持久化存储
       - ../database:/app/database:ro  # 挂载数据库迁移文件，启动时自动执行
     ports:
-      - "8081:8080"  # 固件下载专用端口，绕过Gateway避免传输卡顿
+      - "8081:8080"  # 固件下载专用端口，绕过 Gateway 避免传输卡顿
     expose:
       - "8080"
     depends_on:
@@ -104,6 +104,12 @@ services:
         condition: service_healthy
     networks:
       - inv-net
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "http://localhost:8080/health", "-O", "/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 40s  # 宽松启动时间，允许数据库连接池初始化
 
   inv-device-server:
     build:
@@ -142,6 +148,13 @@ services:
         condition: service_healthy
       inv-api-server:
         condition: service_healthy
+    healthcheck:
+      # 简化健康检查：只检查 HTTP 端口可用（MQTT 在开发环境可选）
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "http://localhost:8081/health", "-O", "/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 5  # 增加重试次数
+      start_period: 60s  # 增加启动等待时间
     networks:
       - inv-net
 
@@ -173,8 +186,8 @@ services:
         condition: service_healthy
       inv-api-server:
         condition: service_healthy
-      inv-device-server:
-        condition: service_healthy
+      # inv-device-server:  # 暂时注释：开发环境可无 MQTT
+      #   condition: service_healthy
     networks:
       - inv-net
 

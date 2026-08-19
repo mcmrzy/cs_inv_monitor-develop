@@ -121,6 +121,7 @@ export interface EnergyMetrics {
   fanSpeed: number | null
   mpptFanSpeed: number | null
   efficiency: number | null
+  runtimeHours: number | null
 }
 
 /** 从展平后的 realtime 数据提取能源指标（兼容 V1 嵌套回退与 V2 展平字段） */
@@ -186,6 +187,7 @@ export function extractEnergyMetrics(rt: Record<string, any> | null | undefined)
     fanSpeed: pick(r, 'fan_speed_percent', 'fan.inv_fan_speed', 'inv_fan_speed'),
     mpptFanSpeed: pick(r, 'fan.mppt_fan_speed', 'mppt_fan_speed'),
     efficiency: pick(r, 'efficiency'),
+    runtimeHours: pick(r, 'runtime_hours', 'energy.runtime_hours'),
   }
 }
 

@@ -17,7 +17,7 @@
 -- 用户表
 CREATE TABLE IF NOT EXISTS users (
     id BIGSERIAL PRIMARY KEY,
-    phone VARCHAR(20) NOT NULL UNIQUE,
+    phone VARCHAR(20) UNIQUE, -- 可空：支持海外用户纯邮箱注册（迁移 104）
     email VARCHAR(100),
     password_hash VARCHAR(255) NOT NULL,
     nickname VARCHAR(50),
@@ -5349,6 +5349,40 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_memberships_active_org_user
     WHERE status = 'active';
 CREATE INDEX IF NOT EXISTS idx_memberships_user_status
     ON organization_memberships(user_id, status);
+
+-- 成员转移审批表（migration 105）：成员跨组织转移改为审批制，
+-- pending 申请由目标组织 org_admin / 系统管理员审批通过后才执行转移。
+-- membership_id 不设外键：审批通过后旧 membership 会被物理删除，审批记录保留审计。
+CREATE TABLE IF NOT EXISTS member_transfer_requests (
+    id BIGSERIAL PRIMARY KEY,
+    root_tenant_id BIGINT NOT NULL,
+    membership_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    from_org_id BIGINT NOT NULL,
+    to_org_id BIGINT NOT NULL,
+    initiator_id BIGINT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'approved', 'rejected')),
+    reason TEXT,
+    reject_reason TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT fk_mtr_tenant_root
+        FOREIGN KEY (root_tenant_id) REFERENCES tenant_roots(root_tenant_id) ON DELETE RESTRICT,
+    CONSTRAINT fk_mtr_from_org_same_root
+        FOREIGN KEY (root_tenant_id, from_org_id)
+        REFERENCES organizations(root_tenant_id, id) ON DELETE RESTRICT,
+    CONSTRAINT fk_mtr_to_org_same_root
+        FOREIGN KEY (root_tenant_id, to_org_id)
+        REFERENCES organizations(root_tenant_id, id) ON DELETE RESTRICT
+);
+CREATE INDEX IF NOT EXISTS idx_mtr_status_created
+    ON member_transfer_requests(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_mtr_membership_pending
+    ON member_transfer_requests(membership_id) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_mtr_to_org
+    ON member_transfer_requests(to_org_id);
+
 -- ---------- Migration 76 同步段：076_drop_legacy_role_system.up.sql ----------
 -- 注意：本段依赖 organizations / organization_closure / organization_memberships
 -- 表，必须位于 064 组织表创建之后（squashed schema 顺序约束）。
