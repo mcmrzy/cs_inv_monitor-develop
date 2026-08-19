@@ -6,114 +6,550 @@
   <title>系统管理手册 - 辰烁光伏监控系统</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; line-height: 1.7; color: #333; background: #f7f8fa; }
-    .container { max-width: 780px; margin: 0 auto; padding: 24px 16px 60px; }
-    h1 { font-size: 22px; color: #1565C0; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #1565C0; }
-    h2 { font-size: 18px; color: #1F2937; margin: 28px 0 12px; padding-left: 10px; border-left: 4px solid #1565C0; }
-    h3 { font-size: 16px; color: #374151; margin: 20px 0 8px; }
-    p { margin: 8px 0; }
-    ol, ul { margin: 8px 0 8px 24px; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; line-height: 1.8; color: #333; background: #f7f8fa; }
+    .container { max-width: 820px; margin: 0 auto; padding: 24px 16px 80px; }
+    h1 { font-size: 24px; color: #1565C0; margin-bottom: 8px; }
+    .subtitle { color: #666; font-size: 14px; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid #1565C0; }
+    h2 { font-size: 18px; color: #1F2937; margin: 32px 0 14px; padding-left: 12px; border-left: 4px solid #1565C0; }
+    h3 { font-size: 16px; color: #374151; margin: 22px 0 10px; }
+    h4 { font-size: 14px; color: #4B5563; margin: 16px 0 8px; }
+    p { margin: 8px 0; font-size: 15px; }
+    ol, ul { margin: 8px 0 8px 24px; font-size: 15px; }
     li { margin: 6px 0; }
     .tip { background: #EFF6FF; border-left: 4px solid #1565C0; padding: 12px 16px; margin: 16px 0; border-radius: 4px; font-size: 14px; }
     .warn { background: #FEF3CD; border-left: 4px solid #F9A825; padding: 12px 16px; margin: 16px 0; border-radius: 4px; font-size: 14px; }
-    table { width: 100%; border-collapse: collapse; margin: 12px 0; }
-    th, td { border: 1px solid #E5E7EB; padding: 8px 12px; text-align: left; font-size: 14px; }
+    .danger { background: #FEE2E2; border-left: 4px solid #DC2626; padding: 12px 16px; margin: 16px 0; border-radius: 4px; font-size: 14px; }
+    .info { background: #F0FDF4; border-left: 4px solid #22C55E; padding: 12px 16px; margin: 16px 0; border-radius: 4px; font-size: 14px; }
+    .step { display: flex; gap: 12px; margin: 12px 0; }
+    .step-num { min-width: 28px; height: 28px; border-radius: 50%; background: #1565C0; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; flex-shrink: 0; }
+    .step-content { flex: 1; padding-top: 3px; font-size: 15px; }
+    table { width: 100%; border-collapse: collapse; margin: 14px 0; }
+    th, td { border: 1px solid #E5E7EB; padding: 10px 14px; text-align: left; font-size: 14px; }
     th { background: #F3F4F6; font-weight: 600; }
-    code { background: #F3F4F6; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+    code { background: #F3F4F6; padding: 2px 6px; border-radius: 4px; font-size: 13px; font-family: 'SF Mono', Consolas, monospace; }
+    .toc { background: #fff; border: 1px solid #E5E7EB; border-radius: 8px; padding: 20px 24px; margin: 20px 0; }
+    .toc h3 { margin: 0 0 12px; font-size: 16px; color: #1565C0; }
+    .toc ul { list-style: none; margin: 0; padding: 0; }
+    .toc li { margin: 6px 0; }
+    .toc a { color: #1565C0; text-decoration: none; font-size: 14px; }
+    .toc a:hover { text-decoration: underline; }
+    .section-divider { border: none; border-top: 1px dashed #D1D5DB; margin: 32px 0; }
+    .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }
+    .feature-card { background: #fff; border: 1px solid #E5E7EB; border-radius: 8px; padding: 16px; }
+    .feature-card h4 { margin: 0 0 6px; color: #1565C0; font-size: 15px; }
+    .feature-card p { margin: 0; font-size: 13px; color: #6B7280; }
+    .endpoint { background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 12px 16px; margin: 12px 0; font-family: 'SF Mono', Consolas, monospace; font-size: 13px; }
+    .method { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; margin-right: 8px; }
+    .method-get { background: #DBEAFE; color: #1D4ED8; }
+    .method-post { background: #D1FAE5; color: #065F46; }
+    .method-put { background: #FEF3C7; color: #92400E; }
+    .method-delete { background: #FEE2E2; color: #991B1B; }
+    .footer { text-align: center; color: #9CA3AF; font-size: 12px; margin-top: 48px; padding-top: 16px; border-top: 1px solid #E5E7EB; }
   </style>
 </head>
 <body>
 <div class="container">
   <h1>光伏逆变器监控系统 — 管理手册</h1>
-  <p>本文档面向系统管理员和组织管理员，介绍后台管理系统的使用方法。</p>
+  <p class="subtitle">面向系统管理员、代理商、安装商<br>管理后台技术栈：React + TypeScript + Ant Design + Vite<br>文档版本：V2.0 &nbsp;|&nbsp; 最后更新：2026年8月</p>
 
-  <h2>一、角色与权限</h2>
-  <p>系统采用 RBAC 权限模型，按组织层级划分角色：</p>
+  <div class="toc">
+    <h3>📋 目录</h3>
+    <ul>
+      <li><a href="#sec1">一、系统概述</a></li>
+      <li><a href="#sec2">二、登录与安全</a></li>
+      <li><a href="#sec3">三、角色与权限</a></li>
+      <li><a href="#sec4">四、仪表盘（Dashboard）</a></li>
+      <li><a href="#sec5">五、设备管理</a></li>
+      <li><a href="#sec6">六、电站管理</a></li>
+      <li><a href="#sec7">七、型号管理</a></li>
+      <li><a href="#sec8">八、告警管理</a></li>
+      <li><a href="#sec9">九、OTA 固件升级</a></li>
+      <li><a href="#sec10">十、远程设置与控制</a></li>
+      <li><a href="#sec11">十一、工单管理</a></li>
+      <li><a href="#sec12">十二、用户管理</a></li>
+      <li><a href="#sec13">十三、组织架构</a></li>
+      <li><a href="#sec14">十四、操作日志</a></li>
+      <li><a href="#sec15">十五、系统监控</a></li>
+      <li><a href="#sec16">十六、大屏展示</a></li>
+      <li><a href="#sec17">十七、批量操作</a></li>
+      <li><a href="#sec18">十八、数据导出</a></li>
+      <li><a href="#sec19">十九、部署与运维</a></li>
+    </ul>
+  </div>
+
+  <!-- ========== 第一章 ========== -->
+  <h2 id="sec1">一、系统概述</h2>
+  <p>辰烁光伏监控系统管理后台（inv-admin-frontend）是面向管理员和渠道商的 Web 管理平台，提供设备全生命周期管理、数据分析、远程控制和系统运维能力。</p>
+
+  <h3>1.1 系统架构</h3>
+  <div class="tip">
+    <strong>技术栈：</strong><br>
+    • <strong>前端：</strong>React 18 + TypeScript + Vite + Ant Design 5 + Zustand（状态管理）+ ECharts（图表）<br>
+    • <strong>后端 API：</strong>Go + Gin + PostgreSQL 16 + Redis 7<br>
+    • <strong>设备通信：</strong>MQTT (EMQX) + Kafka + WebSocket<br>
+    • <strong>部署：</strong>Docker Compose + Nginx 反向代理
+  </div>
+
+  <h3>1.2 功能模块总览</h3>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <h4>📊 仪表盘</h4>
+      <p>全局数据概览、实时功率曲线、告警统计、设备在线率</p>
+    </div>
+    <div class="feature-card">
+      <h4>🔌 设备管理</h4>
+      <p>设备列表、实时监控、远程控制、参数配置、批量操作</p>
+    </div>
+    <div class="feature-card">
+      <h4>🏭 电站管理</h4>
+      <p>电站列表、能量流图、发电统计、设备关联</p>
+    </div>
+    <div class="feature-card">
+      <h4>📦 型号管理</h4>
+      <p>设备型号注册、字段配置、控制命令、协议管理</p>
+    </div>
+    <div class="feature-card">
+      <h4>🔔 告警管理</h4>
+      <p>告警列表、级别筛选、批量处理、通知管理</p>
+    </div>
+    <div class="feature-card">
+      <h4>⬆️ OTA 升级</h4>
+      <p>固件管理、升级包、升级任务、看板、回退</p>
+    </div>
+    <div class="feature-card">
+      <h4>🔧 远程设置</h4>
+      <p>参数读写、设备配置、命令下发</p>
+    </div>
+    <div class="feature-card">
+      <h4>🎫 工单管理</h4>
+      <p>工单创建、分配、跟踪、关闭</p>
+    </div>
+    <div class="feature-card">
+      <h4>👥 用户管理</h4>
+      <p>用户列表、角色分配、权限管理</p>
+    </div>
+    <div class="feature-card">
+      <h4>🏢 组织架构</h4>
+      <p>代理商、安装商、终端用户层级管理</p>
+    </div>
+    <div class="feature-card">
+      <h4>📋 操作日志</h4>
+      <p>全量操作审计、告警日志、登录日志</p>
+    </div>
+    <div class="feature-card">
+      <h4>🖥️ 大屏展示</h4>
+      <p>数据大屏、实时监控、投屏展示</p>
+    </div>
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- ========== 第二章 ========== -->
+  <h2 id="sec2">二、登录与安全</h2>
+
+  <h3>2.1 登录方式</h3>
+  <p>管理后台支持以下登录方式：</p>
+  <ul>
+    <li><strong>手机号 + 验证码：</strong>通过短信验证码登录</li>
+    <li><strong>邮箱 + 密码：</strong>适用于海外用户</li>
+    <li><strong>账号 + 密码：</strong>传统登录方式</li>
+  </ul>
+
+  <h3>2.2 安全机制</h3>
   <table>
-    <tr><th>角色</th><th>级别</th><th>主要权限</th></tr>
-    <tr><td>超级管理员</td><td>系统级</td><td>全局管理，含用户、组织、固件、系统配置</td></tr>
-    <tr><td>代理商</td><td>渠道级</td><td>管理下属安装商和终端用户，查看辖区设备</td></tr>
-    <tr><td>安装商</td><td>服务商级</td><td>安装调试设备，管理终端用户</td></tr>
-    <tr><td>终端用户</td><td>业主级</td><td>查看自己的设备和电站数据</td></tr>
+    <tr><th>机制</th><th>说明</th></tr>
+    <tr><td>JWT Token</td><td>Bearer Token 认证，过期自动刷新</td></tr>
+    <tr><td>RBAC 权限</td><td>基于角色的细粒度权限控制</td></tr>
+    <tr><td>操作日志</td><td>所有操作记录不可删除，保留 90 天以上</td></tr>
+    <tr><td>会话管理</td><td>单点登录，异地登录提醒</td></tr>
+    <tr><td>密码策略</td><td>最低 8 位，含大小写字母和数字</td></tr>
+    <tr><td>验证码</td><td>图形验证码防暴力破解</td></tr>
   </table>
 
-  <h3>1.1 权限说明</h3>
+  <hr class="section-divider">
+
+  <!-- ========== 第三章 ========== -->
+  <h2 id="sec3">三、角色与权限</h2>
+  <p>系统采用 RBAC（基于角色的访问控制）权限模型，按组织层级划分角色：</p>
+
+  <h3>3.1 角色层级</h3>
+  <table>
+    <tr><th>角色</th><th>级别</th><th>数据范围</th><th>主要权限</th></tr>
+    <tr><td>超级管理员</td><td>系统级</td><td>全局数据</td><td>全部功能，含系统配置、用户管理、组织管理</td></tr>
+    <tr><td>代理商</td><td>渠道级</td><td>下属安装商和终端用户数据</td><td>管理下属组织、查看辖区设备和告警、OTA 推送</td></tr>
+    <tr><td>安装商</td><td>服务商级</td><td>管辖终端用户数据</td><td>设备安装调试、参数配置、终端用户管理</td></tr>
+    <tr><td>终端用户</td><td>业主级</td><td>仅自己的设备</td><td>查看设备数据、告警通知、基本控制</td></tr>
+  </table>
+
+  <h3>3.2 权限模块</h3>
+  <table>
+    <tr><th>权限点</th><th>说明</th><th>默认角色</th></tr>
+    <tr><td><code>device:view</code></td><td>查看设备列表和详情</td><td>全部</td></tr>
+    <tr><td><code>device:control</code></td><td>远程控制设备</td><td>安装商及以上</td></tr>
+    <tr><td><code>device:config</code></td><td>修改设备参数配置</td><td>安装商及以上</td></tr>
+    <tr><td><code>alarm:view</code></td><td>查看告警记录</td><td>全部</td></tr>
+    <tr><td><code>alarm:manage</code></td><td>确认/关闭告警</td><td>安装商及以上</td></tr>
+    <tr><td><code>ota:view</code></td><td>查看固件和升级包</td><td>全部</td></tr>
+    <tr><td><code>ota:create</code></td><td>上传固件/推送升级</td><td>安装商及以上</td></tr>
+    <tr><td><code>ota:control</code></td><td>发布/回退/重试升级</td><td>代理商及以上</td></tr>
+    <tr><td><code>user:manage</code></td><td>用户增删改查</td><td>代理商及以上</td></tr>
+    <tr><td><code>org:manage</code></td><td>组织架构管理</td><td>超级管理员</td></tr>
+    <tr><td><code>log:view</code></td><td>查看操作日志</td><td>代理商及以上</td></tr>
+    <tr><td><code>model:manage</code></td><td>设备型号管理</td><td>超级管理员</td></tr>
+  </table>
+
+  <h3>3.3 数据隔离</h3>
   <ul>
+    <li>通过 <code>parent_id</code> 实现层级关系（代理商 → 安装商 → 综端用户）</li>
     <li>上级角色可查看下级的所有数据</li>
     <li>终端用户仅可查看自己绑定的设备</li>
-    <li>权限可按功能模块（设备管理、告警、OTA、工单等）细粒度分配</li>
-    <li>组织管理员可自定义角色并分配权限</li>
+    <li>权限矩阵缓存在 Redis 中，实时生效</li>
   </ul>
 
-  <h2>二、设备管理</h2>
-  <h3>2.1 设备列表</h3>
-  <p>「设备管理」页面展示您有权限查看的所有设备，支持按状态（在线/离线/故障）、型号、电站等条件筛选。</p>
+  <hr class="section-divider">
+
+  <!-- ========== 第四章 ========== -->
+  <h2 id="sec4">四、仪表盘（Dashboard）</h2>
+  <p>仪表盘是管理后台的首页，提供全局数据概览。</p>
+
+  <h3>4.1 核心指标卡片</h3>
+  <table>
+    <tr><th>指标</th><th>说明</th></tr>
+    <tr><td>设备总数</td><td>当前管理的设备总数，按在线/离线/故障分类</td></tr>
+    <tr><td>实时总功率</td><td>所有在线设备当前发电功率之和</td></tr>
+    <tr><td>今日发电量</td><td>今日所有设备累计发电量</td></tr>
+    <tr><td>未处理告警</td><td>当前未确认/未关闭的告警数量</td></tr>
+    <tr><td>在线率</td><td>在线设备占总数的百分比</td></tr>
+    <tr><td>本月发电量</td><td>本月累计发电量</td></tr>
+  </table>
+
+  <h3>4.2 图表区域</h3>
   <ul>
-    <li>点击设备进入详情页，查看实时参数、历史数据、告警记录</li>
-    <li>支持批量操作：固件升级、参数配置、重启等</li>
-    <li>设备导出：可将设备列表导出为 Excel</li>
+    <li><strong>实时功率曲线：</strong>展示今日逐小时发电功率趋势</li>
+    <li><strong>发电量统计：</strong>日/月/年发电量柱状图</li>
+    <li><strong>告警分布：</strong>按级别和类型的告警统计饼图</li>
+    <li><strong>设备状态分布：</strong>在线/离线/故障设备占比</li>
+    <li><strong>告警时间线：</strong>最新告警事件列表</li>
   </ul>
 
-  <h3>2.2 设备型号管理</h3>
-  <p>「型号管理」页面用于管理支持的逆变器型号（如 CS-L10-3K、CS-L10-6K2 等），每种型号定义了：
-    <ul>
-      <li>芯片架构（ESP32/ARM）</li>
-      <li>支持的通信协议</li>
-      <li>额定功率范围</li>
-      <li>远程参数配置模板</li>
-    </ul>
-  </p>
-
-  <h2>三、告警管理</h2>
-  <h3>3.1 告警规则</h3>
-  <p>管理员可配置告警触发规则：</p>
+  <h3>4.3 快捷入口</h3>
   <ul>
-    <li>设备离线超时（默认 5 分钟无心跳触发）</li>
-    <li>参数超限（电压、电流、温度等超过设定阈值）</li>
-    <li>通信异常（MQTT 断连、Kafka 消费延迟）</li>
+    <li>设备管理 → 查看全部设备</li>
+    <li>告警管理 → 查看未处理告警</li>
+    <li>OTA 升级 → 查看升级任务</li>
+    <li>电站列表 → 查看所有电站</li>
   </ul>
 
-  <h3>3.2 告警处理流程</h3>
+  <hr class="section-divider">
+
+  <!-- ========== 第五章 ========== -->
+  <h2 id="sec5">五、设备管理</h2>
+  <p>「设备管理」页面是有权限查看的所有设备的中心管理入口。</p>
+
+  <h3>5.1 设备列表</h3>
+  <p>列表展示字段：</p>
+  <table>
+    <tr><th>字段</th><th>说明</th></tr>
+    <tr><td>设备名称</td><td>自定义名称，支持在线编辑</td></tr>
+    <tr><td>设备 SN</td><td>唯一序列号</td></tr>
+    <tr><td>设备型号</td><td>关联的设备型号</td></tr>
+    <tr><td>运行状态</td><td>在线 / 离线 / 故障（带颜色标签）</td></tr>
+    <tr><td>实时功率</td><td>当前发电功率</td></tr>
+    <tr><td>今日发电量</td><td>今日累计发电</td></tr>
+    <tr><td>电站</td><td>所属电站</td></tr>
+    <tr><td>绑定用户</td><td>设备绑定的用户</td></tr>
+    <tr><td>最后上线时间</td><td>最近一次心跳时间</td></tr>
+  </table>
+
+  <h3>5.2 筛选与搜索</h3>
+  <ul>
+    <li><strong>状态筛选：</strong>在线 / 离线 / 故障 / 全部</li>
+    <li><strong>型号筛选：</strong>按设备型号过滤</li>
+    <li><strong>电站筛选：</strong>按所属电站过滤</li>
+    <li><strong>关键字搜索：</strong>按设备名称或 SN 模糊搜索</li>
+    <li><strong>时间范围：</strong>按注册时间、最后上线时间筛选</li>
+  </ul>
+
+  <h3>5.3 设备详情</h3>
+  <p>点击设备进入详情页，包含：</p>
+  <ul>
+    <li><strong>实时数据：</strong>所有遥测参数实时展示，5 秒自动刷新</li>
+    <li><strong>历史数据：</strong>日/月/年发电曲线，支持 CSV 导出</li>
+    <li><strong>告警记录：</strong>该设备的告警历史</li>
+    <li><strong>操作日志：</strong>该设备的操作记录</li>
+    <li><strong>远程控制：</strong>控制命令下发面板</li>
+    <li><strong>设备信息：</strong>SN、型号、固件版本、WiFi 信息等</li>
+  </ul>
+
+  <h3>5.4 批量操作</h3>
+  <ul>
+    <li><strong>批量升级：</strong>选择多台设备推送 OTA 升级</li>
+    <li><strong>批量参数配置：</strong>统一修改多台设备的运行参数</li>
+    <li><strong>批量重启：</strong>远程重启多台设备</li>
+    <li><strong>批量导出：</strong>将设备列表导出为 Excel</li>
+    <li><strong>批量删除：</strong>批量解绑/删除设备</li>
+  </ul>
+
+  <hr class="section-divider">
+
+  <!-- ========== 第六章 ========== -->
+  <h2 id="sec6">六、电站管理</h2>
+  <p>「电站管理」页面管理光伏电站，每个电站包含一组设备。</p>
+
+  <h3>6.1 电站列表</h3>
+  <p>支持两种视图：</p>
+  <ul>
+    <li><strong>卡片视图：</strong>每个电站一张卡片，展示实时功率、今日发电、设备数、在线率</li>
+    <li><strong>列表视图：</strong>表格形式展示，支持排序和筛选</li>
+  </ul>
+
+  <h3>6.2 电站详情</h3>
+  <p>点击电站进入详情页：</p>
+  <ul>
+    <li><strong>能量流图：</strong>直观展示 光伏板 → 逆变器 → 电网/负载/电池 的能量流动方向和实时功率值</li>
+    <li><strong>设备列表：</strong>该电站下所有设备的状态和实时数据</li>
+    <li><strong>发电统计：</strong>日/月/年发电量图表</li>
+    <li><strong>告警统计：</strong>该电站的告警汇总</li>
+  </ul>
+
+  <h3>6.3 电站操作</h3>
+  <ul>
+    <li>创建/编辑/删除电站</li>
+    <li>添加/移除设备</li>
+    <li>设置电站时区（影响数据展示时间）</li>
+    <li>导出电站发电数据</li>
+  </ul>
+
+  <hr class="section-divider">
+
+  <!-- ========== 第七章 ========== -->
+  <h2 id="sec7">七、型号管理</h2>
+  <p>「型号管理」页面用于管理支持的逆变器型号，是系统的核心配置之一。</p>
+
+  <h3>7.1 型号列表</h3>
+  <table>
+    <tr><th>字段</th><th>说明</th><th>示例</th></tr>
+    <tr><td>型号编码</td><td>唯一标识</td><td><code>CS-I10-6k2</code></td></tr>
+    <tr><td>型号名称</td><td>显示名称</td><td>CS-I10-6k2 48V离网逆变器</td></tr>
+    <tr><td>制造商</td><td>厂商名称</td><td>CS</td></tr>
+    <tr><td>分类</td><td>设备类型</td><td>inverter / battery / hybrid</td></tr>
+    <tr><td>额定功率</td><td>kW</td><td>6.2</td></tr>
+  </table>
+
+  <h3>7.2 字段配置（显示参数）</h3>
+  <p>每种型号定义一组「显示字段」，决定前端展示哪些参数：</p>
+  <table>
+    <tr><th>配置项</th><th>说明</th><th>示例</th></tr>
+    <tr><td>field_key</td><td>后端标识（对应 MQTT 数据 key）</td><td><code>ac_voltage</code></td></tr>
+    <tr><td>field_name</td><td>前端显示名称</td><td>交流电压</td></tr>
+    <tr><td>field_type</td><td>数据类型</td><td>float / int / string / bool</td></tr>
+    <tr><td>unit</td><td>单位</td><td>V / A / W / kWh / %</td></tr>
+    <tr><td>sort</td><td>排序（越小越靠前）</td><td>10</td></tr>
+    <tr><td>is_show</td><td>是否在前端显示</td><td>true</td></tr>
+    <tr><td>group_name</td><td>分组名称</td><td>交流参数 / 光伏参数 / 电池参数</td></tr>
+    <tr><td>parse_rule</td><td>解析规则（数学表达式，x 为变量）</td><td><code>x/1000</code></td></tr>
+  </table>
+
+  <h3>7.3 控制命令配置</h3>
+  <p>将字段的 <code>is_control</code> 设为 <code>true</code>，该字段会出现在控制页面：</p>
+  <table>
+    <tr><th>控制类型</th><th>配置示例</th></tr>
+    <tr><td>简单开关</td><td><code>{"label": "开机", "confirm": true, "confirm_message": "确认开机？"}</code></td></tr>
+    <tr><td>数值输入</td><td><code>{"label": "功率限制", "input_type": "number", "min": 0, "max": 10000, "step": 100, "unit": "W"}</code></td></tr>
+    <tr><td>开关切换</td><td><code>{"label": "ECO模式", "input_type": "switch", "confirm": true}</code></td></tr>
+  </table>
+
+  <h3>7.4 协议管理</h3>
+  <p>配置 MQTT 数据解析规则：</p>
+  <table>
+    <tr><th>配置项</th><th>说明</th></tr>
+    <tr><td>topic_pattern</td><td>MQTT topic 模式（如 <code>data/ac</code>）</td></tr>
+    <tr><td>parse_type</td><td>解析方式：json / modbus / custom</td></tr>
+    <tr><td>parse_config</td><td>解析配置 JSON</td></tr>
+    <tr><td>is_active</td><td>是否启用</td></tr>
+  </table>
+
+  <div class="tip">
+    <strong>无代码接入：</strong>通过型号管理页面配置字段和协议，无需修改代码即可接入新型号设备。
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- ========== 第八章 ========== -->
+  <h2 id="sec8">八、告警管理</h2>
+
+  <h3>8.1 告警列表</h3>
+  <p>「告警管理」页面展示所有告警记录：</p>
+  <table>
+    <tr><th>字段</th><th>说明</th></tr>
+    <tr><td>告警设备</td><td>设备名称和 SN</td></tr>
+    <tr><td>告警类型</td><td>过压 / 欠压 / 过温 / 离线 等</td></tr>
+    <tr><td>告警级别</td><td>紧急（红）/ 警告（橙）/ 信息（蓝）</td></tr>
+    <tr><td>告警时间</td><td>首次触发时间</td></tr>
+    <tr><td>持续时长</td><td>从触发到当前的时间</td></tr>
+    <tr><td>处理状态</td><td>未处理 / 已确认 / 已关闭</td></tr>
+    <tr><td>处理人</td><td>确认/关闭告警的人员</td></tr>
+  </table>
+
+  <h3>8.2 筛选与搜索</h3>
+  <ul>
+    <li>按级别筛选：紧急 / 警告 / 信息</li>
+    <li>按状态筛选：未处理 / 已确认 / 已关闭</li>
+    <li>按设备筛选：选择特定设备</li>
+    <li>按时间范围筛选</li>
+    <li>按告警类型筛选</li>
+  </ul>
+
+  <h3>8.3 告警处理流程</h3>
+  <div class="step"><div class="step-num">1</div><div class="step-content"><strong>自动触发：</strong>系统根据规则自动生成告警记录并推送通知</div></div>
+  <div class="step"><div class="step-num">2</div><div class="step-content"><strong>确认告警：</strong>管理员确认告警，可指派处理人</div></div>
+  <div class="step"><div class="step-num">3</div><div class="step-content"><strong>处理问题：</strong>处理人解决问题后更新状态</div></div>
+  <div class="step"><div class="step-num">4</div><div class="step-content"><strong>关闭告警：</strong>告警状态变更为「已关闭」</div></div>
+
+  <h3>8.4 批量操作</h3>
+  <ul>
+    <li>批量确认：选择多条告警一键确认</li>
+    <li>批量关闭：选择多条告警一键关闭</li>
+    <li>导出告警：将告警列表导出为 Excel</li>
+  </ul>
+
+  <h3>8.5 通知管理</h3>
+  <p>「通知」标签页管理通知规则：</p>
+  <ul>
+    <li>配置通知方式（App 推送 / 短信 / 邮件）</li>
+    <li>按告警级别配置推送策略</li>
+    <li>设置通知接收人</li>
+    <li>查看通知发送记录</li>
+  </ul>
+
+  <hr class="section-divider">
+
+  <!-- ========== 第九章 ========== -->
+  <h2 id="sec9">九、OTA 固件升级</h2>
+  <p>OTA 管理是系统的核心功能之一，支持从固件上传到批量推送的完整流程。</p>
+
+  <h3>9.1 固件管理</h3>
+  <p>「固件管理」标签页管理固件文件：</p>
+  <table>
+    <tr><th>操作</th><th>说明</th></tr>
+    <tr><td>上传固件</td><td>上传 ESP32 或 ARM 芯片固件文件</td></tr>
+    <tr><td>固件信息</td><td>版本号、芯片类型、文件大小、MD5/SHA256 校验</td></tr>
+    <tr><td>发布说明</td><td>填写固件更新内容</td></tr>
+    <tr><td>版本历史</td><td>查看所有固件版本</td></tr>
+  </table>
+
+  <h3>9.2 升级包管理</h3>
+  <p>升级包将多个芯片固件打包为一个业务单元：</p>
+  <ul>
+    <li>创建升级包：选择多个芯片固件，指定升级顺序</li>
+    <li>设置目标型号</li>
+    <li>发布升级包（标记为可用）</li>
+    <li>版本格式：<code>V1.0.0.20260630</code></li>
+  </ul>
+
+  <h3>9.3 升级推送</h3>
+  <p>推送升级到目标设备：</p>
+  <div class="step"><div class="step-num">1</div><div class="step-content">选择目标固件版本或升级包</div></div>
+  <div class="step"><div class="step-num">2</div><div class="step-content">选择目标设备（单台 / 批量 / 按型号 / 按电站）</div></div>
+  <div class="step"><div class="step-num">3</div><div class="step-content">设置升级时间（立即 / 定时）</div></div>
+  <div class="step"><div class="step-num">4</div><div class="step-content">确认并推送，系统创建升级任务</div></div>
+
+  <h3>9.4 升级任务</h3>
+  <p>「升级任务」标签页管理升级任务：</p>
+  <ul>
+    <li>查看任务状态：待执行 / 执行中 / 已完成 / 已取消</li>
+    <li>查看每台设备的升级进度和结果</li>
+    <li>重试失败的设备</li>
+    <li>取消未执行的任务</li>
+  </ul>
+
+  <h3>9.5 升级看板</h3>
+  <p>「升级看板」标签页展示升级统计：</p>
+  <ul>
+    <li>升级成功率</li>
+    <li>各版本覆盖情况</li>
+    <li>升级失败原因分析</li>
+    <li>设备固件版本分布</li>
+  </ul>
+
+  <h3>9.6 回退机制</h3>
+  <ul>
+    <li><strong>单设备回退：</strong>将单台设备回退到上一版本</li>
+    <li><strong>升级包回退：</strong>回退整个升级包的所有设备</li>
+    <li><strong>回退到已发布版本：</strong>回退到最近一次正式发布的版本</li>
+  </ul>
+
+  <div class="warn">
+    <strong>升级安全：</strong><br>
+    • OTA 升级期间确保设备供电稳定<br>
+    • 升级失败时设备自动回退到上一版本<br>
+    • 所有升级记录不可删除，供审计追溯<br>
+    • 敏感操作需要 <code>ota:control</code> 权限
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- ========== 第十章 ========== -->
+  <h2 id="sec10">十、远程设置与控制</h2>
+
+  <h3>10.1 远程设置</h3>
+  <p>「远程设置」页面提供设备参数的远程读写能力：</p>
+  <ul>
+    <li><strong>参数读取：</strong>从设备读取当前配置参数</li>
+    <li><strong>参数写入：</strong>修改设备运行参数（需专业权限）</li>
+    <li><strong>参数分组：</strong>按交流参数、光伏参数、电池参数、系统参数分组</li>
+  </ul>
+
+  <h3>10.2 命令下发</h3>
+  <p>支持的控制命令：</p>
+  <table>
+    <tr><th>命令</th><th>说明</th><th>通信方式</th></tr>
+    <tr><td><code>set_control</code></td><td>设置远程控制参数（功率限制、充放电使能等）</td><td>MQTT</td></tr>
+    <tr><td><code>get_params</code></td><td>获取设备当前参数</td><td>MQTT</td></tr>
+    <tr><td><code>set_params</code></td><td>设置设备参数</td><td>MQTT</td></tr>
+    <tr><td><code>set_alarm</code></td><td>告警控制（触发/清除）</td><td>MQTT</td></tr>
+    <tr><td><code>reset</code></td><td>设备重置</td><td>MQTT</td></tr>
+  </table>
+
+  <h3>10.3 批量设置</h3>
+  <p>「批量设置」页面支持对多台设备统一配置参数：</p>
   <ol>
-    <li>系统自动生成告警记录并推送给相关人员</li>
-    <li>管理员确认告警并指派处理人</li>
-    <li>处理人记录处理结果，告警状态变更为「已处理」</li>
-    <li>支持批量确认和批量关闭</li>
-  </ol>
-
-  <h2>四、OTA 固件升级</h2>
-  <h3>4.1 固件版本管理</h3>
-  <p>在「固件管理」页面可以：</p>
-  <ul>
-    <li>上传新固件（支持 ESP32 和 ARM 双芯片）</li>
-    <li>查看固件版本历史和发布说明</li>
-    <li>管理升级包（多个芯片固件打包）</li>
-  </ul>
-
-  <h3>4.2 推送升级</h3>
-  <ol>
-    <li>选择目标固件版本</li>
-    <li>选择目标设备（单台或多台批量）</li>
-    <li>设置升级时间（立即或定时）</li>
-    <li>推送升级命令，设备收到后自动执行</li>
+    <li>选择目标设备（支持多选、按型号筛选）</li>
+    <li>选择要修改的参数</li>
+    <li>设置参数值</li>
+    <li>确认并下发</li>
   </ol>
 
   <div class="warn">
-    <strong>升级注意：</strong>OTA 升级期间请确保设备供电稳定。升级失败可能需要本地 USB 刷机恢复。
+    <strong>操作安全：</strong>所有远程控制操作均记录在操作日志中，包括操作人、时间、参数和结果。敏感参数修改需要 <code>device:config</code> 权限。
   </div>
 
-  <h2>五、工单管理</h2>
-  <p>「工单管理」用于跟踪和处理用户提交的故障工单和服务请求。</p>
-  <h3>5.1 工单流程</h3>
-  <ol>
-    <li>用户通过 App 提交工单（标题、描述、图片附件）</li>
-    <li>管理员审核工单，指派处理人</li>
-    <li>处理人解决问题后更新状态为「已解决」</li>
-    <li>用户确认后工单关闭</li>
-  </ol>
+  <hr class="section-divider">
 
-  <h3>5.2 工单模板</h3>
-  <p>系统内置常用工单模板，帮助用户快速提交：</p>
+  <!-- ========== 第十一章 ========== -->
+  <h2 id="sec11">十一、工单管理</h2>
+  <p>「工单管理」用于跟踪和处理用户提交的故障工单和服务请求。</p>
+
+  <h3>11.1 工单流程</h3>
+  <div class="step"><div class="step-num">1</div><div class="step-content"><strong>创建工单：</strong>用户通过 App 提交，或管理员在后台创建</div></div>
+  <div class="step"><div class="step-num">2</div><div class="step-content"><strong>审核分配：</strong>管理员审核工单内容，指派处理人</div></div>
+  <div class="step"><div class="step-num">3</div><div class="step-content"><strong>处理跟进：</strong>处理人解决问题，更新工单进度和备注</div></div>
+  <div class="step"><div class="step-num">4</div><div class="step-content"><strong>确认关闭：</strong>用户确认问题已解决，工单关闭</div></div>
+
+  <h3>11.2 工单字段</h3>
+  <table>
+    <tr><th>字段</th><th>说明</th></tr>
+    <tr><td>工单标题</td><td>简要描述问题</td></tr>
+    <tr><td>工单类型</td><td>设备故障 / 定期维护 / 设备巡检 / 安装调试 / 其他</td></tr>
+    <tr><td>优先级</td><td>高 / 中 / 低</td></tr>
+    <tr><td>关联设备</td><td>问题相关的设备</td></tr>
+    <tr><td>问题描述</td><td>详细描述</td></tr>
+    <tr><td>附件</td><td>照片、截图等（最多 9 张）</td></tr>
+    <tr><td>处理状态</td><td>待处理 / 处理中 / 已解决 / 已关闭</td></tr>
+    <tr><td>处理记录</td><td>处理人的操作记录和备注</td></tr>
+  </table>
+
+  <h3>11.3 工单模板</h3>
   <table>
     <tr><th>模板</th><th>描述</th><th>默认优先级</th></tr>
     <tr><td>设备故障</td><td>设备运行异常，需要检修</td><td>高</td></tr>
@@ -122,37 +558,277 @@
     <tr><td>安装调试</td><td>设备安装与参数调试</td><td>中</td></tr>
   </table>
 
-  <h2>六、组织架构</h2>
-  <p>「组织架构」管理支持树形层级结构：</p>
+  <hr class="section-divider">
+
+  <!-- ========== 第十二章 ========== -->
+  <h2 id="sec12">十二、用户管理</h2>
+  <p>「用户管理」页面管理平台用户账号。</p>
+
+  <h3>12.1 用户列表</h3>
+  <table>
+    <tr><th>字段</th><th>说明</th></tr>
+    <tr><td>用户 ID</td><td>系统唯一标识</td></tr>
+    <tr><td>手机号</td><td>登录手机号</td></tr>
+    <tr><td>邮箱</td><td>登录邮箱（海外用户）</td></tr>
+    <tr><td>昵称</td><td>显示名称</td></tr>
+    <tr><td>角色</td><td>超级管理员 / 代理商 / 安装商 / 终端用户</td></tr>
+    <tr><td>状态</td><td>正常 / 禁用</td></tr>
+    <tr><td>所属组织</td><td>关联的组织架构</td></tr>
+    <tr><td>最后登录</td><td>最近登录时间和 IP</td></tr>
+    <tr><td>注册时间</td><td>账号创建时间</td></tr>
+  </table>
+
+  <h3>12.2 用户操作</h3>
   <ul>
-    <li>创建/编辑组织（代理商、安装商、终端用户）</li>
-    <li>邀请用户加入组织（通过邀请链接或手机号）</li>
-    <li>分配组织内角色和权限</li>
-    <li>查看组织下属的设备和电站</li>
+    <li><strong>创建用户：</strong>手动创建用户账号</li>
+    <li><strong>编辑用户：</strong>修改用户信息、角色、所属组织</li>
+    <li><strong>禁用/启用：</strong>暂停或恢复用户账号</li>
+    <li><strong>重置密码：</strong>重置用户密码</li>
+    <li><strong>删除用户：</strong>软删除用户账号</li>
   </ul>
 
-  <h2>七、操作日志</h2>
-  <p>所有管理操作均记录在「操作日志」中，包括：</p>
+  <h3>12.3 角色分配</h3>
+  <p>为用户分配角色和权限：</p>
   <ul>
-    <li>用户登录/登出</li>
-    <li>设备绑定/解绑</li>
-    <li>远程控制命令</li>
-    <li>OTA 升级记录</li>
-    <li>权限变更</li>
+    <li>选择角色（超级管理员 / 代理商 / 安装商 / 终端用户）</li>
+    <li>细粒度权限分配（设备管理、告警、OTA、工单等模块）</li>
+    <li>设置数据范围（全局 / 本组织及下级 / 仅自己的）</li>
   </ul>
 
-  <div class="tip">
-    <strong>安全审计：</strong>操作日志不可删除，保留 90 天以上。建议定期导出备份。
+  <hr class="section-divider">
+
+  <!-- ========== 第十三章 ========== -->
+  <h2 id="sec13">十三、组织架构</h2>
+  <p>「组织架构」管理支持树形层级结构，实现多级渠道管理。</p>
+
+  <h3>13.1 组织层级</h3>
+  <pre style="background:#f8f9fa;padding:16px;border-radius:6px;font-size:13px;">
+辰烁能源（超级管理员）
+├── 代理商 A
+│   ├── 安装商 A1
+│   │   ├── 终端用户 A1-1
+│   │   └── 终端用户 A1-2
+│   └── 安装商 A2
+│       └── 终端用户 A2-1
+└── 代理商 B
+    └── 安装商 B1
+        └── 终端用户 B1-1
+  </pre>
+
+  <h3>13.2 组织管理</h3>
+  <ul>
+    <li><strong>创建组织：</strong>创建新的代理商、安装商</li>
+    <li><strong>编辑组织：</strong>修改组织名称、描述、联系方式</li>
+    <li><strong>邀请用户：</strong>通过邀请链接或手机号邀请用户加入组织</li>
+    <li><strong>分配权限：</strong>设置组织内角色和权限</li>
+    <li><strong>查看数据：</strong>查看组织下属的设备和电站</li>
+  </ul>
+
+  <h3>13.3 渠道管理</h3>
+  <p>「渠道管理」页面管理商业渠道：</p>
+  <ul>
+    <li>渠道商注册和审核</li>
+    <li>渠道商权限配置</li>
+    <li>渠道商数据统计</li>
+    <li>渠道商结算管理</li>
+  </ul>
+
+  <hr class="section-divider">
+
+  <!-- ========== 第十四章 ========== -->
+  <h2 id="sec14">十四、操作日志</h2>
+  <p>「操作日志」页面记录所有管理操作，支持审计追溯。</p>
+
+  <h3>14.1 日志类型</h3>
+  <table>
+    <tr><th>标签</th><th>内容</th></tr>
+    <tr><td>操作日志</td><td>用户操作记录（设备控制、参数修改、OTA 等）</td></tr>
+    <tr><td>告警日志</td><td>告警触发、确认、关闭记录</td></tr>
+    <tr><td>登录日志</td><td>用户登录/登出记录，含 IP 地址</td></tr>
+  </table>
+
+  <h3>14.2 日志字段</h3>
+  <table>
+    <tr><th>字段</th><th>说明</th></tr>
+    <tr><td>操作人</td><td>执行操作的用户</td></tr>
+    <tr><td>操作类型</td><td>login / logout / device_control / param_modify / ota_upgrade</td></tr>
+    <tr><td>操作详情</td><td>JSON 格式的操作参数和结果</td></tr>
+    <tr><td>设备 SN</td><td>关联的设备</td></tr>
+    <tr><td>IP 地址</td><td>操作人 IP</td></tr>
+    <tr><td>操作时间</td><td>操作发生时间</td></tr>
+    <tr><td>结果</td><td>success / failed</td></tr>
+  </table>
+
+  <h3>14.3 筛选与导出</h3>
+  <ul>
+    <li>按操作类型筛选</li>
+    <li>按操作人筛选</li>
+    <li>按设备筛选</li>
+    <li>按时间范围筛选</li>
+    <li>按关键字搜索</li>
+    <li>导出为 Excel</li>
+  </ul>
+
+  <div class="info">
+    <strong>数据保留：</strong>操作日志不可删除，保留 90 天以上。建议定期导出备份。
   </div>
 
-  <h2>八、系统监控</h2>
-  <p>「系统监控」页面展示平台运行状态：</p>
+  <hr class="section-divider">
+
+  <!-- ========== 第十五章 ========== -->
+  <h2 id="sec15">十五、系统监控</h2>
+  <p>「系统监控」页面展示平台运行状态。</p>
+
+  <h3>15.1 监控指标</h3>
+  <table>
+    <tr><th>指标</th><th>说明</th></tr>
+    <tr><td>服务健康状态</td><td>API Server、Device Server、API Gateway 运行状态</td></tr>
+    <tr><td>数据库状态</td><td>PostgreSQL 连接数、查询延迟、存储使用量</td></tr>
+    <tr><td>Redis 状态</td><td>连接数、内存使用、命中率</td></tr>
+    <tr><td>MQTT 状态</td><td>EMQX 连接数、消息吞吐量</td></tr>
+    <tr><td>Kafka 状态</td><td>Topic 消费延迟、分区状态</td></tr>
+    <tr><td>服务器资源</td><td>CPU / 内存 / 磁盘使用率</td></tr>
+    <tr><td>版本信息</td><td>各服务版本号和运行时间</td></tr>
+  </table>
+
+  <h3>15.2 告警规则</h3>
+  <p>管理员可配置系统级告警规则：</p>
   <ul>
-    <li>服务健康状态（API、数据库、Redis、MQTT）</li>
-    <li>CPU / 内存使用率</li>
-    <li>数据库连接池状态</li>
-    <li>版本号和运行时间</li>
+    <li>设备离线超时（默认 5 分钟无心跳触发）</li>
+    <li>参数超限（电压、电流、温度等超过设定阈值）</li>
+    <li>通信异常（MQTT 断连、Kafka 消费延迟）</li>
+    <li>服务异常（API 响应超时、数据库连接失败）</li>
   </ul>
+
+  <hr class="section-divider">
+
+  <!-- ========== 第十六章 ========== -->
+  <h2 id="sec16">十六、大屏展示</h2>
+  <p>「大屏展示」页面提供数据可视化大屏，适合投屏展示和监控中心。</p>
+
+  <h3>16.1 大屏内容</h3>
+  <ul>
+    <li><strong>实时功率地图：</strong>按地理位置展示各电站实时功率</li>
+    <li><strong>发电量统计：</strong>日/月/年发电量趋势</li>
+    <li><strong>设备状态分布：</strong>在线/离线/故障占比</li>
+    <li><strong>告警实时滚动：</strong>最新告警事件</li>
+    <li><strong>核心指标：</strong>总装机容量、总发电量、在线率</li>
+  </ul>
+
+  <h3>16.2 使用方式</h3>
+  <ul>
+    <li>全屏模式：点击右上角全屏按钮</li>
+    <li>自动刷新：数据每 30 秒自动更新</li>
+    <li>投屏：支持 Chromecast / AirPlay 投屏到电视</li>
+  </ul>
+
+  <hr class="section-divider">
+
+  <!-- ========== 第十七章 ========== -->
+  <h2 id="sec17">十七、批量操作</h2>
+  <p>系统支持多种批量操作，提高管理效率。</p>
+
+  <h3>17.1 设备批量操作</h3>
+  <table>
+    <tr><th>操作</th><th>说明</th></tr>
+    <tr><td>批量导入</td><td>通过 Excel 批量导入设备（SN、型号、电站）</td></tr>
+    <tr><td>批量导出</td><td>将设备列表导出为 Excel</td></tr>
+    <tr><td>批量升级</td><td>选择多台设备推送 OTA 升级</td></tr>
+    <tr><td>批量配置</td><td>统一修改多台设备的运行参数</td></tr>
+    <tr><td>批量重启</td><td>远程重启多台设备</td></tr>
+    <tr><td>批量绑定/解绑</td><td>批量关联/解除用户与设备的关系</td></tr>
+  </table>
+
+  <h3>17.2 告警批量操作</h3>
+  <ul>
+    <li>批量确认：选择多条告警一键确认</li>
+    <li>批量关闭：选择多条告警一键关闭</li>
+    <li>批量导出：将告警列表导出为 Excel</li>
+  </ul>
+
+  <hr class="section-divider">
+
+  <!-- ========== 第十八章 ========== -->
+  <h2 id="sec18">十八、数据导出</h2>
+  <p>系统支持多种数据导出功能：</p>
+
+  <table>
+    <tr><th>导出内容</th><th>格式</th><th>说明</th></tr>
+    <tr><td>设备列表</td><td>Excel</td><td>包含设备信息、状态、绑定用户</td></tr>
+    <tr><td>发电数据</td><td>Excel / CSV</td><td>历史发电量、功率曲线</td></tr>
+    <tr><td>告警记录</td><td>Excel</td><td>告警详情、处理记录</td></tr>
+    <tr><td>操作日志</td><td>Excel</td><td>全量操作记录</td></tr>
+    <tr><td>用户列表</td><td>Excel</td><td>用户信息、角色、状态</td></tr>
+    <tr><td>工单记录</td><td>Excel</td><td>工单详情、处理进度</td></tr>
+  </table>
+
+  <hr class="section-divider">
+
+  <!-- ========== 第十九章 ========== -->
+  <h2 id="sec19">十九、部署与运维</h2>
+
+  <h3>19.1 系统要求</h3>
+  <table>
+    <tr><th>组件</th><th>要求</th></tr>
+    <tr><td>服务器</td><td>Linux（推荐 Ubuntu 20.04+），2 核 4GB 以上</td></tr>
+    <tr><td>数据库</td><td>PostgreSQL 16 + TimescaleDB 扩展</td></tr>
+    <tr><td>缓存</td><td>Redis 7</td></tr>
+    <tr><td>消息队列</td><td>EMQX (MQTT Broker) + Apache Kafka</td></tr>
+    <tr><td>Web 服务器</td><td>Nginx（反向代理 + 静态文件服务）</td></tr>
+    <tr><td>容器</td><td>Docker + Docker Compose</td></tr>
+  </table>
+
+  <h3>19.2 部署方式</h3>
+  <h4>Docker Compose 部署（推荐）</h4>
+  <div class="step"><div class="step-num">1</div><div class="step-content">克隆项目代码到服务器</div></div>
+  <div class="step"><div class="step-num">2</div><div class="step-content">配置环境变量（<code>deploy/.secrets/deploy.env</code>）</div></div>
+  <div class="step"><div class="step-num">3</div><div class="step-content">执行 <code>make docker-up</code> 构建并启动所有服务</div></div>
+  <div class="step"><div class="step-num">4</div><div class="step-content">配置 Nginx 反向代理和 SSL 证书</div></div>
+
+  <h4>手动部署</h4>
+  <div class="step"><div class="step-num">1</div><div class="step-content">安装依赖：Go 1.21+、Node.js 18+、PostgreSQL 16、Redis 7</div></div>
+  <div class="step"><div class="step-num">2</div><div class="step-content">执行数据库迁移：<code>psql -f database/schema.sql</code></div></div>
+  <div class="step"><div class="step-num">3</div><div class="step-content">构建 Go 服务：<code>make build-go</code></div></div>
+  <div class="step"><div class="step-num">4</div><div class="step-content">构建前端：<code>make build-web</code></div></div>
+  <div class="step"><div class="step-num">5</div><div class="step-content">启动服务：<code>./deploy/deploy.sh --all</code></div></div>
+
+  <h3>19.3 自动部署</h3>
+  <p>支持 Git Polling 和 Webhook 两种自动部署方式：</p>
+  <ul>
+    <li><strong>Git Polling：</strong>服务器定时拉取 Git 仓库，检测到更新自动部署</li>
+    <li><strong>Webhook：</strong>Git 推送时触发 Webhook，服务器收到通知后自动部署</li>
+  </ul>
+
+  <h3>19.4 日常运维</h3>
+  <table>
+    <tr><th>操作</th><th>命令</th></tr>
+    <tr><td>查看服务状态</td><td><code>make docker-logs</code></td></tr>
+    <tr><td>重启服务</td><td><code>make docker-down && make docker-up</code></td></tr>
+    <tr><td>数据库备份</td><td><code>deploy/scripts/backup.sh</code></td></tr>
+    <tr><td>数据库维护</td><td><code>deploy/scripts/db_maintenance.sh</code></td></tr>
+    <tr><td>查看日志</td><td><code>journalctl -u inv-monitor -f</code></td></tr>
+    <tr><td>监控脚本</td><td><code>deploy/monitor.sh</code></td></tr>
+  </table>
+
+  <h3>19.5 备份策略</h3>
+  <ul>
+    <li><strong>数据库：</strong>每日自动备份，保留 30 天</li>
+    <li><strong>配置文件：</strong>版本控制管理</li>
+    <li><strong>固件文件：</strong>对象存储备份</li>
+    <li><strong>日志：</strong>集中日志管理，保留 90 天</li>
+  </ul>
+
+  <div class="danger">
+    <strong>安全提醒：</strong><br>
+    • <code>deploy/.secrets/</code> 目录包含敏感配置，禁止提交到版本控制<br>
+    • 定期轮换 JWT 密钥和数据库密码<br>
+    • 启用 HTTPS，禁止 HTTP 明文传输<br>
+    • 限制数据库和 Redis 的网络访问范围
+  </div>
+
+  <div class="footer">
+    <p>© 2026 辰烁能源科技有限公司 &nbsp;|&nbsp; 文档版本 V2.0 &nbsp;|&nbsp; 技术支持：support@jiuxiaoyw.online</p>
+  </div>
 </div>
 </body>
 </html>
