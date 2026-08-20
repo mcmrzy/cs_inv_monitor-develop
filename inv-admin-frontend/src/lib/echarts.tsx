@@ -67,9 +67,13 @@ const ReactECharts: React.FC<ReactEChartsProps> = ({
 
     const handleResize = () => chart.resize()
     window.addEventListener('resize', handleResize)
+    // 容器尺寸变化（侧边栏折叠、tab 切换、抽屉打开）时同步 canvas 尺寸，避免图表超出视图
+    const observer = new ResizeObserver(() => chart.resize())
+    observer.observe(containerRef.current)
 
     return () => {
       window.removeEventListener('resize', handleResize)
+      observer.disconnect()
       chart.dispose()
       chartRef.current = null
     }

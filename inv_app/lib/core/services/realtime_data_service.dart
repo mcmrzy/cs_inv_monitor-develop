@@ -231,10 +231,14 @@ class RealtimeDataServiceImpl implements RealtimeDataService {
     }
     
     // 检查是否是嵌套结构（ac, battery, pv等）还是扁平结构
+    // V2: ac/pv/bat/sys/eng/chr/fan/diag/sock, V1: ac/battery/batt/pv/sys_status/energy
     final isNested = realtime.containsKey('ac') || 
                      realtime.containsKey('battery') || 
                      realtime.containsKey('batt') ||
-                     realtime.containsKey('pv');
+                     realtime.containsKey('bat') ||
+                     realtime.containsKey('pv') ||
+                     realtime.containsKey('eng') ||
+                     realtime.containsKey('chr');
     
     if (kDebugMode) {
       debugPrint('[RealtimeDataService] Data structure: ${isNested ? "nested" : "flat"}');
@@ -246,6 +250,8 @@ class RealtimeDataServiceImpl implements RealtimeDataService {
     PVData? pvData;
     SystemStatus? sysStatusData;
     EnergyData? energyData;
+    FanData? fanData;
+    int workTimeTotalSec = 0;
     CellsData? cellsData;
     DeviceInfo? deviceInfoData;
     MeterData? meterData;
@@ -270,25 +276,41 @@ class RealtimeDataServiceImpl implements RealtimeDataService {
           ? ACData.fromJson(extractNestedData(realtime['ac'])!)
           : null;
 
-      batteryData = realtime['battery'] != null || realtime['batt'] != null
-          ? BatteryData.fromJson(
-              extractNestedData(realtime['battery'] ?? realtime['batt'])!,
-            )
+      // V2: bat, V1: battery
+      final batGroup = realtime['bat'] is Map ? realtime['bat']
+          : realtime['battery'] is Map ? realtime['battery']
+          : realtime['batt'] is Map ? realtime['batt'] : null;
+      batteryData = batGroup != null
+          ? BatteryData.fromJson(extractNestedData(batGroup)!)
           : null;
 
-      pvData = realtime['pv'] != null
+      pvData = realtime['pv'] is Map
           ? PVData.fromJson(extractNestedData(realtime['pv'])!)
           : null;
 
-      sysStatusData = realtime['sys_status'] != null || realtime['sys'] != null
-          ? SystemStatus.fromJson(
-              extractNestedData(realtime['sys_status'] ?? realtime['sys'])!,
-            )
+      // V2: sys, V1: sys_status
+      // 注意：V2 中 sys_status 是 int（位掩码），不是 Map，需要用 sys 组
+      final sysGroup = realtime['sys'] is Map ? realtime['sys'] : (realtime['sys_status'] is Map ? realtime['sys_status'] : null);
+      sysStatusData = sysGroup != null
+          ? SystemStatus.fromJson(extractNestedData(sysGroup)!)
           : null;
 
-      energyData = realtime['energy'] != null
-          ? EnergyData.fromJson(extractNestedData(realtime['energy'])!)
+      // V2: eng, V1: energy
+      final engGroup = realtime['eng'] is Map ? realtime['eng']
+          : realtime['energy'] is Map ? realtime['energy'] : null;
+      energyData = engGroup != null
+          ? EnergyData.fromJson(extractNestedData(engGroup)!)
           : null;
+
+      // V2.1 新增组：fan（双风扇转速）/ diag（诊断量）
+      if (realtime['fan'] is Map) {
+        fanData = FanData.fromJson(extractNestedData(realtime['fan'])!);
+      }
+      final diagGroup = realtime['diag'] is Map
+          ? extractNestedData(realtime['diag'])
+          : null;
+      workTimeTotalSec =
+          (diagGroup?['work_time_total'] as num?)?.toInt() ?? 0;
 
       cellsData = realtime['cells'] != null
           ? CellsData.fromJson(extractNestedData(realtime['cells'])!)
@@ -302,98 +324,44 @@ class RealtimeDataServiceImpl implements RealtimeDataService {
           ? MeterData.fromJson(extractNestedData(realtime['meter'])!)
           : null;
     } else {
-      // 扁平结构：从键值对中提取数据构建对象
+      // 扁平结构：顶层键即 V2.1 协议键（服务端 normalizeRealtimeData 展平后），
+      // 直接用实体 fromJson 解析，按代表性键做存在性守卫避免全 0 假数据
       if (kDebugMode) {
         debugPrint('[RealtimeDataService] Building objects from flat data');
       }
-      
-      // AC 数据 - 支持多种字段名格式
-      if (realtime.containsKey('ac_voltage') || 
-          realtime.containsKey('ac_power') || 
-          realtime.containsKey('ac_active_power')) {
-        acData = ACData(
-          voltage: (realtime['ac_voltage'] as num?)?.toDouble() ?? 0,
-          current: (realtime['ac_current'] as num?)?.toDouble() ?? 0,
-          power: (realtime['ac_power'] as num?)?.toDouble() ?? 
-                 (realtime['ac_active_power'] as num?)?.toDouble() ?? 0,
-          frequency: (realtime['ac_frequency'] as num?)?.toDouble() ?? 0,
-          loadPercent: (realtime['ac_load_percent'] as num?)?.toDouble() ?? 
-                      (realtime['load_percent'] as num?)?.toDouble() ?? 0,
-          pf: (realtime['ac_pf'] as num?)?.toDouble() ?? 
-              (realtime['ac_power_factor'] as num?)?.toDouble() ?? 0,
-        );
+
+      if (realtime.containsKey('ac_output_voltage') ||
+          realtime.containsKey('output_power')) {
+        acData = ACData.fromJson(realtime);
       }
-      
-      // Battery 数据 - 支持多种字段名格式
-      if (realtime.containsKey('batt_soc') || 
-          realtime.containsKey('batt_voltage') || 
-          realtime.containsKey('battery_soc') || 
+
+      if (realtime.containsKey('battery_soc') ||
           realtime.containsKey('battery_voltage')) {
-        batteryData = BatteryData(
-          soc: (realtime['batt_soc'] as num?)?.toDouble() ?? 
-               (realtime['battery_soc'] as num?)?.toDouble() ?? 0,
-          soh: (realtime['batt_soh'] as num?)?.toDouble() ?? 
-               (realtime['battery_soh'] as num?)?.toDouble() ?? 0,
-          voltage: (realtime['batt_voltage'] as num?)?.toDouble() ?? 
-                   (realtime['battery_voltage'] as num?)?.toDouble() ?? 0,
-          current: (realtime['batt_current'] as num?)?.toDouble() ?? 
-                   (realtime['battery_current'] as num?)?.toDouble() ?? 0,
-          chargeState: realtime['batt_charge_state']?.toString() ?? 
-                       realtime['battery_state']?.toString() ?? '',
-        );
+        batteryData = BatteryData.fromJson(realtime);
       }
-      
-      // PV 数据 - 支持多种字段名格式
-      if (realtime.containsKey('pv_voltage') || 
-          realtime.containsKey('pv_power') || 
-          realtime.containsKey('pv_total_power') || 
-          realtime.containsKey('pv1_voltage')) {
-        pvData = PVData(
-          pvVoltage: (realtime['pv_voltage'] as num?)?.toDouble() ?? 
-                     (realtime['pv1_voltage'] as num?)?.toDouble() ?? 0,
-          pvCurrent: (realtime['pv_current'] as num?)?.toDouble() ?? 
-                     (realtime['pv1_current'] as num?)?.toDouble() ?? 0,
-          pvPower: (realtime['pv_power'] as num?)?.toDouble() ?? 
-                   (realtime['pv_total_power'] as num?)?.toDouble() ?? 0,
-          mpptState: realtime['mppt_state']?.toString() ?? '',
-        );
+
+      if (realtime.containsKey('pv1_voltage') ||
+          realtime.containsKey('pv_total_power')) {
+        pvData = PVData.fromJson(realtime);
       }
-      
-      // System Status 数据 - 支持多种字段名格式
-      if (realtime.containsKey('state') || 
-          realtime.containsKey('temp_inv') || 
-          realtime.containsKey('inverter_temperature') || 
-          realtime.containsKey('work_state')) {
-        sysStatusData = SystemStatus(
-          state: realtime['state']?.toString() ?? 
-                 realtime['work_state']?.toString() ?? '',
-          faultCode: (realtime['fault_code'] as num?)?.toInt() ?? 0,
-          alarmCode: (realtime['alarm_code'] as num?)?.toInt() ?? 0,
-          tempInv: (realtime['temp_inv'] as num?)?.toDouble() ?? 
-                   (realtime['inverter_temperature'] as num?)?.toDouble() ?? 0,
-          tempMos: (realtime['temp_mos'] as num?)?.toDouble() ?? 
-                   (realtime['mos_temperature'] as num?)?.toDouble() ?? 0,
-          efficiency: (realtime['efficiency'] as num?)?.toDouble() ?? 0,
-        );
+
+      if (realtime.containsKey('work_state') ||
+          realtime.containsKey('inverter_temperature')) {
+        sysStatusData = SystemStatus.fromJson(realtime);
       }
-      
-      // Energy 数据 - 支持多种字段名格式
-      if (realtime.containsKey('daily_pv') || 
-          realtime.containsKey('total_pv') || 
-          realtime.containsKey('daily_pv_energy') || 
+
+      if (realtime.containsKey('daily_pv_energy') ||
           realtime.containsKey('total_pv_energy')) {
-        energyData = EnergyData(
-          dailyPV: (realtime['daily_pv'] as num?)?.toDouble() ?? 
-                   (realtime['daily_pv_energy'] as num?)?.toDouble() ?? 0,
-          totalPV: (realtime['total_pv'] as num?)?.toDouble() ?? 
-                   (realtime['total_pv_energy'] as num?)?.toDouble() ?? 0,
-          runtimeHours: (realtime['runtime_hours'] as num?)?.toInt() ?? 0,
-          dailyFeedEnergy: (realtime['daily_feed_energy'] as num?)?.toDouble() ?? 0,
-          totalFeedEnergy: (realtime['total_feed_energy'] as num?)?.toDouble() ?? 0,
-          dailyGridImport: (realtime['daily_grid_import'] as num?)?.toDouble() ?? 0,
-          totalGridImport: (realtime['total_grid_import'] as num?)?.toDouble() ?? 0,
-        );
+        energyData = EnergyData.fromJson(realtime);
       }
+
+      if (realtime.containsKey('mppt_fan_speed') ||
+          realtime.containsKey('inv_fan_speed')) {
+        fanData = FanData.fromJson(realtime);
+      }
+
+      workTimeTotalSec =
+          (realtime['work_time_total'] as num?)?.toInt() ?? 0;
     }
 
     final loadPower = (realtime['load_power'] as num?)?.toDouble() ?? 0;
@@ -411,7 +379,7 @@ class RealtimeDataServiceImpl implements RealtimeDataService {
         : null;
 
     if (kDebugMode) {
-      debugPrint('[RealtimeDataService] Parsed: ac=${acData != null}, battery=${batteryData != null}, pv=${pvData != null}, sysStatus=${sysStatusData != null}, energy=${energyData != null}');
+      debugPrint('[RealtimeDataService] Parsed: ac=${acData != null}, battery=${batteryData != null}, pv=${pvData != null}, sysStatus=${sysStatusData != null}, energy=${energyData != null}, fan=${fanData != null}, workTimeTotalSec=$workTimeTotalSec');
     }
 
     return InverterRealtime(
@@ -421,6 +389,8 @@ class RealtimeDataServiceImpl implements RealtimeDataService {
       pv: pvData,
       sysStatus: sysStatusData,
       energy: energyData,
+      fan: fanData,
+      workTimeTotalSec: workTimeTotalSec,
       cells: cellsData,
       onlineStatus: onlineStatus,
       deviceInfo: deviceInfoData,

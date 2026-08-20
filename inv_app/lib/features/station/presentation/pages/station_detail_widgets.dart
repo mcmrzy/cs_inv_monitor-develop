@@ -3,34 +3,30 @@ part of 'station_detail_page.dart';
 class _EnergyFlowPainter extends CustomPainter {
   final List<FlowEdge> flows;
   final double animValue;
-  // 节点圆心：由 _flowArea 按 Align 布局公式计算后传入（见 _flowNodeCenter）
-  final Offset pvCenter;
-  final Offset loadCenter;
-  final Offset battCenter;
-  final Offset gridCenter;
 
   _EnergyFlowPainter({
     required this.flows,
     required this.animValue,
-    required this.pvCenter,
-    required this.loadCenter,
-    required this.battCenter,
-    required this.gridCenter,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
     final cx = size.width / 2;
-    final pvC = pvCenter;
-    final loadC = loadCenter;
-    final battC = battCenter;
-    final gridC = gridCenter;
+    final cy = size.height / 2;
 
     // 动态计算：80.w / 2 = 40 * size.width / 375
     final nodeR = 40.0 * size.width / 375.0;
+    // 标签12.sp + 间距4.h 导致圆心偏移
+    final labelOff = (12.0 * size.width / 375.0 + size.height / 100.0) / 2.0;
 
-    const pvColor = AppColors.orange; // 能流品牌色统一定义于 AppColors
-    const loadColor = AppColors.blue; // 能流品牌色统一定义于 AppColors
+    // 旧版本的节点位置计算（与 Align 布局精确对齐）
+    final pvC = Offset(cx, size.height * 0.125 + labelOff);
+    final loadC = Offset(cx, size.height * 0.875 - labelOff);
+    final battC = Offset(size.width * 0.125, cy + labelOff);
+    final gridC = Offset(size.width * 0.875, cy + labelOff);
+
+    const pvColor = AppColors.orange;
+    const loadColor = AppColors.blue;
     const battColor = AppColors.successLight;
     const gridColor = AppColors.textSecondary;
     const r = 16.0;
@@ -454,11 +450,7 @@ class _EnergyFlowPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _EnergyFlowPainter old) =>
       flows.length != old.flows.length ||
-      animValue != old.animValue ||
-      pvCenter != old.pvCenter ||
-      loadCenter != old.loadCenter ||
-      battCenter != old.battCenter ||
-      gridCenter != old.gridCenter;
+      animValue != old.animValue;
 }
 
 // 选择设备弹窗：白色圆角面板 + 设备列表（选中态高亮、逐项入场动画）

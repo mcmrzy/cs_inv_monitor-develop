@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Row, Col, Input, Select, Button, Tag, Space, Spin, Empty, Typography, Badge } from 'antd'
 import { ProCard } from '@ant-design/pro-components'
-import { SearchOutlined, ReloadOutlined, DesktopOutlined, ThunderboltOutlined } from '@ant-design/icons'
+import { SearchOutlined, ReloadOutlined, DesktopOutlined, ThunderboltOutlined, RightOutlined } from '@ant-design/icons'
 import { deviceApi } from '@/services/deviceApi'
 import { DEVICE_STATUS_MAP } from '@/utils/constants'
 import { safeNum } from '@/utils/format'
@@ -35,6 +36,7 @@ interface DeviceItem {
 
 const StationDevicesTab: React.FC<StationDevicesTabProps> = ({ stationId, timezone }) => {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined)
   const [modalSn, setModalSn] = useState<string | null>(null)
@@ -216,6 +218,20 @@ const StationDevicesTab: React.FC<StationDevicesTabProps> = ({ stationId, timezo
                           </Col>
                         )}
                       </Row>
+                    </div>
+                    {/* 设备详情入口：跳转完整设备详情页（卡片其余区域点击弹实时数据 Modal） */}
+                    <div style={{ marginTop: 8, textAlign: 'right', borderTop: '1px solid #f0f0f0', paddingTop: 8 }}>
+                      <Button
+                        type="link"
+                        size="small"
+                        icon={<RightOutlined />}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          navigate(`/devices/${dev.sn}/detail`)
+                        }}
+                      >
+                        {t('station.viewDeviceDetail')}
+                      </Button>
                     </div>
                   </ProCard>
                 </Col>

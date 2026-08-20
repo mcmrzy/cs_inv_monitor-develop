@@ -555,30 +555,6 @@ class _StationDetailPageState extends State<StationDetailPage>
     setState(() => _selectedDeviceSn = selected);
   }
 
-  /// 按 Align 布局公式计算能量流节点的圆心：
-  /// 圆心 = 容器中心 + alignment * (容器尺寸 - 子组件尺寸) / 2 + 标签偏移。
-  /// 与 _energyNode/_energyNodeBatt 的 Column 结构保持一致，
-  /// 避免 CustomPainter 固定比例估算与真实节点位置错位。
-  Offset _flowNodeCenter({
-    required Size size,
-    required Alignment align,
-    required bool labelAbove,
-    required bool active,
-  }) {
-    // 与 _energyNode/_buildGlow 尺寸一致：节点圆 80.w、光晕 110.w、标签 12.sp、间距 4.h
-    final nodeD = 80.0 * size.width / 375.0;
-    final glowD = 110.0 * size.width / 375.0;
-    final labelH = 12.0 * size.width / 375.0;
-    final gapH = size.height / 100.0; // 4.h，容器高 400.h → 比例 1/100
-    final childD = active ? glowD : nodeD;
-    final childH = labelH + gapH + childD;
-    final childW = childD;
-    final cx = size.width / 2 + align.x * (size.width - childW) / 2;
-    final cy = size.height / 2 + align.y * (size.height - childH) / 2;
-    final circleOffset = (childH - nodeD) / 2;
-    return Offset(cx, cy + (labelAbove ? circleOffset : -circleOffset));
-  }
-
   Widget _flowArea(
     double pv,
     double load,
@@ -595,90 +571,56 @@ class _StationDetailPageState extends State<StationDetailPage>
 
     return SizedBox(
       height: 400.h,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final size = Size(constraints.maxWidth, constraints.maxHeight);
-          // 节点圆心按 Align 布局公式精确计算，保证连线端点与节点边缘对齐
-          final pvCenter = _flowNodeCenter(
-            size: size,
-            align: const Alignment(0, -0.75),
-            labelAbove: true,
-            active: pv > 0,
-          );
-          final loadCenter = _flowNodeCenter(
-            size: size,
-            align: const Alignment(0, 0.75),
-            labelAbove: false,
-            active: load > 0,
-          );
-          final battCenter = _flowNodeCenter(
-            size: size,
-            align: const Alignment(-0.75, 0),
-            labelAbove: true,
-            active: batt.abs() > 0,
-          );
-          final gridCenter = _flowNodeCenter(
-            size: size,
-            align: const Alignment(0.75, 0),
-            labelAbove: true,
-            active: grid.abs() > 0,
-          );
-          return AnimatedBuilder(
-            animation: _anim,
-            builder: (_, child) => Stack(
-              children: [
-                Positioned.fill(
-                  child: CustomPaint(
-                    painter: _EnergyFlowPainter(
-                      flows: flows,
-                      animValue: _anim.value,
-                      pvCenter: pvCenter,
-                      loadCenter: loadCenter,
-                      battCenter: battCenter,
-                      gridCenter: gridCenter,
-                    ),
-                  ),
+      child: AnimatedBuilder(
+        animation: _anim,
+        builder: (_, child) => Stack(
+          children: [
+            Positioned.fill(
+              child: CustomPaint(
+                painter: _EnergyFlowPainter(
+                  flows: flows,
+                  animValue: _anim.value,
                 ),
-                _energyNode(
-                  l10n.pv,
-                  pvW,
-                  Icons.wb_sunny,
-                  AppColors.orange,
-                  const Alignment(0, -0.75),
-                  true,
-                  active: pv > 0,
-                ),
-                _energyNode(
-                  l10n.load,
-                  loadW,
-                  Icons.home_rounded,
-                  AppColors.blue,
-                  const Alignment(0, 0.75),
-                  false,
-                  active: load > 0,
-                ),
-                _energyNodeBatt(
-                  l10n.battery,
-                  battW,
-                  soc,
-                  Icons.battery_charging_full,
-                  AppColors.successLight,
-                  const Alignment(-0.75, 0),
-                  active: batt.abs() > 0,
-                ),
-                _energyNode(
-                  l10n.grid,
-                  gridW,
-                  Icons.electrical_services,
-                  AppColor.textSecondary(context),
-                  const Alignment(0.75, 0),
-                  true,
-                  active: grid.abs() > 0,
-                ),
-              ],
+              ),
             ),
-          );
-        },
+            _energyNode(
+              l10n.pv,
+              pvW,
+              Icons.wb_sunny,
+              AppColors.orange,
+              const Alignment(0, -0.75),
+              true,
+              active: pv > 0,
+            ),
+            _energyNode(
+              l10n.load,
+              loadW,
+              Icons.home_rounded,
+              AppColors.blue,
+              const Alignment(0, 0.75),
+              false,
+              active: load > 0,
+            ),
+            _energyNodeBatt(
+              l10n.battery,
+              battW,
+              soc,
+              Icons.battery_charging_full,
+              AppColors.successLight,
+              const Alignment(-0.75, 0),
+              active: batt.abs() > 0,
+            ),
+            _energyNode(
+              l10n.grid,
+              gridW,
+              Icons.electrical_services,
+              AppColor.textSecondary(context),
+              const Alignment(0.75, 0),
+              true,
+              active: grid.abs() > 0,
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -767,14 +767,18 @@ extension _DeviceControlTabSections on _DeviceControlPageState {
     final l10n = AppLocalizations.of(context)!;
     final device =
         _deviceInfo['device'] as Map<String, dynamic>? ?? _deviceInfo;
+    final ratedPowerW = device['rated_power_w'] as num?;
+    final phase = device['phase'] as String?;
     return {
       l10n.str('control_device_sn'): widget.deviceSN,
       l10n.str('control_device_model'):
           device['model'] ?? device['model_name'] ?? '—',
-      l10n.str('control_device_name'):
-          device['name'] ?? device['device_name'] ?? '—',
-      l10n.str('control_install_location'):
-          device['location'] ?? device['install_location'] ?? '—',
+      l10n.str('control_device_name'): device['alias'] ?? '—',
+      if (ratedPowerW != null && ratedPowerW > 0)
+        l10n.str('control_rated_power'):
+            '${ratedPowerW.toDouble().toStringAsFixed(0)} W',
+      if (phase != null && phase.isNotEmpty)
+        l10n.str('control_phase'): phase,
       l10n.str('control_install_date'):
           device['install_date'] ?? device['created_at'] ?? '—',
       l10n.str('control_station'):
@@ -843,16 +847,11 @@ extension _DeviceControlTabSections on _DeviceControlPageState {
     final l10n = AppLocalizations.of(context)!;
     final device =
         _deviceInfo['device'] as Map<String, dynamic>? ?? _deviceInfo;
-    final fwVersion = device['firmware_version'] ??
-        device['fw_version'] ??
-        _controlState['reported']?['firmware_version'] ??
-        '—';
-    final hwVersion = device['hardware_version'] ??
-        device['hw_version'] ??
-        _controlState['reported']?['hardware_version'] ??
-        '—';
-    final mcuVersion =
-        device['mcu_version'] ?? _controlState['reported']?['mcu_version'];
+    // devices 表 V2.1 字段：firmware_arm / firmware_esp / hardware_version / bootloader_version
+    final fwArm = device['firmware_arm'] as String?;
+    final fwEsp = device['firmware_esp'] as String?;
+    final hwVersion = device['hardware_version'] as String?;
+    final bootloaderVersion = device['bootloader_version'] as String?;
 
     return Container(
       decoration: AppColor.card(context),
@@ -878,14 +877,23 @@ extension _DeviceControlTabSections on _DeviceControlPageState {
             ],
           ),
           SizedBox(height: 8.h),
-          _buildInfoRow(l10n.str('control_firmware_version'), '$fwVersion'),
-          _buildInfoRow(l10n.str('control_hardware_version'), '$hwVersion'),
-          if (mcuVersion != null)
-            _buildInfoRow(l10n.str('control_mcu_version'), '$mcuVersion'),
+          _buildInfoRow(l10n.str('control_firmware_arm'),
+              fwVersionLabel(fwArm)),
+          _buildInfoRow(l10n.str('control_firmware_esp'),
+              fwVersionLabel(fwEsp)),
+          _buildInfoRow(l10n.str('control_hardware_version'),
+              fwVersionLabel(hwVersion)),
+          if (bootloaderVersion != null && bootloaderVersion.isNotEmpty)
+            _buildInfoRow(
+                l10n.str('control_bootloader_version'), bootloaderVersion),
         ],
       ),
     );
   }
+
+  /// 空版本号统一展示为占位符
+  static String fwVersionLabel(String? v) =>
+      (v == null || v.isEmpty) ? '—' : v;
 
   Widget _buildInfoRow(String label, String value) {
     return Padding(
@@ -918,10 +926,8 @@ extension _DeviceControlTabSections on _DeviceControlPageState {
         _deviceInfo['device'] as Map<String, dynamic>? ?? _deviceInfo;
     final deviceModel =
         device['model'] ?? device['model_name'] ?? '';
-    final firmwareVersion = device['firmware_version'] ??
-        device['fw_version'] ??
-        _controlState['reported']?['firmware_version'] ??
-        '';
+    // 设备当前 ARM 主控固件版本（devices.firmware_arm）
+    final firmwareVersion = device['firmware_arm'] as String? ?? '';
 
     return Container(
       decoration: AppColor.card(context),

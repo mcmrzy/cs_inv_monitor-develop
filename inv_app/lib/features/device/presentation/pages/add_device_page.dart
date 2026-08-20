@@ -13,6 +13,11 @@ import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart'
     hide DeviceBindRequested, DeviceBindSuccess;
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/ambient_light_service.dart';
+import 'package:inv_app/core/services/ble/ble_adapter.dart';
+import 'package:inv_app/core/services/ble/ble_binding_service.dart';
+import 'package:inv_app/core/services/ble/ble_device_manager.dart';
+import 'package:inv_app/core/services/ble/ble_direct_service.dart';
+import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/utils/sn_utils.dart';
@@ -77,6 +82,19 @@ class _AddDevicePageState extends State<AddDevicePage>
   int? _selectedStationId;
   String? _selectedStationName;
 
+  // --- BLE 设备扫描状态 ---
+  bool _bleEnabled = false;
+  bool _bleAdapterOn = false;
+  bool _bleScanning = false;
+  List<BleDiscoveredDevice> _bleDevices = [];
+  Map<String, bool> _bleBoundByMac = {};
+  StreamSubscription<List<BleDiscoveredDevice>>? _bleDirectSub;
+  StreamSubscription<BleScanResult>? _standaloneScanSub;
+
+  /// BLE 广播名前缀（形如 CS_INV_SN / CS-INV-SN），去掉后即为 SN
+  static final RegExp _snPrefixPattern =
+      RegExp(r'^CS[-_]INV[-_]', caseSensitive: false);
+
   @override
   void initState() {
     super.initState();
@@ -88,6 +106,7 @@ class _AddDevicePageState extends State<AddDevicePage>
     _cameraController!.addListener(_onCameraStateChanged);
     _loadScanHistory();
     _loadStationName();
+    _initBleScan();
   }
 
   Future<void> _loadStationName() async {
@@ -219,6 +238,8 @@ class _AddDevicePageState extends State<AddDevicePage>
     _lowLightTimer?.cancel();
     _luxSub?.cancel();
     AmbientLightService.stop();
+    _bleDirectSub?.cancel();
+    _standaloneScanSub?.cancel();
     _snController.dispose();
     _pinController.dispose();
     _tabController.dispose();
@@ -295,6 +316,7 @@ class _AddDevicePageState extends State<AddDevicePage>
     _scannedPin = pin;
     if (pin.isNotEmpty) {
       // 二维码带 PIN → 跳 BLE 直连绑定页（扫描匹配 SN，离网可用）
+      _scanning = false;
       if (!mounted) return;
       context.push(
         '/device/qr-bind?sn=${Uri.encodeQueryComponent(sn)}&pin=${Uri.encodeQueryComponent(pin)}',
@@ -337,8 +359,20 @@ class _AddDevicePageState extends State<AddDevicePage>
       ),
     );
     controller.dispose();
-    if (pin == null || pin.isEmpty || !mounted) return;
+    if (pin == null || !mounted) {
+      // 用户取消，重置扫码状态避免一直转圈
+      if (mounted) setState(() => _scanning = false);
+      return;
+    }
+    if (pin.length != 6) {
+      if (mounted) {
+        setState(() => _scanning = false);
+        AppToast.show(context, AppLocalizations.of(context)!.pinLengthError, type: ToastType.info);
+      }
+      return;
+    }
     _scannedPin = pin;
+    _scanning = false;
     context.push(
       '/device/qr-bind?sn=${Uri.encodeQueryComponent(sn)}&pin=${Uri.encodeQueryComponent(pin)}',
     );
@@ -421,9 +455,9 @@ class _AddDevicePageState extends State<AddDevicePage>
     }
 
     if (!mounted) return;
-    if (pin.isEmpty) {
-      // PIN 必填（后端严格模式：云端绑定同样强制 PIN 校验，见设计文档 §5.4）
-      AppToast.show(context, AppLocalizations.of(context)!.pinRequired, type: ToastType.info);
+    if (pin.isEmpty || pin.length != 6) {
+      // PIN 必填且必须为 6 位（后端严格模式：云端绑定同样强制 PIN 校验，见设计文档 §5.4）
+      AppToast.show(context, AppLocalizations.of(context)!.pinLengthError, type: ToastType.info);
       return;
     }
 
@@ -961,7 +995,472 @@ class _AddDevicePageState extends State<AddDevicePage>
                   ),
           ),
         ),
+        // BLE 蓝牙设备列表区域
+        _buildBleSection(),
       ],
+    );
+  }
+
+  // ==================== BLE 设备扫描 ====================
+
+  /// 解析 BLE 广播名 → 展示用 SN
+  static String _displaySnOf(BleDiscoveredDevice device) {
+    if (device.name.isEmpty) return device.macAddress;
+    final sn = device.name.replaceFirst(_snPrefixPattern, '');
+    return sn.isEmpty ? device.name : sn;
+  }
+
+  /// 初始化 BLE 扫描：BleDirectService 已启用则复用其流，否则独立扫描
+  Future<void> _initBleScan() async {
+    final directService = getIt<BleDirectService>();
+    _bleEnabled = directService.enabled;
+    if (_bleEnabled) {
+      _bleAdapterOn = true;
+      _bleDevices = directService.scanResults;
+      _subscribeBleDirect();
+      _refreshBleBoundStatuses(_bleDevices);
+    } else {
+      // 蓝牙适配器已开则独立扫描一轮
+      try {
+        final status = await getIt<BleAdapter>().status;
+        _bleAdapterOn = status == BleAdapterStatus.on;
+        if (_bleAdapterOn && mounted) {
+          _startStandaloneScan();
+        }
+      } catch (_) {}
+    }
+    if (mounted) setState(() {});
+  }
+
+  /// 订阅 BleDirectService 的设备发现流
+  void _subscribeBleDirect() {
+    _bleDirectSub?.cancel();
+    _bleDirectSub = getIt<BleDirectService>().scanResultsStream.listen((devices) {
+      if (!mounted) return;
+      setState(() => _bleDevices = devices);
+      _refreshBleBoundStatuses(devices);
+    });
+  }
+
+  /// BleDirectService 未启用时的独立扫描（轻量，无自动连接/轮询）
+  void _startStandaloneScan() {
+    _standaloneScanSub?.cancel();
+    _bleScanning = true;
+    final seen = <String, BleDiscoveredDevice>{
+      for (final d in _bleDevices) d.macAddress: d,
+    };
+    _standaloneScanSub = getIt<BleAdapter>().scan(
+      serviceUuids: const [BleCtProtocol.serviceUuid],
+      timeout: const Duration(seconds: 15),
+    ).listen(
+      (result) {
+        if (!mounted) return;
+        final device = BleDiscoveredDevice(
+          macAddress: result.macAddress,
+          name: result.name,
+          lastSeen: DateTime.now(),
+        );
+        seen[result.macAddress] = device;
+        setState(() => _bleDevices = seen.values.toList()
+          ..sort((a, b) => (b.lastSeen ?? DateTime(0)).compareTo(a.lastSeen ?? DateTime(0))));
+      },
+      onDone: () {
+        if (!mounted) return;
+        setState(() => _bleScanning = false);
+        _refreshBleBoundStatuses(_bleDevices);
+      },
+      onError: (_) {
+        if (!mounted) return;
+        setState(() => _bleScanning = false);
+      },
+    );
+  }
+
+  /// 切换 BLE 直连总开关（从添加设备页面快捷操作）
+  Future<void> _toggleBleFromAddDevice(bool value) async {
+    final directService = getIt<BleDirectService>();
+    try {
+      await directService.setEnabled(value);
+    } catch (_) {
+      if (!mounted) return;
+      AppToast.show(context, AppLocalizations.of(context)!.bleBluetoothOff, type: ToastType.error);
+      return;
+    }
+    await getIt<StorageService>().saveIsBleDirectEnabled(value);
+    if (!mounted) return;
+    setState(() {
+      _bleEnabled = value;
+      _bleAdapterOn = true; // setEnabled 成功说明蓝牙已开
+    });
+    if (value) {
+      _standaloneScanSub?.cancel();
+      _standaloneScanSub = null;
+      _bleDevices = directService.scanResults;
+      _subscribeBleDirect();
+      _refreshBleBoundStatuses(_bleDevices);
+    } else {
+      _bleDirectSub?.cancel();
+      _bleDirectSub = null;
+      // BleDirectService 已关闭，BLE 适配器已释放，启动独立扫描
+      _startStandaloneScan();
+    }
+  }
+
+  /// 手动刷新 BLE 扫描
+  void _rescanBle() {
+    final directService = getIt<BleDirectService>();
+    if (directService.enabled) {
+      directService.rescan();
+    } else {
+      _startStandaloneScan();
+    }
+  }
+
+  /// 批量查询发现设备的绑定状态
+  Future<void> _refreshBleBoundStatuses(List<BleDiscoveredDevice> devices) async {
+    final keyStore = getIt<BleDeviceKeyStore>();
+    final result = <String, bool>{};
+    for (final device in devices) {
+      final sn = device.name.replaceFirst(_snPrefixPattern, '');
+      if (device.name.isEmpty || sn.isEmpty) {
+        result[device.macAddress] = false;
+        continue;
+      }
+      try {
+        result[device.macAddress] = await keyStore.read(sn) != null;
+      } catch (_) {
+        result[device.macAddress] = false;
+      }
+    }
+    if (!mounted) return;
+    setState(() => _bleBoundByMac = result);
+  }
+
+  /// BLE 设备绑定弹窗：输入 PIN → BleBindingService.bindAfterProvision
+  Future<void> _showBleBindDialog(BleDiscoveredDevice device) async {
+    final l10n = AppLocalizations.of(context)!;
+    final pinController = TextEditingController();
+    var enteredPin = '';
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l10n.str('ble_bind_confirm_title')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(l10n.str('ble_bind_confirm_desc')),
+            SizedBox(height: 8.h),
+            Text(
+              _displaySnOf(device),
+              style: TextStyle(
+                fontSize: 14.sp,
+                fontWeight: FontWeight.w600,
+                color: AppColor.textPrimary(context),
+              ),
+            ),
+            SizedBox(height: 16.h),
+            TextField(
+              controller: pinController,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              maxLength: 6,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: InputDecoration(
+                labelText: l10n.pinInputTitle,
+                hintText: l10n.pinInputHint,
+                counterText: '',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () {
+              enteredPin = pinController.text.trim();
+              if (enteredPin.length != 6) {
+                AppToast.show(dialogContext, l10n.pinLengthError, type: ToastType.info);
+                return;
+              }
+              Navigator.pop(dialogContext, true);
+            },
+            child: Text(l10n.pinInputConfirm),
+          ),
+        ],
+      ),
+    );
+    pinController.dispose();
+    if (proceed != true || !mounted) return;
+
+    final outcome = await getIt<BleBindingService>().bindAfterProvision(
+      macAddress: device.macAddress,
+      pin: enteredPin,
+    );
+    if (!mounted) return;
+
+    // 绑定失败时断开会话，避免残留 session 误判
+    if (outcome != BindOutcome.bound && outcome != BindOutcome.alreadyBound) {
+      try {
+        await getIt<BleDeviceManager>().disconnectDevice(device.macAddress);
+      } catch (_) {}
+    }
+
+    final (text, type) = switch (outcome) {
+      BindOutcome.bound => (l10n.str('ble_binding_success'), ToastType.success),
+      BindOutcome.alreadyBound => (l10n.str('ble_binding_already_bound'), ToastType.info),
+      BindOutcome.invalidPin => (l10n.pinInvalid, ToastType.error),
+      BindOutcome.locked => (l10n.pinLocked, ToastType.error),
+      BindOutcome.needLoginForSync => (l10n.str('ble_binding_need_login'), ToastType.info),
+      _ => (l10n.str('ble_binding_failed'), ToastType.error),
+    };
+    if (!mounted) return;
+    AppToast.show(context, text, type: type);
+    // 绑定成功：更新状态并刷新列表
+    if (outcome == BindOutcome.bound || outcome == BindOutcome.alreadyBound) {
+      _bleBoundByMac = {..._bleBoundByMac, device.macAddress: true};
+      _sessionBoundCount++;
+      _addToScanHistory(_displaySnOf(device), true);
+    }
+    if (mounted) setState(() => _bleDevices = getIt<BleDirectService>().enabled
+        ? getIt<BleDirectService>().scanResults
+        : _bleDevices);
+  }
+
+  /// BLE 设备列表项
+  Widget _buildBleDeviceTile(BleDiscoveredDevice device) {
+    final connected = getIt<BleDeviceManager>().sessionOf(device.macAddress) != null;
+    final bound = _bleBoundByMac[device.macAddress] ?? false;
+    final displaySn = _displaySnOf(device);
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
+      child: Row(
+        children: [
+          Container(
+            width: 36.w,
+            height: 36.w,
+            decoration: BoxDecoration(
+              color: AppColors.blue.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.router_rounded, size: 18.sp, color: AppColors.blue),
+          ),
+          SizedBox(width: 12.w),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  displaySn,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14.sp,
+                    fontWeight: FontWeight.w500,
+                    color: AppColor.textPrimary(context),
+                  ),
+                ),
+                SizedBox(height: 2.h),
+                Text(
+                  displaySn,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 11.sp, color: AppColor.textHint(context)),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(width: 8.w),
+          if (connected)
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
+              decoration: BoxDecoration(
+                color: AppColors.success.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10.r),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.check_circle_rounded, size: 12.sp, color: AppColors.success),
+                  SizedBox(width: 4.w),
+                  Text(
+                    AppLocalizations.of(context)!.str('ble_device_connected'),
+                    style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600, color: AppColors.success),
+                  ),
+                ],
+              ),
+            )
+          else if (bound)
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
+              decoration: BoxDecoration(
+                color: AppColors.blue.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10.r),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.link_rounded, size: 12.sp, color: AppColors.blue),
+                  SizedBox(width: 4.w),
+                  Text(
+                    AppLocalizations.of(context)!.str('ble_device_bound'),
+                    style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600, color: AppColors.blue),
+                  ),
+                ],
+              ),
+            )
+          else
+            FilledButton.tonal(
+              style: FilledButton.styleFrom(
+                padding: EdgeInsets.symmetric(horizontal: 14.w),
+                minimumSize: Size(0, 34.h),
+              ),
+              onPressed: () => _showBleBindDialog(device),
+              child: Text(
+                AppLocalizations.of(context)!.str('ble_bind_device'),
+                style: TextStyle(fontSize: 13.sp),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// BLE 设备列表区域（嵌入手动输入 tab 底部）
+  Widget _buildBleSection() {
+    final l10n = AppLocalizations.of(context)!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(height: 24.h),
+        Divider(height: 1, color: AppColor.outline(context)),
+        SizedBox(height: 16.h),
+        // 标题行：BLE 开关 + 刷新按钮
+        Row(
+          children: [
+            Icon(Icons.bluetooth_rounded, size: 20.sp, color: AppColors.blue),
+            SizedBox(width: 8.w),
+            Text(
+              l10n.str('ble_found_devices'),
+              style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600),
+            ),
+            const Spacer(),
+            // 刷新按钮
+            IconButton(
+              icon: Icon(Icons.refresh_rounded, size: 20.sp),
+              onPressed: _rescanBle,
+              tooltip: l10n.str('ble_rescan'),
+              visualDensity: VisualDensity.compact,
+            ),
+            SizedBox(width: 4.w),
+            // BLE 开关
+            SizedBox(
+              height: 28.h,
+              child: Switch(
+                value: _bleEnabled,
+                onChanged: _toggleBleFromAddDevice,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: 4.h),
+        Padding(
+          padding: EdgeInsets.only(left: 28.w),
+          child: Text(
+            l10n.str('ble_found_devices_hint'),
+            style: TextStyle(fontSize: 11.sp, color: AppColor.textHint(context)),
+          ),
+        ),
+        SizedBox(height: 12.h),
+        // 设备列表 / 空状态
+        if (_bleDevices.isNotEmpty)
+          Container(
+            decoration: BoxDecoration(
+              color: AppColor.surfaceContainer(context),
+              borderRadius: BorderRadius.circular(14.r),
+            ),
+            child: Column(
+              children: [
+                for (int i = 0; i < _bleDevices.length; i++) ...[
+                  if (i > 0) Divider(height: 1, indent: 62.w),
+                  _buildBleDeviceTile(_bleDevices[i]),
+                ],
+              ],
+            ),
+          )
+        else if (_bleScanning)
+          Padding(
+            padding: EdgeInsets.symmetric(vertical: 20.h),
+            child: Center(
+              child: Column(
+                children: [
+                  SizedBox(
+                    width: 24.w,
+                    height: 24.w,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.blue),
+                  ),
+                  SizedBox(height: 8.h),
+                  Text(l10n.str('ble_scanning_short'), style: TextStyle(fontSize: 12.sp, color: AppColor.textHint(context))),
+                ],
+              ),
+            ),
+          )
+        else if (!_bleAdapterOn)
+          _buildBleEmptyState(
+            Icons.bluetooth_disabled_rounded,
+            l10n.bleBluetoothOff,
+            l10n.str('ble_scan_enable_hint'),
+          )
+        else
+          _buildBleEmptyState(
+            Icons.bluetooth_searching_rounded,
+            l10n.str('ble_found_empty'),
+            l10n.str('ble_scanning_hint'),
+          ),
+        SizedBox(height: 8.h),
+        if (_bleEnabled)
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 4.w),
+            child: Text(
+              l10n.str('ble_scanning_hint'),
+              style: TextStyle(fontSize: 11.sp, color: AppColor.textHint(context)),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildBleEmptyState(IconData icon, String title, String? subtitle) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(vertical: 24.h),
+      decoration: BoxDecoration(
+        color: AppColor.surfaceContainer(context),
+        borderRadius: BorderRadius.circular(14.r),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 32.sp, color: AppColor.textHint(context)),
+          SizedBox(height: 8.h),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13.sp, color: AppColor.textHint(context)),
+          ),
+          if (subtitle != null) ...[
+            SizedBox(height: 4.h),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 11.sp, color: AppColor.textHint(context)),
+            ),
+          ],
+        ],
+      ),
     );
   }
 

@@ -156,13 +156,14 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
     );
 
     if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
     // 使用 switch pattern matching 替代 fold（避免分析器误报）
     switch (result) {
       case Left(value: final failure):
         setState(() {
           _cloudBindingPending = false;
           _phase = _QrBindPhase.cloudFailed;
-          _cloudErrorMessage = failure.message;
+          _cloudErrorMessage = l10n.translateError(failure.message);
         });
       case Right():
         // 云端绑定成功：展示 done 页，用户点击「完成」返回
@@ -380,9 +381,9 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
           FilledButton.icon(
             onPressed: () {
               final pin = _pinController.text.trim();
-              if (pin.isEmpty) {
+              if (pin.length != 6) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(l10n.pinRequired)),
+                  SnackBar(content: Text(l10n.pinLengthError)),
                 );
                 return;
               }

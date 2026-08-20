@@ -105,21 +105,27 @@ class BleProvisioningService {
   BluetoothDevice? _connectedDevice;
   BluetoothDevice? get connectedDevice => _connectedDevice;
 
-  // 订阅状态通知的特征
   // 超时定时器
   Timer? _scanTimer;
   Timer? _connectionTimer;
   Timer? _provisioningTimer;
 
+  // 扫描结果流订阅（dispose 时必须取消，否则页面销毁后回调仍会触发）
+  StreamSubscription<List<ScanResult>>? _scanResultsSub;
+
   // 是否正在运行
   bool _running = false;
   bool get isRunning => _running;
+
+  // 是否已释放（防止 dispose 后回调触发）
+  bool _disposed = false;
 
   // 本轮配网是否挂起了 BLE 直连（退出时需恢复）
   bool _directSuspended = false;
 
   /// 发射状态更新
   void _emitStatus(BleProvisioningStatus status) {
+    if (_disposed) return;
     _currentStatus = status;
     if (!_statusController.isClosed) {
       _statusController.add(status);
@@ -219,8 +225,9 @@ class BleProvisioningService {
         timeout: scanTimeout,
       );
 
-      // 监听扫描结果
-      FlutterBlueUltra.scanResults.listen((results) {
+      // 监听扫描结果（存储订阅以便 dispose 时取消，防止页面销毁后回调触发）
+      _scanResultsSub = FlutterBlueUltra.scanResults.listen((results) {
+        if (_disposed) return; // 服务已释放，忽略迟到的回调
         _discoveredDevices = results.map((result) {
           // 协议说明：广播名是 CS_INV_完整SN，GAP Device Name也是完整SN
           final advName = result.advertisementData.advName;
@@ -255,7 +262,9 @@ class BleProvisioningService {
           _scanTimer?.cancel();
         }
 
-        _devicesController.add(_discoveredDevices);
+        if (!_devicesController.isClosed) {
+          _devicesController.add(_discoveredDevices);
+        }
       });
 
       // 设置扫描超时
@@ -275,6 +284,8 @@ class BleProvisioningService {
   /// 停止扫描（不恢复直连，供连接流程内部使用）
   void _stopScanInternal() {
     FlutterBlueUltra.stopScan();
+    _scanResultsSub?.cancel();
+    _scanResultsSub = null;
     _scanTimer?.cancel();
     _running = false; // 重置运行标志
     if (_currentStatus == BleProvisioningStatus.scanning) {
@@ -617,7 +628,9 @@ class BleProvisioningService {
       _provisioningTimer = Timer(provisioningTimeout, () {
         if (_currentStatus == BleProvisioningStatus.waitingForResult) {
           _emitStatus(BleProvisioningStatus.timeout);
-          _resultController.add('ble_timeout');
+          if (!_resultController.isClosed) {
+            _resultController.add('ble_timeout');
+          }
         }
       });
 
@@ -663,6 +676,10 @@ class BleProvisioningService {
 
   /// 释放资源
   void dispose() {
+    _disposed = true;
+    // 先取消扫描订阅，防止回调在控制器关闭后触发
+    _scanResultsSub?.cancel();
+    _scanResultsSub = null;
     reset();
     _statusController.close();
     _devicesController.close();

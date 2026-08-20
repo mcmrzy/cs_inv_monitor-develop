@@ -162,7 +162,6 @@ class AppLocalizations {
   String get offline => _localizedStrings['offline']!;
   String get fault => _localizedStrings['fault']!;
   String get realtimeData => _localizedStrings['realtime_data']!;
-  String get energyFlow => _localizedStrings['energy_flow']!;
   String get historyChart => _localizedStrings['history_chart']!;
   String get all => _localizedStrings['all']!;
   String get normal => _localizedStrings['normal']!;
@@ -491,6 +490,10 @@ class AppLocalizations {
       _localizedStrings['offline_mode_settings']!;
   String get offlineModeSettingsHint =>
       _localizedStrings['offline_mode_settings_hint']!;
+  String get bleOfflineMode => _localizedStrings['ble_offline_mode'] ?? 'Offline Mode';
+  String get bleOfflineModeDesc => _localizedStrings['ble_offline_mode_desc'] ?? '';
+  String get deviceDirectToggle => _localizedStrings['device_direct_toggle'] ?? 'Direct';
+  String get deviceDirectToggleDesc => _localizedStrings['device_direct_toggle_desc'] ?? '';
   String get helpSelfService => _localizedStrings['help_self_service']!;
   String get helpSelfServiceHint =>
       _localizedStrings['help_self_service_hint']!;
@@ -751,9 +754,8 @@ class AppLocalizations {
   String get workStatus => _localizedStrings['work_status']!;
   String get faultCode => _localizedStrings['fault_code']!;
   String get alarmCodeLabel => _localizedStrings['alarm_code_label']!;
-  String get efficiency => _localizedStrings['efficiency']!;
   String get inverterTemp => _localizedStrings['inverter_temp']!;
-  String get mosTemp => _localizedStrings['mos_temp']!;
+  String get boostTemp => _localizedStrings['boost_temp']!;
   String get lastUpdate => _localizedStrings['last_update']!;
   String get historyCurve => _localizedStrings['history_curve']!;
 
@@ -1094,9 +1096,6 @@ class AppLocalizations {
   String get tabWorkMode => _localizedStrings['tab_work_mode'] ?? 'Work Mode';
   String get tabAdvanced =>
       _localizedStrings['tab_advanced'] ?? 'Advanced Settings';
-  String get settingsEntryDesc =>
-      _localizedStrings['settings_entry_desc'] ??
-      'View & modify device parameters';
   String settingLabel(String key) => _localizedStrings[key] ?? key;
   String enumLabel(String key) => _localizedStrings[key] ?? key;
   String get settingReadSuccess =>
@@ -1629,6 +1628,7 @@ class AppLocalizations {
   String get pinInputConfirm => _localizedStrings['pin_input_confirm']!;
   String get pinInvalid => _localizedStrings['pin_invalid']!;
   String get pinLocked => _localizedStrings['pin_locked']!;
+  String get pinLengthError => _localizedStrings['pin_length_error'] ?? 'PIN must be exactly 6 digits';
   String get pinCheckFailed => _localizedStrings['pin_check_failed']!;
   String get bindRegisteredLater => _localizedStrings['bind_registered_later']!;
   String get pinRequired => _localizedStrings['pin_required']!;

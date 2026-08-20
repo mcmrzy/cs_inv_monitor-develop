@@ -64,6 +64,8 @@ export const otaApi = {
   rollbackUpgrade: (data: { sn: string; package_id: number }) => api.post('/ota/rollback', data),
   // 获取设备可用升级包
   getAvailablePackages: (sn: string) => api.get(`/ota/available-packages/${sn}`, { expectedDataShape: 'object' }),
+  // 获取设备升级历史
+  getDeviceUpgradeHistory: (sn: string, params?: any) => api.get(`/ota/devices/${sn}/history`, { params, expectedDataShape: 'page' }),
 
   // 升级任务管理（新统一接口）
   listTasks: (params?: any) => api.get('/ota/tasks', { params, expectedDataShape: 'page' }),

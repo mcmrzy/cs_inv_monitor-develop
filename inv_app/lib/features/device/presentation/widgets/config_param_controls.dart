@@ -66,7 +66,6 @@ const List<SettingsCategory> settingsCategories = [
       'set_max_chg_curr',
       'set_max_charge_current',
       'set_ac_charge_current',
-      'set_charge_priority',
       'set_charge_time',
       'set_close_charge_time',
       'set_equalize_enable',

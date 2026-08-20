@@ -1,15 +1,15 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
-  Tag, Button, Space, Spin, Tabs, Row, Col, Empty, Progress, Typography, Select, Statistic,
+  Tag, Button, Space, Spin, Tabs, Row, Col, Empty, Progress, Typography, Select, Statistic, Form, message, Upload,
 } from 'antd'
-import { ProTable, ProCard } from '@ant-design/pro-components'
+import { ProTable, ProCard, ModalForm, ProFormText } from '@ant-design/pro-components'
 import type { ProColumns } from '@ant-design/pro-components'
 import {
   ArrowLeftOutlined, DesktopOutlined, CheckCircleOutlined,
   SunOutlined, WarningOutlined, ThunderboltOutlined,
-  ReloadOutlined, EditOutlined, CloudOutlined, HomeOutlined, TableOutlined,
+  ReloadOutlined, EditOutlined, CloudOutlined, HomeOutlined, TableOutlined, PictureOutlined,
 } from '@ant-design/icons'
 import api from '@/services/api'
 import { deviceApi } from '@/services/deviceApi'
@@ -18,6 +18,10 @@ import { formatInTimezone } from '@/utils/timezone'
 import { safeNum } from '@/utils/format'
 import useTimezoneStore from '@/stores/timezoneStore'
 import useTranslation from '@/hooks/useTranslation'
+import useAuthStore from '@/stores/authStore'
+import { API_BASE, resolveMediaUrl } from '@/utils/urls'
+import RegionPicker from '@/components/RegionPicker'
+import LocationPicker, { LocationPickerRef } from '@/components/LocationPicker'
 import EnergyFlowDiagram from './components/EnergyFlowDiagram'
 import SocialContribution from './components/SocialContribution'
 import StationStatisticsTab from './components/StationStatisticsTab'
@@ -142,6 +146,12 @@ const StationDetailPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('overview')
   const [selectedDeviceSn, setSelectedDeviceSn] = useState<string>('all')
   const [modalDeviceSn, setModalDeviceSn] = useState<string | null>(null)
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [editForm] = Form.useForm()
+  const [editLocation, setEditLocation] = useState<{ lat: number; lng: number } | undefined>(undefined)
+  const editMapRef = useRef<LocationPickerRef>(null)
+  const [editImageUrl, setEditImageUrl] = useState<string | undefined>(undefined)
+  const token = useAuthStore((s) => s.token)
 
   const { data: station, isLoading: stationLoading, refetch: refetchStation } = useQuery({
     queryKey: ['station', id],
@@ -449,6 +459,52 @@ const StationDetailPage: React.FC = () => {
 
   const recentAlarms = alarms.slice(0, 5)
 
+  /* ==================== 编辑电站 ==================== */
+  // 地理编码（使用高德地图 API）
+  const geocodeAddress = async (province: string, city: string, district: string, address: string, country: string, mapRef: React.RefObject<LocationPickerRef | null>) => {
+    const fullAddress = [country, province, city, district, address].filter(Boolean).join(' ')
+    if (!fullAddress.trim()) return
+    try {
+      const res = await fetch(`https://restapi.amap.com/v3/geocode/geo?address=${encodeURIComponent(fullAddress)}&key=9b882d2b07f28a4b28a8a8f0b8a8a8a8&output=json`)
+      const data = await res.json()
+      if (data.geocodes?.[0]?.location) {
+        const [lng, lat] = data.geocodes[0].location.split(',').map(Number)
+        setEditLocation({ lat, lng })
+        mapRef.current?.setPosition({ lat, lng })
+      }
+    } catch { /* ignore geocode errors */ }
+  }
+
+  const handleEditSave = async (values: Record<string, unknown>) => {
+    try {
+      if (editLocation && editLocation.lat !== 0) {
+        values.latitude = editLocation.lat
+        values.longitude = editLocation.lng
+      }
+      if (editImageUrl) {
+        values.card_image_url = editImageUrl
+      }
+      await api.put(`/stations/${id}`, values)
+      message.success(t('station.updateSuccess'))
+      refetchStation()
+      setEditLocation(undefined)
+      setEditImageUrl(undefined)
+      return true
+    } catch {
+      message.error(t('station.updateFailed'))
+      return false
+    }
+  }
+
+  const openEditModal = () => {
+    editForm.setFieldsValue(station)
+    if (station.latitude && station.longitude) {
+      setEditLocation({ lat: station.latitude, lng: station.longitude })
+    }
+    setEditImageUrl(station.card_image_url || undefined)
+    setEditModalOpen(true)
+  }
+
   /* ==================== 概览 Tab ==================== */
   const renderOverviewTab = () => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -709,7 +765,7 @@ const StationDetailPage: React.FC = () => {
         </Col>
         <Col>
           <Space>
-            <Button icon={<EditOutlined />} size="small" onClick={() => navigate(`/stations/${id}/edit`)}>
+            <Button icon={<EditOutlined />} size="small" onClick={openEditModal}>
               {t('common.edit')}
             </Button>
             <Button icon={<ReloadOutlined />} size="small" onClick={() => refetchStation()}>
@@ -759,6 +815,103 @@ const StationDetailPage: React.FC = () => {
         deviceSn={modalDeviceSn}
         onClose={() => setModalDeviceSn(null)}
       />
+
+      {/* 编辑电站弹窗（简化版：名称 + 地址 + 图片） */}
+      <ModalForm
+        title={t('station.editStation')}
+        open={editModalOpen}
+        onOpenChange={(open) => { if (!open) { setEditModalOpen(false); setEditLocation(undefined); setEditImageUrl(undefined) } }}
+        form={editForm}
+        onFinish={handleEditSave}
+        layout="vertical"
+        width={600}
+        modalProps={{ destroyOnHidden: true, maskClosable: false }}
+      >
+        <ProFormText
+          name="name"
+          label={t('station.stationName')}
+          rules={[{ required: true, message: t('station.stationName') + ' ' + t('common.required') }]}
+          placeholder={t('station.stationName')}
+        />
+        <Form.Item label={t('station.province')} name="region">
+          <RegionPicker
+            value={undefined}
+            onChange={(region) => {
+              editForm.setFieldsValue({
+                country: region[0] || '',
+                province: region[1] || '',
+                city: region[2] || ''
+              })
+              geocodeAddress(region[1] || '', region[2] || '', '', editForm.getFieldValue('address') || '', region[0] || '', editMapRef)
+            }}
+            mode="station"
+          />
+        </Form.Item>
+        <ProFormText
+          name="address"
+          label={t('station.address')}
+          placeholder={t('station.address')}
+          fieldProps={{
+            onChange: () => {
+              const v = editForm.getFieldsValue()
+              geocodeAddress(v.province || '', v.city || '', v.district || '', v.address || '', v.country || '', editMapRef)
+            }
+          }}
+        />
+        <Form.Item label={t('station.mapSelectLocation') || 'Select on map'}>
+          <LocationPicker
+            ref={editMapRef}
+            value={editLocation}
+            onChange={setEditLocation}
+            onReverseGeocode={(_pos, addr) => {
+              editForm.setFieldsValue({ address: addr })
+            }}
+            initialCenter={editLocation && (editLocation.lat !== 0 || editLocation.lng !== 0) ? [editLocation.lat, editLocation.lng] : [30, 110]}
+            initialZoom={editLocation && (editLocation.lat !== 0 || editLocation.lng !== 0) ? 14 : 4}
+          />
+        </Form.Item>
+        <Form.Item label={t('station.stationImage') || '电站图片'}>
+          <Upload
+            name="file"
+            action={`${API_BASE}/upload/station-image`}
+            headers={{ Authorization: token ? `Bearer ${token}` : '' }}
+            showUploadList={false}
+            accept="image/*"
+            beforeUpload={(file) => {
+              if (!file.type.startsWith('image/')) { message.error(t('upload.imageOnly')); return Upload.LIST_IGNORE }
+              if (file.size > 5 * 1024 * 1024) { message.error('图片大小不能超过 5MB'); return Upload.LIST_IGNORE }
+              return true
+            }}
+            onChange={(info) => {
+              if (info.file.status === 'done') {
+                const resp = info.file.response
+                if (resp?.code === 0 && resp?.data?.url) {
+                  setEditImageUrl(resp.data.url)
+                  message.success(t('upload.success'))
+                } else {
+                  message.error(resp?.message || t('upload.failed'))
+                }
+              } else if (info.file.status === 'error') {
+                message.error(t('upload.failed'))
+              }
+            }}
+          >
+            {editImageUrl ? (
+              <div style={{ position: 'relative', cursor: 'pointer', display: 'inline-block' }}>
+                <img src={resolveMediaUrl(editImageUrl, true)} alt="station" style={{ width: 200, height: 120, objectFit: 'cover', borderRadius: 8, border: '1px solid #d9d9d9' }} />
+                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.5)', color: '#fff', textAlign: 'center', fontSize: 12, padding: '4px 0', borderRadius: '0 0 8px 8px' }}>
+                  <PictureOutlined style={{ marginRight: 4 }} />{t('upload.changeAvatar')}
+                </div>
+              </div>
+            ) : (
+              <div style={{ width: 200, height: 120, border: '1px dashed #d9d9d9', borderRadius: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: '#fafafa' }}>
+                <PictureOutlined style={{ fontSize: 24, color: '#999' }} />
+                <div style={{ marginTop: 8, color: '#999', fontSize: 13 }}>{t('common.upload') || '上传图片'}</div>
+              </div>
+            )}
+          </Upload>
+        </Form.Item>
+      </ModalForm>
     </div>
   )
 }

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Form, Input, Button, Checkbox, App, Space, Alert, Dropdown, Segmented, Select } from 'antd'
-import { UserOutlined, LockOutlined, MailOutlined, PhoneOutlined, SafetyOutlined, CloudOutlined, LineChartOutlined, GlobalOutlined } from '@ant-design/icons'
+import { UserOutlined, LockOutlined, MailOutlined, PhoneOutlined, SafetyOutlined, CloudOutlined, LineChartOutlined, GlobalOutlined, ApiOutlined } from '@ant-design/icons'
 import useAuthStore from '@/stores/authStore'
 import useLocaleStore from '@/stores/localeStore'
 import api from '@/services/api'
@@ -45,15 +45,15 @@ type Lang = 'zh' | 'en'
 
 const i18n: Record<Lang, Record<string, string>> = {
   zh: {
-    brand: '辰烁科技', brandSub: 'CSERGY', title: '光伏逆变器\n智能运维平台',
+    brand: '辰烁科技', brandSub: 'CSERGY', title: '光伏逆变器\n智能监控平台',
     subtitle: '一站式管理您的光伏逆变器设备',
     f1Title: '云端集中监控', f1Desc: '实时采集设备数据，多电站统一管理',
-    f2Title: '智能告警引擎', f2Desc: '自定义阈值规则，故障秒级推送通知',
+    f2Title: '远程设备管理', f2Desc: '远程配置与控制，设备状态实时掌握',
     f3Title: '深度数据分析', f3Desc: '发电效率统计，设备性能对比分析',
     welcome: '欢迎回来', createAcc: '创建账号', resetPwd: '重置密码',
     welcomeSub: '登录您的账户以继续', createSub: '注册新账户开始使用', resetSub: '通过邮箱或手机号重置密码',
     login: '密码登录', loginByCode: '验证码登录',
-    account: '手机号 / 邮箱', password: '密码', remember: '记住账号', forgot: '忘记密码？',
+    account: '手机号 / 邮箱', password: '密码', remember: '记住密码', forgot: '忘记密码？',
     submitLogin: '登 录', noAccount: '还没有账号？', goRegister: '立即注册',
     phone: '手机号', email: '邮箱', code: '验证码', sendCode: '发送验证码', resendCode: 's 后重发',
     loginByPhoneCode: '手机号登录', loginByEmailCode: '邮箱登录',
@@ -63,7 +63,7 @@ const i18n: Record<Lang, Record<string, string>> = {
     nickname: '昵称', confirmPassword: '确认密码', newPassword: '新密码', confirmNewPwd: '确认新密码',
     submitRegister: '注 册', hasAccount: '已有账号？', goLogin: '立即登录',
     submitReset: '重置密码', goBack: '返回登录', emailPlaceholder: '注册时使用的邮箱',
-    footer: '© 2026 辰烁科技 · 光伏逆变器智能运维平台',
+    footer: '© 2026 辰烁科技 · 光伏逆变器智能监控平台',
     errLogin: '登录失败，请检查手机号/邮箱和密码是否正确',
     errRegister: '注册失败，请检查信息后重试',
     errReset: '重置失败，请检查邮箱和验证码是否正确',
@@ -79,15 +79,15 @@ const i18n: Record<Lang, Record<string, string>> = {
     errRequestFailed: '请求失败，请稍后重试',
   },
   en: {
-    brand: 'CHENSHUO', brandSub: 'TECHNOLOGY', title: 'Solar Inverter\nSmart O&M Platform',
+    brand: 'CHENSHUO', brandSub: 'TECHNOLOGY', title: 'Solar Inverter\nSmart Monitoring Platform',
     subtitle: 'All-in-one inverter management',
     f1Title: 'Cloud Monitoring', f1Desc: 'Real-time data, multi-station management',
-    f2Title: 'Smart Alerts', f2Desc: 'Custom thresholds, instant fault notifications',
+    f2Title: 'Remote Device Mgmt', f2Desc: 'Remote config & control, real-time device status',
     f3Title: 'Data Analytics', f3Desc: 'Generation stats, device performance comparison',
     welcome: 'Welcome Back', createAcc: 'Create Account', resetPwd: 'Reset Password',
     welcomeSub: 'Sign in to your account', createSub: 'Register a new account', resetSub: 'Reset via email or phone',
     login: 'Password Login', loginByCode: 'Code Login',
-    account: 'Phone / Email', password: 'Password', remember: 'Remember account', forgot: 'Forgot password?',
+    account: 'Phone / Email', password: 'Password', remember: 'Remember password', forgot: 'Forgot password?',
     submitLogin: 'Sign In', noAccount: "Don't have an account? ", goRegister: 'Register',
     phone: 'Phone', email: 'Email', code: 'Verification Code', sendCode: 'Send Code', resendCode: 's',
     loginByPhoneCode: 'Phone Login', loginByEmailCode: 'Email Login',
@@ -97,7 +97,7 @@ const i18n: Record<Lang, Record<string, string>> = {
     nickname: 'Nickname', confirmPassword: 'Confirm Password', newPassword: 'New Password', confirmNewPwd: 'Confirm New Password',
     submitRegister: 'Sign Up', hasAccount: 'Already have an account? ', goLogin: 'Sign In',
     submitReset: 'Reset Password', goBack: 'Back to Login', emailPlaceholder: 'Your registered email',
-    footer: '© 2026 CSERGY · Solar Inverter Smart O&M Platform',
+    footer: '© 2026 CSERGY · Solar Inverter Smart Monitoring Platform',
     errLogin: 'Login failed. Please check your phone/email and password.',
     errRegister: 'Registration failed. Please check your info and try again.',
     errReset: 'Reset failed. Please check your email and verification code.',
@@ -140,11 +140,12 @@ const LoginPage: React.FC = () => {
   const [phoneRegisterForm] = Form.useForm()
   const [selectedCountryCode, setSelectedCountryCode] = useState<'CN' | string>('CN') // 默认中国
 
-  // 从 localStorage 读取保存的账号并自动填充
+  // 从 localStorage 读取保存的账号和密码并自动填充
   useEffect(() => {
     const savedAccount = localStorage.getItem('remembered_account')
+    const savedPassword = localStorage.getItem('remembered_password')
     if (savedAccount) {
-      loginForm.setFieldsValue({ account: savedAccount, remember: true })
+      loginForm.setFieldsValue({ account: savedAccount, password: savedPassword || '', remember: true })
     }
   }, [loginForm])
 
@@ -256,11 +257,13 @@ const LoginPage: React.FC = () => {
   // 登录按钮点击
   const onLogin = async (values: { account: string; password: string; remember?: boolean }) => {
     await performLogin(values)
-    // 登录成功后保存账号（performLogin 成功会 navigate，所以这里只在未跳转时执行）
+    // 登录成功后保存账号和密码（performLogin 成功会 navigate，所以这里只在未跳转时执行）
     if (values.remember) {
       localStorage.setItem('remembered_account', values.account)
+      localStorage.setItem('remembered_password', values.password)
     } else {
       localStorage.removeItem('remembered_account')
+      localStorage.removeItem('remembered_password')
     }
   }
 
@@ -446,7 +449,7 @@ const LoginPage: React.FC = () => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 22, maxWidth: 400, marginBottom: 40 }}>
               {[
                 { icon: <CloudOutlined />, title: t.f1Title, desc: t.f1Desc, color: '#93c5fd' },
-                { icon: <SafetyOutlined />, title: t.f2Title, desc: t.f2Desc, color: '#86efac' },
+                { icon: <ApiOutlined />, title: t.f2Title, desc: t.f2Desc, color: '#86efac' },
                 { icon: <LineChartOutlined />, title: t.f3Title, desc: t.f3Desc, color: '#fcd34d' },
               ].map((f, i) => (
                 <div key={i} style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>

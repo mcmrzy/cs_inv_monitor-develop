@@ -63,6 +63,12 @@ abstract class StorageService implements StorageServiceLike {
   Future<int> getBlePollInterval();
   Future<void> saveBlePollInterval(int seconds);
 
+  Future<bool> getIsOfflineMode();
+  Future<void> saveIsOfflineMode(bool value);
+
+  Future<Set<String>> getDirectConnectedDevices();
+  Future<void> saveDirectConnectedDevices(Set<String> macAddresses);
+
   Future<String?> getLocale();
   Future<void> saveLocale(String locale);
   Future<void> deleteLocale();
@@ -170,6 +176,33 @@ class StorageServiceImpl implements StorageService {
   @override
   Future<void> saveBlePollInterval(int seconds) async {
     await _sharedPreferences.setInt(_kBlePollInterval, seconds);
+  }
+
+  static const String _kOfflineMode = 'offline_mode';
+  static const String _kDirectConnectedDevices = 'direct_connected_devices';
+
+  @override
+  Future<bool> getIsOfflineMode() async {
+    return _sharedPreferences.getBool(_kOfflineMode) ?? false;
+  }
+
+  @override
+  Future<void> saveIsOfflineMode(bool value) async {
+    await _sharedPreferences.setBool(_kOfflineMode, value);
+  }
+
+  @override
+  Future<Set<String>> getDirectConnectedDevices() async {
+    final list = _sharedPreferences.getStringList(_kDirectConnectedDevices);
+    return list?.toSet() ?? <String>{};
+  }
+
+  @override
+  Future<void> saveDirectConnectedDevices(Set<String> macAddresses) async {
+    await _sharedPreferences.setStringList(
+      _kDirectConnectedDevices,
+      macAddresses.toList(),
+    );
   }
 
   @override

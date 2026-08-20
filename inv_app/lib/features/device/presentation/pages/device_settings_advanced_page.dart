@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -11,11 +12,13 @@ import 'package:inv_app/features/device/domain/entities/config_schema.dart';
 import 'package:inv_app/features/device/presentation/widgets/config_param_controls.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
-/// 第 3 层：高级参数页（工程师模式）
+/// 高级参数设置页（工程师模式）
 ///
-/// 内容 = 全部 schema 键按 group_code 分组渲染，外加「危险操作」区块
-/// （force_charge / force_discharge 开关与 restart 按钮，沿用旧设置页逻辑）。
-/// 顶部黄色警示条提示谨慎修改，不做密码门（产品决定）。
+/// 功能：
+/// - 进入页面自动发送 query_config 读取设备当前配置
+/// - 顶部提供手动「读取设备」按钮
+/// - 全量 schema 按 group_code 分组渲染
+/// - 修改后底部显示「应用」按钮
 class DeviceSettingsAdvancedPage extends StatefulWidget {
   final String sn;
 
@@ -33,12 +36,14 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
   /// 原始值（最近一次服务端状态）
   Map<String, dynamic> _original = {};
 
-  /// 工作值（含未应用修改，含 force_charge/force_discharge）
+  /// 工作值（含未应用修改）
   Map<String, dynamic> _pending = {};
 
   bool _loading = true;
   bool _failed = false;
   bool _applying = false;
+  bool _reading = false;
+  DateTime? _lastReadAt;
 
   @override
   void initState() {
@@ -48,7 +53,7 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
 
   // ==================== 数据加载 ====================
 
-  /// 拉取 schema + control-state（进入页面重新请求，简单可靠）
+  /// 拉取 schema + control-state，然后自动发送 query_config
   Future<void> _fetchAll() async {
     setState(() {
       _loading = true;
@@ -77,7 +82,8 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
           if (s.paramKey.isNotEmpty) schemas[s.paramKey] = s;
         }
       }
-      final values = mergeControlState(state);
+      // 基线用 reported 优先：设备真实值优先，未被设备回报的键回退 desired
+      final values = mergeControlStateReportedFirst(state);
       if (!mounted) return;
       setState(() {
         _schemaMap = schemas;
@@ -85,6 +91,8 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
         _pending = Map.from(values);
         _loading = false;
       });
+      // 自动发送 query_config 读取设备实际配置
+      _readDeviceConfig();
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -94,7 +102,7 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
     }
   }
 
-  /// 仅刷新 control-state（应用成功后调用）
+  /// 仅刷新 control-state
   Future<void> _refreshState() async {
     try {
       final dio = getIt<Dio>();
@@ -104,14 +112,62 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
         validate: (v) => v is Map<String, dynamic>,
         expected: 'an object',
       );
-      final values = mergeControlState(state);
+      final values = mergeControlStateReportedFirst(state);
       if (!mounted) return;
       setState(() {
         _original = Map.from(values);
         _pending = Map.from(values);
       });
     } catch (_) {
-      // 刷新失败静默：保留本地已应用状态
+      // 刷新失败静默
+    }
+  }
+
+  /// 发送 query_config 命令读取设备当前配置
+  Future<void> _readDeviceConfig() async {
+    if (_reading) return;
+    setState(() => _reading = true);
+    final l10n = AppLocalizations.of(context)!;
+
+    try {
+      final dio = getIt<Dio>();
+      // 发送 query_config 命令
+      final response = await dio.post(
+        '/devices/by-sn/${widget.sn}/control',
+        data: {'command': 'query_config', 'params': {}},
+      );
+      unwrapApiResponse<Map<String, dynamic>>(
+        response.data,
+        validate: (value) =>
+            value is Map<String, dynamic> && value['task_id'] is String,
+        expected: 'an object containing task_id',
+      );
+
+      // 等待设备响应后刷新状态（给设备 2 秒处理时间）
+      await Future.delayed(const Duration(seconds: 2));
+      await _refreshState();
+
+      if (!mounted) return;
+      setState(() {
+        _reading = false;
+        _lastReadAt = DateTime.now();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.str('settings_read_success')),
+          backgroundColor: AppColors.success,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _reading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.str('settings_read_failed')),
+          backgroundColor: AppColors.warning,
+        ),
+      );
     }
   }
 
@@ -126,7 +182,6 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
   bool _isModified(String key) =>
       _pending.containsKey(key) && _pending[key] != _original[key];
 
-  /// 请求修改：confirmation_mode=='modal' 的参数先弹确认框再纳入
   void _requestChange(ConfigParamSchema schema, dynamic newValue) {
     if (schema.needsModalConfirm) {
       _showModalConfirm(schema, newValue);
@@ -143,18 +198,12 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
       builder: (ctx) => AlertDialog(
         title: Row(
           children: [
-            Icon(
-              Icons.warning_amber_rounded,
-              color: AppColors.warning,
-              size: 24.sp,
-            ),
+            Icon(Icons.warning_amber_rounded, color: AppColors.warning, size: 24.sp),
             SizedBox(width: 8.w),
             Expanded(child: Text(l10n.str('config_confirm_title'))),
           ],
         ),
-        content: Text(
-          l10n.str('config_confirm_body', {'param': name}),
-        ),
+        content: Text(l10n.str('config_confirm_body', {'param': name})),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -172,7 +221,7 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
     );
   }
 
-  /// 应用修改：POST set_params 仅写改动项（含 force_charge/force_discharge）
+  /// 应用修改：POST set_params 仅写改动项
   Future<void> _applyChanges() async {
     final l10n = AppLocalizations.of(context)!;
     final paramsToWrite = <String, dynamic>{};
@@ -198,10 +247,7 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.settingSetSuccess),
-          backgroundColor: AppColors.success,
-        ),
+        SnackBar(content: Text(l10n.settingSetSuccess), backgroundColor: AppColors.success),
       );
       setState(() {
         _original = Map.from(_pending);
@@ -211,16 +257,13 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.settingSetFailed),
-          backgroundColor: AppColors.error,
-        ),
+        SnackBar(content: Text(l10n.settingSetFailed), backgroundColor: AppColors.error),
       );
       setState(() => _applying = false);
     }
   }
 
-  /// 发送单命令（restart 等，沿用旧设置页逻辑）
+  /// 发送单命令（restart 等）
   Future<void> _sendSingleCommand(String command) async {
     final l10n = AppLocalizations.of(context)!;
     try {
@@ -237,25 +280,18 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l10n.commandSent),
-            backgroundColor: AppColors.success,
-          ),
+          SnackBar(content: Text(l10n.commandSent), backgroundColor: AppColors.success),
         );
       }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l10n.settingSetFailed),
-            backgroundColor: AppColors.error,
-          ),
+          SnackBar(content: Text(l10n.settingSetFailed), backgroundColor: AppColors.error),
         );
       }
     }
   }
 
-  /// 危险操作确认弹窗（沿用旧设置页样式），确认后直接发送单命令（restart）
   void _showDangerousConfirm(String confirmKey, String command) {
     final l10n = AppLocalizations.of(context)!;
     showDialog(
@@ -263,28 +299,51 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
       builder: (ctx) => AlertDialog(
         title: Row(
           children: [
-            Icon(
-              Icons.warning_amber_rounded,
-              color: AppColors.error,
-              size: 24.sp,
-            ),
+            Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 24.sp),
             SizedBox(width: 8.w),
-            Expanded(
-              child: Text(l10n.settingForceConfirmTitle),
-            ),
+            Expanded(child: Text(l10n.settingForceConfirmTitle)),
           ],
         ),
         content: Text(l10n.str(confirmKey)),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(l10n.cancel),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l10n.cancel)),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: AppColors.error),
             onPressed: () {
               Navigator.pop(ctx);
               _sendSingleCommand(command);
+            },
+            child: Text(l10n.confirm),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDangerousConfirmWithCallback(
+    String confirmKey,
+    bool newValue,
+    ValueChanged<bool> onConfirm,
+  ) {
+    final l10n = AppLocalizations.of(context)!;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 24.sp),
+            SizedBox(width: 8.w),
+            Expanded(child: Text(l10n.settingForceConfirmTitle)),
+          ],
+        ),
+        content: Text(l10n.str(confirmKey)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l10n.cancel)),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () {
+              Navigator.pop(ctx);
+              onConfirm(newValue);
             },
             child: Text(l10n.confirm),
           ),
@@ -308,15 +367,28 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
         centerTitle: true,
         elevation: 0,
         scrolledUnderElevation: 0.5,
+        actions: [
+          // 读取设备按钮
+          IconButton(
+            icon: _reading
+                ? SizedBox(
+                    width: 20.w,
+                    height: 20.w,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.primary,
+                    ),
+                  )
+                : Icon(Icons.download_rounded, size: 22),
+            tooltip: l10n.str('settings_read_device'),
+            onPressed: _reading ? null : _readDeviceConfig,
+          ),
+        ],
       ),
       body: _buildBody(l10n),
       bottomNavigationBar: _modifiedCount > 0
-          ? ConfigApplyBar(
-              modifiedCount: _modifiedCount,
-              applying: _applying,
-              onApply: _applyChanges,
-            )
-          : null,
+          ? _buildApplyBar(l10n)
+          : _buildHintBar(l10n),
     );
   }
 
@@ -334,7 +406,7 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
       );
     }
 
-    // 全部 schema 按 group_code 分组（组内按 sort_order），并按 visibility 过滤
+    // 全量 schema 按 group_code 分组
     final grouped = <String, List<ConfigParamSchema>>{};
     for (final schema in _schemaMap.values) {
       if (!configParamVisible(schema, _pending)) continue;
@@ -344,51 +416,97 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
       list.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
     }
 
-    return ListView(
-      padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 96.h),
+    return Column(
       children: [
-        // 顶部黄色警示条
-        _buildWarningBanner(l10n),
-        // 按 group_code 分组渲染全部参数
-        for (final groupCode in configGroupOrder)
-          if ((grouped[groupCode] ?? const []).isNotEmpty) ...[
-            _buildGroupHeader(l10n, groupCode),
-            for (final schema in grouped[groupCode]!)
-              ConfigParamControl(
-                schema: schema,
-                value: _pending[schema.paramKey],
-                modified: _isModified(schema.paramKey),
-                onRequestChange: (v) => _requestChange(schema, v),
-              ),
-          ],
-        // 危险操作区块
-        _buildDangerousZone(l10n),
+        // 读取状态提示条
+        if (_reading) _buildReadingBanner(l10n),
+        // 主内容
+        Expanded(
+          child: ListView(
+            padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 96.h),
+            children: [
+              // 顶部提示条
+              _buildInfoBanner(l10n),
+              SizedBox(height: 8.h),
+              // 按 group_code 分组渲染
+              for (final groupCode in configGroupOrder)
+                if ((grouped[groupCode] ?? const []).isNotEmpty) ...[
+                  _buildGroupHeader(l10n, groupCode),
+                  _buildGroupCard(grouped[groupCode]!),
+                  SizedBox(height: 12.h),
+                ],
+              // 危险操作区块
+              _buildDangerousZone(l10n),
+            ],
+          ),
+        ),
       ],
     );
   }
 
-  /// 黄色警示条：高级参数供安装调试使用
-  Widget _buildWarningBanner(AppLocalizations l10n) {
+  /// 读取中提示条
+  Widget _buildReadingBanner(AppLocalizations l10n) {
     return Container(
-      margin: EdgeInsets.only(bottom: 12.h),
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h),
+      color: AppColors.primary.withValues(alpha: 0.08),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 16.w,
+            height: 16.w,
+            child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+          ),
+          SizedBox(width: 10.w),
+          Text(
+            l10n.str('settings_reading_device'),
+            style: TextStyle(fontSize: 13.sp, color: AppColors.primary, fontWeight: FontWeight.w500),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 顶部信息提示条
+  Widget _buildInfoBanner(AppLocalizations l10n) {
+    return Container(
       padding: EdgeInsets.all(12.w),
       decoration: BoxDecoration(
-        color: AppColors.warning.withValues(alpha: 0.12),
+        color: AppColors.primary.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(10.r),
-        border: Border.all(color: AppColors.warning.withValues(alpha: 0.35)),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.15)),
       ),
       child: Row(
         children: [
-          Icon(Icons.warning_amber_rounded, size: 18.w, color: AppColors.warning),
+          Icon(Icons.info_outline_rounded, size: 18.w, color: AppColors.primary),
           SizedBox(width: 10.w),
           Expanded(
-            child: Text(
-              l10n.str('settings_advanced_warning'),
-              style: TextStyle(
-                fontSize: 12.sp,
-                color: AppColors.warning,
-                fontWeight: FontWeight.w500,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.str('settings_write_hint'),
+                  style: TextStyle(fontSize: 12.sp, color: AppColors.primary),
+                ),
+                if (_lastReadAt != null) ...[
+                  SizedBox(height: 4.h),
+                  Text(
+                    '${l10n.str("settings_last_read")}: ${_formatTime(_lastReadAt!)}',
+                    style: TextStyle(fontSize: 11.sp, color: AppColor.textSecondary(context)),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          // 手动读取按钮
+          TextButton.icon(
+            onPressed: _reading ? null : _readDeviceConfig,
+            icon: Icon(Icons.refresh_rounded, size: 16.sp),
+            label: Text(l10n.str('settings_read_device'), style: TextStyle(fontSize: 12.sp)),
+            style: TextButton.styleFrom(
+              padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
           ),
         ],
@@ -396,36 +514,159 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
     );
   }
 
+  String _formatTime(DateTime dt) {
+    return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')}';
+  }
+
   /// 分组标题
   Widget _buildGroupHeader(AppLocalizations l10n, String groupCode) {
     return Padding(
-      padding: EdgeInsets.fromLTRB(2.w, 8.h, 2.w, 8.h),
-      child: Text(
-        configGroupTitle(l10n, groupCode),
-        style: TextStyle(
-          fontSize: 13.sp,
-          fontWeight: FontWeight.w600,
-          color: AppColor.textSecondary(context),
+      padding: EdgeInsets.only(bottom: 8.h),
+      child: Row(
+        children: [
+          Container(
+            width: 3.w,
+            height: 14.h,
+            decoration: BoxDecoration(
+              color: AppColors.primary,
+              borderRadius: BorderRadius.circular(2.r),
+            ),
+          ),
+          SizedBox(width: 8.w),
+          Text(
+            configGroupTitle(l10n, groupCode),
+            style: TextStyle(
+              fontSize: 14.sp,
+              fontWeight: FontWeight.w600,
+              color: AppColor.textPrimary(context),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 分组卡片：将同组参数包裹在圆角卡片内
+  Widget _buildGroupCard(List<ConfigParamSchema> schemas) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(12.r),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8.r,
+            offset: Offset(0, 2.h),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12.r),
+        child: Column(
+          children: [
+            for (int i = 0; i < schemas.length; i++) ...[
+              if (i > 0)
+                Divider(height: 1.h, indent: 16.w, endIndent: 16.w),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 4.h),
+                child: ConfigParamControl(
+                  schema: schemas[i],
+                  value: _pending[schemas[i].paramKey],
+                  modified: _isModified(schemas[i].paramKey),
+                  onRequestChange: (v) => _requestChange(schemas[i], v),
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );
   }
 
-  /// 危险操作区块：强制充电/放电开关 + 故障复位按钮（沿用旧设置页逻辑）
-  Widget _buildDangerousZone(AppLocalizations l10n) {
-    final theme = Theme.of(context);
+  /// 底部应用栏
+  Widget _buildApplyBar(AppLocalizations l10n) {
     return Container(
-      margin: EdgeInsets.only(top: 8.h),
-      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+      padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 24.h),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
+        color: Theme.of(context).colorScheme.surface,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 8.r,
+            offset: Offset(0, -2.h),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: Row(
+          children: [
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
+              decoration: BoxDecoration(
+                color: AppColors.warning.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8.r),
+              ),
+              child: Text(
+                '$_modifiedCount ${l10n.str("settings_no_changes").split("暂无")[0]}',
+                style: TextStyle(
+                  fontSize: 13.sp,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.warning,
+                ),
+              ),
+            ),
+            SizedBox(width: 12.w),
+            Expanded(
+              child: FilledButton(
+                onPressed: _applying ? null : _applyChanges,
+                style: FilledButton.styleFrom(
+                  padding: EdgeInsets.symmetric(vertical: 14.h),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10.r),
+                  ),
+                ),
+                child: _applying
+                    ? SizedBox(
+                        width: 20.w,
+                        height: 20.w,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : Text(l10n.applyChanges, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 无修改时的底部提示栏
+  Widget _buildHintBar(AppLocalizations l10n) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(16.w, 8.h, 16.w, 16.h),
+      child: SafeArea(
+        child: Text(
+          l10n.str('settings_write_hint'),
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 12.sp, color: AppColor.textSecondary(context)),
+        ),
+      ),
+    );
+  }
+
+  /// 危险操作区块
+  Widget _buildDangerousZone(AppLocalizations l10n) {
+    return Container(
+      padding: EdgeInsets.all(16.w),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(12.r),
-        border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+        border: Border.all(color: AppColors.error.withValues(alpha: 0.25)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 4.r,
-            offset: Offset(0, 1.h),
+            blurRadius: 8.r,
+            offset: Offset(0, 2.h),
           ),
         ],
       ),
@@ -434,62 +675,48 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
         children: [
           Row(
             children: [
-              Icon(
-                Icons.warning_amber_rounded,
-                color: AppColors.error,
-                size: 18.sp,
-              ),
+              Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 18.sp),
               SizedBox(width: 6.w),
               Text(
                 l10n.str('settings_dangerous_zone'),
-                style: TextStyle(
-                  fontSize: 14.sp,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.error,
-                ),
+                style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600, color: AppColors.error),
               ),
             ],
           ),
           SizedBox(height: 6.h),
           Text(
             l10n.settingAdvancedHint,
-            style: TextStyle(
-              fontSize: 12.sp,
-              color: AppColor.textSecondary(context),
-            ),
+            style: TextStyle(fontSize: 12.sp, color: AppColor.textSecondary(context)),
           ),
-          SizedBox(height: 8.h),
-          // 强制充电开关（确认后纳入待提交）
+          SizedBox(height: 12.h),
           _buildDangerousSwitch(
             l10n,
             label: l10n.str('setting_force_charge'),
             confirmKey: 'setting_force_charge_confirm',
             value: configBoolIsOn(_pending['force_charge']),
-            onConfirm: (v) =>
-                setState(() => _pending['force_charge'] = v),
+            onConfirm: (v) => setState(() => _pending['force_charge'] = v),
           ),
-          // 强制放电开关（确认后纳入待提交）
+          Divider(height: 16.h),
           _buildDangerousSwitch(
             l10n,
             label: l10n.str('setting_force_discharge'),
             confirmKey: 'setting_force_discharge_confirm',
             value: configBoolIsOn(_pending['force_discharge']),
-            onConfirm: (v) =>
-                setState(() => _pending['force_discharge'] = v),
+            onConfirm: (v) => setState(() => _pending['force_discharge'] = v),
           ),
-          SizedBox(height: 8.h),
-          // 故障复位按钮（确认后立即发送单命令）
-          OutlinedButton.icon(
-            icon: Icon(Icons.restart_alt_rounded, size: 18.sp),
-            label: Text(l10n.settingRestartBtn),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.error,
-              side: const BorderSide(color: AppColors.error),
-              padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 12.h),
-            ),
-            onPressed: () => _showDangerousConfirm(
-              'setting_restart_confirm',
-              'restart',
+          SizedBox(height: 12.h),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              icon: Icon(Icons.restart_alt_rounded, size: 18.sp),
+              label: Text(l10n.settingRestartBtn),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.error,
+                side: BorderSide(color: AppColors.error.withValues(alpha: 0.5)),
+                padding: EdgeInsets.symmetric(vertical: 12.h),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
+              ),
+              onPressed: () => _showDangerousConfirm('setting_restart_confirm', 'restart'),
             ),
           ),
         ],
@@ -497,7 +724,6 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
     );
   }
 
-  /// 危险开关行：点击先弹危险确认框，确认后回调纳入修改
   Widget _buildDangerousSwitch(
     AppLocalizations l10n, {
     required String label,
@@ -510,60 +736,15 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
         Expanded(
           child: Text(
             label,
-            style: TextStyle(
-              fontSize: 14.sp,
-              fontWeight: FontWeight.w500,
-              color: AppColors.error,
-            ),
+            style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w500, color: AppColors.error),
           ),
         ),
         Switch(
           value: value,
           activeThumbColor: AppColors.error,
-          onChanged: (v) =>
-              _showDangerousConfirmWithCallback(confirmKey, v, onConfirm),
+          onChanged: (v) => _showDangerousConfirmWithCallback(confirmKey, v, onConfirm),
         ),
       ],
-    );
-  }
-
-  /// 危险确认弹窗（Switch 版）：确认后执行回调纳入待提交
-  void _showDangerousConfirmWithCallback(
-    String confirmKey,
-    bool newValue,
-    ValueChanged<bool> onConfirm,
-  ) {
-    final l10n = AppLocalizations.of(context)!;
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(
-              Icons.warning_amber_rounded,
-              color: AppColors.error,
-              size: 24.sp,
-            ),
-            SizedBox(width: 8.w),
-            Expanded(child: Text(l10n.settingForceConfirmTitle)),
-          ],
-        ),
-        content: Text(l10n.str(confirmKey)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(l10n.cancel),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
-            onPressed: () {
-              Navigator.pop(ctx);
-              onConfirm(newValue);
-            },
-            child: Text(l10n.confirm),
-          ),
-        ],
-      ),
     );
   }
 }

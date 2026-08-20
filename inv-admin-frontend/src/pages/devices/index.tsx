@@ -1,9 +1,10 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Row, Col, Card, Table, Button, Input, Select, Space, Modal, Form,
   Drawer, Descriptions, Slider, Tooltip, message, Typography,
-  Dropdown, Tag, DatePicker, Divider, Spin, Empty, Upload, Tabs, Timeline,
+  Dropdown, Tag, DatePicker, Divider, Spin, Empty, Upload, Tabs,
   Input as AntInput, InputNumber, Switch, Alert, List, Grid,
 } from 'antd'
 import Popconfirm from '@/components/LocalizedPopconfirm'
@@ -31,7 +32,8 @@ import StatusBadge from '@/components/StatusBadge'
 import { useModelFields, DynamicFieldRenderer, DynamicStatCards } from '@/components/dyna'
 import { formatInTimezone } from '@/utils/timezone'
 import useTimezoneStore from '@/stores/timezoneStore'
-import { decodeTelemetryQuality } from '@/utils/telemetryQuality'
+import { toRtEnvelope, extractEnergyMetrics, type EnergyMetrics } from '@/pages/device-detail/energyUtils'
+import FirmwareUpgradeTab from './components/FirmwareUpgradeTab'
 
 const { Text, Title } = Typography
 const { RangePicker } = DatePicker
@@ -58,11 +60,9 @@ interface DeviceRecord {
 }
 
 interface RealtimeData {
-  ac?: { voltage: number; current: number; power: number; frequency: number; powerFactor: number }
-  pv?: { voltage: number; current: number; power: number }
-  battery?: { soc: number; voltage: number; current: number; temp: number }
-  system?: { state: string; fault_code: number; temp_inv: number; temp_ambient: number }
   online?: { online: boolean; rssi: number; ip: string }
+  _raw?: Record<string, any>
+  _metrics?: EnergyMetrics
   [key: string]: any
 }
 
@@ -92,16 +92,6 @@ interface UnbindRequestRecord {
   reviewed_by: number
   review_comment: string
   reviewed_at: string
-  created_at: string
-}
-
-interface LifecycleRecord {
-  id: number
-  device_sn: string
-  event_type: string
-  description: string
-  triggered_by: number
-  metadata: any
   created_at: string
 }
 
@@ -170,45 +160,9 @@ function mapCapabilityToTemplate(capability: CommandCapability): CommandTemplate
   }
 }
 
-interface CommandHistoryRecord {
-  id: number
-  device_sn: string
-  command_name: string
-  command_label: string
-  params: any
-  req_id: string
-  status: string
-  result_message: string
-  executed_by: number
-  ip_address: string
-  retry_count: number
-  created_at: string
-  completed_at: string
-}
-
-const COMMAND_STATUS_COLORS: Record<string, string> = {
-  pending: 'default',
-  queued: 'gold',
-  sent: 'processing',
-  ack_received: 'blue',
-  success: 'green',
-  failed: 'red',
-  timeout: 'orange',
-}
-
-const LIFECYCLE_EVENT_COLORS: Record<string, string> = {
-  registered: 'green',
-  bound: 'blue',
-  unbound: 'orange',
-  activated: 'cyan',
-  decommissioned: 'red',
-  maintenance: 'purple',
-  firmware_upgrade: 'geekblue',
-  hardware_replace: 'volcano',
-}
-
 const DevicesPage: React.FC = () => {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { timezone } = useTimezoneStore()
 
@@ -218,17 +172,6 @@ const DevicesPage: React.FC = () => {
     grid: t('dev.gridProtect'),
     system: t('dev.systemControl'),
     ota: t('dev.remoteUpgrade'),
-  }
-
-  const LIFECYCLE_EVENT_LABELS: Record<string, string> = {
-    registered: t('dev.register'),
-    bound: t('dev.bind'),
-    unbound: t('dev.unbindAction'),
-    activated: t('dev.activate'),
-    decommissioned: t('dev.retire'),
-    maintenance: t('dev.maintenance'),
-    firmware_upgrade: t('dev.firmwareUpgrade'),
-    hardware_replace: t('dev.hardwareReplace'),
   }
 
   const { user, hasPermission } = useAuthStore()
@@ -354,12 +297,9 @@ const DevicesPage: React.FC = () => {
       deviceApi.getRealtime(detailSn).then((res) => {
         const d = res.data
         const inner = d?.data ?? d ?? {}
-        const raw = inner?.realtime ?? inner
-
-        const acObj = raw?.ac || (raw?.voltage != null ? raw : null)
-        const pvObj = raw?.pv || (raw?.pv_voltage != null ? raw : null)
-        const batObj = raw?.battery || raw?.batt || (raw?.soc != null ? raw : null)
-        const sysObj = raw?.sys_status || raw?.sys || raw
+        // 与电站健康/设备详情页同一套 V2.1 解析（energyUtils）
+        const env = toRtEnvelope(inner)
+        const raw = env.realtime
 
         // Build aliased raw data for DynamicFieldRenderer compatibility
         const rawForFields: Record<string, any> = { ...(raw || {}) }
@@ -401,33 +341,23 @@ const DevicesPage: React.FC = () => {
         if (rawForFields.ambient_temp != null) rawForFields.temp_env = rawForFields.ambient_temp
         if (rawForFields.run_status != null) rawForFields.work_state = rawForFields.run_status
 
+        // V2 展平字段 → V1 键别名（型号 field_key 兼容 + 面板回退）
+        if (rawForFields.ac_output_voltage != null) {
+          rawForFields.ac_voltage = rawForFields.ac_output_voltage
+          rawForFields.voltage = rawForFields.ac_output_voltage
+        }
+        if (rawForFields.output_power != null) {
+          rawForFields.ac_power = rawForFields.output_power
+          rawForFields.power = rawForFields.output_power
+        }
+        if (rawForFields.output_current != null) rawForFields.ac_current = rawForFields.output_current
+        if (rawForFields.ac_output_frequency != null) rawForFields.ac_frequency = rawForFields.ac_output_frequency
+        if (rawForFields.pv_total_power != null) rawForFields.pv_power = rawForFields.pv_total_power
+
         return {
-          ac: acObj ? {
-            voltage: acObj.voltage || 0,
-            current: acObj.current || 0,
-            power: acObj.power || 0,
-            frequency: acObj.frequency || 0,
-            powerFactor: acObj.powerFactor || acObj.pf || 0,
-          } : undefined,
-          pv: pvObj ? {
-            voltage: pvObj.pv_voltage || pvObj.voltage || 0,
-            current: pvObj.pv_current || pvObj.current || 0,
-            power: pvObj.pv_power || pvObj.power || 0,
-          } : undefined,
-          battery: batObj ? {
-            soc: batObj.soc || 0,
-            voltage: batObj.voltage || 0,
-            current: batObj.current || 0,
-            temp: batObj.temp || batObj.temp_bat || 0,
-          } : undefined,
-          system: {
-            state: sysObj.state || raw?.charge_state || '-',
-            fault_code: sysObj.fault_code || 0,
-            temp_inv: sysObj.temp_inv || 0,
-            temp_ambient: sysObj.temp_mos || sysObj.temp_env || 0,
-          },
           online: { online: raw?.online ?? false, rssi: raw?.rssi || 0, ip: raw?.ip || '' },
           _raw: rawForFields,
+          _metrics: extractEnergyMetrics(raw),
         } as RealtimeData
       }),
     enabled: !!detailSn && detailDrawerOpen,
@@ -474,20 +404,6 @@ const DevicesPage: React.FC = () => {
     }).catch(() => {})
   }, [])
 
-  const { data: lifecycleRes, error: lifecycleError, refetch: refetchLifecycle } = useQuery({
-    queryKey: ['deviceLifecycle', detailSn],
-    queryFn: () =>
-      deviceApi.getLifecycleHistory(detailSn).then((res) => {
-        const d = res.data
-        const inner = d?.data ?? d
-        return {
-          items: (inner?.items ?? []) as LifecycleRecord[],
-          total: (inner?.total ?? 0) as number,
-        }
-      }),
-    enabled: !!detailSn && detailDrawerOpen,
-  })
-
   const { data: unbindRequestsRes, error: unbindRequestsError, refetch: refetchUnbindRequests } = useQuery({
     queryKey: ['unbindRequests', unbindReqPage, unbindReqPageSize],
     queryFn: () =>
@@ -515,22 +431,7 @@ const DevicesPage: React.FC = () => {
     enabled: !!detailSn && detailDrawerOpen,
   })
 
-  const { data: commandHistoryRes, error: commandHistoryError, refetch: refetchCommandHistory } = useQuery({
-    queryKey: ['commandHistory', detailSn],
-    queryFn: () =>
-      commandApi.getHistory(detailSn, { page_size: 50 }).then((res) => {
-        const d = res.data
-        const inner = d?.data ?? d
-        return {
-          items: (inner?.items ?? []) as CommandHistoryRecord[],
-          total: (inner?.total ?? 0) as number,
-        }
-      }),
-    enabled: !!detailSn && detailDrawerOpen,
-  })
-
   const commandTemplates = Array.isArray(commandTemplatesRes) ? commandTemplatesRes : []
-  const commandHistory = commandHistoryRes?.items ?? []
 
   const createMutation = useMutation({
     mutationFn: (data: any) => deviceApi.createDevice(data).then((r) => r.data),
@@ -807,7 +708,6 @@ const DevicesPage: React.FC = () => {
       } else {
         messageApi.warning(result?.message || t('dev.commandFailed'))
       }
-      queryClient.invalidateQueries({ queryKey: ['commandHistory', detailSn] })
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || t('dev.commandFailed')
       setCommandResult({ success: false, message: msg })
@@ -1374,163 +1274,125 @@ const DevicesPage: React.FC = () => {
 
   const renderRealtimePanel = () => {
     if (realtimeLoading) return <Spin tip={t('common.loading')} />
-    if (!realtimeData)
-      return <Empty description={t('dev.noRealtimeData')} />
+    const m = realtimeData?._metrics
+    if (!m) return <Empty description={t('dev.noRealtimeData')} />
 
-    const { ac, pv, battery, system, online } = realtimeData
-    const isOnline = online?.online ?? false
+    // 统一 V2.1 解析（与电站健康同一套 energyUtils），null 显示 '--' 而非 0
+    const raw = realtimeData?._raw ?? {}
+    const fmt = (v: number | null | undefined, digits = 1) => (v != null ? v.toFixed(digits) : '--')
+    const powerFactor = raw.power_factor ?? raw.ac_pf ?? null
+    const battTemp = raw.cell_max_temp ?? raw.battery_avg_temp ?? raw.temp_bat ?? null
+    const workStateText = raw.work_state ?? raw.run_status ?? (m.workState != null ? String(m.workState) : null)
 
     return (
       <Row gutter={[12, 12]}>
-        {ac && (
-          <Col span={24}>
-            <Card size="small" title={t('dev.acSide')} style={{ background: '#f7f8fa', borderColor: '#e8e8e8' }}>
-              <Row gutter={[12, 8]}>
-                <Col span={8}>
-                  <Text type="secondary">{t('dev.voltage')}</Text>
-                  <br />
-                  <Text strong>{ac.voltage?.toFixed(1) ?? '-'} V</Text>
-                </Col>
-                <Col span={8}>
-                  <Text type="secondary">{t('dev.current')}</Text>
-                  <br />
-                  <Text strong>{ac.current?.toFixed(2) ?? '-'} A</Text>
-                </Col>
-                <Col span={8}>
-                  <Text type="secondary">{t('dev.power')}</Text>
-                  <br />
-                  <Text strong>{ac.power?.toFixed(1) ?? '-'} W</Text>
-                </Col>
-                <Col span={8}>
-                  <Text type="secondary">{t('dev.frequency')}</Text>
-                  <br />
-                  <Text strong>{ac.frequency?.toFixed(1) ?? '-'} Hz</Text>
-                </Col>
-                <Col span={8}>
-                  <Text type="secondary">{t('dev.powerFactor')}</Text>
-                  <br />
-                  <Text strong>{ac.powerFactor?.toFixed(2) ?? '-'}</Text>
-                </Col>
-              </Row>
-            </Card>
-          </Col>
-        )}
-        {pv && (
-          <Col span={24}>
-            <Card size="small" title={t('dev.pvSide')} style={{ background: '#f7f8fa', borderColor: '#e8e8e8' }}>
-              <Row gutter={[12, 8]}>
-                <Col span={8}>
-                  <Text type="secondary">{t('dev.voltage')}</Text>
-                  <br />
-                  <Text strong>{pv.voltage?.toFixed(1) ?? '-'} V</Text>
-                </Col>
-                <Col span={8}>
-                  <Text type="secondary">{t('dev.current')}</Text>
-                  <br />
-                  <Text strong>{pv.current?.toFixed(2) ?? '-'} A</Text>
-                </Col>
-                <Col span={8}>
-                  <Text type="secondary">{t('dev.power')}</Text>
-                  <br />
-                  <Text strong>{pv.power?.toFixed(1) ?? '-'} W</Text>
-                </Col>
-              </Row>
-            </Card>
-          </Col>
-        )}
-        {battery && (
-          <Col span={24}>
-            <Card size="small" title={t('dev.battery')} style={{ background: '#f7f8fa', borderColor: '#e8e8e8' }}>
-              <Row gutter={[12, 8]}>
-                <Col span={6}>
-                  <Text type="secondary">SOC</Text>
-                  <br />
-                  <Text strong>{battery.soc?.toFixed(1) ?? '-'} %</Text>
-                </Col>
-                <Col span={6}>
-                  <Text type="secondary">{t('dev.voltage')}</Text>
-                  <br />
-                  <Text strong>{battery.voltage?.toFixed(1) ?? '-'} V</Text>
-                </Col>
-                <Col span={6}>
-                  <Text type="secondary">{t('dev.current')}</Text>
-                  <br />
-                  <Text strong>{battery.current?.toFixed(2) ?? '-'} A</Text>
-                </Col>
-                <Col span={6}>
-                  <Text type="secondary">{t('dev.temperature')}</Text>
-                  <br />
-                  <Text strong>{battery.temp?.toFixed(1) ?? '-'} °C</Text>
-                </Col>
-              </Row>
-            </Card>
-          </Col>
-        )}
-        {system && (
-          <Col span={24}>
-            <Card size="small" title={t('dev.systemInfo')} style={{ background: '#f7f8fa', borderColor: '#e8e8e8' }}>
-              <Row gutter={[12, 8]}>
-                <Col span={6}>
-                  <Text type="secondary">{t('dev.workStatus')}</Text>
-                  <br />
-                  <Text strong>{system.state ?? '-'}</Text>
-                </Col>
-                <Col span={6}>
-                  <Text type="secondary">{t('dev.faultCode')}</Text>
-                  <br />
-                  <Text strong style={{ color: system.fault_code ? '#ff4d4f' : undefined }}>
-                    {system.fault_code || t('dev.none')}
-                  </Text>
-                </Col>
-                <Col span={6}>
-                  <Text type="secondary">{t('dev.inverterTemp')}</Text>
-                  <br />
-                  <Text strong>{system.temp_inv?.toFixed(1) ?? '-'} °C</Text>
-                </Col>
-                <Col span={6}>
-                  <Text type="secondary">{t('dev.ambientTemp')}</Text>
-                  <br />
-                  <Text strong>{system.temp_ambient?.toFixed(1) ?? '-'} °C</Text>
-                </Col>
-              </Row>
-            </Card>
-          </Col>
-        )}
-      </Row>
-    )
-  }
-
-  const renderLifecyclePanel = () => {
-    const lifecycles = lifecycleRes?.items ?? []
-    if (lifecycles.length === 0) {
-      return <Empty description={t('dev.noLifecycleRecords')} />
-    }
-    return (
-      <Timeline
-        items={lifecycles.map((event) => ({
-          color: LIFECYCLE_EVENT_COLORS[event.event_type] || 'gray',
-          children: (
-            <div>
-              <div style={{ marginBottom: 4 }}>
-                <Tag color={LIFECYCLE_EVENT_COLORS[event.event_type] || 'default'}>
-                  {LIFECYCLE_EVENT_LABELS[event.event_type] || event.event_type}
-                </Tag>
-                <Text style={{ fontSize: 12, color: '#999' }}>
-                  {formatInTimezone(event.created_at, timezone, 'YYYY-MM-DD HH:mm:ss')}
+        <Col span={24}>
+          <Card size="small" title={t('dev.acSide')} style={{ background: '#f7f8fa', borderColor: '#e8e8e8' }}>
+            <Row gutter={[12, 8]}>
+              <Col span={8}>
+                <Text type="secondary">{t('dev.voltage')}</Text>
+                <br />
+                <Text strong>{fmt(m.acVoltage)} V</Text>
+              </Col>
+              <Col span={8}>
+                <Text type="secondary">{t('dev.current')}</Text>
+                <br />
+                <Text strong>{fmt(m.acCurrent, 2)} A</Text>
+              </Col>
+              <Col span={8}>
+                <Text type="secondary">{t('dev.power')}</Text>
+                <br />
+                <Text strong>{fmt(m.loadPower)} W</Text>
+              </Col>
+              <Col span={8}>
+                <Text type="secondary">{t('dev.frequency')}</Text>
+                <br />
+                <Text strong>{fmt(m.acFrequency)} Hz</Text>
+              </Col>
+              <Col span={8}>
+                <Text type="secondary">{t('dev.powerFactor')}</Text>
+                <br />
+                <Text strong>{powerFactor != null ? Number(powerFactor).toFixed(2) : '--'}</Text>
+              </Col>
+            </Row>
+          </Card>
+        </Col>
+        <Col span={24}>
+          <Card size="small" title={t('dev.pvSide')} style={{ background: '#f7f8fa', borderColor: '#e8e8e8' }}>
+            <Row gutter={[12, 8]}>
+              <Col span={8}>
+                <Text type="secondary">{t('dev.pv1Voltage')}</Text>
+                <br />
+                <Text strong>{fmt(m.pv1Voltage)} V</Text>
+              </Col>
+              <Col span={8}>
+                <Text type="secondary">{t('dev.pv2Voltage')}</Text>
+                <br />
+                <Text strong>{fmt(m.pv2Voltage)} V</Text>
+              </Col>
+              <Col span={8}>
+                <Text type="secondary">{t('dev.power')}</Text>
+                <br />
+                <Text strong>{fmt(m.pvPower)} W</Text>
+              </Col>
+            </Row>
+          </Card>
+        </Col>
+        <Col span={24}>
+          <Card size="small" title={t('dev.battery')} style={{ background: '#f7f8fa', borderColor: '#e8e8e8' }}>
+            <Row gutter={[12, 8]}>
+              <Col span={6}>
+                <Text type="secondary">SOC</Text>
+                <br />
+                <Text strong>{fmt(m.battSoc)} %</Text>
+              </Col>
+              <Col span={6}>
+                <Text type="secondary">{t('dev.voltage')}</Text>
+                <br />
+                <Text strong>{fmt(m.battVoltage, 2)} V</Text>
+              </Col>
+              <Col span={6}>
+                <Text type="secondary">{t('dev.current')}</Text>
+                <br />
+                <Text strong>{fmt(m.battCurrent, 2)} A</Text>
+              </Col>
+              <Col span={6}>
+                <Text type="secondary">{t('dev.temperature')}</Text>
+                <br />
+                <Text strong>{battTemp != null ? `${Number(battTemp).toFixed(1)} °C` : '--'}</Text>
+              </Col>
+            </Row>
+          </Card>
+        </Col>
+        <Col span={24}>
+          <Card size="small" title={t('dev.systemInfo')} style={{ background: '#f7f8fa', borderColor: '#e8e8e8' }}>
+            <Row gutter={[12, 8]}>
+              <Col span={6}>
+                <Text type="secondary">{t('dev.workStatus')}</Text>
+                <br />
+                <Text strong>{workStateText ?? '-'}</Text>
+              </Col>
+              <Col span={6}>
+                <Text type="secondary">{t('dev.faultCode')}</Text>
+                <br />
+                <Text strong style={{ color: m.faultCode ? '#ff4d4f' : undefined }}>
+                  {m.faultCode || t('dev.none')}
                 </Text>
-              </div>
-              <Text>{event.description}</Text>
-              {event.triggered_by && (
-                <div>
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    {t('dev.operatorID')}: {event.triggered_by}
-                  </Text>
-                </div>
-              )}
-            </div>
-          ),
-        }))}
-      />
+              </Col>
+              <Col span={6}>
+                <Text type="secondary">{t('dev.inverterTemp')}</Text>
+                <br />
+                <Text strong>{fmt(m.inverterTemp)} °C</Text>
+              </Col>
+              <Col span={6}>
+                <Text type="secondary">{t('dev.ambientTemp')}</Text>
+                <br />
+                <Text strong>{fmt(m.ambientTemp)} °C</Text>
+              </Col>
+            </Row>
+          </Card>
+        </Col>
+      </Row>
     )
   }
 
@@ -1558,47 +1420,6 @@ const DevicesPage: React.FC = () => {
   }, [deviceDetailRaw, detailDevice, realtimeData])
   const modelFields = useModelFields(deviceDetail?.model, (deviceDetail as any)?.model_id)
   const currentStatus = deviceDetail?.status ?? 0
-  const latestTelemetrySample = telemetryData.length > 0 ? telemetryData[telemetryData.length - 1] : undefined
-  const telemetryMetadata = useMemo(() => {
-    const realtime = realtimeData?._raw ?? {}
-    const protocolVersion = realtime.protocol_version ?? latestTelemetrySample?.protocol_version
-    const rawQualityFlags = realtime.quality_flags ?? latestTelemetrySample?.quality_flags
-    return {
-      protocolVersion: protocolVersion == null || protocolVersion === '' ? null : String(protocolVersion),
-      quality: decodeTelemetryQuality(rawQualityFlags),
-    }
-  }, [latestTelemetrySample, realtimeData])
-
-  const renderTelemetryMetadata = () => {
-    const { protocolVersion, quality } = telemetryMetadata
-    return (
-      <Card size="small" title={t('dev.telemetryMetadata')} style={{ marginBottom: 16 }}>
-        <Descriptions column={2} size="small">
-          <Descriptions.Item label={t('dev.protocolVersion')}>
-            {protocolVersion ? <Tag color="blue">V{protocolVersion}</Tag> : <Text type="secondary">{t('dev.notReported')}</Text>}
-          </Descriptions.Item>
-          <Descriptions.Item label={t('dev.samplingCycle')}>
-            <Tag>3 {t('dev.minutes')}</Tag>
-          </Descriptions.Item>
-          <Descriptions.Item label={t('dev.dataQuality')} span={2}>
-            {quality.isNormal === null ? (
-              <Text type="secondary">{t('dev.notReported')}</Text>
-            ) : quality.isNormal ? (
-              <Tag color="success">{t('dev.qualityNormal')} (0)</Tag>
-            ) : (
-              <Space size={[4, 4]} wrap>
-                {quality.flags.map((flag) => <Tag color="warning" key={flag.key}>{flag.label}</Tag>)}
-                {quality.unknownMask !== 0 && (
-                  <Tag color="error">{t('dev.unknownQualityFlag')} 0x{quality.unknownMask.toString(16).toUpperCase()}</Tag>
-                )}
-                <Text type="secondary">mask=0x{quality.value!.toString(16).toUpperCase()}</Text>
-              </Space>
-            )}
-          </Descriptions.Item>
-        </Descriptions>
-      </Card>
-    )
-  }
 
   const drawerTabItems = [
     {
@@ -1633,8 +1454,6 @@ const DevicesPage: React.FC = () => {
               </Descriptions.Item>
             </Descriptions>
           </Card>
-
-          {renderTelemetryMetadata()}
 
           {modelFields?.cache && modelFields.cache.showFields.length > 0 && (
             <Card size="small" title={`${deviceDetail?.model ?? ''} ${t('dev.statusOverview')}`} style={{ marginBottom: 16 }}>
@@ -1891,79 +1710,22 @@ const DevicesPage: React.FC = () => {
                 {t('dev.refreshTemplate')}
               </Button>
             </Space>
-
-            <Divider style={{ margin: '8px 0' }} />
-
-            <div>
-              <Text strong style={{ display: 'block', marginBottom: 8 }}>
-                {t('dev.commandHistory')}
-              </Text>
-              {commandHistory.length === 0 ? (
-                <Empty description={t('dev.noCommandRecords')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
-              ) : (
-                <List
-                  size="small"
-                  dataSource={commandHistory}
-                  renderItem={(item: CommandHistoryRecord) => (
-                    <List.Item style={{ display: 'block', padding: '8px 0' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Space size={4}>
-                          <Text strong>{item.command_label}</Text>
-                          <Tag color={COMMAND_STATUS_COLORS[item.status] || 'default'}>
-                            {item.status === 'pending' && t('dev.waiting')}
-                            {item.status === 'queued' && (t('dev.queued') || '排队中')}
-                            {item.status === 'sent' && t('dev.sent')}
-                            {item.status === 'ack_received' && t('dev.deviceConfirmed')}
-                            {item.status === 'success' && t('dev.success')}
-                            {item.status === 'failed' && t('dev.failed')}
-                            {item.status === 'timeout' && t('dev.timeout')}
-                          </Tag>
-                        </Space>
-                        <Text type="secondary" style={{ fontSize: 12 }}>
-                          {formatInTimezone(item.created_at, timezone, 'MM-DD HH:mm:ss')}
-                        </Text>
-                      </div>
-                      {item.params && Object.keys(item.params).length > 0 && (
-                        <div style={{ marginTop: 2 }}>
-                          <Text type="secondary" style={{ fontSize: 12 }}>
-                            {t('dev.param')}: {JSON.stringify(item.params)}
-                          </Text>
-                        </div>
-                      )}
-                      {item.result_message && (
-                        <div style={{ marginTop: 2 }}>
-                          <Text type="secondary" style={{ fontSize: 12 }}>
-                            {item.result_message}
-                          </Text>
-                        </div>
-                      )}
-                    </List.Item>
-                  )}
-                />
-              )}
-            </div>
           </Card>
         </>
       ),
     },
     {
-      key: 'lifecycle',
-      label: t('dev.lifecycle'),
-      children: (
-        <Card size="small" title={t('dev.lifecycleRecords')}>
-          {renderLifecyclePanel()}
-        </Card>
-      ),
+      key: 'firmware',
+      label: t('dev.firmwareUpgradeTab'),
+      children: detailSn ? <FirmwareUpgradeTab sn={detailSn} /> : null,
     },
   ]
 
   const secondaryQueryFailure = [
     { error: deviceDetailError, retry: refetchDeviceDetail },
     { error: realtimeError, retry: refetchRealtime },
-    { error: lifecycleError, retry: refetchLifecycle },
     { error: unbindRequestsError, retry: refetchUnbindRequests },
     { error: commandTemplatesError, retry: refetchCommandTemplates },
-    { error: commandHistoryError, retry: refetchCommandHistory },
     { error: installersError, retry: refetchInstallers },
     { error: stationsListError, retry: refetchStationsList },
   ].find((item) => item.error)
@@ -2540,6 +2302,16 @@ const DevicesPage: React.FC = () => {
         }}
         extra={
           <Space>
+            <Button
+              icon={<EyeOutlined />}
+              onClick={() => {
+                if (!detailSn) return
+                setDetailDrawerOpen(false)
+                navigate(`/devices/${detailSn}/detail`)
+              }}
+            >
+              {t('dev.viewFullDetail')}
+            </Button>
             {currentStatus !== 0 && (
               <>
                 <Popconfirm
@@ -2548,7 +2320,6 @@ const DevicesPage: React.FC = () => {
                     commandApi.execute(detailSn, { command: 'restart', params: {} })
                       .then(() => {
                         messageApi.success(t('dev.restartSuccess'))
-                        queryClient.invalidateQueries({ queryKey: ['commandHistory', detailSn] })
                       })
                       .catch(() => messageApi.error(t('dev.restartFailed')))
                   }}
@@ -2563,7 +2334,6 @@ const DevicesPage: React.FC = () => {
                     commandApi.execute(detailSn, { command: 'query_status', params: {} })
                       .then(() => {
                         messageApi.success(t('dev.querySuccess'))
-                        queryClient.invalidateQueries({ queryKey: ['commandHistory', detailSn] })
                       })
                       .catch(() => messageApi.error(t('dev.queryFailed')))
                   }}

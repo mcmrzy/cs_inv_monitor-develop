@@ -14,19 +14,17 @@ void main() {
         current: 10.2,
         power: 2250.0,
         frequency: 50.0,
-        loadPercent: 75.0,
         pf: 0.95,
         apparentPower: 2368.0,
-        voltageThd: 2.5,
       );
 
       expect(acData.voltage, 220.5);
       expect(acData.power, 2250.0);
 
-      // 测试 toJson
+      // 测试 toJson（V2.1 键）
       final json = acData.toJson();
-      expect(json['voltage'], 220.5);
-      expect(json['power'], 2250.0);
+      expect(json['ac_output_voltage'], 220.5);
+      expect(json['output_power'], 2250.0);
 
       // 测试 fromJson
       final restored = ACData.fromJson(json);
@@ -75,21 +73,22 @@ void main() {
 
     test('数据模型 - SystemStatus 创建', () {
       final sysStatus = SystemStatus(
-        state: 'normal',
+        state: '1',
         faultCode: 0,
         alarmCode: 0,
         tempInv: 45.0,
-        tempMos: 40.0,
-        efficiency: 95.5,
-        ambientTemperature: 25.0,
+        boostTemp: 40.0,
+        transformerTemp: 38.0,
+        pvTemp: 42.0,
         dcBusVoltage: 400.0,
-        runtimeHours: 1000,
-        fanSpeedPercent: 60.0,
+        loadPercent: 75.0,
       );
 
-      expect(sysStatus.state, 'normal');
+      expect(sysStatus.state, '1');
       expect(sysStatus.hasFault, false);
       expect(sysStatus.faultCode, 0);
+      expect(sysStatus.boostTemp, 40.0);
+      expect(sysStatus.loadPercent, 75.0);
 
       // 测试故障状态
       final faultStatus = SystemStatus(faultCode: 100);
@@ -100,11 +99,6 @@ void main() {
       final energyData = EnergyData(
         dailyPV: 15.5,
         totalPV: 1000.0,
-        runtimeHours: 500,
-        dailyFeedEnergy: 10.0,
-        totalFeedEnergy: 800.0,
-        dailyGridImport: 5.0,
-        totalGridImport: 200.0,
         dailyCharge: 3.0,
         totalCharge: 150.0,
         dailyDischarge: 2.0,
@@ -114,7 +108,7 @@ void main() {
       );
 
       expect(energyData.dailyPV, 15.5);
-      expect(energyData.runtimeHours, 500);
+      expect(energyData.totalLoad, 600.0);
     });
 
     test('数据模型 - OnlineStatus 创建', () {
@@ -135,8 +129,10 @@ void main() {
         ac: ACData(voltage: 220, power: 2000),
         battery: BatteryData(soc: 80, voltage: 48),
         pv: PVData(pvPower: 1800),
-        sysStatus: SystemStatus(state: 'normal', efficiency: 95),
-        energy: EnergyData(dailyPV: 15, runtimeHours: 100),
+        sysStatus: SystemStatus(state: '1'),
+        energy: EnergyData(dailyPV: 15),
+        fan: FanData(mpptSpeed: 40, invSpeed: 60),
+        workTimeTotalSec: 3600000,
         onlineStatus: OnlineStatus(online: true),
         loadPower: 1500,
         updatedAt: DateTime(2026, 7, 27, 12, 0, 0),
@@ -146,6 +142,8 @@ void main() {
       expect(realtime.ac?.power, 2000);
       expect(realtime.battery?.soc, 80);
       expect(realtime.pv?.pvPower, 1800);
+      expect(realtime.fan?.maxSpeed, 60.0);
+      expect(realtime.workTimeTotalSec, 3600000);
       expect(realtime.onlineStatus?.online, true);
     });
   });
@@ -211,42 +209,48 @@ void main() {
     test('嵌套结构解析 - 标准格式', () {
       final nestedData = {
         'ac': {
-          'voltage': 220.5,
-          'current': 10.2,
-          'power': 2250.0,
-          'frequency': 50.0,
+          'ac_output_voltage': 220.5,
+          'output_current': 10.2,
+          'output_power': 2250.0,
+          'ac_output_frequency': 50.0,
         },
-        'battery': {
-          'soc': 80.0,
-          'voltage': 48.5,
-          'current': 15.0,
+        'bat': {
+          'battery_soc': 80.0,
+          'battery_voltage': 48.5,
+          'battery_current': 15.0,
         },
         'pv': {
-          'pv_voltage': 120.0,
-          'pv_current': 15.0,
-          'pv_power': 1800.0,
+          'pv1_voltage': 120.0,
+          'pv1_current': 15.0,
+          'pv_total_power': 1800.0,
         },
-        'sys_status': {
-          'state': 'normal',
+        'sys': {
+          'work_state': '1',
           'fault_code': 0,
           'alarm_code': 0,
-          'temp_inv': 45.0,
+          'inverter_temperature': 45.0,
         },
-        'energy': {
-          'daily_pv': 15.5,
-          'total_pv': 1000.0,
-          'runtime_hours': 500,
+        'fan': {
+          'mppt_fan_speed': 40.0,
+          'inv_fan_speed': 60.0,
+        },
+        'diag': {
+          'work_time_total': 1800000,
+        },
+        'eng': {
+          'daily_pv_energy': 15.5,
+          'total_pv_energy': 1000.0,
         },
         'online': true,
         'updated_at': '2026-07-27T12:00:00Z',
       };
 
-      // 验证嵌套结构的关键字段存在
+      // 验证嵌套结构的关键字段存在（V2.1 组键）
       expect(nestedData.containsKey('ac'), true);
-      expect(nestedData.containsKey('battery'), true);
+      expect(nestedData.containsKey('bat'), true);
       expect(nestedData.containsKey('pv'), true);
-      expect(nestedData.containsKey('sys_status'), true);
-      expect(nestedData.containsKey('energy'), true);
+      expect(nestedData.containsKey('sys'), true);
+      expect(nestedData.containsKey('eng'), true);
 
       // 验证在线状态
       expect(nestedData['online'], true);
@@ -254,33 +258,33 @@ void main() {
 
     test('扁平结构解析 - 键值对格式', () {
       final flatData = {
-        'ac_voltage': 220.5,
-        'ac_current': 10.2,
-        'ac_power': 2250.0,
-        'ac_frequency': 50.0,
-        'batt_soc': 80.0,
-        'batt_voltage': 48.5,
-        'batt_current': 15.0,
-        'pv_voltage': 120.0,
-        'pv_current': 15.0,
-        'pv_power': 1800.0,
-        'state': 'normal',
+        'ac_output_voltage': 220.5,
+        'output_current': 10.2,
+        'output_power': 2250.0,
+        'ac_output_frequency': 50.0,
+        'battery_soc': 80.0,
+        'battery_voltage': 48.5,
+        'battery_current': 15.0,
+        'pv1_voltage': 120.0,
+        'pv1_current': 15.0,
+        'pv_total_power': 1800.0,
+        'work_state': '1',
         'fault_code': 0,
         'alarm_code': 0,
-        'temp_inv': 45.0,
-        'daily_pv': 15.5,
-        'total_pv': 1000.0,
-        'runtime_hours': 500,
+        'inverter_temperature': 45.0,
+        'daily_pv_energy': 15.5,
+        'total_pv_energy': 1000.0,
+        'work_time_total': 1800000,
         'online': true,
         'updated_at': '2026-07-27T12:00:00Z',
       };
 
-      // 验证扁平结构的关键字段存在
-      expect(flatData.containsKey('ac_voltage'), true);
-      expect(flatData.containsKey('batt_soc'), true);
-      expect(flatData.containsKey('pv_power'), true);
-      expect(flatData.containsKey('state'), true);
-      expect(flatData.containsKey('daily_pv'), true);
+      // 验证扁平结构的关键字段存在（V2.1 顶层键）
+      expect(flatData.containsKey('ac_output_voltage'), true);
+      expect(flatData.containsKey('battery_soc'), true);
+      expect(flatData.containsKey('pv_total_power'), true);
+      expect(flatData.containsKey('work_state'), true);
+      expect(flatData.containsKey('daily_pv_energy'), true);
 
       // 验证在线状态
       expect(flatData['online'], true);

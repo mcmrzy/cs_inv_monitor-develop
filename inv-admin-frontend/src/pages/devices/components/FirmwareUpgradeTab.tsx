@@ -1,0 +1,227 @@
+import React from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Card, Descriptions, Button, Table, Tag, Space, message, Popconfirm, Empty, Spin, Typography } from 'antd'
+import type { ColumnsType } from 'antd/es/table'
+import { ReloadOutlined, CloudDownloadOutlined } from '@ant-design/icons'
+import { deviceApi } from '@/services/deviceApi'
+import { otaApi } from '@/services/otaApi'
+import useAuthStore from '@/stores/authStore'
+import useTranslation from '@/hooks/useTranslation'
+import { formatInTimezone } from '@/utils/timezone'
+import useTimezoneStore from '@/stores/timezoneStore'
+
+const { Text } = Typography
+
+interface FirmwareUpgradeTabProps {
+  sn: string
+}
+
+interface DeviceUpgradeRecord {
+  id: number
+  device_sn: string
+  firmware_id: number
+  firmware_version: string
+  target_chip: string
+  old_version: string
+  status: string
+  progress: number
+  error_message: string
+  retry_count: number
+  pushed_by: number
+  started_at: string
+  completed_at: string
+  created_at: string
+}
+
+const STATUS_COLOR_MAP: Record<string, string> = {
+  pending: 'default',
+  running: 'processing',
+  success: 'success',
+  failed: 'error',
+  cancelled: 'warning',
+}
+
+const FirmwareUpgradeTab: React.FC<FirmwareUpgradeTabProps> = ({ sn }) => {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const { timezone } = useTimezoneStore()
+  const { user, hasPermission } = useAuthStore()
+  const isSuperAdmin = user?.isSystemAdmin
+  const isAdmin = isSuperAdmin || hasPermission('devices:manage')
+
+  const [historyPage, setHistoryPage] = React.useState(1)
+  const [historyPageSize, setHistoryPageSize] = React.useState(10)
+
+  const { data: deviceData, isLoading: deviceLoading } = useQuery({
+    queryKey: ['deviceBySn', sn],
+    queryFn: () => deviceApi.getDeviceBySn(sn).then((res) => res.data?.data ?? res.data),
+    enabled: !!sn,
+  })
+
+  const { data: availablePackages, isLoading: packagesLoading, refetch: refetchPackages } = useQuery({
+    queryKey: ['availablePackages', sn],
+    queryFn: () => otaApi.getAvailablePackages(sn).then((res) => {
+      const data = res.data?.data ?? res.data
+      return data?.packages ?? []
+    }),
+    enabled: false,
+  })
+
+  const { data: upgradeHistory, isLoading: historyLoading } = useQuery({
+    queryKey: ['deviceUpgradeHistory', sn, historyPage, historyPageSize],
+    queryFn: () => otaApi.getDeviceUpgradeHistory(sn, { page: historyPage, pageSize: historyPageSize }).then((res) => {
+      const data = res.data?.data ?? res.data
+      return {
+        items: (data?.items ?? []) as DeviceUpgradeRecord[],
+        total: (data?.total ?? 0) as number,
+      }
+    }),
+    enabled: !!sn,
+  })
+
+  const pushUpgradeMutation = useMutation({
+    mutationFn: (packageId: number) => otaApi.pushPackageUpgrade({ package_id: packageId, device_sns: [sn], immediate: true }),
+    onSuccess: () => {
+      message.success(t('dev.pushSuccess'))
+      queryClient.invalidateQueries({ queryKey: ['deviceUpgradeHistory', sn] })
+    },
+    onError: (error: any) => {
+      message.error(`${t('dev.pushFailed')}: ${error.message}`)
+    },
+  })
+
+  const firmwareItems = React.useMemo(() => {
+    if (!deviceData) return []
+    return [
+      { label: t('dev.firmwareArm'), children: deviceData.firmware_arm || '-' },
+      { label: t('dev.firmwareEsp'), children: deviceData.firmware_esp || '-' },
+      { label: t('dev.firmwareDsp'), children: deviceData.firmware_dsp || '-' },
+      { label: t('dev.firmwareBms'), children: deviceData.firmware_bms || '-' },
+      { label: t('dev.bootloaderVersion'), children: deviceData.bootloader_version || '-' },
+    ]
+  }, [deviceData, t])
+
+  const historyColumns: ColumnsType<DeviceUpgradeRecord> = [
+    { title: t('dev.firmwareVersion_col'), dataIndex: 'firmware_version', key: 'firmware_version' },
+    { title: t('dev.targetChip'), dataIndex: 'target_chip', key: 'target_chip' },
+    { title: t('dev.oldVersion'), dataIndex: 'old_version', key: 'old_version', render: (v: string) => v || '-' },
+    {
+      title: t('dev.upgradeStatus'),
+      dataIndex: 'status',
+      key: 'status',
+      render: (status: string) => <Tag color={STATUS_COLOR_MAP[status] || 'default'}>{status}</Tag>,
+    },
+    { title: t('dev.progress'), dataIndex: 'progress', key: 'progress', render: (v: number) => `${v ?? 0}%` },
+    { title: t('dev.errorInfo'), dataIndex: 'error_message', key: 'error_message', render: (v: string) => v || '-' },
+    {
+      title: t('common.startTime'),
+      dataIndex: 'started_at',
+      key: 'started_at',
+      render: (v: string) => formatInTimezone(v, timezone, 'YYYY-MM-DD HH:mm:ss'),
+    },
+    {
+      title: t('common.endTime'),
+      dataIndex: 'completed_at',
+      key: 'completed_at',
+      render: (v: string) => formatInTimezone(v, timezone, 'YYYY-MM-DD HH:mm:ss'),
+    },
+  ]
+
+  const packagesList = Array.isArray(availablePackages) ? availablePackages : []
+
+  return (
+    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+      <Card size="small" title={t('dev.currentFirmware')}>
+        {deviceLoading ? (
+          <Spin />
+        ) : deviceData ? (
+          <Descriptions column={2} size="small">
+            {firmwareItems.map((item) => (
+              <Descriptions.Item key={item.label} label={item.label}>{item.children}</Descriptions.Item>
+            ))}
+          </Descriptions>
+        ) : (
+          <Empty description={t('dev.noRealtimeData')} />
+        )}
+      </Card>
+
+      <Card
+        size="small"
+        title={t('dev.availableUpdates')}
+        extra={
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={() => refetchPackages()}
+            loading={packagesLoading}
+          >
+            {t('dev.checkUpdate')}
+          </Button>
+        }
+      >
+        {packagesLoading ? (
+          <Spin tip={t('dev.checkingUpdate')} />
+        ) : packagesList.length === 0 ? (
+          <Empty description={t('dev.noUpdates')} />
+        ) : (
+          <Space direction="vertical" size="small" style={{ width: '100%' }}>
+            {packagesList.map((pkg: any) => (
+              <Card
+                key={pkg.id}
+                size="small"
+                style={{ background: '#f7f8fa', borderColor: '#e8e8e8' }}
+              >
+                <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                  <Space>
+                    <Text strong>{pkg.user_version || pkg.version || '-'}</Text>
+                    {pkg.main_version && <Text type="secondary">({pkg.main_version})</Text>}
+                    {isAdmin && (
+                      <Popconfirm
+                        title={t('dev.confirmUpgrade')}
+                        description={t('dev.confirmUpgradeDesc')}
+                        onConfirm={() => pushUpgradeMutation.mutate(pkg.id)}
+                        okButtonProps={{ loading: pushUpgradeMutation.isPending }}
+                      >
+                        <Button
+                          type="primary"
+                          size="small"
+                          icon={<CloudDownloadOutlined />}
+                          loading={pushUpgradeMutation.isPending}
+                        >
+                          {t('dev.upgradeNow')}
+                        </Button>
+                      </Popconfirm>
+                    )}
+                  </Space>
+                  {pkg.changelog && <Text type="secondary">{pkg.changelog}</Text>}
+                </Space>
+              </Card>
+            ))}
+          </Space>
+        )}
+      </Card>
+
+      <Card size="small" title={t('dev.upgradeHistory')}>
+        <Table
+          columns={historyColumns}
+          dataSource={upgradeHistory?.items ?? []}
+          rowKey="id"
+          loading={historyLoading}
+          size="small"
+          pagination={{
+            current: historyPage,
+            pageSize: historyPageSize,
+            total: upgradeHistory?.total ?? 0,
+            onChange: (page, pageSize) => {
+              setHistoryPage(page)
+              setHistoryPageSize(pageSize)
+            },
+            showSizeChanger: true,
+            showTotal: (total) => `${total} ${t('common.records')}`,
+          }}
+        />
+      </Card>
+    </Space>
+  )
+}
+
+export default FirmwareUpgradeTab

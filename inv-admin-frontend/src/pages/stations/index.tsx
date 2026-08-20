@@ -4,9 +4,9 @@ import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import {
   Row, Col, Typography, Tag, Select, message, Space,
   Drawer, Descriptions, Tabs, Statistic, Input, Button, Form, Modal, Empty, Spin, Grid,
-  Tooltip, Radio, Alert,
+  Tooltip, Radio, Alert, Upload,
 } from 'antd'
-import { ProTable, ProCard, ModalForm, ProFormText, ProFormDigit, ProFormSelect } from '@ant-design/pro-components'
+import { ProTable, ProCard, ModalForm, ProFormText } from '@ant-design/pro-components'
 import type { ProColumns } from '@ant-design/pro-components'
 import Popconfirm from '@/components/LocalizedPopconfirm'
 
@@ -14,7 +14,7 @@ import {
   ReloadOutlined, SwapOutlined, EyeOutlined, EditOutlined,
   ApartmentOutlined, DesktopOutlined, CheckCircleOutlined, ThunderboltOutlined,
   SunOutlined, ArrowUpOutlined, FireOutlined, PlusOutlined, DeleteOutlined,
-  SearchOutlined, AppstoreOutlined, UnorderedListOutlined,
+  SearchOutlined, AppstoreOutlined, UnorderedListOutlined, PictureOutlined,
 } from '@ant-design/icons'
 import ReactECharts from '@/lib/echarts'
 import dayjs from 'dayjs'
@@ -31,7 +31,7 @@ import useLocaleStore from '@/stores/localeStore'
 import StatisticCard from '@/components/StatisticCard'
 import StationCard from './components/StationCard'
 import RegionPicker from '@/components/RegionPicker'
-
+import { API_BASE, resolveMediaUrl } from '@/utils/urls'
 import LocationPicker, { LocationPickerRef, LatLng } from '@/components/LocationPicker'
 
 const { Title, Text } = Typography
@@ -138,12 +138,15 @@ const StationsPage: React.FC = () => {
   const [editForm] = Form.useForm()
   const editMapRef = useRef<LocationPickerRef>(null)
   const [editLocation, setEditLocation] = useState<LatLng | undefined>(undefined)
+  const [editImageUrl, setEditImageUrl] = useState<string | undefined>(undefined)
+  const token = useAuthStore((s) => s.token)
 
   /* ---------- 创建电站弹窗 ---------- */
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [addForm] = Form.useForm()
   const addMapRef = useRef<LocationPickerRef>(null)
   const [addLocation, setAddLocation] = useState<LatLng | undefined>(undefined)
+  const [addImageUrl, setAddImageUrl] = useState<string | undefined>(undefined)
 
   /* ---------- 分配用户 ---------- */
   const [assignVisible, setAssignVisible] = useState(false)
@@ -368,11 +371,15 @@ const StationsPage: React.FC = () => {
         values.latitude = editLocation.lat
         values.longitude = editLocation.lng
       }
+      if (editImageUrl) {
+        values.card_image_url = editImageUrl
+      }
       await api.put(`/stations/${currentStation!.id}`, values)
       messageApi.success(t('station.updateSuccess'))
       queryClient.invalidateQueries({ queryKey: ['stations'] })
       setCurrentStation({ ...currentStation!, ...values })
       setEditLocation(undefined)
+      setEditImageUrl(undefined)
       return true
     } catch {
       messageApi.error(t('station.updateFailed'))
@@ -386,10 +393,14 @@ const StationsPage: React.FC = () => {
         values.latitude = addLocation.lat
         values.longitude = addLocation.lng
       }
+      if (addImageUrl) {
+        values.card_image_url = addImageUrl
+      }
       await api.post('/stations', values)
       messageApi.success(t('station.addSuccess'))
       queryClient.invalidateQueries({ queryKey: ['stations'] })
       setAddLocation(undefined)
+      setAddImageUrl(undefined)
       return true
     } catch {
       messageApi.error(t('station.addFailed'))
@@ -626,21 +637,13 @@ const StationsPage: React.FC = () => {
           <a onClick={() => {
             editForm.setFieldsValue({
               name: record.name,
-              province: record.province,
-              city: record.city,
-              district: record.district,
               address: record.address,
-              capacity: record.capacity,
-              panel_count: record.panel_count,
-              battery_capacity: record.battery_capacity,
-              contact_name: record.contact_name,
-              contact_phone: record.contact_phone,
-              timezone: record.timezone || 'Asia/Shanghai',
             })
             setCurrentStation(record)
             const lat = record.latitude ? Number(record.latitude) : 0
             const lng = record.longitude ? Number(record.longitude) : 0
             setEditLocation(lat !== 0 || lng !== 0 ? { lat, lng } : undefined)
+            setEditImageUrl(record.card_image_url || undefined)
             setEditModalOpen(true)
           }}><EditOutlined /> {t('common.edit')}</a>
           <Popconfirm
@@ -797,22 +800,12 @@ const StationsPage: React.FC = () => {
               onClick={() => {
                 editForm.setFieldsValue({
                   name: station.name,
-                  province: station.province,
-                  city: station.city,
-                  district: station.district,
                   address: station.address,
-                  capacity: station.capacity,
-                  panel_count: station.panel_count,
-                  battery_capacity: station.battery_capacity,
-                  contact_name: station.contact_name,
-                  contact_phone: station.contact_phone,
-                  install_date: station.install_date ? dayjs(station.install_date) : undefined,
-                  status: station.status,
-                  timezone: station.timezone || 'Asia/Shanghai',
                 })
                 const sLat = station.latitude ? Number(station.latitude) : 0
                 const sLng = station.longitude ? Number(station.longitude) : 0
                 setEditLocation(sLat !== 0 || sLng !== 0 ? { lat: sLat, lng: sLng } : undefined)
+                setEditImageUrl(station.card_image_url || undefined)
                 setEditModalOpen(true)
               }}
             >
@@ -1182,91 +1175,91 @@ const StationsPage: React.FC = () => {
         />
       </Drawer>
 
-      {/* 编辑弹窗 */}
+      {/* 编辑弹窗（简化版：名称 + 地址 + 图片） */}
       <ModalForm
         title={t('station.editStation')}
         open={editModalOpen}
-        onOpenChange={(open) => { if (!open) { setEditModalOpen(false); setEditLocation(undefined) } }}
+        onOpenChange={(open) => { if (!open) { setEditModalOpen(false); setEditLocation(undefined); setEditImageUrl(undefined) } }}
         form={editForm}
         onFinish={handleEditSave}
         layout="vertical"
-        width={720}
+        width={600}
         modalProps={{ destroyOnHidden: true, maskClosable: false }}
       >
-        <Row gutter={16}>
-          <Col span={12}>
-            <ProFormText name="name" label={t('station.stationName')} rules={[{ required: true }]} />
-          </Col>
-          <Col span={12}>
-            <ProFormDigit name="capacity" label={t('station.capacity_kW')} min={0} fieldProps={{ style: { width: '100%' } }} />
-          </Col>
-          <Col span={24}>
-            <Form.Item label={t('station.province')} name="region">
-              <RegionPicker
-                value={undefined}
-                onChange={(region) => {
-                  editForm.setFieldsValue({
-                    country: region[0] || '',
-                    province: region[1] || '',
-                    city: region[2] || ''
-                  })
-                  triggerGeocode(region[1] || '', region[2] || '', '', editForm.getFieldValue('address') || '', region[0] || '', editMapRef)
-                }}
-                mode="station"
-              />
-            </Form.Item>
-          </Col>
-          <Col span={24}>
-            <ProFormText name="address" label={t('station.address')} fieldProps={{
-              onChange: () => {
-                const v = editForm.getFieldsValue()
-                triggerGeocode(v.province || '', v.city || '', v.district || '', v.address || '', v.country || '', editMapRef)
+        <ProFormText name="name" label={t('station.stationName')} rules={[{ required: true }]} />
+        <Form.Item label={t('station.province')} name="region">
+          <RegionPicker
+            value={undefined}
+            onChange={(region) => {
+              editForm.setFieldsValue({
+                country: region[0] || '',
+                province: region[1] || '',
+                city: region[2] || ''
+              })
+              triggerGeocode(region[1] || '', region[2] || '', '', editForm.getFieldValue('address') || '', region[0] || '', editMapRef)
+            }}
+            mode="station"
+          />
+        </Form.Item>
+        <ProFormText name="address" label={t('station.address')} fieldProps={{
+          onChange: () => {
+            const v = editForm.getFieldsValue()
+            triggerGeocode(v.province || '', v.city || '', v.district || '', v.address || '', v.country || '', editMapRef)
+          }
+        }} />
+        <Form.Item label={t('station.mapSelectLocation') || 'Select on map'}>
+          <LocationPicker
+            ref={editMapRef}
+            value={editLocation}
+            onChange={setEditLocation}
+            onReverseGeocode={(_pos, addr) => {
+              editForm.setFieldsValue({ address: addr })
+            }}
+            initialCenter={editLocation && (editLocation.lat !== 0 || editLocation.lng !== 0) ? [editLocation.lat, editLocation.lng] : [30, 110]}
+            initialZoom={editLocation && (editLocation.lat !== 0 || editLocation.lng !== 0) ? 14 : 4}
+          />
+        </Form.Item>
+        <Form.Item label={t('station.stationImage') || '电站图片'}>
+          <Upload
+            name="file"
+            action={`${API_BASE}/upload/station-image`}
+            headers={{ Authorization: token ? `Bearer ${token}` : '' }}
+            showUploadList={false}
+            accept="image/*"
+            beforeUpload={(file) => {
+              if (!file.type.startsWith('image/')) { message.error(t('upload.imageOnly')); return Upload.LIST_IGNORE }
+              if (file.size > 5 * 1024 * 1024) { message.error('图片大小不能超过 5MB'); return Upload.LIST_IGNORE }
+              return true
+            }}
+            onChange={(info) => {
+              if (info.file.status === 'done') {
+                const resp = info.file.response
+                if (resp?.code === 0 && resp?.data?.url) {
+                  setEditImageUrl(resp.data.url)
+                  message.success(t('upload.success'))
+                } else {
+                  message.error(resp?.message || t('upload.failed'))
+                }
+              } else if (info.file.status === 'error') {
+                message.error(t('upload.failed'))
               }
-            }} />
-          </Col>
-          <Col span={24}>
-            <Form.Item label={t('station.mapSelectLocation') || 'Select on map'}>
-              <LocationPicker
-                ref={editMapRef}
-                value={editLocation}
-                onChange={setEditLocation}
-                onReverseGeocode={(_pos, addr) => {
-                  // Fill address field when user picks a point on map
-                  editForm.setFieldsValue({ address: addr })
-                }}
-                initialCenter={editLocation && (editLocation.lat !== 0 || editLocation.lng !== 0) ? [editLocation.lat, editLocation.lng] : [30, 110]}
-                initialZoom={editLocation && (editLocation.lat !== 0 || editLocation.lng !== 0) ? 14 : 4}
-              />
-            </Form.Item>
-          </Col>
-          <Col span={8}>
-            <ProFormDigit name="panel_count" label={t('station.panelCount')} min={0} fieldProps={{ style: { width: '100%' } }} />
-          </Col>
-          <Col span={8}>
-            <ProFormDigit name="battery_capacity" label={t('station.batteryCapacity')} min={0} fieldProps={{ style: { width: '100%' } }} />
-          </Col>
-          <Col span={8}>
-            <ProFormSelect name="status" label={t('common.status')} options={[
-              { value: 1, label: t('station.normal') },
-              { value: 0, label: t('station.stopped') },
-            ]} />
-          </Col>
-          <Col span={24}>
-            <ProFormSelect name="timezone" label={t('station.timezone')} fieldProps={{
-              showSearch: true,
-              placeholder: t('station.selectTimezone'),
-              options: TIMEZONE_LIST.map(tz => ({ value: tz.id, label: getTimezoneLabel(tz.id, lang) })),
-              filterOption: (input: string, option: { label?: string } | undefined) =>
-                (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
-            }} />
-          </Col>
-          <Col span={12}>
-            <ProFormText name="contact_name" label={t('station.contact')} />
-          </Col>
-          <Col span={12}>
-            <ProFormText name="contact_phone" label={t('station.contactPhone')} />
-          </Col>
-        </Row>
+            }}
+          >
+            {editImageUrl ? (
+              <div style={{ position: 'relative', cursor: 'pointer', display: 'inline-block' }}>
+                <img src={resolveMediaUrl(editImageUrl, true)} alt="station" style={{ width: 200, height: 120, objectFit: 'cover', borderRadius: 8, border: '1px solid #d9d9d9' }} />
+                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.5)', color: '#fff', textAlign: 'center', fontSize: 12, padding: '4px 0', borderRadius: '0 0 8px 8px' }}>
+                  <PictureOutlined style={{ marginRight: 4 }} />{t('upload.changeAvatar')}
+                </div>
+              </div>
+            ) : (
+              <div style={{ width: 200, height: 120, border: '1px dashed #d9d9d9', borderRadius: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: '#fafafa' }}>
+                <PictureOutlined style={{ fontSize: 24, color: '#999' }} />
+                <div style={{ marginTop: 8, color: '#999', fontSize: 13 }}>{t('common.upload') || '上传图片'}</div>
+              </div>
+            )}
+          </Upload>
+        </Form.Item>
       </ModalForm>
 
       {/* 添加设备弹窗 */}
@@ -1293,7 +1286,7 @@ const StationsPage: React.FC = () => {
         </div>
       </Modal>
 
-      {/* 创建电站弹窗 */}
+      {/* 创建电站弹窗（简化版：名称 + 地址 + 图片） */}
       <ModalForm
         title={t('station.addStationTitle')}
         open={addModalOpen}
@@ -1302,79 +1295,87 @@ const StationsPage: React.FC = () => {
             setAddModalOpen(false)
             addForm.resetFields()
             setAddLocation(undefined)
+            setAddImageUrl(undefined)
           }
         }}
         form={addForm}
         onFinish={handleCreate}
         layout="vertical"
-        width={720}
+        width={600}
         modalProps={{ destroyOnHidden: true, maskClosable: false }}
       >
-        <Row gutter={16}>
-          <Col span={12}>
-            <ProFormText name="name" label={t('station.stationName')} rules={[{ required: true, message: t('station.stationName') }]} />
-          </Col>
-          <Col span={12}>
-            <ProFormDigit name="capacity" label={t('station.capacity_kW')} min={0} fieldProps={{ style: { width: '100%' } }} />
-          </Col>
-          <Col span={24}>
-            <Form.Item label={t('station.province')} name="region">
-              <RegionPicker
-                value={undefined}
-                onChange={(region) => {
-                  addForm.setFieldsValue({
-                    country: region[0] || '',
-                    province: region[1] || '',
-                    city: region[2] || ''
-                  })
-                  triggerGeocode(region[1] || '', region[2] || '', '', addForm.getFieldValue('address') || '', region[0] || '', addMapRef)
-                }}
-                mode="station"
-              />
-            </Form.Item>
-          </Col>
-          <Col span={24}>
-            <ProFormText name="address" label={t('station.address')} fieldProps={{
-              onChange: () => {
-                const v = addForm.getFieldsValue()
-                triggerGeocode(v.province || '', v.city || '', v.district || '', v.address || '', v.country || '', addMapRef)
+        <ProFormText name="name" label={t('station.stationName')} rules={[{ required: true, message: t('station.stationName') }]} />
+        <Form.Item label={t('station.province')} name="region">
+          <RegionPicker
+            value={undefined}
+            onChange={(region) => {
+              addForm.setFieldsValue({
+                country: region[0] || '',
+                province: region[1] || '',
+                city: region[2] || ''
+              })
+              triggerGeocode(region[1] || '', region[2] || '', '', addForm.getFieldValue('address') || '', region[0] || '', addMapRef)
+            }}
+            mode="station"
+          />
+        </Form.Item>
+        <ProFormText name="address" label={t('station.address')} fieldProps={{
+          onChange: () => {
+            const v = addForm.getFieldsValue()
+            triggerGeocode(v.province || '', v.city || '', v.district || '', v.address || '', v.country || '', addMapRef)
+          }
+        }} />
+        <Form.Item label={t('station.mapSelectLocation') || 'Select on map'}>
+          <LocationPicker
+            ref={addMapRef}
+            value={addLocation}
+            onChange={setAddLocation}
+            onReverseGeocode={(_pos, addr) => {
+              addForm.setFieldsValue({ address: addr })
+            }}
+          />
+        </Form.Item>
+        <Form.Item label={t('station.stationImage') || '电站图片'}>
+          <Upload
+            name="file"
+            action={`${API_BASE}/upload/station-image`}
+            headers={{ Authorization: token ? `Bearer ${token}` : '' }}
+            showUploadList={false}
+            accept="image/*"
+            beforeUpload={(file) => {
+              if (!file.type.startsWith('image/')) { message.error(t('upload.imageOnly')); return Upload.LIST_IGNORE }
+              if (file.size > 5 * 1024 * 1024) { message.error('图片大小不能超过 5MB'); return Upload.LIST_IGNORE }
+              return true
+            }}
+            onChange={(info) => {
+              if (info.file.status === 'done') {
+                const resp = info.file.response
+                if (resp?.code === 0 && resp?.data?.url) {
+                  setAddImageUrl(resp.data.url)
+                  message.success(t('upload.success'))
+                } else {
+                  message.error(resp?.message || t('upload.failed'))
+                }
+              } else if (info.file.status === 'error') {
+                message.error(t('upload.failed'))
               }
-            }} />
-          </Col>
-          <Col span={24}>
-            <Form.Item label={t('station.mapSelectLocation') || 'Select on map'}>
-              <LocationPicker
-                ref={addMapRef}
-                value={addLocation}
-                onChange={setAddLocation}
-                onReverseGeocode={(_pos, addr) => {
-                  addForm.setFieldsValue({ address: addr })
-                }}
-              />
-            </Form.Item>
-          </Col>
-          <Col span={8}>
-            <ProFormDigit name="panel_count" label={t('station.panelCount')} min={0} fieldProps={{ style: { width: '100%' } }} />
-          </Col>
-          <Col span={8}>
-            <ProFormDigit name="battery_capacity" label={t('station.batteryCapacity')} min={0} fieldProps={{ style: { width: '100%' } }} />
-          </Col>
-          <Col span={8}>
-            <ProFormSelect name="timezone" label={t('station.timezone')} fieldProps={{
-              showSearch: true,
-              placeholder: t('station.selectTimezone'),
-              options: TIMEZONE_LIST.map(tz => ({ value: tz.id, label: getTimezoneLabel(tz.id, lang) })),
-              filterOption: (input: string, option: { label?: string } | undefined) =>
-                (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
-            }} />
-          </Col>
-          <Col span={12}>
-            <ProFormText name="contact_name" label={t('station.contact')} />
-          </Col>
-          <Col span={12}>
-            <ProFormText name="contact_phone" label={t('station.contactPhone')} />
-          </Col>
-        </Row>
+            }}
+          >
+            {addImageUrl ? (
+              <div style={{ position: 'relative', cursor: 'pointer', display: 'inline-block' }}>
+                <img src={resolveMediaUrl(addImageUrl, true)} alt="station" style={{ width: 200, height: 120, objectFit: 'cover', borderRadius: 8, border: '1px solid #d9d9d9' }} />
+                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.5)', color: '#fff', textAlign: 'center', fontSize: 12, padding: '4px 0', borderRadius: '0 0 8px 8px' }}>
+                  <PictureOutlined style={{ marginRight: 4 }} />{t('upload.changeAvatar')}
+                </div>
+              </div>
+            ) : (
+              <div style={{ width: 200, height: 120, border: '1px dashed #d9d9d9', borderRadius: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: '#fafafa' }}>
+                <PictureOutlined style={{ fontSize: 24, color: '#999' }} />
+                <div style={{ marginTop: 8, color: '#999', fontSize: 13 }}>{t('common.upload') || '上传图片'}</div>
+              </div>
+            )}
+          </Upload>
+        </Form.Item>
       </ModalForm>
     </div>
   )

@@ -16,6 +16,24 @@ import 'package:inv_app/features/ota/presentation/pages/local_ota_channel_select
 
 part 'device_control_sections.dart';
 
+/// 从嵌套或扁平的 realtime 数据中提取值
+/// V2 数据嵌套在分组下（ac.output_power, bat.battery_soc 等），
+/// V1 数据是扁平的（ac_power, battery_soc 等）
+dynamic _rtPick(Map<String, dynamic> rt, String flatKey, String group, String nestedKey) {
+  // 先尝试嵌套路径：rt[group][nestedKey]
+  final groupData = rt[group];
+  if (groupData is Map<String, dynamic>) {
+    final v = groupData[nestedKey];
+    if (v != null) return v;
+  }
+  // 回退扁平路径：rt[flatKey]
+  return rt[flatKey];
+}
+
+double _rtPickNum(Map<String, dynamic> rt, String flatKey, String group, String nestedKey, [double fallback = 0]) {
+  return (_rtPick(rt, flatKey, group, nestedKey) as num?)?.toDouble() ?? fallback;
+}
+
 class DeviceControlPage extends StatefulWidget {
   final String deviceSN;
 
@@ -178,11 +196,11 @@ class _DeviceControlPageState extends State<DeviceControlPage>
       if (mounted) {
         setState(() {
           _realtimeData = data;
-          // Infer AC output state from realtime data
+          // Infer AC output state from realtime data (V2: ac.output_power, V1: output_power)
+          final outputPower = _rtPickNum(data, 'output_power', 'ac', 'output_power');
           _acOutputOn = data['ac_output_on'] == true ||
               data['ac_on'] == true ||
-              (data['output_power'] != null &&
-                  (data['output_power'] as num) > 0);
+              outputPower > 0;
         });
       }
       return true;
@@ -797,7 +815,8 @@ class _DeviceControlPageState extends State<DeviceControlPage>
 
   Widget _buildRunModeCard() {
     final l10n = AppLocalizations.of(context)!;
-    final runMode = _realtimeData['run_mode'] ??
+    // V2: sys.work_state, V1: run_mode/running_mode/mode
+    final runMode = _rtPick(_realtimeData, 'run_mode', 'sys', 'work_state') ??
         _realtimeData['running_mode'] ??
         _realtimeData['mode'];
     final modeStr = runMode?.toString() ?? '—';
@@ -851,11 +870,16 @@ class _DeviceControlPageState extends State<DeviceControlPage>
 
   Widget _buildEnergyFlowCard() {
     final l10n = AppLocalizations.of(context)!;
-    final pvPower = _realtimeData['pv_power'] ?? _realtimeData['pv_power_w'];
-    final battPower =
-        _realtimeData['battery_power'] ?? _realtimeData['batt_power'];
-    final loadPower =
-        _realtimeData['load_power'] ?? _realtimeData['output_power'];
+    // V2: pv.pv_total_power, V1: pv_power
+    final pvPower = _rtPickNum(_realtimeData, 'pv_power', 'pv', 'pv_total_power');
+    // V2: bat.battery_charge_power - bat.battery_discharge_power, V1: battery_power
+    final chgW = (_rtPick(_realtimeData, 'battery_charge_power', 'bat', 'battery_charge_power') as num?)?.toDouble();
+    final disW = (_rtPick(_realtimeData, 'battery_discharge_power', 'bat', 'battery_discharge_power') as num?)?.toDouble();
+    final battPower = (chgW != null || disW != null)
+        ? (chgW ?? 0) - (disW ?? 0)
+        : _rtPickNum(_realtimeData, 'battery_power', 'bat', 'power');
+    // V2: ac.output_power, V1: load_power
+    final loadPower = _rtPickNum(_realtimeData, 'load_power', 'ac', 'output_power');
 
     return Container(
       decoration: AppColor.card(context),

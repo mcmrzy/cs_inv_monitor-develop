@@ -64,8 +64,6 @@ import 'package:inv_app/features/device/presentation/pages/device_edit_page.dart
 
 import 'package:inv_app/features/device/presentation/pages/history_chart_page.dart';
 
-import 'package:inv_app/features/device/presentation/pages/device_settings_page.dart';
-
 import 'package:inv_app/features/device/presentation/pages/local_mode_page.dart';
 
 import 'package:inv_app/features/ota/presentation/pages/ota_page.dart';
@@ -286,15 +284,6 @@ class AppRouter {
           final sn = state.pathParameters['sn']!;
 
           return _slidePage(state, HistoryChartPage(deviceSN: sn));
-        },
-      ),
-      GoRoute(
-        path: '/device/:sn/settings',
-        name: 'deviceSettings',
-        pageBuilder: (context, state) {
-          final sn = state.pathParameters['sn']!;
-
-          return _slidePage(state, DeviceSettingsPage(sn: sn));
         },
       ),
       GoRoute(

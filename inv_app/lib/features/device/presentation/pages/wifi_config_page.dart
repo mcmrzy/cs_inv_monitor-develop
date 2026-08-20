@@ -658,9 +658,9 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
 
     // 配网写 WiFi 凭据前先校验 PIN（附录 B）
     final pin = _pinController.text.trim();
-    if (pin.isEmpty) {
+    if (pin.length != 6) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context)!.pinRequired)),
+        SnackBar(content: Text(AppLocalizations.of(context)!.pinLengthError)),
       );
       return;
     }
