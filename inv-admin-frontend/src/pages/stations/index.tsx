@@ -801,6 +801,9 @@ const StationsPage: React.FC = () => {
                 editForm.setFieldsValue({
                   name: station.name,
                   address: station.address,
+                  province: station.province || '',
+                  city: station.city || '',
+                  district: station.district || '',
                 })
                 const sLat = station.latitude ? Number(station.latitude) : 0
                 const sLng = station.longitude ? Number(station.longitude) : 0
