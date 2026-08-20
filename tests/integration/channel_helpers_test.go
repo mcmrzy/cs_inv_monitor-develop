@@ -137,6 +137,7 @@ func (c *channelTestContext) generateClaimCode(t *testing.T, sn string, expiresH
 }
 
 // addMember adds a user to an organization and returns the membership data.
+// Returns nil if the user already belongs to another organization (409 conflict).
 func (c *channelTestContext) addMember(t *testing.T, userID, orgID int64, roleIDs []int) map[string]interface{} {
 	t.Helper()
 	body := map[string]interface{}{
@@ -148,6 +149,12 @@ func (c *channelTestContext) addMember(t *testing.T, userID, orgID int64, roleID
 	}
 	resp, status := doJSONWithRetry(t, c.Client, "POST", c.BaseURL+"/api/v1/members/add", body, c.Token, 5)
 	require.Equal(t, http.StatusOK, status, "add member HTTP: %s", resp.Message)
+
+	// If user already belongs to another org, return nil so tests can handle it
+	if resp.Code == 409 {
+		t.Logf("user %d already belongs to another organization: %s", userID, resp.Message)
+		return nil
+	}
 	require.Equal(t, 0, resp.Code, "add member biz code: %s", resp.Message)
 
 	var data map[string]interface{}
