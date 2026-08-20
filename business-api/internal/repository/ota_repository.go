@@ -1680,7 +1680,9 @@ func (r *OTARepository) MarkTimedOutUpgradeTasks(ctx context.Context, timeout ti
 	rows, err := r.db.Query(ctx, `
 		UPDATE upgrade_tasks SET
 		    status = 'failed',
-		    notes = CONCAT_WS(E'\n', NULLIF(notes, ''), $2),
+		    -- $2 需显式 cast：CONCAT_WS 为 variadic "any" 签名，unknown 参数
+		    -- 无法被推断类型（SQLSTATE 42P18），导致超时收口持续失败。
+		    notes = CONCAT_WS(E'\n', NULLIF(notes, ''), $2::text),
 		    completed_at = COALESCE(completed_at, NOW()),
 		    updated_at = NOW()
 		WHERE status IN ('pending', 'running')

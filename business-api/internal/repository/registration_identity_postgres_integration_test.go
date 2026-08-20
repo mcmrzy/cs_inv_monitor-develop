@@ -188,7 +188,11 @@ func TestMigration107BackfillsOrphanUsers(t *testing.T) {
 	`)
 	require.NoError(t, err)
 
+	// 生产迁移序列：107 建身份（授权清单为 107 时代硬编码的 10 项），
+	// 108 为存量 customer 分配补授 devices:control，两级叠加后与代码侧
+	// RoleDefaultPermissions[customer] 一致。
 	execMigrationFile(t, pool, "107_backfill_personal_orgs_for_users.up.sql")
+	execMigrationFile(t, pool, "108_grant_customer_devices_control.up.sql")
 
 	assertCustomerIdentity(t, pool, 9201)
 	assertCustomerIdentity(t, pool, 9202) // 空昵称用户兜底为 User_<id>
@@ -201,8 +205,9 @@ func TestMigration107BackfillsOrphanUsers(t *testing.T) {
 	`).Scan(&existingOrgID))
 	assert.Equal(t, int64(9210), existingOrgID)
 
-	// 幂等重放不产生重复身份
+	// 幂等重放不产生重复身份与重复授权
 	execMigrationFile(t, pool, "107_backfill_personal_orgs_for_users.up.sql")
+	execMigrationFile(t, pool, "108_grant_customer_devices_control.up.sql")
 	var totalMemberships int
 	require.NoError(t, pool.QueryRow(ctx, `
 		SELECT COUNT(*) FROM organization_memberships

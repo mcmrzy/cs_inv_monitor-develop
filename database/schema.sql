@@ -7134,6 +7134,8 @@ INSERT INTO schema_migrations (version, name) VALUES (95, '095_device_alias_stat
 -- 097-107 同样由 migrator 按编号执行（本基线仅登记 0..95）；其中 105
 -- （member_transfer_requests 表）与 106（访问视图 owner 分支）的 DDL 已同步
 -- 进本基线，均为幂等定义，migrator 重放安全；107 为存量用户组织身份
--- backfill，全新库无孤儿用户，执行为空操作。
+-- backfill，全新库无孤儿用户，执行为空操作。108 为 customer 角色存量
+-- 补授 devices:control（幂等 backfill，新分配由代码侧 role_default_grants.go
+-- 直接携带），全新 initdb 库无存量分配，执行为空操作。
 
--- Next migration version to use: 108
+-- Next migration version to use: 109
