@@ -59,6 +59,11 @@ export function useDeviceConfig(sn: string) {
   const reported = useMemo(() => (controlState?.reported ?? {}) as Record<string, unknown>, [controlState])
   const desired = useMemo(() => (controlState?.desired ?? {}) as Record<string, unknown>, [controlState])
 
+  /** 后端同步状态（unknown/pending/synced/drifted）：unknown 表示设备尚未回报配置 */
+  const syncStatus = (controlState?.sync_status as string) ?? 'unknown'
+  /** 设备是否已回报过配置（reported 非空），用于「未上报/值不可信」提示 */
+  const hasReportedConfig = useMemo(() => Object.keys(reported).length > 0, [reported])
+
   const getMeta = useCallback(
     (paramKey: string): ResolvedFieldMeta => resolveFieldMeta(schemaMap, paramKey),
     [schemaMap],
@@ -191,6 +196,8 @@ export function useDeviceConfig(sn: string) {
     controlState,
     reported,
     desired,
+    syncStatus,
+    hasReportedConfig,
     stateLoading,
     stateError,
     history: history ?? [],
