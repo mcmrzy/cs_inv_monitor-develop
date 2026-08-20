@@ -980,13 +980,16 @@ func (h *InternalHandler) DeviceCmdResult(c *gin.Context) {
 			logger.Error("DeviceCmdResult update failed",
 				zap.String("sn", req.SN), zap.String("task_id", req.TaskID), zap.Error(err))
 		}
+		// 注意：status 参数不可在 CASE WHEN 中复用（SET 列推断 varchar 与字面量比较推断
+		// text 冲突，服务器报 SQLSTATE 42P08），状态时间戳改用独立布尔参数控制。
 		_, err = h.db.Exec(ctx, `
 			UPDATE device_commands SET status=$2,result_code=COALESCE(NULLIF($3,''),result_code),
 				result_message=$4,response_data=COALESCE($5::jsonb,'[]'::jsonb),
-				acknowledged_at=CASE WHEN $2='acknowledged' THEN NOW() ELSE acknowledged_at END,
-				completed_at=CASE WHEN $2 IN ('success','failed') THEN NOW() ELSE completed_at END
+				acknowledged_at=CASE WHEN $6 THEN NOW() ELSE acknowledged_at END,
+				completed_at=CASE WHEN $7 THEN NOW() ELSE completed_at END
 			WHERE task_id::text=$1
-		`, req.TaskID, status, resultCodeStr, req.Message, responseData)
+		`, req.TaskID, status, resultCodeStr, req.Message, responseData,
+			status == "acknowledged", status == "success" || status == "failed")
 		if err != nil {
 			logger.Error("Device command lifecycle update failed", zap.String("task_id", req.TaskID), zap.Error(err))
 		}

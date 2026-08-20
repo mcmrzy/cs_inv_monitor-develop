@@ -2164,11 +2164,15 @@ func (r *DeviceRepository) UpdateCommandLogStatus(ctx context.Context, taskID, s
 	`, taskID, status, message); err != nil {
 		return err
 	}
+	// 注意：status 参数不可在 CASE WHEN 中复用（SET 列推断 varchar 与字面量比较推断
+	// text 冲突，服务器报 SQLSTATE 42P08），时间戳列改用独立布尔参数控制。
 	if _, err = tx.Exec(ctx, `UPDATE device_commands SET status=$2,result_message=$3,
-		queued_at=CASE WHEN $2='queued' THEN NOW() ELSE queued_at END,
-		sent_at=CASE WHEN $2='sent' THEN NOW() ELSE sent_at END,
-		completed_at=CASE WHEN $2 IN ('failed','timeout','cancelled') THEN NOW() ELSE completed_at END
-		WHERE task_id=$1::uuid`, taskID, status, message); err != nil {
+		queued_at=CASE WHEN $4 THEN NOW() ELSE queued_at END,
+		sent_at=CASE WHEN $5 THEN NOW() ELSE sent_at END,
+		completed_at=CASE WHEN $6 THEN NOW() ELSE completed_at END
+		WHERE task_id=$1::uuid`, taskID, status, message,
+		status == "queued", status == "sent",
+		status == "failed" || status == "timeout" || status == "cancelled"); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
