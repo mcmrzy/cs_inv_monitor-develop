@@ -425,6 +425,33 @@ func isBasicUserGET(path, method string) bool {
 	return false
 }
 
+// isModelDictionaryGET reports whether the request is a read of the model field
+// dictionaries (GET /models/{id}/fields, /models/fields-by-code/{code},
+// /models/{id}/field-capabilities). These are pure rendering metadata for
+// device data pages (history/realtime/status tabs) consumed by every role,
+// including end users; business-api serves them without org-level grants while
+// model governance reads and every mutation stay RBAC protected. They are
+// matched explicitly here because the generic prefix map would otherwise route
+// them to the admin-gated "models" resource.
+func isModelDictionaryGET(path, method string) bool {
+	if method != http.MethodGet {
+		return false
+	}
+	rest := strings.TrimPrefix(path, "/api/v1/models/")
+	if rest == path { // prefix mismatch
+		return false
+	}
+	segs := strings.Split(rest, "/")
+	switch {
+	case len(segs) == 2 && (segs[1] == "fields" || segs[1] == "field-capabilities"):
+		_, err := strconv.ParseInt(segs[0], 10, 64)
+		return err == nil
+	case len(segs) == 2 && segs[0] == "fields-by-code":
+		return segs[1] != ""
+	}
+	return false
+}
+
 // isUserActive verifies the user account is still valid (not deleted/banned).
 func (r *RBACMiddleware) isUserActive(ctx context.Context, userID string) bool {
 	if r.pg == nil {
@@ -491,7 +518,8 @@ func (r *RBACMiddleware) RBACGuard() gin.HandlerFunc {
 
 		// Basic user GET endpoints: any authenticated user can view their own data.
 		// Data scoping is enforced by the downstream service layer.
-		if isBasicUserGET(path, c.Request.Method) {
+		// Model field dictionaries ride the same lane (see isModelDictionaryGET).
+		if isBasicUserGET(path, c.Request.Method) || isModelDictionaryGET(path, c.Request.Method) {
 			if !r.isUserActive(c.Request.Context(), userID) {
 				c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "账号不可用"})
 				c.Abort()
