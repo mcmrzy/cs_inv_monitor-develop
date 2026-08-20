@@ -96,7 +96,25 @@ func createPersonalCustomerOrg(ctx context.Context, tx pgx.Tx, userID int64, nic
 		ORDER BY o.root_tenant_id
 		LIMIT 1
 	`).Scan(&rootTenantID, &manufacturerOrgID); err != nil {
-		return fmt.Errorf("resolve manufacturer root org: %w", err)
+		// No manufacturer root org exists yet (fresh test environment).
+		// Create one using ensure_tenant_root (idempotent SECURITY DEFINER function).
+		logger.Info("no manufacturer root org found, creating via ensure_tenant_root",
+			zap.Int64("user_id", userID))
+		if _, err := tx.Exec(ctx, `SELECT ensure_tenant_root($1)`, userID); err != nil {
+			return fmt.Errorf("create manufacturer root org via ensure_tenant_root: %w", err)
+		}
+		// Re-query the newly created manufacturer org.
+		if err := tx.QueryRow(ctx, `
+			SELECT o.root_tenant_id, o.id
+			FROM organizations o
+			WHERE o.org_type = 'manufacturer'
+			  AND o.deleted_at IS NULL
+			  AND o.status = 'active'
+			ORDER BY o.root_tenant_id
+			LIMIT 1
+		`).Scan(&rootTenantID, &manufacturerOrgID); err != nil {
+			return fmt.Errorf("resolve manufacturer root org after creation: %w", err)
+		}
 	}
 
 	orgName := nickname

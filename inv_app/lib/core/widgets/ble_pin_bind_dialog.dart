@@ -47,8 +47,11 @@ class _BlePinBindDialogState extends State<_BlePinBindDialog> {
   void _submit() {
     final pin = _pinController.text.trim();
     if (pin.length != 6) {
-      AppToast.show(context, AppLocalizations.of(context)!.pinLengthError,
-          type: ToastType.info);
+      AppToast.show(
+        context,
+        AppLocalizations.of(context)!.pinLengthError,
+        type: ToastType.info,
+      );
       return;
     }
     Navigator.pop(context, pin);
