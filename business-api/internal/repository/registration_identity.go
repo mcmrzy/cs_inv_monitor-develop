@@ -86,36 +86,15 @@ func (r *UserRepository) EnsureUserOrgIdentity(ctx context.Context, userID int64
 // 角色固定为 customer 并写入默认授权（EnsureRoleDefaultGrants）。
 // 必须在事务内调用；code 标记为 personal-<user_id> 便于精确回滚。
 func createPersonalCustomerOrg(ctx context.Context, tx pgx.Tx, userID int64, nickname string) error {
-	var rootTenantID, manufacturerOrgID int64
-	if err := tx.QueryRow(ctx, `
-		SELECT o.root_tenant_id, o.id
-		FROM organizations o
-		WHERE o.org_type = 'manufacturer'
-		  AND o.deleted_at IS NULL
-		  AND o.status = 'active'
-		ORDER BY o.root_tenant_id
-		LIMIT 1
-	`).Scan(&rootTenantID, &manufacturerOrgID); err != nil {
-		// No manufacturer root org exists yet (fresh test environment).
-		// Create one using ensure_tenant_root (idempotent SECURITY DEFINER function).
-		logger.Info("no manufacturer root org found, creating via ensure_tenant_root",
-			zap.Int64("user_id", userID))
-		if _, err := tx.Exec(ctx, `SELECT ensure_tenant_root($1)`, userID); err != nil {
-			return fmt.Errorf("create manufacturer root org via ensure_tenant_root: %w", err)
-		}
-		// Re-query the newly created manufacturer org.
-		if err := tx.QueryRow(ctx, `
-			SELECT o.root_tenant_id, o.id
-			FROM organizations o
-			WHERE o.org_type = 'manufacturer'
-			  AND o.deleted_at IS NULL
-			  AND o.status = 'active'
-			ORDER BY o.root_tenant_id
-			LIMIT 1
-		`).Scan(&rootTenantID, &manufacturerOrgID); err != nil {
-			return fmt.Errorf("resolve manufacturer root org after creation: %w", err)
-		}
+	// Each user gets their own root tenant. ensure_tenant_root is idempotent:
+	// if the user already has a manufacturer root org, it returns the existing one.
+	rootTenantID := userID
+	if _, err := tx.Exec(ctx, `SELECT ensure_tenant_root($1)`, rootTenantID); err != nil {
+		return fmt.Errorf("ensure tenant root for user %d: %w", userID, err)
 	}
+
+	// The manufacturer org ID equals the root tenant ID (created by ensure_tenant_root).
+	manufacturerOrgID := rootTenantID
 
 	orgName := nickname
 	if orgName == "" {
