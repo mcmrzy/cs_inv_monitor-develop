@@ -1761,6 +1761,8 @@ const Map<String, String> en = {
   'settings_reading_device': 'Reading device config...',
   'settings_read_success': 'Device config updated',
   'settings_read_failed': 'Failed to read device config',
+  'settings_read_no_report': 'Device has not reported configuration; values shown may be unreliable',
+  'settings_not_reported_hint': 'The device has not reported its configuration yet (possibly offline or firmware without query_config). Values shown may be unreliable.',
   'settings_read_hint': 'Send read command to device to get current config',
   'settings_last_read': 'Last read',
   'settings_write_hint': 'Click Apply to send changes to device',

@@ -341,6 +341,7 @@ export default {
     'station.genCurrent': '发电机电流',
     'station.fuelLevel': '燃油液位',
     'station.pv': '光伏',
+    'station.stationImage': '电站图片',
   },
   en: {
     'station.listLoadFailed': 'Failed to load stations. The empty list shown is not a valid result.',
@@ -683,5 +684,6 @@ export default {
     'station.viewRealtimeData': 'View Realtime Data',
     'station.viewDeviceDetail': 'Device Detail',
     'station.chargeState': 'Charge State',
+    'station.stationImage': 'Station Image',
   },
 }

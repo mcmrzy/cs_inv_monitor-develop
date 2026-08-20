@@ -61,6 +61,8 @@ const AlertsPage: React.FC = () => {
     'device_online': { label: t('alert.deviceOnline') || '设备上线', color: '#52c41a', icon: '↑' },
     'device_offline': { label: t('alert.deviceOffline') || '设备离线', color: '#ff4d4f', icon: '↓' },
     'ota_available': { label: t('alert.otaAvailable') || 'OTA更新', color: '#1890ff', icon: '↑' },
+    'cmd_sent': { label: t('alert.cmdSent') || '命令下发', color: '#722ed1', icon: '→' },
+    'cmd_result': { label: t('alert.cmdResult') || '命令结果', color: '#1890ff', icon: '↵' },
     'command_sent': { label: t('alert.commandSent') || '命令下发', color: '#722ed1', icon: '→' },
     'command_success': { label: t('alert.commandSuccess') || '命令成功', color: '#52c41a', icon: '✓' },
     'command_failed': { label: t('alert.commandFailed') || '命令失败', color: '#ff4d4f', icon: '✗' },
@@ -564,10 +566,8 @@ const AlertsPage: React.FC = () => {
                   { label: t('alert.deviceOnline') || '设备上线', value: 'device_online' },
                   { label: t('alert.deviceOffline') || '设备离线', value: 'device_offline' },
                   { label: t('alert.otaAvailable') || 'OTA更新', value: 'ota_available' },
-                  { label: t('alert.commandSent') || '命令下发', value: 'command_sent' },
-                  { label: t('alert.commandSuccess') || '命令成功', value: 'command_success' },
-                  { label: t('alert.commandFailed') || '命令失败', value: 'command_failed' },
-                  { label: t('alert.commandQueued') || '命令排队', value: 'command_queued' },
+                  { label: t('alert.cmdSent') || '命令下发', value: 'cmd_sent' },
+                  { label: t('alert.cmdResult') || '命令结果', value: 'cmd_result' },
                 ]}
               />
             </Col>

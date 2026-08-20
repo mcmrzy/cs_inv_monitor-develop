@@ -29,7 +29,8 @@ class DeviceSettingsAdvancedPage extends StatefulWidget {
       _DeviceSettingsAdvancedPageState();
 }
 
-class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage> {
+class _DeviceSettingsAdvancedPageState
+    extends State<DeviceSettingsAdvancedPage> {
   /// 全量 schema（param_key → schema）
   Map<String, ConfigParamSchema> _schemaMap = {};
 
@@ -44,6 +45,9 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
   bool _applying = false;
   bool _reading = false;
   DateTime? _lastReadAt;
+
+  /// 设备尚未实际回报配置（reported 空且 sync_status 为 unknown）
+  bool _configUnreported = false;
 
   @override
   void initState() {
@@ -89,6 +93,7 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
         _schemaMap = schemas;
         _original = Map.from(values);
         _pending = Map.from(values);
+        _configUnreported = !controlStateHasReported(state);
         _loading = false;
       });
       // 自动发送 query_config 读取设备实际配置
@@ -102,8 +107,8 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
     }
   }
 
-  /// 仅刷新 control-state
-  Future<void> _refreshState() async {
+  /// 仅刷新 control-state。返回最新 control-state，失败返回 null。
+  Future<Map<String, dynamic>?> _refreshState() async {
     try {
       final dio = getIt<Dio>();
       final res = await dio.get('/devices/by-sn/${widget.sn}/control-state');
@@ -113,14 +118,17 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
         expected: 'an object',
       );
       final values = mergeControlStateReportedFirst(state);
-      if (!mounted) return;
+      if (!mounted) return state;
       setState(() {
         _original = Map.from(values);
         _pending = Map.from(values);
+        _configUnreported = !controlStateHasReported(state);
       });
+      return state;
     } catch (_) {
       // 刷新失败静默
     }
+    return null;
   }
 
   /// 发送 query_config 命令读取设备当前配置
@@ -145,17 +153,23 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
 
       // 等待设备响应后刷新状态（给设备 2 秒处理时间）
       await Future.delayed(const Duration(seconds: 2));
-      await _refreshState();
+      final refreshed = await _refreshState();
 
       if (!mounted) return;
+      final reported = refreshed != null && controlStateHasReported(refreshed);
       setState(() {
         _reading = false;
         _lastReadAt = DateTime.now();
+        _configUnreported = !reported;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(l10n.str('settings_read_success')),
-          backgroundColor: AppColors.success,
+          content: Text(
+            reported
+                ? l10n.str('settings_read_success')
+                : l10n.str('settings_read_no_report'),
+          ),
+          backgroundColor: reported ? AppColors.success : AppColors.warning,
           duration: const Duration(seconds: 2),
         ),
       );
@@ -174,9 +188,7 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
   // ==================== 修改与应用 ====================
 
   int get _modifiedCount {
-    return _pending.entries
-        .where((e) => e.value != _original[e.key])
-        .length;
+    return _pending.entries.where((e) => e.value != _original[e.key]).length;
   }
 
   bool _isModified(String key) =>
@@ -198,7 +210,8 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
       builder: (ctx) => AlertDialog(
         title: Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: AppColors.warning, size: 24.sp),
+            Icon(Icons.warning_amber_rounded,
+                color: AppColors.warning, size: 24.sp),
             SizedBox(width: 8.w),
             Expanded(child: Text(l10n.str('config_confirm_title'))),
           ],
@@ -247,7 +260,9 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.settingSetSuccess), backgroundColor: AppColors.success),
+        SnackBar(
+            content: Text(l10n.settingSetSuccess),
+            backgroundColor: AppColors.success),
       );
       setState(() {
         _original = Map.from(_pending);
@@ -257,7 +272,9 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.settingSetFailed), backgroundColor: AppColors.error),
+        SnackBar(
+            content: Text(l10n.settingSetFailed),
+            backgroundColor: AppColors.error),
       );
       setState(() => _applying = false);
     }
@@ -280,13 +297,17 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.commandSent), backgroundColor: AppColors.success),
+          SnackBar(
+              content: Text(l10n.commandSent),
+              backgroundColor: AppColors.success),
         );
       }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.settingSetFailed), backgroundColor: AppColors.error),
+          SnackBar(
+              content: Text(l10n.settingSetFailed),
+              backgroundColor: AppColors.error),
         );
       }
     }
@@ -299,14 +320,16 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
       builder: (ctx) => AlertDialog(
         title: Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 24.sp),
+            Icon(Icons.warning_amber_rounded,
+                color: AppColors.error, size: 24.sp),
             SizedBox(width: 8.w),
             Expanded(child: Text(l10n.settingForceConfirmTitle)),
           ],
         ),
         content: Text(l10n.str(confirmKey)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l10n.cancel)),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: Text(l10n.cancel)),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: AppColors.error),
             onPressed: () {
@@ -331,14 +354,16 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
       builder: (ctx) => AlertDialog(
         title: Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 24.sp),
+            Icon(Icons.warning_amber_rounded,
+                color: AppColors.error, size: 24.sp),
             SizedBox(width: 8.w),
             Expanded(child: Text(l10n.settingForceConfirmTitle)),
           ],
         ),
         content: Text(l10n.str(confirmKey)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l10n.cancel)),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: Text(l10n.cancel)),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: AppColors.error),
             onPressed: () {
@@ -386,9 +411,8 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
         ],
       ),
       body: _buildBody(l10n),
-      bottomNavigationBar: _modifiedCount > 0
-          ? _buildApplyBar(l10n)
-          : _buildHintBar(l10n),
+      bottomNavigationBar:
+          _modifiedCount > 0 ? _buildApplyBar(l10n) : _buildHintBar(l10n),
     );
   }
 
@@ -420,6 +444,8 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
       children: [
         // 读取状态提示条
         if (_reading) _buildReadingBanner(l10n),
+        // 设备未上报配置提示条：值不可信，不要谎称“读取成功”
+        if (_configUnreported && !_reading) _buildNotReportedBanner(l10n),
         // 主内容
         Expanded(
           child: ListView(
@@ -444,6 +470,31 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
     );
   }
 
+  /// 设备未上报配置提示条：值不可信
+  Widget _buildNotReportedBanner(AppLocalizations l10n) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h),
+      color: AppColors.warning.withValues(alpha: 0.12),
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded,
+              size: 16.sp, color: AppColors.warning),
+          SizedBox(width: 8.w),
+          Expanded(
+            child: Text(
+              l10n.str('settings_not_reported_hint'),
+              style: TextStyle(
+                  fontSize: 12.sp,
+                  color: AppColors.warning,
+                  fontWeight: FontWeight.w500),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// 读取中提示条
   Widget _buildReadingBanner(AppLocalizations l10n) {
     return Container(
@@ -455,12 +506,16 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
           SizedBox(
             width: 16.w,
             height: 16.w,
-            child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+            child: CircularProgressIndicator(
+                strokeWidth: 2, color: AppColors.primary),
           ),
           SizedBox(width: 10.w),
           Text(
             l10n.str('settings_reading_device'),
-            style: TextStyle(fontSize: 13.sp, color: AppColors.primary, fontWeight: FontWeight.w500),
+            style: TextStyle(
+                fontSize: 13.sp,
+                color: AppColors.primary,
+                fontWeight: FontWeight.w500),
           ),
         ],
       ),
@@ -478,7 +533,8 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
       ),
       child: Row(
         children: [
-          Icon(Icons.info_outline_rounded, size: 18.w, color: AppColors.primary),
+          Icon(Icons.info_outline_rounded,
+              size: 18.w, color: AppColors.primary),
           SizedBox(width: 10.w),
           Expanded(
             child: Column(
@@ -492,7 +548,9 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
                   SizedBox(height: 4.h),
                   Text(
                     '${l10n.str("settings_last_read")}: ${_formatTime(_lastReadAt!)}',
-                    style: TextStyle(fontSize: 11.sp, color: AppColor.textSecondary(context)),
+                    style: TextStyle(
+                        fontSize: 11.sp,
+                        color: AppColor.textSecondary(context)),
                   ),
                 ],
               ],
@@ -502,7 +560,8 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
           TextButton.icon(
             onPressed: _reading ? null : _readDeviceConfig,
             icon: Icon(Icons.refresh_rounded, size: 16.sp),
-            label: Text(l10n.str('settings_read_device'), style: TextStyle(fontSize: 12.sp)),
+            label: Text(l10n.str('settings_read_device'),
+                style: TextStyle(fontSize: 12.sp)),
             style: TextButton.styleFrom(
               padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
               minimumSize: Size.zero,
@@ -565,8 +624,7 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
         child: Column(
           children: [
             for (int i = 0; i < schemas.length; i++) ...[
-              if (i > 0)
-                Divider(height: 1.h, indent: 16.w, endIndent: 16.w),
+              if (i > 0) Divider(height: 1.h, indent: 16.w, endIndent: 16.w),
               Padding(
                 padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 4.h),
                 child: ConfigParamControl(
@@ -629,9 +687,12 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
                     ? SizedBox(
                         width: 20.w,
                         height: 20.w,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
                       )
-                    : Text(l10n.applyChanges, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
+                    : Text(l10n.applyChanges,
+                        style: TextStyle(
+                            fontSize: 15.sp, fontWeight: FontWeight.w600)),
               ),
             ),
           ],
@@ -648,7 +709,8 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
         child: Text(
           l10n.str('settings_write_hint'),
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 12.sp, color: AppColor.textSecondary(context)),
+          style: TextStyle(
+              fontSize: 12.sp, color: AppColor.textSecondary(context)),
         ),
       ),
     );
@@ -675,18 +737,23 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
         children: [
           Row(
             children: [
-              Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 18.sp),
+              Icon(Icons.warning_amber_rounded,
+                  color: AppColors.error, size: 18.sp),
               SizedBox(width: 6.w),
               Text(
                 l10n.str('settings_dangerous_zone'),
-                style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600, color: AppColors.error),
+                style: TextStyle(
+                    fontSize: 14.sp,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.error),
               ),
             ],
           ),
           SizedBox(height: 6.h),
           Text(
             l10n.settingAdvancedHint,
-            style: TextStyle(fontSize: 12.sp, color: AppColor.textSecondary(context)),
+            style: TextStyle(
+                fontSize: 12.sp, color: AppColor.textSecondary(context)),
           ),
           SizedBox(height: 12.h),
           _buildDangerousSwitch(
@@ -714,9 +781,11 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
                 foregroundColor: AppColors.error,
                 side: BorderSide(color: AppColors.error.withValues(alpha: 0.5)),
                 padding: EdgeInsets.symmetric(vertical: 12.h),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10.r)),
               ),
-              onPressed: () => _showDangerousConfirm('setting_restart_confirm', 'restart'),
+              onPressed: () =>
+                  _showDangerousConfirm('setting_restart_confirm', 'restart'),
             ),
           ),
         ],
@@ -736,13 +805,17 @@ class _DeviceSettingsAdvancedPageState extends State<DeviceSettingsAdvancedPage>
         Expanded(
           child: Text(
             label,
-            style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w500, color: AppColors.error),
+            style: TextStyle(
+                fontSize: 14.sp,
+                fontWeight: FontWeight.w500,
+                color: AppColors.error),
           ),
         ),
         Switch(
           value: value,
           activeThumbColor: AppColors.error,
-          onChanged: (v) => _showDangerousConfirmWithCallback(confirmKey, v, onConfirm),
+          onChanged: (v) =>
+              _showDangerousConfirmWithCallback(confirmKey, v, onConfirm),
         ),
       ],
     );
