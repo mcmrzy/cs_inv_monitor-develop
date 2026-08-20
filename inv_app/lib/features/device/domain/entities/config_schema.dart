@@ -147,13 +147,26 @@ const List<String> configGroupOrder = [
   'parallel',
 ];
 
-/// 合并 control-state：desired 优先，缺失用 reported 兜底
+/// 合并 control-state（编辑值）：desired 优先，缺失用 reported 兜底。
+/// 用于输入框当前值与修改基线（展示"下发意图"，与 Web 端 getEditValue 对齐）。
 Map<String, dynamic> mergeControlState(Map<String, dynamic> state) {
   final desired = state['desired'];
   final reported = state['reported'];
   return {
     if (reported is Map) ...reported.cast<String, dynamic>(),
     if (desired is Map) ...desired.cast<String, dynamic>(),
+  };
+}
+
+/// 合并 control-state（展示值）：reported 优先，缺失用 desired 兜底。
+/// 用于分类摘要等"设备真实值"展示（读取设备配置后不被旧 desired 遮蔽，
+/// 与 Web 端 getSummaryValue 对齐）。
+Map<String, dynamic> mergeControlStateReportedFirst(Map<String, dynamic> state) {
+  final desired = state['desired'];
+  final reported = state['reported'];
+  return {
+    if (desired is Map) ...desired.cast<String, dynamic>(),
+    if (reported is Map) ...reported.cast<String, dynamic>(),
   };
 }
 

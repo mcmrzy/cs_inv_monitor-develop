@@ -200,7 +200,7 @@ class _DashboardPageState extends State<DashboardPage> {
   /// Compact quick stats below the hero card.
   Widget _buildQuickStats(BuildContext context, InverterRealtime? data) {
     final l10n = AppLocalizations.of(context)!;
-    final loadPercent = data?.ac?.loadPercent ?? 0;
+    final loadPercent = data?.sysStatus?.loadPercent ?? 0;
     final frequency = data?.ac?.frequency ?? 0;
     final pf = data?.ac?.pf ?? 0;
 
@@ -276,48 +276,64 @@ class _DashboardPageState extends State<DashboardPage> {
     return _buildStaticSections(context, data);
   }
 
+  /// 动态字段分组定义：groups 匹配服务端 group_code（device_model_fields.group_name），
+  /// prefixes 兕底匹配 fieldKey 前缀（V2.1 键名无统一组前缀）
   List<Map<String, dynamic>> _getDynamicSectionDefs(AppLocalizations l10n) => [
         {
           'title': l10n.acOutput,
           'icon': Icons.power,
           'color': AppColors.success,
-          'prefix': 'ac_',
+          'groups': ['ac'],
+          'prefixes': ['ac_', 'output_'],
         },
         {
           'title': l10n.batteryBms,
           'icon': Icons.battery_charging_full,
           'color': AppColors.success,
-          'prefix': 'batt_',
+          'groups': ['bat'],
+          'prefixes': ['battery_', 'batt_'],
         },
         {
           'title': l10n.pvMppt,
           'icon': Icons.wb_sunny,
           'color': AppColors.orange,
-          'prefix': 'pv_',
+          'groups': ['pv'],
+          'prefixes': ['pv1_', 'pv2_', 'pv_', 'mppt_'],
         },
         {
           'title': l10n.loadLabel,
           'icon': Icons.home,
           'color': AppColors.blue,
-          'prefix': 'load_',
+          'groups': ['load'],
+          'prefixes': ['load_'],
         },
         {
           'title': l10n.electricMeter,
           'icon': Icons.electric_meter,
           'color': AppColors.warning,
-          'prefix': 'meter_',
+          'groups': ['meter'],
+          'prefixes': ['meter_'],
         },
         {
           'title': l10n.energyStatsLabel,
           'icon': Icons.battery_charging_full,
           'color': AppColors.primary,
-          'prefix': 'energy_',
+          'groups': ['eng'],
+          'prefixes': [
+            'daily_',
+            'total_',
+            'gen_energy_',
+            'ac_charge_energy_',
+            'ac_bypass_energy_',
+            'output_energy_',
+          ],
         },
         {
           'title': l10n.systemStatusLabel,
           'icon': Icons.info_outline,
           'color': AppColors.primary,
-          'prefix': 'sys_',
+          'groups': ['sys', 'fan', 'diag', 'sock'],
+          'prefixes': ['sys_'],
         },
       ];
 
@@ -329,9 +345,13 @@ class _DashboardPageState extends State<DashboardPage> {
     final widgets = <Widget>[];
 
     for (final def in _getDynamicSectionDefs(l10n)) {
-      final prefix = def['prefix'] as String;
+      final groups = (def['groups'] as List<String>).toSet();
+      final prefixes = (def['prefixes'] as List<String>);
       final sectionFields = fields
-          .where((f) => f.isShow && f.fieldKey.startsWith(prefix))
+          .where((f) =>
+              f.isShow &&
+              (groups.contains(f.groupName) ||
+                  prefixes.any((p) => f.fieldKey.startsWith(p))))
           .toList()
         ..sort((a, b) => a.sort.compareTo(b.sort));
 
@@ -363,6 +383,8 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  /// 实时值映射：键名与 V2.1 协议/服务端 field_key 一致
+  /// （device_model_fields 下发的 fieldKey 直接查此 map）
   Map<String, dynamic> _buildRealtimeMapForFields(InverterRealtime? data) {
     final map = <String, dynamic>{};
     if (data == null) return map;
@@ -371,50 +393,67 @@ class _DashboardPageState extends State<DashboardPage> {
 
     if (data.ac != null) {
       map.addAll({
-        'ac_voltage': data.ac!.voltage,
-        'ac_current': data.ac!.current,
-        'ac_power': data.ac!.power,
-        'ac_frequency': data.ac!.frequency,
-        'ac_load_percent': data.ac!.loadPercent,
-        'ac_pf': data.ac!.pf,
+        'ac_output_voltage': data.ac!.voltage,
+        'output_current': data.ac!.current,
+        'output_power': data.ac!.power,
+        'ac_output_frequency': data.ac!.frequency,
+        'output_apparent_power': data.ac!.apparentPower,
       });
     }
     if (data.battery != null) {
       map.addAll({
-        'batt_soc': data.battery!.soc,
-        'batt_soh': data.battery!.soh,
-        'batt_voltage': data.battery!.voltage,
-        'batt_current': data.battery!.current,
-        'batt_charge_state': data.battery!.chargeState,
+        'battery_soc': data.battery!.soc,
+        'battery_soh': data.battery!.soh,
+        'battery_voltage': data.battery!.voltage,
+        'battery_current': data.battery!.current,
+        'battery_charge_power': data.battery!.chargePower,
+        'battery_discharge_power': data.battery!.dischargePower,
       });
     }
     if (data.pv != null) {
       map.addAll({
-        'pv_voltage': data.pv!.pvVoltage,
-        'pv_current': data.pv!.pvCurrent,
-        'pv_power': data.pv!.pvPower,
+        'pv1_voltage': data.pv!.pvVoltage,
+        'pv1_current': data.pv!.pvCurrent,
+        'pv_total_power': data.pv!.pvPower,
         'mppt_state': data.pv!.mpptState,
       });
     }
     if (data.sysStatus != null) {
       map.addAll({
-        'state': data.sysStatus!.state,
+        'work_state': data.sysStatus!.state,
         'fault_code': data.sysStatus!.faultCode,
         'alarm_code': data.sysStatus!.alarmCode,
-        'temp_inv': data.sysStatus!.tempInv,
-        'temp_mos': data.sysStatus!.tempMos,
-        'efficiency': data.sysStatus!.efficiency,
+        'inverter_temperature': data.sysStatus!.tempInv,
+        'boost_temperature': data.sysStatus!.boostTemp,
+        'transformer_temperature': data.sysStatus!.transformerTemp,
+        'pv_temperature': data.sysStatus!.pvTemp,
+        'dc_bus_voltage': data.sysStatus!.dcBusVoltage,
+        'load_percent': data.sysStatus!.loadPercent,
       });
     }
+    if (data.fan != null) {
+      map.addAll({
+        'mppt_fan_speed': data.fan!.mpptSpeed,
+        'inv_fan_speed': data.fan!.invSpeed,
+      });
+    }
+    map['work_time_total'] = data.workTimeTotalSec;
     if (data.energy != null) {
       map.addAll({
-        'daily_pv': data.energy!.dailyPV,
-        'total_pv': data.energy!.totalPV,
-        'runtime_hours': data.energy!.runtimeHours,
-        'daily_feed_energy': data.energy!.dailyFeedEnergy,
-        'total_feed_energy': data.energy!.totalFeedEnergy,
-        'daily_grid_import': data.energy!.dailyGridImport,
-        'total_grid_import': data.energy!.totalGridImport,
+        'daily_pv_energy': data.energy!.dailyPV,
+        'total_pv_energy': data.energy!.totalPV,
+        'daily_charge_energy': data.energy!.dailyCharge,
+        'total_charge_energy': data.energy!.totalCharge,
+        'daily_discharge_energy': data.energy!.dailyDischarge,
+        'total_discharge_energy': data.energy!.totalDischarge,
+        'daily_load_energy': data.energy!.dailyLoad,
+        'total_load_energy': data.energy!.totalLoad,
+        'gen_energy_daily': data.energy!.dailyGenEnergy,
+        'gen_energy_total': data.energy!.totalGenEnergy,
+        'ac_charge_energy_daily': data.energy!.dailyAcChargeEnergy,
+        'ac_charge_energy_total': data.energy!.totalAcChargeEnergy,
+        'ac_bypass_energy_daily': data.energy!.dailyAcBypassEnergy,
+        'ac_bypass_energy_total': data.energy!.totalAcBypassEnergy,
       });
     }
     if (data.meter != null) {
@@ -552,7 +591,9 @@ class _DashboardPageState extends State<DashboardPage> {
               ),
               _dataItem(
                 l10n.loadRate,
-                '${ac.loadPercent.toStringAsFixed(1)}%',
+                sysStatus != null
+                    ? '${sysStatus.loadPercent.toStringAsFixed(1)}%'
+                    : '--',
                 AppColors.blue,
               ),
             ]),
@@ -580,7 +621,7 @@ class _DashboardPageState extends State<DashboardPage> {
               ),
               _dataItem(
                 l10n.runningTime,
-                '${energy.runtimeHours}h',
+                '${((data?.workTimeTotalSec ?? 0) / 3600).toStringAsFixed(0)}h',
                 AppColors.teal,
               ),
             ]),
@@ -764,15 +805,6 @@ class _DashboardPageState extends State<DashboardPage> {
               Expanded(
                 child: _statusCell(
                   context,
-                  l10n.efficiency,
-                  '${sysStatus.efficiency.toStringAsFixed(1)}%',
-                  AppColors.blue,
-                ),
-              ),
-              SizedBox(width: 8.w),
-              Expanded(
-                child: _statusCell(
-                  context,
                   l10n.inverterTemp,
                   '${sysStatus.tempInv.toStringAsFixed(1)}°C',
                   AppColors.warning,
@@ -782,9 +814,18 @@ class _DashboardPageState extends State<DashboardPage> {
               Expanded(
                 child: _statusCell(
                   context,
-                  l10n.mosTemp,
-                  '${sysStatus.tempMos.toStringAsFixed(1)}°C',
+                  l10n.boostTemp,
+                  '${sysStatus.boostTemp.toStringAsFixed(1)}°C',
                   AppColors.errorLight,
+                ),
+              ),
+              SizedBox(width: 8.w),
+              Expanded(
+                child: _statusCell(
+                  context,
+                  l10n.loadRate,
+                  '${sysStatus.loadPercent.toStringAsFixed(1)}%',
+                  AppColors.blue,
                 ),
               ),
             ],

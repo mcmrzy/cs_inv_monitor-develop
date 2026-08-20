@@ -12,26 +12,32 @@ import 'package:inv_app/features/device/presentation/pages/device_settings_advan
 import 'package:inv_app/features/device/presentation/widgets/config_param_controls.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
-/// 设备设置页（手风琴式）
+/// 远程设置 Tab（设备详情页内嵌，手风琴式）
 ///
 /// 单页展示 8 大功能分类：点击分类卡片原地展开参数控件，
 /// 再点收起；修改项全局汇总，底部应用条一次性提交（set_params 仅写改动项）。
 /// 高级参数仍为独立页（工程师模式，参数多且按 group_code 分组）。
-/// 路由保持 /device/:sn/settings 不变。
-class DeviceSettingsPage extends StatefulWidget {
+/// 作为 TabBarView 子页内嵌于设备详情页（无 Scaffold/AppBar），
+/// AutomaticKeepAliveClientMixin 保持切 Tab 不重建（避免重复 query_config）。
+class RemoteSettingsTab extends StatefulWidget {
   final String sn;
 
-  const DeviceSettingsPage({super.key, required this.sn});
+  const RemoteSettingsTab({super.key, required this.sn});
 
   @override
-  State<DeviceSettingsPage> createState() => _DeviceSettingsPageState();
+  State<RemoteSettingsTab> createState() => _RemoteSettingsTabState();
 }
 
-class _DeviceSettingsPageState extends State<DeviceSettingsPage> {
+class _RemoteSettingsTabState extends State<RemoteSettingsTab>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   /// 全量 schema（param_key → schema），用于摘要文案与参数渲染
   Map<String, ConfigParamSchema> _schemaMap = {};
 
-  /// 原始值（最近一次服务端状态，desired 优先、reported 兜底）
+  /// 原始值（设备真实值：reported 优先、desired 兜底）——
+  /// 读取设备配置后输入框与摘要均反映设备最新回报
   Map<String, dynamic> _original = {};
 
   /// 工作值（含未应用修改）
@@ -43,6 +49,8 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage> {
   bool _loading = true;
   bool _failed = false;
   bool _applying = false;
+  bool _reading = false;
+  DateTime? _lastReadAt;
 
   /// control-state 拉取成功即视为设备可读（在线徽标）
   bool _readable = false;
@@ -55,7 +63,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage> {
 
   // ==================== 数据加载 ====================
 
-  /// 并行拉取参数 schema 与当前值
+  /// 并行拉取参数 schema 与当前值，然后自动读取设备配置
   Future<void> _fetchData() async {
     setState(() {
       _loading = true;
@@ -84,7 +92,8 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage> {
           if (s.paramKey.isNotEmpty) schemas[s.paramKey] = s;
         }
       }
-      final values = mergeControlState(state);
+      // 基线用 reported 优先：设备真实值优先，未被设备回报的键回退 desired
+      final values = mergeControlStateReportedFirst(state);
       if (!mounted) return;
       setState(() {
         _schemaMap = schemas;
@@ -93,6 +102,8 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage> {
         _readable = true;
         _loading = false;
       });
+      // 自动发送 query_config 读取设备实际配置
+      _readDeviceConfig();
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -113,7 +124,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage> {
         validate: (v) => v is Map<String, dynamic>,
         expected: 'an object',
       );
-      final values = mergeControlState(state);
+      final values = mergeControlStateReportedFirst(state);
       if (!mounted) return;
       setState(() {
         _original = Map.from(values);
@@ -121,6 +132,47 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage> {
       });
     } catch (_) {
       // 刷新失败静默：保留本地已应用状态
+    }
+  }
+
+  /// 发送 query_config 命令读取设备当前配置
+  Future<void> _readDeviceConfig() async {
+    if (_reading) return;
+    setState(() => _reading = true);
+    final l10n = AppLocalizations.of(context)!;
+
+    try {
+      final dio = getIt<Dio>();
+      final response = await dio.post(
+        '/devices/by-sn/${widget.sn}/control',
+        data: {'command': 'query_config', 'params': {}},
+      );
+      unwrapApiResponse<Map<String, dynamic>>(
+        response.data,
+        validate: (value) =>
+            value is Map<String, dynamic> && value['task_id'] is String,
+        expected: 'an object containing task_id',
+      );
+
+      // 等待设备响应后刷新状态
+      await Future.delayed(const Duration(seconds: 2));
+      await _refreshState();
+
+      if (!mounted) return;
+      setState(() {
+        _reading = false;
+        _lastReadAt = DateTime.now();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.str('settings_read_success')),
+          backgroundColor: AppColors.success,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _reading = false);
     }
   }
 
@@ -320,34 +372,68 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final l10n = AppLocalizations.of(context)!;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          l10n.str('device_settings_title'),
-          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17.sp),
-        ),
-        centerTitle: true,
-        elevation: 0,
-        scrolledUnderElevation: 0.5,
-        actions: [
-          // 设备可读（在线）小徽标：control-state 拉取成功即视为可读
+    return Column(
+      children: [
+        // Tab 顶部操作条（原 AppBar actions 下沉）
+        _buildActionBar(l10n),
+        // 主内容
+        Expanded(child: _buildBody(l10n)),
+        // 底部应用条（有修改项时）
+        if (_modifiedCount > 0)
+          ConfigApplyBar(
+            modifiedCount: _modifiedCount,
+            applying: _applying,
+            onApply: _applyChanges,
+          ),
+      ],
+    );
+  }
+
+  /// Tab 顶部操作条：在线徽标 + 读取设备 + 刷新
+  Widget _buildActionBar(AppLocalizations l10n) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16.w, 8.h, 8.w, 4.h),
+      child: Row(
+        children: [
           if (!_loading) _buildReadableBadge(l10n),
+          const Spacer(),
+          // 读取设备（含 loading 态）
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              minimumSize: Size(0, 34.h),
+              padding: EdgeInsets.symmetric(horizontal: 12.w),
+              textStyle:
+                  TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600),
+              foregroundColor: AppColors.primary,
+              side: BorderSide(
+                  color: AppColors.primary.withValues(alpha: 0.45)),
+            ),
+            onPressed: _reading ? null : _readDeviceConfig,
+            icon: _reading
+                ? SizedBox(
+                    width: 14.w,
+                    height: 14.w,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.5,
+                      color: AppColors.primary,
+                    ),
+                  )
+                : Icon(Icons.download_rounded, size: 16.sp),
+            label: Text(l10n.str('settings_read_device')),
+          ),
           IconButton(
-            icon: Icon(Icons.refresh_rounded, size: 22.sp),
+            visualDensity: VisualDensity.compact,
+            iconSize: 20.sp,
+            color: AppColor.textSecondary(context),
+            tooltip: l10n.str('settings_read_device'),
             onPressed: _loading ? null : _fetchData,
+            icon: const Icon(Icons.refresh_rounded),
           ),
         ],
       ),
-      body: _buildBody(l10n),
-      bottomNavigationBar: _modifiedCount > 0
-          ? ConfigApplyBar(
-              modifiedCount: _modifiedCount,
-              applying: _applying,
-              onApply: _applyChanges,
-            )
-          : null,
     );
   }
 
@@ -398,17 +484,58 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage> {
       );
     }
 
-    return ListView(
-      padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 24.h),
+    return Column(
       children: [
-        // 8 大功能分类：点击原地展开参数控件（手风琴）
-        for (final category in settingsCategories)
-          _buildCategoryCard(l10n, category),
-        SizedBox(height: 6.h),
-        // 高级参数入口（独立页：工程师模式）
-        _buildAdvancedEntry(l10n),
+        // 读取中提示条
+        if (_reading)
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h),
+            color: AppColors.primary.withValues(alpha: 0.08),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 16.w,
+                  height: 16.w,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                ),
+                SizedBox(width: 10.w),
+                Text(
+                  l10n.str('settings_reading_device'),
+                  style: TextStyle(fontSize: 13.sp, color: AppColors.primary, fontWeight: FontWeight.w500),
+                ),
+              ],
+            ),
+          ),
+        // 主内容
+        Expanded(
+          child: ListView(
+            padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 24.h),
+            children: [
+              // 读取时间提示
+              if (_lastReadAt != null)
+                Padding(
+                  padding: EdgeInsets.only(bottom: 8.h),
+                  child: Text(
+                    '${l10n.str("settings_last_read")}: ${_formatTime(_lastReadAt!)}',
+                    style: TextStyle(fontSize: 11.sp, color: AppColor.textSecondary(context)),
+                  ),
+                ),
+              // 8 大功能分类：点击原地展开参数控件（手风琴）
+              for (final category in settingsCategories)
+                _buildCategoryCard(l10n, category),
+              SizedBox(height: 6.h),
+              // 高级参数入口（独立页：工程师模式）
+              _buildAdvancedEntry(l10n),
+            ],
+          ),
+        ),
       ],
     );
+  }
+
+  String _formatTime(DateTime dt) {
+    return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')}';
   }
 
   /// 分类卡片：彩色图标圆底 + 标题 + 摘要/已修改数 + 展开箭头
@@ -426,7 +553,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage> {
       margin: EdgeInsets.only(bottom: 10.h),
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14.r),
+        borderRadius: BorderRadius.circular(16.r),
         side: BorderSide(
           color: expanded
               ? category.color.withValues(alpha: 0.45)
@@ -434,7 +561,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage> {
           width: expanded ? 1 : 0.6,
         ),
       ),
-      color: theme.colorScheme.surface,
+      color: AppColor.surfaceContainer(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -591,15 +718,15 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage> {
       elevation: 0,
       margin: EdgeInsets.only(bottom: 10.h),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14.r),
+        borderRadius: BorderRadius.circular(16.r),
         side: BorderSide(
           color: AppColor.outline(context).withValues(alpha: 0.6),
           width: 1,
         ),
       ),
-      color: theme.colorScheme.surface.withValues(alpha: 0.6),
+      color: AppColor.surfaceContainer(context).withValues(alpha: 0.6),
       child: InkWell(
-        borderRadius: BorderRadius.circular(14.r),
+        borderRadius: BorderRadius.circular(16.r),
         onTap: _openAdvanced,
         child: Padding(
           padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 14.h),

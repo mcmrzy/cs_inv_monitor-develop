@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Card, Table, Button, Select, Tag, Space, Row, Col, DatePicker,
@@ -34,6 +35,7 @@ interface NotificationItem {
 
 const AlertsPage: React.FC = () => {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const { message } = App.useApp()
   const { t } = useTranslation()
   const { timezone } = useTimezoneStore()
@@ -298,7 +300,11 @@ const AlertsPage: React.FC = () => {
       title: t('alert.type') || '类型', key: '_type', width: 80,
       render: () => <Tag color="red">{t('alert.alarmType') || '告警'}</Tag>,
     },
-    { title: t('alert.deviceSN'), dataIndex: 'device_sn', key: 'device_sn', width: 140 },
+    { title: t('alert.deviceSN'), dataIndex: 'device_sn', key: 'device_sn', width: 140,
+      render: (sn: string) => sn
+        ? <a onClick={() => navigate(`/devices/${sn}/detail`)} style={{ fontFamily: 'monospace' }}>{sn}</a>
+        : '-',
+    },
     { title: t('alert.faultCode'), dataIndex: 'fault_code', key: 'fault_code', width: 80 },
     {
       title: t('alert.alertLevel'), dataIndex: 'alarm_level', key: 'alarm_level', width: 80,
@@ -355,7 +361,11 @@ const AlertsPage: React.FC = () => {
       title: t('alert.type') || '类型', key: '_type', width: 80,
       render: () => <Tag color="blue">{t('alert.notifyType') || '通知'}</Tag>,
     },
-    { title: t('alert.deviceSN'), dataIndex: 'device_sn', key: 'device_sn', width: 140 },
+    { title: t('alert.deviceSN'), dataIndex: 'device_sn', key: 'device_sn', width: 140,
+      render: (sn: string) => sn
+        ? <a onClick={() => navigate(`/devices/${sn}/detail`)} style={{ fontFamily: 'monospace' }}>{sn}</a>
+        : '-',
+    },
     {
       title: t('alert.notifyType') || '通知类型', dataIndex: 'notify_type', key: 'notify_type', width: 100,
       render: (val: string) => {
@@ -409,7 +419,11 @@ const AlertsPage: React.FC = () => {
         return <Tag color="red">{t('alert.alarmType') || '告警'}</Tag>
       },
     },
-    { title: t('alert.deviceSN'), dataIndex: 'device_sn', key: 'device_sn', width: 140 },
+    { title: t('alert.deviceSN'), dataIndex: 'device_sn', key: 'device_sn', width: 140,
+      render: (sn: string) => sn
+        ? <a onClick={() => navigate(`/devices/${sn}/detail`)} style={{ fontFamily: 'monospace' }}>{sn}</a>
+        : '-',
+    },
     {
       title: t('alert.detail') || '详情', key: 'detail', ellipsis: true,
       render: (_: any, record: any) => {

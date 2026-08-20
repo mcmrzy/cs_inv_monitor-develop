@@ -35,6 +35,8 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
   bool _isBleDirectEnabled = false;
   bool _autoConnect = true;
   int _blePollInterval = 180;
+  bool _isOfflineMode = false;
+  Set<String> _directConnectedDevices = {};
   bool _loading = true;
 
   /// 发现设备列表（来自 BleDirectService.scanResultsStream）
@@ -63,8 +65,14 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
   }
 
   @override
-  void dispose() {
+  void deactivate() {
     _scanSub?.cancel();
+    _scanSub = null;
+    super.deactivate();
+  }
+
+  @override
+  void dispose() {
     super.dispose();
   }
 
@@ -72,12 +80,16 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
     final bleDirect = await _storage.getIsBleDirectEnabled();
     final autoConnect = await _storage.getIsBleAutoConnect();
     final pollInterval = await _storage.getBlePollInterval();
+    final offlineMode = await _storage.getIsOfflineMode();
+    final directDevices = await _storage.getDirectConnectedDevices();
 
     if (mounted) {
       setState(() {
         _isBleDirectEnabled = bleDirect;
         _autoConnect = autoConnect;
         _blePollInterval = pollInterval;
+        _isOfflineMode = offlineMode;
+        _directConnectedDevices = directDevices;
         _loading = false;
       });
       // 开关已打开（上次会话恢复）：展示已缓存的发现设备
@@ -116,6 +128,7 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
     } else {
       await _scanSub?.cancel();
       _scanSub = null;
+      if (!mounted) return;
       setState(() {
         _foundDevices = const [];
         _boundByMac = const {};
@@ -134,6 +147,29 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
     await getIt<BleDirectService>().setAutoConnect(value);
     if (!mounted) return;
     setState(() => _autoConnect = value);
+  }
+
+  Future<void> _toggleOfflineMode(bool value) async {
+    await _storage.saveIsOfflineMode(value);
+    if (!mounted) return;
+    setState(() => _isOfflineMode = value);
+    AppToast.show(
+      context,
+      value ? '已开启离网模式' : '已关闭离网模式',
+      type: ToastType.success,
+    );
+  }
+
+  Future<void> _toggleDeviceDirectConnection(String macAddress, bool value) async {
+    final updated = Set<String>.from(_directConnectedDevices);
+    if (value) {
+      updated.add(macAddress);
+    } else {
+      updated.remove(macAddress);
+    }
+    await _storage.saveDirectConnectedDevices(updated);
+    if (!mounted) return;
+    setState(() => _directConnectedDevices = updated);
   }
 
   /// 订阅发现设备列表流
@@ -215,10 +251,10 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
           FilledButton(
             onPressed: () {
               enteredPin = pinController.text.trim();
-              if (enteredPin.isEmpty) {
+              if (enteredPin.length != 6) {
                 AppToast.show(
                   dialogContext,
-                  l10n.pinRequired,
+                  l10n.pinLengthError,
                   type: ToastType.info,
                 );
                 return;
@@ -238,6 +274,15 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
       pin: enteredPin,
     );
     if (!mounted) return;
+
+    // 绑定失败（PIN 错误/锁定/连接失败）：主动断开设备的 GATT 会话，
+    // 否则 BleDeviceManager 中残留的 session 会让 UI 误判为"已连接"
+    if (outcome != BindOutcome.bound && outcome != BindOutcome.alreadyBound) {
+      try {
+        await getIt<BleDeviceManager>().disconnectDevice(device.macAddress);
+      } catch (_) {}
+    }
+
     final (text, type) = switch (outcome) {
       BindOutcome.bound => (
           l10n.str('ble_binding_success'),
@@ -258,13 +303,16 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
           ToastType.error,
         ),
     };
+    if (!mounted) return;
     AppToast.show(context, text, type: type);
     // 绑定成功（或设备端判定已绑定）：立即更新该行的绑定状态
     if (outcome == BindOutcome.bound || outcome == BindOutcome.alreadyBound) {
       _boundByMac = {..._boundByMac, device.macAddress: true};
     }
     // 刷新列表（会话状态可能变化）
-    setState(() => _foundDevices = getIt<BleDirectService>().scanResults);
+    if (mounted) {
+      setState(() => _foundDevices = getIt<BleDirectService>().scanResults);
+    }
   }
 
   Future<void> _showPollIntervalDialog() async {
@@ -381,6 +429,14 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
               onChanged: _toggleBleDirect,
             ),
             SettingsSwitchRow(
+              icon: Icons.wifi_off_rounded,
+              accent: AppColors.orange,
+              title: l10n.bleOfflineMode,
+              subtitle: l10n.bleOfflineModeDesc,
+              value: _isOfflineMode,
+              onChanged: _toggleOfflineMode,
+            ),
+            SettingsSwitchRow(
               icon: Icons.link_rounded,
               accent: AppColors.blue,
               title: l10n.str('ble_auto_connect'),
@@ -495,12 +551,13 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
     );
   }
 
-  /// 发现设备行：SN + 已连接徽标 > 已绑定徽标 > 绑定按钮
+  /// 发现设备行：SN + 直连开关 + 已连接徽标 > 已绑定徽标 > 绑定按钮
   Widget _buildFoundDeviceRow(BleDiscoveredDevice device) {
     final connected =
         getIt<BleDeviceManager>().sessionOf(device.macAddress) != null;
     final bound = _boundByMac[device.macAddress] ?? false;
     final displaySn = displaySnOf(device);
+    final isDirectEnabled = _directConnectedDevices.contains(device.macAddress);
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
       child: Row(
@@ -546,6 +603,24 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
                 ),
               ],
             ),
+          ),
+          SizedBox(width: 8.w),
+          // 直连开关
+          Column(
+            children: [
+              Text(
+                l10n.deviceDirectToggle,
+                style: TextStyle(fontSize: 10.sp, color: AppColor.textHint(context)),
+              ),
+              SizedBox(
+                height: 28.h,
+                child: Switch(
+                  value: isDirectEnabled,
+                  onChanged: (value) => _toggleDeviceDirectConnection(device.macAddress, value),
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+            ],
           ),
           SizedBox(width: 8.w),
           // 状态渲染优先级：已连接 > 已绑定 > 未绑定（绑定按钮）

@@ -27,6 +27,23 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// roleCodeToName 角色代码到中文名称的映射。
+var roleCodeToName = map[string]string{
+	"manufacturer": "制造商",
+	"agent":        "代理商",
+	"distributor":  "经销商",
+	"installer":    "安装商",
+	"customer":     "终端用户",
+}
+
+// getRoleName 获取角色的中文名称，未匹配时回退为角色代码。
+func getRoleName(roleCode string) string {
+	if name, ok := roleCodeToName[roleCode]; ok {
+		return name
+	}
+	return roleCode
+}
+
 // ============================================================================
 // Request/Response Models
 // ============================================================================
@@ -379,7 +396,7 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 	if !isCustomerMode {
 		roleCode = assignments[0].RoleCode
 	}
-	roleName := roleCode
+	roleName := getRoleName(roleCode) // 转换为中文角色名称
 	var orgName string
 	if isCustomerMode {
 		orgName = orgCache[customerParentOrgID].Name
@@ -946,9 +963,16 @@ func (h *InvitationHandler) Details(c *gin.Context) {
 	}
 
 	roleCodes := parseRoleCodes(invitation.RoleAssignments)
-	roleName := strings.Join(roleCodes, ", ")
+	// 将角色代码转换为中文名称
+	roleNames := make([]string, 0, len(roleCodes))
+	for _, code := range roleCodes {
+		roleNames = append(roleNames, getRoleName(code))
+	}
+	roleName := strings.Join(roleNames, "、")
 	if roleName == "" {
-		roleName, _ = roleIDToCode[invitation.FirstRoleID()]
+		if code, ok := roleIDToCode[invitation.FirstRoleID()]; ok {
+			roleName = getRoleName(code)
+		}
 	}
 
 	response.Success(c, InvitationResponse{
@@ -1168,7 +1192,7 @@ func convertInvitationItems(items []repository.ListInvitationsResponseItem) []In
 			ID:          item.ID,
 			Email:       item.Recipient,
 			RoleID:      roleID,
-			RoleName:    roleIDToCode[int(item.FirstRoleID())],
+			RoleName:    getRoleName(roleIDToCode[int(item.FirstRoleID())]),
 			RoleCodes:   parseRoleCodes(item.RoleAssignments),
 			Status:      item.Status,
 			ExpiresAt:   item.ExpiresAt.Format(time.RFC3339),

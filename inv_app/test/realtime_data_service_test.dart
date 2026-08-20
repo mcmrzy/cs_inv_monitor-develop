@@ -3,117 +3,122 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('RealtimeDataService 数据解析测试', () {
     group('嵌套结构解析', () {
-      test('解析标准嵌套格式 - 包含所有字段', () {
+      test('解析标准嵌套格式 - 包含所有字段（V2.1 组键）', () {
         final realtime = {
           'ac': {
-            'voltage': 220.5,
-            'current': 10.2,
-            'power': 2250.0,
-            'frequency': 50.0,
-            'load_percent': 75.0,
-            'pf': 0.95,
+            'ac_output_voltage': 220.5,
+            'output_current': 10.2,
+            'output_power': 2250.0,
+            'ac_output_frequency': 50.0,
+            'output_apparent_power': 2368.0,
           },
-          'battery': {
-            'soc': 80.0,
-            'soh': 95.0,
-            'voltage': 48.5,
-            'current': 15.0,
-            'charge_state': 'charging',
-            'power': 727.5,
+          'bat': {
+            'battery_soc': 80.0,
+            'battery_soh': 95.0,
+            'battery_voltage': 48.5,
+            'battery_current': 15.0,
+            'battery_charge_power': 727.5,
             'capacity_remain': 100.0,
             'capacity_total': 125.0,
             'cycle_count': 150,
-            'temp_max': 35.0,
-            'temp_min': 30.0,
+            'battery_temp_max': 35.0,
+            'battery_temp_min': 30.0,
             'protect_status': 0,
             'bms_fault_code': 0,
           },
           'pv': {
-            'pv_voltage': 120.0,
-            'pv_current': 15.0,
-            'pv_power': 1800.0,
+            'pv1_voltage': 120.0,
+            'pv1_current': 15.0,
+            'pv_total_power': 1800.0,
             'mppt_state': 'MPPT',
             'pv1_power': 900.0,
             'pv2_power': 900.0,
           },
-          'sys_status': {
-            'state': 'normal',
+          'sys': {
+            'work_state': '1',
             'fault_code': 0,
             'alarm_code': 0,
-            'temp_inv': 45.0,
-            'temp_mos': 40.0,
-            'efficiency': 95.5,
-            'ambient_temperature': 25.0,
+            'inverter_temperature': 45.0,
+            'boost_temperature': 40.0,
+            'transformer_temperature': 38.0,
+            'pv_temperature': 42.0,
             'dc_bus_voltage': 400.0,
-            'runtime_hours': 1000,
-            'fan_speed_percent': 60.0,
+            'load_percent': 75.0,
           },
-          'energy': {
-            'daily_pv': 15.5,
-            'total_pv': 1000.0,
-            'runtime_hours': 500,
-            'daily_feed_energy': 10.0,
-            'total_feed_energy': 800.0,
-            'daily_grid_import': 5.0,
-            'total_grid_import': 200.0,
-            'daily_charge': 3.0,
-            'total_charge': 150.0,
-            'daily_discharge': 2.0,
-            'total_discharge': 100.0,
-            'daily_load': 12.0,
-            'total_load': 600.0,
+          'fan': {
+            'mppt_fan_speed': 40.0,
+            'inv_fan_speed': 60.0,
+          },
+          'diag': {
+            'work_time_total': 3600000,
+          },
+          'eng': {
+            'daily_pv_energy': 15.5,
+            'total_pv_energy': 1000.0,
+            'daily_charge_energy': 3.0,
+            'total_charge_energy': 150.0,
+            'daily_discharge_energy': 2.0,
+            'total_discharge_energy': 100.0,
+            'daily_load_energy': 12.0,
+            'total_load_energy': 600.0,
           },
           'online': true,
           'updated_at': '2026-07-27T12:00:00Z',
         };
 
-        // 验证嵌套结构检测
+        // 验证嵌套结构检测（V2 组键）
         final isNested = realtime.containsKey('ac') ||
-            realtime.containsKey('battery') ||
-            realtime.containsKey('batt') ||
-            realtime.containsKey('pv');
+            realtime.containsKey('bat') ||
+            realtime.containsKey('pv') ||
+            realtime.containsKey('sys') ||
+            realtime.containsKey('eng');
         expect(isNested, true);
 
-        // 验证 AC 数据解析
+        // 验证 AC 数据解析（V2.1 键）
         final acData = realtime['ac'] as Map<String, dynamic>;
-        expect(acData['voltage'], 220.5);
-        expect(acData['power'], 2250.0);
+        expect(acData['ac_output_voltage'], 220.5);
+        expect(acData['output_power'], 2250.0);
 
-        // 验证电池数据解析
-        final batteryData = realtime['battery'] as Map<String, dynamic>;
-        expect(batteryData['soc'], 80.0);
-        expect(batteryData['charge_state'], 'charging');
+        // 验证电池数据解析（V2 bat 组）
+        final batteryData = realtime['bat'] as Map<String, dynamic>;
+        expect(batteryData['battery_soc'], 80.0);
         expect(batteryData['cycle_count'], 150);
 
         // 验证 PV 数据解析
         final pvData = realtime['pv'] as Map<String, dynamic>;
-        expect(pvData['pv_power'], 1800.0);
+        expect(pvData['pv_total_power'], 1800.0);
         expect(pvData['mppt_state'], 'MPPT');
 
-        // 验证系统状态解析
-        final sysStatus = realtime['sys_status'] as Map<String, dynamic>;
-        expect(sysStatus['state'], 'normal');
+        // 验证系统状态解析（V2 sys 组）
+        final sysStatus = realtime['sys'] as Map<String, dynamic>;
+        expect(sysStatus['work_state'], '1');
         expect(sysStatus['fault_code'], 0);
-        expect(sysStatus['efficiency'], 95.5);
+        expect(sysStatus['boost_temperature'], 40.0);
 
-        // 验证能源数据解析
-        final energyData = realtime['energy'] as Map<String, dynamic>;
-        expect(energyData['daily_pv'], 15.5);
-        expect(energyData['runtime_hours'], 500);
+        // 验证 fan/diag 组（V2.1 新增）
+        final fan = realtime['fan'] as Map<String, dynamic>;
+        expect(fan['inv_fan_speed'], 60.0);
+        final diag = realtime['diag'] as Map<String, dynamic>;
+        expect(diag['work_time_total'], 3600000);
+
+        // 验证能源数据解析（V2 eng 组）
+        final energyData = realtime['eng'] as Map<String, dynamic>;
+        expect(energyData['daily_pv_energy'], 15.5);
+        expect(energyData['daily_load_energy'], 12.0);
       });
 
       test('解析标准嵌套格式 - 使用别名字段', () {
         final realtime = {
           'batt': {
-            'soc': 75.0,
-            'voltage': 48.0,
+            'battery_soc': 75.0,
+            'battery_voltage': 48.0,
           },
           'sys': {
-            'state': 'charging',
+            'work_state': '1',
             'fault_code': 0,
           },
           'pv': {
-            'pv_power': 1500.0,
+            'pv_total_power': 1500.0,
           },
           'online': true,
         };
@@ -125,119 +130,127 @@ void main() {
 
         // 验证电池数据（使用别名）
         final batteryData = realtime['batt'] as Map<String, dynamic>;
-        expect(batteryData['soc'], 75.0);
+        expect(batteryData['battery_soc'], 75.0);
 
         // 验证系统状态（使用别名）
         final sysStatus = realtime['sys'] as Map<String, dynamic>;
-        expect(sysStatus['state'], 'charging');
+        expect(sysStatus['work_state'], '1');
       });
     });
 
     group('扁平结构解析', () {
       test('解析扁平格式 - AC 电压和功率', () {
         final realtime = {
-          'ac_voltage': 220.5,
-          'ac_current': 10.2,
-          'ac_power': 2250.0,
-          'ac_frequency': 50.0,
-          'ac_load_percent': 75.0,
-          'ac_pf': 0.95,
+          'ac_output_voltage': 220.5,
+          'output_current': 10.2,
+          'output_power': 2250.0,
+          'ac_output_frequency': 50.0,
+          'output_apparent_power': 2368.0,
         };
 
         // 验证扁平结构检测
         final isNested = realtime.containsKey('ac') ||
-            realtime.containsKey('battery') ||
-            realtime.containsKey('batt') ||
+            realtime.containsKey('bat') ||
             realtime.containsKey('pv');
         expect(isNested, false);
 
         // 验证 AC 数据构建
-        final hasAcData = realtime.containsKey('ac_voltage') || realtime.containsKey('ac_power');
+        final hasAcData = realtime.containsKey('ac_output_voltage') ||
+            realtime.containsKey('output_power');
         expect(hasAcData, true);
 
         // 验证数据提取
-        final acVoltage = (realtime['ac_voltage'] as num?)?.toDouble() ?? 0;
-        final acPower = (realtime['ac_power'] as num?)?.toDouble() ?? 0;
+        final acVoltage =
+            (realtime['ac_output_voltage'] as num?)?.toDouble() ?? 0;
+        final acPower = (realtime['output_power'] as num?)?.toDouble() ?? 0;
         expect(acVoltage, 220.5);
         expect(acPower, 2250.0);
       });
 
       test('解析扁平格式 - 电池数据', () {
         final realtime = {
-          'batt_soc': 80.0,
-          'batt_soh': 95.0,
-          'batt_voltage': 48.5,
-          'batt_current': 15.0,
-          'batt_charge_state': 'charging',
+          'battery_soc': 80.0,
+          'battery_soh': 95.0,
+          'battery_voltage': 48.5,
+          'battery_current': 15.0,
         };
 
         // 验证电池数据构建
-        final hasBatteryData = realtime.containsKey('batt_soc') || realtime.containsKey('batt_voltage');
+        final hasBatteryData = realtime.containsKey('battery_soc') ||
+            realtime.containsKey('battery_voltage');
         expect(hasBatteryData, true);
 
         // 验证数据提取
-        final soc = (realtime['batt_soc'] as num?)?.toDouble() ?? 0;
-        final voltage = (realtime['batt_voltage'] as num?)?.toDouble() ?? 0;
+        final soc = (realtime['battery_soc'] as num?)?.toDouble() ?? 0;
+        final voltage = (realtime['battery_voltage'] as num?)?.toDouble() ?? 0;
         expect(soc, 80.0);
         expect(voltage, 48.5);
       });
 
       test('解析扁平格式 - PV 数据', () {
         final realtime = {
-          'pv_voltage': 120.0,
-          'pv_current': 15.0,
-          'pv_power': 1800.0,
+          'pv1_voltage': 120.0,
+          'pv1_current': 15.0,
+          'pv_total_power': 1800.0,
           'mppt_state': 'MPPT',
         };
 
         // 验证 PV 数据构建
-        final hasPvData = realtime.containsKey('pv_voltage') || realtime.containsKey('pv_power');
+        final hasPvData = realtime.containsKey('pv1_voltage') ||
+            realtime.containsKey('pv_total_power');
         expect(hasPvData, true);
 
         // 验证数据提取
-        final pvPower = (realtime['pv_power'] as num?)?.toDouble() ?? 0;
+        final pvPower =
+            (realtime['pv_total_power'] as num?)?.toDouble() ?? 0;
         expect(pvPower, 1800.0);
       });
 
       test('解析扁平格式 - 系统状态', () {
         final realtime = {
-          'state': 'normal',
+          'work_state': '1',
           'fault_code': 0,
           'alarm_code': 0,
-          'temp_inv': 45.0,
-          'temp_mos': 40.0,
-          'efficiency': 95.5,
+          'inverter_temperature': 45.0,
+          'boost_temperature': 40.0,
+          'transformer_temperature': 38.0,
+          'pv_temperature': 42.0,
+          'dc_bus_voltage': 400.0,
+          'load_percent': 75.0,
+          'mppt_fan_speed': 40.0,
+          'inv_fan_speed': 60.0,
         };
 
         // 验证系统状态构建
-        final hasSysStatus = realtime.containsKey('state') || realtime.containsKey('temp_inv');
+        final hasSysStatus = realtime.containsKey('work_state') ||
+            realtime.containsKey('inverter_temperature');
         expect(hasSysStatus, true);
 
         // 验证数据提取
-        final state = realtime['state'] as String? ?? '';
+        final state = realtime['work_state'] as String? ?? '';
         final faultCode = (realtime['fault_code'] as num?)?.toInt() ?? 0;
-        expect(state, 'normal');
+        expect(state, '1');
         expect(faultCode, 0);
       });
 
-      test('解析扁平格式 - 能源数据', () {
+      test('解析扁平格式 - 能源与诊断数据', () {
         final realtime = {
-          'daily_pv': 15.5,
-          'total_pv': 1000.0,
-          'runtime_hours': 500,
-          'daily_feed_energy': 10.0,
-          'total_feed_energy': 800.0,
+          'daily_pv_energy': 15.5,
+          'total_pv_energy': 1000.0,
+          'work_time_total': 1800000,
+          'gen_energy_daily': 2.0,
         };
 
         // 验证能源数据构建
-        final hasEnergyData = realtime.containsKey('daily_pv') || realtime.containsKey('total_pv');
+        final hasEnergyData = realtime.containsKey('daily_pv_energy') ||
+            realtime.containsKey('total_pv_energy');
         expect(hasEnergyData, true);
 
-        // 验证数据提取
-        final dailyPv = realtime['daily_pv']?.toDouble() ?? 0;
-        final runtimeHours = realtime['runtime_hours']?.toInt() ?? 0;
+        // 验证数据提取（累计运行时长为秒）
+        final dailyPv = realtime['daily_pv_energy']?.toDouble() ?? 0;
+        final workTimeTotal = realtime['work_time_total']?.toInt() ?? 0;
         expect(dailyPv, 15.5);
-        expect(runtimeHours, 500);
+        expect(workTimeTotal, 1800000);
       });
     });
 

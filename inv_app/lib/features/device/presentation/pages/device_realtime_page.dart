@@ -1,7 +1,7 @@
-// 设备详情页 ——「能源流监控中心」
+// 设备详情页 —— 实时监控与远程设置
 //
-// 结构：AppBar + 横幅区（MQTT 降级 / 数据滞后）+ TabBar（5 Tab）+ TabBarView
-//   Tab1 能源流    Tab2 实时数据    Tab3 能量统计    Tab4 状态中心    Tab5 设备健康
+// 结构：AppBar + 横幅区（MQTT 降级 / 数据滞后）+ TabBarView + 底部 Tab 栏（4 Tab）
+//   Tab1 实时数据    Tab2 能量统计    Tab3 远程设置    Tab4 设备健康
 //
 // 取数机制保持不变：
 //   - _fetchDeviceDetail：GET /devices/by-sn/:sn（realtime_data 展平为 derived 来源）
@@ -10,6 +10,7 @@
 
 import 'dart:async';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -23,6 +24,7 @@ import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/realtime_data_service.dart';
 import 'package:inv_app/core/services/connection_mode_service.dart';
 import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
+import 'package:inv_app/features/device/presentation/pages/device_settings_page.dart';
 import 'package:inv_app/features/device/presentation/widgets/energy_dashboard_tabs.dart';
 import 'package:inv_app/core/entities/inverter_data.dart';
 import 'package:inv_app/core/utils/api_response.dart';
@@ -39,7 +41,11 @@ class DeviceRealtimePage extends StatefulWidget {
   State<DeviceRealtimePage> createState() => _DeviceRealtimePageState();
 }
 
-class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
+class _DeviceRealtimePageState extends State<DeviceRealtimePage>
+    with SingleTickerProviderStateMixin {
+  /// 底部 Tab 栏控制器（4 Tab：实时数据 / 能量统计 / 远程设置 / 设备健康）
+  late final TabController _tabController;
+
   /// 扁平 realtime map（_fetchDeviceDetail 的 realtime_data 展平结果，
   /// 供 derived_health_score / diag_work_time_total 等 derived 字段使用）
   final Map<String, dynamic> _realtimeData = {};
@@ -69,10 +75,19 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
   @override
   void initState() {
     super.initState();
-    _initLocalMode();
+    _tabController = TabController(length: 4, vsync: this);
     _subscribeMqttData();
     _listenOnlineStatus();
-    _fetchDeviceDetail();
+    // 初始化本地模式（异步），完成后再决定是否调用云端 API
+    _initLocalMode().then((_) {
+      if (!mounted) return;
+      if (!_isLocalMode) {
+        _fetchDeviceDetail();
+      } else {
+        // 本地模式：等 DeviceBloc 推送数据，先显示加载态
+        setState(() => _loading = true);
+      }
+    });
     // 每 30 秒刷新一次，保证数据停更后滞后提示能及时出现
     _staleRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted && _dataUpdatedAt != null) {
@@ -117,6 +132,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
 
   @override
   void dispose() {
+    _tabController.dispose();
     // 本地模式下停止 bloc 本地轮询和连接监控
     if (_isLocalMode) {
       try {
@@ -138,27 +154,44 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
   Future<void> _fetchDeviceDetail() async {
     try {
       final dio = getIt<Dio>();
+      if (kDebugMode) {
+        debugPrint('[DeviceRealtimePage] Fetching device detail for ${widget.sn}');
+      }
       // API 路径: /devices/by-sn/:sn
       final res = await dio
           .get('/devices/by-sn/${widget.sn}')
-          .timeout(const Duration(seconds: 5));
+          .timeout(const Duration(seconds: 10));
+      if (kDebugMode) {
+        debugPrint('[DeviceRealtimePage] API response status: ${res.statusCode}');
+      }
       if (res.statusCode == 200 && mounted) {
         final data = unwrapApiResponse<Map<String, dynamic>>(
           res.data,
-          validate: (value) => value is Map<String, dynamic>,
+          validate: (value) {
+            if (kDebugMode) {
+              debugPrint('[DeviceRealtimePage] Validating data type: ${value.runtimeType}, isMap: ${value is Map<String, dynamic>}');
+            }
+            return value is Map<String, dynamic>;
+          },
           expected: 'an object',
         );
+        if (kDebugMode) {
+          debugPrint('[DeviceRealtimePage] API data keys: ${data.keys.toList()}');
+          debugPrint('[DeviceRealtimePage] has realtime_data: ${data.containsKey('realtime_data')}, value: ${data['realtime_data'] != null}');
+          debugPrint('[DeviceRealtimePage] has online_status: ${data.containsKey('online_status')}, value: ${data['online_status']}');
+        }
 
         // 解析 realtime_data
         final realtimeRaw =
             data['realtime_data'] as Map<String, dynamic>? ?? {};
+        if (kDebugMode) {
+          debugPrint('[DeviceRealtimePage] realtimeRaw keys: ${realtimeRaw.keys.toList()}');
+        }
         Map<String, dynamic> flatData = {};
 
         // realtime_data 可能是嵌套结构（ac/pv/energy 对象），展平它
-        // 数据结构可能是 {"ac": {"power": 2319}} 或 {"ac": {"data": {...}, "timestamp": ...}}
         realtimeRaw.forEach((key, value) {
           if (value is Map<String, dynamic>) {
-            // 检查是否有 data 子字段（新格式）
             if (value.containsKey('data') &&
                 value['data'] is Map<String, dynamic>) {
               final innerData = value['data'] as Map<String, dynamic>;
@@ -167,7 +200,6 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
                 flatData[flatKey] = subValue;
               });
             } else {
-              // 旧格式：直接嵌套
               value.forEach((subKey, subValue) {
                 final flatKey = '${key}_$subKey';
                 flatData[flatKey] = subValue;
@@ -178,7 +210,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
           }
         });
 
-        // 尝试将 realtime_data 解析为结构化遥测（MQTT 数据缺失时的兜底）
+        // 尝试将 realtime_data 解析为结构化遥测
         final structured = InverterRealtime.fromJson(realtimeRaw);
         final hasSection = structured.ac != null ||
             structured.pv != null ||
@@ -186,14 +218,28 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
             structured.sysStatus != null ||
             structured.energy != null;
 
+        if (kDebugMode) {
+          debugPrint('[DeviceRealtimePage] structured: ac=${structured.ac != null}, pv=${structured.pv != null}, batt=${structured.battery != null}, sys=${structured.sysStatus != null}, energy=${structured.energy != null}');
+          if (structured.ac != null) {
+            debugPrint('[DeviceRealtimePage] ac: voltage=${structured.ac!.voltage}, power=${structured.ac!.power}, current=${structured.ac!.current}');
+          }
+          if (structured.pv != null) {
+            debugPrint('[DeviceRealtimePage] pv: power=${structured.pv!.pvPower}, pv1V=${structured.pv!.pvVoltage}');
+          }
+          if (structured.battery != null) {
+            debugPrint('[DeviceRealtimePage] batt: soc=${structured.battery!.soc}, voltage=${structured.battery!.voltage}, power=${structured.battery!.power}');
+          }
+          if (structured.energy != null) {
+            debugPrint('[DeviceRealtimePage] energy: dailyPv=${structured.energy!.dailyPV}, dailyCharge=${structured.energy!.dailyCharge}, dailyLoad=${structured.energy!.dailyLoad}');
+          }
+          debugPrint('[DeviceRealtimePage] hasSection=$hasSection, flatData keys: ${flatData.keys.toList()}');
+        }
+
         setState(() {
-          // 合并 API 数据到现有数据（MQTT 实时数据优先）
           _realtimeData.addAll(flatData);
-          // 结构化数据：MQTT/轮询未提供时才使用 API 解析结果
           if (_latest == null && hasSection) {
             _latest = structured;
           }
-          // 提取遥测时间戳（后端字段兼容 updated_at / data_time）
           final updatedAtStr = (data['updated_at'] ??
                   data['data_time'] ??
                   realtimeRaw['updated_at'])
@@ -208,9 +254,16 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
           _loading = false;
           _error = null;
           _apiUnavailable = false;
+          if (kDebugMode) {
+            debugPrint('[DeviceRealtimePage] setState complete: _loading=$_loading, _error=$_error, _online=$_online');
+          }
         });
       }
-    } catch (_) {
+    } catch (e, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('[DeviceRealtimePage] _fetchDeviceDetail failed: $e');
+        debugPrint('[DeviceRealtimePage] Stack trace: $stackTrace');
+      }
       if (mounted) {
         setState(() {
           _apiUnavailable = true;
@@ -281,52 +334,74 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
     }
   }
 
-  /// 将 InverterRealtime 转为与云端 API 一致的扁平 Map，
+  /// 将 InverterRealtime 转为与云端 API 一致的扁平 Map（V2.1 键，
+  /// 与服务端 normalizeRealtimeData 展平后的顶层键一致），
   /// 保持 derived 字段合并机制与原实现一致
   Map<String, dynamic> _inverterToFlatMap(InverterRealtime rt) {
     final map = <String, dynamic>{};
     // AC
     if (rt.ac != null) {
-      map['ac_voltage'] = rt.ac!.voltage;
-      map['ac_current'] = rt.ac!.current;
-      map['ac_power'] = rt.ac!.power;
-      map['ac_frequency'] = rt.ac!.frequency;
-      map['ac_load_percent'] = rt.ac!.loadPercent;
-      map['ac_pf'] = rt.ac!.pf;
+      map['ac_output_voltage'] = rt.ac!.voltage;
+      map['output_current'] = rt.ac!.current;
+      map['output_power'] = rt.ac!.power;
+      map['ac_output_frequency'] = rt.ac!.frequency;
+      map['output_apparent_power'] = rt.ac!.apparentPower;
     }
     // Battery
     if (rt.battery != null) {
-      map['batt_soc'] = rt.battery!.soc;
-      map['batt_soh'] = rt.battery!.soh;
-      map['batt_voltage'] = rt.battery!.voltage;
-      map['batt_current'] = rt.battery!.current;
-      map['batt_charge_state'] = rt.battery!.chargeState;
+      map['battery_soc'] = rt.battery!.soc;
+      map['battery_soh'] = rt.battery!.soh;
+      map['battery_voltage'] = rt.battery!.voltage;
+      map['battery_current'] = rt.battery!.current;
+      map['battery_power'] = rt.battery!.power;
+      map['battery_charge_power'] = rt.battery!.chargePower;
+      map['battery_discharge_power'] = rt.battery!.dischargePower;
     }
     // PV
     if (rt.pv != null) {
-      map['pv_voltage'] = rt.pv!.pvVoltage;
-      map['pv_current'] = rt.pv!.pvCurrent;
-      map['pv_power'] = rt.pv!.pvPower;
+      map['pv1_voltage'] = rt.pv!.pvVoltage;
+      map['pv1_current'] = rt.pv!.pvCurrent;
+      map['pv_total_power'] = rt.pv!.pvPower;
       map['mppt_state'] = rt.pv!.mpptState;
     }
     // System Status
     if (rt.sysStatus != null) {
-      map['state'] = rt.sysStatus!.state;
+      map['work_state'] = rt.sysStatus!.state;
       map['fault_code'] = rt.sysStatus!.faultCode;
       map['alarm_code'] = rt.sysStatus!.alarmCode;
-      map['temp_inv'] = rt.sysStatus!.tempInv;
-      map['temp_mos'] = rt.sysStatus!.tempMos;
-      map['efficiency'] = rt.sysStatus!.efficiency;
+      map['inverter_temperature'] = rt.sysStatus!.tempInv;
+      map['boost_temperature'] = rt.sysStatus!.boostTemp;
+      map['transformer_temperature'] = rt.sysStatus!.transformerTemp;
+      map['pv_temperature'] = rt.sysStatus!.pvTemp;
+      map['dc_bus_voltage'] = rt.sysStatus!.dcBusVoltage;
+      map['load_percent'] = rt.sysStatus!.loadPercent;
     }
+    // Fan（V2.1 双风扇）
+    if (rt.fan != null) {
+      map['mppt_fan_speed'] = rt.fan!.mpptSpeed;
+      map['inv_fan_speed'] = rt.fan!.invSpeed;
+    }
+    // Diag（V2.1 诊断量）
+    map['work_time_total'] = rt.workTimeTotalSec;
     // Energy
     if (rt.energy != null) {
-      map['daily_pv'] = rt.energy!.dailyPV;
-      map['total_pv'] = rt.energy!.totalPV;
-      map['runtime_hours'] = rt.energy!.runtimeHours;
-      map['daily_feed_energy'] = rt.energy!.dailyFeedEnergy;
-      map['total_feed_energy'] = rt.energy!.totalFeedEnergy;
-      map['daily_grid_import'] = rt.energy!.dailyGridImport;
-      map['total_grid_import'] = rt.energy!.totalGridImport;
+      map['daily_pv_energy'] = rt.energy!.dailyPV;
+      map['total_pv_energy'] = rt.energy!.totalPV;
+      map['daily_charge_energy'] = rt.energy!.dailyCharge;
+      map['total_charge_energy'] = rt.energy!.totalCharge;
+      map['daily_discharge_energy'] = rt.energy!.dailyDischarge;
+      map['total_discharge_energy'] = rt.energy!.totalDischarge;
+      map['daily_load_energy'] = rt.energy!.dailyLoad;
+      map['output_energy_daily'] = rt.energy!.dailyLoad;
+      map['total_load_energy'] = rt.energy!.totalLoad;
+      map['output_energy_total'] = rt.energy!.totalLoad;
+      // V2 能量分项
+      map['gen_energy_daily'] = rt.energy!.dailyGenEnergy;
+      map['gen_energy_total'] = rt.energy!.totalGenEnergy;
+      map['ac_charge_energy_daily'] = rt.energy!.dailyAcChargeEnergy;
+      map['ac_charge_energy_total'] = rt.energy!.totalAcChargeEnergy;
+      map['ac_bypass_energy_daily'] = rt.energy!.dailyAcBypassEnergy;
+      map['ac_bypass_energy_total'] = rt.energy!.totalAcBypassEnergy;
     }
     // Cells
     if (rt.cells != null && rt.cells!.voltages.isNotEmpty) {
@@ -352,6 +427,25 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
           final l10n = AppLocalizations.of(context)!;
           AppToast.show(context, l10n.inverterNoResponse, type: ToastType.error);
           context.pop();
+        }
+        // 本地直连模式：接收 DeviceBloc 的本地实时数据
+        if (state is DeviceDetailLoaded && state.realtimeData != null) {
+          final rt = state.realtimeData!;
+          setState(() {
+            _latest = rt;
+            final newMqttData = _inverterToFlatMap(rt);
+            _realtimeData.addAll(newMqttData);
+            _hasMqttData = true;
+            _apiUnavailable = false;
+            _error = null;
+            _loading = false;
+            if (rt.updatedAt != null) {
+              _dataUpdatedAt = rt.updatedAt;
+            }
+            if (rt.onlineStatus != null) {
+              _online = rt.onlineStatus!.online;
+            }
+          });
         }
       },
       child: Scaffold(
@@ -406,66 +500,151 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
     );
   }
 
-  /// 内容区：横幅区（TabBar 上方）+ TabBar（5 Tab）+ TabBarView
+  /// 内容区：横幅区（顶部）+ TabBarView（4 Tab）+ 底部品牌 Tab 栏
   Widget _buildContent() {
-    final l10n = AppLocalizations.of(context)!;
-
-    return DefaultTabController(
-      length: 5,
-      child: Column(
-        children: [
-          // ── 横幅区（位于 TabBar 上方）──
-          if (_apiUnavailable && _hasMqttData)
-            Padding(
-              padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 0),
-              child: _buildMqttFallbackBanner(),
-            ),
-          // 数据滞后提示：设备离线时陈旧数据不再被误当实时值
+    return Column(
+      children: [
+        // ── 横幅区（位于 TabBarView 上方）──
+        if (_apiUnavailable && _hasMqttData)
           Padding(
             padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 0),
-            child: _buildStaleDataBanner(),
+            child: _buildMqttFallbackBanner(),
           ),
-          // ── TabBar ──
-          TabBar(
-            isScrollable: true,
-            tabAlignment: TabAlignment.start,
-            labelStyle: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600),
-            unselectedLabelStyle:
-                TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w400),
-            tabs: [
-              Tab(text: l10n.str('energy_flow')),
-              Tab(text: l10n.str('realtime_data')),
-              Tab(text: l10n.str('energy_stats')),
-              Tab(text: l10n.str('status_center_title')),
-              Tab(text: l10n.str('health_title')),
+        // 数据滞后提示：设备离线时陈旧数据不再被误当实时值
+        Padding(
+          padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 0),
+          child: _buildStaleDataBanner(),
+        ),
+        // ── TabBarView ──
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              RealtimeDataTab(
+                data: _latest,
+                footer: _buildProtocolEntry(),
+              ),
+              EnergyStatsTab(data: _latest),
+              RemoteSettingsTab(sn: widget.sn),
+              DeviceHealthTab(
+                data: _latest,
+                flat: _realtimeData,
+                online: _online,
+              ),
             ],
           ),
-          // ── TabBarView ──
-          Expanded(
-            child: TabBarView(
-              children: [
-                EnergyFlowTab(data: _latest),
-                RealtimeDataTab(
-                  data: _latest,
-                  footer: Column(
-                    children: [
-                      _buildSettingsEntry(),
-                      SizedBox(height: 12.h),
-                      _buildProtocolEntry(),
-                    ],
-                  ),
-                ),
-                EnergyStatsTab(data: _latest),
-                StatusCenterTab(sn: widget.sn, data: _latest),
-                DeviceHealthTab(
-                  data: _latest,
-                  flat: _realtimeData,
-                  online: _online,
-                ),
-              ],
+        ),
+        // ── 底部 Tab 栏（品牌浮起容器）──
+        _buildBottomTabBar(),
+      ],
+    );
+  }
+
+  /// 底部 Tab 栏：品牌浮起圆角容器，图标 + 文字组合；
+  /// 选中项品牌色渐变药丸高亮，未选中灰色；SafeArea 适配底部安全区
+  Widget _buildBottomTabBar() {
+    final l10n = AppLocalizations.of(context)!;
+    final tabs = [
+      (Icons.assessment_outlined, l10n.str('realtime_data')),
+      (Icons.insights_outlined, l10n.str('energy_stats')),
+      (Icons.tune_rounded, l10n.str('remote_settings')),
+      (Icons.health_and_safety_outlined, l10n.str('health_title')),
+    ];
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return SafeArea(
+      top: false,
+      child: Container(
+        margin: EdgeInsets.fromLTRB(12.w, 0, 12.w, 8.h),
+        padding: EdgeInsets.all(5.w),
+        decoration: BoxDecoration(
+          color: AppColor.surfaceContainer(context),
+          borderRadius: BorderRadius.circular(22.r),
+          border: Border.all(color: AppColor.border(context)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black
+                  .withValues(alpha: isDark ? 0.3 : 0.08),
+              blurRadius: 18,
+              offset: Offset(0, 4.h),
             ),
-          ),
-        ],
+          ],
+        ),
+        child: AnimatedBuilder(
+          animation: _tabController,
+          builder: (context, _) {
+            final current =
+                _tabController.animation?.value.round() ?? _tabController.index;
+            return Row(
+              children: [
+                for (var i = 0; i < tabs.length; i++)
+                  Expanded(
+                    child: _buildBottomTabItem(
+                      i,
+                      current,
+                      tabs[i].$1,
+                      tabs[i].$2,
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  /// 单个底部 Tab 项：选中品牌蓝渐变药丸（图标+文字白色），未选中灰
+  Widget _buildBottomTabItem(
+    int index,
+    int current,
+    IconData icon,
+    String label,
+  ) {
+    final selected = index == current;
+    return InkWell(
+      onTap: () => _tabController.animateTo(index),
+      borderRadius: BorderRadius.circular(16.r),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+        padding: EdgeInsets.symmetric(vertical: 8.h),
+        decoration: BoxDecoration(
+          gradient: selected
+              ? LinearGradient(
+                  colors: [
+                    AppColors.primary,
+                    AppColors.primary.withValues(alpha: 0.75),
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                )
+              : null,
+          borderRadius: BorderRadius.circular(16.r),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 17.sp,
+              color:
+                  selected ? Colors.white : AppColor.textSecondary(context),
+            ),
+            SizedBox(width: 5.w),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11.sp,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                color:
+                    selected ? Colors.white : AppColor.textSecondary(context),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -533,61 +712,6 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
             child: Text(l10n.retry),
           ),
         ],
-      ),
-    );
-  }
-
-  /// 参数设置入口（push /device/:sn/settings）
-  Widget _buildSettingsEntry() {
-    final l10n = AppLocalizations.of(context)!;
-    return GestureDetector(
-      onTap: () => context.push('/device/${widget.sn}/settings'),
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
-        decoration: AppColor.card(context),
-        child: Row(
-          children: [
-            Container(
-              padding: EdgeInsets.all(8.w),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10.r),
-              ),
-              child: Icon(
-                Icons.tune_rounded,
-                size: 20.sp,
-                color: AppColors.primary,
-              ),
-            ),
-            SizedBox(width: 12.w),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    l10n.paramSettings,
-                    style: TextStyle(
-                      fontSize: 14.sp,
-                      fontWeight: FontWeight.w600,
-                      color: AppColor.textPrimary(context),
-                    ),
-                  ),
-                  SizedBox(height: 2.h),
-                  Text(
-                    l10n.settingsEntryDesc,
-                    style:
-                        TextStyle(fontSize: 12.sp, color: AppColor.textHint(context)),
-                  ),
-                ],
-              ),
-            ),
-            Icon(
-              Icons.chevron_right_rounded,
-              size: 20.sp,
-              color: AppColor.textHint(context),
-            ),
-          ],
-        ),
       ),
     );
   }

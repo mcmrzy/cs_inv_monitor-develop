@@ -17,6 +17,7 @@ export default {
     'station.cumulativeGen': '累计',
     'station.runtimeHours': '运行时长',
     'station.viewRealtimeData': '查看实时数据',
+    'station.viewDeviceDetail': '设备详情',
     'station.createDate': '创建日期',
     'station.ownerUserID': '归属用户ID',
     'station.assignStation': '分配电站给其他用户',
@@ -680,6 +681,7 @@ export default {
     'station.cumulativeGen': 'Cumulative',
     'station.runtimeHours': 'Runtime Hours',
     'station.viewRealtimeData': 'View Realtime Data',
+    'station.viewDeviceDetail': 'Device Detail',
     'station.chargeState': 'Charge State',
   },
 }

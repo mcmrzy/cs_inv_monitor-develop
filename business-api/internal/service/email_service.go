@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"fmt"
+	"html/template"
 	"math/big"
 	"strings"
 	"time"
@@ -241,6 +242,8 @@ func maskEmail(email string) string {
 func (s *EmailService) SendInvitationEmail(toEmail, tokenHint, roleName, organizationName string, expiresHours int, senderName, invitePath string) error {
 	ctx := context.Background()
 	inviteURL := strings.TrimRight(s.frontendURL, "/") + invitePath
+	// Content 使用 template.HTML 类型以保留 HTML 标签（如 <br>）不被转义
+	contentHTML := template.HTML(fmt.Sprintf("分配角色：%s<br>邀请有效期：%d 小时<br>点击下方按钮即可接受邀请，注册或登录后自动加入该组织。", roleName, expiresHours))
 	vars := map[string]interface{}{
 		"ToEmail":          toEmail,
 		"TokenHint":        tokenHint,
@@ -252,7 +255,7 @@ func (s *EmailService) SendInvitationEmail(toEmail, tokenHint, roleName, organiz
 		"InviteURL":        inviteURL,
 		"Title":            "邀请加入组织",
 		"Summary":          fmt.Sprintf("%s 邀请您加入组织「%s」。", senderName, organizationName),
-		"Content":          fmt.Sprintf("分配角色：%s<br>邀请有效期：%d 小时<br>点击下方按钮即可接受邀请，注册或登录后自动加入该组织。", roleName, expiresHours),
+		"Content":          contentHTML,
 		"ButtonText":       "接受邀请",
 		"ButtonURL":        inviteURL,
 		"FooterNote":       "如果您并未发起此邀请，请忽略此邮件或联系管理员。",
@@ -264,6 +267,8 @@ func (s *EmailService) SendInvitationEmail(toEmail, tokenHint, roleName, organiz
 func (s *EmailService) SendTransferNotification(requesterEmail, deviceSN, fromOrg, toOrg, reason string, senderName string) error {
 	ctx := context.Background()
 	actionURL := strings.TrimRight(s.frontendURL, "/") + "/organizations"
+	// Content 使用 template.HTML 类型以保留 HTML 标签（如 <br>）不被转义
+	contentHTML := template.HTML(fmt.Sprintf("设备 SN：%s<br>转出组织：%s<br>转入组织：%s<br>转移原因：%s", deviceSN, fromOrg, toOrg, reason))
 	vars := map[string]interface{}{
 		"DeviceSN":   deviceSN,
 		"FromOrg":    fromOrg,
@@ -273,7 +278,7 @@ func (s *EmailService) SendTransferNotification(requesterEmail, deviceSN, fromOr
 		"ActionURL":  actionURL,
 		"Title":      "设备转移通知",
 		"Summary":    fmt.Sprintf("操作人：%s", senderName),
-		"Content":    fmt.Sprintf("设备 SN：%s<br>转出组织：%s<br>转入组织：%s<br>转移原因：%s", deviceSN, fromOrg, toOrg, reason),
+		"Content":    contentHTML,
 		"ButtonText": "查看组织",
 		"ButtonURL":  actionURL,
 		"FooterNote": "如非本人操作，请尽快联系系统管理员。",
