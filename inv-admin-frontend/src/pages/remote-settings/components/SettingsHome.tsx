@@ -3,7 +3,7 @@
 // 点击展开该模块全部设置项（v1 平铺字段行：左侧标签、右侧控件，行间分隔线，无需再逐项展开）。
 
 import React, { useState } from 'react'
-import { Typography, Spin, Collapse, Empty } from 'antd'
+import { Typography, Spin, Collapse, Empty, Alert } from 'antd'
 import {
   ControlOutlined, ExperimentOutlined, ThunderboltOutlined,
   ExportOutlined, PoweroffOutlined, BulbOutlined, ToolOutlined, AlertOutlined,
@@ -55,6 +55,16 @@ const SettingsHome: React.FC<SettingsHomeProps> = ({ cfg, loading, onOpenAdvance
         <div style={{ marginBottom: 12 }}>
           <QueryErrorAlert error={cfg.schemaError ?? cfg.stateError} onRetry={cfg.refetchAll} />
         </div>
+      )}
+
+      {/* 设备从未上报配置：值不可信，避免被误当成真实参数 */}
+      {!cfg.schemaError && !cfg.stateError && cfg.controlState && !cfg.hasReportedConfig && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message={t('remote.homeNotReported')}
+        />
       )}
 
       {sections.length > 0 ? (
