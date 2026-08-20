@@ -57,8 +57,8 @@ describe('LoginPage', () => {
 
   it('should show remember account checkbox', () => {
     renderWithProviders(<LoginPage />)
-    // 组件 i18n 文案为「记住账号」（zh remember）
-    expect(screen.getByText('记住账号')).toBeInTheDocument()
+    // 组件 i18n 文案为「记住密码」（zh remember）
+    expect(screen.getByText('记住密码')).toBeInTheDocument()
   })
 
   it('should show forgot password link', () => {
@@ -188,7 +188,7 @@ describe('LoginPage', () => {
     renderWithProviders(<LoginPage />)
 
     expect(screen.getByText('云端集中监控')).toBeInTheDocument()
-    expect(screen.getByText('智能告警引擎')).toBeInTheDocument()
+    expect(screen.getByText('远程设备管理')).toBeInTheDocument()
     expect(screen.getByText('深度数据分析')).toBeInTheDocument()
   })
 

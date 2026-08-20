@@ -158,6 +158,10 @@ export default {
     'upload.changeAvatar': '更换头像',
     'common.retry': '重试',
     'common.refreshList': '刷新列表',
+    'common.startTime': '开始时间',
+    'common.endTime': '结束时间',
+    'common.records': '条记录',
+    'common.upload': '上传图片',
   },
   en: {
     'common.search': 'Search',
@@ -318,5 +322,9 @@ export default {
     'upload.changeAvatar': 'Change Avatar',
     'common.retry': 'Retry',
     'common.refreshList': 'Refresh List',
+    'common.startTime': 'Start Time',
+    'common.endTime': 'End Time',
+    'common.records': 'records',
+    'common.upload': 'Upload Image',
   },
 }

@@ -61,8 +61,12 @@ class SettingsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // child 用同色 Material 包裹：ListTile 的点按水波纹/背景绘制在最近的
+    // Material 上，而不是被外层带背景色的 DecoratedBox 遮挡，
+    // 否则每个设置行都会告警 “ListTile background color or ink splashes may be invisible”。
     return Container(
       margin: EdgeInsets.symmetric(horizontal: 16.w),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.circular(16.r),
@@ -70,18 +74,21 @@ class SettingsCard extends StatelessWidget {
           color: AppColor.outline(context).withValues(alpha: 0.6),
         ),
       ),
-      child: Column(
-        children: [
-          for (var i = 0; i < children.length; i++) ...[
-            if (i > 0)
-              Divider(
-                height: 1,
-                indent: 56.w,
-                color: AppColor.outline(context).withValues(alpha: 0.5),
-              ),
-            children[i],
+      child: Material(
+        color: AppColor.surfaceContainer(context),
+        child: Column(
+          children: [
+            for (var i = 0; i < children.length; i++) ...[
+              if (i > 0)
+                Divider(
+                  height: 1,
+                  indent: 56.w,
+                  color: AppColor.outline(context).withValues(alpha: 0.5),
+                ),
+              children[i],
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -168,6 +175,7 @@ class SettingsSwitchRow extends StatelessWidget {
   final bool value;
   final ValueChanged<bool>? onChanged;
   final VoidCallback? onTap;
+
   /// 置灰开关（父级关闭时子项禁用）：开关禁用 + 图标/文字灰化
   final bool enabled;
 
@@ -223,6 +231,7 @@ class SettingsLevelRow extends StatelessWidget {
   final bool value;
   final Color dotColor;
   final ValueChanged<bool> onChanged;
+
   /// 置灰开关（父级关闭时子项禁用）：开关禁用 + 文字/圆点灰化
   final bool enabled;
 
@@ -288,7 +297,8 @@ class SettingsTimeRow extends StatelessWidget {
             ),
           ),
           SizedBox(width: 2.w),
-          Icon(Icons.chevron_right, size: 20, color: AppColor.textHint(context)),
+          Icon(Icons.chevron_right,
+              size: 20, color: AppColor.textHint(context)),
         ],
       ),
       onTap: onTap,
@@ -327,10 +337,12 @@ class SettingsValueRow extends StatelessWidget {
               subtitle!,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style:
-                  TextStyle(fontSize: 12.sp, color: AppColor.textSecondary(context)),
+              style: TextStyle(
+                  fontSize: 12.sp, color: AppColor.textSecondary(context)),
             ),
-      trailing: trailing ?? Icon(Icons.chevron_right, size: 20, color: AppColor.textHint(context)),
+      trailing: trailing ??
+          Icon(Icons.chevron_right,
+              size: 20, color: AppColor.textHint(context)),
       onTap: onTap,
     );
   }

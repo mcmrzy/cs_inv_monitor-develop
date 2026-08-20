@@ -94,9 +94,8 @@ class ConfigParamSchema {
       confirmationMode: json['confirmation_mode']?.toString(),
       displayNameKey:
           json['display_name_key']?.toString() ?? 'config.${json['param_key']}',
-      sortOrder: (json['sort_order'] is num)
-          ? (json['sort_order'] as num).toInt()
-          : 0,
+      sortOrder:
+          (json['sort_order'] is num) ? (json['sort_order'] as num).toInt() : 0,
       visibility: toMap(json['visibility']),
     );
   }
@@ -161,13 +160,26 @@ Map<String, dynamic> mergeControlState(Map<String, dynamic> state) {
 /// 合并 control-state（展示值）：reported 优先，缺失用 desired 兜底。
 /// 用于分类摘要等"设备真实值"展示（读取设备配置后不被旧 desired 遮蔽，
 /// 与 Web 端 getSummaryValue 对齐）。
-Map<String, dynamic> mergeControlStateReportedFirst(Map<String, dynamic> state) {
+Map<String, dynamic> mergeControlStateReportedFirst(
+    Map<String, dynamic> state) {
   final desired = state['desired'];
   final reported = state['reported'];
   return {
     if (desired is Map) ...desired.cast<String, dynamic>(),
     if (reported is Map) ...reported.cast<String, dynamic>(),
   };
+}
+
+/// control-state 是否已包含设备实际回报（reported 非空或同步状态非 unknown）。
+///
+/// 云端 /control 的 success 只代表命令被受理/入队，设备可能离线或固件不支持
+/// query_config。GET /devices/:sn/control-state 返回 {reported:{}, sync_status:'unknown'}
+/// 即代表该设备从未上报配置——此时展示值不可信，不应提示“读取成功/在线”。
+bool controlStateHasReported(Map<String, dynamic> state) {
+  final reported = state['reported'];
+  if (reported is Map && reported.isNotEmpty) return true;
+  final sync = state['sync_status'];
+  return sync is String && sync != 'unknown';
 }
 
 /// 可见性联动判断：
@@ -204,7 +216,8 @@ int configDecimalsForStep(double? step) {
 String formatConfigNumber(num value, ConfigParamSchema schema) {
   final decimals = configDecimalsForStep(schema.step);
   final text = value.toStringAsFixed(decimals);
-  final unit = (schema.unit == null || schema.unit!.isEmpty) ? '' : ' ${schema.unit}';
+  final unit =
+      (schema.unit == null || schema.unit!.isEmpty) ? '' : ' ${schema.unit}';
   return '$text$unit';
 }
 

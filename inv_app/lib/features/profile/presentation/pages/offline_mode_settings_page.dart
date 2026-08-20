@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import 'package:inv_app/core/data/local_cache_database.dart';
@@ -13,6 +12,7 @@ import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/widgets/app_toast.dart';
+import 'package:inv_app/core/widgets/ble_pin_bind_dialog.dart';
 import 'package:inv_app/core/widgets/settings_widgets.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
@@ -38,6 +38,9 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
   bool _isOfflineMode = false;
   Set<String> _directConnectedDevices = {};
   bool _loading = true;
+
+  /// 绑定弹窗打开中标记，防止快速连点重复弹窗（触发 Duplicate GlobalKeys）
+  bool _bindDialogOpen = false;
 
   /// 发现设备列表（来自 BleDirectService.scanResultsStream）
   StreamSubscription<List<BleDiscoveredDevice>>? _scanSub;
@@ -160,7 +163,8 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
     );
   }
 
-  Future<void> _toggleDeviceDirectConnection(String macAddress, bool value) async {
+  Future<void> _toggleDeviceDirectConnection(
+      String macAddress, bool value) async {
     final updated = Set<String>.from(_directConnectedDevices);
     if (value) {
       updated.add(macAddress);
@@ -208,110 +212,63 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
 
   /// 绑定对话框：设备名 + 铭牌 PIN 输入 → BLE 绑定（设备端校验 PIN）
   Future<void> _showBindDialog(BleDiscoveredDevice device) async {
-    final pinController = TextEditingController();
-    var enteredPin = '';
-    final proceed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(l10n.str('ble_bind_confirm_title')),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(l10n.str('ble_bind_confirm_desc')),
-            SizedBox(height: 8.h),
-            Text(
-              displaySnOf(device),
-              style: TextStyle(
-                fontSize: 14.sp,
-                fontWeight: FontWeight.w600,
-                color: AppColor.textPrimary(context),
-              ),
-            ),
-            SizedBox(height: 16.h),
-            TextField(
-              controller: pinController,
-              autofocus: true,
-              keyboardType: TextInputType.number,
-              maxLength: 6,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              decoration: InputDecoration(
-                labelText: l10n.pinInputTitle,
-                hintText: l10n.pinInputHint,
-                counterText: '',
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: Text(l10n.cancel),
+    // 防止快速连点重复弹窗（同一 context 叠加多个 OverlayEntry 触发
+    // Duplicate GlobalKeys / dirty widget in wrong build scope）
+    if (_bindDialogOpen) return;
+    _bindDialogOpen = true;
+    try {
+      final enteredPin = await showBlePinBindDialog(
+        context: context,
+        deviceSn: displaySnOf(device),
+      );
+      if (enteredPin == null || !mounted) return;
+
+      final outcome = await getIt<BleBindingService>().bindAfterProvision(
+        macAddress: device.macAddress,
+        pin: enteredPin,
+      );
+      if (!mounted) return;
+
+      // 绑定失败（PIN 错误/锁定/连接失败）：主动断开设备的 GATT 会话，
+      // 否则 BleDeviceManager 中残留的 session 会让 UI 误判为"已连接"
+      if (outcome != BindOutcome.bound && outcome != BindOutcome.alreadyBound) {
+        try {
+          await getIt<BleDeviceManager>().disconnectDevice(device.macAddress);
+        } catch (_) {}
+      }
+
+      final (text, type) = switch (outcome) {
+        BindOutcome.bound => (
+            l10n.str('ble_binding_success'),
+            ToastType.success,
           ),
-          FilledButton(
-            onPressed: () {
-              enteredPin = pinController.text.trim();
-              if (enteredPin.length != 6) {
-                AppToast.show(
-                  dialogContext,
-                  l10n.pinLengthError,
-                  type: ToastType.info,
-                );
-                return;
-              }
-              Navigator.pop(dialogContext, true);
-            },
-            child: Text(l10n.pinInputConfirm),
+        BindOutcome.alreadyBound => (
+            l10n.str('ble_binding_already_bound'),
+            ToastType.info,
           ),
-        ],
-      ),
-    );
-    pinController.dispose();
-    if (proceed != true || !mounted) return;
-
-    final outcome = await getIt<BleBindingService>().bindAfterProvision(
-      macAddress: device.macAddress,
-      pin: enteredPin,
-    );
-    if (!mounted) return;
-
-    // 绑定失败（PIN 错误/锁定/连接失败）：主动断开设备的 GATT 会话，
-    // 否则 BleDeviceManager 中残留的 session 会让 UI 误判为"已连接"
-    if (outcome != BindOutcome.bound && outcome != BindOutcome.alreadyBound) {
-      try {
-        await getIt<BleDeviceManager>().disconnectDevice(device.macAddress);
-      } catch (_) {}
-    }
-
-    final (text, type) = switch (outcome) {
-      BindOutcome.bound => (
-          l10n.str('ble_binding_success'),
-          ToastType.success,
-        ),
-      BindOutcome.alreadyBound => (
-          l10n.str('ble_binding_already_bound'),
-          ToastType.info,
-        ),
-      BindOutcome.invalidPin => (l10n.pinInvalid, ToastType.error),
-      BindOutcome.locked => (l10n.pinLocked, ToastType.error),
-      BindOutcome.needLoginForSync => (
-          l10n.str('ble_binding_need_login'),
-          ToastType.info,
-        ),
-      _ => (
-          l10n.str('ble_binding_failed'),
-          ToastType.error,
-        ),
-    };
-    if (!mounted) return;
-    AppToast.show(context, text, type: type);
-    // 绑定成功（或设备端判定已绑定）：立即更新该行的绑定状态
-    if (outcome == BindOutcome.bound || outcome == BindOutcome.alreadyBound) {
-      _boundByMac = {..._boundByMac, device.macAddress: true};
-    }
-    // 刷新列表（会话状态可能变化）
-    if (mounted) {
-      setState(() => _foundDevices = getIt<BleDirectService>().scanResults);
+        BindOutcome.invalidPin => (l10n.pinInvalid, ToastType.error),
+        BindOutcome.locked => (l10n.pinLocked, ToastType.error),
+        BindOutcome.needLoginForSync => (
+            l10n.str('ble_binding_need_login'),
+            ToastType.info,
+          ),
+        _ => (
+            l10n.str('ble_binding_failed'),
+            ToastType.error,
+          ),
+      };
+      if (!mounted) return;
+      AppToast.show(context, text, type: type);
+      // 绑定成功（或设备端判定已绑定）：立即更新该行的绑定状态
+      if (outcome == BindOutcome.bound || outcome == BindOutcome.alreadyBound) {
+        _boundByMac = {..._boundByMac, device.macAddress: true};
+      }
+      // 刷新列表（会话状态可能变化）
+      if (mounted) {
+        setState(() => _foundDevices = getIt<BleDirectService>().scanResults);
+      }
+    } finally {
+      _bindDialogOpen = false;
     }
   }
 
@@ -365,7 +322,8 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              l10n.str('local_cache_stats')
+              l10n
+                  .str('local_cache_stats')
                   .replaceAll('{stations}', '${stats['stations']}')
                   .replaceAll('{devices}', '${stats['devices']}'),
               style: TextStyle(fontSize: 14.sp),
@@ -373,7 +331,8 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
             SizedBox(height: 16.h),
             Text(
               l10n.str('local_cache_clear_confirm'),
-              style: TextStyle(fontSize: 13.sp, color: AppColor.textHint(context)),
+              style:
+                  TextStyle(fontSize: 13.sp, color: AppColor.textHint(context)),
             ),
           ],
         ),
@@ -387,7 +346,8 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
               await cache.clearAll();
               if (ctx.mounted) Navigator.pop(ctx);
               if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar( // ignore: use_build_context_synchronously
+                ScaffoldMessenger.of(context).showSnackBar(
+                  // ignore: use_build_context_synchronously
                   SnackBar(content: Text(l10n.str('local_cache_cleared'))),
                 );
               }
@@ -450,8 +410,7 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
               title: l10n.blePollInterval,
               subtitle: l10n.blePollIntervalDesc,
               trailing: Container(
-                padding:
-                    EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
+                padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
                 decoration: BoxDecoration(
                   color: AppColors.blue.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10.r),
@@ -610,13 +569,15 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
             children: [
               Text(
                 l10n.deviceDirectToggle,
-                style: TextStyle(fontSize: 10.sp, color: AppColor.textHint(context)),
+                style: TextStyle(
+                    fontSize: 10.sp, color: AppColor.textHint(context)),
               ),
               SizedBox(
                 height: 28.h,
                 child: Switch(
                   value: isDirectEnabled,
-                  onChanged: (value) => _toggleDeviceDirectConnection(device.macAddress, value),
+                  onChanged: (value) =>
+                      _toggleDeviceDirectConnection(device.macAddress, value),
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
               ),

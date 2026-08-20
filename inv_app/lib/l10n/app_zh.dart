@@ -1711,6 +1711,8 @@ const Map<String, String> zh = {
   'settings_reading_device': '正在读取设备配置...',
   'settings_read_success': '设备配置已更新',
   'settings_read_failed': '读取设备配置失败',
+  'settings_read_no_report': '设备未回报配置，显示值不可信',
+  'settings_not_reported_hint': '设备尚未上报配置（可能离线或固件不支持 query_config），当前显示值不可信',
   'settings_read_hint': '将向设备发送读取指令，获取当前实际配置参数',
   'settings_last_read': '上次读取',
   'settings_write_hint': '修改后需点击「应用」才会下发到设备',

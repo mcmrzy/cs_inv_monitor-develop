@@ -55,6 +55,10 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
   /// control-state 拉取成功即视为设备可读（在线徽标）
   bool _readable = false;
 
+  /// 设备是否尚未实际回报配置（reported 空且 sync_status 为 unknown）：
+  /// 为 true 时 value 不可信，应给出“未上报”提示而非“读取成功/在线”
+  bool _configUnreported = false;
+
   @override
   void initState() {
     super.initState();
@@ -100,6 +104,7 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
         _original = Map.from(values);
         _pending = Map.from(values);
         _readable = true;
+        _configUnreported = !controlStateHasReported(state);
         _loading = false;
       });
       // 自动发送 query_config 读取设备实际配置
@@ -114,8 +119,9 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
     }
   }
 
-  /// 仅刷新 control-state（应用成功后调用）
-  Future<void> _refreshState() async {
+  /// 仅刷新 control-state（应用成功后调用）。返回最新 control-state，
+  /// 供调用方判断设备是否已实际回报配置；失败返回 null。
+  Future<Map<String, dynamic>?> _refreshState() async {
     try {
       final dio = getIt<Dio>();
       final res = await dio.get('/devices/by-sn/${widget.sn}/control-state');
@@ -125,14 +131,17 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
         expected: 'an object',
       );
       final values = mergeControlStateReportedFirst(state);
-      if (!mounted) return;
+      if (!mounted) return state;
       setState(() {
         _original = Map.from(values);
         _pending = Map.from(values);
+        _configUnreported = !controlStateHasReported(state);
       });
+      return state;
     } catch (_) {
       // 刷新失败静默：保留本地已应用状态
     }
+    return null;
   }
 
   /// 发送 query_config 命令读取设备当前配置
@@ -156,17 +165,23 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
 
       // 等待设备响应后刷新状态
       await Future.delayed(const Duration(seconds: 2));
-      await _refreshState();
+      final refreshed = await _refreshState();
 
       if (!mounted) return;
+      final reported = refreshed != null && controlStateHasReported(refreshed);
       setState(() {
         _reading = false;
         _lastReadAt = DateTime.now();
+        _configUnreported = !reported;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(l10n.str('settings_read_success')),
-          backgroundColor: AppColors.success,
+          content: Text(
+            reported
+                ? l10n.str('settings_read_success')
+                : l10n.str('settings_read_no_report'),
+          ),
+          backgroundColor: reported ? AppColors.success : AppColors.warning,
           duration: const Duration(seconds: 2),
         ),
       );
@@ -408,8 +423,8 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
               textStyle:
                   TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600),
               foregroundColor: AppColors.primary,
-              side: BorderSide(
-                  color: AppColors.primary.withValues(alpha: 0.45)),
+              side:
+                  BorderSide(color: AppColors.primary.withValues(alpha: 0.45)),
             ),
             onPressed: _reading ? null : _readDeviceConfig,
             icon: _reading
@@ -497,12 +512,39 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
                 SizedBox(
                   width: 16.w,
                   height: 16.w,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: AppColors.primary),
                 ),
                 SizedBox(width: 10.w),
                 Text(
                   l10n.str('settings_reading_device'),
-                  style: TextStyle(fontSize: 13.sp, color: AppColors.primary, fontWeight: FontWeight.w500),
+                  style: TextStyle(
+                      fontSize: 13.sp,
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w500),
+                ),
+              ],
+            ),
+          ),
+        // 设备未上报配置提示条：值不可信，不要谎称“读取成功/在线”
+        if (_configUnreported && !_reading)
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h),
+            color: AppColors.warning.withValues(alpha: 0.12),
+            child: Row(
+              children: [
+                Icon(Icons.warning_amber_rounded,
+                    size: 16.sp, color: AppColors.warning),
+                SizedBox(width: 8.w),
+                Expanded(
+                  child: Text(
+                    l10n.str('settings_not_reported_hint'),
+                    style: TextStyle(
+                        fontSize: 12.sp,
+                        color: AppColors.warning,
+                        fontWeight: FontWeight.w500),
+                  ),
                 ),
               ],
             ),
@@ -518,7 +560,9 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
                   padding: EdgeInsets.only(bottom: 8.h),
                   child: Text(
                     '${l10n.str("settings_last_read")}: ${_formatTime(_lastReadAt!)}',
-                    style: TextStyle(fontSize: 11.sp, color: AppColor.textSecondary(context)),
+                    style: TextStyle(
+                        fontSize: 11.sp,
+                        color: AppColor.textSecondary(context)),
                   ),
                 ),
               // 8 大功能分类：点击原地展开参数控件（手风琴）
@@ -544,9 +588,8 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
   Widget _buildCategoryCard(AppLocalizations l10n, SettingsCategory category) {
     final theme = Theme.of(context);
     final expanded = _expandedId == category.id;
-    final modifiedInCategory = category.paramKeys
-        .where((k) => _isModified(k))
-        .length;
+    final modifiedInCategory =
+        category.paramKeys.where((k) => _isModified(k)).length;
 
     return Card(
       elevation: 0,
