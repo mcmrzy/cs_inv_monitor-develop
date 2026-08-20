@@ -63,6 +63,32 @@ func TestRegisterModelRoutesIncludesFrontendContract(t *testing.T) {
 	}
 }
 
+func TestRegisterModelRoutesFieldDictionaryReadsBypassRBAC(t *testing.T) {
+	// 字段能力表是设备数据渲染字典（App/设备详情页渲染遥测依赖），
+	// 读取不经过权限中间件（与 fields 系列一致），仅写操作受 models:edit 管控。
+	gin.SetMode(gin.TestMode)
+	checker := &recordingPermissionChecker{allow: false}
+	router := gin.New()
+	router.Use(gin.Recovery()) // 空 ModelHandler 无 db，handler 会 panic，仅需确认不因 403 中断
+	group := router.Group("/api/v1").Use(func(c *gin.Context) {
+		c.Set("user_id", int64(42))
+		c.Next()
+	})
+	registerModelRoutes(group, &handler.ModelHandler{}, checker)
+
+	for _, p := range []string{
+		"/api/v1/models/1/field-capabilities",
+		"/api/v1/models/1/fields",
+		"/api/v1/models/fields-by-code/CS6K2",
+	} {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, p, nil)
+		router.ServeHTTP(w, req)
+		require.NotEqual(t, http.StatusForbidden, w.Code, "GET %s should not be RBAC-gated", p)
+	}
+	require.Empty(t, checker.calls, "field dictionary reads must not hit the permission checker")
+}
+
 func TestRegisterModelRoutesEnforcesGovernancePermissions(t *testing.T) {
 	tests := []struct {
 		method string
@@ -82,7 +108,6 @@ func TestRegisterModelRoutesEnforcesGovernancePermissions(t *testing.T) {
 		{http.MethodDelete, "/api/v1/models/1/protocols/2", "protocol_publish"},
 		{http.MethodGet, "/api/v1/field-catalog", "view"},
 		{http.MethodPost, "/api/v1/field-catalog", "dictionary"},
-		{http.MethodGet, "/api/v1/models/1/field-capabilities", "view"},
 		{http.MethodPut, "/api/v1/models/1/field-capabilities", "edit"},
 		{http.MethodPut, "/api/v1/models/1/field-capabilities/output_power", "edit"},
 		{http.MethodGet, "/api/v1/models/1/commands-v2", "view"},

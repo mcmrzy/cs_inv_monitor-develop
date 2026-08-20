@@ -156,6 +156,18 @@ func newTestRouter(rbac *RBACMiddleware) *gin.Engine {
 	router.POST("/api/v1/devices/by-sn/TEST001/request-transfer", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
+	router.GET("/api/v1/models/:id/field-capabilities", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+	router.GET("/api/v1/models/:id/fields", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+	router.GET("/api/v1/models/fields-by-code/:code", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+	router.GET("/api/v1/models/:id/migration-report", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
 	return router
 }
 
@@ -313,6 +325,74 @@ func TestRBACGuard_SelfServiceDeviceOperations_Pass(t *testing.T) {
 		router.ServeHTTP(w, req)
 		assert.Equal(t, http.StatusOK, w.Code, "POST %s should pass gateway RBAC", p)
 	}
+}
+
+func TestIsModelDictionaryGET(t *testing.T) {
+	tests := []struct {
+		path   string
+		method string
+		expect bool
+	}{
+		{"/api/v1/models/1/fields", http.MethodGet, true},
+		{"/api/v1/models/42/field-capabilities", http.MethodGet, true},
+		{"/api/v1/models/fields-by-code/CS6K2", http.MethodGet, true},
+		{"/api/v1/models/1/fields", http.MethodPut, false},
+		{"/api/v1/models/1/field-capabilities", http.MethodPut, false},
+		{"/api/v1/models/1/fields-batch", http.MethodGet, false},
+		{"/api/v1/models/1/migration-report", http.MethodGet, false},
+		{"/api/v1/models/1", http.MethodGet, false},
+		{"/api/v1/models/abc/fields", http.MethodGet, false},
+		{"/api/v1/models/1/fields/2", http.MethodGet, false},
+		{"/api/v1/models/fields-by-code/", http.MethodGet, false},
+		{"/api/v1/field-catalog", http.MethodGet, false},
+	}
+
+	for _, tt := range tests {
+		name := tt.method + " " + tt.path
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, tt.expect, isModelDictionaryGET(tt.path, tt.method))
+		})
+	}
+}
+
+func TestRBACGuard_ModelDictionaryReads_Pass(t *testing.T) {
+	// User 42 has NO permission grants — field dictionary reads (device data
+	// rendering metadata) must pass the gateway for every role, including
+	// end users on the admin console history/realtime pages.
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer rdb.Close()
+	router := newTestRouter(NewRBACMiddleware(rdb, nil, 300))
+
+	for _, p := range []string{
+		"/api/v1/models/1/field-capabilities",
+		"/api/v1/models/1/fields",
+		"/api/v1/models/fields-by-code/CS6K2",
+	} {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, p, nil)
+		req.Header.Set("X-User-ID", "42")
+		router.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code, "GET %s should pass gateway RBAC", p)
+	}
+}
+
+func TestRBACGuard_ModelGovernanceRead_StillForbidden(t *testing.T) {
+	// Guard against over-broad dictionary whitelisting: model governance reads
+	// (migration-report et al.) must still require the models:view grant.
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer rdb.Close()
+
+	rbac := NewRBACMiddleware(rdb, nil, 300)
+	mr.Set("gw:user_perms:42:0:0", "[]")
+	router := newTestRouter(rbac)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/models/1/migration-report", nil)
+	req.Header.Set("X-User-ID", "42")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusForbidden, w.Code)
 }
 
 func TestRBACGuard_SelfServiceDeviceOperation_Unauthenticated(t *testing.T) {

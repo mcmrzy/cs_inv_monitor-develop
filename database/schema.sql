@@ -7136,6 +7136,8 @@ INSERT INTO schema_migrations (version, name) VALUES (95, '095_device_alias_stat
 -- 进本基线，均为幂等定义，migrator 重放安全；107 为存量用户组织身份
 -- backfill，全新库无孤儿用户，执行为空操作。108 为 customer 角色存量
 -- 补授 devices:control（幂等 backfill，新分配由代码侧 role_default_grants.go
--- 直接携带），全新 initdb 库无存量分配，执行为空操作。
+-- 直接携带），全新 initdb 库无存量分配，执行为空操作。110 修正
+-- device_config_schema.permission_code 拼写（'device:control'→'devices:control'）
+-- 及其列默认值（096 遗留缺陷，见迁移内注释），幂等可重放。
 
--- Next migration version to use: 109
+-- Next migration version to use: 111

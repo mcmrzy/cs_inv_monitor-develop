@@ -31,6 +31,9 @@ func registerModelRoutes(auth gin.IRoutes, h *handler.ModelHandler, checker midd
 	auth.DELETE("/models/:id", modelsDelete, h.DeleteModel)
 	auth.GET("/models/:id/fields", h.GetModelFields)
 	auth.GET("/models/fields-by-code/:code", h.GetFieldsByModelCode)
+	// 字段能力表同为设备数据渲染字典（历史/实时/状态页按型号渲染）,
+	// 与 fields 系列一致登录即可读; 写操作仍需 models:edit。
+	auth.GET("/models/:id/field-capabilities", h.GetFieldCapabilities)
 	auth.POST("/models/:id/fields", modelsEdit, h.CreateField)
 	auth.PUT("/models/:id/fields/:fieldId", modelsEdit, h.UpdateField)
 	auth.DELETE("/models/:id/fields/:fieldId", modelsEdit, h.DeleteField)
@@ -43,7 +46,6 @@ func registerModelRoutes(auth gin.IRoutes, h *handler.ModelHandler, checker midd
 	// V2 model registry endpoints used by ModelRegistryWorkspace.
 	auth.GET("/field-catalog", modelsView, h.ListFieldCatalog)
 	auth.POST("/field-catalog", dictionaryEdit, h.UpsertFieldCatalog)
-	auth.GET("/models/:id/field-capabilities", modelsView, h.GetFieldCapabilities)
 	auth.PUT("/models/:id/field-capabilities", modelsEdit, h.BatchUpdateFieldCapabilities)
 	auth.PUT("/models/:id/field-capabilities/:fieldKey", modelsEdit, h.UpdateFieldCapability)
 	auth.GET("/models/:id/commands-v2", modelsView, h.GetModelCommandsV2)
