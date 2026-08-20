@@ -19,7 +19,6 @@ import 'package:inv_app/core/services/ble/ble_device_manager.dart';
 import 'package:inv_app/core/services/ble/ble_direct_service.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
-import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/utils/sn_utils.dart';
 import 'package:inv_app/core/utils/api_response.dart';
 import 'package:inv_app/core/widgets/station_selector_sheet.dart';
