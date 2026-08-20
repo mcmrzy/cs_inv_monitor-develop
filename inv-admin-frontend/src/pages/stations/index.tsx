@@ -1031,7 +1031,8 @@ const StationsPage: React.FC = () => {
       <Space style={{ marginBottom: 16, width: '100%', justifyContent: 'space-between' }}>
         <Title level={4} style={{ margin: 0 }}>{t('station.title')}</Title>
         <Space>
-          {isAdmin && (
+          {/* 后端 CreateStation 无角色限制且归属创建者，按 create 权限码放行（终端用户自建电站） */}
+          {hasPermission('stations:create') && (
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setAddModalOpen(true)}>
               {t('station.addStation')}
             </Button>

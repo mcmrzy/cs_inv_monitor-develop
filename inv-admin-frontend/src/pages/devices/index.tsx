@@ -293,6 +293,10 @@ const DevicesPage: React.FC = () => {
   const [bindStationSn, setBindStationSn] = useState<string>('')
   const [selectedStationId, setSelectedStationId] = useState<number | null>(null)
 
+  // 绑定设备（所有权绑定，SN + 铭牌 PIN）相关状态
+  const [deviceBindModalOpen, setDeviceBindModalOpen] = useState(false)
+  const [bindDeviceForm] = Form.useForm()
+
   const [modelOptions, setModelOptions] = useState<{ label: string; value: string; model: any }[]>([])
   // modelFields hook 移到 deviceDetail useMemo 之后（line ~1500），以确保使用 API 返回的实际设备数据
 
@@ -640,8 +644,33 @@ const DevicesPage: React.FC = () => {
       const list = Array.isArray(d) ? d : d?.data?.items || d?.data?.list || d?.list || (Array.isArray(d?.data) ? d?.data : [])
       return Array.isArray(list) ? list : []
     }),
-    enabled: bindStationModalOpen,
+    enabled: bindStationModalOpen || deviceBindModalOpen,
   })
+
+  // 终端用户/渠道角色绑定设备到自己的账户（与管理员建台账的 createDevice 互补，
+  // 后端 DeviceHandler.Create 仅限系统管理员，Bind 归属当前用户且凭 PIN 防抢绑）
+  const bindDeviceMutation = useMutation({
+    mutationFn: ({ sn, pin, stationId }: { sn: string; pin: string; stationId?: number }) =>
+      deviceApi.bindDevice(sn, pin, stationId),
+    onSuccess: () => {
+      messageApi.success(t('dev.bindDeviceSuccess'))
+      setDeviceBindModalOpen(false)
+      bindDeviceForm.resetFields()
+      queryClient.invalidateQueries({ queryKey: ['devices'] })
+    },
+    onError: (err: any) => {
+      messageApi.error(err?.response?.data?.message || err?.message || t('common.error'))
+    },
+  })
+
+  const handleBindDeviceSubmit = async () => {
+    try {
+      const values = await bindDeviceForm.validateFields()
+      bindDeviceMutation.mutate({ sn: values.sn, pin: values.pin, stationId: values.stationId || undefined })
+    } catch {
+      // validation failed
+    }
+  }
 
   const bindStationMutation = useMutation({
     mutationFn: ({ sn, stationId }: { sn: string; stationId: number }) =>
@@ -2075,9 +2104,15 @@ const DevicesPage: React.FC = () => {
             <Row justify="space-between" align="middle">
               <Col>
                 <Space>
-                  {!isEndUser && (
+                  {/* 添加设备=建台账（后端仅限系统管理员）；渠道角色/终端用户通过绑定接入外来设备 */}
+                  {isSuperAdmin && (
                     <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
                       {t('dev.addDevice')}
+                    </Button>
+                  )}
+                  {hasPermission('devices:create') && (
+                    <Button type="primary" icon={<LinkOutlined />} onClick={() => setDeviceBindModalOpen(true)}>
+                      {t('dev.bindDevice')}
                     </Button>
                   )}
                   {(isSuperAdmin || isAdmin) && (
@@ -2185,6 +2220,50 @@ const DevicesPage: React.FC = () => {
           </Form.Item>
           <Form.Item name="model" label={t('common.model')}>
             <Input placeholder={t('common.model')} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={t('dev.bindDeviceTitle')}
+        open={deviceBindModalOpen}
+        onCancel={() => setDeviceBindModalOpen(false)}
+        onOk={handleBindDeviceSubmit}
+        confirmLoading={bindDeviceMutation.isPending}
+        okText={t('dev.bindDevice')}
+        cancelText={t('common.cancel')}
+        destroyOnHidden
+      >
+        <Alert
+          message={t('dev.bindDeviceTip')}
+          type="info"
+          showIcon
+          style={{ marginTop: 16 }}
+        />
+        <Form form={bindDeviceForm} layout="vertical" style={{ marginTop: 16 }}>
+          <Form.Item
+            name="sn"
+            label={t('dev.deviceSN')}
+            rules={[{ required: true, message: t('dev.deviceSN') }]}
+          >
+            <Input placeholder={t('dev.deviceSN')} />
+          </Form.Item>
+          <Form.Item
+            name="pin"
+            label={t('dev.pin')}
+            rules={[{ required: true, message: t('dev.pin') }]}
+          >
+            <Input.Password placeholder={t('dev.pin')} />
+          </Form.Item>
+          <Form.Item name="stationId" label={t('dev.selectStationOptional')}>
+            <Select
+              allowClear
+              showSearch
+              filterOption={(input, option) =>
+                (option?.label as string)?.toLowerCase().includes(input.toLowerCase())
+              }
+              options={(Array.isArray(stationsList) ? stationsList : []).map((s: any) => ({ value: s.id, label: s.name }))}
+            />
           </Form.Item>
         </Form>
       </Modal>
