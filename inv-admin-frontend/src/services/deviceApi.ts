@@ -4,6 +4,8 @@ export const deviceApi = {
   getDevices: (params: any) => api.get('/devices', { params, expectedDataShape: 'page' }),
   getDeviceBySn: (sn: string) => api.get(`/devices/by-sn/${sn}`, { expectedDataShape: 'object' }),
   createDevice: (data: any) => api.post('/devices', data),
+  bindDevice: (sn: string, pin: string, stationId?: number) =>
+    api.post('/devices/bind', { sn, pin, station_id: stationId }),
   updateDevice: (sn: string, data: any) => api.put(`/devices/by-sn/${sn}`, data),
   deleteDevice: (sn: string) => api.delete(`/devices/by-sn/${sn}`),
   unbindDevice: (sn: string) => api.post(`/devices/by-sn/${sn}/unbind`),
