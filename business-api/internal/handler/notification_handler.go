@@ -203,20 +203,14 @@ func (h *NotificationHandler) Delete(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
-	isSystemAdmin := middleware.GetIsSystemAdmin(c)
 	var tag interface{ RowsAffected() int64 }
-	if isSystemAdmin {
-		tag, err = h.db.Exec(ctx, `DELETE FROM notifications WHERE id = $1`, id)
-	} else {
-		tag, err = h.db.Exec(ctx, `DELETE FROM notifications n WHERE n.id = $1 AND `+
-			notificationMutationScope("n", isSystemAdmin, 2), id, middleware.GetUserID(c))
-	}
+	tag, err = h.db.Exec(ctx, `DELETE FROM notifications WHERE id = $1 AND user_id = $2`, id, middleware.GetUserID(c))
 	if err != nil {
 		response.Error(c, 500, "delete failed")
 		return
 	}
 	if tag.RowsAffected() != 1 {
-		response.Error(c, 403, "notification is outside your data scope")
+		response.Error(c, 404, "notification not found")
 		return
 	}
 
@@ -227,14 +221,8 @@ func (h *NotificationHandler) ClearAll(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
-	isSystemAdmin := middleware.GetIsSystemAdmin(c)
-	var err error
-	if isSystemAdmin {
-		_, err = h.db.Exec(ctx, `DELETE FROM notifications`)
-	} else {
-		_, err = h.db.Exec(ctx, `DELETE FROM notifications n WHERE `+
-			notificationMutationScope("n", isSystemAdmin, 1), middleware.GetUserID(c))
-	}
+	userIDs := []int64{middleware.GetUserID(c)}
+	_, err := h.db.Exec(ctx, `DELETE FROM notifications WHERE user_id = ANY($1::bigint[])`, userIDs)
 	if err != nil {
 		response.Error(c, 500, "clear failed")
 		return

@@ -506,7 +506,7 @@ func (h *AdminHandler) ListTenants(c *gin.Context) {
 	}
 
 	rows, err := h.db.Query(ctx, `
-		SELECT u.id, u.phone, COALESCE(u.nickname,''), COALESCE(u.email,''), u.status,
+		SELECT u.id, COALESCE(u.phone,''), COALESCE(u.nickname,''), COALESCE(u.email,''), u.status,
 		       COALESCE(u.created_at, NOW()), COALESCE(u.last_login_at, u.created_at)
 		FROM users u
 		WHERE u.is_system_admin = false AND u.deleted_at IS NULL

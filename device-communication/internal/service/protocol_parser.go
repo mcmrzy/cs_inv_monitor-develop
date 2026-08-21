@@ -1249,8 +1249,9 @@ func (p *ProtocolParser) handleCommandResponse(ctx context.Context, raw *RawMess
 		return err
 	}
 
-	// 命令闭环（文档 11.4.1）：命令执行成功后立即下发 query_config 索取最新配置
-	if isCommandSuccess(result) && p.hub != nil {
+	// 命令闭环（文档 11.4.1）：设置类命令执行成功后立即下发 query_config 索取最新配置。
+	// query_ 查询类命令自身豁免，避免 query_config → 成功 → query_config 无限自循环。
+	if isCommandSuccess(result) && !strings.HasPrefix(resp.Cmd, "query_") && p.hub != nil {
 		select {
 		case p.hub.GetCmdChan() <- &mqtt.DeviceCommand{DeviceSN: raw.SN, CmdType: "query_config"}:
 			logger.Info("query_config queued after command", zap.String("sn", raw.SN), zap.String("cmd", resp.Cmd))

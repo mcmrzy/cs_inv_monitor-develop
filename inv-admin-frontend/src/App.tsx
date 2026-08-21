@@ -35,6 +35,7 @@ const OperationLogsPage = lazyWithRetry(() => import('@/pages/operation-logs'))
 const DeviceDetailPage = lazyWithRetry(() => import('@/pages/device-detail'))
 const SystemMonitorPage = lazyWithRetry(() => import('@/pages/system/SystemMonitor'))
 const SystemConfigPage = lazyWithRetry(() => import('@/pages/system/SystemConfig'))
+const DownloadPage = lazyWithRetry(() => import('@/pages/download'))
 
 const RoleRedirect: React.FC = () => {
   const user = useAuthStore((s) => s.user)
@@ -51,6 +52,7 @@ const AppRoutes: React.FC = () => (
     <Route path="/login" element={<LoginPage />} />
     <Route path="/invite/:token" element={<InviteAcceptPage />} />
     <Route path="/unauthorized" element={<UnauthorizedPage />} />
+    <Route path="/download" element={<DownloadPage />} />
     <Route
       path="/"
       element={

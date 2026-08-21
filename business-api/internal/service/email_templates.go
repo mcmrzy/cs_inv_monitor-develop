@@ -46,12 +46,12 @@ type emailBuiltinTemplate struct {
 const emailButtonBlock = `{{if and .ButtonText .ButtonURL}}
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0 8px 0;">
     <tr>
-        <td align="center">
+        <td align="center" style="text-align:center;">
             <!--[if mso]>
             <v:shape xmlns:v="http://schemas.microsoft.com/vml/" href="{{.ButtonURL}}" fill="t" stroke="f" fillcolor="#1677ff" arcsize="6%" style="width:220px;height:44px;position:absolute;top:50%;transform:translateY(-50%);" type="button">
                 <v:textbox style="mso-fit-shape-to-text:true" inset="12px,0px,12px,0px">
             <![endif]-->
-            <a href="{{.ButtonURL}}" target="_blank" style="display:inline-block;padding:14px 32px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;background-color:#1677ff;min-width:160px;">{{.ButtonText}}</a>
+            <a href="{{.ButtonURL}}" target="_blank" style="display:inline-block;padding:14px 32px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;background-color:#1677ff;min-width:160px;text-align:center;">{{.ButtonText}}</a>
             <!--[if mso]>
                 </v:textbox>
             </v:shape>

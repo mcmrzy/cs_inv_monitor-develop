@@ -350,6 +350,7 @@ type RegisterRequest struct {
 	Phone    string `json:"phone" binding:"required"`
 	Code     string `json:"code" binding:"required"`
 	Password string `json:"password" binding:"required,min=6,max=20"`
+	Country  string `json:"country"` // 注册时选择的国家/地区代码（如 CN, US）
 }
 
 func (h *AuthHandler) Register(c *gin.Context) {
@@ -385,9 +386,11 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		Phone:        req.Phone,
 		PasswordHash: string(hashedPassword),
 		Status:       1,
+		Country:      req.Country,
 	}
 
-	if err := h.userService.Create(c.Request.Context(), user); err != nil {
+	// 同步建立个人 customer 组织身份，保证注册用户拥有终端用户权限基线
+	if err := h.userService.CreateWithOrgIdentity(c.Request.Context(), user); err != nil {
 		response.Error(c, 500, "create user failed")
 		return
 	}
@@ -685,6 +688,7 @@ type UpdateProfileRequest struct {
 	Country    string `json:"country"`
 	RegionName string `json:"region_name"`
 	Bio        string `json:"bio"`
+	Phone      string `json:"phone"` // 可选：补充手机号（开发阶段，暂不校验短信验证码）
 }
 
 func (h *AuthHandler) UpdateProfile(c *gin.Context) {
@@ -704,9 +708,32 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 		}
 	}
 
+	// 可选手机号：开发阶段暂不校验短信验证码
+	if req.Phone != "" {
+		if len(req.Phone) < 5 {
+			response.Error(c, 400, "invalid phone number")
+			return
+		}
+		// 查重：排除自己
+		existingPhone, _ := h.userService.GetByPhone(c.Request.Context(), req.Phone)
+		if existingPhone != nil && existingPhone.ID != userID {
+			response.Error(c, 4004, "phone already registered")
+			return
+		}
+	}
+
 	if err := h.userService.UpdateProfile(c.Request.Context(), userID, req.Nickname, req.Avatar, req.Timezone, req.Country, req.RegionName, req.Bio); err != nil {
 		response.Error(c, 500, "update profile failed")
 		return
+	}
+
+	// 更新手机号（如有提供）
+	if req.Phone != "" {
+		if err := h.userService.UpdatePhone(c.Request.Context(), userID, req.Phone); err != nil {
+			logger.Warn("update phone failed", zap.String("phone", req.Phone), zap.Error(err))
+			response.Error(c, 500, "update phone failed")
+			return
+		}
 	}
 
 	response.SuccessWithMessage(c, "profile updated", nil)
@@ -997,8 +1024,9 @@ type EmailRegisterRequest struct {
 	Email    string `json:"email" binding:"required"`
 	Password string `json:"password" binding:"required,min=6,max=20"`
 	Code     string `json:"code" binding:"required"`
-	Phone    string `json:"phone" binding:"required"`
-	Nickname string `json:"nickname" binding:"required"`
+	Phone    string `json:"phone"`    // 可选：海外用户纯邮箱注册无需手机号
+	Nickname string `json:"nickname"` // 可选：为空时以邮箱前缀兜底
+	Country  string `json:"country"`  // 注册时选择的国家/地区代码（如 CN, US）
 }
 
 func (h *AuthHandler) EmailRegister(c *gin.Context) {
@@ -1013,7 +1041,8 @@ func (h *AuthHandler) EmailRegister(c *gin.Context) {
 		return
 	}
 
-	if len(req.Phone) < 5 {
+	// 手机号可选：仅在填写时校验格式与唯一性
+	if req.Phone != "" && len(req.Phone) < 5 {
 		response.Error(c, 4010, "invalid phone number")
 		return
 	}
@@ -1029,10 +1058,12 @@ func (h *AuthHandler) EmailRegister(c *gin.Context) {
 		return
 	}
 
-	existingPhone, _ := h.userService.GetByPhone(c.Request.Context(), req.Phone)
-	if existingPhone != nil {
-		response.Error(c, 4004, "phone already registered")
-		return
+	if req.Phone != "" {
+		existingPhone, _ := h.userService.GetByPhone(c.Request.Context(), req.Phone)
+		if existingPhone != nil {
+			response.Error(c, 4004, "phone already registered")
+			return
+		}
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
@@ -1041,16 +1072,23 @@ func (h *AuthHandler) EmailRegister(c *gin.Context) {
 		return
 	}
 
+	// 昵称为空时以邮箱前缀兜底，保证个人资料页有展示名
+	nickname := req.Nickname
+	if nickname == "" {
+		nickname = strings.Split(req.Email, "@")[0]
+	}
+
 	user := &model.User{
 		Phone:        req.Phone,
 		Email:        req.Email,
 		PasswordHash: string(hashedPassword),
-		Nickname:     req.Nickname,
+		Nickname:     nickname,
 		Status:       1,
+		Country:      req.Country,
 	}
 
-	if err := h.userService.Create(c.Request.Context(), user); err != nil {
-		logger.Error("create user failed", zap.String("email", req.Email), zap.Error(err))
+	if err := h.userService.CreateWithOrgIdentity(c.Request.Context(), user); err != nil {
+		logger.Error("create user with org identity failed", zap.String("email", req.Email), zap.Error(err))
 		response.Error(c, 500, "创建用户失败，请稍后重试")
 		return
 	}
@@ -1301,13 +1339,13 @@ func (h *AuthHandler) JVerifyLogin(c *gin.Context) {
 		return
 	}
 
-	// 用户不存在则自动创建
+	// 用户不存在则自动创建（同步建立个人 customer 组织身份）
 	if user == nil {
 		user = &model.User{
 			Phone:  phone,
 			Status: 1,
 		}
-		if err := h.userService.Create(c.Request.Context(), user); err != nil {
+		if err := h.userService.CreateWithOrgIdentity(c.Request.Context(), user); err != nil {
 			response.Error(c, 500, "create user failed")
 			return
 		}

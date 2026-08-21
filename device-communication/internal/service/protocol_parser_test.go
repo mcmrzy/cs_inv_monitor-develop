@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"inv-device-server/internal/mqtt"
 	"inv-device-server/internal/repository"
 
 	"github.com/stretchr/testify/assert"
@@ -384,6 +385,74 @@ func TestHandleCommandResponse(t *testing.T) {
 
 	err := parser.handleCommandResponse(context.Background(), raw)
 	assert.NoError(t, err)
+}
+
+// TestHandleCommandResponseFollowUpQueryConfig 验证命令闭环（V2.1 文档 11.4.1）：
+// 设置类命令成功后补发 query_config，而 query_ 查询类命令自身成功后
+// 不得再触发（否则 query_config → 成功 → query_config 无限自循环）。
+func TestHandleCommandResponseFollowUpQueryConfig(t *testing.T) {
+	newParser := func(t *testing.T) (*ProtocolParser, *mqtt.Hub) {
+		t.Helper()
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(server.Close)
+		hub := mqtt.NewHub(nil)
+		parser := &ProtocolParser{
+			apiServer:  server.URL,
+			internalKey: "test-key",
+			httpClient: server.Client(),
+			hub:        hub,
+		}
+		return parser, hub
+	}
+
+	t.Run("set_control success queues query_config", func(t *testing.T) {
+		parser, hub := newParser(t)
+		raw := &RawMessage{
+			SN:      "SN001",
+			MsgType: "cmd_result",
+			Payload: json.RawMessage(`{"task_id":"t1","cmd":"set_control","success":true,"result":"ok","timestamp":1700000000}`),
+		}
+		require.NoError(t, parser.handleCommandResponse(context.Background(), raw))
+		select {
+		case cmd := <-hub.GetCmdChan():
+			assert.Equal(t, "query_config", cmd.CmdType)
+			assert.Equal(t, "SN001", cmd.DeviceSN)
+		default:
+			t.Fatal("expected query_config follow-up after set_control success")
+		}
+	})
+
+	t.Run("query_config success does not self-trigger", func(t *testing.T) {
+		parser, hub := newParser(t)
+		raw := &RawMessage{
+			SN:      "SN001",
+			MsgType: "cmd_result",
+			Payload: json.RawMessage(`{"task_id":"t2","cmd":"query_config","success":true,"result":"ok","timestamp":1700000000}`),
+		}
+		require.NoError(t, parser.handleCommandResponse(context.Background(), raw))
+		select {
+		case <-hub.GetCmdChan():
+			t.Fatal("query_config result must not queue another query_config (infinite loop)")
+		default:
+		}
+	})
+
+	t.Run("failed command does not queue query_config", func(t *testing.T) {
+		parser, hub := newParser(t)
+		raw := &RawMessage{
+			SN:      "SN001",
+			MsgType: "cmd_result",
+			Payload: json.RawMessage(`{"task_id":"t3","cmd":"set_control","success":false,"result":"failed","timestamp":1700000000}`),
+		}
+		require.NoError(t, parser.handleCommandResponse(context.Background(), raw))
+		select {
+		case <-hub.GetCmdChan():
+			t.Fatal("failed command must not queue query_config")
+		default:
+		}
+	})
 }
 
 func TestProtocolParser_ConcurrentAccess(t *testing.T) {
