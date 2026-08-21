@@ -955,7 +955,10 @@ func (h *InternalHandler) DeviceCmdResult(c *gin.Context) {
 	case "executing":
 		status = "executing"
 	}
-	if req.Stage != "acknowledged" && req.Stage != "executing" && !req.Success && req.Result != "ok" && req.Result != "success" {
+	// 设备回执的 result 可能为大写（OK/Success），状态判断须大小写不敏感，
+	// 否则 result=OK 的查询/设置命令会被误标为 failed（不影响 reported 入库，但记录不准）。
+	if req.Stage != "acknowledged" && req.Stage != "executing" && !req.Success &&
+		!strings.EqualFold(req.Result, "ok") && !strings.EqualFold(req.Result, "success") {
 		status = "failed"
 	}
 
