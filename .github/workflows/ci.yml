@@ -76,6 +76,16 @@ jobs:
         with:
           flutter-version: '3.44'
           channel: 'stable'
+          cache: true
+      - name: Cache pub dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            inv_app/.dart_tool
+          key: ${{ runner.os }}-pub-${{ hashFiles('inv_app/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
       - name: Pub Get
         working-directory: inv_app
         run: flutter pub get
@@ -87,7 +97,8 @@ jobs:
       - name: Test
         working-directory: inv_app
         run: flutter test --coverage
-      - name: Build unsigned release APK
+      - name: Build unsigned release APK (optional)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         working-directory: inv_app
         run: flutter build apk --release --dart-define=API_BASE_URL=https://example.invalid/api/v1
 
