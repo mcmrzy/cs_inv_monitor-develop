@@ -1,0 +1,30 @@
+# download-site - 应用下载站点配置
+# 用于配置 download.jiuxiaoyw.online 域名
+# 实际上是将请求代理到现有的管理后台
+
+# 注意：如果你已经在使用主 docker-compose.yml，
+# 只需要将 nginx-download.conf 添加到主 Nginx 的配置中即可。
+# 这个文件是独立部署时使用的。
+
+version: '3.8'
+
+services:
+  # 方式1：独立 Nginx 反向代理（如果主服务在另一台服务器）
+  download-proxy:
+    image: nginx:alpine
+    container_name: download-site-proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./configs/nginx-download.conf:/etc/nginx/conf.d/default.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    extra_hosts:
+      - "inv-admin-frontend:host-gateway"
+      - "api-gateway:host-gateway"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
