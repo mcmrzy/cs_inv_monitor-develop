@@ -282,3 +282,4 @@ func (r *DeviceRepository) getTelemetryV2(ctx context.Context, sn, startTime, en
 	}
 	return result, rows.Err()
 }
+

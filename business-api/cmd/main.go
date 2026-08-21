@@ -1193,11 +1193,16 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			authMembers.PATCH("/memberships/:id/reactivate", deps.MemberLifecycleHandler.ReactivateMember)
 			authMembers.PUT("/memberships/:id/role", deps.MemberLifecycleHandler.UpdateMemberRole)
 
-			// Cross-organization transfer
+			// Cross-organization transfer (approval-based)
 			authMembers.POST("/transfer/initiate", deps.MemberLifecycleHandler.TransferInitiate)
 			authMembers.POST("/transfer/accept", deps.MemberLifecycleHandler.TransferAccept)
 			authMembers.POST("/transfer/reject", deps.MemberLifecycleHandler.TransferReject)
 			authMembers.GET("/transfers/list", deps.MemberLifecycleHandler.ListTransfers)
+			authMembers.POST("/transfers/batch-accept", deps.MemberLifecycleHandler.BatchAcceptTransfers)
+			authMembers.POST("/transfers/batch-reject", deps.MemberLifecycleHandler.BatchRejectTransfers)
+
+			// Look up registered users by email (for member add/transfer flows)
+			authMembers.GET("/users/by-email", deps.MemberLifecycleHandler.GetUserByEmail)
 
 			// Bulk operations (admin privileges recommended)
 			authMembers.POST("/bulk-add", deps.MemberLifecycleHandler.BulkAdd)

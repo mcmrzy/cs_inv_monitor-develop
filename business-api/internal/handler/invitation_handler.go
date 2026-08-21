@@ -27,6 +27,23 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// roleCodeToName 角色代码到中文名称的映射。
+var roleCodeToName = map[string]string{
+	"manufacturer": "制造商",
+	"agent":        "代理商",
+	"distributor":  "经销商",
+	"installer":    "安装商",
+	"customer":     "终端用户",
+}
+
+// getRoleName 获取角色的中文名称，未匹配时回退为角色代码。
+func getRoleName(roleCode string) string {
+	if name, ok := roleCodeToName[roleCode]; ok {
+		return name
+	}
+	return roleCode
+}
+
 // ============================================================================
 // Request/Response Models
 // ============================================================================
@@ -351,6 +368,21 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 		}
 	}
 
+	// 已注册邮箱预检查（鉴权通过后执行）：已注册用户不发邀请，
+	// 直接在 results 中标记 already_registered，避免接受时因 email 唯一约束冲突
+	alreadyRegistered := make(map[string]bool)
+	for _, email := range emails {
+		existingUser, uerr := h.userRepo.GetByEmail(ctx, email)
+		if uerr != nil {
+			logger.Error("Failed to check existing user", zap.String("email", email), zap.Error(uerr))
+			response.Error(c, 500, "检查用户状态失败")
+			return
+		}
+		if existingUser != nil {
+			alreadyRegistered[email] = true
+		}
+	}
+
 	// Get inviter info
 	inviter, err := h.userRepo.GetByID(ctx, userID)
 	if err != nil || inviter == nil {
@@ -364,7 +396,7 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 	if !isCustomerMode {
 		roleCode = assignments[0].RoleCode
 	}
-	roleName := roleCode
+	roleName := getRoleName(roleCode) // 转换为中文角色名称
 	var orgName string
 	if isCustomerMode {
 		orgName = orgCache[customerParentOrgID].Name
@@ -401,6 +433,14 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 
 	for _, email := range emails {
 		result := CreateInvitationResult{Email: email}
+
+		// Skip if email is already registered as a system user
+		if alreadyRegistered[email] {
+			result.Status = "already_registered"
+			result.Error = "该邮箱已注册为系统用户"
+			results = append(results, result)
+			continue
+		}
 
 		// Generate secure token (crypto/rand)
 		tokenBytes := make([]byte, 32)
@@ -923,9 +963,16 @@ func (h *InvitationHandler) Details(c *gin.Context) {
 	}
 
 	roleCodes := parseRoleCodes(invitation.RoleAssignments)
-	roleName := strings.Join(roleCodes, ", ")
+	// 将角色代码转换为中文名称
+	roleNames := make([]string, 0, len(roleCodes))
+	for _, code := range roleCodes {
+		roleNames = append(roleNames, getRoleName(code))
+	}
+	roleName := strings.Join(roleNames, "、")
 	if roleName == "" {
-		roleName, _ = roleIDToCode[invitation.FirstRoleID()]
+		if code, ok := roleIDToCode[invitation.FirstRoleID()]; ok {
+			roleName = getRoleName(code)
+		}
 	}
 
 	response.Success(c, InvitationResponse{
@@ -1145,7 +1192,7 @@ func convertInvitationItems(items []repository.ListInvitationsResponseItem) []In
 			ID:          item.ID,
 			Email:       item.Recipient,
 			RoleID:      roleID,
-			RoleName:    roleIDToCode[int(item.FirstRoleID())],
+			RoleName:    getRoleName(roleIDToCode[int(item.FirstRoleID())]),
 			RoleCodes:   parseRoleCodes(item.RoleAssignments),
 			Status:      item.Status,
 			ExpiresAt:   item.ExpiresAt.Format(time.RFC3339),

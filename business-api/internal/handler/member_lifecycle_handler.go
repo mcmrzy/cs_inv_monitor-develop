@@ -3,7 +3,9 @@ package handler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"inv-api-server/internal/middleware"
@@ -83,6 +85,7 @@ type MemberLifecycleResponse struct {
 	UserID           int64  `json:"user_id,omitempty"`
 	MembershipID     int64  `json:"membership_id,omitempty"`
 	TransferredCount int    `json:"transferred_count,omitempty"`
+	PendingCount     int    `json:"pending_count,omitempty"`
 }
 
 // ==================== Service Interface ====================
@@ -99,11 +102,12 @@ type MemberLifecycleServiceInterface interface {
 	TransferInitiate(ctx context.Context, actorUserID int64, membershipIDs []int64, targetOrgID int64, reason string) (*service.TransferResult, error)
 	TransferAccept(ctx context.Context, actorUserID int64, transferID int64) error
 	TransferReject(ctx context.Context, actorUserID int64, transferID int64, reason string) error
-	ListTransfers(ctx context.Context, userID int64) ([]service.PendingTransferInfo, error)
+	ListTransfers(ctx context.Context, viewerUserID int64, page, pageSize int, status string) (*service.ListTransfersResult, error)
 	ListMembers(ctx context.Context, orgID int64, page, pageSize int, roleFilter string) (*service.ListMembersResult, error)
 	BulkAdd(ctx context.Context, actorUserID int64, tenantID int64, req service.BulkAddParams) (*service.BulkAddResult, error)
 	BulkTransfer(ctx context.Context, actorUserID int64, req service.BulkTransferParams) (*service.BulkTransferResult, error)
 	UpdateMemberRole(ctx context.Context, actorUserID int64, tenantID int64, membershipID int64, role string) error
+	GetUserByEmail(ctx context.Context, actorUserID int64, email string) (*service.UserLookupResult, error)
 }
 
 // ==================== Handler Struct ====================
@@ -145,7 +149,7 @@ func (h *MemberLifecycleHandler) AddMember(c *gin.Context) {
 	}
 
 	tenantID := middleware.GetRootTenantID(c)
-	if tenantID == 0 {
+	if tenantID == 0 && !middleware.GetIsSystemAdmin(c) {
 		response.Error(c, 403, "tenant context missing")
 		return
 	}
@@ -347,7 +351,7 @@ func (h *MemberLifecycleHandler) ListMembers(c *gin.Context) {
 
 // ==================== Transfer Flow ====================
 
-// TransferInitiate handles POST /api/v1/members/transfer/initiate - Initiate transfer to different org
+// TransferInitiate handles POST /api/v1/members/transfer/initiate - Initiate transfer approval
 func (h *MemberLifecycleHandler) TransferInitiate(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 
@@ -364,27 +368,21 @@ func (h *MemberLifecycleHandler) TransferInitiate(c *gin.Context) {
 	}
 
 	response.Success(c, MemberLifecycleResponse{
-		Message:          "成员转移完成",
-		OrganizationID:   result.OrganizationID,
-		TransferredCount: result.TransferredCount,
+		Message:        "转移申请已创建，等待目标组织管理员审批",
+		OrganizationID: result.OrganizationID,
+		PendingCount:   result.PendingCount,
 	})
 }
 
-// TransferAccept handles POST /api/v1/members/transfer/accept - Accept transfer request
+// TransferAccept handles POST /api/v1/members/transfer/accept - Approve a transfer request
 func (h *MemberLifecycleHandler) TransferAccept(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 
 	var req struct {
 		TransferID int64 `json:"transfer_id" binding:"required"`
-		Approved   bool  `json:"approved"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, 400, "invalid request")
-		return
-	}
-
-	if !req.Approved {
-		response.Error(c, 400, "拒绝转移需要使用 transfer/reject 接口")
 		return
 	}
 
@@ -394,28 +392,22 @@ func (h *MemberLifecycleHandler) TransferAccept(c *gin.Context) {
 		return
 	}
 
-	response.SuccessWithMessage(c, "转移请求已接受", map[string]interface{}{
+	response.SuccessWithMessage(c, "转移已批准，成员已转入目标组织", map[string]interface{}{
 		"transfer_id": req.TransferID,
-		"status":      "accepted",
+		"status":      "approved",
 	})
 }
 
-// TransferReject handles POST /api/v1/members/transfer/reject - Reject transfer request
+// TransferReject handles POST /api/v1/members/transfer/reject - Reject a transfer request
 func (h *MemberLifecycleHandler) TransferReject(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 
 	var req struct {
 		TransferID int64  `json:"transfer_id" binding:"required"`
-		Approved   bool   `json:"approved"`
 		Reason     string `json:"reason"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, 400, "invalid request")
-		return
-	}
-
-	if req.Approved {
-		response.Error(c, 400, "拒绝转移必须设置 approved=false")
 		return
 	}
 
@@ -425,27 +417,131 @@ func (h *MemberLifecycleHandler) TransferReject(c *gin.Context) {
 		return
 	}
 
-	response.SuccessWithMessage(c, "转移请求已拒绝", map[string]interface{}{
+	response.SuccessWithMessage(c, "转移申请已拒绝", map[string]interface{}{
 		"transfer_id": req.TransferID,
 		"reason":      req.Reason,
 	})
 }
 
-// ListTransfers handles GET /api/v1/members/transfers/list - List pending transfers
+// ListTransfers handles GET /api/v1/members/transfers/list - List transfer requests approvable by the caller
 func (h *MemberLifecycleHandler) ListTransfers(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 
-	transfers, err := h.svc.ListTransfers(c.Request.Context(), userID)
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
+	status := strings.TrimSpace(c.Query("status"))
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+	// 状态过滤仅允许合法值，避免任意 SQL 入参
+	validStatus := map[string]bool{"pending": true, "approved": true, "rejected": true}
+	if !validStatus[status] {
+		status = ""
+	}
+
+	result, err := h.svc.ListTransfers(c.Request.Context(), userID, page, pageSize, status)
 	if err != nil {
 		handleServiceError(c, err)
 		return
 	}
 
-	if transfers == nil {
-		transfers = []service.PendingTransferInfo{}
+	response.Page(c, result.Items, result.Total, result.Page, result.Size)
+}
+
+// BatchAcceptTransfers handles POST /api/v1/members/transfers/batch-accept - Approve transfers in batch
+func (h *MemberLifecycleHandler) BatchAcceptTransfers(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+
+	var req struct {
+		TransferIDs []int64 `json:"transfer_ids" binding:"required,min=1,max=100"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, 400, "invalid request")
+		return
 	}
 
-	response.Page(c, transfers, int64(len(transfers)), 1, 10)
+	processed, failures := h.processTransferBatch(c, userID, req.TransferIDs, "accept", "")
+	if processed == 0 {
+		response.Error(c, 409, strings.Join(failures, "；"))
+		return
+	}
+	response.SuccessWithMessage(c, fmt.Sprintf("已批准 %d 项转移申请", processed), gin.H{
+		"processed": processed,
+		"failures":  failures,
+	})
+}
+
+// BatchRejectTransfers handles POST /api/v1/members/transfers/batch-reject - Reject transfers in batch
+func (h *MemberLifecycleHandler) BatchRejectTransfers(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+
+	var req struct {
+		TransferIDs []int64 `json:"transfer_ids" binding:"required,min=1,max=100"`
+		Reason      string  `json:"reason"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, 400, "invalid request")
+		return
+	}
+
+	processed, failures := h.processTransferBatch(c, userID, req.TransferIDs, "reject", req.Reason)
+	if processed == 0 {
+		response.Error(c, 409, strings.Join(failures, "；"))
+		return
+	}
+	response.SuccessWithMessage(c, fmt.Sprintf("已拒绝 %d 项转移申请", processed), gin.H{
+		"processed": processed,
+		"failures":  failures,
+	})
+}
+
+// processTransferBatch 逐项执行审批（mode: "accept" | "reject"），返回成功数与失败明细
+func (h *MemberLifecycleHandler) processTransferBatch(c *gin.Context, userID int64, transferIDs []int64, mode, rejectReason string) (int, []string) {
+	processed := 0
+	var failures []string
+	for _, id := range transferIDs {
+		var err error
+		if mode == "reject" {
+			err = h.svc.TransferReject(c.Request.Context(), userID, id, rejectReason)
+		} else {
+			err = h.svc.TransferAccept(c.Request.Context(), userID, id)
+		}
+		if err != nil {
+			var svcErr *service.MemberServiceError
+			if errors.As(err, &svcErr) {
+				failures = append(failures, fmt.Sprintf("#%d: %s", id, svcErr.Message))
+			} else {
+				failures = append(failures, fmt.Sprintf("#%d: 内部错误", id))
+			}
+			continue
+		}
+		processed++
+	}
+	return processed, failures
+}
+
+// ==================== User Lookup ====================
+
+// GetUserByEmail handles GET /api/v1/members/users/by-email - Lookup user by email with current orgs
+func (h *MemberLifecycleHandler) GetUserByEmail(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+
+	email := strings.TrimSpace(c.Query("email"))
+	if email == "" {
+		response.Error(c, 400, "请输入邮箱")
+		return
+	}
+
+	result, err := h.svc.GetUserByEmail(c.Request.Context(), userID, email)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+
+	response.Success(c, result)
 }
 
 // ==================== Bulk Operations ====================
@@ -527,8 +623,8 @@ func (h *MemberLifecycleHandler) BulkTransfer(c *gin.Context) {
 	}
 
 	response.Success(c, MemberLifecycleResponse{
-		Message:          "批量转移完成",
-		OrganizationID:   result.OrganizationID,
-		TransferredCount: result.TransferredCount,
+		Message:        "批量转移申请已创建，等待目标组织管理员审批",
+		OrganizationID: result.OrganizationID,
+		PendingCount:   result.TransferredCount,
 	})
 }

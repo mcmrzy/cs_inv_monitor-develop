@@ -17,7 +17,7 @@
 -- 用户表
 CREATE TABLE IF NOT EXISTS users (
     id BIGSERIAL PRIMARY KEY,
-    phone VARCHAR(20) NOT NULL UNIQUE,
+    phone VARCHAR(20) UNIQUE, -- 可空：支持海外用户纯邮箱注册（迁移 104）
     email VARCHAR(100),
     password_hash VARCHAR(255) NOT NULL,
     nickname VARCHAR(50),
@@ -5349,6 +5349,40 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_memberships_active_org_user
     WHERE status = 'active';
 CREATE INDEX IF NOT EXISTS idx_memberships_user_status
     ON organization_memberships(user_id, status);
+
+-- 成员转移审批表（migration 105）：成员跨组织转移改为审批制，
+-- pending 申请由目标组织 org_admin / 系统管理员审批通过后才执行转移。
+-- membership_id 不设外键：审批通过后旧 membership 会被物理删除，审批记录保留审计。
+CREATE TABLE IF NOT EXISTS member_transfer_requests (
+    id BIGSERIAL PRIMARY KEY,
+    root_tenant_id BIGINT NOT NULL,
+    membership_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    from_org_id BIGINT NOT NULL,
+    to_org_id BIGINT NOT NULL,
+    initiator_id BIGINT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'approved', 'rejected')),
+    reason TEXT,
+    reject_reason TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT fk_mtr_tenant_root
+        FOREIGN KEY (root_tenant_id) REFERENCES tenant_roots(root_tenant_id) ON DELETE RESTRICT,
+    CONSTRAINT fk_mtr_from_org_same_root
+        FOREIGN KEY (root_tenant_id, from_org_id)
+        REFERENCES organizations(root_tenant_id, id) ON DELETE RESTRICT,
+    CONSTRAINT fk_mtr_to_org_same_root
+        FOREIGN KEY (root_tenant_id, to_org_id)
+        REFERENCES organizations(root_tenant_id, id) ON DELETE RESTRICT
+);
+CREATE INDEX IF NOT EXISTS idx_mtr_status_created
+    ON member_transfer_requests(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_mtr_membership_pending
+    ON member_transfer_requests(membership_id) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_mtr_to_org
+    ON member_transfer_requests(to_org_id);
+
 -- ---------- Migration 76 同步段：076_drop_legacy_role_system.up.sql ----------
 -- 注意：本段依赖 organizations / organization_closure / organization_memberships
 -- 表，必须位于 064 组织表创建之后（squashed schema 顺序约束）。
@@ -5357,8 +5391,17 @@ DROP VIEW IF EXISTS v_user_station_access CASCADE;
 DROP VIEW IF EXISTS v_user_hierarchy CASCADE;
 DROP VIEW IF EXISTS v_user_device_access CASCADE;
 
--- 组织体系设备访问视图：用户可访问本组织及下级组织成员拥有的设备，系统管理员可访问全部。
+-- 组织体系设备访问视图：用户可访问本组织及下级组织成员拥有的设备，
+-- 资源持有者（user_id）天然可访问自己的设备，系统管理员可访问全部（迁移 106 增加 owner 分支）。
 CREATE OR REPLACE VIEW v_user_device_access (user_id, device_sn) AS
+-- Owner branch: users can always access devices they own
+SELECT
+    d.user_id,
+    d.sn AS device_sn
+FROM devices d
+WHERE d.deleted_at IS NULL
+  AND d.sn IS NOT NULL
+UNION
 SELECT DISTINCT
     viewer_om.user_id,
     d.sn AS device_sn
@@ -5379,13 +5422,22 @@ FROM users u
 CROSS JOIN devices d
 WHERE u.is_system_admin = true
   AND u.deleted_at IS NULL
-  AND d.deleted_at IS NULL;
+  AND d.deleted_at IS NULL
+  AND d.sn IS NOT NULL;
 
 COMMENT ON VIEW v_user_device_access IS
-'Organization-based device access view: users can access devices owned by members of their organization and descendant organizations. System admins have access to all devices.';
+'Organization-based device access view: owners can always access their own devices; users can access devices owned by members of their organization and descendant organizations. System admins have access to all devices.';
 
--- 组织体系电站访问视图：用户可访问本组织及下级组织成员拥有的电站，系统管理员可访问全部。
+-- 组织体系电站访问视图：用户可访问本组织及下级组织成员拥有的电站，
+-- 资源持有者（user_id）天然可访问自己的电站，系统管理员可访问全部（迁移 106 增加 owner 分支）。
 CREATE OR REPLACE VIEW v_user_station_access (user_id, station_id) AS
+-- Owner branch: users can always access stations they own
+SELECT
+    s.user_id,
+    s.id AS station_id
+FROM stations s
+WHERE s.deleted_at IS NULL
+UNION
 SELECT DISTINCT
     viewer_om.user_id,
     s.id AS station_id
@@ -5408,7 +5460,7 @@ WHERE u.is_system_admin = true
   AND s.deleted_at IS NULL;
 
 COMMENT ON VIEW v_user_station_access IS
-'Organization-based station access view: users can access stations owned by members of their organization and descendant organizations. System admins have access to all stations.';
+'Organization-based station access view: owners can always access their own stations; users can access stations owned by members of their organization and descendant organizations. System admins have access to all stations.';
 
 -- 组织体系用户层级视图：将每个用户映射到其组织及下级组织内的所有用户（替代旧 parent_id 递归树）。
 -- depth=0 表示自身，depth>0 表示组织级后代。
@@ -7079,5 +7131,13 @@ INSERT INTO schema_migrations (version, name) VALUES (95, '095_device_alias_stat
 -- 4 张新表等）由 migrator 在服务器启动时按编号迁移执行。
 -- 096 设计为幂等可重放（ALTER IF NOT EXISTS / INSERT ON CONFLICT），
 -- 全新 initdb 库启动时执行一次即可与逐版本升级的旧库收敛一致。
+-- 097-107 同样由 migrator 按编号执行（本基线仅登记 0..95）；其中 105
+-- （member_transfer_requests 表）与 106（访问视图 owner 分支）的 DDL 已同步
+-- 进本基线，均为幂等定义，migrator 重放安全；107 为存量用户组织身份
+-- backfill，全新库无孤儿用户，执行为空操作。108 为 customer 角色存量
+-- 补授 devices:control（幂等 backfill，新分配由代码侧 role_default_grants.go
+-- 直接携带），全新 initdb 库无存量分配，执行为空操作。110 修正
+-- device_config_schema.permission_code 拼写（'device:control'→'devices:control'）
+-- 及其列默认值（096 遗留缺陷，见迁移内注释），幂等可重放。
 
--- Next migration version to use: 097
+-- Next migration version to use: 111

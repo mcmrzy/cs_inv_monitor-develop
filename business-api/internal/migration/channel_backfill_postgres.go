@@ -35,7 +35,7 @@ func NewPostgresOrganizationBackfillStore(db *pgxpool.Pool, runID uuid.UUID, wor
 
 func LoadLegacyChannelSnapshot(ctx context.Context, db *pgxpool.Pool) ([]LegacyUser, []LegacyOwnershipFact, error) {
 	rows, err := db.Query(ctx, `
-		SELECT id, phone, COALESCE(email,''), COALESCE(nickname,''), role, parent_id,
+		SELECT id, COALESCE(phone,''), COALESCE(email,''), COALESCE(nickname,''), role, parent_id,
 		       status, deleted_at IS NOT NULL
 		FROM users
 		ORDER BY id
@@ -293,7 +293,7 @@ func (s *PostgresOrganizationBackfillStore) ApplyBatch(ctx context.Context, jobN
 		}
 	}
 	lockedRows, err := tx.Query(ctx, `
-		SELECT id,phone,COALESCE(email,''),COALESCE(nickname,''),role,parent_id,status,deleted_at IS NOT NULL
+		SELECT id,COALESCE(phone,''),COALESCE(email,''),COALESCE(nickname,''),role,parent_id,status,deleted_at IS NOT NULL
 		FROM users WHERE id=ANY($1) ORDER BY id FOR UPDATE SKIP LOCKED
 	`, ids)
 	if err != nil {
@@ -550,7 +550,7 @@ func (s *PostgresOrganizationBackfillStore) Complete(ctx context.Context, result
 	}
 	sourceRows, err := tx.Query(ctx, `
 		SELECT i.source_fingerprint,
-		       u.id,u.phone,COALESCE(u.email,''),COALESCE(u.nickname,''),u.role,u.parent_id,u.status,u.deleted_at IS NOT NULL
+		       u.id,COALESCE(u.phone,''),COALESCE(u.email,''),COALESCE(u.nickname,''),u.role,u.parent_id,u.status,u.deleted_at IS NOT NULL
 		FROM channel_migration_items i
 		JOIN users u ON u.id=i.source_user_id
 		WHERE i.run_id=$1 AND i.source_table='users'
