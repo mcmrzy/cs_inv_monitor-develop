@@ -70,11 +70,11 @@ const i18n: Record<Lang, Record<string, string>> = {
     errSendCode: '验证码发送失败，请稍后重试',
     errEmailFirst: '请先输入邮箱',
     errPwdMismatch: '两次输入的密码不一致',
-    successLogin: '登录成功', successRegister: '注册成功，请登录', successReset: '密码重置成功，请登录', successCodeSent: '验证码已发送到邮箱',
+    successLogin: '登录成功', successRegister: '注册成功，正在进入系统', successReset: '密码重置成功，请登录', successCodeSent: '验证码已发送到邮箱',
     errEmailFormat: '邮箱格式不正确', errPhoneFormat: '手机号格式不正确', errPwdMin: '密码至少 6 位，需包含字母和数字',
     errPhoneFirst: '请先输入手机号', successCodeSentPhone: '验证码已发送到手机',
     captchaRequired: '请完成验证后重试',
-    errUserNotFound: '用户不存在或账号未注册', errAccountDisabled: '账户已禁用', errWrongPassword: '密码错误',
+    errUserNotFound: '用户不存在或账号未注册', errPhoneNotRegistered: '该手机号未注册', errAccountDisabled: '账户已禁用', errWrongPassword: '密码错误',
     errPhoneRegistered: '该手机号已注册', errCodeInvalid: '验证码错误或已过期', errAlreadyRegistered: '该账号已注册',
     errRequestFailed: '请求失败，请稍后重试',
   },
@@ -104,11 +104,11 @@ const i18n: Record<Lang, Record<string, string>> = {
     errSendCode: 'Failed to send code. Please try again later.',
     errEmailFirst: 'Please enter your email first',
     errPwdMismatch: 'Passwords do not match',
-    successLogin: 'Login successful', successRegister: 'Registered! Please sign in.', successReset: 'Password reset! Please sign in.', successCodeSent: 'Code sent to your email',
+    successLogin: 'Login successful', successRegister: 'Registration successful. Entering the system...', successReset: 'Password reset! Please sign in.', successCodeSent: 'Code sent to your email',
     errEmailFormat: 'Invalid email format', errPhoneFormat: 'Invalid phone number', errPwdMin: 'At least 6 chars with letters and numbers',
     errPhoneFirst: 'Please enter your phone number first', successCodeSentPhone: 'Code sent to your phone',
     captchaRequired: 'Complete the security verification and try again.',
-    errUserNotFound: 'User not found or account is not registered', errAccountDisabled: 'This account is disabled', errWrongPassword: 'Incorrect password',
+    errUserNotFound: 'User not found or account is not registered', errPhoneNotRegistered: 'This phone number is not registered', errAccountDisabled: 'This account is disabled', errWrongPassword: 'Incorrect password',
     errPhoneRegistered: 'This phone number is already registered', errCodeInvalid: 'The verification code is invalid or expired', errAlreadyRegistered: 'This account is already registered',
     errRequestFailed: 'Request failed. Please try again later.',
   },
@@ -166,6 +166,33 @@ const LoginPage: React.FC = () => {
     return localized || payload?.message || fallback
   }
 
+  type AuthResponseData = {
+    token?: string
+    accessToken?: string
+    access_token?: string
+    refresh_token?: string
+    refreshToken?: string
+    permissions?: string[]
+    user?: User
+  }
+
+  const completeRegistration = (payload: Record<string, unknown>) => {
+    const data = (payload?.data ?? payload) as AuthResponseData
+    if (!data.user) {
+      showError(t.errRegister)
+      return false
+    }
+
+    login(
+      data.token ?? data.accessToken ?? data.access_token ?? '',
+      data.refresh_token ?? data.refreshToken ?? '',
+      mapBackendUser(data.user as unknown as Record<string, unknown>),
+      data.permissions ?? [],
+    )
+    message.success(t.successRegister)
+    navigate('/dashboard', { replace: true })
+    return true
+  }
   useEffect(() => {
     if (countdown > 0) {
       timerRef.current = setInterval(() => {
@@ -281,7 +308,7 @@ const LoginPage: React.FC = () => {
       const res = await api.post('/auth/email-register', payload)
       const d = res.data as Record<string, unknown>
       if (d?.code !== undefined && d.code !== 0) { showError(localizeAuthError(d, t.errRegister)); return }
-      message.success(t.successRegister); setActiveTab('login')
+      completeRegistration(d)
     } catch (err: any) { showError(localizeAuthError(err?.response?.data, t.errRegister)) }
     finally { setLoading(false) }
   }
@@ -293,7 +320,7 @@ const LoginPage: React.FC = () => {
       const res = await api.post('/auth/register', { ...values, country: selectedCountryCode })
       const d = res.data as Record<string, unknown>
       if (d?.code !== undefined && d.code !== 0) { showError(localizeAuthError(d, t.errRegister)); return }
-      message.success(t.successRegister); setActiveTab('login')
+      completeRegistration(d)
     } catch (err: any) { showError(localizeAuthError(err?.response?.data, t.errRegister)) }
     finally { setLoading(false) }
   }
@@ -381,10 +408,21 @@ const LoginPage: React.FC = () => {
       const headers = { 'X-Captcha-Token': captchaToken }
       const res = await api.post('/auth/send-code', { phone, type: apiType }, { headers })
       const d = res.data as Record<string, unknown>
-      if (d?.code !== undefined && d.code !== 0) { showError(localizeAuthError(d, t.errSendCode)); return }
+      if (d?.code !== undefined && d.code !== 0) {
+        if (type === 'login' && Number(d.code) === 4001) {
+          showError(t.errPhoneNotRegistered)
+          return
+        }
+        showError(localizeAuthError(d, t.errSendCode))
+        return
+      }
       message.success(t.successCodeSentPhone); setCountdown(60)
     } catch (err: any) {
       if (err?.message === '用户取消验证') return
+      if (type === 'login' && Number(err?.response?.data?.code) === 4001) {
+        showError(t.errPhoneNotRegistered)
+        return
+      }
       showError(localizeAuthError(err?.response?.data, t.errSendCode))
     }
   }

@@ -2,6 +2,7 @@ import { beforeEach, describe, it, expect, vi } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
+import { useLocation } from 'react-router-dom'
 import { server } from '@/test/mocks/server'
 import { mockLoginResponse } from '@/test/mocks/data'
 import { renderWithProviders } from '@/test/test-utils'
@@ -11,9 +12,15 @@ import useLocaleStore from '@/stores/localeStore'
 
 // Mock the SliderCaptchaModal to avoid complex rendering
 vi.mock('@/components/SliderCaptcha/SliderCaptchaModal', () => ({
-  default: () => null,
+  default: ({ open, onSuccess }: { open: boolean; onSuccess: (token: string) => void }) => (
+    open ? <button onClick={() => onSuccess('mock-captcha-token')}>完成滑块验证</button> : null
+  ),
 }))
 
+const LocationObserver = () => {
+  const location = useLocation()
+  return <div data-testid="location-path">{location.pathname}</div>
+}
 describe('LoginPage', () => {
   beforeEach(() => {
     useLocaleStore.setState({ lang: 'zh' })
@@ -147,6 +154,40 @@ describe('LoginPage', () => {
     expect(capturedBody).toMatchObject({ phone: '13800000099', country: 'CN' })
   })
 
+  it('should automatically login and navigate after phone registration', async () => {
+    useAuthStore.getState().logout()
+    server.use(
+      http.post('/api/v1/auth/register', () => {
+        return HttpResponse.json({
+          code: 0,
+          message: 'success',
+          data: {
+            access_token: 'registered-access-token',
+            refresh_token: 'registered-refresh-token',
+            user: { id: 9, phone: '13800000099', nickname: 'u', status: 1 },
+            permissions: ['dashboard:view'],
+          },
+        })
+      }),
+    )
+    const user = userEvent.setup()
+    renderWithProviders(<><LoginPage /><LocationObserver /></>)
+
+    await user.click(screen.getByText('立即注册'))
+    await user.type(screen.getByPlaceholderText('手机号'), '13800000099')
+    await user.type(screen.getByPlaceholderText('验证码'), '123456')
+    await user.type(screen.getByPlaceholderText('密码'), 'Admin123')
+    await user.type(screen.getByPlaceholderText('确认密码'), 'Admin123')
+    await user.click(screen.getByRole('button', { name: '注 册' }))
+
+    await waitFor(() => {
+      const state = useAuthStore.getState()
+      expect(state.isAuthenticated).toBe(true)
+      expect(state.token).toBe('registered-access-token')
+      expect(state.refreshToken).toBe('registered-refresh-token')
+    })
+    expect(screen.getByTestId('location-path')).toHaveTextContent('/dashboard')
+  })
   it('should return to login view from register view via login link', async () => {
     const user = userEvent.setup()
     renderWithProviders(<LoginPage />)
@@ -238,6 +279,25 @@ describe('LoginPage', () => {
     })
   })
 
+  it('should show an immediate error when sending a login code to an unregistered phone', async () => {
+    useAuthStore.getState().logout()
+    server.use(
+      http.post('/api/v1/auth/send-code', () => {
+        return HttpResponse.json({ code: 4001, message: '该手机号未注册' })
+      }),
+    )
+    const user = userEvent.setup()
+    renderWithProviders(<LoginPage />)
+
+    await user.click(screen.getByText('验证码登录'))
+    await user.type(screen.getByPlaceholderText('手机号'), '13800000099')
+    await user.click(screen.getByRole('button', { name: '发送验证码' }))
+    await user.click(screen.getByRole('button', { name: '完成滑块验证' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('该手机号未注册')).toBeInTheDocument()
+    })
+  })
   it('should login with phone verification code', async () => {
     useAuthStore.getState().logout()
     server.use(

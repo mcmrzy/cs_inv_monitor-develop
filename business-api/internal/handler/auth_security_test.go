@@ -52,6 +52,12 @@ func TestHasUsablePassword(t *testing.T) {
 	require.True(t, hasUsablePassword(string(valid)))
 }
 
+func TestRequiresRegisteredPhone(t *testing.T) {
+	require.True(t, requiresRegisteredPhone("login"))
+	require.True(t, requiresRegisteredPhone("reset_password"))
+	require.False(t, requiresRegisteredPhone("register"))
+}
+
 func TestRequireRefreshSwapRejectsReplay(t *testing.T) {
 	err := requireRefreshSwap(false, nil)
 	var appErr *apperr.AppError
