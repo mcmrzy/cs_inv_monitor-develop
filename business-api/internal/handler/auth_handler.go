@@ -442,6 +442,10 @@ type SendCodeRequest struct {
 	Type  string `json:"type" binding:"required"`
 }
 
+func requiresRegisteredPhone(codeType string) bool {
+	return codeType == "login" || codeType == "reset_password"
+}
+
 func (h *AuthHandler) SendCode(c *gin.Context) {
 	var req SendCodeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -471,7 +475,7 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 		return
 	}
 
-	if req.Type == "reset_password" && existingUser == nil {
+	if requiresRegisteredPhone(req.Type) && existingUser == nil {
 		response.Error(c, 4001, "该手机号未注册")
 		return
 	}
