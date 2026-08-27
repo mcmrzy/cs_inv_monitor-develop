@@ -29,6 +29,9 @@ jobs:
           ref: ${{ env.DEPLOY_SHA }}
           lfs: true
 
+      - name: Validate production compose topology
+        run: bash deploy/validate-production-compose.sh
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -48,6 +51,18 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository_owner }}/inv-device-server:${{ env.DEPLOY_SHA }}
             ghcr.io/${{ github.repository_owner }}/inv-device-server:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build & Push mqtt-kafka-bridge
+        uses: docker/build-push-action@v6
+        with:
+          context: ./mqtt-kafka-bridge
+          file: ./mqtt-kafka-bridge/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/mqtt-kafka-bridge:${{ env.DEPLOY_SHA }}
+            ghcr.io/${{ github.repository_owner }}/mqtt-kafka-bridge:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -148,6 +163,21 @@ jobs:
             # ---------- 登录 ghcr.io ----------
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
+            # ---------- 清理旧的独立 Kafka/Bridge 容器（保留本项目容器） ----------
+            remove_legacy_container() {
+              local container="$1"
+              if docker inspect "$container" > /dev/null 2>&1; then
+                local project
+                project=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project" }}' "$container" 2>/dev/null || true)
+                if [ "$project" != "inv-monitor-prod" ]; then
+                  echo "移除旧项目容器: $container (compose project: ${project:-none})"
+                  docker rm -f "$container"
+                fi
+              fi
+            }
+            remove_legacy_container inv-kafka
+            remove_legacy_container mqtt-kafka-bridge
+
             # ---------- 拉取新镜像 ----------
             docker compose -f docker-compose.prod.yml --env-file .env.prod pull
 
@@ -212,7 +242,7 @@ jobs:
             # ---------- 保留最近 N 个镜像 tag，清理旧镜像 ----------
             KEEP_COUNT=3
             REGISTRY_OWNER="${{ github.repository_owner }}"
-            for svc in inv-device-server inv-api-server api-gateway inv-admin-frontend; do
+            for svc in inv-device-server mqtt-kafka-bridge inv-api-server api-gateway inv-admin-frontend; do
               echo "=== 清理 ${svc} 旧镜像（保留最近 ${KEEP_COUNT} 个 tag）==="
               docker images "ghcr.io/${REGISTRY_OWNER}/${svc}" --format '{{.Tag}}' \
                 | grep -v '^latest$' \
@@ -252,6 +282,20 @@ jobs:
                 echo "✅ Nginx 正常"
               else
                 echo "❌ Nginx 异常"
+                failed=1
+              fi
+
+              if docker inspect -f "{{.State.Health.Status}}" inv-kafka 2>/dev/null | grep -q healthy; then
+                echo "✅ Kafka 正常"
+              else
+                echo "❌ Kafka 异常"
+                failed=1
+              fi
+
+              if docker inspect -f "{{.State.Health.Status}}" mqtt-kafka-bridge 2>/dev/null | grep -q healthy; then
+                echo "✅ MQTT-Kafka Bridge 正常"
+              else
+                echo "❌ MQTT-Kafka Bridge 异常"
                 failed=1
               fi
 
