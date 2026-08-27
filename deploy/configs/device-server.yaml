@@ -36,7 +36,7 @@ mqtt:
 kafka:
   enabled: true
   brokers:
-    - jiuxiaoyw.online:9092
+    - kafka:29092
   telemetry_topic: inv-telemetry
   alarm_topic: inv-alerts
   command_topic: inv-commands

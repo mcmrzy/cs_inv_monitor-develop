@@ -20,6 +20,7 @@ import 'package:inv_app/core/services/ble/ble_direct_service.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/utils/sn_utils.dart';
+import 'package:inv_app/core/utils/qr_scan_guard.dart';
 import 'package:inv_app/core/utils/api_response.dart';
 import 'package:inv_app/core/widgets/station_selector_sheet.dart';
 import 'package:inv_app/core/widgets/app_toast.dart';
@@ -43,6 +44,7 @@ class _AddDevicePageState extends State<AddDevicePage>
   late TabController _tabController;
   bool _scanning = false;
   MobileScannerController? _cameraController;
+  final _qrScanGuard = QrScanGuard();
   String _lastScanned = '';
   String _scannedPin = '';
 
@@ -258,7 +260,7 @@ class _AddDevicePageState extends State<AddDevicePage>
     // 识别到二维码即说明光线足够，重置暗光计时并熄灭自动补光
     _onDetectSuccess();
     final raw = barcode.rawValue!.trim();
-    if (raw.isEmpty || raw == _lastScanned) return;
+    if (raw.isEmpty || !_qrScanGuard.tryAcquire(raw)) return;
 
     _scanning = true;
 
@@ -266,6 +268,7 @@ class _AddDevicePageState extends State<AddDevicePage>
     if (qr == null) {
       _lastScanned = raw;
       _scannedPin = '';
+      _qrScanGuard.release();
       _scanning = false;
       if (mounted) {
         AppToast.show(
@@ -281,6 +284,7 @@ class _AddDevicePageState extends State<AddDevicePage>
     if (!validateSNFormat(sn)) {
       _lastScanned = sn;
       _scannedPin = '';
+      _qrScanGuard.release();
       _scanning = false;
       if (mounted) {
         AppToast.show(context,
@@ -312,8 +316,12 @@ class _AddDevicePageState extends State<AddDevicePage>
             ],
           ),
         );
-        if (confirm != true) return;
+        if (confirm != true) {
+          _qrScanGuard.release(resetPayload: true);
+          return;
+        }
       } else {
+        _qrScanGuard.release(resetPayload: true);
         return;
       }
       _scanning = true;
@@ -323,11 +331,7 @@ class _AddDevicePageState extends State<AddDevicePage>
     _scannedPin = pin;
     if (pin.isNotEmpty) {
       // 二维码带 PIN → 跳 BLE 直连绑定页（扫描匹配 SN，离网可用）
-      _scanning = false;
-      if (!mounted) return;
-      context.push(
-        '/device/qr-bind?sn=${Uri.encodeQueryComponent(sn)}&pin=${Uri.encodeQueryComponent(pin)}',
-      );
+      await _openQrBindPage(sn, pin);
       return;
     }
     // 二维码无 PIN → 弹窗要求输入铭牌 PIN（云端绑定同样强制 PIN 校验）
@@ -368,11 +372,13 @@ class _AddDevicePageState extends State<AddDevicePage>
     controller.dispose();
     if (pin == null || !mounted) {
       // 用户取消，重置扫码状态避免一直转圈
+      _qrScanGuard.release(resetPayload: true);
       if (mounted) setState(() => _scanning = false);
       return;
     }
     if (pin.length != 6) {
       if (mounted) {
+        _qrScanGuard.release(resetPayload: true);
         setState(() => _scanning = false);
         AppToast.show(context, AppLocalizations.of(context)!.pinLengthError,
             type: ToastType.info);
@@ -380,10 +386,37 @@ class _AddDevicePageState extends State<AddDevicePage>
       return;
     }
     _scannedPin = pin;
-    _scanning = false;
-    context.push(
-      '/device/qr-bind?sn=${Uri.encodeQueryComponent(sn)}&pin=${Uri.encodeQueryComponent(pin)}',
-    );
+    await _openQrBindPage(sn, pin);
+  }
+
+  /// Pause the camera while the bind page is open so one QR code cannot push
+  /// multiple bind routes. Resume scanning only after that route is closed.
+  Future<void> _openQrBindPage(String sn, String pin) async {
+    try {
+      await _cameraController?.pause();
+    } catch (_) {
+      // The camera may not be attached in widget tests or during teardown.
+    }
+    if (!mounted) return;
+
+    try {
+      await context.push(
+        '/device/qr-bind?sn=${Uri.encodeQueryComponent(sn)}&pin=${Uri.encodeQueryComponent(pin)}',
+      );
+    } finally {
+      if (!mounted) return;
+      _qrScanGuard.release(resetPayload: true);
+      setState(() {
+        _scanning = false;
+        _lastScanned = '';
+        _scannedPin = '';
+      });
+      try {
+        await _cameraController?.start();
+      } catch (_) {
+        // The scanner will report its own state if restarting is unavailable.
+      }
+    }
   }
 
   Future<(int, String)?> _showStationSelector() async {
@@ -1460,6 +1493,7 @@ class _AddDevicePageState extends State<AddDevicePage>
   }
 
   void _continueScanning() {
+    _qrScanGuard.release(resetPayload: true);
     setState(() {
       _lastScanned = '';
       _scannedPin = '';

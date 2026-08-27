@@ -1,6 +1,6 @@
 # ============================================================
 # cs_inv_monitor - Production Docker Compose
-# Excludes EMQX/Kafka/mqtt-kafka-bridge (running externally)
+# EMQX runs externally; Kafka and mqtt-kafka-bridge run in this stack
 # ============================================================
 
 name: inv-monitor-prod
@@ -77,6 +77,97 @@ services:
         max-size: "50m"
         max-file: "3"
 
+  # ---------- Kafka (KRaft single node) ----------
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: inv-kafka
+    hostname: kafka
+    ports:
+      # Keep the host listener local; application containers use kafka:29092.
+      - "127.0.0.1:9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://127.0.0.1:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_NUM_PARTITIONS: 6
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_HEAP_OPTS: -Xmx1G -Xms1G
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    networks:
+      - inv-prod-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:29092 --list >/dev/null"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2.0"
+        reservations:
+          memory: 1G
+          cpus: "1.0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # ---------- MQTT → Kafka bridge ----------
+  mqtt-kafka-bridge:
+    image: ghcr.io/mcmrzy/mqtt-kafka-bridge:${IMAGE_TAG:?IMAGE_TAG must be an immutable release tag}
+    container_name: mqtt-kafka-bridge
+    ports:
+      # EMQX is external to this Compose project and posts webhook events here.
+      - "18088:18088"
+    env_file:
+      - .env.prod
+    environment:
+      KAFKA_BROKERS: kafka:29092
+      KAFKA_TELEMETRY_TOPIC: ${KAFKA_TELEMETRY_TOPIC:-inv-telemetry}
+      KAFKA_ALARM_TOPIC: ${KAFKA_ALARM_TOPIC:-inv-alerts}
+      EMQX_TOKEN: ${EMQX_WEBHOOK_TOKEN:-}
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    networks:
+      - inv-prod-network
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:18088/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "1.0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
   # ---------- inv-device-server ----------
   inv-device-server:
     image: ghcr.io/mcmrzy/inv-device-server:${IMAGE_TAG:?IMAGE_TAG must be an immutable release tag}
@@ -90,7 +181,8 @@ services:
       REDIS_HOST: redis
       MQTT_BROKER: ${MQTT_BROKER}
       MQTT_PORT: ${MQTT_PORT}
-      KAFKA_BROKER: ${KAFKA_BROKER}
+      KAFKA_BROKER: kafka:29092
+      KAFKA_ENABLED: "true"
       API_SERVER_URL: http://inv-api-server:8080
       INTERNAL_KEY: ${INTERNAL_KEY}
     volumes:
@@ -103,6 +195,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
       inv-api-server:
         condition: service_healthy
@@ -259,6 +353,7 @@ networks:
 volumes:
   pg-data:
   redis-data:
+  kafka-data:
   device-logs:
   inv-uploads:
   inv-firmware:
