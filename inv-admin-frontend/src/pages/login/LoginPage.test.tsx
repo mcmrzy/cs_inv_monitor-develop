@@ -185,8 +185,8 @@ describe('LoginPage', () => {
       expect(state.isAuthenticated).toBe(true)
       expect(state.token).toBe('registered-access-token')
       expect(state.refreshToken).toBe('registered-refresh-token')
+      expect(screen.getByTestId('location-path')).toHaveTextContent('/dashboard')
     })
-    expect(screen.getByTestId('location-path')).toHaveTextContent('/dashboard')
   })
   it('should return to login view from register view via login link', async () => {
     const user = userEvent.setup()
