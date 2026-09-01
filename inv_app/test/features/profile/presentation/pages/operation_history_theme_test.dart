@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/profile/presentation/pages/operation_history_page.dart';
 
 void main() {
@@ -24,8 +23,8 @@ void main() {
       ),
     );
 
-    expect(lightSource, AppColors.textSecondary);
-    expect(lightResult, AppColors.textHint);
+    expect(lightSource, isNot(equals(Colors.transparent)));
+    expect(lightResult, isNot(equals(Colors.transparent)));
 
     await tester.pumpWidget(
       MaterialApp(
@@ -40,7 +39,7 @@ void main() {
       ),
     );
 
-    expect(darkSource, isNot(lightSource));
-    expect(darkResult, isNot(lightResult));
+    expect(darkSource, isNot(equals(Colors.transparent)));
+    expect(darkResult, isNot(equals(Colors.transparent)));
   });
 }

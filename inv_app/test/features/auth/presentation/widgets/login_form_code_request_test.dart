@@ -52,7 +52,7 @@ void main() {
   });
 
   Future<void> openCodeLogin(WidgetTester tester, LoginForm form) async {
-    await pumpApp(tester, form, authBloc: authBloc);
+    await pumpApp(tester, form, authBloc: authBloc, useScaffold: true);
     await tester.tap(find.text('验证码登录'));
     await tester.pump();
   }
@@ -270,7 +270,7 @@ void main() {
     expect(
       tester
           .widget<ElevatedButton>(
-            find.widgetWithText(ElevatedButton, '发送'),
+            find.byKey(const Key('login-send-code-button')),
           )
           .onPressed,
       isNull,
@@ -317,7 +317,7 @@ void main() {
     expect(
       tester
           .widget<ElevatedButton>(
-            find.widgetWithText(ElevatedButton, '发送'),
+            find.byKey(const Key('login-send-code-button')),
           )
           .onPressed,
       isNull,
@@ -459,7 +459,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('60s'), findsNothing);
-    expect(tester.widget<TextFormField>(codeField).controller!.text, isEmpty);
+    expect(tester.widget<TextField>(codeField).controller!.text, isEmpty);
     expect(
       tester
           .widget<ElevatedButton>(

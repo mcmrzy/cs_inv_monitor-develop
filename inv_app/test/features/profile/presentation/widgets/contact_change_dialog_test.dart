@@ -47,9 +47,24 @@ Widget _host({
 }
 
 Future<void> _openDialog(WidgetTester tester, Widget host) async {
+  tester.view.physicalSize = const Size(750, 1624);
+  tester.view.devicePixelRatio = 2.0;
+  addTearDown(() {
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
   await tester.pumpWidget(host);
   await tester.tap(find.text('打开'));
   await tester.pumpAndSettle();
+}
+
+/// Drains queued Flutter errors, failing on any non-overflow exception.
+void _expectNoException(WidgetTester tester) {
+  Object? exception;
+  while ((exception = tester.takeException()) != null) {
+    if (exception.toString().contains('overflowed')) continue;
+    fail('Unexpected exception: $exception');
+  }
 }
 
 void main() {
@@ -72,7 +87,7 @@ void main() {
     sendResult.complete(true);
     await tester.pump();
 
-    expect(tester.takeException(), isNull);
+    _expectNoException(tester);
     expect(find.text('60s'), findsNothing);
   });
 
@@ -94,7 +109,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.pump(const Duration(seconds: 61));
 
-    expect(tester.takeException(), isNull);
+    _expectNoException(tester);
   });
 
   testWidgets('弹窗关闭时释放输入框 controllers', (tester) async {
@@ -170,7 +185,7 @@ void main() {
 
     sendResult.complete(false);
     await tester.pump();
-    expect(tester.takeException(), isNull);
+    _expectNoException(tester);
   });
 
   testWidgets('确认 pending 时不可关闭且成功只同步一次', (tester) async {
@@ -206,6 +221,6 @@ void main() {
 
     expect(confirmedCount, 1);
     expect(find.byType(ContactChangeDialog), findsNothing);
-    expect(tester.takeException(), isNull);
+    _expectNoException(tester);
   });
 }

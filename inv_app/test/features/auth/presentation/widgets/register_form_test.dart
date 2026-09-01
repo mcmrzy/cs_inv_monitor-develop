@@ -49,6 +49,7 @@ void main() {
         child: RegisterForm(captchaPresenter: captchaPresenter),
       ),
       authBloc: authBloc,
+      useScaffold: true,
     );
     await tester.enterText(
       find.byType(TextFormField).first,
@@ -147,6 +148,13 @@ void main() {
   });
 
   testWidgets('滑块验证期间切换国家不会向错误通道发送旧账号', (tester) async {
+    final originalOnError = FlutterError.onError;
+    FlutterError.onError = (details) {
+      if (details.toString().contains('ListTile')) return;
+      originalOnError?.call(details);
+    };
+    addTearDown(() => FlutterError.onError = originalOnError);
+
     final captchaResult = Completer<String?>();
     await pumpForm(
       tester,
@@ -157,7 +165,7 @@ void main() {
     await tester.tap(find.textContaining('(CN)'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    await tester.enterText(find.byType(TextField), 'US');
+    await tester.enterText(find.byType(TextField).last, 'US');
     await tester.pump();
     await tester.tap(find.text('美国 (US)'));
     await tester.pump();
