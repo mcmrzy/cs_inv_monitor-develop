@@ -347,7 +347,7 @@ class _AddDevicePageState extends State<AddDevicePage>
       builder: (ctx) => AddDevicePinDialog(
         title: AppLocalizations.of(ctx)!.pinInputTitle,
         hintText: AppLocalizations.of(ctx)!.pinInputHint,
-        invalidPinMessage: AppLocalizations.of(ctx)!.invalidPinLength,
+        invalidPinMessage: AppLocalizations.of(ctx)!.pinLengthError,
         cancelLabel: AppLocalizations.of(ctx)!.cancel,
         confirmLabel: AppLocalizations.of(ctx)!.confirm,
       ),
