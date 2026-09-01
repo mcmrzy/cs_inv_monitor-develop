@@ -60,7 +60,7 @@ void main() {
   Finder fieldWithKeyboard(TextInputType keyboardType) {
     return find.byWidgetPredicate(
       (widget) =>
-          widget is TextFormField && widget.keyboardType == keyboardType,
+          widget is TextField && widget.keyboardType == keyboardType,
     );
   }
 

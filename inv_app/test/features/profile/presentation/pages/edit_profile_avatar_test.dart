@@ -48,7 +48,7 @@ void main() {
     await getIt.reset();
   });
 
-  Finder get avatarButton =>
+  Finder getAvatarButton() =>
       find.byKey(const Key('edit-profile-avatar-button'));
 
   Future<void> pumpPage(
@@ -75,7 +75,7 @@ void main() {
       ),
       authBloc: authBloc,
     );
-    await tester.ensureVisible(avatarButton);
+    await tester.ensureVisible(getAvatarButton());
   }
 
   testWidgets('头像选择等待期间快速连点只启动一次', (tester) async {
@@ -89,12 +89,12 @@ void main() {
       },
     );
 
-    await tester.tap(avatarButton);
-    await tester.tap(avatarButton);
+    await tester.tap(getAvatarButton());
+    await tester.tap(getAvatarButton());
     await tester.pump();
 
     expect(pickCount, 1);
-    expect(tester.widget<GestureDetector>(avatarButton).onTap, isNull);
+    expect(tester.widget<GestureDetector>(getAvatarButton()).onTap, isNull);
     expect(tester.widget<PopScope>(find.byType(PopScope)).canPop, isFalse);
     expect(
       tester
@@ -107,7 +107,7 @@ void main() {
 
     picked.complete(null);
     await tester.pump();
-    expect(tester.widget<GestureDetector>(avatarButton).onTap, isNotNull);
+    expect(tester.widget<GestureDetector>(getAvatarButton()).onTap, isNotNull);
     expect(tester.widget<PopScope>(find.byType(PopScope)).canPop, isTrue);
   });
 
@@ -121,13 +121,13 @@ void main() {
       },
     );
 
-    await tester.tap(avatarButton);
+    await tester.tap(getAvatarButton());
     await tester.pump();
-    await tester.tap(avatarButton);
+    await tester.tap(getAvatarButton());
     await tester.pump();
 
     expect(pickCount, 2);
-    expect(tester.widget<GestureDetector>(avatarButton).onTap, isNotNull);
+    expect(tester.widget<GestureDetector>(getAvatarButton()).onTap, isNotNull);
   });
 
   testWidgets('页面销毁后忽略迟到的选图结果', (tester) async {
@@ -137,7 +137,7 @@ void main() {
       pickAvatarPath: () => picked.future,
     );
 
-    await tester.tap(avatarButton);
+    await tester.tap(getAvatarButton());
     await tester.pumpWidget(const SizedBox.shrink());
     picked.complete('/tmp/avatar.jpg');
     await tester.pump();
@@ -154,13 +154,13 @@ void main() {
       uploadAvatarPath: (_) async => '/avatar.jpg',
     );
 
-    await tester.tap(avatarButton);
+    await tester.tap(getAvatarButton());
     await tester.pump();
 
     final updates = addedEvents.whereType<AuthUpdateProfileRequested>().toList();
     expect(updates, hasLength(1));
     expect(updates.single.avatar, '/avatar.jpg');
-    expect(tester.widget<GestureDetector>(avatarButton).onTap, isNull);
+    expect(tester.widget<GestureDetector>(getAvatarButton()).onTap, isNull);
 
     final requestId = updates.single.requestId;
     final savedState = AuthProfileUpdateSuccess(
@@ -183,7 +183,7 @@ void main() {
       ),
     );
     await tester.pump();
-    expect(tester.widget<GestureDetector>(avatarButton).onTap, isNull);
+    expect(tester.widget<GestureDetector>(getAvatarButton()).onTap, isNull);
 
     authStates.add(savedState);
     authStates.add(savedState);
@@ -191,7 +191,7 @@ void main() {
     await tester.pump();
 
     expect(tester.takeException(), isNull);
-    expect(tester.widget<GestureDetector>(avatarButton).onTap, isNotNull);
+    expect(tester.widget<GestureDetector>(getAvatarButton()).onTap, isNotNull);
     expect(tester.widget<PopScope>(find.byType(PopScope)).canPop, isTrue);
   });
 
@@ -205,14 +205,14 @@ void main() {
       renderedAvatarUrls: renderedAvatarUrls,
     );
 
-    await tester.tap(avatarButton);
+    await tester.tap(getAvatarButton());
     await tester.pump();
     final update = addedEvents.whereType<AuthUpdateProfileRequested>().single;
 
     await tester.pump(const Duration(seconds: 15));
     await tester.pump();
     expect(renderedAvatarUrls, isEmpty);
-    expect(tester.widget<GestureDetector>(avatarButton).onTap, isNull);
+    expect(tester.widget<GestureDetector>(getAvatarButton()).onTap, isNull);
     expect(tester.widget<PopScope>(find.byType(PopScope)).canPop, isTrue);
 
     authStates.add(
@@ -236,7 +236,7 @@ void main() {
       renderedAvatarUrls.any((url) => url.endsWith('/late-avatar.jpg')),
       isTrue,
     );
-    expect(tester.widget<GestureDetector>(avatarButton).onTap, isNotNull);
+    expect(tester.widget<GestureDetector>(getAvatarButton()).onTap, isNotNull);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
@@ -250,7 +250,7 @@ void main() {
       uploadAvatarPath: (_) async => '/late-avatar.jpg',
     );
 
-    await tester.tap(avatarButton);
+    await tester.tap(getAvatarButton());
     await tester.pump();
     final update = addedEvents.whereType<AuthUpdateProfileRequested>().single;
     await tester.pump(const Duration(seconds: 15));

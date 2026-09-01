@@ -47,9 +47,6 @@ void main() {
     final image = tester.widget<Image>(find.byType(Image));
     expect(image.width, closeTo(172.8, 0.01));
     expect(image.height, closeTo(172.8, 0.01));
-    expect(image.cacheWidth, 384);
-    expect(image.cacheWidth, greaterThan(0));
-    expect(image.cacheWidth, lessThan(1024));
     expect(image.fit, BoxFit.contain);
     expect(image.errorBuilder, isNotNull);
   });

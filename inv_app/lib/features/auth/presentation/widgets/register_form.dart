@@ -6,6 +6,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/widgets/slider_captcha_dialog.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:inv_app/core/data/continents_data.dart';
 import 'package:inv_app/features/auth/presentation/widgets/auth_country_picker_sheet.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
