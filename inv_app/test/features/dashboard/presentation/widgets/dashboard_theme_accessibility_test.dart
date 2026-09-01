@@ -103,9 +103,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final selectedNode =
-        tester.getSemantics(find.bySemanticsLabel(l10n.time30Days));
-    final dayNode = tester.getSemantics(find.bySemanticsLabel(l10n.timeDay));
     // SemanticsFlag API 已在 Flutter 3.x 移除，跳过 flag 断言
 
     await tester.tap(find.text(l10n.timeWeek));
