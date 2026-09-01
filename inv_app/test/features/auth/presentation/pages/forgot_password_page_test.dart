@@ -74,6 +74,7 @@ void main() {
 
     await tester.tap(sendButton());
     await tester.tap(sendButton());
+    await tester.pump();
 
     expect(launchCount, 1);
     expect(tester.widget<ElevatedButton>(sendButton()).onPressed, isNull);

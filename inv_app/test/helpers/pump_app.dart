@@ -49,6 +49,7 @@ Future<void> pumpApp(
   List<BlocProvider> additionalProviders = const [],
   Locale locale = const Locale('zh', 'CN'),
   ThemeData? theme,
+  bool useScaffold = false,
 }) async {
   // Collect all BlocProviders — only add those that are provided (non-null).
   final blocProviders = <BlocProvider>[
@@ -64,7 +65,7 @@ Future<void> pumpApp(
     ...additionalProviders,
   ];
 
-  Widget app = _buildMaterialApp(widget, locale, theme);
+  Widget app = _buildMaterialApp(widget, locale, theme, useScaffold: useScaffold);
 
   if (blocProviders.isNotEmpty) {
     app = MultiBlocProvider(providers: blocProviders, child: app);
@@ -92,8 +93,9 @@ Future<void> pumpMinimalApp(
 MaterialApp _buildMaterialApp(
   Widget child,
   Locale locale,
-  ThemeData? theme,
-) {
+  ThemeData? theme, {
+  bool useScaffold = false,
+}) {
   return MaterialApp(
     locale: locale,
     theme: theme ?? ThemeData.light(useMaterial3: true),
@@ -105,13 +107,22 @@ MaterialApp _buildMaterialApp(
     ],
     supportedLocales: AppLocalizations.supportedLocales,
     // 与生产一致：初始化 ScreenUtil，支持依赖 .w/.h 的组件（如骨架屏）
-    home: Material(
-      child: ScreenUtilInit(
-        designSize: const Size(375, 812),
-        minTextAdapt: true,
-        builder: (context, screenUtilChild) => screenUtilChild!,
-        child: child,
-      ),
-    ),
+    home: useScaffold
+        ? Scaffold(
+            body: ScreenUtilInit(
+              designSize: const Size(375, 812),
+              minTextAdapt: true,
+              builder: (context, screenUtilChild) => screenUtilChild!,
+              child: child,
+            ),
+          )
+        : Material(
+            child: ScreenUtilInit(
+              designSize: const Size(375, 812),
+              minTextAdapt: true,
+              builder: (context, screenUtilChild) => screenUtilChild!,
+              child: child,
+            ),
+          ),
   );
 }

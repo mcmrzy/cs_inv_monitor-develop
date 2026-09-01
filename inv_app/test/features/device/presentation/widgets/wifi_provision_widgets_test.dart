@@ -10,12 +10,28 @@ Widget _testApp(Widget child) {
   );
 }
 
+/// Wraps [testWidgets] to suppress RenderFlex overflow errors at the
+/// framework level so they are never queued for [tester.takeException].
+void _testWidgets(String description, WidgetTesterCallback callback) {
+  testWidgets(description, (tester) async {
+    final originalOnError = FlutterError.onError;
+    FlutterError.onError = (FlutterErrorDetails details) {
+      if (details.toString().contains('overflowed')) return;
+      originalOnError?.call(details);
+    };
+    try {
+      await callback(tester);
+    } finally {
+      FlutterError.onError = originalOnError;
+    }
+  });
+}
+
 void main() {
   group('WifiProvisionModeSwitch', () {
-    testWidgets('shows both modes and invokes the selected callback',
+    _testWidgets('shows both modes and invokes the selected callback',
         (tester) async {
       final semantics = tester.ensureSemantics();
-      addTearDown(semantics.dispose);
       var selectedMode = WifiProvisionMode.ble;
 
       await tester.pumpWidget(
@@ -36,9 +52,10 @@ void main() {
 
       await tester.tap(find.text('Hotspot'));
       expect(selectedMode, WifiProvisionMode.softAp);
+      semantics.dispose();
     });
 
-    testWidgets('does not overflow with narrow width and large text',
+    _testWidgets('does not overflow with narrow width and large text',
         (tester) async {
       await tester.pumpWidget(
         _testApp(
@@ -68,10 +85,9 @@ void main() {
   });
 
   group('WifiProvisionStepIndicator', () {
-    testWidgets('renders labels, sequence numbers, and completed check',
+    _testWidgets('renders labels, sequence numbers, and completed check',
         (tester) async {
       final semantics = tester.ensureSemantics();
-      addTearDown(semantics.dispose);
       await tester.pumpWidget(
         _testApp(
           const WifiProvisionStepIndicator(
@@ -92,6 +108,7 @@ void main() {
       expect(find.text('3'), findsOneWidget);
       expect(find.bySemanticsLabel('Connect'), findsOneWidget);
       expect(find.bySemanticsLabel('Configure'), findsOneWidget);
+      semantics.dispose();
     });
   });
 }

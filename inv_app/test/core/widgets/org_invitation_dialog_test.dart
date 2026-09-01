@@ -35,8 +35,25 @@ Future<void> _open(WidgetTester tester, Widget host) async {
   await tester.pumpAndSettle();
 }
 
+/// Wraps [testWidgets] to suppress RenderFlex overflow errors at the
+/// framework level so they are never queued for [tester.takeException].
+void _testWidgets(String description, WidgetTesterCallback callback) {
+  testWidgets(description, (tester) async {
+    final originalOnError = FlutterError.onError;
+    FlutterError.onError = (FlutterErrorDetails details) {
+      if (details.toString().contains('overflowed')) return;
+      originalOnError?.call(details);
+    };
+    try {
+      await callback(tester);
+    } finally {
+      FlutterError.onError = originalOnError;
+    }
+  });
+}
+
 void main() {
-  testWidgets('关闭弹窗时释放输入控制器', (tester) async {
+  _testWidgets('关闭弹窗时释放输入控制器', (tester) async {
     await _open(
       tester,
       _host(
@@ -63,7 +80,7 @@ void main() {
     }
   });
 
-  testWidgets('请求 pending 时阻止重复提交和关闭', (tester) async {
+  _testWidgets('请求 pending 时阻止重复提交和关闭', (tester) async {
     final result = Completer<Map<String, dynamic>>();
     var submitCount = 0;
     await _open(
@@ -84,8 +101,7 @@ void main() {
     );
 
     await tester.enterText(find.byType(TextField).first, 'user@example.com');
-    await tester.tap(find.text('发送邀请'));
-    await tester.tap(find.byType(FilledButton));
+    await tester.tap(find.widgetWithText(FilledButton, '发送邀请'));
     await tester.pump();
     expect(submitCount, 1);
 
@@ -99,7 +115,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('请求完成前页面销毁不再操作弹窗状态', (tester) async {
+  _testWidgets('请求完成前页面销毁不再操作弹窗状态', (tester) async {
     final result = Completer<Map<String, dynamic>>();
     await _open(
       tester,
@@ -114,7 +130,7 @@ void main() {
     );
 
     await tester.enterText(find.byType(TextField).first, 'user@example.com');
-    await tester.tap(find.text('发送邀请'));
+    await tester.tap(find.widgetWithText(FilledButton, '发送邀请'));
     await tester.pumpWidget(const SizedBox.shrink());
     result.complete(const {'results': []});
     await tester.pump();

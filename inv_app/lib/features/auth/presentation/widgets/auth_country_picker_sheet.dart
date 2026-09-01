@@ -138,22 +138,25 @@ class _AuthCountryPickerSheetState extends State<AuthCountryPickerSheet> {
     final code = country['code'] as String;
     final name = country['name'] as String;
     final selected = code == widget.initialCode;
-    return ListTile(
-      dense: true,
-      visualDensity: VisualDensity.compact,
-      title: Text(
-        '$name ($code)',
-        style: TextStyle(
-          fontSize: 14.sp,
-          fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-          color: AppColor.textPrimary(context),
+    return Material(
+      color: Colors.transparent,
+      child: ListTile(
+        dense: true,
+        visualDensity: VisualDensity.compact,
+        title: Text(
+          '$name ($code)',
+          style: TextStyle(
+            fontSize: 14.sp,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+            color: AppColor.textPrimary(context),
+          ),
         ),
-      ),
-      trailing: selected
-          ? Icon(Icons.check_rounded, color: AppColors.primary, size: 20.w)
-          : null,
-      onTap: () => Navigator.of(context).pop(
-        <String, String>{'code': code, 'name': name},
+        trailing: selected
+            ? Icon(Icons.check_rounded, color: AppColors.primary, size: 20.w)
+            : null,
+        onTap: () => Navigator.of(context).pop(
+          <String, String>{'code': code, 'name': name},
+        ),
       ),
     );
   }
