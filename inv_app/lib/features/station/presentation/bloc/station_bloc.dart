@@ -270,9 +270,15 @@ class StationBloc extends Bloc<StationEvent, StationState> {
   ) async {
     final result = await repository.create(event.data);
     result.fold(
-      (failure) => emit(StationError(message: failure.message)),
+      (failure) => emit(
+        StationActionError(
+          message: failure.message,
+          action: 'create',
+          requestId: event.requestId,
+        ),
+      ),
       (_) {
-        emit(StationCreateSuccess());
+        emit(StationCreateSuccess(requestId: event.requestId));
         add(StationSummaryRequested());
       },
     );
@@ -284,9 +290,21 @@ class StationBloc extends Bloc<StationEvent, StationState> {
   ) async {
     final result = await repository.update(event.stationId, event.data);
     result.fold(
-      (failure) => emit(StationError(message: failure.message)),
+      (failure) => emit(
+        StationActionError(
+          message: failure.message,
+          action: 'update',
+          stationId: event.stationId,
+          requestId: event.requestId,
+        ),
+      ),
       (_) {
-        emit(StationUpdateSuccess());
+        emit(
+          StationUpdateSuccess(
+            stationId: event.stationId,
+            requestId: event.requestId,
+          ),
+        );
         add(StationSummaryRequested());
       },
     );
@@ -298,13 +316,25 @@ class StationBloc extends Bloc<StationEvent, StationState> {
   ) async {
     final result = await repository.delete(event.stationId);
     result.fold(
-      (failure) => emit(StationError(message: failure.message)),
+      (failure) => emit(
+        StationActionError(
+          message: failure.message,
+          action: 'delete',
+          stationId: event.stationId,
+          requestId: event.requestId,
+        ),
+      ),
       (_) async {
         // 联动删除本地快照（含下属设备），避免离网模式展示已删除的电站
         try {
           await localCache?.deleteStation('${event.stationId}');
         } catch (_) {}
-        emit(StationDeleteSuccess());
+        emit(
+          StationDeleteSuccess(
+            stationId: event.stationId,
+            requestId: event.requestId,
+          ),
+        );
         add(StationSummaryRequested());
       },
     );

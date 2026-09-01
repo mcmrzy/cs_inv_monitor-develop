@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -11,7 +12,13 @@ import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 class ForgotPasswordPage extends StatefulWidget {
-  const ForgotPasswordPage({super.key});
+  const ForgotPasswordPage({
+    super.key,
+    this.captchaLauncher,
+  });
+
+  @visibleForTesting
+  final Future<String?> Function(BuildContext context)? captchaLauncher;
 
   @override
   State<ForgotPasswordPage> createState() => _ForgotPasswordPageState();
@@ -25,7 +32,12 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   final _confirmPasswordController = TextEditingController();
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  bool _isRequestingCode = false;
+  bool _isAwaitingCodeResult = false;
+  String? _pendingCodePhone;
+  String? _pendingCodeRequestId;
   bool _isSendingCode = false;
+  bool _isResetting = false;
   int _countdownSeconds = 0;
   Timer? _countdownTimer;
 
@@ -40,24 +52,64 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   }
 
   void _startCountdown() {
+    if (!mounted) return;
     setState(() {
       _countdownSeconds = 60;
+      _isRequestingCode = false;
+      _isAwaitingCodeResult = false;
+      _pendingCodePhone = null;
+      _pendingCodeRequestId = null;
       _isSendingCode = true;
     });
     _countdownTimer?.cancel();
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
       setState(() {
-        if (_countdownSeconds > 0) {
-          _countdownSeconds--;
-        } else {
+        if (_countdownSeconds <= 1) {
+          _countdownSeconds = 0;
           _isSendingCode = false;
           timer.cancel();
+        } else {
+          _countdownSeconds--;
         }
       });
     });
   }
 
+  void _releaseCodeRequest() {
+    if (!mounted) return;
+    setState(() {
+      _isRequestingCode = false;
+      _isAwaitingCodeResult = false;
+      _pendingCodePhone = null;
+      _pendingCodeRequestId = null;
+    });
+  }
+
+  void _cancelCooldownForChangedPhone() {
+    if (!_isSendingCode) return;
+    _countdownTimer?.cancel();
+    setState(() {
+      _countdownSeconds = 0;
+      _isSendingCode = false;
+      _codeController.clear();
+    });
+  }
+
+  void _handlePhoneChanged() {
+    if (_isAwaitingCodeResult) {
+      _codeController.clear();
+      _releaseCodeRequest();
+      return;
+    }
+    _cancelCooldownForChangedPhone();
+  }
+
   Future<void> _handleSendCode() async {
+    if (_isRequestingCode || _isSendingCode) return;
     final l10n = AppLocalizations.of(context)!;
     final phone = _phoneController.text.trim();
     if (phone.isEmpty || phone.length != 11) {
@@ -68,20 +120,49 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       );
       return;
     }
+    setState(() => _isRequestingCode = true);
     // 后端要求先通过滑块验证，获取 verifyToken 后随请求携带
-    final captchaToken = await showSliderCaptcha(context);
-    if (captchaToken == null || !mounted) return;
+    final launchCaptcha = widget.captchaLauncher ?? showSliderCaptcha;
+    String? captchaToken;
+    try {
+      captchaToken = await launchCaptcha(context);
+    } catch (_) {
+      if (!mounted) return;
+      _releaseCodeRequest();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.sliderCaptchaFailed)),
+      );
+      return;
+    }
+    if (!mounted) return;
+    if (captchaToken == null) {
+      _releaseCodeRequest();
+      return;
+    }
+    if (_phoneController.text.trim() != phone) {
+      _releaseCodeRequest();
+      return;
+    }
+    final requestId = AuthCodeRequestId.next();
+    setState(() {
+      _isAwaitingCodeResult = true;
+      _pendingCodePhone = phone;
+      _pendingCodeRequestId = requestId;
+    });
     context.read<AuthBloc>().add(
           AuthSendCodeRequested(
             phone: phone,
             type: 'reset',
+            requestId: requestId,
             captchaToken: captchaToken,
           ),
         );
   }
 
   void _handleResetPassword() {
+    if (_isResetting) return;
     if (_formKey.currentState!.validate()) {
+      setState(() => _isResetting = true);
       context.read<AuthBloc>().add(
             AuthResetPasswordRequested(
               phone: _phoneController.text.trim(),
@@ -108,7 +189,30 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
           ),
           BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {
-          if (state is AuthError) {
+          if (state is AuthCodeSendError) {
+            if (!_isAwaitingCodeResult ||
+                state.type != 'reset' ||
+                state.channel != 'phone' ||
+                state.target != _pendingCodePhone ||
+                state.requestId != _pendingCodeRequestId) {
+              return;
+            }
+            if (_pendingCodePhone != _phoneController.text.trim()) {
+              _releaseCodeRequest();
+              return;
+            }
+            _releaseCodeRequest();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  AppLocalizations.of(context)!.translateError(state.message),
+                ),
+              ),
+            );
+          } else if (state is AuthError) {
+            if (_isResetting) {
+              setState(() => _isResetting = false);
+            }
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
@@ -117,6 +221,17 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
               ),
             );
           } else if (state is AuthCodeSent) {
+            if (!_isAwaitingCodeResult ||
+                state.type != 'reset' ||
+                state.channel != 'phone' ||
+                state.target != _pendingCodePhone ||
+                state.requestId != _pendingCodeRequestId) {
+              return;
+            }
+            if (_pendingCodePhone != _phoneController.text.trim()) {
+              _releaseCodeRequest();
+              return;
+            }
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content:
@@ -246,6 +361,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
     final l10n = AppLocalizations.of(context)!;
     return TextFormField(
       controller: _phoneController,
+      onChanged: (_) => _handlePhoneChanged(),
       keyboardType: TextInputType.phone,
       maxLength: 11,
       decoration: InputDecoration(
@@ -304,7 +420,10 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
           width: 120.w,
           height: 56.h,
           child: ElevatedButton(
-            onPressed: _isSendingCode ? null : _handleSendCode,
+            key: const Key('forgot-password-send-code-button'),
+            onPressed: _isSendingCode || _isRequestingCode || _isResetting
+                ? null
+                : _handleSendCode,
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
@@ -315,7 +434,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
               ),
               padding: EdgeInsets.zero,
             ),
-            child: state is AuthCodeSending
+            child: _isRequestingCode
                 ? SizedBox(
                     height: 20.h,
                     width: 20.w,
@@ -411,7 +530,10 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   Widget _buildResetButton(AuthState state) {
     final l10n = AppLocalizations.of(context)!;
     return ElevatedButton(
-      onPressed: state is AuthLoading ? null : _handleResetPassword,
+      key: const Key('forgot-password-reset-button'),
+      onPressed: _isResetting || _isRequestingCode || state is AuthLoading
+          ? null
+          : _handleResetPassword,
       style: ElevatedButton.styleFrom(
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
@@ -420,7 +542,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
           borderRadius: BorderRadius.circular(8.r),
         ),
       ),
-      child: state is AuthLoading
+      child: _isResetting || state is AuthLoading
           ? SizedBox(
               height: 20.h,
               width: 20.w,

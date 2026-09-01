@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// 通用数据缓存服务，用于在无网络时展示缓存数据。
@@ -31,7 +33,11 @@ class DataCacheService {
     final ts = _prefs.getInt('$_tsPrefix$key') ?? 0;
     if (ts > 0) {
       final age = DateTime.now().millisecondsSinceEpoch - ts;
-      if (age > ttl.inMilliseconds) return null;
+      if (age > ttl.inMilliseconds) {
+        // 保持同步读取 API，同时在后台尽力清除过期的动态缓存 key。
+        unawaited(_removeExpired(key));
+        return null;
+      }
     }
 
     try {
@@ -61,6 +67,17 @@ class DataCacheService {
   Future<void> remove(String key) async {
     await _prefs.remove('$_prefix$key');
     await _prefs.remove('$_tsPrefix$key');
+  }
+
+  Future<void> _removeExpired(String key) async {
+    try {
+      await Future.wait([
+        _prefs.remove('$_prefix$key'),
+        _prefs.remove('$_tsPrefix$key'),
+      ]);
+    } catch (_) {
+      // 过期清理是 best effort，不应让同步读取路径产生未处理异步错误。
+    }
   }
 
   /// 清除所有数据缓存

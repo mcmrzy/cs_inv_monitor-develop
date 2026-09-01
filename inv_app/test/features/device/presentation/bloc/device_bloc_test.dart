@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:bloc_test/bloc_test.dart';
+import 'package:fake_async/fake_async.dart';
 import 'package:fpdart/fpdart.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -41,6 +42,96 @@ void main() {
 
   test('initial state is DeviceInitial', () {
     expect(deviceBloc.state, equals(DeviceInitial()));
+  });
+
+  test('local polling does not overlap while a request is pending', () {
+    fakeAsync((async) {
+      final repository = MockDeviceRepository();
+      final realtimeService = MockRealtimeDataService();
+      final localService = MockLocalCommunicationService();
+      final pendingConnect = Completer<void>();
+
+      when(() => realtimeService.realtimeDataStream)
+          .thenAnswer((_) => const Stream<InverterRealtime>.empty());
+      when(() => localService.connect(any()))
+          .thenAnswer((_) => pendingConnect.future);
+      when(() => localService.getRealtimeData()).thenAnswer(
+        (_) async => <String, dynamic>{},
+      );
+
+      final bloc = DeviceBloc(
+        repository: repository,
+        realtimeDataService: realtimeService,
+        localCommunicationService: localService,
+      );
+      bloc.add(const DeviceStartLocalPoll(deviceIP: '192.168.4.1'));
+      async.flushMicrotasks();
+
+      async.elapse(const Duration(seconds: 3));
+      async.flushMicrotasks();
+      verify(() => localService.connect('192.168.4.1')).called(1);
+
+      async.elapse(const Duration(seconds: 9));
+      async.flushMicrotasks();
+      verifyNever(() => localService.connect(any()));
+
+      pendingConnect.complete();
+      async.flushMicrotasks();
+      async.elapse(const Duration(seconds: 3));
+      async.flushMicrotasks();
+      verify(() => localService.connect('192.168.4.1')).called(1);
+
+      bloc.close();
+      async.flushMicrotasks();
+    });
+  });
+
+  test('a new local polling generation is not blocked by an old request', () {
+    fakeAsync((async) {
+      final repository = MockDeviceRepository();
+      final realtimeService = MockRealtimeDataService();
+      final localService = MockLocalCommunicationService();
+      final oldConnect = Completer<void>();
+      final newConnect = Completer<void>();
+
+      when(() => realtimeService.realtimeDataStream)
+          .thenAnswer((_) => const Stream<InverterRealtime>.empty());
+      when(() => localService.connect('192.168.4.1'))
+          .thenAnswer((_) => oldConnect.future);
+      when(() => localService.connect('192.168.4.2'))
+          .thenAnswer((_) => newConnect.future);
+      when(() => localService.getRealtimeData()).thenAnswer(
+        (_) async => <String, dynamic>{},
+      );
+
+      final bloc = DeviceBloc(
+        repository: repository,
+        realtimeDataService: realtimeService,
+        localCommunicationService: localService,
+      );
+      bloc.add(const DeviceStartLocalPoll(deviceIP: '192.168.4.1'));
+      async.flushMicrotasks();
+      async.elapse(const Duration(seconds: 3));
+      async.flushMicrotasks();
+      verify(() => localService.connect('192.168.4.1')).called(1);
+
+      bloc.add(const DeviceStartLocalPoll(deviceIP: '192.168.4.2'));
+      async.flushMicrotasks();
+      async.elapse(const Duration(seconds: 3));
+      async.flushMicrotasks();
+      verify(() => localService.connect('192.168.4.2')).called(1);
+
+      oldConnect.complete();
+      async.flushMicrotasks();
+      async.elapse(const Duration(seconds: 3));
+      async.flushMicrotasks();
+      verifyNever(() => localService.connect('192.168.4.2'));
+
+      newConnect.complete();
+      async.flushMicrotasks();
+      bloc.close();
+      async.flushMicrotasks();
+    });
   });
 
   // ---------------------------------------------------------------------------

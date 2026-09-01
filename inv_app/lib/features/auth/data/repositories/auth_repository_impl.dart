@@ -209,6 +209,24 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<Either<Failure, AuthorizationContextResponse>>
+      switchOrganizationContext({
+    required int organizationId,
+    required String refreshToken,
+  }) async {
+    return apiService.post(
+      '/auth/context',
+      data: {
+        'organization_id': organizationId,
+        'refresh_token': refreshToken,
+      },
+      fromJson: (json) => AuthorizationContextResponse.fromJson(
+        Map<String, dynamic>.from(json as Map),
+      ),
+    );
+  }
+
+  @override
   Future<Either<Failure, LoginResponse>> wechatLogin({
     required String code,
   }) async {

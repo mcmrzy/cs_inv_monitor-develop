@@ -15,6 +15,8 @@ import 'package:inv_app/core/services/theme_service.dart';
 import 'package:inv_app/core/services/widget_update_service.dart';
 import 'package:inv_app/core/services/offline/offline_log_sync_service.dart';
 import 'package:inv_app/core/services/storage_service.dart';
+import 'package:inv_app/core/services/api_service.dart';
+import 'package:inv_app/core/stores/organization_context_store.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
@@ -241,6 +243,12 @@ class _InvAppState extends State<InvApp> {
   Widget build(BuildContext context) {
     return MultiBlocProvider(
       providers: [
+        RepositoryProvider<OrganizationContextStore>(
+          create: (_) => OrganizationContextStore(
+            apiService: getIt<ApiService>(),
+            storageService: getIt<StorageService>(),
+          ),
+        ),
         // AuthBloc 立即创建（登录状态检查由 SplashPage 触发，避免重复检查）
         BlocProvider<AuthBloc>(
           create: (_) => getIt<AuthBloc>(),
@@ -304,14 +312,6 @@ class _InvAppState extends State<InvApp> {
               ],
               supportedLocales: AppLocalizations.supportedLocales,
               locale: _currentLocale,
-              builder: (context, widget) {
-                return MediaQuery(
-                  data: MediaQuery.of(context).copyWith(
-                    textScaler: const TextScaler.linear(1.0),
-                  ),
-                  child: widget!,
-                );
-              },
             );
           },
         ),

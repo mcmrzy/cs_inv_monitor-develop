@@ -534,79 +534,36 @@ extension _DeviceControlTabSections on _DeviceControlPageState {
   void _showEnergyScheduleEditor(Map<String, dynamic>? existing) {
     final l10n = AppLocalizations.of(context)!;
     final isEdit = existing != null;
-    final startCtrl =
-        TextEditingController(text: existing?['start_time'] ?? '');
-    final endCtrl = TextEditingController(text: existing?['end_time'] ?? '');
-    final modeCtrl = TextEditingController(text: existing?['mode'] ?? '');
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(
-          isEdit
-              ? l10n.str('control_edit_schedule')
-              : l10n.str('control_add_schedule'),
-          style: TextStyle(
-            fontSize: 16.sp,
-            fontWeight: FontWeight.w600,
-          ),
+      builder: (_) => DeviceScheduleDialog(
+        title: isEdit
+            ? l10n.str('control_edit_schedule')
+            : l10n.str('control_add_schedule'),
+        initialStart: existing?['start_time'] ?? '',
+        initialEnd: existing?['end_time'] ?? '',
+        initialMode: existing?['mode'] ?? '',
+        startLabel: l10n.str('control_start_time'),
+        startHint: l10n.str('control_start_time_hint'),
+        endLabel: l10n.str('control_end_time'),
+        endHint: l10n.str('control_end_time_hint'),
+        modeLabel: l10n.str('control_mode'),
+        modeHint: l10n.str('control_mode_hint'),
+        cancelLabel: l10n.cancel,
+        saveLabel: l10n.save,
+        onSave: (start, end, mode) => _saveEnergySchedule(
+          existing,
+          start,
+          end,
+          mode,
+          isEdit,
         ),
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: startCtrl,
-                decoration: InputDecoration(
-                  labelText: l10n.str('control_start_time'),
-                  hintText: l10n.str('control_start_time_hint'),
-                ),
-              ),
-              SizedBox(height: 12.h),
-              TextField(
-                controller: endCtrl,
-                decoration: InputDecoration(
-                  labelText: l10n.str('control_end_time'),
-                  hintText: l10n.str('control_end_time_hint'),
-                ),
-              ),
-              SizedBox(height: 12.h),
-              TextField(
-                controller: modeCtrl,
-                decoration: InputDecoration(
-                  labelText: l10n.str('control_mode'),
-                  hintText: l10n.str('control_mode_hint'),
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(AppLocalizations.of(context)!.cancel),
-          ),
-          FilledButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _saveEnergySchedule(
-                existing,
-                startCtrl.text,
-                endCtrl.text,
-                modeCtrl.text,
-                isEdit,
-              );
-            },
-            child: Text(AppLocalizations.of(context)!.save),
-          ),
-        ],
       ),
     );
   }
 
-  void _saveEnergySchedule(
+  Future<bool> _saveEnergySchedule(
     Map<String, dynamic>? existing,
     String start,
     String end,
@@ -665,7 +622,9 @@ extension _DeviceControlTabSections on _DeviceControlPageState {
             backgroundColor: AppColors.success,
           ),
         );
+        return true;
       }
+      return false;
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -675,6 +634,7 @@ extension _DeviceControlTabSections on _DeviceControlPageState {
           ),
         );
       }
+      return false;
     }
   }
 
@@ -1235,6 +1195,159 @@ extension _DeviceControlTabSections on _DeviceControlPageState {
               onConfirm();
             },
             child: Text(l10n.confirm),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+typedef SaveDeviceSchedule = FutureOr<bool> Function(
+  String start,
+  String end,
+  String mode,
+);
+
+/// Owns the schedule editor's input and submission state for the dialog route.
+class DeviceScheduleDialog extends StatefulWidget {
+  const DeviceScheduleDialog({
+    super.key,
+    required this.title,
+    required this.initialStart,
+    required this.initialEnd,
+    required this.initialMode,
+    required this.startLabel,
+    required this.startHint,
+    required this.endLabel,
+    required this.endHint,
+    required this.modeLabel,
+    required this.modeHint,
+    required this.cancelLabel,
+    required this.saveLabel,
+    required this.onSave,
+  });
+
+  final String title;
+  final String initialStart;
+  final String initialEnd;
+  final String initialMode;
+  final String startLabel;
+  final String startHint;
+  final String endLabel;
+  final String endHint;
+  final String modeLabel;
+  final String modeHint;
+  final String cancelLabel;
+  final String saveLabel;
+  final SaveDeviceSchedule onSave;
+
+  @override
+  State<DeviceScheduleDialog> createState() => _DeviceScheduleDialogState();
+}
+
+class _DeviceScheduleDialogState extends State<DeviceScheduleDialog> {
+  late final TextEditingController _startController;
+  late final TextEditingController _endController;
+  late final TextEditingController _modeController;
+  bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _startController = TextEditingController(text: widget.initialStart);
+    _endController = TextEditingController(text: widget.initialEnd);
+    _modeController = TextEditingController(text: widget.initialMode);
+  }
+
+  @override
+  void dispose() {
+    _startController.dispose();
+    _endController.dispose();
+    _modeController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_isSubmitting) return;
+    setState(() => _isSubmitting = true);
+    try {
+      final saved = await Future<bool>.sync(
+        () => widget.onSave(
+          _startController.text,
+          _endController.text,
+          _modeController.text,
+        ),
+      );
+      if (!mounted) return;
+      if (saved) {
+        Navigator.pop(context);
+      } else {
+        setState(() => _isSubmitting = false);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: !_isSubmitting,
+      child: AlertDialog(
+        title: Text(
+          widget.title,
+          style: TextStyle(
+            fontSize: 16.sp,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16.r),
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _startController,
+                enabled: !_isSubmitting,
+                decoration: InputDecoration(
+                  labelText: widget.startLabel,
+                  hintText: widget.startHint,
+                ),
+              ),
+              SizedBox(height: 12.h),
+              TextField(
+                controller: _endController,
+                enabled: !_isSubmitting,
+                decoration: InputDecoration(
+                  labelText: widget.endLabel,
+                  hintText: widget.endHint,
+                ),
+              ),
+              SizedBox(height: 12.h),
+              TextField(
+                controller: _modeController,
+                enabled: !_isSubmitting,
+                decoration: InputDecoration(
+                  labelText: widget.modeLabel,
+                  hintText: widget.modeHint,
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed:
+                _isSubmitting ? null : () => Navigator.pop(context),
+            child: Text(widget.cancelLabel),
+          ),
+          FilledButton(
+            onPressed: _isSubmitting ? null : _save,
+            child: Text(widget.saveLabel),
           ),
         ],
       ),

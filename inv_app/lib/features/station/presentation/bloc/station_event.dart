@@ -33,33 +33,52 @@ class StationDetailRequested extends StationEvent {
 
 class StationCreateRequested extends StationEvent {
   final Map<String, dynamic> data;
+  final String requestId;
 
-  const StationCreateRequested({required this.data});
+  const StationCreateRequested({
+    required this.data,
+    required this.requestId,
+  });
 
   @override
-  List<Object?> get props => [data];
+  List<Object?> get props => [data, requestId];
 }
 
 class StationUpdateRequested extends StationEvent {
   final int stationId;
   final Map<String, dynamic> data;
+  final String requestId;
 
   const StationUpdateRequested({
     required this.stationId,
     required this.data,
+    required this.requestId,
   });
 
   @override
-  List<Object?> get props => [stationId, data];
+  List<Object?> get props => [stationId, data, requestId];
 }
 
 class StationDeleteRequested extends StationEvent {
   final int stationId;
+  final String requestId;
 
-  const StationDeleteRequested({required this.stationId});
+  const StationDeleteRequested({
+    required this.stationId,
+    required this.requestId,
+  });
 
   @override
-  List<Object?> get props => [stationId];
+  List<Object?> get props => [stationId, requestId];
+}
+
+class StationActionRequestId {
+  static int _sequence = 0;
+
+  static String next() {
+    final timestamp = DateTime.now().microsecondsSinceEpoch;
+    return '$timestamp-${_sequence++}';
+  }
 }
 
 class DeviceUnbindRequested extends StationEvent {

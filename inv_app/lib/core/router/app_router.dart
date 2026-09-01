@@ -90,6 +90,8 @@ import 'package:inv_app/features/ota/presentation/bloc/ota_bloc.dart';
 
 import 'package:inv_app/core/router/guards/auth_guard.dart';
 
+import 'package:inv_app/core/router/route_parameter_parser.dart';
+
 // 主框架/导航/设备列表等组件已拆分至 shell/ 目录，路由文件仅保留路由表
 import 'package:inv_app/core/router/shell/main_shell.dart';
 import 'package:inv_app/core/router/shell/device_list_page.dart';
@@ -123,6 +125,23 @@ CustomTransitionPage<void> _fadePage(GoRouterState state, Widget child) {
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
       return FadeTransition(opacity: animation, child: child);
     },
+  );
+}
+
+CustomTransitionPage<void> _invalidRouteParameterPage(
+  GoRouterState state,
+  String parameterName,
+) {
+  return _fadePage(
+    state,
+    Scaffold(
+      body: Center(
+        child: Text(
+          invalidPositiveRouteParameterMessage(parameterName),
+          textAlign: TextAlign.center,
+        ),
+      ),
+    ),
   );
 }
 
@@ -216,7 +235,10 @@ class AppRouter {
         path: '/station/:id',
         name: 'stationDetail',
         pageBuilder: (context, state) {
-          final id = int.parse(state.pathParameters['id']!);
+          final id = parsePositiveRouteInt(state.pathParameters['id']);
+          if (id == null) {
+            return _invalidRouteParameterPage(state, 'id');
+          }
           // 支持 ?tab=devices 直达设备管理 Tab（首页“移除设备”入口）
           final initialTab =
               state.uri.queryParameters['tab'] == 'devices' ? 2 : 0;
@@ -231,7 +253,10 @@ class AppRouter {
         path: '/station/:id/edit',
         name: 'editStation',
         pageBuilder: (context, state) {
-          final id = int.parse(state.pathParameters['id']!);
+          final id = parsePositiveRouteInt(state.pathParameters['id']);
+          if (id == null) {
+            return _invalidRouteParameterPage(state, 'id');
+          }
 
           return _slidePage(state, EditStationPage(stationId: id));
         },
@@ -246,7 +271,9 @@ class AppRouter {
           DeviceQrBindPage(
             sn: state.uri.queryParameters['sn'] ?? '',
             pin: state.uri.queryParameters['pin'] ?? '',
-            stationId: int.tryParse(state.uri.queryParameters['station_id'] ?? ''),
+            stationId: parsePositiveRouteInt(
+              state.uri.queryParameters['station_id'],
+            ),
           ),
         ),
       ),
@@ -346,12 +373,12 @@ class AppRouter {
         path: '/add-device',
         name: 'addDevice',
         pageBuilder: (context, state) {
-          final stationId = state.uri.queryParameters['station_id'];
-
           return _slidePage(
             state,
             AddDevicePage(
-              stationId: stationId != null ? int.parse(stationId) : null,
+              stationId: parsePositiveRouteInt(
+                state.uri.queryParameters['station_id'],
+              ),
             ),
           );
         },
@@ -360,7 +387,10 @@ class AppRouter {
         path: '/alarm/:id',
         name: 'alarmDetail',
         pageBuilder: (context, state) {
-          final id = int.parse(state.pathParameters['id']!);
+          final id = parsePositiveRouteInt(state.pathParameters['id']);
+          if (id == null) {
+            return _invalidRouteParameterPage(state, 'id');
+          }
 
           return _slidePage(state, AlarmDetailPage(alarmId: id));
         },
@@ -435,7 +465,9 @@ class AppRouter {
         pageBuilder: (context, state) {
           final sn = state.pathParameters['sn']!;
 
-          final taskId = int.parse(state.uri.queryParameters['task_id'] ?? '0');
+          final taskId = parseNonNegativeRouteInt(
+            state.uri.queryParameters['task_id'],
+          );
 
           return _slidePage(
             state,

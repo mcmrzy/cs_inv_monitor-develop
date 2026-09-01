@@ -3,10 +3,12 @@ part of 'station_detail_page.dart';
 class _EnergyFlowPainter extends CustomPainter {
   final List<FlowEdge> flows;
   final double animValue;
+  final Color gridColor;
 
   _EnergyFlowPainter({
     required this.flows,
     required this.animValue,
+    required this.gridColor,
   });
 
   @override
@@ -28,7 +30,6 @@ class _EnergyFlowPainter extends CustomPainter {
     const pvColor = AppColors.orange;
     const loadColor = AppColors.blue;
     const battColor = AppColors.successLight;
-    const gridColor = AppColors.textSecondary;
     const r = 16.0;
     const offset = 8.0;
 
@@ -450,10 +451,11 @@ class _EnergyFlowPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _EnergyFlowPainter old) =>
       flows.length != old.flows.length ||
-      animValue != old.animValue;
+      animValue != old.animValue ||
+      gridColor != old.gridColor;
 }
 
-// 选择设备弹窗：白色圆角面板 + 设备列表（选中态高亮、逐项入场动画）
+// 选择设备弹窗：主题自适应圆角面板 + 设备列表（选中态高亮、逐项入场动画）
 class _DeviceSelectSheet extends StatefulWidget {
   final List<dynamic> devices;
   final String selectedSn;
@@ -572,7 +574,7 @@ class _DeviceSelectSheetState extends State<_DeviceSelectSheet>
                           fontWeight: FontWeight.w600,
                           color: selected
                               ? AppColors.primary
-                              : AppColors.textPrimary,
+                              : AppColor.textPrimary(context),
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -582,7 +584,7 @@ class _DeviceSelectSheetState extends State<_DeviceSelectSheet>
                         subtitle,
                         style: TextStyle(
                           fontSize: 12.sp,
-                          color: AppColors.textHint,
+                          color: AppColor.textHint(context),
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -600,7 +602,7 @@ class _DeviceSelectSheetState extends State<_DeviceSelectSheet>
                   Icon(
                     Icons.chevron_right_rounded,
                     size: 18.sp,
-                    color: AppColors.textHint,
+                    color: AppColor.textHint(context),
                   ),
               ],
             ),
@@ -687,7 +689,7 @@ class _DeviceSelectSheetState extends State<_DeviceSelectSheet>
                           style: TextStyle(
                             fontSize: 16.sp,
                             fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
+                            color: AppColor.textPrimary(context),
                           ),
                         ),
                         SizedBox(height: 2.h),
@@ -695,7 +697,7 @@ class _DeviceSelectSheetState extends State<_DeviceSelectSheet>
                           l10n.deviceCountHint('${widget.devices.length}'),
                           style: TextStyle(
                             fontSize: 12.sp,
-                            color: AppColors.textHint,
+                            color: AppColor.textHint(context),
                           ),
                         ),
                       ],
@@ -704,7 +706,7 @@ class _DeviceSelectSheetState extends State<_DeviceSelectSheet>
                 ],
               ),
               SizedBox(height: 14.h),
-              Divider(height: 1, color: AppColors.divider),
+              Divider(height: 1, color: AppColor.divider(context)),
               SizedBox(height: 6.h),
               ConstrainedBox(
                 constraints: BoxConstraints(
@@ -720,8 +722,7 @@ class _DeviceSelectSheetState extends State<_DeviceSelectSheet>
               _animatedItem(
                 options.length,
                 Material(
-                  color:
-                      AppColors.surfaceHover,
+                  color: AppColor.surfaceHover(context),
                   borderRadius: BorderRadius.circular(14.r),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(14.r),
@@ -734,7 +735,7 @@ class _DeviceSelectSheetState extends State<_DeviceSelectSheet>
                         style: TextStyle(
                           fontSize: 16.sp,
                           fontWeight: FontWeight.w600,
-                          color: AppColors.textSecondary,
+                          color: AppColor.textSecondary(context),
                         ),
                       ),
                     ),

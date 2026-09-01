@@ -179,7 +179,7 @@ class _UpgradeHistoryPageState extends State<UpgradeHistoryPage> {
         elevation: 0,
         scrolledUnderElevation: 0.5,
         backgroundColor: AppColor.surfaceContainer(context),
-        foregroundColor: AppColors.textPrimary,
+        foregroundColor: AppColor.textPrimary(context),
       ),
       body: _buildBody(context, l10n),
     );
@@ -196,7 +196,10 @@ class _UpgradeHistoryPageState extends State<UpgradeHistoryPage> {
           children: [
             Text(
               l10n.str('upgrade_history_load_failed'),
-              style: TextStyle(fontSize: 14.sp, color: AppColors.textHint),
+              style: TextStyle(
+                fontSize: 14.sp,
+                color: AppColor.textHint(context),
+              ),
             ),
             SizedBox(height: 12.h),
             OutlinedButton(
@@ -211,7 +214,10 @@ class _UpgradeHistoryPageState extends State<UpgradeHistoryPage> {
       return Center(
         child: Text(
           l10n.str('upgrade_history_empty'),
-          style: TextStyle(fontSize: 14.sp, color: AppColors.textHint),
+          style: TextStyle(
+            fontSize: 14.sp,
+            color: AppColor.textHint(context),
+          ),
         ),
       );
     }
@@ -314,7 +320,7 @@ class _UpgradeTile extends StatelessWidget {
       leading: Icon(
         Icons.system_update_rounded,
         size: 22.sp,
-        color: _statusColor(item.status),
+        color: _statusColor(context, item.status),
       ),
       title: Text(
         versionText,
@@ -322,7 +328,7 @@ class _UpgradeTile extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
           fontSize: 14.sp,
-          color: AppColors.textPrimary,
+          color: AppColor.textPrimary(context),
           fontWeight: FontWeight.w500,
         ),
       ),
@@ -337,7 +343,7 @@ class _UpgradeTile extends StatelessWidget {
               style: TextStyle(
                 fontSize: 14.sp,
                 fontWeight: FontWeight.w500,
-                color: AppColors.textPrimary,
+                color: AppColor.textPrimary(context),
               ),
             ),
             SizedBox(height: 2.h),
@@ -347,13 +353,19 @@ class _UpgradeTile extends StatelessWidget {
             ' · ${_formatTime(item.createdAt)}',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 12.sp, color: AppColors.textHint),
+            style: TextStyle(
+              fontSize: 12.sp,
+              color: AppColor.textHint(context),
+            ),
           ),
           if (item.oldVersion.isNotEmpty) ...[
             SizedBox(height: 2.h),
             Text(
               '${l10n.str('upgrade_history_old_version')}: v${item.oldVersion}',
-              style: TextStyle(fontSize: 11.sp, color: AppColors.textHint),
+              style: TextStyle(
+                fontSize: 11.sp,
+                color: AppColor.textHint(context),
+              ),
             ),
           ],
           if (item.errorMessage.isNotEmpty) ...[
@@ -379,7 +391,7 @@ class _UpgradeTile extends StatelessWidget {
                 icon: const Icon(Icons.restore_rounded, size: 20),
                 color: canRollback
                     ? AppColors.primary
-                    : AppColors.textHint,
+                    : AppColor.textHint(context),
                 onPressed: canRollback && !rollbackSubmitting
                     ? onRollback
                     : null,
@@ -410,7 +422,7 @@ class _StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final color = _statusColor(status);
+    final color = _statusColor(context, status);
     final labelKey = switch (status) {
       'pending' => 'upgrade_history_status_pending',
       'downloading' => 'upgrade_history_status_downloading',
@@ -439,13 +451,13 @@ class _StatusChip extends StatelessWidget {
   }
 }
 
-Color _statusColor(String status) {
+Color _statusColor(BuildContext context, String status) {
   return switch (status) {
     'success' => AppColors.success,
     'failed' => AppColors.error,
     'pending' => AppColors.warning,
     'downloading' || 'upgrading' => AppColors.primary,
-    _ => AppColors.textHint,
+    _ => AppColor.textHint(context),
   };
 }
 

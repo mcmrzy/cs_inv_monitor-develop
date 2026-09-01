@@ -19,7 +19,16 @@ import 'package:inv_app/l10n/app_localizations.dart';
 /// 一键登录自动注册的用户（昵称为空）首次进入 App 时弹出。
 /// 昵称 / 邮箱 / 头像均为选填，可保存或跳过。
 class ProfileSetupDialog extends StatefulWidget {
-  const ProfileSetupDialog({super.key});
+  final Future<String?> Function()? pickAvatarPath;
+  final Future<String?> Function(String sourcePath)? cropAvatarPath;
+  final Future<String> Function(String filePath)? uploadAvatarPath;
+
+  const ProfileSetupDialog({
+    super.key,
+    this.pickAvatarPath,
+    this.cropAvatarPath,
+    this.uploadAvatarPath,
+  });
 
   static Future<bool?> show(BuildContext context) {
     return showDialog<bool>(
@@ -41,11 +50,14 @@ class _ProfileSetupDialogState extends State<ProfileSetupDialog> {
 
   String? _avatarUrl;
   bool _isUploadingAvatar = false;
+  bool _isSendingEmailCode = false;
   bool _isSaving = false;
 
   // 邮箱验证码倒计时
   int _emailCountdown = 0;
   Timer? _emailTimer;
+  StreamSubscription<AuthState>? _saveSubscription;
+  Completer<AuthState>? _saveCompleter;
 
   static final RegExp _emailRegExp =
       RegExp(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$');
@@ -76,6 +88,11 @@ class _ProfileSetupDialogState extends State<ProfileSetupDialog> {
     _emailController.dispose();
     _emailCodeController.dispose();
     _emailTimer?.cancel();
+    unawaited(_saveSubscription?.cancel());
+    final saveCompleter = _saveCompleter;
+    if (saveCompleter != null && !saveCompleter.isCompleted) {
+      saveCompleter.complete(const AuthError(message: 'dialog disposed'));
+    }
     super.dispose();
   }
 
@@ -92,60 +109,90 @@ class _ProfileSetupDialogState extends State<ProfileSetupDialog> {
     return '$serverBase$path';
   }
 
+  Future<String?> _selectAvatarPath() async {
+    final injectedPicker = widget.pickAvatarPath;
+    if (injectedPicker != null) return injectedPicker();
+
+    final image = await _picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1024,
+      maxHeight: 1024,
+      imageQuality: 90,
+    );
+    return image?.path;
+  }
+
+  Future<String?> _cropAvatarPath(String sourcePath) async {
+    final injectedCropper = widget.cropAvatarPath;
+    if (injectedCropper != null) return injectedCropper(sourcePath);
+
+    // 圆角矩形裁剪后再上传
+    final cropped = await ImageCropper().cropImage(
+      sourcePath: sourcePath,
+      maxWidth: 512,
+      maxHeight: 512,
+      compressFormat: ImageCompressFormat.jpg,
+      compressQuality: 85,
+      uiSettings: [
+        AndroidUiSettings(
+          cropStyle: CropStyle.rectangle,
+          lockAspectRatio: true,
+          initAspectRatio: CropAspectRatioPreset.square,
+          // 隐藏比例工具栏：固定方形裁剪，避免用户改比例破坏头像形状
+          hideBottomControls: true,
+        ),
+        IOSUiSettings(
+          cropStyle: CropStyle.rectangle,
+          aspectRatioLockEnabled: true,
+          aspectRatioPresets: [CropAspectRatioPreset.square],
+        ),
+      ],
+    );
+    return cropped?.path;
+  }
+
+  Future<String> _uploadAvatarPath(String filePath) {
+    final injectedUploader = widget.uploadAvatarPath;
+    if (injectedUploader != null) return injectedUploader(filePath);
+
+    final apiClient = getIt<ApiClient>();
+    final avatarService = AvatarUploadService(apiClient);
+    return avatarService.uploadAvatar(File(filePath));
+  }
+
   Future<void> _pickAndUploadAvatar() async {
+    if (_isUploadingAvatar || _isSaving) return;
+    setState(() => _isUploadingAvatar = true);
+
     try {
-      final XFile? image = await _picker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 1024,
-        maxHeight: 1024,
-        imageQuality: 90,
-      );
-      if (image == null || !mounted) return;
+      final sourcePath = await _selectAvatarPath();
+      if (sourcePath == null || !mounted) return;
 
-      // 圆角矩形裁剪后再上传
-      final CroppedFile? cropped = await ImageCropper().cropImage(
-        sourcePath: image.path,
-        maxWidth: 512,
-        maxHeight: 512,
-        compressFormat: ImageCompressFormat.jpg,
-        compressQuality: 85,
-        uiSettings: [
-          AndroidUiSettings(
-            cropStyle: CropStyle.rectangle,
-            lockAspectRatio: true,
-            initAspectRatio: CropAspectRatioPreset.square,
-            // 隐藏比例工具栏：固定方形裁剪，避免用户改比例破坏头像形状
-            hideBottomControls: true,
-          ),
-          IOSUiSettings(
-            cropStyle: CropStyle.rectangle,
-            aspectRatioLockEnabled: true,
-            aspectRatioPresets: [CropAspectRatioPreset.square],
-          ),
-        ],
-      );
-      if (cropped == null || !mounted) return;
+      final croppedPath = await _cropAvatarPath(sourcePath);
+      if (croppedPath == null || !mounted) return;
 
-      setState(() => _isUploadingAvatar = true);
-
-      final apiClient = getIt<ApiClient>();
-      final avatarService = AvatarUploadService(apiClient);
-      final url = await avatarService.uploadAvatar(File(cropped.path));
+      final url = await _uploadAvatarPath(croppedPath);
 
       if (!mounted) return;
-      setState(() {
-        _avatarUrl = url;
-        _isUploadingAvatar = false;
-      });
+      setState(() => _avatarUrl = url);
     } catch (e) {
-      if (!mounted) return;
-      setState(() => _isUploadingAvatar = false);
       _showSnack(e.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _isUploadingAvatar = false);
+      }
     }
   }
 
   /// 发送邮箱变更验证码
   Future<void> _sendEmailCode() async {
+    if (_isSendingEmailCode ||
+        _emailCountdown > 0 ||
+        _isSaving ||
+        _isUploadingAvatar) {
+      return;
+    }
+
     final email = _emailController.text.trim();
     final l10n = AppLocalizations.of(context)!;
     if (email.isEmpty) {
@@ -157,6 +204,7 @@ class _ProfileSetupDialogState extends State<ProfileSetupDialog> {
       return;
     }
 
+    setState(() => _isSendingEmailCode = true);
     try {
       final apiClient = getIt<ApiClient>();
       final response = await apiClient.post(
@@ -166,35 +214,74 @@ class _ProfileSetupDialogState extends State<ProfileSetupDialog> {
       final data = response.data is Map ? response.data as Map : null;
       if (response.statusCode == 200 && data != null && data['code'] == 0) {
         if (!mounted) return;
-        setState(() => _emailCountdown = 60);
-        _emailTimer?.cancel();
-        _emailTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-          if (!mounted) {
-            timer.cancel();
-            return;
-          }
-          if (_emailCountdown > 0) {
-            setState(() => _emailCountdown--);
-          } else {
-            timer.cancel();
-          }
-        });
+        _startEmailCountdown();
         _showSnack(l10n.codeSent);
       } else {
         throw Exception(data?['message'] ?? '发送失败');
       }
     } catch (e) {
       _showSnack(e.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _isSendingEmailCode = false);
+      }
+    }
+  }
+
+  void _startEmailCountdown() {
+    _emailTimer?.cancel();
+    setState(() => _emailCountdown = 60);
+    _emailTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_emailCountdown <= 1) {
+        timer.cancel();
+        setState(() => _emailCountdown = 0);
+        return;
+      }
+      setState(() => _emailCountdown--);
+    });
+  }
+
+  Future<void> _handleLateSaveResult(
+    Completer<AuthState> completer,
+    StreamSubscription<AuthState>? subscription,
+    AppLocalizations l10n,
+  ) async {
+    try {
+      final state = await completer.future;
+      if (!mounted) return;
+      if (state is AuthProfileUpdateSuccess) {
+        Navigator.of(context).pop(true);
+        _showSnack(l10n.profileSaved);
+      } else if (state is AuthProfileUpdateError) {
+        _showSnack(l10n.translateError(state.message));
+      }
+    } finally {
+      await subscription?.cancel();
+      if (identical(_saveSubscription, subscription)) {
+        _saveSubscription = null;
+      }
+      if (identical(_saveCompleter, completer)) {
+        _saveCompleter = null;
+      }
     }
   }
 
   Future<void> _save() async {
-    if (_isSaving) return;
+    if (_isSaving || _isUploadingAvatar) return;
 
     final l10n = AppLocalizations.of(context)!;
     final nickname = _nicknameController.text.trim();
     final email = _emailController.text.trim();
     final currentState = context.read<AuthBloc>().state;
+    // UI 超时不等于底层请求已取消；Bloc 仍在处理时禁止重复派发更新。
+    if (currentState is AuthLoading) {
+      _showSnack(l10n.errRequestTimeout);
+      return;
+    }
     final previousEmail =
         currentState is AuthAuthenticated ? (currentState.email ?? '') : '';
 
@@ -213,7 +300,12 @@ class _ProfileSetupDialogState extends State<ProfileSetupDialog> {
         _showSnack(l10n.fillAllFields);
         return;
       }
-      setState(() => _isSaving = true);
+    }
+
+    setState(() => _isSaving = true);
+
+    if (emailChanged) {
+      final code = _emailCodeController.text.trim();
       try {
         final apiClient = getIt<ApiClient>();
         final resp = await apiClient.put(
@@ -233,33 +325,40 @@ class _ProfileSetupDialogState extends State<ProfileSetupDialog> {
     }
 
     if (!mounted) return;
-    setState(() => _isSaving = true);
 
+    StreamSubscription<AuthState>? subscription;
+    Completer<AuthState>? completer;
     try {
-      final completer = Completer<void>();
+      final requestId = AuthProfileRequestId.next();
+      final saveCompleter = Completer<AuthState>();
+      completer = saveCompleter;
+      _saveCompleter = saveCompleter;
       // 监听状态变化，等待更新完成或失败
-      final subscription = context.read<AuthBloc>().stream.listen((state) {
-        if (state is AuthAuthenticated || state is AuthError) {
-          if (!completer.isCompleted) completer.complete();
+      subscription = context.read<AuthBloc>().stream.listen((state) {
+        final isOwnSuccess = state is AuthProfileUpdateSuccess &&
+            state.requestId == requestId;
+        final isOwnError = state is AuthProfileUpdateError &&
+            state.requestId == requestId;
+        if ((isOwnSuccess || isOwnError) && !saveCompleter.isCompleted) {
+          saveCompleter.complete(state);
         }
       });
+      _saveSubscription = subscription;
 
       context.read<AuthBloc>().add(
-            AuthUpdateProfileRequested(
-              nickname: nickname,
-              avatar: _avatarUrl,
-            ),
-          );
-
-      await completer.future.timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {},
+        AuthUpdateProfileRequested(
+          requestId: requestId,
+          nickname: nickname,
+          avatar: _avatarUrl,
+        ),
       );
-      await subscription.cancel();
+
+      final updatedState = await saveCompleter.future.timeout(
+        const Duration(seconds: 10),
+      );
 
       if (!mounted) return;
-      final updatedState = context.read<AuthBloc>().state;
-      if (updatedState is AuthError) {
+      if (updatedState is AuthProfileUpdateError) {
         setState(() => _isSaving = false);
         _showSnack(l10n.translateError(updatedState.message));
         return;
@@ -267,14 +366,40 @@ class _ProfileSetupDialogState extends State<ProfileSetupDialog> {
 
       Navigator.of(context).pop(true);
       _showSnack(l10n.profileSaved);
+    } on TimeoutException {
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      _showSnack(l10n.errRequestTimeout);
+      final lateCompleter = completer;
+      final lateSubscription = subscription;
+      if (lateCompleter != null) {
+        subscription = null;
+        completer = null;
+        unawaited(
+          _handleLateSaveResult(
+            lateCompleter,
+            lateSubscription,
+            l10n,
+          ),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _isSaving = false);
       _showSnack(e.toString());
+    } finally {
+      await subscription?.cancel();
+      if (identical(_saveSubscription, subscription)) {
+        _saveSubscription = null;
+      }
+      if (identical(_saveCompleter, completer)) {
+        _saveCompleter = null;
+      }
     }
   }
 
   void _skip() {
+    if (_isSaving || _isUploadingAvatar) return;
     Navigator.of(context).pop(false);
   }
 
@@ -302,7 +427,9 @@ class _ProfileSetupDialogState extends State<ProfileSetupDialog> {
               // 头像（选填）
               Center(
                 child: GestureDetector(
-                  onTap: _isUploadingAvatar ? null : _pickAndUploadAvatar,
+                  onTap: _isUploadingAvatar || _isSaving
+                      ? null
+                      : _pickAndUploadAvatar,
                   child: Stack(
                     children: [
                       Container(
@@ -343,7 +470,9 @@ class _ProfileSetupDialogState extends State<ProfileSetupDialog> {
               Center(
                 child: TextButton.icon(
                   onPressed:
-                      _isUploadingAvatar ? null : _pickAndUploadAvatar,
+                      _isUploadingAvatar || _isSaving
+                          ? null
+                          : _pickAndUploadAvatar,
                   icon: const Icon(Icons.photo_camera_rounded, size: 16),
                   label: Text(l10n.changeAvatar),
                 ),
@@ -352,6 +481,7 @@ class _ProfileSetupDialogState extends State<ProfileSetupDialog> {
               // 昵称（选填）
               TextField(
                 controller: _nicknameController,
+                enabled: !_isSaving,
                 maxLength: 30,
                 decoration: InputDecoration(
                   labelText: l10n.nickname,
@@ -367,6 +497,7 @@ class _ProfileSetupDialogState extends State<ProfileSetupDialog> {
               // 邮箱（选填）
               TextField(
                 controller: _emailController,
+                enabled: !_isSaving,
                 keyboardType: TextInputType.emailAddress,
                 decoration: InputDecoration(
                   labelText: l10n.email,
@@ -384,6 +515,7 @@ class _ProfileSetupDialogState extends State<ProfileSetupDialog> {
                   Expanded(
                     child: TextField(
                       controller: _emailCodeController,
+                      enabled: !_isSaving,
                       keyboardType: TextInputType.number,
                       decoration: InputDecoration(
                         labelText: l10n.verificationCode,
@@ -400,13 +532,25 @@ class _ProfileSetupDialogState extends State<ProfileSetupDialog> {
                   SizedBox(
                     height: 50.h,
                     child: FilledButton.tonal(
-                      onPressed:
-                          _emailCountdown > 0 ? null : _sendEmailCode,
-                      child: Text(
-                        _emailCountdown > 0
-                            ? '${_emailCountdown}s'
-                            : l10n.sendCode,
-                      ),
+                      onPressed: _isSendingEmailCode ||
+                              _emailCountdown > 0 ||
+                              _isSaving ||
+                              _isUploadingAvatar
+                          ? null
+                          : _sendEmailCode,
+                      child: _isSendingEmailCode
+                          ? SizedBox(
+                              width: 18.w,
+                              height: 18.w,
+                              child: const CircularProgressIndicator(
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : Text(
+                              _emailCountdown > 0
+                                  ? '${_emailCountdown}s'
+                                  : l10n.sendCode,
+                            ),
                     ),
                   ),
                 ],
@@ -416,11 +560,11 @@ class _ProfileSetupDialogState extends State<ProfileSetupDialog> {
         ),
         actions: [
           TextButton(
-            onPressed: _isSaving ? null : _skip,
+            onPressed: _isSaving || _isUploadingAvatar ? null : _skip,
             child: Text(l10n.skip),
           ),
           FilledButton(
-            onPressed: _isSaving ? null : _save,
+            onPressed: _isSaving || _isUploadingAvatar ? null : _save,
             child: _isSaving
                 ? SizedBox(
                     width: 18.w,

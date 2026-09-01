@@ -17,6 +17,7 @@ import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
+import 'package:inv_app/features/station/presentation/models/station_list_presentation.dart';
 import 'package:inv_app/features/onboarding/data/setup_guide_storage.dart';
 import 'package:inv_app/core/services/data_cache_service.dart';
 import 'package:inv_app/core/widgets/app_toast.dart';
@@ -156,38 +157,11 @@ class _HomePageState extends State<HomePage> {
   }
 
   List<dynamic> _filterStations(List<dynamic> stations) {
-    final q = _searchCtl.text.trim().toLowerCase();
-    var list = stations;
-    if (q.isNotEmpty) {
-      list = list
-          .where(
-            (s) => (s['station_name'] ?? s['name'] ?? '')
-                .toString()
-                .toLowerCase()
-                .contains(q),
-          )
-          .toList();
-    }
-    switch (_filterIndex) {
-      case 1:
-        list = list
-            .where(
-              (s) =>
-                  (s['status'] ?? 1) == 1 &&
-                  (s['fault_count'] ?? 0) == 0 &&
-                  (s['online_count'] ?? 0) > 0,
-            )
-            .toList();
-      case 2:
-        list = list.where((s) => (s['fault_count'] ?? 0) > 0).toList();
-      case 3:
-        list = list
-            .where(
-              (s) => (s['status'] ?? 1) != 1 || (s['online_count'] ?? 0) == 0,
-            )
-            .toList();
-    }
-    return list;
+    return StationListPresentation.filter(
+      stations,
+      query: _searchCtl.text,
+      filterIndex: _filterIndex,
+    );
   }
 
   // 进入电站排序模式：清空过滤/搜索，基于全量列表拖动
@@ -248,13 +222,15 @@ class _HomePageState extends State<HomePage> {
           final ds = _cachedState;
 
           if (ds == null) {
-            if (state is StationError) {
+            if (state is StationError && state is! StationActionError) {
               return _buildOfflineFallback();
             }
             return const SkeletonHomePage();
           }
 
-          if (state is StationError && ds.stations.isEmpty) {
+          if (state is StationError &&
+              state is! StationActionError &&
+              ds.stations.isEmpty) {
             return _buildOfflineFallback();
           }
 
@@ -613,22 +589,7 @@ class _HomePageState extends State<HomePage> {
 
   SliverToBoxAdapter _buildFilterCards(dynamic state) {
     final stations = state.stations as List<dynamic>;
-    final totalCount = stations.length;
-    final normalCount = stations
-        .where(
-          (s) =>
-              (s['status'] ?? 1) == 1 &&
-              (s['fault_count'] ?? 0) == 0 &&
-              (s['online_count'] ?? 0) > 0,
-        )
-        .length;
-    final faultCount =
-        stations.where((s) => (s['fault_count'] ?? 0) > 0).length;
-    final offlineCount = stations
-        .where((s) => (s['status'] ?? 1) != 1 || (s['online_count'] ?? 0) == 0)
-        .length;
-
-    final values = [totalCount, normalCount, faultCount, offlineCount];
+    final values = StationListPresentation.counts(stations).asList;
 
     return SliverToBoxAdapter(
       child: Container(
@@ -701,11 +662,8 @@ class _HomePageState extends State<HomePage> {
     final faultCount = station['fault_count'] ?? 0;
     final todayEnergy = (station['today_energy'] ?? 0).toDouble();
     final totalEnergy = (station['total_energy'] ?? 0).toDouble();
-    final status = station['status'] ?? 1;
-    final onlineCount = station['online_count'] ?? 0;
-
-    final ok = status == 1 && faultCount == 0 && onlineCount > 0;
-    final hasFault = faultCount > 0;
+    final ok = StationListPresentation.isNormal(station);
+    final hasFault = StationListPresentation.hasFault(station);
     final province = station['province'] ?? '';
     final city = station['city'] ?? '';
     final district = station['district'] ?? '';
@@ -1746,4 +1704,3 @@ class _MenuItemData {
     required this.path,
   });
 }
-

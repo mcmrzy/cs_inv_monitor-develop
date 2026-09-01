@@ -14,11 +14,10 @@ import 'package:inv_app/core/widgets/wifi_switch_dialog.dart';
 import 'package:inv_app/core/widgets/wifi_enable_dialog.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
+import 'package:inv_app/features/device/presentation/widgets/wifi_provision_widgets.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 part 'wifi_config_sections.dart';
-
-enum _ProvisionMode { softap, ble }
 
 class WifiConfigPage extends StatefulWidget {
   const WifiConfigPage({super.key});
@@ -32,7 +31,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
   final _bleProvisioningService = BleProvisioningService();
   final _connectionModeService = getIt<ConnectionModeService>();
 
-  _ProvisionMode _provisionMode = _ProvisionMode.ble;
+  WifiProvisionMode _provisionMode = WifiProvisionMode.ble;
 
   bool _wifiScanning = false;
   List<ScannedWifiNetwork> _csInvNetworks = [];
@@ -635,8 +634,12 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
     }
   }
 
-  Future<void> _disconnectBleDevice() async {
+  Future<void> _disconnectBleDevice({WifiProvisionMode? expectedMode}) async {
     await _bleProvisioningService.disconnectFromDevice();
+    if (!mounted ||
+        (expectedMode != null && _provisionMode != expectedMode)) {
+      return;
+    }
     setState(() {
       _selectedBleDevice = null;
       _bleConnecting = false;
@@ -841,7 +844,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         children: [
           _buildModeSwitch(),
           SizedBox(height: 20.h),
-          if (_provisionMode == _ProvisionMode.softap)
+          if (_provisionMode == WifiProvisionMode.softAp)
             _buildSoftApSection()
           else
             _buildBleSection(),
@@ -852,212 +855,37 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
 
   Widget _buildModeSwitch() {
     final l10n = AppLocalizations.of(context)!;
-    return Container(
-      padding: EdgeInsets.all(4.w),
-      decoration: BoxDecoration(
-        color: AppColor.surfaceHover(context),
-        borderRadius: BorderRadius.circular(12.r),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                // 切换到BLE模式时重置热点配网状态
-                setState(() {
-                  _provisionMode = _ProvisionMode.ble;
-                  _selectedDeviceAp = null;
-                  _provisionStep = 0;
-                  _provisionStatus = '';
-                  _provisionOk = false;
-                });
-              },
-              child: Container(
-                padding: EdgeInsets.symmetric(vertical: 10.h),
-                decoration: BoxDecoration(
-                  color: _provisionMode == _ProvisionMode.ble
-                      ? AppColors.primary
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(10.r),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.bluetooth,
-                      size: 18.sp,
-                      color: _provisionMode == _ProvisionMode.ble
-                          ? Colors.white
-                          : AppColor.textSecondary(context),
-                    ),
-                    SizedBox(width: 6.w),
-                    Text(
-                      l10n.bleProvision,
-                      style: TextStyle(
-                        fontSize: 14.sp,
-                        fontWeight: FontWeight.w600,
-                        color: _provisionMode == _ProvisionMode.ble
-                            ? Colors.white
-                            : AppColor.textSecondary(context),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                // 切换到热点模式时断开BLE连接并重置状态
-                _disconnectBleDevice();
-                setState(() {
-                  _provisionMode = _ProvisionMode.softap;
-                  _selectedDeviceAp = null;
-                  _provisionStep = 0;
-                  _provisionStatus = '';
-                  _provisionOk = false;
-                  _provisionSuccess = false;
-                });
-                if (_csInvNetworks.isEmpty && !_wifiScanning) _scanCSInvWiFi();
-              },
-              child: Container(
-                padding: EdgeInsets.symmetric(vertical: 10.h),
-                decoration: BoxDecoration(
-                  color: _provisionMode == _ProvisionMode.softap
-                      ? AppColors.primary
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(10.r),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.router,
-                      size: 18.sp,
-                      color: _provisionMode == _ProvisionMode.softap
-                          ? Colors.white
-                          : AppColor.textSecondary(context),
-                    ),
-                    SizedBox(width: 6.w),
-                    Text(
-                      AppLocalizations.of(context)!.hotspotProvision,
-                      style: TextStyle(
-                        fontSize: 14.sp,
-                        fontWeight: FontWeight.w600,
-                        color: _provisionMode == _ProvisionMode.softap
-                            ? Colors.white
-                            : AppColor.textSecondary(context),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+    return WifiProvisionModeSwitch(
+      selectedMode: _provisionMode,
+      bleLabel: l10n.bleProvision,
+      softApLabel: l10n.hotspotProvision,
+      onSelected: _selectProvisionMode,
     );
   }
 
-  Widget _buildStepIndicatorRow(List<_StepData> steps) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 16.h),
-      decoration: BoxDecoration(
-        color: AppColor.surfaceContainer(context),
-        borderRadius: BorderRadius.circular(14.r),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: steps.asMap().entries.map((entry) {
-          final index = entry.key;
-          final step = entry.value;
+  void _selectProvisionMode(WifiProvisionMode mode) {
+    if (mode == WifiProvisionMode.ble) {
+      // 切换到BLE模式时重置热点配网状态
+      setState(() {
+        _provisionMode = WifiProvisionMode.ble;
+        _selectedDeviceAp = null;
+        _provisionStep = 0;
+        _provisionStatus = '';
+        _provisionOk = false;
+      });
+      return;
+    }
 
-          Color stepColor;
-          if (step.isCompleted) {
-            stepColor = AppColors.successLight;
-          } else if (step.isCurrent) {
-            stepColor = AppColors.primary;
-          } else {
-            stepColor = AppColor.textHint(context);
-          }
-
-          return Expanded(
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    children: [
-                      Container(
-                        width: 28.w,
-                        height: 28.w,
-                        decoration: BoxDecoration(
-                          color: stepColor.withValues(alpha: 0.1),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: stepColor, width: 2),
-                        ),
-                        child: step.isCompleted
-                            ? Icon(Icons.check, size: 14.sp, color: stepColor)
-                            : Center(
-                                child: Text(
-                                  '${index + 1}',
-                                  style: TextStyle(
-                                    fontSize: 12.sp,
-                                    fontWeight: FontWeight.w600,
-                                    color: stepColor,
-                                  ),
-                                ),
-                              ),
-                      ),
-                      SizedBox(height: 4.h),
-                      Text(
-                        step.label,
-                        style: TextStyle(
-                          fontSize: 10.sp,
-                          color: step.isCurrent || step.isCompleted
-                              ? AppColor.textPrimary(context)
-                              : AppColor.textHint(context),
-                          fontWeight: step.isCurrent
-                              ? FontWeight.w600
-                              : FontWeight.w400,
-                        ),
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                if (index < steps.length - 1)
-                  Container(
-                    width: 16.w,
-                    height: 2,
-                    color: step.isCompleted
-                        ? AppColors.successLight
-                        : AppColor.border(context),
-                  ),
-              ],
-            ),
-          );
-        }).toList(),
-      ),
-    );
+    // 切换到热点模式时断开BLE连接并重置状态
+    _disconnectBleDevice(expectedMode: WifiProvisionMode.softAp);
+    setState(() {
+      _provisionMode = WifiProvisionMode.softAp;
+      _selectedDeviceAp = null;
+      _provisionStep = 0;
+      _provisionStatus = '';
+      _provisionOk = false;
+      _provisionSuccess = false;
+    });
+    if (_csInvNetworks.isEmpty && !_wifiScanning) _scanCSInvWiFi();
   }
-}
-
-class _StepData {
-  final String label;
-  final bool isCompleted;
-  final bool isCurrent;
-  const _StepData({
-    required this.label,
-    required this.isCompleted,
-    required this.isCurrent,
-  });
 }

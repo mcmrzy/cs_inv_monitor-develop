@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -7,12 +5,15 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:dio/dio.dart';
 import 'package:image_picker/image_picker.dart';
 
-import 'package:inv_app/core/config/app_config.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
+import 'package:inv_app/features/support/data/models/work_order_models.dart';
+import 'package:inv_app/features/support/presentation/widgets/work_order_submit_dialog.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
+
+export 'package:inv_app/features/support/data/models/work_order_models.dart';
 
 /// 工单列表 + 提交表单（对接后端 /work-orders）
 ///
@@ -257,151 +258,28 @@ class _WorkOrdersPageState extends State<WorkOrdersPage> {
 
   Future<void> _showSubmitDialog() async {
     final l10n = AppLocalizations.of(context)!;
-    final titleController = TextEditingController();
-    final descController = TextEditingController();
-    final selectedImages = <XFile>[];
-    // 表单选择项：默认设备故障模板 + 中优先级 + 不关联设备
-    var selectedTemplate = _templates.isNotEmpty
-        ? (_templates.first['templateId'] ?? 'repair').toString()
-        : 'repair';
-    var selectedPriority = 'medium';
-    var selectedDeviceSn = '';
     final templates = _templates.isNotEmpty
         ? _templates
         : WorkOrderTemplate.fallback;
-
-    final submitted = await showDialog<bool>(
+    final submitted = await showDialog<WorkOrderSubmitData>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(l10n.workOrderSubmit),
-        content: SingleChildScrollView(
-          child: StatefulBuilder(
-            builder: (innerContext, setDialogState) => Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: titleController,
-                  maxLength: 50,
-                  decoration: InputDecoration(
-                    labelText: l10n.workOrderTitleLabel,
-                    hintText: l10n.workOrderTitleHint,
-                  ),
-                ),
-                SizedBox(height: 8.h),
-                TextField(
-                  controller: descController,
-                  maxLines: 4,
-                  maxLength: 500,
-                  decoration: InputDecoration(
-                    labelText: l10n.workOrderDescLabel,
-                    hintText: l10n.workOrderDescHint,
-                    alignLabelWithHint: true,
-                  ),
-                ),
-                SizedBox(height: 12.h),
-                // 工单类型（模板）
-                _selectRow(
-                  icon: Icons.category_rounded,
-                  label: l10n.str('work_order_template'),
-                  value: _templateTitle(templates, selectedTemplate),
-                  onTap: () async {
-                    final picked = await _pickTemplate(
-                      innerContext,
-                      templates,
-                      selectedTemplate,
-                    );
-                    if (picked != null) {
-                      setDialogState(() {
-                        selectedTemplate = picked;
-                        // 模板默认优先级联动
-                        final tpl = templates.firstWhere(
-                          (t) => (t['templateId'] ?? '') == picked,
-                          orElse: () => const {},
-                        );
-                        final p = (tpl['priority'] ?? '').toString();
-                        if (p.isNotEmpty) selectedPriority = p;
-                      });
-                    }
-                  },
-                ),
-                SizedBox(height: 8.h),
-                // 优先级
-                _selectRow(
-                  icon: Icons.flag_rounded,
-                  label: l10n.workOrderPriority,
-                  value: _priorityLabel(l10n, selectedPriority),
-                  onTap: () async {
-                    final picked =
-                        await _pickPriority(innerContext, selectedPriority);
-                    if (picked != null) {
-                      setDialogState(() => selectedPriority = picked);
-                    }
-                  },
-                ),
-                SizedBox(height: 8.h),
-                // 关联设备（可选）
-                _selectRow(
-                  icon: Icons.devices_other_rounded,
-                  label: l10n.str('work_order_select_device'),
-                  value: selectedDeviceSn.isEmpty
-                      ? l10n.str('work_order_no_device')
-                      : selectedDeviceSn,
-                  onTap: () async {
-                    final picked = await _pickDevice(
-                      innerContext,
-                      selectedDeviceSn,
-                    );
-                    if (picked != null) {
-                      setDialogState(() => selectedDeviceSn = picked);
-                    }
-                  },
-                ),
-                SizedBox(height: 12.h),
-                _buildAttachmentPicker(
-                  innerContext,
-                  l10n,
-                  selectedImages,
-                  setDialogState,
-                ),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: Text(l10n.cancel),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (titleController.text.trim().isEmpty ||
-                  descController.text.trim().isEmpty) {
-                AppToast.show(
-                  dialogContext,
-                  l10n.str('work_order_required'),
-                  type: ToastType.info,
-                );
-                return;
-              }
-              Navigator.pop(dialogContext, true);
-            },
-            child: Text(l10n.workOrderSubmit),
-          ),
-        ],
+      builder: (_) => WorkOrderSubmitDialog(
+        templates: templates,
+        deviceOptions: _deviceOptions,
       ),
     );
-    if (submitted != true || !mounted) return;
+    if (submitted == null || !mounted) return;
 
     try {
       final dio = getIt<Dio>();
       final response = await dio.post(
         '/work-orders',
         data: {
-          'title': titleController.text.trim(),
-          'description': descController.text.trim(),
-          'priority': selectedPriority,
-          'template_type': selectedTemplate,
-          if (selectedDeviceSn.isNotEmpty) 'device_sn': selectedDeviceSn,
+          'title': submitted.title,
+          'description': submitted.description,
+          'priority': submitted.priority,
+          'template_type': submitted.templateType,
+          if (submitted.deviceSn.isNotEmpty) 'device_sn': submitted.deviceSn,
         },
       );
       final data = response.data;
@@ -409,9 +287,9 @@ class _WorkOrdersPageState extends State<WorkOrdersPage> {
         // 创建成功后上传附件（可选，失败不阻断工单提交）
         final orderId =
             ((data['data'] as Map?) ?? const {})['id']?.toString() ?? '';
-        if (orderId.isNotEmpty && selectedImages.isNotEmpty) {
+        if (orderId.isNotEmpty && submitted.images.isNotEmpty) {
           try {
-            await _uploadAttachments(orderId, selectedImages);
+            await _uploadAttachments(orderId, submitted.images);
           } catch (e) {
             debugPrint('[WorkOrdersPage] upload attachments failed: $e');
             if (!mounted) return;
@@ -444,337 +322,6 @@ class _WorkOrdersPageState extends State<WorkOrdersPage> {
         type: ToastType.error,
       );
     }
-  }
-
-  /// 选择行：标签 + 当前值 + 箭头
-  Widget _selectRow({
-    required IconData icon,
-    required String label,
-    required String value,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10.r),
-      child: Padding(
-        padding: EdgeInsets.symmetric(vertical: 8.h, horizontal: 4.w),
-        child: Row(
-          children: [
-            Icon(icon, size: 18.sp, color: AppColor.textHint(context)),
-            SizedBox(width: 8.w),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13.sp,
-                color: AppColor.textSecondary(context),
-              ),
-            ),
-            const Spacer(),
-            Flexible(
-              child: Text(
-                value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 13.sp,
-                  fontWeight: FontWeight.w500,
-                  color: AppColor.textPrimary(context),
-                ),
-              ),
-            ),
-            SizedBox(width: 4.w),
-            Icon(
-              Icons.arrow_drop_down_rounded,
-              size: 18.sp,
-              color: AppColor.textHint(context),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<String?> _pickTemplate(
-    BuildContext dialogContext,
-    List<Map<String, dynamic>> templates,
-    String current,
-  ) {
-    return showDialog<String>(
-      context: dialogContext,
-      builder: (ctx) => SimpleDialog(
-        title: Text(AppLocalizations.of(ctx)!.str('work_order_template')),
-        children: [
-          for (final tpl in templates)
-            SimpleDialogOption(
-              onPressed: () =>
-                  Navigator.pop(ctx, (tpl['templateId'] ?? '').toString()),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          (tpl['title'] ?? '').toString(),
-                          style: TextStyle(
-                            fontSize: 14.sp,
-                            fontWeight: (tpl['templateId'] ?? '') == current
-                                ? FontWeight.w700
-                                : FontWeight.w400,
-                          ),
-                        ),
-                        if ((tpl['description'] ?? '').toString().isNotEmpty)
-                          Text(
-                            (tpl['description'] ?? '').toString(),
-                            style: TextStyle(
-                              fontSize: 12.sp,
-                              color: AppColor.textHint(ctx),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  if ((tpl['templateId'] ?? '') == current)
-                    Icon(Icons.check_rounded,
-                        size: 16.sp, color: AppColors.primary),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Future<String?> _pickPriority(BuildContext dialogContext, String current) {
-    final l10n = AppLocalizations.of(dialogContext)!;
-    final options = ['high', 'medium', 'low'];
-    return showDialog<String>(
-      context: dialogContext,
-      builder: (ctx) => SimpleDialog(
-        title: Text(l10n.workOrderPriority),
-        children: [
-          for (final p in options)
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(ctx, p),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      _priorityLabel(l10n, p),
-                      style: TextStyle(
-                        fontSize: 14.sp,
-                        fontWeight:
-                            p == current ? FontWeight.w700 : FontWeight.w400,
-                      ),
-                    ),
-                  ),
-                  if (p == current)
-                    Icon(Icons.check_rounded,
-                        size: 16.sp, color: AppColors.primary),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  /// 选择关联设备：第一项为「不关联设备」
-  Future<String?> _pickDevice(BuildContext dialogContext, String current) {
-    final l10n = AppLocalizations.of(dialogContext)!;
-    return showDialog<String>(
-      context: dialogContext,
-      builder: (ctx) => SimpleDialog(
-        title: Text(l10n.str('work_order_select_device')),
-        children: [
-          SimpleDialogOption(
-            onPressed: () => Navigator.pop(ctx, ''),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    l10n.str('work_order_no_device'),
-                    style: TextStyle(
-                      fontSize: 14.sp,
-                      fontWeight: current.isEmpty
-                          ? FontWeight.w700
-                          : FontWeight.w400,
-                    ),
-                  ),
-                ),
-                if (current.isEmpty)
-                  Icon(Icons.check_rounded,
-                      size: 16.sp, color: AppColors.primary),
-              ],
-            ),
-          ),
-          for (final (sn, name) in _deviceOptions)
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(ctx, sn),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          name,
-                          style: TextStyle(
-                            fontSize: 14.sp,
-                            fontWeight: sn == current
-                                ? FontWeight.w700
-                                : FontWeight.w400,
-                          ),
-                        ),
-                        Text(
-                          sn,
-                          style: TextStyle(
-                            fontSize: 11.sp,
-                            color: AppColor.textHint(ctx),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (sn == current)
-                    Icon(Icons.check_rounded,
-                        size: 16.sp, color: AppColors.primary),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  String _templateTitle(List<Map<String, dynamic>> templates, String id) {
-    for (final tpl in templates) {
-      if ((tpl['templateId'] ?? '') == id) {
-        return (tpl['title'] ?? id).toString();
-      }
-    }
-    return id;
-  }
-
-  String _priorityLabel(AppLocalizations l10n, String priority) {
-    return switch (priority) {
-      'high' => l10n.str('work_order_priority_high'),
-      'medium' => l10n.str('work_order_priority_medium'),
-      'low' => l10n.str('work_order_priority_low'),
-      _ => priority.isEmpty ? '-' : priority,
-    };
-  }
-
-  /// 附件选择区：已选图片缩略图（可移除）+ 添加按钮（最多 5 张）
-  Widget _buildAttachmentPicker(
-    BuildContext dialogContext,
-    AppLocalizations l10n,
-    List<XFile> selected,
-    void Function(VoidCallback) setDialogState,
-  ) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Expanded(
-          child: selected.isEmpty
-              ? Text(
-                  l10n.workOrderAttachHint,
-                  style: TextStyle(
-                    fontSize: 12.sp,
-                    color: AppColor.textHint(dialogContext),
-                  ),
-                )
-              : Wrap(
-                  spacing: 8.w,
-                  runSpacing: 8.h,
-                  children: [
-                    for (var i = 0; i < selected.length; i++)
-                      _attachmentThumb(
-                        dialogContext,
-                        selected,
-                        i,
-                        setDialogState,
-                      ),
-                  ],
-                ),
-        ),
-        TextButton.icon(
-          onPressed: selected.length >= 5
-              ? null
-              : () => _pickAttachmentImages(
-                    dialogContext,
-                    l10n,
-                    selected,
-                    setDialogState,
-                  ),
-          icon: const Icon(Icons.add_photo_alternate_outlined, size: 18),
-          label: Text(l10n.workOrderAddImage),
-        ),
-      ],
-    );
-  }
-
-  /// 单张已选图片缩略图（右上角可移除）
-  Widget _attachmentThumb(
-    BuildContext dialogContext,
-    List<XFile> selected,
-    int index,
-    void Function(VoidCallback) setDialogState,
-  ) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8.r),
-          child: Image.file(
-            File(selected[index].path),
-            width: 52.w,
-            height: 52.w,
-            fit: BoxFit.cover,
-          ),
-        ),
-        Positioned(
-          top: -6.h,
-          right: -6.w,
-          child: GestureDetector(
-            onTap: () => setDialogState(() => selected.removeAt(index)),
-            child: Container(
-              padding: const EdgeInsets.all(2),
-              decoration: const BoxDecoration(
-                color: Colors.black54,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Icons.close, size: 12.sp, color: Colors.white),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// 从相册选图（最多 5 张，超限提示）
-  Future<void> _pickAttachmentImages(
-    BuildContext dialogContext,
-    AppLocalizations l10n,
-    List<XFile> selected,
-    void Function(VoidCallback) setDialogState,
-  ) async {
-    final picker = ImagePicker();
-    final picked = await picker.pickMultiImage(
-      maxWidth: 1600,
-      maxHeight: 1600,
-      imageQuality: 85,
-    );
-    if (picked.isEmpty) return;
-    final remaining = 5 - selected.length;
-    if (picked.length > remaining) {
-      AppToast.show(
-        dialogContext,
-        l10n.workOrderAttachHint,
-        type: ToastType.info,
-      );
-    }
-    setDialogState(() => selected.addAll(picked.take(remaining)));
   }
 
   /// 上传附件（multipart files 字段，1-5 张，仅图片）
@@ -1200,72 +747,6 @@ class _WorkOrdersPageState extends State<WorkOrdersPage> {
   }
 }
 
-/// 工单模板兜底数据（与后端 /work-orders/templates 结构一致）
-class WorkOrderTemplate {
-  static const List<Map<String, dynamic>> fallback = [
-    {
-      'templateId': 'repair',
-      'title': '设备故障',
-      'description': '设备运行异常，需要检修',
-      'priority': 'high',
-    },
-    {
-      'templateId': 'maintenance',
-      'title': '定期维护',
-      'description': '设备定期保养维护',
-      'priority': 'medium',
-    },
-    {
-      'templateId': 'inspection',
-      'title': '设备巡检',
-      'description': '设备运行状态巡检',
-      'priority': 'low',
-    },
-    {
-      'templateId': 'installation',
-      'title': '安装调试',
-      'description': '设备安装与参数调试',
-      'priority': 'medium',
-    },
-  ];
-}
-
-class WorkOrderItem {
-  final String id;
-  final String title;
-  final String status;
-  final String priority;
-  final String deviceSn;
-  final DateTime createdAt;
-
-  const WorkOrderItem({
-    required this.id,
-    required this.title,
-    required this.status,
-    required this.priority,
-    required this.deviceSn,
-    required this.createdAt,
-  });
-
-  /// 后端同时输出 camelCase 与 snake_case 字段，双兼容解析；
-  /// 时间解析失败回退当前时间，避免整条数据丢失
-  factory WorkOrderItem.fromJson(Map<String, dynamic> json) {
-    return WorkOrderItem(
-      id: json['id']?.toString() ?? '',
-      title: (json['title'] ?? '').toString(),
-      status: (json['status'] ?? 'open').toString(),
-      priority: (json['priority'] ?? '').toString(),
-      deviceSn: (json['deviceSn'] ?? json['device_sn'] ?? '').toString(),
-      createdAt: _parseTime(json['createdAt'] ?? json['created_at']),
-    );
-  }
-
-  static DateTime _parseTime(dynamic raw) {
-    if (raw == null) return DateTime.now();
-    return DateTime.tryParse(raw.toString()) ?? DateTime.now();
-  }
-}
-
 /// 卡片式工单项：优先级图标圆底 + 标题 + 元信息 + 状态徽章
 ///
 /// 单击 [onTap] 进入详情页；长按 [onLongPress] 弹出操作菜单。
@@ -1450,14 +931,6 @@ class _WorkOrderActionItem extends StatelessWidget {
       ),
     );
   }
-}
-
-/// 本地时间格式化：yyyy-MM-dd HH:mm
-String formatWorkOrderTime(DateTime time) {
-  final t = time.toLocal();
-  String two(int v) => v.toString().padLeft(2, '0');
-  return '${t.year}-${two(t.month)}-${two(t.day)} '
-      '${two(t.hour)}:${two(t.minute)}';
 }
 
 /// 工单详情页（GET /work-orders/:id）
@@ -1814,127 +1287,6 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage> {
       'installation' => '安装调试',
       _ => templateType.isEmpty ? '-' : templateType,
     };
-  }
-}
-
-/// 工单详情数据模型（GET /work-orders/:id 全字段，camel/snake 双兼容）
-class WorkOrderDetail {
-  final String id;
-  final String title;
-  final String description;
-  final String status;
-  final String priority;
-  final String deviceSn;
-  final String creatorName;
-  final String assigneeName;
-  final String templateType;
-  final String resolution;
-  final DateTime? slaDeadline;
-  final DateTime createdAt;
-  final DateTime updatedAt;
-  final List<WorkOrderTimelineEvent> timeline;
-  final List<WorkOrderAttachment> attachments;
-
-  const WorkOrderDetail({
-    required this.id,
-    required this.title,
-    required this.description,
-    required this.status,
-    required this.priority,
-    required this.deviceSn,
-    required this.creatorName,
-    required this.assigneeName,
-    required this.templateType,
-    required this.resolution,
-    this.slaDeadline,
-    required this.createdAt,
-    required this.updatedAt,
-    required this.timeline,
-    required this.attachments,
-  });
-
-  factory WorkOrderDetail.fromJson(Map<String, dynamic> json) {
-    return WorkOrderDetail(
-      id: json['id']?.toString() ?? '',
-      title: (json['title'] ?? '').toString(),
-      description: (json['description'] ?? '').toString(),
-      status: (json['status'] ?? 'open').toString(),
-      priority: (json['priority'] ?? '').toString(),
-      deviceSn: (json['deviceSn'] ?? json['device_sn'] ?? '').toString(),
-      creatorName:
-          (json['creatorName'] ?? json['creator_name'] ?? '').toString(),
-      assigneeName:
-          (json['assigneeName'] ?? json['assignee_name'] ?? '').toString(),
-      templateType:
-          (json['templateType'] ?? json['template_type'] ?? '').toString(),
-      resolution: (json['resolution'] ?? '').toString(),
-      slaDeadline: _tryParse(json['slaDeadline'] ?? json['sla_deadline']),
-      createdAt:
-          _tryParse(json['createdAt'] ?? json['created_at']) ?? DateTime.now(),
-      updatedAt:
-          _tryParse(json['updatedAt'] ?? json['updated_at']) ?? DateTime.now(),
-      timeline: (json['timeline'] as List? ?? const [])
-          .map((e) => WorkOrderTimelineEvent.fromJson(
-              Map<String, dynamic>.from(e as Map)))
-          .toList(),
-      attachments: (json['attachments'] as List? ?? const [])
-          .map((e) => WorkOrderAttachment.fromJson(
-              Map<String, dynamic>.from(e as Map)))
-          .toList(),
-    );
-  }
-
-  static DateTime? _tryParse(dynamic raw) {
-    if (raw == null) return null;
-    return DateTime.tryParse(raw.toString());
-  }
-}
-
-/// 时间线事件（状态流转记录）
-class WorkOrderTimelineEvent {
-  final String status;
-  final String operator;
-  final String remark;
-  final DateTime timestamp;
-
-  const WorkOrderTimelineEvent({
-    required this.status,
-    required this.operator,
-    required this.remark,
-    required this.timestamp,
-  });
-
-  factory WorkOrderTimelineEvent.fromJson(Map<String, dynamic> json) {
-    return WorkOrderTimelineEvent(
-      status: (json['status'] ?? '').toString(),
-      operator: (json['operator'] ?? '').toString(),
-      remark: (json['remark'] ?? '').toString(),
-      timestamp: DateTime.tryParse((json['timestamp'] ?? '').toString()) ??
-          DateTime.now(),
-    );
-  }
-}
-
-/// 工单附件（图片）
-class WorkOrderAttachment {
-  final String name;
-  final String url;
-
-  const WorkOrderAttachment({required this.name, required this.url});
-
-  factory WorkOrderAttachment.fromJson(Map<String, dynamic> json) {
-    return WorkOrderAttachment(
-      name: (json['name'] ?? '').toString(),
-      url: (json['url'] ?? '').toString(),
-    );
-  }
-
-  /// 附件完整 URL：后端返回相对路径 /firmware/...，
-  /// 拼接 API 主机地址（去掉 /api/v1 前缀）。
-  String get fullUrl {
-    final base = AppConfig.apiBaseUrl;
-    final host = base.replaceFirst(RegExp(r'/api/v1/*$'), '');
-    return url.startsWith('http') ? url : '$host$url';
   }
 }
 

@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:inv_app/core/auth/permission_codes.dart';
 import 'package:inv_app/core/components/permission_gate.dart';
 import 'package:inv_app/core/entities/organization.dart';
 import 'package:inv_app/core/stores/organization_context_store.dart';
+import 'package:inv_app/core/widgets/create_organization_dialog.dart';
 import 'package:inv_app/core/widgets/org_selector_dialog.dart';
+import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:intl/intl.dart';
 
 /// 组织浏览器屏幕
@@ -60,10 +63,9 @@ class _OrganizationBrowserScreenStateState
             tooltip: '刷新',
           ),
 
-          // 新建组织（仅管理员）
-          PermissionGate(
-            resource: 'organization',
-            action: 'manage',
+          // 后端仅允许系统管理员创建组织。
+          RoleGuard(
+            requireSystemAdmin: true,
             child: IconButton(
               icon: const Icon(Icons.add_circle),
               onPressed: _showCreateOrgDialog,
@@ -125,9 +127,8 @@ class _OrganizationBrowserScreenStateState
                     ),
                   ),
                   SizedBox(height: 24.h),
-                  PermissionGate(
-                    resource: 'organization',
-                    action: 'manage',
+                  RoleGuard(
+                    requireSystemAdmin: true,
                     child: FilledButton.icon(
                       onPressed: _showCreateOrgDialog,
                       icon: const Icon(Icons.add),
@@ -161,9 +162,8 @@ class _OrganizationBrowserScreenStateState
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            PermissionGate(
-              resource: 'organization',
-              action: 'manage',
+            RoleGuard(
+              requireSystemAdmin: true,
               child: FloatingActionButton.extended(
                 onPressed: _showCreateOrgDialog,
                 icon: const Icon(Icons.add),
@@ -206,104 +206,45 @@ class _OrganizationBrowserScreenStateState
   }
 
   Future<void> _selectOrganization(Organization org) async {
-    final wasChanged = await showOrgSelectorDialog(context);
-
-    if (wasChanged != true && mounted) {
-      // 如果未切换，直接使用 ListTile 点击效果
-      _orgStore.setActiveOrganization(org.id, org.name);
-
+    try {
+      await _orgStore.switchContextToOrganization(
+        org.id,
+        org.name,
+        context.read<AuthBloc>(),
+      );
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('已切换到 "${org.name}"'),
           duration: const Duration(seconds: 2),
         ),
       );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('切换失败：$error')),
+      );
     }
   }
 
   Future<void> _showCreateOrgDialog() async {
-    final nameController = TextEditingController();
-    final descriptionController = TextEditingController();
-
-    showDialog(
+    final newOrg = await showDialog<Organization>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('创建新组织'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: '组织名称',
-                    hintText: '请输入组织名称',
-                    prefixIcon: Icon(Icons.business),
-                  ),
-                  autofocus: true,
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: descriptionController,
-                  decoration: const InputDecoration(
-                    labelText: '描述（可选）',
-                    hintText: '请输入组织描述',
-                    prefixIcon: Icon(Icons.description),
-                  ),
-                  maxLines: 3,
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                final name = nameController.text.trim();
-                if (name.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('请输入组织名称')),
-                  );
-                  return;
-                }
+      builder: (context) => CreateOrganizationDialog(
+        onSubmit: ({required String name, String? description}) =>
+            _orgStore.apiService.createOrganization(
+          name: name,
+          description: description,
+        ),
+      ),
+    );
 
-                try {
-                  final newOrg = await _orgStore.apiService.createOrganization(
-                    name: name,
-                    description: descriptionController.text.trim().isEmpty
-                        ? null
-                        : descriptionController.text.trim(),
-                  );
-
-                  _orgStore.addOrganization(newOrg);
-
-                  await Future.microtask(() {});
-                  if (!mounted) return;
-                  Navigator.pop(context); // ignore: use_build_context_synchronously
-                  ScaffoldMessenger.of(context).showSnackBar( // ignore: use_build_context_synchronously
-                    SnackBar(
-                      content: Text('已创建组织 "${newOrg.name}"'),
-                    ),
-                  );
-                } catch (e) {
-                  await Future.microtask(() {});
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar( // ignore: use_build_context_synchronously
-                    SnackBar(
-                      content: Text('创建失败：$e'),
-                    ),
-                  );
-                }
-              },
-              child: const Text('创建'),
-            ),
-          ],
-        );
-      },
+    if (!mounted || newOrg == null) return;
+    _orgStore.addOrganization(newOrg);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('已创建组织 "${newOrg.name}"'),
+      ),
     );
   }
 }
@@ -459,10 +400,16 @@ class _OrganizationCard extends StatelessWidget {
                   // TODO: 实现具体操作
                 },
                 itemBuilder: (context) {
-                  final canManage =
-                      PermChecker.has(context, 'organization', 'manage');
-                  final canManageDevice =
-                      PermChecker.has(context, 'device', 'manage');
+                  final canManageMembers = PermChecker.hasCode(
+                    context,
+                    PermissionCodes.organizationsManageMembers,
+                    requiredOrgId: organization.id,
+                  );
+                  final canManageDevice = PermChecker.hasCode(
+                    context,
+                    PermissionCodes.devicesManage,
+                    requiredOrgId: organization.id,
+                  );
                   return [
                     const PopupMenuItem(
                       value: 'view',
@@ -474,7 +421,7 @@ class _OrganizationCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                    if (canManage)
+                    if (canManageMembers)
                       const PopupMenuItem(
                         value: 'members',
                         child: Row(

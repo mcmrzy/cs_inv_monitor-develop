@@ -47,15 +47,26 @@ class AuthSendCodeRequested extends AuthEvent {
   final String phone;
   final String type;
   final String? captchaToken;
+  final String requestId;
 
   const AuthSendCodeRequested({
     required this.phone,
     required this.type,
+    required this.requestId,
     this.captchaToken,
   });
 
   @override
-  List<Object?> get props => [phone, type, captchaToken];
+  List<Object?> get props => [phone, type, captchaToken, requestId];
+}
+
+class AuthCodeRequestId {
+  static int _sequence = 0;
+
+  static String next() {
+    final timestamp = DateTime.now().microsecondsSinceEpoch;
+    return '$timestamp-${_sequence++}';
+  }
 }
 
 class AuthResetPasswordRequested extends AuthEvent {
@@ -87,6 +98,7 @@ class AuthChangePasswordRequested extends AuthEvent {
 }
 
 class AuthUpdateProfileRequested extends AuthEvent {
+  final String requestId;
   final String? nickname;
   final String? avatar;
   final String? email;
@@ -95,6 +107,7 @@ class AuthUpdateProfileRequested extends AuthEvent {
   final String? bio;
 
   const AuthUpdateProfileRequested({
+    required this.requestId,
     this.nickname,
     this.avatar,
     this.email,
@@ -104,7 +117,24 @@ class AuthUpdateProfileRequested extends AuthEvent {
   });
 
   @override
-  List<Object?> get props => [nickname, avatar, email, country, regionName, bio];
+  List<Object?> get props => [
+        requestId,
+        nickname,
+        avatar,
+        email,
+        country,
+        regionName,
+        bio,
+      ];
+}
+
+class AuthProfileRequestId {
+  static int _sequence = 0;
+
+  static String next() {
+    final timestamp = DateTime.now().microsecondsSinceEpoch;
+    return '$timestamp-${_sequence++}';
+  }
 }
 
 class AuthEmailLoginRequested extends AuthEvent {
@@ -173,15 +203,17 @@ class AuthSendEmailCodeRequested extends AuthEvent {
   final String email;
   final String type;
   final String? captchaToken;
+  final String requestId;
 
   const AuthSendEmailCodeRequested({
     required this.email,
     required this.type,
+    required this.requestId,
     this.captchaToken,
   });
 
   @override
-  List<Object?> get props => [email, type, captchaToken];
+  List<Object?> get props => [email, type, captchaToken, requestId];
 }
 
 /// 修改手机号/邮箱成功后，同步更新 AuthBloc 状态与本地缓存（无需重新请求服务器）
@@ -206,6 +238,21 @@ class AuthTokenRefreshed extends AuthEvent {
 
   @override
   List<Object?> get props => [token, refreshToken];
+}
+
+class AuthOrganizationContextSwitchRequested extends AuthEvent {
+  final int organizationId;
+  final String organizationName;
+  final Completer<void> completer;
+
+  const AuthOrganizationContextSwitchRequested({
+    required this.organizationId,
+    required this.organizationName,
+    required this.completer,
+  });
+
+  @override
+  List<Object?> get props => [organizationId, organizationName];
 }
 
 class AuthWechatLoginRequested extends AuthEvent {

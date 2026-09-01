@@ -24,6 +24,9 @@ class BlePollingService {
 
   Timer? _timer;
   final _controller = StreamController<BlePolledTelemetry>.broadcast();
+  bool _pollInFlight = false;
+  bool _disposed = false;
+  int _generation = 0;
 
   bool get isRunning => _timer?.isActive ?? false;
 
@@ -31,11 +34,16 @@ class BlePollingService {
   Stream<BlePolledTelemetry> get telemetry => _controller.stream;
 
   void start() {
-    if (isRunning) return;
-    _timer = Timer.periodic(interval, (_) => _pollOnce());
+    if (_disposed || isRunning) return;
+    final generation = ++_generation;
+    _timer = Timer.periodic(
+      interval,
+      (_) => unawaited(_pollOnce(generation)),
+    );
   }
 
   void stop() {
+    _generation++;
     _timer?.cancel();
     _timer = null;
   }
@@ -44,27 +52,44 @@ class BlePollingService {
     interval = value;
     if (isRunning) {
       _timer?.cancel();
-      _timer = Timer.periodic(interval, (_) => _pollOnce());
+      final generation = ++_generation;
+      _timer = Timer.periodic(
+        interval,
+        (_) => unawaited(_pollOnce(generation)),
+      );
     }
   }
 
-  Future<void> _pollOnce() async {
-    for (final session in manager.sessions.values) {
-      if (session.state != BleDeviceState.ready || session.sn == null) {
-        continue;
+  bool _isCurrent(int generation) =>
+      !_disposed && generation == _generation && isRunning;
+
+  Future<void> _pollOnce(int generation) async {
+    if (_pollInFlight || !_isCurrent(generation)) return;
+    _pollInFlight = true;
+    try {
+      for (final session in manager.sessions.values) {
+        if (!_isCurrent(generation)) return;
+        if (session.state != BleDeviceState.ready || session.sn == null) {
+          continue;
+        }
+        try {
+          final data = await session.readTelemetrySnapshot();
+          if (!_isCurrent(generation)) return;
+          _controller.add(
+            BlePolledTelemetry(sn: session.sn!, data: data),
+          );
+        } catch (_) {
+          // 单设备读取失败不影响其他设备与下一周期
+        }
       }
-      try {
-        final data = await session.readTelemetrySnapshot();
-        _controller.add(
-          BlePolledTelemetry(sn: session.sn!, data: data),
-        );
-      } catch (_) {
-        // 单设备读取失败不影响其他设备与下一周期
-      }
+    } finally {
+      _pollInFlight = false;
     }
   }
 
   void dispose() {
+    if (_disposed) return;
+    _disposed = true;
     stop();
     _controller.close();
   }

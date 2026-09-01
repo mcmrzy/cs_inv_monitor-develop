@@ -49,6 +49,25 @@ void main() {
       expect(loaded, isNull);
     });
 
+    test('removes expired data and timestamp after a cache miss', () async {
+      final oldTs = DateTime.now().millisecondsSinceEpoch - 3600000;
+      SharedPreferences.setMockInitialValues({
+        'data_cache_test_key': '{"data":"old"}',
+        'data_cache_ts_test_key': oldTs,
+      });
+      final prefs = await SharedPreferences.getInstance();
+      final service = DataCacheService(prefs);
+
+      expect(
+        service.load('test_key', ttl: const Duration(minutes: 5)),
+        isNull,
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(prefs.containsKey('data_cache_test_key'), isFalse);
+      expect(prefs.containsKey('data_cache_ts_test_key'), isFalse);
+    });
+
     test('handles nested data structures', () async {
       final data = {
         'stations': [
