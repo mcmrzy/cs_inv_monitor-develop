@@ -214,10 +214,7 @@ class _StationDetailPageState extends State<StationDetailPage>
 
         return BlocListener<StationBloc, StationState>(
           listener: (context, state) {
-            if (state is StationDeleteSuccess) {
-              AppToast.show(context, l10n.str('station_deleted', {}), type: ToastType.info);
-              context.pop();
-            } else if (state is DeviceUnbindSuccess) {
+            if (state is DeviceUnbindSuccess) {
               AppToast.show(context, '${l10n.str('device_unbound', {})} - ${state.sn}', type: ToastType.success);
               context.read<StationBloc>().add(
                 StationDetailRequested(stationId: widget.stationId),
@@ -239,7 +236,8 @@ class _StationDetailPageState extends State<StationDetailPage>
               );
             } else if (state is DeviceReorderSuccess) {
               AppToast.show(context, l10n.str('device_order_saved', {}), type: ToastType.success);
-            } else if (state is StationError) {
+            } else if (state is StationError &&
+                state is! StationActionError) {
               AppToast.show(context, l10n.translateError(state.message), type: ToastType.error);
             }
           },
@@ -418,7 +416,9 @@ class _StationDetailPageState extends State<StationDetailPage>
                 decoration: BoxDecoration(
                   color: online
                       ? AppColors.badgeNormalBg
-                      : Colors.white.withValues(alpha: 0.8),
+                      : AppColor.surfaceContainer(
+                          context,
+                        ).withValues(alpha: 0.8),
                   borderRadius: BorderRadius.circular(6.r),
                   boxShadow: [
                     BoxShadow(
@@ -580,6 +580,7 @@ class _StationDetailPageState extends State<StationDetailPage>
                 painter: _EnergyFlowPainter(
                   flows: flows,
                   animValue: _anim.value,
+                  gridColor: AppColor.textSecondary(context),
                 ),
               ),
             ),
@@ -710,7 +711,7 @@ class _StationDetailPageState extends State<StationDetailPage>
           height: 62.w,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: Colors.white,
+            color: AppColor.surfaceContainer(context),
             boxShadow: [
               BoxShadow(
                 color: color.withValues(alpha: 0.1),
@@ -801,7 +802,7 @@ class _StationDetailPageState extends State<StationDetailPage>
           height: 62.w,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: Colors.white,
+            color: AppColor.surfaceContainer(context),
             boxShadow: [
               BoxShadow(
                 color: color.withValues(alpha: 0.1),
@@ -997,7 +998,7 @@ class _StationDetailPageState extends State<StationDetailPage>
     return Container(
       padding: EdgeInsets.all(14.w),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.circular(14.r),
         boxShadow: [
           BoxShadow(
@@ -1068,7 +1069,7 @@ class _StationDetailPageState extends State<StationDetailPage>
       child: Container(
         padding: EdgeInsets.all(16.w),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColor.surfaceContainer(context),
           borderRadius: BorderRadius.circular(14.r),
           boxShadow: [
             BoxShadow(
@@ -1136,7 +1137,7 @@ class _StationDetailPageState extends State<StationDetailPage>
       child: Container(
         padding: EdgeInsets.all(14.w),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColor.surfaceContainer(context),
           borderRadius: BorderRadius.circular(14.r),
           boxShadow: [
             BoxShadow(
@@ -1278,7 +1279,7 @@ class _StationDetailPageState extends State<StationDetailPage>
       height: 56.h + MediaQuery.of(context).padding.bottom,
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColor.surfaceContainer(context),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
@@ -1530,4 +1531,3 @@ class FlowEdge {
     required this.toColor,
   });
 }
-

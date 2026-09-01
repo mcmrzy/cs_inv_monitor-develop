@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:inv_app/core/auth/permission_codes.dart';
 import 'package:inv_app/core/stores/organization_context_store.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 
@@ -39,7 +40,8 @@ extension PermissionLevelExtension on PermissionLevel {
 /// 权限检查器 (基于新组织权限体系)
 class PermChecker {
   /// 构建 permission_code，如 'devices:view'
-  static String _permCode(String resource, String action) => '$resource:$action';
+  static String _permCode(String resource, String action) =>
+      PermissionCodes.build(resource, action);
 
   /// 检查用户对某个资源的某个操作是否有权限
   static bool has(
@@ -48,23 +50,33 @@ class PermChecker {
     String action, {
     int? requiredOrgId,
   }) {
+    return hasCode(
+      context,
+      _permCode(resource, action),
+      requiredOrgId: requiredOrgId,
+    );
+  }
+
+  /// 检查用户是否拥有后端返回的完整 permission_code。
+  static bool hasCode(
+    BuildContext context,
+    String permissionCode, {
+    int? requiredOrgId,
+  }) {
     final authState = context.read<AuthBloc>().state;
     if (authState is! AuthAuthenticated) return false;
 
     // 系统超级管理员绕过所有权限检查
     if (authState.isSystemAdmin) return true;
 
-    // 获取当前组织上下文
-    final orgStore = context.read<OrganizationContextStore>();
-
-    // 如果需要特定组织且不在该组织中，返回 false
-    if (requiredOrgId != null && !orgStore.isMemberOf(requiredOrgId)) {
+    // 权限列表与认证令牌中的活动组织绑定；不能信任独立的本地 UI 选择状态。
+    if (requiredOrgId != null &&
+        authState.activeOrganizationId != requiredOrgId) {
       return false;
     }
 
     // 基于 permission_code 检查
-    final code = _permCode(resource, action);
-    return authState.permissions.contains(code);
+    return authState.permissions.contains(permissionCode);
   }
 
   /// 获取用户的权限等级
@@ -75,7 +87,7 @@ class PermChecker {
     }
 
     if (authState.isSystemAdmin) return PermissionLevel.admin;
-    if (authState.permissions.contains('admin:manage')) {
+    if (authState.permissions.contains(PermissionCodes.adminManage)) {
       return PermissionLevel.manage;
     }
     if (authState.permissions.any((p) => p.endsWith(':manage'))) {
@@ -88,29 +100,40 @@ class PermChecker {
 /// 权限门控组件
 /// 根据用户的权限显示或隐藏子组件
 class PermissionGate extends StatelessWidget {
-  final String resource;
-  final String action; // view, control, manage, admin
+  final String? resource;
+  final String? action; // view, control, manage, admin
+  final String? permissionCode;
   final Widget child;
   final Widget? emptyWrapper; // 没有权限时显示的组件，默认为 SizedBox.shrink()
   final int? requiredOrgId; // 可选：指定所需的组织 ID
 
   const PermissionGate({
     super.key,
-    required this.resource,
-    required this.action,
+    this.resource,
+    this.action,
+    this.permissionCode,
     required this.child,
     this.emptyWrapper,
     this.requiredOrgId,
-  });
+  }) : assert(
+          permissionCode != null || (resource != null && action != null),
+          'Provide permissionCode or both resource and action.',
+        );
 
   @override
   Widget build(BuildContext context) {
-    final hasPermission = PermChecker.has(
-      context,
-      resource,
-      action,
-      requiredOrgId: requiredOrgId,
-    );
+    final hasPermission = permissionCode != null
+        ? PermChecker.hasCode(
+            context,
+            permissionCode!,
+            requiredOrgId: requiredOrgId,
+          )
+        : PermChecker.has(
+            context,
+            resource!,
+            action!,
+            requiredOrgId: requiredOrgId,
+          );
 
     if (hasPermission) {
       return child;
@@ -202,10 +225,16 @@ extension AuthContextExtensions on BuildContext {
     return PermChecker.has(this, resource, action);
   }
 
-  bool canViewDevices() => hasPermission('device', 'view');
-  bool canControlDevices() => hasPermission('device', 'control');
-  bool canManageOrganizations() => hasPermission('organization', 'manage');
-  bool canViewAlerts() => hasPermission('alert', 'view');
-  bool canManageUsers() => hasPermission('user', 'manage');
-  bool canConfigureSystem() => hasPermission('system', 'admin');
+  bool hasPermissionCode(String permissionCode) {
+    return PermChecker.hasCode(this, permissionCode);
+  }
+
+  bool canViewDevices() => hasPermissionCode(PermissionCodes.devicesView);
+  bool canControlDevices() =>
+      hasPermissionCode(PermissionCodes.devicesControl);
+  bool canManageOrganizations() =>
+      hasPermissionCode(PermissionCodes.organizationsManage);
+  bool canViewAlerts() => hasPermissionCode(PermissionCodes.alertsView);
+  bool canManageUsers() => hasPermissionCode(PermissionCodes.usersManage);
+  bool canConfigureSystem() => hasPermissionCode(PermissionCodes.adminManage);
 }

@@ -25,6 +25,7 @@ import 'package:inv_app/core/utils/api_response.dart';
 import 'package:inv_app/core/widgets/station_selector_sheet.dart';
 import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/core/widgets/ble_pin_bind_dialog.dart';
+import 'package:inv_app/features/device/presentation/widgets/add_device_pin_dialog.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 class AddDevicePage extends StatefulWidget {
@@ -341,35 +342,16 @@ class _AddDevicePageState extends State<AddDevicePage>
   /// 扫码/手动二维码无 PIN 时的补充输入：弹窗要求 6 位铭牌 PIN，
   /// 随后进入 BLE 直连绑定页（后端严格模式：无 PIN 无法绑定）。
   Future<void> _promptPinAndBind(String sn) async {
-    final controller = TextEditingController();
     final pin = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(AppLocalizations.of(ctx)!.pinInputTitle),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          keyboardType: TextInputType.number,
-          maxLength: 6,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          decoration: InputDecoration(
-            hintText: AppLocalizations.of(ctx)!.pinInputHint,
-            counterText: '',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(AppLocalizations.of(ctx)!.cancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: Text(AppLocalizations.of(ctx)!.confirm),
-          ),
-        ],
+      builder: (ctx) => AddDevicePinDialog(
+        title: AppLocalizations.of(ctx)!.pinInputTitle,
+        hintText: AppLocalizations.of(ctx)!.pinInputHint,
+        invalidPinMessage: AppLocalizations.of(ctx)!.invalidPinLength,
+        cancelLabel: AppLocalizations.of(ctx)!.cancel,
+        confirmLabel: AppLocalizations.of(ctx)!.confirm,
       ),
     );
-    controller.dispose();
     if (pin == null || !mounted) {
       // 用户取消，重置扫码状态避免一直转圈
       _qrScanGuard.release(resetPayload: true);

@@ -16,8 +16,47 @@ import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/features/alarm/presentation/bloc/alarm_bloc.dart';
 import 'package:inv_app/features/notification/presentation/bloc/notification_bloc.dart';
+import 'package:inv_app/features/notification/presentation/models/notification_feed_item.dart';
 import 'package:inv_app/core/utils/timezone_utils.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
+
+/// Coalesces real-time notification bursts while keeping explicit refreshes
+/// immediate.
+class NotificationRefreshScheduler {
+  NotificationRefreshScheduler({
+    required VoidCallback onRefresh,
+    this.delay = const Duration(milliseconds: 300),
+  }) : _onRefresh = onRefresh;
+
+  final VoidCallback _onRefresh;
+  final Duration delay;
+  Timer? _timer;
+  bool _disposed = false;
+
+  void schedule() {
+    if (_disposed) return;
+
+    _timer?.cancel();
+    _timer = Timer(delay, () {
+      _timer = null;
+      if (!_disposed) _onRefresh();
+    });
+  }
+
+  void refreshNow() {
+    if (_disposed) return;
+
+    _timer?.cancel();
+    _timer = null;
+    _onRefresh();
+  }
+
+  void dispose() {
+    _disposed = true;
+    _timer?.cancel();
+    _timer = null;
+  }
+}
 
 class NotificationCenterPage extends StatefulWidget {
   const NotificationCenterPage({super.key});
@@ -31,6 +70,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
   AlarmState? _cachedAlarmState;
   final NotificationStreamService _streamService = NotificationStreamService();
   StreamSubscription<Map<String, dynamic>>? _sseSubscription;
+  late final NotificationRefreshScheduler _refreshScheduler;
   // 系统通知批量管理模式（长按菜单进入）：告警与通知分别按 id 勾选（两类 id 可能冲突）
   bool _batchMode = false;
   final Set<int> _selectedNotifIds = {};
@@ -45,6 +85,9 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
   @override
   void initState() {
     super.initState();
+    _refreshScheduler = NotificationRefreshScheduler(
+      onRefresh: _dispatchRefreshRequests,
+    );
     _removeCtl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 260),
@@ -65,14 +108,15 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
       '[NotificationCenter] Received real-time notification: $notificationData',
     );
     if (!mounted) return;
-    // 同时刷新 BLoC 数据
-    _refreshAll();
+    // 突发事件在一个短窗口内合并，避免重复请求两组列表。
+    _refreshScheduler.schedule();
   }
 
   Future<void> _startSSEConnection() async {
     try {
       final storageService = getIt<StorageService>();
       final token = await storageService.getToken();
+      if (!mounted) return;
       if (token != null && token.isNotEmpty) {
         await _streamService.start(token: token);
       }
@@ -84,12 +128,18 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
   @override
   void dispose() {
     _sseSubscription?.cancel();
+    _refreshScheduler.dispose();
     _streamService.stop();
     _removeCtl.dispose();
     super.dispose();
   }
 
   void _refreshAll() {
+    _refreshScheduler.refreshNow();
+  }
+
+  void _dispatchRefreshRequests() {
+    if (!mounted) return;
     context.read<AlarmBloc>().add(const AlarmListRequested());
     context.read<NotificationBloc>().add(const SystemNotificationsRequested());
   }
@@ -229,57 +279,25 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
 
   // ==================== 数据合并 ====================
 
-  List<_NotificationItem> _mergeItems(
+  List<NotificationFeedItem> _mergeItems(
     AlarmState alarmState,
     NotificationState notifState,
   ) {
-    final items = <_NotificationItem>[];
-
-    // 添加告警
+    Iterable<dynamic> alarms = const [];
     if (alarmState is AlarmListLoaded) {
-      for (final alarm in alarmState.alarms) {
-        final occurredAt = alarm['occurred_at'] as String? ?? '';
-        DateTime? timestamp = DateTime.tryParse(occurredAt);
-        timestamp ??= DateTime.now();
-        items.add(
-          _NotificationItem(
-            type: _ItemType.alarm,
-            timestamp: timestamp,
-            data: alarm,
-          ),
-        );
-      }
+      alarms = alarmState.alarms;
     } else if (_cachedAlarmState is AlarmListLoaded) {
-      for (final alarm in (_cachedAlarmState as AlarmListLoaded).alarms) {
-        final occurredAt = alarm['occurred_at'] as String? ?? '';
-        DateTime? timestamp = DateTime.tryParse(occurredAt);
-        timestamp ??= DateTime.now();
-        items.add(
-          _NotificationItem(
-            type: _ItemType.alarm,
-            timestamp: timestamp,
-            data: alarm,
-          ),
-        );
-      }
+      alarms = (_cachedAlarmState as AlarmListLoaded).alarms;
     }
 
-    // 添加系统通知
-    if (notifState is SystemNotificationsLoaded) {
-      for (final notif in notifState.notifications) {
-        items.add(
-          _NotificationItem(
-            type: _ItemType.system,
-            timestamp: notif.timestamp,
-            data: notif,
-          ),
-        );
-      }
-    }
+    final notifications = notifState is SystemNotificationsLoaded
+        ? notifState.notifications
+        : const <SystemNotification>[];
 
-    // 按时间倒序排列
-    items.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-    return items;
+    return mergeNotificationFeedItems(
+      alarms: alarms,
+      systemNotifications: notifications,
+    );
   }
 
   // ==================== 通用组件 ====================
@@ -772,23 +790,23 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
 
   Widget _buildItemCard(
     BuildContext context,
-    _NotificationItem item,
+    NotificationFeedItem item,
     AppLocalizations l10n, {
     required int index,
     required bool batchMode,
   }) {
     Widget card;
-    if (item.type == _ItemType.alarm) {
+    if (item.type == NotificationFeedItemType.alarm) {
       card = _buildAlarmCard(
         context,
-        item.data as Map<String, dynamic>,
+        item.alarm,
         l10n,
         item.timestamp,
       );
     } else {
       card = _buildSystemCard(
         context,
-        item.data as SystemNotification,
+        item.notification,
         l10n,
         item.timestamp,
       );
@@ -798,7 +816,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
       card = JiggleOnce(active: batchMode, index: index, child: card);
     }
     // 批量删除：卡片缩小 + 淡出移除动画
-    if (_removingKeys.contains(_itemKey(item))) {
+    if (_removingKeys.contains(item.stableKey)) {
       card = AnimatedBuilder(
         animation: _removeCtl,
         builder: (context, child) => Opacity(
@@ -812,14 +830,6 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
       );
     }
     return card;
-  }
-
-  /// 条目唯一 key：告警/通知 id 类型不同可能冲突，加前缀区分
-  String _itemKey(_NotificationItem item) {
-    if (item.type == _ItemType.alarm) {
-      return 'alarm:${(item.data as Map<String, dynamic>)['id']}';
-    }
-    return 'notif:${(item.data as SystemNotification).id}';
   }
 
   Widget _buildAlarmCard(
@@ -1224,22 +1234,6 @@ class _LongPressFeedbackCardState extends State<_LongPressFeedbackCard> {
       ),
     );
   }
-}
-
-// ==================== 内部数据模型 ====================
-
-enum _ItemType { alarm, system }
-
-class _NotificationItem {
-  final _ItemType type;
-  final DateTime timestamp;
-  final dynamic data;
-
-  const _NotificationItem({
-    required this.type,
-    required this.timestamp,
-    required this.data,
-  });
 }
 
 // ==================== 弹窗逐项入场动画 ====================

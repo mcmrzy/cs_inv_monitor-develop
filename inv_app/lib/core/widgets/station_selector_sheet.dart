@@ -25,9 +25,15 @@ class StationSelectorSheet extends StatefulWidget {
 }
 
 class _StationSelectorSheetState extends State<StationSelectorSheet> {
+  List<dynamic>? _cachedStations;
+
   @override
   void initState() {
     super.initState();
+    final state = context.read<StationBloc>().state;
+    if (state is StationSummaryLoaded) {
+      _cachedStations = state.stations;
+    }
     context.read<StationBloc>().add(StationSummaryRequested());
   }
 
@@ -91,10 +97,19 @@ class _StationSelectorSheetState extends State<StationSelectorSheet> {
             Expanded(
               child: BlocBuilder<StationBloc, StationState>(
                 builder: (context, state) {
-                  if (state is StationLoading || state is StationInitial) {
+                  if (state is StationSummaryLoaded) {
+                    _cachedStations = state.stations;
+                  }
+                  if ((state is StationLoading || state is StationInitial) &&
+                      _cachedStations == null) {
                     return const PageSkeleton();
                   }
-                  if (state is StationError) {
+                  if (state is StationActionError &&
+                      _cachedStations == null) {
+                    return const PageSkeleton();
+                  }
+                  if (state is StationError &&
+                      state is! StationActionError) {
                     return Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -118,10 +133,7 @@ class _StationSelectorSheetState extends State<StationSelectorSheet> {
                       ),
                     );
                   }
-                  List<dynamic> stations = [];
-                  if (state is StationSummaryLoaded) {
-                    stations = state.stations;
-                  }
+                  final stations = _cachedStations ?? const <dynamic>[];
                   if (stations.isEmpty) {
                     return Center(
                       child: Column(

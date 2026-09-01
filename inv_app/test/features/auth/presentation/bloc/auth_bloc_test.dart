@@ -62,6 +62,8 @@ void main() {
         .thenAnswer((_) async {});
     when(() => mockStorageService.getPermissions())
         .thenAnswer((_) async => <String>[]);
+    when(() => mockStorageService.getActiveOrgId())
+        .thenAnswer((_) async => null);
     when(() => mockStorageService.savePermissions(any()))
         .thenAnswer((_) async {});
     when(() => mockStorageService.deletePermissions())
@@ -407,11 +409,22 @@ void main() {
         const AuthSendCodeRequested(
           phone: '13800138000',
           type: 'login',
+          requestId: 'request-1',
         ),
       ),
       expect: () => [
-        isA<AuthCodeSending>(),
-        isA<AuthCodeSent>(),
+        const AuthCodeSending(
+          target: '13800138000',
+          type: 'login',
+          channel: 'phone',
+          requestId: 'request-1',
+        ),
+        const AuthCodeSent(
+          target: '13800138000',
+          type: 'login',
+          channel: 'phone',
+          requestId: 'request-1',
+        ),
       ],
     );
 
@@ -432,11 +445,57 @@ void main() {
         const AuthSendCodeRequested(
           phone: '13800138000',
           type: 'login',
+          requestId: 'request-1',
         ),
       ),
       expect: () => [
-        isA<AuthCodeSending>(),
-        isA<AuthError>(),
+        const AuthCodeSending(
+          target: '13800138000',
+          type: 'login',
+          channel: 'phone',
+          requestId: 'request-1',
+        ),
+        isA<AuthCodeSendError>()
+            .having((state) => state.target, 'target', '13800138000')
+            .having((state) => state.type, 'type', 'login')
+            .having((state) => state.channel, 'channel', 'phone')
+            .having((state) => state.requestId, 'requestId', 'request-1'),
+      ],
+    );
+  });
+
+  group('AuthSendEmailCodeRequested', () {
+    blocTest<AuthBloc, AuthState>(
+      'emits request identity on success',
+      build: () {
+        when(
+          () => mockSendEmailCodeUseCase(
+            email: any(named: 'email'),
+            type: any(named: 'type'),
+          ),
+        ).thenAnswer((_) async => right<Failure, void>(null));
+        return authBloc;
+      },
+      act: (bloc) => bloc.add(
+        const AuthSendEmailCodeRequested(
+          email: 'user@example.com',
+          type: 'register',
+          requestId: 'request-1',
+        ),
+      ),
+      expect: () => const [
+        AuthCodeSending(
+          target: 'user@example.com',
+          type: 'register',
+          channel: 'email',
+          requestId: 'request-1',
+        ),
+        AuthCodeSent(
+          target: 'user@example.com',
+          type: 'register',
+          channel: 'email',
+          requestId: 'request-1',
+        ),
       ],
     );
   });
@@ -524,6 +583,144 @@ void main() {
         isA<AuthError>(),
       ],
     );
+  });
+
+  // ---------------------------------------------------------------------------
+  // AuthUpdateProfileRequested
+  // ---------------------------------------------------------------------------
+  group('AuthUpdateProfileRequested', () {
+    User existingUser() => User(
+          id: 1,
+          phone: '13800138000',
+          nickname: 'Old name',
+          email: 'old@example.com',
+          avatar: '/old-avatar.jpg',
+          country: '中国',
+          region: '广东省',
+          status: 1,
+          createdAt: DateTime(2026),
+        );
+
+    blocTest<AuthBloc, AuthState>(
+      'emits correlated success and preserves explicit empty field updates',
+      seed: () => AuthProfileUpdateSuccess(
+        requestId: 'previous-profile-success',
+        userId: 1,
+        phone: '13800138000',
+        user: existingUser(),
+      ),
+      build: () {
+        when(
+          () => mockUpdateProfileUseCase(
+            nickname: any(named: 'nickname'),
+            avatar: any(named: 'avatar'),
+            email: any(named: 'email'),
+            country: any(named: 'country'),
+            regionName: any(named: 'regionName'),
+            bio: any(named: 'bio'),
+          ),
+        ).thenAnswer((_) async => right<Failure, void>(null));
+        // 模拟服务器读写延迟：保存后仍返回旧资料。
+        when(() => mockGetProfileUseCase()).thenAnswer(
+          (_) async => right<Failure, User>(existingUser()),
+        );
+        return authBloc;
+      },
+      act: (bloc) => bloc.add(
+        const AuthUpdateProfileRequested(
+          requestId: 'profile-clear-1',
+          nickname: '',
+          avatar: '',
+          email: '',
+          country: '',
+          regionName: '',
+          bio: '',
+        ),
+      ),
+      expect: () => [
+        isA<AuthLoading>(),
+        isA<AuthProfileUpdateSuccess>()
+            .having((state) => state.requestId, 'requestId', 'profile-clear-1')
+            .having((state) => state.user?.nickname, 'nickname', '')
+            .having((state) => state.user?.avatar, 'avatar', '')
+            .having((state) => state.user?.email, 'email', '')
+            .having((state) => state.user?.country, 'country', '')
+            .having((state) => state.user?.region, 'region', '')
+            .having((state) => state.user?.bio, 'bio', ''),
+      ],
+    );
+
+    blocTest<AuthBloc, AuthState>(
+      'emits correlated profile error on failure',
+      seed: () => AuthProfileUpdateSuccess(
+        requestId: 'previous-profile-success',
+        userId: 1,
+        phone: '13800138000',
+        user: existingUser(),
+      ),
+      build: () {
+        when(
+          () => mockUpdateProfileUseCase(
+            nickname: any(named: 'nickname'),
+            avatar: any(named: 'avatar'),
+            email: any(named: 'email'),
+            country: any(named: 'country'),
+            regionName: any(named: 'regionName'),
+            bio: any(named: 'bio'),
+          ),
+        ).thenAnswer(
+          (_) async => left<Failure, void>(
+            createTestServerFailure('profile failed'),
+          ),
+        );
+        return authBloc;
+      },
+      act: (bloc) => bloc.add(
+        const AuthUpdateProfileRequested(
+          requestId: 'profile-fail-1',
+          nickname: 'New name',
+        ),
+      ),
+      expect: () => [
+        isA<AuthLoading>(),
+        isA<AuthProfileUpdateError>()
+            .having((state) => state.requestId, 'requestId', 'profile-fail-1')
+            .having((state) => state.message, 'message', 'profile failed'),
+        isA<AuthAuthenticated>()
+            .having(
+              (state) => state.runtimeType,
+              'runtimeType',
+              AuthAuthenticated,
+            )
+            .having((state) => state.user?.nickname, 'nickname', 'Old name'),
+      ],
+    );
+  });
+
+  group('AuthState listener isolation', () {
+    test('only profile update terminals are classified as profile-only states', () {
+      const profileSuccess = AuthProfileUpdateSuccess(
+        requestId: 'profile-success',
+        userId: 1,
+        phone: '13800138000',
+      );
+      const profileError = AuthProfileUpdateError(
+        message: 'profile failed',
+        requestId: 'profile-error',
+      );
+
+      expect(profileSuccess.isProfileUpdateTerminal, isTrue);
+      expect(profileError.isProfileUpdateTerminal, isTrue);
+      expect(
+        const AuthAuthenticated(userId: 1, phone: '13800138000')
+            .isProfileUpdateTerminal,
+        isFalse,
+      );
+      expect(
+        const AuthError(message: 'login failed').isProfileUpdateTerminal,
+        isFalse,
+      );
+    });
   });
 
   // ---------------------------------------------------------------------------

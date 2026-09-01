@@ -13,6 +13,8 @@ import 'package:inv_app/core/services/ble/ble_device_manager.dart';
 import 'package:inv_app/core/services/ble/ble_direct_service.dart';
 import 'package:inv_app/core/services/ble/ble_polling_service.dart';
 import 'package:inv_app/core/network/api_client.dart';
+import 'package:inv_app/core/network/retry_request_options.dart';
+import 'package:inv_app/core/auth/organization_context_session_service.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/data/local_cache_database.dart';
 import 'package:inv_app/core/services/realtime_data_service.dart';
@@ -107,7 +109,9 @@ class ServiceLocator {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          final token = await getIt<StorageService>().getToken();
+          final token = normalizeTokenValue(
+            await getIt<StorageService>().getToken(),
+          );
           if (token != null) {
             options.headers['Authorization'] = 'Bearer $token';
           }
@@ -115,6 +119,10 @@ class ServiceLocator {
         },
         onError: (error, handler) async {
           if (error.response?.statusCode == 401) {
+            if (isTokenRefreshRetry(error.requestOptions)) {
+              return handler.next(error);
+            }
+
             // 未携带 token 的请求（如离网 guest 模式误碰云端接口）必然 401：
             // 直接透传错误由业务层展示离线态，不触发刷新/登出链路
             // （登出会连带退出 guest 本地模式，导致用户被踢回登录页）
@@ -123,6 +131,12 @@ class ServiceLocator {
             }
             if (error.requestOptions.path == '/auth/refresh') {
               getIt<AuthBloc>().add(AuthLogoutRequested());
+              return handler.next(error);
+            }
+
+            // 上下文切换请求自身携带 refresh token，并由事务服务负责处理；
+            // 401 时不能触发通用刷新，否则会额外轮换旧上下文令牌。
+            if (error.requestOptions.path == '/auth/context') {
               return handler.next(error);
             }
 
@@ -137,29 +151,20 @@ class ServiceLocator {
             }
 
             final storageService = getIt<StorageService>();
-            final newToken = await storageService.getToken();
-            final opts = Options(
-              method: error.requestOptions.method,
-              headers: {
-                ...error.requestOptions.headers,
-                'Authorization': 'Bearer $newToken',
-              },
+            final newToken = normalizeTokenValue(
+              await storageService.getToken(),
+            );
+            if (newToken == null) {
+              return handler.next(error);
+            }
+
+            final retryOptions = buildTokenRefreshRetryOptions(
+              error.requestOptions,
+              accessToken: newToken,
             );
 
             try {
-              final retryResponse = await dio.fetch(
-                RequestOptions(
-                  path: error.requestOptions.path,
-                  data: error.requestOptions.data,
-                  queryParameters: error.requestOptions.queryParameters,
-                  headers: opts.headers,
-                  method: opts.method,
-                  baseUrl: error.requestOptions.baseUrl,
-                  connectTimeout: error.requestOptions.connectTimeout,
-                  receiveTimeout: error.requestOptions.receiveTimeout,
-                  sendTimeout: error.requestOptions.sendTimeout,
-                ),
-              );
+              final retryResponse = await dio.fetch(retryOptions);
               return handler.resolve(retryResponse);
             } catch (e) {
               return handler.next(error);
@@ -173,11 +178,11 @@ class ServiceLocator {
     if (kDebugMode) {
       dio.interceptors.add(
         PrettyDioLogger(
-          requestHeader: true,
-          requestBody: true,
-          responseBody: true,
+          requestHeader: false,
+          requestBody: false,
+          responseBody: false,
           responseHeader: false,
-          error: true,
+          error: false,
           compact: true,
         ),
       );
@@ -201,7 +206,9 @@ class ServiceLocator {
     _refreshCompleter ??= Completer<bool>();
     try {
       final storageService = getIt<StorageService>();
-      final refreshToken = await storageService.getRefreshToken();
+      final refreshToken = normalizeTokenValue(
+        await storageService.getRefreshToken(),
+      );
 
       if (refreshToken == null) {
         _finishTokenRefresh(false);
@@ -246,10 +253,12 @@ class ServiceLocator {
         }
       }
 
-      if (newToken != null) {
-        await storageService.saveToken(newToken);
-        if (newRefreshToken != null) {
-          await storageService.saveRefreshToken(newRefreshToken);
+      final normalizedNewToken = normalizeTokenValue(newToken);
+      final normalizedNewRefreshToken = normalizeTokenValue(newRefreshToken);
+      if (normalizedNewToken != null) {
+        await storageService.saveToken(normalizedNewToken);
+        if (normalizedNewRefreshToken != null) {
+          await storageService.saveRefreshToken(normalizedNewRefreshToken);
         }
         _finishTokenRefresh(true);
         return true;
@@ -481,6 +490,9 @@ getIt.registerLazySingleton<NotifyPrefsService>(
   }
 
   static void _initUseCases() {
+    getIt.registerLazySingleton<OrganizationContextSessionService>(
+      () => OrganizationContextSessionService(getIt(), getIt()),
+    );
     getIt.registerLazySingleton(() => LoginUseCase(getIt()));
     getIt.registerLazySingleton(() => RegisterUseCase(getIt()));
     getIt.registerLazySingleton(() => LogoutUseCase(getIt()));
@@ -522,6 +534,7 @@ getIt.registerLazySingleton<NotifyPrefsService>(
         jverifyLoginUseCase: getIt(),
         storageService: getIt(),
         jpushService: getIt(),
+        organizationContextSessionService: getIt(),
       ),
     );
 

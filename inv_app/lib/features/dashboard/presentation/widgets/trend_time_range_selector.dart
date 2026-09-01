@@ -25,12 +25,13 @@ class TrendTimeRangeSelector extends StatelessWidget {
         borderRadius: BorderRadius.circular(8.r),
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
-          _buildRangeButton(context, l10n.timeDay, 'day'),
-          _buildRangeButton(context, l10n.time30Days, '30days'),
-          _buildRangeButton(context, l10n.timeWeek, 'week'),
-          _buildRangeButton(context, l10n.timeMonth, 'month'),
+          Expanded(child: _buildRangeButton(context, l10n.timeDay, 'day')),
+          Expanded(
+            child: _buildRangeButton(context, l10n.time30Days, '30days'),
+          ),
+          Expanded(child: _buildRangeButton(context, l10n.timeWeek, 'week')),
+          Expanded(child: _buildRangeButton(context, l10n.timeMonth, 'month')),
         ],
       ),
     );
@@ -39,31 +40,41 @@ class TrendTimeRangeSelector extends StatelessWidget {
   Widget _buildRangeButton(BuildContext context, String label, String range) {
     final isSelected = selectedRange == range;
 
-    return GestureDetector(
-      onTap: () => onRangeChanged(range),
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? AppColor.surfaceContainer(context)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(6.r),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : null,
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12.sp,
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-            color: isSelected ? AppColor.textPrimary(context) : AppColor.textSecondary(context),
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      child: GestureDetector(
+        onTap: () => onRangeChanged(range),
+        child: Container(
+          alignment: Alignment.center,
+          padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 6.h),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? AppColor.surfaceContainer(context)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(6.r),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Text(
+            label,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12.sp,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+              color: isSelected
+                  ? AppColor.textPrimary(context)
+                  : AppColor.textSecondary(context),
+            ),
           ),
         ),
       ),

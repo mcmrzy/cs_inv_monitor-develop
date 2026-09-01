@@ -1,14 +1,19 @@
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:dio/dio.dart';
 
 /// SSE数据源 - 实现实时数据更新
 class DashboardSSEDataSource {
   final Dio dio;
   StreamController<Map<String, dynamic>>? _controller;
-  Response<ResponseBody>? _response;
+  StreamSubscription<List<int>>? _responseSubscription;
+  CancelToken? _requestCancelToken;
   bool _isConnected = false;
+  bool _stopped = true;
+  int _generation = 0;
   Timer? _heartbeatTimer;
+  Timer? _stabilityTimer;
   Timer? _reconnectTimer;
   int _reconnectAttempts = 0;
   static const int maxReconnectAttempts = 5;
@@ -19,29 +24,36 @@ class DashboardSSEDataSource {
 
   /// 连接到SSE流
   Stream<Map<String, dynamic>> connectToSSE() {
+    final generation = ++_generation;
+    _stopped = false;
+    _cancelConnectionResources();
+    _closeController();
+    _reconnectAttempts = 0;
     _controller = StreamController<Map<String, dynamic>>.broadcast();
-    _connect();
+    _connect(generation);
     return _controller!.stream;
   }
 
   /// 断开SSE连接
   void disconnect() {
-    _isConnected = false;
-    _heartbeatTimer?.cancel();
-    _reconnectTimer?.cancel();
-    _controller?.close();
-    _controller = null;
+    _stopped = true;
+    _generation++;
+    _cancelConnectionResources();
+    _closeController();
   }
 
   /// 检查连接状态
   bool get isConnected => _isConnected;
 
-  Future<void> _connect() async {
-    if (_isConnected) return;
+  Future<void> _connect(int generation) async {
+    if (!_isCurrentGeneration(generation) || _isConnected) return;
 
+    final cancelToken = CancelToken();
+    _requestCancelToken = cancelToken;
     try {
       final response = await dio.get<ResponseBody>(
         '/dashboard/sse',
+        cancelToken: cancelToken,
         options: Options(
           responseType: ResponseType.stream,
           receiveTimeout: null, // SSE 长连接不设超时
@@ -52,30 +64,54 @@ class DashboardSSEDataSource {
         ),
       );
 
-      _response = response;
-      _isConnected = true;
-      _reconnectAttempts = 0;
+      if (!_isCurrentGeneration(generation)) {
+        _discardResponse(response);
+        return;
+      }
 
-      _startHeartbeat();
-      _listenToStream();
+      _isConnected = true;
+
+      _startHeartbeat(generation);
+      _listenToStream(response, generation);
     } catch (e) {
-      _handleConnectionError(e);
+      final isCancellation = e is DioException && CancelToken.isCancel(e);
+      if (_isCurrentGeneration(generation) && !isCancellation) {
+        _handleConnectionError(e, generation);
+      }
     }
   }
 
-  void _listenToStream() {
-    _response?.data?.stream.listen(
+  void _listenToStream(
+    Response<ResponseBody> response,
+    int generation,
+  ) {
+    final Stream<List<int>>? responseStream = response.data?.stream;
+    if (responseStream == null) return;
+
+    final subscription = responseStream.listen(
       (data) {
+        if (!_isCurrentGeneration(generation)) return;
         final String chunk = utf8.decode(data);
         _processSSEData(chunk);
       },
       onDone: () {
-        _handleDisconnection();
+        if (_isCurrentGeneration(generation)) {
+          _handleDisconnection(generation);
+        }
       },
       onError: (error) {
-        _handleConnectionError(error);
+        if (_isCurrentGeneration(generation)) {
+          _handleConnectionError(error, generation);
+        }
       },
     );
+
+    if (_isCurrentGeneration(generation)) {
+      _responseSubscription = subscription;
+      _startStabilityTimer(generation);
+    } else {
+      unawaited(subscription.cancel());
+    }
   }
 
   void _processSSEData(String chunk) {
@@ -87,6 +123,7 @@ class DashboardSSEDataSource {
         if (data.isNotEmpty) {
           try {
             final jsonData = json.decode(data) as Map<String, dynamic>;
+            _reconnectAttempts = 0;
             _controller?.add(jsonData);
           } catch (e) {
             // 忽略解析错误
@@ -108,10 +145,10 @@ class DashboardSSEDataSource {
     }
   }
 
-  void _startHeartbeat() {
+  void _startHeartbeat(int generation) {
     _heartbeatTimer?.cancel();
     _heartbeatTimer = Timer.periodic(heartbeatInterval, (timer) {
-      if (!_isConnected) {
+      if (!_isCurrentGeneration(generation) || !_isConnected) {
         timer.cancel();
         return;
       }
@@ -120,14 +157,23 @@ class DashboardSSEDataSource {
     });
   }
 
+  void _startStabilityTimer(int generation) {
+    _stabilityTimer?.cancel();
+    _stabilityTimer = Timer(heartbeatInterval, () {
+      if (_isCurrentGeneration(generation) && _isConnected) {
+        _reconnectAttempts = 0;
+      }
+    });
+  }
+
   void _sendHeartbeat() {
     // 心跳检测 - 可以发送一个空注释或特定格式的数据
     // 这里简单处理，实际可能需要发送特定格式
   }
 
-  void _handleConnectionError(dynamic error) {
-    _isConnected = false;
-    _heartbeatTimer?.cancel();
+  void _handleConnectionError(dynamic error, int generation) {
+    if (!_isCurrentGeneration(generation)) return;
+    _cancelActiveTransport();
 
     if (_reconnectAttempts < maxReconnectAttempts) {
       _reconnectAttempts++;
@@ -135,16 +181,18 @@ class DashboardSSEDataSource {
 
       _reconnectTimer?.cancel();
       _reconnectTimer = Timer(delay, () {
-        _connect();
+        if (_isCurrentGeneration(generation)) {
+          _connect(generation);
+        }
       });
     } else {
       _controller?.addError(error);
     }
   }
 
-  void _handleDisconnection() {
-    _isConnected = false;
-    _heartbeatTimer?.cancel();
+  void _handleDisconnection(int generation) {
+    if (!_isCurrentGeneration(generation)) return;
+    _cancelActiveTransport();
 
     if (_reconnectAttempts < maxReconnectAttempts) {
       _reconnectAttempts++;
@@ -152,8 +200,56 @@ class DashboardSSEDataSource {
 
       _reconnectTimer?.cancel();
       _reconnectTimer = Timer(delay, () {
-        _connect();
+        if (_isCurrentGeneration(generation)) {
+          _connect(generation);
+        }
       });
+    }
+  }
+
+  bool _isCurrentGeneration(int generation) {
+    return !_stopped && generation == _generation;
+  }
+
+  void _cancelConnectionResources() {
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    _cancelActiveTransport();
+  }
+
+  void _cancelActiveTransport() {
+    _isConnected = false;
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+    _stabilityTimer?.cancel();
+    _stabilityTimer = null;
+
+    _requestCancelToken?.cancel('Dashboard SSE connection stopped');
+    _requestCancelToken = null;
+
+    final subscription = _responseSubscription;
+    _responseSubscription = null;
+    if (subscription != null) {
+      unawaited(subscription.cancel());
+    }
+  }
+
+  void _discardResponse(Response<ResponseBody> response) {
+    final Stream<List<int>>? responseStream = response.data?.stream;
+    if (responseStream == null) return;
+
+    final subscription = responseStream.listen(
+      (_) {},
+      onError: (_) {},
+    );
+    unawaited(subscription.cancel());
+  }
+
+  void _closeController() {
+    final controller = _controller;
+    _controller = null;
+    if (controller != null && !controller.isClosed) {
+      unawaited(controller.close());
     }
   }
 

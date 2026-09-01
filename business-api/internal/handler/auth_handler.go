@@ -820,6 +820,11 @@ func (h *AuthHandler) AuthorizationContext(c *gin.Context) {
 		response.Error(c, 401, "organization membership is not active")
 		return
 	}
+	permissions, err := h.contextResolver.LoadAllPermissionCodes(c.Request.Context(), resolved.Actor)
+	if err != nil {
+		response.Error(c, 500, "load organization permissions failed")
+		return
+	}
 
 	accessToken, err := h.jwtService.GenerateContextAccessTokenForSession(
 		resolved.Actor.UserID, resolved.Actor.RootTenantID, resolved.Actor.OrganizationID,
@@ -853,6 +858,7 @@ func (h *AuthHandler) AuthorizationContext(c *gin.Context) {
 		"membership_id":         resolved.Actor.MembershipID,
 		"membership_version":    resolved.Actor.MembershipVersion,
 		"authorization_version": resolved.AuthorizationVersion,
+		"permissions":           permissions,
 	})
 }
 

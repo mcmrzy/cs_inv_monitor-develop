@@ -75,7 +75,7 @@ class _AuthPageState extends State<AuthPage>
       backgroundColor: Colors.white,
       body: BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {
-          if (state is AuthError) {
+          if (state is AuthError && state is! AuthCodeSendError) {
             AppToast.show(
               context,
               AppLocalizations.of(context)!.translateError(state.message),

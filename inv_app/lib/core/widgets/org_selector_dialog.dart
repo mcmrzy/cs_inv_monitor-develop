@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/stores/organization_context_store.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 
 /// 组织选择对话框
 /// 用于在多个组织之间切换
@@ -156,18 +157,27 @@ class _OrgSelectorDialogState extends State<OrgSelectorDialog> {
                           ),
                         )
                       : null,
-                  onTap: () {
-                    _orgStore!.switchContextToOrganization(org.id, org.name);
-
-                    // 显示成功提示
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('已切换到 "${org.name}"'),
-                        duration: const Duration(seconds: 2),
-                      ),
-                    );
-
-                    Navigator.pop(context, true);
+                  onTap: () async {
+                    try {
+                      await _orgStore!.switchContextToOrganization(
+                        org.id,
+                        org.name,
+                        context.read<AuthBloc>(),
+                      );
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('已切换到 "${org.name}"'),
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                      Navigator.pop(context, true);
+                    } catch (error) {
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('切换失败：$error')),
+                      );
+                    }
                   },
                 );
               }).toList(),

@@ -95,15 +95,21 @@ class _DevicePickerListState extends State<DevicePickerList> {
           );
         }
         final devices = _filter(cached.devices);
-        return ListView(
+        final hasHint = widget.hint != null;
+        final leadingItemCount = hasHint ? 2 : 1;
+        return ListView.builder(
           physics: const BouncingScrollPhysics(),
           padding: EdgeInsets.fromLTRB(16.w, 8.h, 16.w, 32.h),
-          children: [
-            DeviceSearchBar(
-              onSearchChanged: (v) => setState(() => _query = v),
-            ),
-            if (widget.hint != null)
-              Padding(
+          itemCount: leadingItemCount +
+              (devices.isEmpty ? 1 : devices.length),
+          itemBuilder: (context, index) {
+            if (index == 0) {
+              return DeviceSearchBar(
+                onSearchChanged: (v) => setState(() => _query = v),
+              );
+            }
+            if (hasHint && index == 1) {
+              return Padding(
                 padding: EdgeInsets.only(bottom: 8.h),
                 child: Text(
                   widget.hint!,
@@ -112,9 +118,10 @@ class _DevicePickerListState extends State<DevicePickerList> {
                     color: AppColor.textHint(context),
                   ),
                 ),
-              ),
-            if (devices.isEmpty)
-              Padding(
+              );
+            }
+            if (devices.isEmpty) {
+              return Padding(
                 padding: EdgeInsets.symmetric(vertical: 32.h),
                 child: Center(
                   child: Text(
@@ -125,10 +132,10 @@ class _DevicePickerListState extends State<DevicePickerList> {
                     ),
                   ),
                 ),
-              )
-            else
-              for (final d in devices) _buildRow(d, l10n),
-          ],
+              );
+            }
+            return _buildRow(devices[index - leadingItemCount], l10n);
+          },
         );
       },
     );

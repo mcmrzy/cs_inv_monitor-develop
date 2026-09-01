@@ -9,6 +9,7 @@ import 'package:inv_app/core/services/ble/ble_device_manager.dart';
 import 'package:inv_app/core/services/ble/ble_direct_service.dart';
 import 'package:inv_app/core/services/offline/offline_op_log_store.dart';
 import 'package:inv_app/core/services/storage_service.dart';
+import 'package:inv_app/core/auth/organization_context_session_service.dart';
 import 'package:inv_app/core/services/connection_mode_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 
@@ -40,6 +41,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final EmailCodeLoginUseCase emailCodeLoginUseCase;
   final StorageService storageService;
   final JPushService jpushService;
+  final OrganizationContextSessionService? organizationContextSessionService;
 
   /// 用户资料本地缓存 key（冷启动时先用缓存展示，后台刷新覆盖）
   static const String _cachedUserKey = 'cached_user_profile';
@@ -47,6 +49,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   /// 资料版本号：本地资料更新（保存资料/改手机邮箱）时递增，
   /// 用于丢弃过期的后台资料刷新结果，避免旧响应覆盖新保存的地区等字段
   int _profileRevision = 0;
+  Completer<void>? _organizationContextSwitchCompleter;
 
   AuthBloc({
     required this.loginUseCase,
@@ -68,6 +71,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     required this.jverifyLoginUseCase,
     required this.storageService,
     required this.jpushService,
+    this.organizationContextSessionService,
   }) : super(AuthInitial()) {
     on<AuthCheckRequested>(_onAuthCheckRequested);
     on<AuthLoginRequested>(_onLoginRequested);
@@ -84,6 +88,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthSendEmailCodeRequested>(_onSendEmailCodeRequested);
     on<AuthContactChanged>(_onContactChanged);
     on<AuthTokenRefreshed>(_onTokenRefreshed);
+    on<AuthOrganizationContextSwitchRequested>(
+      _onOrganizationContextSwitchRequested,
+    );
     on<AuthWechatLoginRequested>(_onWechatLoginRequested);
     on<AuthGoogleLoginRequested>(_onGoogleLoginRequested);
     on<AuthJVerifyLoginWithTokenRequested>(_onJVerifyLoginWithTokenRequested);
@@ -102,6 +109,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       String phone = await storageService.getUserPhone() ?? '';
       bool isSystemAdmin = await storageService.getIsSystemAdmin() ?? false;
       List<String> permissions = await storageService.getPermissions();
+      final activeOrganizationId = await storageService.getActiveOrgId();
 
       // 先读取本地缓存的用户资料，网络未就绪时也能立即展示昵称/头像
       final cachedUser = await _loadCachedUser();
@@ -114,6 +122,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           phone: phone,
           isSystemAdmin: isSystemAdmin,
           permissions: permissions,
+          activeOrganizationId: activeOrganizationId,
           user: cachedUser,
         ),
       );
@@ -121,7 +130,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       jpushService.bindUser(userId);
 
       // 后台刷新资料，成功后更新状态；失败保持本地缓存
-      unawaited(_refreshProfile(emit, userId, phone, isSystemAdmin, permissions));
+      unawaited(
+        _refreshProfile(
+          emit,
+          userId,
+          phone,
+          isSystemAdmin,
+          permissions,
+          activeOrganizationId,
+        ),
+      );
     } else {
       emit(AuthUnauthenticated());
     }
@@ -133,6 +151,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     String phone,
     bool isSystemAdmin,
     List<String> permissions,
+    int? activeOrganizationId,
   ) async {
     // 记录发起时的资料版本：期间用户若保存过资料（版本号变化），
     // 则本次刷新的旧响应必须丢弃，避免覆盖新保存的地区等字段
@@ -150,7 +169,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           // 服务器读取可能滞后（读写分离副本延迟）：本地缓存非空的昵称/头像/地址字段优先，
           // 避免刚保存的资料被旧响应覆盖（重启后地址偶尔消失的根因）
           final cached = await _loadCachedUser();
-          final merged = _fillEmptyFromCached(user, cached);
+          final merged = _withPermissions(
+            _fillEmptyFromCached(user, cached),
+            permissions,
+          );
           // 缓存最新资料，冷启动时优先展示本地缓存
           await _cacheUser(merged);
           emit(
@@ -159,6 +181,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               phone: merged.phone,
               isSystemAdmin: merged.isSystemAdmin,
               permissions: merged.permissions,
+              activeOrganizationId: activeOrganizationId,
               user: merged,
             ),
           );
@@ -220,6 +243,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         await storageService.saveUserPhone(response.user.phone);
         await storageService.saveIsSystemAdmin(response.user.isSystemAdmin);
         await storageService.savePermissions(response.permissions);
+        if (response.activeOrganizationId != null &&
+            response.activeOrganizationId! > 0) {
+          await storageService.saveActiveOrgId(
+            response.activeOrganizationId!,
+          );
+        }
 
         if (event.rememberPassword) {
           await storageService.saveRememberPassword(true);
@@ -237,6 +266,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             phone: response.user.phone,
             isSystemAdmin: response.user.isSystemAdmin,
             permissions: response.permissions,
+            activeOrganizationId: response.activeOrganizationId,
             user: response.user,
           ),
         );
@@ -275,6 +305,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         await storageService.saveUserPhone(response.user.phone);
         await storageService.saveIsSystemAdmin(response.user.isSystemAdmin);
         await storageService.savePermissions(response.permissions);
+        if (response.activeOrganizationId != null &&
+            response.activeOrganizationId! > 0) {
+          await storageService.saveActiveOrgId(
+            response.activeOrganizationId!,
+          );
+        }
 
         emit(
           AuthAuthenticated(
@@ -282,6 +318,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             phone: response.user.phone,
             isSystemAdmin: response.user.isSystemAdmin,
             permissions: response.permissions,
+            activeOrganizationId: response.activeOrganizationId,
             user: response.user,
           ),
         );
@@ -377,7 +414,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     AuthSendCodeRequested event,
     Emitter<AuthState> emit,
   ) async {
-    emit(AuthCodeSending());
+    emit(
+      AuthCodeSending(
+        target: event.phone,
+        type: event.type,
+        channel: 'phone',
+        requestId: event.requestId,
+      ),
+    );
 
     final result = await sendCodeUseCase(
       phone: event.phone,
@@ -386,8 +430,23 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     );
 
     result.fold(
-      (failure) => emit(AuthError(message: failure.message)),
-      (_) => emit(AuthCodeSent()),
+      (failure) => emit(
+        AuthCodeSendError(
+          message: failure.message,
+          target: event.phone,
+          type: event.type,
+          channel: 'phone',
+          requestId: event.requestId,
+        ),
+      ),
+      (_) => emit(
+        AuthCodeSent(
+          target: event.phone,
+          type: event.type,
+          channel: 'phone',
+          requestId: event.requestId,
+        ),
+      ),
     );
   }
 
@@ -438,6 +497,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     final previousPhone = previousState is AuthAuthenticated ? previousState.phone : null;
     final previousIsSystemAdmin = previousState is AuthAuthenticated ? previousState.isSystemAdmin : false;
     final previousPermissions = previousState is AuthAuthenticated ? previousState.permissions : <String>[];
+    final previousActiveOrganizationId =
+        previousState is AuthAuthenticated
+            ? previousState.activeOrganizationId
+            : null;
     final previousUser = previousState is AuthAuthenticated ? previousState.user : null;
 
     emit(AuthLoading());
@@ -453,7 +516,25 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     await result.fold<Future<void>>(
       (failure) async {
-        emit(AuthError(message: failure.message));
+        emit(
+          AuthProfileUpdateError(
+            message: failure.message,
+            requestId: event.requestId,
+          ),
+        );
+        // 错误状态只作为本次请求的终态通知；随后恢复登录态，确保用户可重试。
+        if (previousState is AuthAuthenticated) {
+          emit(
+            AuthAuthenticated(
+              userId: previousState.userId,
+              phone: previousState.phone,
+              isSystemAdmin: previousState.isSystemAdmin,
+              permissions: previousState.permissions,
+              activeOrganizationId: previousState.activeOrganizationId,
+              user: previousState.user,
+            ),
+          );
+        }
       },
       (_) async {
         // 更新成功后，重新获取用户信息
@@ -464,9 +545,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         final refreshed = _mergeProfile(
           fetched ?? previousUser,
           nickname: event.nickname,
+          email: event.email,
           country: event.country,
           regionName: event.regionName,
           avatar: event.avatar,
+          bio: event.bio,
         );
         // 使用最新的用户信息更新状态
         if (refreshed != null && previousUserId != null) {
@@ -474,22 +557,26 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           // 等待写入完成，避免保存后立即重启导致缓存未落盘
           await _cacheUser(refreshed);
           emit(
-            AuthAuthenticated(
+            AuthProfileUpdateSuccess(
+              requestId: event.requestId,
               userId: previousUserId,
               phone: previousPhone ?? refreshed.phone,
               isSystemAdmin: refreshed.isSystemAdmin,
               permissions: refreshed.permissions,
+              activeOrganizationId: previousActiveOrganizationId,
               user: refreshed,
             ),
           );
         } else if (previousUserId != null) {
           // 获取资料失败且无旧资料可合并：恢复保存前状态，避免卡在加载中
           emit(
-            AuthAuthenticated(
+            AuthProfileUpdateSuccess(
+              requestId: event.requestId,
               userId: previousUserId,
               phone: previousPhone ?? '',
               isSystemAdmin: previousIsSystemAdmin,
               permissions: previousPermissions,
+              activeOrganizationId: previousActiveOrganizationId,
               user: previousUser,
             ),
           );
@@ -503,20 +590,22 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   User? _mergeProfile(
     User? base, {
     String? nickname,
+    String? email,
     String? country,
     String? regionName,
     String? avatar,
+    String? bio,
   }) {
     if (base == null) return null;
     return User(
       id: base.id,
       phone: base.phone,
-      email: base.email,
-      nickname: nickname?.isNotEmpty == true ? nickname : base.nickname,
-      avatar: avatar?.isNotEmpty == true ? avatar : base.avatar,
-      country: country?.isNotEmpty == true ? country : base.country,
-      region: regionName?.isNotEmpty == true ? regionName : base.region,
-      bio: base.bio,
+      email: email ?? base.email,
+      nickname: nickname ?? base.nickname,
+      avatar: avatar ?? base.avatar,
+      country: country ?? base.country,
+      region: regionName ?? base.region,
+      bio: bio ?? base.bio,
       hasPassword: base.hasPassword,
       isSystemAdmin: base.isSystemAdmin,
       permissions: base.permissions,
@@ -554,6 +643,26 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       lastLoginAt: fetched.lastLoginAt,
       createdAt: fetched.createdAt,
       updatedAt: fetched.updatedAt,
+    );
+  }
+
+  User _withPermissions(User user, List<String> permissions) {
+    return User(
+      id: user.id,
+      phone: user.phone,
+      email: user.email,
+      nickname: user.nickname,
+      avatar: user.avatar,
+      country: user.country,
+      region: user.region,
+      bio: user.bio,
+      hasPassword: user.hasPassword,
+      isSystemAdmin: user.isSystemAdmin,
+      permissions: List<String>.of(permissions),
+      status: user.status,
+      lastLoginAt: user.lastLoginAt,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
     );
   }
 
@@ -603,6 +712,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         phone: newPhone,
         isSystemAdmin: current.isSystemAdmin,
         permissions: current.permissions,
+        activeOrganizationId: current.activeOrganizationId,
         user: updatedUser,
       ),
     );
@@ -632,6 +742,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         await storageService.saveUserPhone(response.user.phone);
         await storageService.saveIsSystemAdmin(response.user.isSystemAdmin);
         await storageService.savePermissions(response.permissions);
+        await _saveActiveOrganization(response.activeOrganizationId);
 
         if (event.rememberPassword) {
           await storageService.saveRememberPassword(true);
@@ -649,6 +760,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             phone: response.user.phone,
             isSystemAdmin: response.user.isSystemAdmin,
             permissions: response.permissions,
+            activeOrganizationId: response.activeOrganizationId,
             user: response.user,
           ),
         );
@@ -685,6 +797,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         await storageService.saveUserPhone(response.user.phone);
         await storageService.saveIsSystemAdmin(response.user.isSystemAdmin);
         await storageService.savePermissions(response.permissions);
+        await _saveActiveOrganization(response.activeOrganizationId);
 
         emit(
           AuthAuthenticated(
@@ -692,6 +805,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             phone: response.user.phone,
             isSystemAdmin: response.user.isSystemAdmin,
             permissions: response.permissions,
+            activeOrganizationId: response.activeOrganizationId,
             user: response.user,
           ),
         );
@@ -728,6 +842,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         await storageService.saveUserPhone(response.user.phone);
         await storageService.saveIsSystemAdmin(response.user.isSystemAdmin);
         await storageService.savePermissions(response.permissions);
+        await _saveActiveOrganization(response.activeOrganizationId);
 
         emit(
           AuthAuthenticated(
@@ -735,6 +850,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             phone: response.user.phone,
             isSystemAdmin: response.user.isSystemAdmin,
             permissions: response.permissions,
+            activeOrganizationId: response.activeOrganizationId,
             user: response.user,
           ),
         );
@@ -775,6 +891,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         await storageService.saveUserPhone(response.user.phone);
         await storageService.saveIsSystemAdmin(response.user.isSystemAdmin);
         await storageService.savePermissions(response.permissions);
+        await _saveActiveOrganization(response.activeOrganizationId);
 
         emit(
           AuthAuthenticated(
@@ -782,6 +899,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             phone: response.user.phone,
             isSystemAdmin: response.user.isSystemAdmin,
             permissions: response.permissions,
+            activeOrganizationId: response.activeOrganizationId,
             user: response.user,
           ),
         );
@@ -798,7 +916,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     AuthSendEmailCodeRequested event,
     Emitter<AuthState> emit,
   ) async {
-    emit(AuthCodeSending());
+    emit(
+      AuthCodeSending(
+        target: event.email,
+        type: event.type,
+        channel: 'email',
+        requestId: event.requestId,
+      ),
+    );
 
     final result = await sendEmailCodeUseCase(
       email: event.email,
@@ -807,8 +932,23 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     );
 
     result.fold(
-      (failure) => emit(AuthError(message: failure.message)),
-      (_) => emit(AuthCodeSent()),
+      (failure) => emit(
+        AuthCodeSendError(
+          message: failure.message,
+          target: event.email,
+          type: event.type,
+          channel: 'email',
+          requestId: event.requestId,
+        ),
+      ),
+      (_) => emit(
+        AuthCodeSent(
+          target: event.email,
+          type: event.type,
+          channel: 'email',
+          requestId: event.requestId,
+        ),
+      ),
     );
   }
 
@@ -819,6 +959,82 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     await storageService.saveToken(event.token);
     if (event.refreshToken != null) {
       await storageService.saveRefreshToken(event.refreshToken!);
+    }
+  }
+
+  Future<void> switchOrganizationContext(
+    int organizationId,
+    String organizationName,
+  ) {
+    final inFlight = _organizationContextSwitchCompleter;
+    if (inFlight != null && !inFlight.isCompleted) {
+      return Future<void>.error(
+        const OrganizationContextSwitchException(
+          'An organization context switch is already in progress.',
+        ),
+      );
+    }
+
+    final completer = Completer<void>();
+    _organizationContextSwitchCompleter = completer;
+    add(
+      AuthOrganizationContextSwitchRequested(
+        organizationId: organizationId,
+        organizationName: organizationName,
+        completer: completer,
+      ),
+    );
+    return completer.future.whenComplete(() {
+      if (identical(_organizationContextSwitchCompleter, completer)) {
+        _organizationContextSwitchCompleter = null;
+      }
+    });
+  }
+
+  Future<void> _onOrganizationContextSwitchRequested(
+    AuthOrganizationContextSwitchRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    final current = state;
+    if (current is! AuthAuthenticated) {
+      event.completer.completeError(
+        const OrganizationContextSwitchException(
+          'An authenticated session is required.',
+        ),
+      );
+      return;
+    }
+
+    final service = organizationContextSessionService ??
+        getIt<OrganizationContextSessionService>();
+    try {
+      final response = await service.switchContext(
+        organizationId: event.organizationId,
+        organizationName: event.organizationName,
+      );
+      _profileRevision++;
+      final updatedUser = current.user == null
+          ? null
+          : _withPermissions(current.user!, response.permissions);
+      emit(
+        AuthAuthenticated(
+          userId: current.userId,
+          phone: current.phone,
+          isSystemAdmin: current.isSystemAdmin,
+          permissions: response.permissions,
+          activeOrganizationId: response.activeOrganizationId,
+          user: updatedUser,
+        ),
+      );
+      event.completer.complete();
+    } catch (error, stackTrace) {
+      event.completer.completeError(error, stackTrace);
+    }
+  }
+
+  Future<void> _saveActiveOrganization(int? organizationId) async {
+    if (organizationId != null && organizationId > 0) {
+      await storageService.saveActiveOrgId(organizationId);
     }
   }
 
@@ -843,6 +1059,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         await storageService.saveUserPhone(response.user.phone);
         await storageService.saveIsSystemAdmin(response.user.isSystemAdmin);
         await storageService.savePermissions(response.permissions);
+        await _saveActiveOrganization(response.activeOrganizationId);
 
         emit(
           AuthAuthenticated(
@@ -850,6 +1067,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             phone: response.user.phone,
             isSystemAdmin: response.user.isSystemAdmin,
             permissions: response.permissions,
+            activeOrganizationId: response.activeOrganizationId,
             user: response.user,
           ),
         );
@@ -883,6 +1101,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         await storageService.saveUserPhone(response.user.phone);
         await storageService.saveIsSystemAdmin(response.user.isSystemAdmin);
         await storageService.savePermissions(response.permissions);
+        await _saveActiveOrganization(response.activeOrganizationId);
 
         emit(
           AuthAuthenticated(
@@ -890,6 +1109,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             phone: response.user.phone,
             isSystemAdmin: response.user.isSystemAdmin,
             permissions: response.permissions,
+            activeOrganizationId: response.activeOrganizationId,
             user: response.user,
           ),
         );
@@ -926,6 +1146,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         await storageService.saveUserPhone(response.user.phone);
         await storageService.saveIsSystemAdmin(response.user.isSystemAdmin);
         await storageService.savePermissions(response.permissions);
+        await _saveActiveOrganization(response.activeOrganizationId);
 
         emit(
           AuthAuthenticated(
@@ -933,6 +1154,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             phone: response.user.phone,
             isSystemAdmin: response.user.isSystemAdmin,
             permissions: response.permissions,
+            activeOrganizationId: response.activeOrganizationId,
             user: response.user,
           ),
         );

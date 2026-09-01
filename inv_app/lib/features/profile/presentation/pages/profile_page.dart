@@ -226,19 +226,23 @@ class _ProfilePageState extends State<ProfilePage> {
                       ? Image.asset(
                           CsergyAssets.avatarDefault,
                           fit: BoxFit.cover,
+                          cacheWidth: 256,
                         )
                       : (avatarUrl != null
                           ? Image.network(
                               avatarUrl,
                               fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) => Image.asset(
-                                CsergyAssets.avatarDefault,
-                                fit: BoxFit.cover,
-                              ),
+                              errorBuilder: (context, error, stackTrace) =>
+                                  Image.asset(
+                                    CsergyAssets.avatarDefault,
+                                    fit: BoxFit.cover,
+                                    cacheWidth: 256,
+                                  ),
                             )
                           : Image.asset(
                               CsergyAssets.avatarDefault,
                               fit: BoxFit.cover,
+                              cacheWidth: 256,
                             ))),
             ),
             SizedBox(width: 16.w),

@@ -24,6 +24,7 @@ import (
 
 type fakeAuthorizationContextResolver struct {
 	context model.AuthorizationSessionContext
+	permissions []string
 	err     error
 }
 
@@ -40,7 +41,7 @@ func (f fakeAuthorizationContextResolver) ResolveDefaultSessionContext(context.C
 }
 
 func (f fakeAuthorizationContextResolver) LoadAllPermissionCodes(context.Context, model.ActorContext) ([]string, error) {
-	return []string{}, nil
+	return f.permissions, f.err
 }
 
 func TestHasUsablePassword(t *testing.T) {
@@ -100,10 +101,13 @@ func TestAuthorizationContextIssuesOrganizationBoundAccessAndRotatesRefresh(t *t
 
 	handler := &AuthHandler{
 		jwtService: jwtService,
-		contextResolver: fakeAuthorizationContextResolver{context: model.AuthorizationSessionContext{
-			Actor:                model.ActorContext{UserID: 7, RootTenantID: 100, OrganizationID: 101, MembershipID: 102, MembershipVersion: 4},
-			AuthorizationVersion: 5, SessionVersion: 3, Phone: "13800138000", IsSystemAdmin: false,
-		}},
+		contextResolver: fakeAuthorizationContextResolver{
+			context: model.AuthorizationSessionContext{
+				Actor:                model.ActorContext{UserID: 7, RootTenantID: 100, OrganizationID: 101, MembershipID: 102, MembershipVersion: 4},
+				AuthorizationVersion: 5, SessionVersion: 3, Phone: "13800138000", IsSystemAdmin: false,
+			},
+			permissions: []string{"devices:view", "organizations:invite"},
+		},
 	}
 	router := gin.New()
 	router.POST("/api/v1/auth/context", handler.AuthorizationContext)
@@ -118,6 +122,7 @@ func TestAuthorizationContextIssuesOrganizationBoundAccessAndRotatesRefresh(t *t
 		Data struct {
 			AccessToken  string `json:"access_token"`
 			RefreshToken string `json:"refresh_token"`
+			Permissions []string `json:"permissions"`
 		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &envelope))
@@ -125,6 +130,7 @@ func TestAuthorizationContextIssuesOrganizationBoundAccessAndRotatesRefresh(t *t
 	require.NoError(t, err)
 	require.Equal(t, int64(101), claims.OrganizationID)
 	require.Equal(t, int64(5), claims.AuthorizationVersion)
+	require.Equal(t, []string{"devices:view", "organizations:invite"}, envelope.Data.Permissions)
 	require.False(t, jwtService.ValidateRefreshToken(context.Background(), 7, refreshToken))
 	require.True(t, jwtService.ValidateRefreshToken(context.Background(), 7, envelope.Data.RefreshToken))
 

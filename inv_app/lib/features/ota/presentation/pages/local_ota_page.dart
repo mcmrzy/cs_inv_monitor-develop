@@ -18,6 +18,7 @@ import 'package:inv_app/features/ota/presentation/controller/local_ota_controlle
 import 'package:inv_app/features/ota/domain/entities/local_channel.dart';
 import 'package:inv_app/features/ota/domain/repositories/local_communication_repository.dart';
 import 'package:inv_app/features/ota/domain/repositories/ota_repository.dart';
+import 'package:inv_app/features/ota/presentation/models/local_ota_presentation.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -152,7 +153,10 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       if (mounted &&
           (widget.firmwareId == null || event.firmwareId == widget.firmwareId)) {
         setState(() {
-          _downloadProgress = event.progress;
+          _downloadProgress = _normalizeProgress(
+            event.progress,
+            source: 'download',
+          );
         });
       }
     });
@@ -711,8 +715,14 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     final l10n = AppLocalizations.of(context)!;
 
     setState(() {
-      _uploadProgress = s.uploadProgress;
-      _upgradeProgress = s.upgradeProgress;
+      _uploadProgress = _normalizeProgress(
+        s.uploadProgress,
+        source: 'upload',
+      );
+      _upgradeProgress = _normalizeProgress(
+        s.upgradeProgress,
+        source: 'upgrade',
+      );
 
       if (s.statusOverrideKey != null) {
         _upgradeStatus = l10n.str(s.statusOverrideKey!, s.statusOverrideParams);
@@ -831,32 +841,33 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
 
   String _mapStatus(String status) {
     final l10n = AppLocalizations.of(context)!;
-    switch (status) {
-      case 'idle':
+    switch (localOtaStatusKind(status)) {
+      case LocalOtaStatusKind.idle:
         return l10n.idleStatus;
-      case 'downloading':
+      case LocalOtaStatusKind.downloading:
         return l10n.downloading;
-      case 'uploading':
-      case 'receiving':
+      case LocalOtaStatusKind.uploading:
         return l10n.uploadingStatus;
-      case 'verifying':
+      case LocalOtaStatusKind.verifying:
         return l10n.verifying;
-      case 'done':
-      case 'succeeded':
+      case LocalOtaStatusKind.done:
         return l10n.done;
-      case 'error':
-      case 'failed':
-      case 'rolled_back':
-      case 'cancelled':
+      case LocalOtaStatusKind.failure:
         return l10n.failure;
-      case 'accepted':
-        return l10n.uploadingStatus;
-      case 'installing':
-      case 'rebooting':
+      case LocalOtaStatusKind.installing:
         return l10n.installingFirmware;
-      default:
+      case LocalOtaStatusKind.unknown:
         return status;
     }
+  }
+
+  double _normalizeProgress(double value, {required String source}) {
+    return normalizeLocalOtaProgress(
+      value,
+      onInvalid: (invalidValue) {
+        debugPrint('[LocalOTA] Invalid $source progress: $invalidValue');
+      },
+    );
   }
 
   @override

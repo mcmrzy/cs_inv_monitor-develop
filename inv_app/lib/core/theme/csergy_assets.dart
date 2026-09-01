@@ -42,11 +42,10 @@ abstract final class CsergyAssets {
   static const String xiaoshuoOtaGuide = '$characterDirectory/xiaoshuo_ota_1536x1024.png';
 
   // ============ 空状态插画 ============
-  static const String illustrationDirectory = 'assets/illustrations/states';
-  static const String emptyStation = '$illustrationDirectory/empty_station_720.webp';
-  static const String emptyDevice = '$illustrationDirectory/empty_device_720.webp';
-  static const String emptyAlarm = '$illustrationDirectory/empty_alarm_720.webp';
-  static const String emptyRecord = '$illustrationDirectory/empty_record_720.webp';
+  static const String emptyStation = xiaoshuoStation;
+  static const String emptyDevice = xiaoshuoDevice;
+  static const String emptyAlarm = xiaoshuoSuccess;
+  static const String emptyRecord = xiaoshuoEmpty;
 
   // ============ 页面背景（WebP，控制包体积） ============
   /// 登录页背景：品牌深蓝渐变 + 抽象光伏/能量元素（上部深色放品牌区，下部浅色放表单）
@@ -55,14 +54,8 @@ abstract final class CsergyAssets {
   /// 一键登录页背景：深蓝科技网格 + 能量粒子（底部浅色区放操作按钮）
   static const String bgJverify = 'assets/images/backgrounds/bg_jverify_abstract.webp';
 
-  // ============ 产品图 ============
-  static const String productDirectory = 'assets/products';
-  static const String inverterMaster = '$productDirectory/csergy_inverter_product_master_2048.webp';
-  static const String inverterCard = '$productDirectory/csergy_inverter_product_card_800.webp';
-
   // ============ 品牌与头像 ============
-  static const String brandShowcase = 'assets/brand/brand_showcase_1600x900.webp';
-  static const String avatarDefault = 'assets/images/avatar_default_512.webp';
+  static const String avatarDefault = 'assets/images/avatar_default.png';
   /// 电站默认图片（无图时占位，与 home_page 电站卡片一致）
   static const String stationDefaultImage = 'assets/images/solar_panel.png';
 

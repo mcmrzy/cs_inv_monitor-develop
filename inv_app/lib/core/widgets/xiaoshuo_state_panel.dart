@@ -1,6 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
+const int _xiaoshuoDecodeWidthBucket = 64;
+
+/// Returns a positive physical-pixel decode width rounded up to a small bucket.
+///
+/// Bucketed widths avoid decoding the same illustration into many nearly
+/// identical image-cache entries while still covering the rendered pixel area.
+int calculateXiaoshuoDecodeWidth({
+  required double logicalWidth,
+  required double devicePixelRatio,
+}) {
+  final physicalWidth = logicalWidth * devicePixelRatio;
+  if (!physicalWidth.isFinite || physicalWidth <= 0) {
+    return _xiaoshuoDecodeWidthBucket;
+  }
+  return (physicalWidth / _xiaoshuoDecodeWidthBucket).ceil() *
+      _xiaoshuoDecodeWidthBucket;
+}
+
 /// 小烁/插画状态面板：插画 + 标题 + 副文案 + 可选操作按钮
 ///
 /// 对应美术路由文档组件契约 `XiaoshuoStatePanel` / `CsergyStatusEmptyState`，
@@ -32,6 +50,11 @@ class XiaoshuoStatePanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final renderSize = size * _imageScale;
+    final logicalImageWidth = renderSize.w;
+    final decodeWidth = calculateXiaoshuoDecodeWidth(
+      logicalWidth: logicalImageWidth,
+      devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+    );
     return Center(
       child: Padding(
         padding: padding,
@@ -40,8 +63,9 @@ class XiaoshuoStatePanel extends StatelessWidget {
           children: [
             Image.asset(
               asset,
-              width: renderSize.w,
-              height: renderSize.w,
+              width: logicalImageWidth,
+              height: logicalImageWidth,
+              cacheWidth: decodeWidth,
               fit: BoxFit.contain,
               errorBuilder: (context, error, stackTrace) => Icon(
                 Icons.image_not_supported_outlined,
