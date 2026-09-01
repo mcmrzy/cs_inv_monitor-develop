@@ -698,20 +698,9 @@ void main() {
   });
 
   group('AuthState listener isolation', () {
-    test('only profile update terminals are classified as profile-only states', () {
-      const profileSuccess = AuthProfileUpdateSuccess(
-        requestId: 'profile-success',
-        userId: 1,
-        phone: '13800138000',
-      );
-      const profileError = AuthProfileUpdateError(
-        message: 'profile failed',
-        requestId: 'profile-error',
-      );
-
-      // isProfileUpdateTerminal getter 未定义，暂跳过
-      // TODO: 在 AuthState 子类中实现 isProfileUpdateTerminal
-    });
+    // TODO: AuthState 子类实现 isProfileUpdateTerminal 后补充
+    // profile 终态分类断言（profileSuccess/profileError 为 true，
+    // 普通登录态为 false）。
   });
 
   // ---------------------------------------------------------------------------
