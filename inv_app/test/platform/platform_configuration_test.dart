@@ -16,8 +16,8 @@ void main() {
         File('android/app/src/main/AndroidManifest.xml').readAsStringSync();
     final iosInfo = File('ios/Runner/Info.plist').readAsStringSync();
 
-    expect(androidManifest, contains('android:label="辰烁光伏"'));
-    expect(iosInfo, contains('<string>辰烁光伏</string>'));
+    expect(androidManifest, contains('android:label="辰烁光伏逆变"'));
+    expect(iosInfo, contains('<string>辰烁光伏逆变</string>'));
   });
 
   test('iOS orientation declarations match the portrait-only app policy', () {
