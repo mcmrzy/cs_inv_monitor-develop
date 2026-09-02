@@ -1,28 +1,30 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:image_cropper/image_cropper.dart';
-import 'dart:io';
 import 'package:inv_app/core/data/china_regions.dart';
 import 'package:inv_app/core/data/country_name_mapping.dart';
 import 'package:inv_app/core/data/province_name_mapping.dart';
 import 'package:inv_app/core/data/regions_data.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
-import 'package:inv_app/core/services/service_locator.dart';
-import 'package:inv_app/core/network/api_client.dart';
-import 'package:inv_app/features/station/data/station_image_upload_service.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
+import 'package:inv_app/features/station/presentation/services/station_image_picker_uploader.dart';
 import 'package:inv_app/features/station/presentation/widgets/inline_location_picker.dart';
 import 'package:inv_app/features/station/presentation/widgets/region_picker_routes.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 class EditStationPage extends StatefulWidget {
   final int stationId;
+  final StationImagePickerUploader? imagePickerUploader;
 
-  const EditStationPage({super.key, required this.stationId});
+  const EditStationPage({
+    super.key,
+    required this.stationId,
+    this.imagePickerUploader,
+  });
 
   @override
   State<EditStationPage> createState() => _EditStationPageState();
@@ -46,6 +48,9 @@ class _EditStationPageState extends State<EditStationPage> {
   double? _longitude;
   bool _loaded = false;
   bool _isSubmitting = false;
+  bool _isDeleting = false;
+  String? _pendingUpdateRequestId;
+  String? _pendingDeleteRequestId;
   File? _cardImage;
   String? _cardImageUrl;
   bool _uploadingImage = false;
@@ -95,58 +100,25 @@ class _EditStationPageState extends State<EditStationPage> {
   }
 
   Future<void> _pickAndUploadImage() async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 1024,
-      maxHeight: 1024,
-      imageQuality: 85,
-    );
-    if (picked == null) return;
-
-    // 方形裁剪后再上传（与头像上传一致，支持缩放/拖动调整）
-    final CroppedFile? cropped = await ImageCropper().cropImage(
-      sourcePath: picked.path,
-      maxWidth: 1024,
-      maxHeight: 1024,
-      compressFormat: ImageCompressFormat.jpg,
-      compressQuality: 85,
-      uiSettings: [
-        AndroidUiSettings(
-          cropStyle: CropStyle.rectangle,
-          lockAspectRatio: true,
-          initAspectRatio: CropAspectRatioPreset.square,
-          // 隐藏比例工具栏：固定方形裁剪，避免用户改比例破坏卡片形状
-          hideBottomControls: true,
-        ),
-        IOSUiSettings(
-          cropStyle: CropStyle.rectangle,
-          aspectRatioLockEnabled: true,
-          aspectRatioPresets: [CropAspectRatioPreset.square],
-        ),
-      ],
-    );
-    if (cropped == null) return;
-
+    if (_uploadingImage || _isSubmitting || _isDeleting) return;
     setState(() => _uploadingImage = true);
     try {
-      final apiClient = getIt<ApiClient>();
-      final uploadService = StationImageUploadService(apiClient);
-      final url = await uploadService.uploadStationImage(File(cropped.path));
-      if (mounted) {
-        setState(() {
-          _cardImage = File(cropped.path);
-          _cardImageUrl = url;
-          _uploadingImage = false;
-        });
-      }
+      final upload =
+          widget.imagePickerUploader ?? pickCropAndUploadStationImage;
+      final result = await upload();
+      if (result == null || !mounted) return;
+      setState(() {
+        _cardImage = result.file;
+        _cardImageUrl = result.url;
+      });
     } catch (e) {
       if (mounted) {
-        setState(() => _uploadingImage = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(e.toString())),
         );
       }
+    } finally {
+      if (mounted) setState(() => _uploadingImage = false);
     }
   }
 
@@ -237,6 +209,7 @@ class _EditStationPageState extends State<EditStationPage> {
   }
 
   void _submit() {
+    if (_isSubmitting || _isDeleting || _uploadingImage) return;
     final l10n = AppLocalizations.of(context)!;
     if (!_formKey.currentState!.validate()) return;
     // 与创建电站页一致的地区校验
@@ -256,7 +229,11 @@ class _EditStationPageState extends State<EditStationPage> {
       );
       return;
     }
-    setState(() => _isSubmitting = true);
+    final requestId = StationActionRequestId.next();
+    setState(() {
+      _isSubmitting = true;
+      _pendingUpdateRequestId = requestId;
+    });
     final data = <String, dynamic>{
       'name': _nameController.text.trim(),
       'country': _country,
@@ -279,27 +256,64 @@ class _EditStationPageState extends State<EditStationPage> {
           StationUpdateRequested(
             stationId: widget.stationId,
             data: data,
+            requestId: requestId,
           ),
         );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColor.surface(context),
-      appBar: AppBar(title: Text(AppLocalizations.of(context)!.editStation)),
-      body: BlocConsumer<StationBloc, StationState>(
+    return PopScope(
+      canPop: !_isSubmitting && !_isDeleting && !_uploadingImage,
+      child: Scaffold(
+        backgroundColor: AppColor.surface(context),
+        appBar: AppBar(title: Text(AppLocalizations.of(context)!.editStation)),
+        body: BlocConsumer<StationBloc, StationState>(
         listener: (context, state) {
-          if (state is StationUpdateSuccess) {
+          if (state is StationUpdateSuccess &&
+              state.stationId == widget.stationId &&
+              state.requestId == _pendingUpdateRequestId &&
+              _isSubmitting) {
+            setState(() {
+              _isSubmitting = false;
+              _pendingUpdateRequestId = null;
+            });
             context
                 .read<StationBloc>()
                 .add(StationDetailRequested(stationId: widget.stationId));
             context.pop();
-          } else if (state is StationDeleteSuccess) {
-            // 详情页同时监听该状态并 pop 回首页（SnackBar 由其展示）
-            context.pop();
-          } else if (state is StationError) {
-            setState(() => _isSubmitting = false);
+          } else if (state is StationDeleteSuccess &&
+              state.stationId == widget.stationId &&
+              state.requestId == _pendingDeleteRequestId &&
+              _isDeleting) {
+            setState(() {
+              _isDeleting = false;
+              _pendingDeleteRequestId = null;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  AppLocalizations.of(context)!
+                      .str('station_deleted', const {}),
+                ),
+              ),
+            );
+            context.go('/home');
+          } else if (state is StationActionError &&
+              ((state.action == 'update' &&
+                      state.stationId == widget.stationId &&
+                      state.requestId == _pendingUpdateRequestId &&
+                      _isSubmitting) ||
+                  (state.action == 'delete' &&
+                      state.stationId == widget.stationId &&
+                      state.requestId == _pendingDeleteRequestId &&
+                      _isDeleting))) {
+            setState(() {
+              _isSubmitting = false;
+              _isDeleting = false;
+              _pendingUpdateRequestId = null;
+              _pendingDeleteRequestId = null;
+            });
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
@@ -310,7 +324,8 @@ class _EditStationPageState extends State<EditStationPage> {
           }
         },
         builder: (context, state) {
-          if (state is StationDetailLoaded) {
+          if (state is StationDetailLoaded &&
+              state.stationId == widget.stationId) {
             _loadData(state.station);
           }
 
@@ -475,7 +490,11 @@ class _EditStationPageState extends State<EditStationPage> {
                         color: Colors.transparent,
                         child: InkWell(
                           borderRadius: BorderRadius.circular(16.r),
-                          onTap: _isSubmitting ? null : _submit,
+                          onTap: _isSubmitting ||
+                                  _isDeleting ||
+                                  _uploadingImage
+                              ? null
+                              : _submit,
                           child: Center(
                             child: _isSubmitting
                                 ? const SizedBox(
@@ -514,7 +533,10 @@ class _EditStationPageState extends State<EditStationPage> {
                   ),
                   SizedBox(height: 16.h),
                   TextButton(
-                    onPressed: () => context.pop(),
+                    onPressed:
+                        _isSubmitting || _isDeleting || _uploadingImage
+                            ? null
+                            : () => context.pop(),
                     child: Text(
                       AppLocalizations.of(context)!.cancel,
                       style: TextStyle(
@@ -527,9 +549,12 @@ class _EditStationPageState extends State<EditStationPage> {
                   // 删除电站入口（自详情页三点菜单迁入）
                   Center(
                     child: TextButton.icon(
-                      onPressed: _isSubmitting
-                          ? null
-                          : () => _confirmDelete(AppLocalizations.of(context)!),
+                      onPressed:
+                          _isSubmitting || _isDeleting || _uploadingImage
+                              ? null
+                              : () => _confirmDelete(
+                                    AppLocalizations.of(context)!,
+                                  ),
                       icon: const Icon(
                         Icons.delete_outline_rounded,
                         size: 18,
@@ -549,37 +574,66 @@ class _EditStationPageState extends State<EditStationPage> {
             ),
           );
         },
+        ),
       ),
     );
   }
 
   // 删除电站确认弹窗，确认后由 BlocListener 处理后续跳栈
   Future<void> _confirmDelete(AppLocalizations l10n) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.delete),
-        content: Text(l10n.str('confirm_delete_station', {})),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(l10n.cancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(
-              l10n.delete,
-              style: const TextStyle(color: AppColors.error),
-            ),
-          ),
-        ],
-      ),
-    );
+    if (_isDeleting || _isSubmitting || _uploadingImage) return;
+    setState(() => _isDeleting = true);
 
-    if (confirmed != true || !mounted) return;
-    context
-        .read<StationBloc>()
-        .add(StationDeleteRequested(stationId: widget.stationId));
+    try {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(l10n.delete),
+          content: Text(l10n.str('confirm_delete_station', {})),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(l10n.cancel),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(
+                l10n.delete,
+                style: const TextStyle(color: AppColors.error),
+              ),
+            ),
+          ],
+        ),
+      );
+
+      if (!mounted) return;
+      if (confirmed != true) {
+        setState(() {
+          _isDeleting = false;
+          _pendingDeleteRequestId = null;
+        });
+        return;
+      }
+      final requestId = StationActionRequestId.next();
+      setState(() => _pendingDeleteRequestId = requestId);
+      context
+          .read<StationBloc>()
+          .add(
+            StationDeleteRequested(
+              stationId: widget.stationId,
+              requestId: requestId,
+            ),
+          );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isDeleting = false;
+        _pendingDeleteRequestId = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    }
   }
 
   Widget _buildImagePicker() {
@@ -597,7 +651,10 @@ class _EditStationPageState extends State<EditStationPage> {
         SizedBox(height: 8.h),
         Center(
           child: GestureDetector(
-            onTap: _uploadingImage ? null : _pickAndUploadImage,
+            key: const Key('edit-station-image-button'),
+            onTap: _uploadingImage || _isSubmitting || _isDeleting
+                ? null
+                : _pickAndUploadImage,
             child: Container(
               width: 120.w,
               height: 120.w,
@@ -631,12 +688,16 @@ class _EditStationPageState extends State<EditStationPage> {
                               top: 8,
                               right: 8,
                               child: GestureDetector(
-                                onTap: () {
-                                  setState(() {
-                                    _cardImage = null;
-                                    _cardImageUrl = null;
-                                  });
-                                },
+                                onTap: _uploadingImage ||
+                                        _isSubmitting ||
+                                        _isDeleting
+                                    ? null
+                                    : () {
+                                        setState(() {
+                                          _cardImage = null;
+                                          _cardImageUrl = null;
+                                        });
+                                      },
                                 child: Container(
                                   padding: EdgeInsets.all(4.w),
                                   decoration: BoxDecoration(
@@ -675,11 +736,15 @@ class _EditStationPageState extends State<EditStationPage> {
                                   top: 8,
                                   right: 8,
                                   child: GestureDetector(
-                                    onTap: () {
-                                      setState(() {
-                                        _cardImageUrl = null;
-                                      });
-                                    },
+                                    onTap: _uploadingImage ||
+                                            _isSubmitting ||
+                                            _isDeleting
+                                        ? null
+                                        : () {
+                                            setState(() {
+                                              _cardImageUrl = null;
+                                            });
+                                          },
                                     child: Container(
                                       padding: EdgeInsets.all(4.w),
                                       decoration: BoxDecoration(

@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/errors/ota_error_types.dart';
@@ -13,14 +12,15 @@ import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/widgets/wifi_enable_dialog.dart';
 import 'package:inv_app/features/ota/data/datasources/ble_communication_service.dart';
+import 'package:inv_app/features/ota/data/datasources/local_ota_result_sync_queue.dart';
 import 'package:inv_app/features/ota/data/datasources/wifi_ap_communication_service.dart';
 import 'package:inv_app/features/ota/presentation/controller/local_ota_controller.dart';
 import 'package:inv_app/features/ota/domain/entities/local_channel.dart';
 import 'package:inv_app/features/ota/domain/repositories/local_communication_repository.dart';
 import 'package:inv_app/features/ota/domain/repositories/ota_repository.dart';
+import 'package:inv_app/features/ota/presentation/models/local_ota_presentation.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wifi_iot/wifi_iot.dart';
 
 enum LocalOTAStep {
@@ -131,8 +131,8 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   @override
   void initState() {
     super.initState();
-    _downloadService =
-        FirmwareDownloadService(getIt<Dio>(), getIt<SharedPreferences>());
+    // 应用级单例：并发守卫与进度流跨页面共享，页面退出不再 dispose
+    _downloadService = getIt<FirmwareDownloadService>();
 
     // 根据通道类型创建对应的通信服务
     switch (widget.channel) {
@@ -152,7 +152,10 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       if (mounted &&
           (widget.firmwareId == null || event.firmwareId == widget.firmwareId)) {
         setState(() {
-          _downloadProgress = event.progress;
+          _downloadProgress = _normalizeProgress(
+            event.progress,
+            source: 'download',
+          );
         });
       }
     });
@@ -221,7 +224,11 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     _otaController
       ?..removeListener(_onControllerChanged)
       ..dispose();
-    _downloadService.dispose();
+    // 本页发起且未完成的下载随页面退出取消（.part 分片保留供续传）；
+    // 下载服务是应用级单例，不随页面 dispose
+    if (_isDownloading && widget.firmwareId != null) {
+      _downloadService.cancelDownload(widget.firmwareId!);
+    }
     // 清理通信服务资源
     if (_communicationService case BleCommunicationService service) {
       service.dispose();
@@ -527,6 +534,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         currentSsid = await WiFiForIoTPlugin.getSSID();
         final isConnected = await WiFiForIoTPlugin.isConnected();
         debugPrint('Current SSID: $currentSsid, isConnected: $isConnected');
+        if (!mounted) return;
 
         if (!_isDeviceHotspotSsid(currentSsid)) {
           setState(() {
@@ -548,11 +556,13 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       } catch (e) {
         debugPrint('forceWifiUsage error: $e');
       }
+      if (!mounted) return;
     }
 
     // 尝试连接（两种通道都使用统一接口）
     connected = await _communicationService.testConnection(widget.deviceIP);
     debugPrint('Connection test result: $connected');
+    if (!mounted) return;
 
     if (connected) {
       _goToStep(LocalOTAStep.pushFirmware);
@@ -690,6 +700,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
           ? _reconnectDeviceHotspot
           : null,
       onTerminateConnection: _disconnectDeviceHotspot,
+      syncQueue: getIt<LocalOtaResultSyncQueue>(),
     );
     _otaController
       ?..removeListener(_onControllerChanged)
@@ -711,8 +722,14 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     final l10n = AppLocalizations.of(context)!;
 
     setState(() {
-      _uploadProgress = s.uploadProgress;
-      _upgradeProgress = s.upgradeProgress;
+      _uploadProgress = _normalizeProgress(
+        s.uploadProgress,
+        source: 'upload',
+      );
+      _upgradeProgress = _normalizeProgress(
+        s.upgradeProgress,
+        source: 'upgrade',
+      );
 
       if (s.statusOverrideKey != null) {
         _upgradeStatus = l10n.str(s.statusOverrideKey!, s.statusOverrideParams);
@@ -795,10 +812,14 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   /// 尝试重新连接设备热点
   Future<bool> _reconnectDeviceHotspot() async {
     try {
-      // 重连前确保手机 WiFi 已开启（未开启引导开启，取消则中止，Q1）
+      // 重连前确保手机 WiFi 已开启（未开启引导开启，取消则中止，Q1）；
+      // 对话框期间页面可能已退出
+      if (!mounted) return false;
       if (!await ensureWifiEnabled(context)) return false;
+      if (!mounted) return false;
       await WiFiForIoTPlugin.forceWifiUsage(true);
       final networks = await scanWifiNetworks();
+      if (!mounted) return false;
       final sn = widget.deviceSN.toUpperCase();
       final target = networks.where((n) {
         final ssid = (n.ssid ?? '').toUpperCase();
@@ -831,32 +852,33 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
 
   String _mapStatus(String status) {
     final l10n = AppLocalizations.of(context)!;
-    switch (status) {
-      case 'idle':
+    switch (localOtaStatusKind(status)) {
+      case LocalOtaStatusKind.idle:
         return l10n.idleStatus;
-      case 'downloading':
+      case LocalOtaStatusKind.downloading:
         return l10n.downloading;
-      case 'uploading':
-      case 'receiving':
+      case LocalOtaStatusKind.uploading:
         return l10n.uploadingStatus;
-      case 'verifying':
+      case LocalOtaStatusKind.verifying:
         return l10n.verifying;
-      case 'done':
-      case 'succeeded':
+      case LocalOtaStatusKind.done:
         return l10n.done;
-      case 'error':
-      case 'failed':
-      case 'rolled_back':
-      case 'cancelled':
+      case LocalOtaStatusKind.failure:
         return l10n.failure;
-      case 'accepted':
-        return l10n.uploadingStatus;
-      case 'installing':
-      case 'rebooting':
+      case LocalOtaStatusKind.installing:
         return l10n.installingFirmware;
-      default:
+      case LocalOtaStatusKind.unknown:
         return status;
     }
+  }
+
+  double _normalizeProgress(double value, {required String source}) {
+    return normalizeLocalOtaProgress(
+      value,
+      onInvalid: (invalidValue) {
+        debugPrint('[LocalOTA] Invalid $source progress: $invalidValue');
+      },
+    );
   }
 
   @override
@@ -1872,6 +1894,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                         await _downloadService
                             .deleteDownloadedFirmware(widget.firmwareId!);
                       }
+                      if (!mounted) return;
                       setState(() {
                         _selectedFilePath = null;
                         _currentStep = LocalOTAStep.selectFirmware;

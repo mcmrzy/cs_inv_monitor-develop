@@ -19,11 +19,24 @@ import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:inv_app/features/profile/data/avatar_upload_service.dart';
 import 'package:inv_app/features/profile/presentation/widgets/change_password_dialog.dart';
+import 'package:inv_app/features/profile/presentation/widgets/contact_change_dialog.dart';
+import 'package:inv_app/features/profile/presentation/widgets/nickname_edit_dialog.dart';
 import 'package:inv_app/features/station/presentation/widgets/region_picker_routes.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 class EditProfilePage extends StatefulWidget {
-  const EditProfilePage({super.key});
+  const EditProfilePage({
+    super.key,
+    this.pickAvatarPath,
+    this.cropAvatarPath,
+    this.uploadAvatarPath,
+    this.avatarImageProvider,
+  });
+
+  final Future<String?> Function()? pickAvatarPath;
+  final Future<String?> Function(String sourcePath)? cropAvatarPath;
+  final Future<String> Function(String filePath)? uploadAvatarPath;
+  final ImageProvider Function(String url)? avatarImageProvider;
 
   @override
   State<EditProfilePage> createState() => _EditProfilePageState();
@@ -37,16 +50,18 @@ class _EditProfilePageState extends State<EditProfilePage> {
   late TextEditingController _regionController;
   late TextEditingController _phoneController;
   bool _isUploadingAvatar = false;
+  bool _isSavingProfile = false;
   String? _avatarUrl;
   final ImagePicker _picker = ImagePicker();
+  StreamSubscription<AuthState>? _lateProfileSubscription;
+  Completer<AuthState?>? _lateProfileCompleter;
 
-  // 邮箱验证码相关状态
-  int _emailCountdown = 0;
-  Timer? _emailTimer;
+  bool get _hasLateProfileRequest => _lateProfileCompleter != null;
 
-  // 手机验证码相关状态
-  int _phoneCountdown = 0;
-  Timer? _phoneTimer;
+  bool get _isProfileBusy =>
+      _isUploadingAvatar || _isSavingProfile || _hasLateProfileRequest;
+
+  bool get _isNavigationBlocked => _isUploadingAvatar || _isSavingProfile;
 
   /// 是否为首次设置密码模式（无密码账号）
   bool _isSetPasswordMode = false;
@@ -100,87 +115,125 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
   @override
   void dispose() {
+    unawaited(_lateProfileSubscription?.cancel());
+    final lateCompleter = _lateProfileCompleter;
+    if (lateCompleter != null && !lateCompleter.isCompleted) {
+      lateCompleter.complete(null);
+    }
     _nicknameController.dispose();
     _emailController.dispose();
     _countryController.dispose();
     _regionController.dispose();
     _phoneController.dispose();
-    _emailTimer?.cancel();
-    _phoneTimer?.cancel();
     super.dispose();
   }
 
-  Future<void> _pickAndUploadAvatar() async {
-    if (!await _ensureAuthenticated()) return;
+  Future<void> _handleLateProfileResult(
+    Completer<AuthState?> completer,
+    StreamSubscription<AuthState>? subscription, {
+    String? submittedAvatar,
+  }) async {
     try {
-      final XFile? image = await _picker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 1024,
-        maxHeight: 1024,
-        imageQuality: 90,
-      );
-
-      if (image == null) return;
-
-      // 圆角矩形裁剪后再上传
-      final CroppedFile? cropped = await ImageCropper().cropImage(
-        sourcePath: image.path,
-        maxWidth: 512,
-        maxHeight: 512,
-        compressFormat: ImageCompressFormat.jpg,
-        compressQuality: 85,
-        uiSettings: [
-          AndroidUiSettings(
-            cropStyle: CropStyle.rectangle,
-            lockAspectRatio: true,
-            initAspectRatio: CropAspectRatioPreset.square,
-            // 隐藏比例工具栏：固定方形裁剪，避免用户改比例破坏头像形状
-            hideBottomControls: true,
-          ),
-          IOSUiSettings(
-            cropStyle: CropStyle.rectangle,
-            aspectRatioLockEnabled: true,
-            aspectRatioPresets: [CropAspectRatioPreset.square],
-          ),
-        ],
-      );
-
-      if (cropped == null) return;
-
-      setState(() {
-        _isUploadingAvatar = true;
-      });
-
-      final apiClient = getIt<ApiClient>();
-      final avatarService = AvatarUploadService(apiClient);
-      final url = await avatarService.uploadAvatar(File(cropped.path));
-
-      setState(() {
-        _avatarUrl = url;
-        _isUploadingAvatar = false;
-      });
-
-      if (mounted) {
-        AppToast.show(
-          context,
-          AppLocalizations.of(context)!.uploadSuccess,
-          type: ToastType.success,
-        );
+      final state = await completer.future;
+      if (!mounted) return;
+      final l10n = AppLocalizations.of(context)!;
+      if (state is AuthProfileUpdateSuccess) {
+        if (submittedAvatar != null) {
+          setState(() => _avatarUrl = submittedAvatar);
+        }
+        AppToast.show(context, l10n.success, type: ToastType.success);
+      } else if (state is AuthProfileUpdateError) {
+        AppToast.show(context, state.message, type: ToastType.error);
       }
-
-      // 单步保存：头像上传成功后立即提交 profile
-      await _submitPartial(avatar: url);
-    } catch (e) {
-      setState(() {
-        _isUploadingAvatar = false;
-      });
-      if (mounted) {
-        AppToast.show(context, e.toString(), type: ToastType.error);
+    } finally {
+      await subscription?.cancel();
+      if (identical(_lateProfileSubscription, subscription)) {
+        _lateProfileSubscription = null;
       }
+      if (identical(_lateProfileCompleter, completer)) {
+        _lateProfileCompleter = null;
+      }
+      if (mounted) setState(() => _isSavingProfile = false);
     }
   }
 
-  /// 单步保存：只提交非空字段（昵称/地区/头像任一修改后即时保存）。
+  Future<String?> _selectAvatarPath() async {
+    final injectedPicker = widget.pickAvatarPath;
+    if (injectedPicker != null) return injectedPicker();
+
+    final image = await _picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1024,
+      maxHeight: 1024,
+      imageQuality: 90,
+    );
+    return image?.path;
+  }
+
+  Future<String?> _cropAvatarPath(String sourcePath) async {
+    final injectedCropper = widget.cropAvatarPath;
+    if (injectedCropper != null) return injectedCropper(sourcePath);
+
+    final cropped = await ImageCropper().cropImage(
+      sourcePath: sourcePath,
+      maxWidth: 512,
+      maxHeight: 512,
+      compressFormat: ImageCompressFormat.jpg,
+      compressQuality: 85,
+      uiSettings: [
+        AndroidUiSettings(
+          cropStyle: CropStyle.rectangle,
+          lockAspectRatio: true,
+          initAspectRatio: CropAspectRatioPreset.square,
+          hideBottomControls: true,
+        ),
+        IOSUiSettings(
+          cropStyle: CropStyle.rectangle,
+          aspectRatioLockEnabled: true,
+          aspectRatioPresets: [CropAspectRatioPreset.square],
+        ),
+      ],
+    );
+    return cropped?.path;
+  }
+
+  Future<String> _uploadAvatarPath(String filePath) {
+    final injectedUploader = widget.uploadAvatarPath;
+    if (injectedUploader != null) return injectedUploader(filePath);
+
+    final avatarService = AvatarUploadService(getIt<ApiClient>());
+    return avatarService.uploadAvatar(File(filePath));
+  }
+
+  Future<void> _pickAndUploadAvatar() async {
+    if (_isProfileBusy) return;
+    setState(() => _isUploadingAvatar = true);
+
+    try {
+      if (!await _ensureAuthenticated() || !mounted) return;
+
+      final sourcePath = await _selectAvatarPath();
+      if (sourcePath == null || !mounted) return;
+
+      final croppedPath = await _cropAvatarPath(sourcePath);
+      if (croppedPath == null || !mounted) return;
+
+      final url = await _uploadAvatarPath(croppedPath);
+      if (!mounted) return;
+
+      // 单步保存：头像上传成功后立即提交 profile
+      final saved = await _submitPartial(avatar: url);
+      if (saved && mounted) setState(() => _avatarUrl = url);
+    } catch (e) {
+      if (mounted) {
+        AppToast.show(context, e.toString(), type: ToastType.error);
+      }
+    } finally {
+      if (mounted) setState(() => _isUploadingAvatar = false);
+    }
+  }
+
+  /// 单步保存：只提交本次变更字段（昵称/地区/头像任一修改后即时保存）。
   /// 成功返回 true（SnackBar 即时确认），失败返回 false——不关闭页面、不清空输入，可重试。
   Future<bool> _submitPartial({
     String? nickname,
@@ -188,71 +241,84 @@ class _EditProfilePageState extends State<EditProfilePage> {
     String? regionName,
     String? avatar,
   }) async {
-    if (!await _ensureAuthenticated()) return false;
-    if (!mounted) return false;
-    final l10n = AppLocalizations.of(context)!;
+    if (!mounted || _isSavingProfile || _hasLateProfileRequest) return false;
+    setState(() => _isSavingProfile = true);
+    StreamSubscription<AuthState>? subscription;
 
     try {
-      // 记录本次提交的字段值，等待状态变化时校验是否已生效
-      // （防止后台旧资料刷新响应被误判为本次保存结果）
-      final submittedNickname = nickname?.trim();
-      final submittedCountry = country?.trim();
-      final submittedRegion = regionName?.trim();
-      final submittedAvatar = avatar;
-      final completer = Completer<void>();
+      if (!await _ensureAuthenticated() || !mounted) return false;
+      final l10n = AppLocalizations.of(context)!;
+      final authBloc = context.read<AuthBloc>();
+      // UI 超时不代表底层请求已取消；旧请求仍在执行时不要并发派发。
+      if (authBloc.state is AuthLoading) {
+        AppToast.show(
+          context,
+          l10n.errRequestTimeout,
+          type: ToastType.error,
+        );
+        return false;
+      }
 
-      // 创建一个临时的监听器来等待状态变化：
-      // 仅当 AuthAuthenticated 中已包含本次提交字段（或保存失败）时才视为完成
-      final subscription = context.read<AuthBloc>().stream.listen((state) {
-        if (state is AuthError) {
-          completer.complete();
-          return;
-        }
-        if (state is AuthAuthenticated) {
-          final user = state.user;
-          final nicknameOk = submittedNickname == null ||
-              (user?.nickname ?? '') == submittedNickname;
-          final countryOk = submittedCountry == null ||
-              (user?.country ?? '') == submittedCountry;
-          final regionOk = submittedRegion == null ||
-              (user?.region ?? '') == submittedRegion;
-          final avatarOk = submittedAvatar == null ||
-              (user?.avatar ?? '') == submittedAvatar;
-          if (nicknameOk && countryOk && regionOk && avatarOk) {
-            completer.complete();
-          }
+      final requestId = AuthProfileRequestId.next();
+      final requestCompleter = Completer<AuthState?>();
+
+      // 只接收本次资料更新的终态，忽略验证码、登录及旧资料请求状态。
+      subscription = authBloc.stream.listen((state) {
+        final isOwnSuccess = state is AuthProfileUpdateSuccess &&
+            state.requestId == requestId;
+        final isOwnError = state is AuthProfileUpdateError &&
+            state.requestId == requestId;
+        if ((isOwnSuccess || isOwnError) && !requestCompleter.isCompleted) {
+          requestCompleter.complete(state);
         }
       });
 
-      context.read<AuthBloc>().add(
-            AuthUpdateProfileRequested(
-              nickname: nickname,
-              country: country,
-              regionName: regionName,
-              avatar: avatar,
-            ),
-          );
+      authBloc.add(
+        AuthUpdateProfileRequested(
+          requestId: requestId,
+          nickname: nickname,
+          country: country,
+          regionName: regionName,
+          avatar: avatar,
+        ),
+      );
 
       // 等待 AuthBloc 处理完成；15s 超时兜底，避免永久等待
-      await completer.future.timeout(
+      final result = await requestCompleter.future.timeout(
         const Duration(seconds: 15),
-        onTimeout: () {},
+        onTimeout: () => null,
       );
-      await subscription.cancel();
 
       if (!mounted) return false;
-      final currentState = context.read<AuthBloc>().state;
-      if (currentState is AuthAuthenticated) {
+      if (result is AuthProfileUpdateSuccess) {
         // 更新成功：即时确认（不关闭页面）
         AppToast.show(context, l10n.success, type: ToastType.success);
         return true;
       }
-      if (currentState is AuthError) {
+      if (result is AuthProfileUpdateError) {
         // 更新失败：提示原因，输入保留可重试
         AppToast.show(
           context,
-          currentState.message,
+          result.message,
           type: ToastType.error,
+        );
+      } else {
+        AppToast.show(
+          context,
+          l10n.errRequestTimeout,
+          type: ToastType.error,
+        );
+        // 底层请求不会随 UI 超时取消；继续等待同 requestId 的迟到终态。
+        final lateSubscription = subscription;
+        subscription = null;
+        _lateProfileSubscription = lateSubscription;
+        _lateProfileCompleter = requestCompleter;
+        unawaited(
+          _handleLateProfileResult(
+            requestCompleter,
+            lateSubscription,
+            submittedAvatar: avatar,
+          ),
         );
       }
       return false;
@@ -261,260 +327,57 @@ class _EditProfilePageState extends State<EditProfilePage> {
         AppToast.show(context, e.toString(), type: ToastType.error);
       }
       return false;
+    } finally {
+      await subscription?.cancel();
+      if (mounted) setState(() => _isSavingProfile = false);
     }
   }
 
   /// 显示编辑昵称弹窗
-  void _showEditNicknameDialog(AppLocalizations l10n) {
-    final nicknameController = TextEditingController(text: _nicknameController.text);
-
-    showDialog(
+  Future<void> _showEditNicknameDialog(AppLocalizations l10n) async {
+    await showDialog<void>(
       context: context,
-      builder: (context) => Dialog(
-        child: Container(
-          padding: EdgeInsets.all(24.w),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // 图标
-              Container(
-                width: 64.w,
-                height: 64.w,
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.person_outline,
-                  size: 32.sp,
-                  color: AppColors.primary,
-                ),
-              ),
-              SizedBox(height: 16.h),
-              Text(
-                l10n.nickname,
-                style: TextStyle(
-                  fontSize: 20.sp,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              SizedBox(height: 24.h),
-              // 昵称输入
-              TextField(
-                controller: nicknameController,
-                decoration: InputDecoration(
-                  labelText: l10n.nickname,
-                  hintText: l10n.nickname,
-                  prefixIcon: Icon(Icons.person, size: 20.sp),
-                  contentPadding: EdgeInsets.symmetric(
-                    horizontal: 16.w,
-                    vertical: 14.h,
-                  ),
-                ),
-              ),
-              SizedBox(height: 24.h),
-              // 按钮
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: OutlinedButton.styleFrom(
-                        padding: EdgeInsets.symmetric(vertical: 14.h),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12.r),
-                        ),
-                      ),
-                      child: Text(l10n.cancel),
-                    ),
-                  ),
-                  SizedBox(width: 12.w),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        setState(() {
-                          _nicknameController.text = nicknameController.text;
-                        });
-                        Navigator.pop(context);
-                        // 单步保存：昵称修改后立即提交
-                        _submitPartial(nickname: nicknameController.text);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        padding: EdgeInsets.symmetric(vertical: 14.h),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12.r),
-                        ),
-                      ),
-                      child: Text(l10n.confirm),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
+      builder: (_) => NicknameEditDialog(
+        initialValue: _nicknameController.text,
+        title: l10n.nickname,
+        label: l10n.nickname,
+        hint: l10n.nickname,
+        cancelLabel: l10n.cancel,
+        confirmLabel: l10n.confirm,
+        onConfirm: _updateNickname,
       ),
     );
   }
 
+  Future<void> _updateNickname(String nickname) async {
+    if (!mounted) return;
+    setState(() => _nicknameController.text = nickname);
+    // 单步保存：昵称修改后立即提交
+    await _submitPartial(nickname: nickname);
+  }
+
   /// 显示修改手机号弹窗（现代化UI）
   Future<void> _showChangePhoneDialog(AppLocalizations l10n) async {
-    final newPhoneController = TextEditingController();
-    final codeController = TextEditingController();
-
     await showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20.r),
-          ),
-          child: Container(
-            padding: EdgeInsets.all(24.w),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // 图标
-                Container(
-                  width: 64.w,
-                  height: 64.w,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.phone_android,
-                    size: 32.sp,
-                    color: AppColors.primary,
-                  ),
-                ),
-                SizedBox(height: 16.h),
-                Text(
-                  l10n.changePhone,
-                  style: TextStyle(
-                    fontSize: 20.sp,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                SizedBox(height: 8.h),
-                Text(
-                  '请输入新的手机号码',
-                  style: TextStyle(
-                    fontSize: 14.sp,
-                    color: AppColor.textSecondary(context),
-                  ),
-                ),
-                SizedBox(height: 24.h),
-                // 手机号输入
-                TextField(
-                  controller: newPhoneController,
-                  keyboardType: TextInputType.phone,
-                  decoration: InputDecoration(
-                    labelText: l10n.newPhone,
-                    hintText: l10n.phoneHint,
-                    prefixIcon: Icon(Icons.phone, size: 20.sp),
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: 16.w,
-                      vertical: 14.h,
-                    ),
-                  ),
-                ),
-                SizedBox(height: 16.h),
-                // 验证码输入
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: codeController,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          labelText: l10n.verificationCode,
-                          hintText: l10n.codeHint,
-                          prefixIcon: Icon(Icons.lock_outline, size: 20.sp),
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 16.w,
-                            vertical: 14.h,
-                          ),
-                        ),
-                      ),
-                    ),
-                    SizedBox(width: 12.w),
-                    SizedBox(
-                      height: 52.h,
-                      child: ElevatedButton(
-                        onPressed: _phoneCountdown > 0
-                            ? null
-                            : () => _sendPhoneCodeForDialog(
-                                  newPhoneController.text,
-                                  setDialogState,
-                                ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _phoneCountdown > 0
-                              ? AppColors.offline
-                              : AppColors.primary,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12.r),
-                          ),
-                          padding: EdgeInsets.symmetric(horizontal: 16.w),
-                        ),
-                        child: Text(
-                          _phoneCountdown > 0
-                              ? '${_phoneCountdown}s'
-                              : l10n.sendCode,
-                          style: TextStyle(fontSize: 13.sp),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 24.h),
-                // 按钮
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: OutlinedButton.styleFrom(
-                          padding: EdgeInsets.symmetric(vertical: 14.h),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12.r),
-                          ),
-                        ),
-                        child: Text(l10n.cancel),
-                      ),
-                    ),
-                    SizedBox(width: 12.w),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () => _verifyPhoneCode(
-                              newPhoneController.text,
-                              codeController.text,
-                            ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
-                          padding: EdgeInsets.symmetric(vertical: 14.h),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12.r),
-                          ),
-                        ),
-                        child: Text(l10n.confirm),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
+      builder: (_) => ContactChangeDialog(
+        icon: Icons.phone_android,
+        title: l10n.changePhone,
+        description: '请输入新的手机号码',
+        valueLabel: l10n.newPhone,
+        valueHint: l10n.phoneHint,
+        valueKeyboardType: TextInputType.phone,
+        valuePrefixIcon: Icons.phone,
+        codeLabel: l10n.verificationCode,
+        codeHint: l10n.codeHint,
+        sendCodeLabel: l10n.sendCode,
+        cancelLabel: l10n.cancel,
+        confirmLabel: l10n.confirm,
+        onSendCode: _sendPhoneCodeForDialog,
+        onConfirm: _verifyPhoneCode,
+        onConfirmed: _completePhoneChange,
       ),
     );
-    // 弹窗关闭（确认/取消/返回键/遮罩）后取消倒计时，避免定时器对已销毁弹窗调用 setState
-    _phoneTimer?.cancel();
-    _phoneCountdown = 0;
   }
 
   /// 检查登录态；未登录时提示并跳转登录页，返回 false 阻止操作
@@ -534,19 +397,16 @@ class _EditProfilePageState extends State<EditProfilePage> {
   }
 
   /// 发送手机验证码（弹窗内使用）
-  Future<void> _sendPhoneCodeForDialog(
-    String phone,
-    StateSetter setDialogState,
-  ) async {
-    if (!await _ensureAuthenticated()) return;
-    if (!mounted) return;
+  Future<bool> _sendPhoneCodeForDialog(String phone) async {
+    if (!await _ensureAuthenticated()) return false;
+    if (!mounted) return false;
     if (phone.isEmpty) {
       AppToast.show(
         context,
         AppLocalizations.of(context)!.phoneRequired,
         type: ToastType.info,
       );
-      return;
+      return false;
     }
 
     try {
@@ -564,20 +424,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
             type: ToastType.success,
           );
         }
-
-        // 开始倒计时
-        setDialogState(() {
-          _phoneCountdown = 60;
-        });
-        _phoneTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-          if (_phoneCountdown > 0) {
-            setDialogState(() {
-              _phoneCountdown--;
-            });
-          } else {
-            timer.cancel();
-          }
-        });
+        return true;
       } else {
         throw Exception(response.data['message'] ?? '发送失败');
       }
@@ -585,20 +432,21 @@ class _EditProfilePageState extends State<EditProfilePage> {
       if (mounted) {
         AppToast.show(context, e.toString(), type: ToastType.error);
       }
+      return false;
     }
   }
 
   /// 验证手机验证码
-  Future<void> _verifyPhoneCode(String newPhone, String code) async {
-    if (!await _ensureAuthenticated()) return;
-    if (!mounted) return;
+  Future<bool> _verifyPhoneCode(String newPhone, String code) async {
+    if (!await _ensureAuthenticated()) return false;
+    if (!mounted) return false;
     if (newPhone.isEmpty || code.isEmpty) {
       AppToast.show(
         context,
         AppLocalizations.of(context)!.fillAllFields,
         type: ToastType.info,
       );
-      return;
+      return false;
     }
 
     try {
@@ -612,26 +460,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
       );
 
       if (response.statusCode == 200 && response.data['code'] == 0) {
-        // 关闭弹窗并取消倒计时，避免弹窗销毁后定时器回调报错
-        _phoneTimer?.cancel();
-        _phoneCountdown = 0;
-
-        if (mounted) {
-          Navigator.pop(context);
-          setState(() {
-            _phoneController.text = newPhone;
-          });
-          // 同步 AuthBloc 状态与本地缓存，重新打开设置页显示新手机号
-          context.read<AuthBloc>().add(AuthContactChanged(newPhone: newPhone));
-        }
-
-        if (mounted) {
-          AppToast.show(
-            context,
-            AppLocalizations.of(context)!.phoneChanged,
-            type: ToastType.success,
-          );
-        }
+        return true;
       } else {
         throw Exception(response.data['message'] ?? '验证失败');
       }
@@ -639,179 +468,55 @@ class _EditProfilePageState extends State<EditProfilePage> {
       if (mounted) {
         AppToast.show(context, e.toString(), type: ToastType.error);
       }
+      return false;
     }
+  }
+
+  void _completePhoneChange(String newPhone) {
+    if (!mounted) return;
+    setState(() => _phoneController.text = newPhone);
+    // 同步 AuthBloc 状态与本地缓存，重新打开设置页显示新手机号
+    context.read<AuthBloc>().add(AuthContactChanged(newPhone: newPhone));
+    AppToast.show(
+      context,
+      AppLocalizations.of(context)!.phoneChanged,
+      type: ToastType.success,
+    );
   }
 
   /// 显示修改邮箱弹窗（现代化UI）
   Future<void> _showChangeEmailDialog(AppLocalizations l10n) async {
-    final newEmailController = TextEditingController();
-    final codeController = TextEditingController();
-
     await showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20.r),
-          ),
-          child: Container(
-            padding: EdgeInsets.all(24.w),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // 图标
-                Container(
-                  width: 64.w,
-                  height: 64.w,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.email_outlined,
-                    size: 32.sp,
-                    color: AppColors.primary,
-                  ),
-                ),
-                SizedBox(height: 16.h),
-                Text(
-                  l10n.changeEmail,
-                  style: TextStyle(
-                    fontSize: 20.sp,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                SizedBox(height: 8.h),
-                Text(
-                  '请输入新的邮箱地址',
-                  style: TextStyle(
-                    fontSize: 14.sp,
-                    color: AppColor.textSecondary(context),
-                  ),
-                ),
-                SizedBox(height: 24.h),
-                // 邮箱输入
-                TextField(
-                  controller: newEmailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: InputDecoration(
-                    labelText: l10n.newEmail,
-                    hintText: l10n.emailHint,
-                    prefixIcon: Icon(Icons.email, size: 20.sp),
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: 16.w,
-                      vertical: 14.h,
-                    ),
-                  ),
-                ),
-                SizedBox(height: 16.h),
-                // 验证码输入
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: codeController,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          labelText: l10n.verificationCode,
-                          hintText: l10n.codeHint,
-                          prefixIcon: Icon(Icons.lock_outline, size: 20.sp),
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 16.w,
-                            vertical: 14.h,
-                          ),
-                        ),
-                      ),
-                    ),
-                    SizedBox(width: 12.w),
-                    SizedBox(
-                      height: 52.h,
-                      child: ElevatedButton(
-                        onPressed: _emailCountdown > 0
-                            ? null
-                            : () => _sendEmailCodeForDialog(
-                                  newEmailController.text,
-                                  setDialogState,
-                                ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _emailCountdown > 0
-                              ? AppColors.offline
-                              : AppColors.primary,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12.r),
-                          ),
-                          padding: EdgeInsets.symmetric(horizontal: 16.w),
-                        ),
-                        child: Text(
-                          _emailCountdown > 0
-                              ? '${_emailCountdown}s'
-                              : l10n.sendCode,
-                          style: TextStyle(fontSize: 13.sp),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 24.h),
-                // 按钮
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: OutlinedButton.styleFrom(
-                          padding: EdgeInsets.symmetric(vertical: 14.h),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12.r),
-                          ),
-                        ),
-                        child: Text(l10n.cancel),
-                      ),
-                    ),
-                    SizedBox(width: 12.w),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () => _verifyEmailCode(
-                              newEmailController.text,
-                              codeController.text,
-                            ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
-                          padding: EdgeInsets.symmetric(vertical: 14.h),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12.r),
-                          ),
-                        ),
-                        child: Text(l10n.confirm),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
+      builder: (_) => ContactChangeDialog(
+        icon: Icons.email_outlined,
+        title: l10n.changeEmail,
+        description: '请输入新的邮箱地址',
+        valueLabel: l10n.newEmail,
+        valueHint: l10n.emailHint,
+        valueKeyboardType: TextInputType.emailAddress,
+        valuePrefixIcon: Icons.email,
+        codeLabel: l10n.verificationCode,
+        codeHint: l10n.codeHint,
+        sendCodeLabel: l10n.sendCode,
+        cancelLabel: l10n.cancel,
+        confirmLabel: l10n.confirm,
+        onSendCode: _sendEmailCodeForDialog,
+        onConfirm: _verifyEmailCode,
+        onConfirmed: _completeEmailChange,
       ),
     );
-    // 弹窗关闭（确认/取消/返回键/遮罩）后取消倒计时，避免定时器对已销毁弹窗调用 setState
-    _emailTimer?.cancel();
-    _emailCountdown = 0;
   }
 
   /// 发送邮箱验证码（弹窗内使用）
-  Future<void> _sendEmailCodeForDialog(
-    String email,
-    StateSetter setDialogState,
-  ) async {
+  Future<bool> _sendEmailCodeForDialog(String email) async {
     if (email.isEmpty) {
       AppToast.show(
         context,
         AppLocalizations.of(context)!.emailRequired,
         type: ToastType.info,
       );
-      return;
+      return false;
     }
 
     try {
@@ -829,20 +534,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
             type: ToastType.success,
           );
         }
-
-        // 开始倒计时
-        setDialogState(() {
-          _emailCountdown = 60;
-        });
-        _emailTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-          if (_emailCountdown > 0) {
-            setDialogState(() {
-              _emailCountdown--;
-            });
-          } else {
-            timer.cancel();
-          }
-        });
+        return true;
       } else {
         throw Exception(response.data['message'] ?? '发送失败');
       }
@@ -850,18 +542,19 @@ class _EditProfilePageState extends State<EditProfilePage> {
       if (mounted) {
         AppToast.show(context, e.toString(), type: ToastType.error);
       }
+      return false;
     }
   }
 
   /// 验证邮箱验证码
-  Future<void> _verifyEmailCode(String newEmail, String code) async {
+  Future<bool> _verifyEmailCode(String newEmail, String code) async {
     if (newEmail.isEmpty || code.isEmpty) {
       AppToast.show(
         context,
         AppLocalizations.of(context)!.fillAllFields,
         type: ToastType.info,
       );
-      return;
+      return false;
     }
 
     try {
@@ -875,26 +568,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
       );
 
       if (response.statusCode == 200 && response.data['code'] == 0) {
-        // 关闭弹窗并取消倒计时，避免弹窗销毁后定时器回调报错
-        _emailTimer?.cancel();
-        _emailCountdown = 0;
-
-        if (mounted) {
-          Navigator.pop(context);
-          setState(() {
-            _emailController.text = newEmail;
-          });
-          // 同步 AuthBloc 状态与本地缓存，重新打开设置页显示新邮箱
-          context.read<AuthBloc>().add(AuthContactChanged(newEmail: newEmail));
-        }
-
-        if (mounted) {
-          AppToast.show(
-            context,
-            AppLocalizations.of(context)!.emailChanged,
-            type: ToastType.success,
-          );
-        }
+        return true;
       } else {
         throw Exception(response.data['message'] ?? '验证失败');
       }
@@ -902,7 +576,20 @@ class _EditProfilePageState extends State<EditProfilePage> {
       if (mounted) {
         AppToast.show(context, e.toString(), type: ToastType.error);
       }
+      return false;
     }
+  }
+
+  void _completeEmailChange(String newEmail) {
+    if (!mounted) return;
+    setState(() => _emailController.text = newEmail);
+    // 同步 AuthBloc 状态与本地缓存，重新打开设置页显示新邮箱
+    context.read<AuthBloc>().add(AuthContactChanged(newEmail: newEmail));
+    AppToast.show(
+      context,
+      AppLocalizations.of(context)!.emailChanged,
+      type: ToastType.success,
+    );
   }
 
   /// 显示地区选择器（两步流程：洲+国家 -> 省/市/区，与电站地址选择共用组件）
@@ -989,9 +676,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    return Scaffold(
-      backgroundColor: AppColor.surface(context),
-      appBar: AppBar(
+    return PopScope(
+      canPop: !_isNavigationBlocked,
+      child: Scaffold(
+        backgroundColor: AppColor.surface(context),
+        appBar: AppBar(
         title: Text(
           l10n.editProfile,
           style: TextStyle(
@@ -1004,9 +693,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
         elevation: 0,
         scrolledUnderElevation: 0.5,
       ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
+        body: Form(
+          key: _formKey,
+          child: ListView(
           padding: EdgeInsets.all(16.w),
           children: [
 
@@ -1024,7 +713,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     label: l10n.nickname,
                     value: _nicknameController.text,
                     icon: Icons.person_outline,
-                    onEdit: () => _showEditNicknameDialog(l10n),
+                    onEdit: _isProfileBusy
+                        ? null
+                        : () => _showEditNicknameDialog(l10n),
                     l10n: l10n,
                   ),
                   Divider(height: 1.h, indent: 16.w, endIndent: 16.w),
@@ -1032,7 +723,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     label: l10n.phone,
                     value: _phoneController.text,
                     icon: Icons.phone_outlined,
-                    onEdit: () => _showChangePhoneDialog(l10n),
+                    onEdit: _isProfileBusy
+                        ? null
+                        : () => _showChangePhoneDialog(l10n),
                     l10n: l10n,
                   ),
                   Divider(height: 1.h, indent: 16.w, endIndent: 16.w),
@@ -1040,7 +733,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     label: l10n.email,
                     value: _emailController.text,
                     icon: Icons.email_outlined,
-                    onEdit: () => _showChangeEmailDialog(l10n),
+                    onEdit: _isProfileBusy
+                        ? null
+                        : () => _showChangeEmailDialog(l10n),
                     l10n: l10n,
                   ),
                   Divider(height: 1.h, indent: 16.w, endIndent: 16.w),
@@ -1053,13 +748,16 @@ class _EditProfilePageState extends State<EditProfilePage> {
                         : l10n.changePassword,
                     value: _isSetPasswordMode ? '-' : '••••••',
                     icon: Icons.lock_outline,
-                    onEdit: () => _showChangePasswordDialog(l10n),
+                    onEdit: _isProfileBusy
+                        ? null
+                        : () => _showChangePasswordDialog(l10n),
                     l10n: l10n,
                   ),
                 ],
               ),
             ),
           ],
+        ),
         ),
       ),
     );
@@ -1080,7 +778,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
       child: Column(
         children: [
           GestureDetector(
-            onTap: _isUploadingAvatar ? null : _pickAndUploadAvatar,
+            key: const Key('edit-profile-avatar-button'),
+            onTap: _isProfileBusy ? null : _pickAndUploadAvatar,
             child: Stack(
               children: [
                 Container(
@@ -1092,7 +791,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     borderRadius: BorderRadius.circular(12.r),
                     image: avatarUrl.isNotEmpty
                         ? DecorationImage(
-                            image: NetworkImage(avatarUrl),
+                            image: widget.avatarImageProvider?.call(avatarUrl) ??
+                                NetworkImage(avatarUrl),
                             fit: BoxFit.cover,
                           )
                         : null,
@@ -1164,7 +864,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
     required String label,
     required String value,
     required IconData icon,
-    required VoidCallback onEdit,
+    required VoidCallback? onEdit,
     required AppLocalizations l10n,
   }) {
     // 如果值为空，显示"点击设置..."的提示
@@ -1211,7 +911,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
               icon: Icon(
                 Icons.edit_outlined,
                 size: 20.sp,
-                color: AppColors.primary,
+                color: onEdit == null
+                    ? AppColor.textHint(context)
+                    : AppColors.primary,
               ),
             ),
           ],
@@ -1284,11 +986,14 @@ class _EditProfilePageState extends State<EditProfilePage> {
               ),
             ),
             IconButton(
-              onPressed: () => _showRegionPicker(l10n),
+              onPressed:
+                  _isProfileBusy ? null : () => _showRegionPicker(l10n),
               icon: Icon(
                 Icons.edit_outlined,
                 size: 20.sp,
-                color: AppColors.primary,
+                color: _isProfileBusy
+                    ? AppColor.textHint(context)
+                    : AppColors.primary,
               ),
             ),
           ],

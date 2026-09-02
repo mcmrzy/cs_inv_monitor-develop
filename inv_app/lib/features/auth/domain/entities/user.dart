@@ -116,6 +116,7 @@ class User {
 class LoginResponse {
   final String token;
   final String? refreshToken;
+  final int? activeOrganizationId;
   final User user;
   final DateTime expireAt;
   final List<String> permissions;
@@ -123,6 +124,7 @@ class LoginResponse {
   const LoginResponse({
     required this.token,
     this.refreshToken,
+    this.activeOrganizationId,
     required this.user,
     required this.expireAt,
     this.permissions = const [],
@@ -142,6 +144,8 @@ class LoginResponse {
               as String? ??
           '',
       refreshToken: (json['refresh_token'] ?? json['refreshToken']) as String?,
+      activeOrganizationId:
+          (json['active_organization_id'] as num?)?.toInt(),
       user: User.fromJson(json['user'] as Map<String, dynamic>? ?? {}),
       expireAt: json['expire_at'] != null
           ? DateTime.tryParse(json['expire_at'].toString()) ??
@@ -150,4 +154,60 @@ class LoginResponse {
       permissions: perms,
     );
   }
+}
+
+/// Result of switching the authorization context to another organization.
+/// Tokens and permissions belong to [activeOrganizationId] and must be
+/// committed together.
+class AuthorizationContextResponse {
+  final String accessToken;
+  final String refreshToken;
+  final int activeOrganizationId;
+  final List<String> permissions;
+
+  const AuthorizationContextResponse({
+    required this.accessToken,
+    required this.refreshToken,
+    required this.activeOrganizationId,
+    required this.permissions,
+  });
+
+  factory AuthorizationContextResponse.fromJson(Map<String, dynamic> json) {
+    final permissions = (json['permissions'] as List? ?? const <dynamic>[])
+        .whereType<String>()
+        .toList(growable: false);
+    return AuthorizationContextResponse(
+      accessToken: (json['access_token'] as String? ?? '').trim(),
+      refreshToken: (json['refresh_token'] as String? ?? '').trim(),
+      activeOrganizationId:
+          (json['active_organization_id'] as num?)?.toInt() ?? 0,
+      permissions: permissions,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        other is AuthorizationContextResponse &&
+            accessToken == other.accessToken &&
+            refreshToken == other.refreshToken &&
+            activeOrganizationId == other.activeOrganizationId &&
+            _sameStrings(permissions, other.permissions);
+  }
+
+  @override
+  int get hashCode => Object.hash(
+        accessToken,
+        refreshToken,
+        activeOrganizationId,
+        Object.hashAll(permissions),
+      );
+}
+
+bool _sameStrings(List<String> left, List<String> right) {
+  if (left.length != right.length) return false;
+  for (var index = 0; index < left.length; index++) {
+    if (left[index] != right[index]) return false;
+  }
+  return true;
 }

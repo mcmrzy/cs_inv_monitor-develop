@@ -1,11 +1,9 @@
 import 'dart:async';
 
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:inv_app/core/services/firmware_download_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
@@ -33,10 +31,9 @@ class FirmwareLibraryPage extends StatefulWidget {
 }
 
 class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
-  final FirmwareDownloadService _downloadService = FirmwareDownloadService(
-    getIt<Dio>(),
-    getIt<SharedPreferences>(),
-  );
+  // 应用级单例：并发守卫与进度流跨页面共享，页面退出不再 dispose
+  final FirmwareDownloadService _downloadService =
+      getIt<FirmwareDownloadService>();
 
   List<String> _models = const [];
   String? _selectedModel;
@@ -79,7 +76,7 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
   @override
   void dispose() {
     _progressSub?.cancel();
-    _downloadService.dispose();
+    // 下载服务是应用级单例，不随页面 dispose
     super.dispose();
   }
 

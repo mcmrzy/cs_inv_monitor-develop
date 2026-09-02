@@ -12,24 +12,26 @@ extension _WifiConfigProvisionSections on _WifiConfigPageState {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildStepIndicatorRow([
-          _StepData(
-            label: AppLocalizations.of(context)!.connectDeviceHotspot,
-            isCompleted: _provisionStep > 1,
-            isCurrent: _provisionStep == 1 ||
-                (_provisionStep == 0 && !deviceConnected),
-          ),
-          _StepData(
-            label: AppLocalizations.of(context)!.selectWifi,
-            isCompleted: _provisionStep > 2 || _provisionOk,
-            isCurrent: _provisionStep == 2 && !_provisionOk,
-          ),
-          _StepData(
-            label: AppLocalizations.of(context)!.finish,
-            isCompleted: _provisionOk,
-            isCurrent: false,
-          ),
-        ]),
+        WifiProvisionStepIndicator(
+          steps: [
+            WifiProvisionStepData(
+              label: AppLocalizations.of(context)!.connectDeviceHotspot,
+              isCompleted: _provisionStep > 1,
+              isCurrent: _provisionStep == 1 ||
+                  (_provisionStep == 0 && !deviceConnected),
+            ),
+            WifiProvisionStepData(
+              label: AppLocalizations.of(context)!.selectWifi,
+              isCompleted: _provisionStep > 2 || _provisionOk,
+              isCurrent: _provisionStep == 2 && !_provisionOk,
+            ),
+            WifiProvisionStepData(
+              label: AppLocalizations.of(context)!.finish,
+              isCompleted: _provisionOk,
+              isCurrent: false,
+            ),
+          ],
+        ),
         SizedBox(height: 24.h),
         if (isStep0) ...[
           // 小烁配网引导插画：连接设备热点前的流程引导（美术路由 C7/guide-wifi）
@@ -484,23 +486,25 @@ extension _WifiConfigProvisionSections on _WifiConfigPageState {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // 步骤指示器
-        _buildStepIndicatorRow([
-          _StepData(
-            label: AppLocalizations.of(context)!.scanNearInverters,
-            isCompleted: deviceSelected,
-            isCurrent: showScanPhase,
-          ),
-          _StepData(
-            label: AppLocalizations.of(context)!.selectWifi,
-            isCompleted: isCompleted || isConnected || isConfiguring,
-            isCurrent: showConfigPhase || showConfiguringPhase,
-          ),
-          _StepData(
-            label: AppLocalizations.of(context)!.finish,
-            isCompleted: isCompleted,
-            isCurrent: showCompletedPhase,
-          ),
-        ]),
+        WifiProvisionStepIndicator(
+          steps: [
+            WifiProvisionStepData(
+              label: AppLocalizations.of(context)!.scanNearInverters,
+              isCompleted: deviceSelected,
+              isCurrent: showScanPhase,
+            ),
+            WifiProvisionStepData(
+              label: AppLocalizations.of(context)!.selectWifi,
+              isCompleted: isCompleted || isConnected || isConfiguring,
+              isCurrent: showConfigPhase || showConfiguringPhase,
+            ),
+            WifiProvisionStepData(
+              label: AppLocalizations.of(context)!.finish,
+              isCompleted: isCompleted,
+              isCurrent: showCompletedPhase,
+            ),
+          ],
+        ),
         SizedBox(height: 24.h),
 
         // 小烁配网引导插画：BLE 扫描阶段流程引导（美术路由 C7/guide-wifi）

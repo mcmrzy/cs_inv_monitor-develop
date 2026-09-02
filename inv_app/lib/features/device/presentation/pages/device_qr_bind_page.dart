@@ -501,6 +501,8 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
   Widget _doneBody(AppLocalizations l10n) {
     final outcome = _doneOutcome;
     final (icon, color, text) = _outcomeInfo(l10n, outcome);
+    final canRetry = outcome != BindOutcome.bound &&
+        outcome != BindOutcome.alreadyBound;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -528,11 +530,13 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            OutlinedButton(
-              onPressed: _start,
-              child: Text(l10n.str('ble_retry')),
-            ),
-            const SizedBox(width: 12),
+            if (canRetry) ...[
+              OutlinedButton(
+                onPressed: _start,
+                child: Text(l10n.str('ble_retry')),
+              ),
+              const SizedBox(width: 12),
+            ],
             FilledButton(
               onPressed: () => Navigator.of(context).pop(),
               child: Text(l10n.str('qr_bind_done')),

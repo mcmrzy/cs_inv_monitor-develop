@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:inv_app/core/auth/permission_codes.dart';
 import 'package:inv_app/core/components/permission_gate.dart';
 import 'package:inv_app/core/config/app_config.dart';
 import 'package:inv_app/core/entities/organization.dart';
 import 'package:inv_app/core/stores/organization_context_store.dart';
 import 'package:inv_app/core/services/api_service.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/widgets/org_invitation_dialog.dart';
 import 'package:intl/intl.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 
@@ -130,8 +132,8 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
             tooltip: '刷新',
           ),
           PermissionGate(
-            resource: 'organization',
-            action: 'manage',
+            permissionCode: PermissionCodes.organizationsInvite,
+            requiredOrgId: widget.organizationId,
             child: IconButton(
               icon: const Icon(Icons.add),
               onPressed: _showSendInviteDialog,
@@ -149,8 +151,8 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
         ],
       ),
       floatingActionButton: PermissionGate(
-        resource: 'organization',
-        action: 'manage',
+        permissionCode: PermissionCodes.organizationsInvite,
+        requiredOrgId: widget.organizationId,
         child: FloatingActionButton.extended(
           onPressed: _showSendInviteDialog,
           icon: const Icon(Icons.person_add),
@@ -267,154 +269,54 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
     final defaultRole = allowedRoles.length > 1
         ? allowedRoles.firstWhere((r) => r != 'org_admin', orElse: () => 'org_admin')
         : 'org_admin';
-    final emailController = TextEditingController();
-    final roleController = TextEditingController(text: defaultRole);
-    final daysController = TextEditingController(text: '7');
-
-    showModalBottomSheet(
+    final dialogResult = await showModalBottomSheet<OrgInvitationDialogResult>(
       context: context,
       isScrollControlled: true,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-              ),
-              child: SingleChildScrollView(
-                padding: EdgeInsets.all(24.w),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          '发送邀请',
-                          style: TextStyle(
-                            fontSize: 20.sp,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 24.h),
-                    TextField(
-                      controller: emailController,
-                      decoration: const InputDecoration(
-                        labelText: '邮箱地址',
-                        hintText: '请输入邀请对象的邮箱',
-                        prefixIcon: Icon(Icons.email),
-                      ),
-                      textInputAction: TextInputAction.next,
-                    ),
-                    SizedBox(height: 16.h),
-                    DropdownButtonFormField<String>(
-                      initialValue: roleController.text,
-                      decoration: const InputDecoration(
-                        labelText: '成员角色',
-                        prefixIcon: Icon(Icons.badge),
-                      ),
-                      items: OrgMemberRole.values
-                          .where((r) => allowedRoles.contains(r.apiValue))
-                          .map(
-                            (r) => DropdownMenuItem(
-                              value: r.apiValue,
-                              child: Text(r.displayName),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        setModalState(() {
-                          roleController.text = value!;
-                        });
-                      },
-                    ),
-                    SizedBox(height: 16.h),
-                    TextField(
-                      controller: daysController,
-                      decoration: const InputDecoration(
-                        labelText: '有效期（天）',
-                        hintText: '默认 7 天',
-                        prefixIcon: Icon(Icons.calendar_today),
-                      ),
-                      keyboardType: TextInputType.number,
-                    ),
-                    SizedBox(height: 24.h),
-                    FilledButton.icon(
-                      onPressed: () async {
-                        final email = emailController.text.trim();
-                        final days = int.tryParse(daysController.text) ?? 7;
-
-                        if (email.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('请输入邮箱地址')),
-                          );
-                          return;
-                        }
-
-                        try {
-                          final result = await _apiService.sendInvitation(
-                            orgId: widget.organizationId,
-                            email: email,
-                            roleCode: roleController.text,
-                            expiresHours: days * 24,
-                          );
-
-                          // 提取创建时唯一返回的邀请链接（相对路径）
-                          String? inviteLink;
-                          final results = result['results'];
-                          if (results is List && results.isNotEmpty) {
-                            final first = results.first;
-                            if (first is Map && first['invite_link'] != null) {
-                              inviteLink = first['invite_link'] as String;
-                            }
-                          }
-
-                          await Future.microtask(() {});
-                          if (!mounted) return;
-                          Navigator.pop(context); // ignore: use_build_context_synchronously
-                          if (inviteLink != null) {
-                            // 邀请链接指向管理后台（Web），使用 frontendBaseUrl（www 域）
-                            _showInviteLinkDialog(
-                              '${AppConfig.frontendBaseUrl}$inviteLink',
-                              email,
-                            );
-                          } else {
-                            ScaffoldMessenger.of(context).showSnackBar( // ignore: use_build_context_synchronously
-                              const SnackBar(
-                                content: Text('邀请已发送（邀请链接仅在创建时可见）'),
-                              ),
-                            );
-                          }
-
-                          // 刷新邀请列表
-                          _loadInvitations();
-                        } catch (e) {
-                          await Future.microtask(() {});
-                          if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar( // ignore: use_build_context_synchronously
-                            SnackBar(
-                              content: Text('发送失败：$e'),
-                            ),
-                          );
-                        }
-                      },
-                      label: const Text('发送邀请'),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
+      builder: (context) => OrgInvitationDialog(
+        allowedRoles: allowedRoles,
+        initialRole: defaultRole,
+        onSubmit: ({
+          required String email,
+          required String roleCode,
+          required int expiresHours,
+        }) =>
+            _apiService.sendInvitation(
+          orgId: widget.organizationId,
+          email: email,
+          roleCode: roleCode,
+          expiresHours: expiresHours,
+        ),
+      ),
     );
+
+    if (!mounted || dialogResult == null) return;
+
+    // 提取创建时唯一返回的邀请链接（相对路径）
+    String? inviteLink;
+    final results = dialogResult.response['results'];
+    if (results is List && results.isNotEmpty) {
+      final first = results.first;
+      if (first is Map && first['invite_link'] != null) {
+        inviteLink = first['invite_link'] as String;
+      }
+    }
+
+    if (inviteLink != null) {
+      // 邀请链接指向管理后台（Web），使用 frontendBaseUrl（www 域）
+      _showInviteLinkDialog(
+        '${AppConfig.frontendBaseUrl}$inviteLink',
+        dialogResult.email,
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('邀请已发送（邀请链接仅在创建时可见）'),
+        ),
+      );
+    }
+
+    // 刷新邀请列表
+    _loadInvitations();
   }
 
   Future<void> _revokeInvitation(int invitationId) async {

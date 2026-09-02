@@ -143,7 +143,8 @@ class _ProfilePageState extends State<ProfilePage> {
           
           final isLoading = state is AuthLoading || state is AuthInitial;
           // 加载超时 / 出错（如缓存缺失且网络差）时展示失败态 + 手动重试
-          final showLoadError = _loadTimedOut || state is AuthError;
+          final showLoadError = _loadTimedOut ||
+              (state is AuthError && !state.isProfileUpdateTerminal);
 
           return ListView(
             physics: const AlwaysScrollableScrollPhysics(),
@@ -226,19 +227,23 @@ class _ProfilePageState extends State<ProfilePage> {
                       ? Image.asset(
                           CsergyAssets.avatarDefault,
                           fit: BoxFit.cover,
+                          cacheWidth: 256,
                         )
                       : (avatarUrl != null
                           ? Image.network(
                               avatarUrl,
                               fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) => Image.asset(
-                                CsergyAssets.avatarDefault,
-                                fit: BoxFit.cover,
-                              ),
+                              errorBuilder: (context, error, stackTrace) =>
+                                  Image.asset(
+                                    CsergyAssets.avatarDefault,
+                                    fit: BoxFit.cover,
+                                    cacheWidth: 256,
+                                  ),
                             )
                           : Image.asset(
                               CsergyAssets.avatarDefault,
                               fit: BoxFit.cover,
+                              cacheWidth: 256,
                             ))),
             ),
             SizedBox(width: 16.w),

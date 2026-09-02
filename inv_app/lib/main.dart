@@ -15,6 +15,8 @@ import 'package:inv_app/core/services/theme_service.dart';
 import 'package:inv_app/core/services/widget_update_service.dart';
 import 'package:inv_app/core/services/offline/offline_log_sync_service.dart';
 import 'package:inv_app/core/services/storage_service.dart';
+import 'package:inv_app/core/services/api_service.dart';
+import 'package:inv_app/core/stores/organization_context_store.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
@@ -24,6 +26,7 @@ import 'package:inv_app/features/notification/presentation/bloc/notification_blo
 import 'package:inv_app/features/dashboard/presentation/bloc/dashboard_bloc.dart';
 import 'package:inv_app/core/router/app_router.dart';
 import 'package:inv_app/core/services/jpush_service.dart';
+import 'package:inv_app/features/ota/data/datasources/local_ota_result_sync_queue.dart';
 import 'package:inv_app/core/services/jverify_service.dart';
 import 'package:inv_app/core/services/deep_link_service.dart';
 import 'package:inv_app/core/services/network_status_service.dart';
@@ -79,6 +82,10 @@ void main() {
   };
 
   runApp(InvApp(notificationBloc: notificationBloc));
+
+  // 启动时恢复本地 OTA 升级结果的云端同步队列：
+  // 上次断网/中断遗留的待同步记录在此重试（网络恢复时也会自动重试）
+  unawaited(getIt<LocalOtaResultSyncQueue>().start());
 
   // 网络状态服务初始化：默认乐观在线，启动瞬间不误判离线
   unawaited(getIt<NetworkStatusService>().initialize());
@@ -241,6 +248,12 @@ class _InvAppState extends State<InvApp> {
   Widget build(BuildContext context) {
     return MultiBlocProvider(
       providers: [
+        RepositoryProvider<OrganizationContextStore>(
+          create: (_) => OrganizationContextStore(
+            apiService: getIt<ApiService>(),
+            storageService: getIt<StorageService>(),
+          ),
+        ),
         // AuthBloc 立即创建（登录状态检查由 SplashPage 触发，避免重复检查）
         BlocProvider<AuthBloc>(
           create: (_) => getIt<AuthBloc>(),
@@ -304,14 +317,6 @@ class _InvAppState extends State<InvApp> {
               ],
               supportedLocales: AppLocalizations.supportedLocales,
               locale: _currentLocale,
-              builder: (context, widget) {
-                return MediaQuery(
-                  data: MediaQuery.of(context).copyWith(
-                    textScaler: const TextScaler.linear(1.0),
-                  ),
-                  child: widget!,
-                );
-              },
             );
           },
         ),

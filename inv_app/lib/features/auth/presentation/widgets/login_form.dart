@@ -23,7 +23,13 @@ enum _CodeChannel { phone, email }
 /// 验证码模式：手机短信 / 邮箱双通道验证码登录
 /// 由 AuthPage 通过 AnimatedSwitcher 与注册表单切换展示
 class LoginForm extends StatefulWidget {
-  const LoginForm({super.key});
+  const LoginForm({
+    super.key,
+    this.captchaLauncher,
+  });
+
+  /// 测试可注入的滑块验证入口；生产环境默认使用真实滑块对话框。
+  final Future<String?> Function(BuildContext context)? captchaLauncher;
 
   @override
   State<LoginForm> createState() => _LoginFormState();
@@ -41,7 +47,13 @@ class _LoginFormState extends State<LoginForm> {
   bool _jverifyAvailable = false;
   _LoginMode _loginMode = _LoginMode.password;
   _CodeChannel _codeChannel = _CodeChannel.phone;
+  bool _isRequestingCode = false;
+  bool _isAwaitingCodeResult = false;
+  _CodeChannel? _pendingCodeChannel;
+  String? _pendingCodeTarget;
+  String? _pendingCodeRequestId;
   bool _isSendingCode = false;
+  bool _isSubmitting = false;
   int _countdownSeconds = 0;
   Timer? _countdownTimer;
 
@@ -62,6 +74,7 @@ class _LoginFormState extends State<LoginForm> {
       for (int i = 0; i < 3 && !initOk && mounted; i++) {
         if (i > 0) {
           await Future.delayed(const Duration(milliseconds: 800));
+          if (!mounted) return;
         }
         initOk = await jverifyService.isInitSuccess();
       }
@@ -80,9 +93,16 @@ class _LoginFormState extends State<LoginForm> {
   Future<void> _loadSavedCredentials() async {
     final storage = getIt<StorageService>();
     final rememberPassword = await storage.getRememberPassword();
+    String? savedPhone;
+    String? savedPassword;
     if (rememberPassword) {
-      _accountController.text = await storage.getSavedPhone() ?? '';
-      _passwordController.text = await storage.getSavedPassword() ?? '';
+      savedPhone = await storage.getSavedPhone();
+      savedPassword = await storage.getSavedPassword();
+    }
+    if (!mounted) return;
+    if (rememberPassword) {
+      _accountController.text = savedPhone ?? '';
+      _passwordController.text = savedPassword ?? '';
       setState(() {
         _rememberPassword = true;
       });
@@ -101,16 +121,27 @@ class _LoginFormState extends State<LoginForm> {
   }
 
   void _startCountdown() {
+    if (!mounted) return;
     setState(() {
       _countdownSeconds = 60;
+      _isRequestingCode = false;
+      _isAwaitingCodeResult = false;
+      _pendingCodeChannel = null;
+      _pendingCodeTarget = null;
+      _pendingCodeRequestId = null;
       _isSendingCode = true;
     });
     _countdownTimer?.cancel();
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
       setState(() {
-        if (_countdownSeconds > 0) {
+        if (_countdownSeconds > 1) {
           _countdownSeconds--;
         } else {
+          _countdownSeconds = 0;
           _isSendingCode = false;
           timer.cancel();
         }
@@ -118,10 +149,62 @@ class _LoginFormState extends State<LoginForm> {
     });
   }
 
+  void _releaseCodeRequest() {
+    if (!mounted) return;
+    setState(() {
+      _isRequestingCode = false;
+      _isAwaitingCodeResult = false;
+      _pendingCodeChannel = null;
+      _pendingCodeTarget = null;
+      _pendingCodeRequestId = null;
+    });
+  }
+
+  void _cancelCooldownForChangedTarget() {
+    if (!_isSendingCode) return;
+    _countdownTimer?.cancel();
+    setState(() {
+      _countdownSeconds = 0;
+      _isSendingCode = false;
+      _codeController.clear();
+    });
+  }
+
+  void _handleCodeTargetChanged() {
+    if (_isAwaitingCodeResult) {
+      _codeController.clear();
+      _releaseCodeRequest();
+      return;
+    }
+    _cancelCooldownForChangedTarget();
+  }
+
+  void _selectCodeChannel(_CodeChannel channel) {
+    if (_codeChannel == channel) return;
+    final supersedesPendingRequest = _isAwaitingCodeResult;
+    _countdownTimer?.cancel();
+    setState(() {
+      _codeChannel = channel;
+      _codeController.clear();
+      if (_isSendingCode) {
+        _countdownSeconds = 0;
+        _isSendingCode = false;
+      }
+    });
+    if (supersedesPendingRequest) {
+      _releaseCodeRequest();
+    }
+  }
+
   /// 验证码模式下发送验证码：先滑块验证，再按通道调用短信/邮箱发送
   Future<void> _handleSendCode() async {
+    // 方法级保护同时覆盖界面尚未来得及重建的连续点击。
+    if (_isRequestingCode || _isSendingCode || _isSubmitting) return;
+
     final l10n = AppLocalizations.of(context)!;
-    if (_codeChannel == _CodeChannel.phone) {
+    final channel = _codeChannel;
+    late final String target;
+    if (channel == _CodeChannel.phone) {
       final phone = _phoneController.text.trim();
       if (phone.isEmpty || phone.length < 5) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -129,16 +212,7 @@ class _LoginFormState extends State<LoginForm> {
         );
         return;
       }
-      // 后端要求先通过滑块验证，获取 verifyToken 后随请求携带
-      final captchaToken = await showSliderCaptcha(context);
-      if (captchaToken == null || !mounted) return;
-      context.read<AuthBloc>().add(
-            AuthSendCodeRequested(
-              phone: phone,
-              type: 'login',
-              captchaToken: captchaToken,
-            ),
-          );
+      target = phone;
     } else {
       final email = _emailController.text.trim();
       if (email.isEmpty || !email.contains('@') || !email.contains('.')) {
@@ -147,12 +221,65 @@ class _LoginFormState extends State<LoginForm> {
         );
         return;
       }
-      final captchaToken = await showSliderCaptcha(context);
-      if (captchaToken == null || !mounted) return;
+      target = email;
+    }
+
+    setState(() => _isRequestingCode = true);
+    // 后端要求先通过滑块验证，获取 verifyToken 后随请求携带。
+    String? captchaToken;
+    try {
+      captchaToken = await (widget.captchaLauncher ?? showSliderCaptcha)(
+        context,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      _releaseCodeRequest();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.sliderCaptchaFailed)),
+      );
+      return;
+    }
+    if (!mounted) return;
+    if (captchaToken == null) {
+      _releaseCodeRequest();
+      return;
+    }
+    if (_codeChannel != channel) {
+      _releaseCodeRequest();
+      return;
+    }
+    final currentTarget = channel == _CodeChannel.phone
+        ? _phoneController.text.trim()
+        : _emailController.text.trim();
+    if (currentTarget != target) {
+      _releaseCodeRequest();
+      return;
+    }
+
+    final requestId = AuthCodeRequestId.next();
+    setState(() {
+      _isAwaitingCodeResult = true;
+      _pendingCodeChannel = channel;
+      _pendingCodeTarget = target;
+      _pendingCodeRequestId = requestId;
+    });
+
+    if (channel == _CodeChannel.phone) {
+      context.read<AuthBloc>().add(
+            AuthSendCodeRequested(
+              phone: target,
+              // login 类型由后端在发码前校验账号是否已注册。
+              type: 'login',
+              requestId: requestId,
+              captchaToken: captchaToken,
+            ),
+          );
+    } else {
       context.read<AuthBloc>().add(
             AuthSendEmailCodeRequested(
-              email: email,
+              email: target,
               type: 'login',
+              requestId: requestId,
               captchaToken: captchaToken,
             ),
           );
@@ -160,7 +287,10 @@ class _LoginFormState extends State<LoginForm> {
   }
 
   void _handleLogin() {
+    if (_isRequestingCode || _isSubmitting) return;
     if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isSubmitting = true);
 
     if (_loginMode == _LoginMode.password) {
       context.read<AuthBloc>().add(
@@ -193,6 +323,22 @@ class _LoginFormState extends State<LoginForm> {
     return BlocListener<AuthBloc, AuthState>(
       listener: (context, state) {
         if (state is AuthCodeSent) {
+          if (!_isAwaitingCodeResult) return;
+          final pendingChannel = _pendingCodeChannel;
+          final currentTarget = pendingChannel == _CodeChannel.phone
+              ? _phoneController.text.trim()
+              : _emailController.text.trim();
+          if (state.type != 'login' ||
+              state.channel != pendingChannel?.name ||
+              state.target != _pendingCodeTarget ||
+              state.requestId != _pendingCodeRequestId) {
+            return;
+          }
+          if (pendingChannel != _codeChannel ||
+              currentTarget != _pendingCodeTarget) {
+            _releaseCodeRequest();
+            return;
+          }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content:
@@ -200,6 +346,33 @@ class _LoginFormState extends State<LoginForm> {
             ),
           );
           _startCountdown();
+        } else if (state is AuthCodeSendError && _isAwaitingCodeResult) {
+          if (state.type == 'login' &&
+              state.channel == _pendingCodeChannel?.name &&
+              state.target == _pendingCodeTarget &&
+              state.requestId == _pendingCodeRequestId) {
+            final currentTarget = _pendingCodeChannel == _CodeChannel.phone
+                ? _phoneController.text.trim()
+                : _emailController.text.trim();
+            if (_pendingCodeChannel != _codeChannel ||
+                currentTarget != _pendingCodeTarget) {
+              _releaseCodeRequest();
+              return;
+            }
+            _releaseCodeRequest();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  AppLocalizations.of(context)!.translateError(state.message),
+                ),
+              ),
+            );
+          }
+        } else if (state is AuthError &&
+            state is! AuthCodeSendError &&
+            !state.isProfileUpdateTerminal &&
+            _isSubmitting) {
+          setState(() => _isSubmitting = false);
         }
       },
       child: Form(
@@ -334,19 +507,13 @@ class _LoginFormState extends State<LoginForm> {
         _buildChannelTab(
           l10n.str('code_channel_phone'),
           _codeChannel == _CodeChannel.phone,
-          () => setState(() {
-            _codeChannel = _CodeChannel.phone;
-            _codeController.clear();
-          }),
+          () => _selectCodeChannel(_CodeChannel.phone),
         ),
         SizedBox(width: 32.w),
         _buildChannelTab(
           l10n.str('code_channel_email'),
           _codeChannel == _CodeChannel.email,
-          () => setState(() {
-            _codeChannel = _CodeChannel.email;
-            _codeController.clear();
-          }),
+          () => _selectCodeChannel(_CodeChannel.email),
         ),
       ],
     );
@@ -406,6 +573,7 @@ class _LoginFormState extends State<LoginForm> {
     final l10n = AppLocalizations.of(context)!;
     return TextFormField(
       controller: _phoneController,
+      onChanged: (_) => _handleCodeTargetChanged(),
       keyboardType: TextInputType.phone,
       maxLength: 15,
       decoration: InputDecoration(
@@ -429,6 +597,7 @@ class _LoginFormState extends State<LoginForm> {
     final l10n = AppLocalizations.of(context)!;
     return TextFormField(
       controller: _emailController,
+      onChanged: (_) => _handleCodeTargetChanged(),
       keyboardType: TextInputType.emailAddress,
       decoration: InputDecoration(
         labelText: l10n.email,
@@ -483,7 +652,12 @@ class _LoginFormState extends State<LoginForm> {
           width: 120.w,
           height: 56.h,
           child: ElevatedButton(
-            onPressed: _isSendingCode ? null : _handleSendCode,
+            key: const Key('login-send-code-button'),
+            onPressed: (_isRequestingCode ||
+                    _isSendingCode ||
+                    _isSubmitting)
+                ? null
+                : _handleSendCode,
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
@@ -494,7 +668,7 @@ class _LoginFormState extends State<LoginForm> {
               ),
               padding: EdgeInsets.zero,
             ),
-            child: state is AuthCodeSending
+            child: _isRequestingCode
                 ? SizedBox(
                     height: 20.h,
                     width: 20.w,
@@ -627,10 +801,13 @@ class _LoginFormState extends State<LoginForm> {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
+          key: const Key('login-submit-button'),
           borderRadius: BorderRadius.circular(14.r),
-          onTap: state is AuthLoading ? null : _handleLogin,
+          onTap: _isRequestingCode || _isSubmitting || state is AuthLoading
+              ? null
+              : _handleLogin,
           child: Center(
-            child: state is AuthLoading
+            child: _isSubmitting || state is AuthLoading
                 ? SizedBox(
                     width: 20.h,
                     height: 20.h,
@@ -666,8 +843,9 @@ class _LoginFormState extends State<LoginForm> {
         ),
         SizedBox(width: 4.w),
         TextButton(
-          onPressed:
-              state is AuthLoading ? null : () => context.push('/jverify-login'),
+          onPressed: _isRequestingCode || _isSubmitting || state is AuthLoading
+              ? null
+              : () => context.push('/jverify-login'),
           child: Text(
             l10n.oneClickLoginTitle,
             style: TextStyle(

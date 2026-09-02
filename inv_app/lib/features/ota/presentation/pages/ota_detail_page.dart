@@ -27,7 +27,12 @@ class _OTADetailPageState extends State<OTADetailPage> {
     super.initState();
     context
         .read<OtaBloc>()
-        .add(OTAProgressPollRequested(deviceSn: widget.deviceSN));
+        .add(
+          OTAProgressStartPollRequested(
+            deviceSn: widget.deviceSN,
+            taskId: widget.taskId,
+          ),
+        );
   }
 
   String _statusText(String status, AppLocalizations l10n) {

@@ -278,7 +278,7 @@ void main() {
     );
 
     blocTest<StationBloc, StationState>(
-      'emits [StationError] on failure',
+      'emits correlated StationActionError on failure',
       build: () {
         when(() => mockStationRepository.create(any())).thenAnswer(
           (_) async => left<Failure, void>(createTestServerFailure()),
@@ -286,10 +286,19 @@ void main() {
         return stationBloc;
       },
       act: (bloc) => bloc.add(
-        const StationCreateRequested(data: {'name': 'New Station'}),
+        const StationCreateRequested(
+          data: {'name': 'New Station'},
+          requestId: 'create-request',
+        ),
       ),
       expect: () => [
-        isA<StationError>(),
+        isA<StationActionError>()
+            .having((state) => state.action, 'action', 'create')
+            .having(
+              (state) => state.requestId,
+              'requestId',
+              'create-request',
+            ),
       ],
     );
   });
@@ -305,7 +314,7 @@ void main() {
     );
 
     blocTest<StationBloc, StationState>(
-      'emits [StationError] on failure',
+      'emits correlated StationActionError on failure',
       build: () {
         when(() => mockStationRepository.update(any(), any())).thenAnswer(
           (_) async => left<Failure, void>(createTestServerFailure()),
@@ -313,10 +322,21 @@ void main() {
         return stationBloc;
       },
       act: (bloc) => bloc.add(
-        const StationUpdateRequested(stationId: 1, data: {'name': 'Updated'}),
+        const StationUpdateRequested(
+          stationId: 1,
+          data: {'name': 'Updated'},
+          requestId: 'update-request',
+        ),
       ),
       expect: () => [
-        isA<StationError>(),
+        isA<StationActionError>()
+            .having((state) => state.action, 'action', 'update')
+            .having((state) => state.stationId, 'stationId', 1)
+            .having(
+              (state) => state.requestId,
+              'requestId',
+              'update-request',
+            ),
       ],
     );
   });
@@ -332,16 +352,28 @@ void main() {
     );
 
     blocTest<StationBloc, StationState>(
-      'emits [StationError] on failure',
+      'emits correlated StationActionError on failure',
       build: () {
         when(() => mockStationRepository.delete(any())).thenAnswer(
           (_) async => left<Failure, void>(createTestServerFailure()),
         );
         return stationBloc;
       },
-      act: (bloc) => bloc.add(const StationDeleteRequested(stationId: 1)),
+      act: (bloc) => bloc.add(
+        const StationDeleteRequested(
+          stationId: 1,
+          requestId: 'delete-request',
+        ),
+      ),
       expect: () => [
-        isA<StationError>(),
+        isA<StationActionError>()
+            .having((state) => state.action, 'action', 'delete')
+            .having((state) => state.stationId, 'stationId', 1)
+            .having(
+              (state) => state.requestId,
+              'requestId',
+              'delete-request',
+            ),
       ],
     );
   });

@@ -198,16 +198,21 @@ class _DashboardOverviewPageState extends State<DashboardOverviewPage> {
               style: TextStyle(fontSize: 12.sp, color: AppColors.warning),
             ),
           ),
-          GestureDetector(
-            onTap: () {
+          TextButton(
+            onPressed: () {
               context.read<DashboardBloc>().add(const DashboardLoadRequested());
             },
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.warning,
+              minimumSize: const Size(48, 48),
+              padding: EdgeInsets.symmetric(horizontal: 8.w),
+              tapTargetSize: MaterialTapTargetSize.padded,
+            ),
             child: Text(
               AppLocalizations.of(context)!.retry,
               style: TextStyle(
                 fontSize: 12.sp,
                 fontWeight: FontWeight.w600,
-                color: AppColors.warning,
               ),
             ),
           ),

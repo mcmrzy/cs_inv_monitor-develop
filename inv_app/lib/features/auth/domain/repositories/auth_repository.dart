@@ -80,6 +80,12 @@ abstract class AuthRepository {
     required String refreshToken,
   });
 
+  Future<Either<Failure, AuthorizationContextResponse>>
+      switchOrganizationContext({
+    required int organizationId,
+    required String refreshToken,
+  });
+
   Future<Either<Failure, LoginResponse>> wechatLogin({
     required String code,
   });

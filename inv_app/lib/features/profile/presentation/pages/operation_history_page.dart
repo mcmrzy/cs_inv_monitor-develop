@@ -134,7 +134,7 @@ class _OperationHistoryPageState extends State<OperationHistoryPage> {
               _DetailRow(
                 label: l10n.opLogResult,
                 value: OpLogItem.resultLabel(l10n, log.result),
-                chipColor: OpLogItem.resultColor(log.result),
+                chipColor: OpLogItem.resultColor(context, log.result),
               ),
               SizedBox(height: 12.h),
               _DetailRow(
@@ -264,7 +264,10 @@ class _OperationHistoryPageState extends State<OperationHistoryPage> {
           children: [
             Text(
               l10n.str('op_log_load_failed'),
-              style: TextStyle(fontSize: 14.sp, color: AppColors.textHint),
+              style: TextStyle(
+                fontSize: 14.sp,
+                color: AppColor.textHint(context),
+              ),
             ),
             SizedBox(height: 12.h),
             OutlinedButton(
@@ -279,7 +282,10 @@ class _OperationHistoryPageState extends State<OperationHistoryPage> {
       return Center(
         child: Text(
           l10n.opLogEmpty,
-          style: TextStyle(fontSize: 14.sp, color: AppColors.textHint),
+          style: TextStyle(
+            fontSize: 14.sp,
+            color: AppColor.textHint(context),
+          ),
         ),
       );
     }
@@ -351,12 +357,12 @@ class OpLogItem {
   }
 
   /// 类型主题色
-  static Color sourceColor(String source) {
+  static Color sourceColor(BuildContext context, String source) {
     return switch (source) {
       'ota' => AppColors.purple,
       'command' => AppColors.blue,
       'operation' => AppColors.teal,
-      _ => AppColors.textSecondary,
+      _ => AppColor.textSecondary(context),
     };
   }
 
@@ -371,13 +377,13 @@ class OpLogItem {
   }
 
   /// 结果徽章色
-  static Color resultColor(String result) {
+  static Color resultColor(BuildContext context, String result) {
     return switch (result) {
       'success' => AppColors.successLight,
       'failed' => AppColors.errorLight,
       'pending' => AppColors.warning,
       'downloading' || 'upgrading' => AppColors.primary,
-      _ => AppColors.textHint,
+      _ => AppColor.textHint(context),
     };
   }
 
@@ -409,7 +415,7 @@ class _OpLogCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final accent = OpLogItem.sourceColor(log.source);
+    final accent = OpLogItem.sourceColor(context, log.source);
     return Material(
       color: AppColor.surfaceContainer(context),
       borderRadius: BorderRadius.circular(16.r),
@@ -490,7 +496,7 @@ class _TypeBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = OpLogItem.sourceColor(source);
+    final accent = OpLogItem.sourceColor(context, source);
     return Container(
       width: 40.w,
       height: 40.w,
@@ -623,7 +629,7 @@ class _ResultChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final color = OpLogItem.resultColor(result);
+    final color = OpLogItem.resultColor(context, result);
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 3.h),
       decoration: BoxDecoration(

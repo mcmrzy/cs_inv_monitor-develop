@@ -6,6 +6,7 @@ import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/entities/energy_data_point.dart';
 import 'package:dio/dio.dart';
 import 'package:inv_app/core/services/service_locator.dart';
+import 'package:inv_app/core/widgets/models/power_flow_chart_data.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 /// 图表视图类型
@@ -37,7 +38,8 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
 
   // 通知数据
   List<Map<String, dynamic>> _alarms = [];
-  List<Map<String, dynamic>> _powerFlowData = []; // energy-flow API 原始数据
+  PowerFlowChartData _powerFlowChartData =
+      PowerFlowChartData.fromRows(const []);
 
   @override
   void initState() {
@@ -180,11 +182,12 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
     if (_period != 'day') {
       if (mounted) {
         setState(() {
-          _powerFlowData = [];
+          _powerFlowChartData = PowerFlowChartData.fromRows(const []);
         });
       }
       return;
     }
+    List<Map<String, dynamic>>? rows;
     try {
       final dio = getIt<Dio>();
       final response = await dio.get(
@@ -201,20 +204,23 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
           if (wrapper is Map<String, dynamic>) {
             final data = wrapper['data'];
             if (data is List) {
-              if (mounted) {
-                setState(() {
-                  _powerFlowData = List<Map<String, dynamic>>.from(data);
-                });
-              }
-              return;
+              rows = List<Map<String, dynamic>>.from(data);
             }
           }
         }
       }
     } catch (_) {}
+    if (rows != null) {
+      if (!mounted) return;
+      final chartData = PowerFlowChartData.fromRows(rows);
+      setState(() {
+        _powerFlowChartData = chartData;
+      });
+      return;
+    }
     if (mounted) {
       setState(() {
-        _powerFlowData = [];
+        _powerFlowChartData = PowerFlowChartData.fromRows(const []);
       });
     }
   }
@@ -640,7 +646,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
         decoration: AppColor.card(context),
       );
     }
-    if (_dataPoints.isEmpty && _powerFlowData.isEmpty) {
+    if (_dataPoints.isEmpty && !_powerFlowChartData.hasSourceRows) {
       return Container(
         height: 260.h,
         decoration: AppColor.card(context),
@@ -987,7 +993,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
 
   /// 折线图 - 实时功率（使用 energy-flow API 数据，所有值单位 W）
   Widget _buildLineChart() {
-    if (_powerFlowData.isEmpty) {
+    if (!_powerFlowChartData.hasSourceRows) {
       return SizedBox(
         height: 220.h,
         child: Center(
@@ -999,36 +1005,8 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
       );
     }
 
-    // 从 energy-flow 数据构建 4 条折线
-    final spotsList = <List<FlSpot>>[
-      [],
-      [],
-      [],
-      [],
-    ]; // pv, charge, discharge, load
-
-    for (final d in _powerFlowData) {
-      final timeStr = d['time'] as String?;
-      if (timeStr == null) continue;
-      // API 返回 UTC 时间，需转为本地时区
-      final dt = DateTime.parse(timeStr).toLocal();
-      // X 轴：使用小数小时（如 6.05 表示 6:03），保证精确定位
-      final x = dt.hour + dt.minute / 60.0;
-
-      spotsList[0].add(FlSpot(x, (d['pvPower'] ?? 0).toDouble()));
-      spotsList[1].add(FlSpot(x, (d['batteryCharge'] ?? 0).toDouble()));
-      spotsList[2].add(FlSpot(x, (d['batteryDischarge'] ?? 0).toDouble()));
-      spotsList[3].add(FlSpot(x, (d['loadPower'] ?? 0).toDouble()));
-    }
-
-    // 计算 Y 轴最大值
-    double maxVal = 0;
-    for (final spots in spotsList) {
-      for (final s in spots) {
-        if (s.y > maxVal) maxVal = s.y;
-      }
-    }
-    final double yMax = maxVal > 0 ? maxVal * 1.2 : 100.0;
+    final spotsList = _powerFlowChartData.series;
+    final yMax = _powerFlowChartData.yMax;
     final yInterval = _calcYInterval(yMax);
 
     final colors = [

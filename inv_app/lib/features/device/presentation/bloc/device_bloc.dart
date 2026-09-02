@@ -32,6 +32,8 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
   String? _activeSN;
   Timer? _localPollTimer;
   String? _localPollIP;
+  int? _localPollInFlightGeneration;
+  int _localPollGeneration = 0;
   final InverterConnectionMonitor _connectionMonitor =
       InverterConnectionMonitor();
 
@@ -66,6 +68,7 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
 
   @override
   Future<void> close() {
+    _localPollGeneration++;
     _mqttSub?.cancel();
     _localPollTimer?.cancel();
     _connectionMonitor.dispose();
@@ -198,7 +201,7 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
   Future<void> _startMQTTRealtime(String sn) async {
     _mqttSub?.cancel();
     _mqttSub = null;
-    
+
     // 停止之前的设备轮询
     if (_activeSN != null) {
       realtimeDataService.stopPolling(_activeSN!);
@@ -422,42 +425,59 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     DeviceStartLocalPoll event,
     Emitter<DeviceState> emit,
   ) {
+    if (isClosed) return;
     _localPollTimer?.cancel();
     _localPollIP = event.deviceIP;
+    final generation = ++_localPollGeneration;
 
     // 启动逆变器连接监控：30秒后检测通信应答，持续无响应则自动断开热点
     _connectionMonitor.start(
       onAutoDisconnected: () {
-        if (!isClosed) {
+        if (!isClosed && generation == _localPollGeneration) {
           add(const DeviceAutoDisconnected());
         }
       },
     );
 
     _localPollTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
-      if (localCommunicationService == null || isClosed) return;
+      if (localCommunicationService == null ||
+          _localPollInFlightGeneration == generation ||
+          !_isCurrentLocalPoll(generation)) {
+        return;
+      }
+      _localPollInFlightGeneration = generation;
       try {
-        await localCommunicationService!.connect(_localPollIP!);
+        await localCommunicationService!.connect(event.deviceIP);
+        if (!_isCurrentLocalPoll(generation)) return;
         final rawData = await localCommunicationService!.getRealtimeData();
+        if (!_isCurrentLocalPoll(generation)) return;
         final realtime = InverterRealtime.fromJson(rawData);
-        if (!isClosed) {
-          // 轮询成功：喂给监控器作为通信应答正常的信号
-          _connectionMonitor.feedRealtime(realtime);
-          add(DeviceLocalRealtimeUpdate(realtime));
-        }
+        // 轮询成功：喂给监控器作为通信应答正常的信号
+        _connectionMonitor.feedRealtime(realtime);
+        add(DeviceLocalRealtimeUpdate(realtime));
       } catch (_) {
         // 轮询失败：喂失败信号，设备真正无响应时由监控器累计并自动断开
-        if (!isClosed) {
+        if (_isCurrentLocalPoll(generation)) {
           _connectionMonitor.feedFailure();
+        }
+      } finally {
+        if (_localPollInFlightGeneration == generation) {
+          _localPollInFlightGeneration = null;
         }
       }
     });
   }
 
+  bool _isCurrentLocalPoll(int generation) =>
+      !isClosed &&
+      generation == _localPollGeneration &&
+      (_localPollTimer?.isActive ?? false);
+
   void _onStopLocalPoll(
     DeviceStopLocalPoll event,
     Emitter<DeviceState> emit,
   ) {
+    _localPollGeneration++;
     _localPollTimer?.cancel();
     _localPollTimer = null;
     _localPollIP = null;
@@ -484,6 +504,7 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     Emitter<DeviceState> emit,
   ) {
     // 停止本地轮询和监控
+    _localPollGeneration++;
     _localPollTimer?.cancel();
     _localPollTimer = null;
     _localPollIP = null;

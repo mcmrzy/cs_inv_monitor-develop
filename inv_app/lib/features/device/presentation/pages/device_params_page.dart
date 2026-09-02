@@ -5,6 +5,8 @@ import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/widgets/param_confirm_dialog.dart';
 import 'package:inv_app/features/device/domain/entities/device_param.dart';
 import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
+import 'package:inv_app/features/device/presentation/widgets/device_param_text_control.dart';
+import 'package:inv_app/features/device/presentation/widgets/device_param_write_dialog.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
@@ -157,102 +159,18 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
   }
 
   void _showNumberEditDialog(DeviceParam param) {
-    final controller = TextEditingController(text: '${param.value}');
-    final minVal =
-        param.minValue is num ? (param.minValue as num).toDouble() : 0.0;
-    final maxVal =
-        param.maxValue is num ? (param.maxValue as num).toDouble() : 100.0;
-    double sliderVal =
-        (param.value is num ? (param.value as num).toDouble() : minVal)
-            .clamp(minVal, maxVal);
-
-    showDialog(
+    final l10n = AppLocalizations.of(context)!;
+    showDialog<void>(
       context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setDialogState) {
-            return AlertDialog(
-              title: Text(param.label),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (param.description != null)
-                    Padding(
-                      padding: EdgeInsets.only(bottom: 8.h),
-                      child: Text(
-                        param.description!,
-                        style: TextStyle(
-                          fontSize: 12.sp,
-                          color: AppColor.textSecondary(context),
-                        ),
-                      ),
-                    ),
-                  if (maxVal - minVal <= 200 && (maxVal - minVal) > 1)
-                    Row(
-                      children: [
-                        Text(
-                          '${minVal.toInt()}',
-                          style: TextStyle(fontSize: 12.sp),
-                        ),
-                        Expanded(
-                          child: Slider(
-                            value: sliderVal.clamp(minVal, maxVal),
-                            min: minVal,
-                            max: maxVal,
-                            divisions: ((maxVal - minVal) ~/ 1).clamp(1, 200),
-                            label: sliderVal.toStringAsFixed(0),
-                            onChanged: (v) {
-                              setDialogState(() => sliderVal = v);
-                              controller.text = v.toStringAsFixed(0);
-                            },
-                          ),
-                        ),
-                        Text(
-                          '${maxVal.toInt()}',
-                          style: TextStyle(fontSize: 12.sp),
-                        ),
-                      ],
-                    ),
-                  SizedBox(height: 8.h),
-                  TextField(
-                    controller: controller,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    decoration: InputDecoration(
-                      hintText: '$minVal ~ $maxVal',
-                      suffixText: param.unit,
-                    ),
-                    onChanged: (v) {
-                      final parsed = double.tryParse(v);
-                      if (parsed != null) {
-                        setDialogState(
-                          () => sliderVal = parsed.clamp(minVal, maxVal),
-                        );
-                      }
-                    },
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: Text(AppLocalizations.of(context)!.cancel),
-                ),
-                FilledButton(
-                  onPressed: () {
-                    final val = num.tryParse(controller.text);
-                    if (val != null) {
-                      _onValueChanged(param.key, val);
-                      Navigator.pop(ctx);
-                    }
-                  },
-                  child: Text(AppLocalizations.of(context)!.confirm),
-                ),
-              ],
-            );
-          },
-        );
-      },
+      builder: (_) => DeviceParamWriteDialog(
+        param: param,
+        cancelLabel: l10n.cancel,
+        confirmLabel: l10n.confirm,
+        onConfirm: (value) {
+          if (!mounted) return;
+          _onValueChanged(param.key, value);
+        },
+      ),
     );
   }
 
@@ -373,6 +291,11 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
                     padding:
                         EdgeInsets.fromLTRB(16.w, 4.h, 16.w, 24.h),
                     itemCount: groupKeys.length,
+                    findChildIndexCallback: (key) {
+                      if (key is! ValueKey<String>) return null;
+                      final index = groupKeys.indexOf(key.value);
+                      return index < 0 ? null : index;
+                    },
                     itemBuilder: (context, index) {
                       final groupKey = groupKeys[index];
                       final groupParams = grouped[groupKey]!;
@@ -393,6 +316,7 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
   Widget _buildGroupTile(String groupKey, List<DeviceParam> params) {
     final (icon, accent) = _groupStyle(groupKey);
     return Container(
+      key: ValueKey(groupKey),
       margin: EdgeInsets.only(bottom: 12.h),
       decoration: BoxDecoration(
         color: AppColor.surfaceContainer(context),
@@ -499,6 +423,7 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
     final l10n = AppLocalizations.of(context)!;
 
     return Container(
+      key: ValueKey(param.key),
       padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
       decoration: BoxDecoration(
         color: param.isDangerous
@@ -584,7 +509,12 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
       case 'bool':
         return _buildBoolControl(param, currentValue);
       case 'text':
-        return _buildTextControl(param, currentValue);
+        return DeviceParamTextControl(
+          key: ValueKey(param.key),
+          param: param,
+          value: currentValue,
+          onChanged: (key, value) => _onValueChanged(key, value),
+        );
       default:
         return _buildNumberControl(param, currentValue);
     }
@@ -747,40 +677,6 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
           onChanged: (v) => _onValueChanged(param.key, v),
         ),
       ],
-    );
-  }
-
-  Widget _buildTextControl(DeviceParam param, dynamic currentValue) {
-    final controller = TextEditingController(text: '${currentValue ?? ''}');
-    return TextField(
-      controller: controller,
-      decoration: InputDecoration(
-        hintText: '${AppLocalizations.of(context)!.inputParam}${param.label}',
-        hintStyle: TextStyle(
-          fontSize: 13.sp,
-          color: AppColor.textHint(context),
-        ),
-        isDense: true,
-        contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
-        filled: true,
-        fillColor: AppColor.surfaceHover(context),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10.r),
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10.r),
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10.r),
-          borderSide: BorderSide(
-            color: AppColor.primary(context).withValues(alpha: 0.5),
-          ),
-        ),
-      ),
-      style: TextStyle(fontSize: 14.sp, color: AppColor.textPrimary(context)),
-      onChanged: (v) => _onValueChanged(param.key, v),
     );
   }
 
