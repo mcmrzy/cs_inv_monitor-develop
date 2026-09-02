@@ -84,6 +84,7 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return BlocConsumer<AuthBloc, AuthState>(
+      listenWhen: (previous, current) => !current.isProfileUpdateTerminal,
       listener: (context, state) {
         if (state is AuthPasswordResetSuccess) {
           if (mounted) {

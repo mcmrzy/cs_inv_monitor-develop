@@ -7,6 +7,12 @@ abstract class AuthState extends Equatable {
   List<Object?> get props => [];
 }
 
+extension AuthStateFlowClassification on AuthState {
+  /// 资料保存的瞬时终态，只应由发起该 requestId 的资料页面消费。
+  bool get isProfileUpdateTerminal =>
+      this is AuthProfileUpdateSuccess || this is AuthProfileUpdateError;
+}
+
 class AuthInitial extends AuthState {}
 
 class AuthLoading extends AuthState {}

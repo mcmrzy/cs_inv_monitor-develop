@@ -370,6 +370,7 @@ class _LoginFormState extends State<LoginForm> {
           }
         } else if (state is AuthError &&
             state is! AuthCodeSendError &&
+            !state.isProfileUpdateTerminal &&
             _isSubmitting) {
           setState(() => _isSubmitting = false);
         }

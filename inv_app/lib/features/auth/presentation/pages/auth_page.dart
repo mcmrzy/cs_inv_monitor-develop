@@ -74,6 +74,7 @@ class _AuthPageState extends State<AuthPage>
     return Scaffold(
       backgroundColor: Colors.white,
       body: BlocConsumer<AuthBloc, AuthState>(
+        listenWhen: (previous, current) => !current.isProfileUpdateTerminal,
         listener: (context, state) {
           if (state is AuthError && state is! AuthCodeSendError) {
             AppToast.show(

@@ -188,132 +188,133 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
             ),
           ),
           BlocConsumer<AuthBloc, AuthState>(
-        listener: (context, state) {
-          if (state is AuthCodeSendError) {
-            if (!_isAwaitingCodeResult ||
-                state.type != 'reset' ||
-                state.channel != 'phone' ||
-                state.target != _pendingCodePhone ||
-                state.requestId != _pendingCodeRequestId) {
-              return;
-            }
-            if (_pendingCodePhone != _phoneController.text.trim()) {
-              _releaseCodeRequest();
-              return;
-            }
-            _releaseCodeRequest();
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  AppLocalizations.of(context)!.translateError(state.message),
-                ),
-              ),
-            );
-          } else if (state is AuthError) {
-            if (_isResetting) {
-              setState(() => _isResetting = false);
-            }
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  AppLocalizations.of(context)!.translateError(state.message),
-                ),
-              ),
-            );
-          } else if (state is AuthCodeSent) {
-            if (!_isAwaitingCodeResult ||
-                state.type != 'reset' ||
-                state.channel != 'phone' ||
-                state.target != _pendingCodePhone ||
-                state.requestId != _pendingCodeRequestId) {
-              return;
-            }
-            if (_pendingCodePhone != _phoneController.text.trim()) {
-              _releaseCodeRequest();
-              return;
-            }
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content:
-                    Text(AppLocalizations.of(context)!.verificationCodeSent),
-              ),
-            );
-            _startCountdown();
-          } else if (state is AuthPasswordResetSuccess) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content:
-                    Text(AppLocalizations.of(context)!.passwordResetSuccess),
-              ),
-            );
-            context.go('/login');
-          }
-        },
-        builder: (context, state) {
-          return SafeArea(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(24.w, 0, 24.w, 24.h),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(height: 56.h),
-                  _buildHeader(),
-                  SizedBox(height: 32.h),
-                  // 毛玻璃表单卡片：半透明白底 + 背景模糊，浮于整页背景图上
-                  Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(24.r),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF0D47A1).withValues(alpha: 0.14),
-                          blurRadius: 24,
-                          offset: const Offset(0, 10),
-                        ),
-                      ],
+            listenWhen: (previous, current) => !current.isProfileUpdateTerminal,
+            listener: (context, state) {
+              if (state is AuthCodeSendError) {
+                if (!_isAwaitingCodeResult ||
+                    state.type != 'reset' ||
+                    state.channel != 'phone' ||
+                    state.target != _pendingCodePhone ||
+                    state.requestId != _pendingCodeRequestId) {
+                  return;
+                }
+                if (_pendingCodePhone != _phoneController.text.trim()) {
+                  _releaseCodeRequest();
+                  return;
+                }
+                _releaseCodeRequest();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      AppLocalizations.of(context)!.translateError(state.message),
                     ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(24.r),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-                        child: Container(
-                          padding: EdgeInsets.fromLTRB(24.w, 28.h, 24.w, 24.h),
-                          decoration: BoxDecoration(
-                            color: AppColor.surfaceContainer(context)
-                                .withValues(alpha: 0.82),
-                            borderRadius: BorderRadius.circular(24.r),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.4),
+                  ),
+                );
+              } else if (state is AuthError) {
+                if (_isResetting) {
+                  setState(() => _isResetting = false);
+                }
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      AppLocalizations.of(context)!.translateError(state.message),
+                    ),
+                  ),
+                );
+              } else if (state is AuthCodeSent) {
+                if (!_isAwaitingCodeResult ||
+                    state.type != 'reset' ||
+                    state.channel != 'phone' ||
+                    state.target != _pendingCodePhone ||
+                    state.requestId != _pendingCodeRequestId) {
+                  return;
+                }
+                if (_pendingCodePhone != _phoneController.text.trim()) {
+                  _releaseCodeRequest();
+                  return;
+                }
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content:
+                        Text(AppLocalizations.of(context)!.verificationCodeSent),
+                  ),
+                );
+                _startCountdown();
+              } else if (state is AuthPasswordResetSuccess) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content:
+                        Text(AppLocalizations.of(context)!.passwordResetSuccess),
+                  ),
+                );
+                context.go('/login');
+              }
+            },
+            builder: (context, state) {
+              return SafeArea(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(24.w, 0, 24.w, 24.h),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SizedBox(height: 56.h),
+                      _buildHeader(),
+                      SizedBox(height: 32.h),
+                      // 毛玻璃表单卡片：半透明白底 + 背景模糊，浮于整页背景图上
+                      Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(24.r),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF0D47A1).withValues(alpha: 0.14),
+                              blurRadius: 24,
+                              offset: const Offset(0, 10),
                             ),
-                          ),
-                          child: Form(
-                            key: _formKey,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                _buildPhoneField(),
-                                SizedBox(height: 16.h),
-                                _buildCodeField(state),
-                                SizedBox(height: 16.h),
-                                _buildPasswordField(),
-                                SizedBox(height: 16.h),
-                                _buildConfirmPasswordField(),
-                                SizedBox(height: 28.h),
-                                _buildResetButton(state),
-                              ],
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(24.r),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                            child: Container(
+                              padding: EdgeInsets.fromLTRB(24.w, 28.h, 24.w, 24.h),
+                              decoration: BoxDecoration(
+                                color: AppColor.surfaceContainer(context)
+                                    .withValues(alpha: 0.82),
+                                borderRadius: BorderRadius.circular(24.r),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.4),
+                                ),
+                              ),
+                              child: Form(
+                                key: _formKey,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    _buildPhoneField(),
+                                    SizedBox(height: 16.h),
+                                    _buildCodeField(state),
+                                    SizedBox(height: 16.h),
+                                    _buildPasswordField(),
+                                    SizedBox(height: 16.h),
+                                    _buildConfirmPasswordField(),
+                                    SizedBox(height: 28.h),
+                                    _buildResetButton(state),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
+                      SizedBox(height: 20.h),
+                      _buildLoginRow(),
+                    ],
                   ),
-                  SizedBox(height: 20.h),
-                  _buildLoginRow(),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
+                ),
+              );
+            },
+          ),
         ],
       ),
     );
