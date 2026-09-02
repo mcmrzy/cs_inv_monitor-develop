@@ -31,8 +31,12 @@ class OtaRemoteDataSource {
         },
       );
 
-  Future<Response> getDeviceOTAStatus(String sn) async =>
-      dio.get('/ota/devices/$sn/status');
+  Future<Response> getDeviceOTAStatus(String sn, {int? taskId}) async => dio.get(
+        '/ota/devices/$sn/status',
+        queryParameters: {
+          if (taskId != null && taskId > 0) 'task_id': taskId,
+        },
+      );
 
   Future<Response> resendUpgradeCommand(String sn) async =>
       dio.post('/ota/resend/$sn');

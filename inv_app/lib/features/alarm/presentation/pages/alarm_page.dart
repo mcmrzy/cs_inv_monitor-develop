@@ -19,6 +19,19 @@ class AlarmPage extends StatefulWidget {
 class _AlarmPageState extends State<AlarmPage> {
   AlarmState? _cachedState;
 
+  Future<void> _refresh() async {
+    final bloc = context.read<AlarmBloc>();
+    final completed = bloc.stream.firstWhere(
+      (state) => state is AlarmListLoaded || state is AlarmError,
+    );
+    bloc.add(const AlarmListRequested());
+    try {
+      await completed.timeout(const Duration(seconds: 15));
+    } catch (_) {
+      // 网络永久悬挂时也要结束下拉刷新动画，允许用户再次尝试。
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -30,50 +43,52 @@ class _AlarmPageState extends State<AlarmPage> {
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       appBar: AppBar(title: Text(l10n.alarmList)),
-      body: BlocBuilder<AlarmBloc, AlarmState>(
+      body: BlocConsumer<AlarmBloc, AlarmState>(
+        listener: (context, state) {
+          if (state is AlarmError && _cachedState != null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(l10n.translateError(state.message)),
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
+        },
         builder: (context, state) {
           if (state is AlarmListLoaded) {
             _cachedState = state;
-          }
-          if (state is AlarmError && _cachedState != null) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(l10n.translateError(state.message)),
-                    duration: const Duration(seconds: 2),
-                  ),
-                );
-              }
-            });
           }
 
           if (_cachedState is AlarmListLoaded) {
             final ds = _cachedState as AlarmListLoaded;
             if (ds.alarms.isEmpty) {
-              return ListView(
-                children: [
-                  SizedBox(height: 120.h),
-                  Center(
-                    child: Column(
-                      children: [
-                        Icon(
-                          Icons.notifications_none,
-                          size: 64.sp,
-                          color: AppColor.textHint(context),
-                        ),
-                        SizedBox(height: 16.h),
-                        Text(
-                          l10n.noAlarms,
-                          style: TextStyle(
+              return StyledRefreshIndicator(
+                onRefresh: _refresh,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  children: [
+                    SizedBox(height: 120.h),
+                    Center(
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.notifications_none,
+                            size: 64.sp,
                             color: AppColor.textHint(context),
-                            fontSize: 16.sp,
                           ),
-                        ),
-                      ],
+                          SizedBox(height: 16.h),
+                          Text(
+                            l10n.noAlarms,
+                            style: TextStyle(
+                              color: AppColor.textHint(context),
+                              fontSize: 16.sp,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               );
             }
             return Column(
@@ -86,9 +101,7 @@ class _AlarmPageState extends State<AlarmPage> {
                   ),
                 Expanded(
                   child: StyledRefreshIndicator(
-                    onRefresh: () async => context
-                        .read<AlarmBloc>()
-                        .add(const AlarmListRequested()),
+                    onRefresh: _refresh,
                     child: ListView.builder(
                       padding: EdgeInsets.all(12.w),
                       itemCount: ds.alarms.length,

@@ -121,8 +121,8 @@ void main() {
     expect(find.text(l10n.str('ble_binding_success')), findsOneWidget);
     // 成功页展示 SN
     expect(find.text(testSn), findsOneWidget);
-    // 结果区展示「重试」与「完成」
-    expect(find.text(l10n.str('ble_retry')), findsOneWidget);
+    // 首次成功后只允许完成，不再暴露重复绑定入口。
+    expect(find.text(l10n.str('ble_retry')), findsNothing);
     expect(find.text(l10n.str('qr_bind_done')), findsOneWidget);
 
     // 云端绑定被调用，BLE 未被调用

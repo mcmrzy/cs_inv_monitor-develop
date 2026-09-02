@@ -1,19 +1,28 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:inv_app/core/data/continents_data.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/widgets/slider_captcha_dialog.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:inv_app/core/data/continents_data.dart';
+import 'package:inv_app/features/auth/presentation/widgets/auth_country_picker_sheet.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
+
+typedef CaptchaPresenter = Future<String?> Function(BuildContext context);
 
 /// 注册表单组件（创建账号标题 / 国家地区选择 / 验证码 / 密码 / 确认密码）
 /// 仅中国大陆（CN）走手机号+短信验证码注册，其余国家/地区走邮箱注册；
 /// 注册不设昵称字段，海外昵称由后端以邮箱前缀兜底。
 /// 由 AuthPage 通过 AnimatedSwitcher 与登录表单切换展示
 class RegisterForm extends StatefulWidget {
-  const RegisterForm({super.key});
+  const RegisterForm({
+    super.key,
+    this.captchaPresenter = showSliderCaptcha,
+  });
+
+  final CaptchaPresenter captchaPresenter;
 
   @override
   State<RegisterForm> createState() => _RegisterFormState();
@@ -28,7 +37,13 @@ class _RegisterFormState extends State<RegisterForm> {
   final _confirmPasswordController = TextEditingController();
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  bool _isCodeRequestInProgress = false;
+  bool _isAwaitingCodeResult = false;
+  String? _pendingCodeRequestCountryCode;
+  String? _pendingCodeRequestTarget;
+  String? _pendingCodeRequestId;
   bool _isSendingCode = false;
+  bool _isSubmitting = false;
   int _countdownSeconds = 0;
   Timer? _countdownTimer;
   String _selectedCountryCode = 'CN'; // 默认中国大陆；其余国家/地区走邮箱注册
@@ -48,16 +63,27 @@ class _RegisterFormState extends State<RegisterForm> {
   }
 
   void _startCountdown() {
+    if (!mounted) return;
     setState(() {
       _countdownSeconds = 60;
       _isSendingCode = true;
+      _isCodeRequestInProgress = false;
+      _isAwaitingCodeResult = false;
+      _pendingCodeRequestCountryCode = null;
+      _pendingCodeRequestTarget = null;
+      _pendingCodeRequestId = null;
     });
     _countdownTimer?.cancel();
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
       setState(() {
-        if (_countdownSeconds > 0) {
+        if (_countdownSeconds > 1) {
           _countdownSeconds--;
         } else {
+          _countdownSeconds = 0;
           _isSendingCode = false;
           timer.cancel();
         }
@@ -65,9 +91,43 @@ class _RegisterFormState extends State<RegisterForm> {
     });
   }
 
+  void _releaseCodeRequest() {
+    if (!mounted) return;
+    setState(() {
+      _isCodeRequestInProgress = false;
+      _isAwaitingCodeResult = false;
+      _pendingCodeRequestCountryCode = null;
+      _pendingCodeRequestTarget = null;
+      _pendingCodeRequestId = null;
+    });
+  }
+
+  void _cancelCooldownForChangedTarget() {
+    if (!_isSendingCode) return;
+    _countdownTimer?.cancel();
+    setState(() {
+      _countdownSeconds = 0;
+      _isSendingCode = false;
+      _codeController.clear();
+    });
+  }
+
+  void _handleCodeTargetChanged() {
+    if (_isAwaitingCodeResult) {
+      _codeController.clear();
+      _releaseCodeRequest();
+      return;
+    }
+    _cancelCooldownForChangedTarget();
+  }
+
   Future<void> _handleSendCode() async {
+    if (_isCodeRequestInProgress || _isSendingCode || _isSubmitting) return;
     final l10n = AppLocalizations.of(context)!;
-    if (!_isMainland) {
+    final requestCountryCode = _selectedCountryCode;
+    final requestIsMainland = requestCountryCode == 'CN';
+    late final String target;
+    if (!requestIsMainland) {
       // 海外国家/地区：仅发送邮箱验证码
       final email = _emailController.text.trim();
       if (email.isEmpty || !email.contains('@') || !email.contains('.')) {
@@ -76,15 +136,7 @@ class _RegisterFormState extends State<RegisterForm> {
         );
         return;
       }
-      final captchaToken = await showSliderCaptcha(context);
-      if (captchaToken == null || !mounted) return;
-      context.read<AuthBloc>().add(
-            AuthSendEmailCodeRequested(
-              email: email,
-              type: 'register',
-              captchaToken: captchaToken,
-            ),
-          );
+      target = email;
     } else {
       // 中国大陆：发送短信验证码到手机号
       final phone = _phoneController.text.trim();
@@ -94,20 +146,61 @@ class _RegisterFormState extends State<RegisterForm> {
         );
         return;
       }
-      final captchaToken = await showSliderCaptcha(context);
+      target = phone;
+    }
+
+    setState(() => _isCodeRequestInProgress = true);
+    try {
+      final captchaToken = await widget.captchaPresenter(context);
       if (captchaToken == null || !mounted) return;
-      context.read<AuthBloc>().add(
-            AuthSendCodeRequested(
-              phone: phone,
-              type: 'register',
-              captchaToken: captchaToken,
-            ),
-          );
+      if (_selectedCountryCode != requestCountryCode) return;
+      final currentTarget = requestIsMainland
+          ? _phoneController.text.trim()
+          : _emailController.text.trim();
+      if (currentTarget != target) return;
+
+      final requestId = AuthCodeRequestId.next();
+      _isAwaitingCodeResult = true;
+      _pendingCodeRequestCountryCode = requestCountryCode;
+      _pendingCodeRequestTarget = target;
+      _pendingCodeRequestId = requestId;
+      if (requestIsMainland) {
+        context.read<AuthBloc>().add(
+              AuthSendCodeRequested(
+                phone: target,
+                type: 'register',
+                requestId: requestId,
+                captchaToken: captchaToken,
+              ),
+            );
+      } else {
+        context.read<AuthBloc>().add(
+              AuthSendEmailCodeRequested(
+                email: target,
+                type: 'register',
+                requestId: requestId,
+                captchaToken: captchaToken,
+              ),
+            );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.sliderCaptchaFailed)),
+        );
+      }
+    } finally {
+      if (mounted && !_isAwaitingCodeResult) {
+        _releaseCodeRequest();
+      }
     }
   }
 
   void _handleRegister() {
+    if (_isCodeRequestInProgress || _isSubmitting) return;
     if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isSubmitting = true);
 
     if (!_isMainland) {
       // 海外国家/地区：邮箱 + 邮箱验证码 + 密码，不需要手机号与昵称
@@ -140,13 +233,24 @@ class _RegisterFormState extends State<RegisterForm> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _CountryPickerSheet(initialCode: _selectedCountryCode),
+      builder: (_) =>
+          AuthCountryPickerSheet(initialCode: _selectedCountryCode),
     );
+    if (!mounted) return;
     if (result != null && result['code'] != _selectedCountryCode) {
+      final supersedesPendingRequest = _isAwaitingCodeResult;
       setState(() {
         _selectedCountryCode = result['code']!;
         _codeController.clear();
+        if (!_isAwaitingCodeResult) {
+          _countdownTimer?.cancel();
+          _countdownSeconds = 0;
+          _isSendingCode = false;
+        }
       });
+      if (supersedesPendingRequest) {
+        _releaseCodeRequest();
+      }
     }
   }
 
@@ -156,6 +260,26 @@ class _RegisterFormState extends State<RegisterForm> {
     return BlocListener<AuthBloc, AuthState>(
       listener: (context, state) {
         if (state is AuthCodeSent) {
+          if (!_isAwaitingCodeResult) return;
+          final expectedChannel =
+              _pendingCodeRequestCountryCode == 'CN' ? 'phone' : 'email';
+          if (state.type != 'register' ||
+              state.channel != expectedChannel ||
+              state.target != _pendingCodeRequestTarget ||
+              state.requestId != _pendingCodeRequestId) {
+            return;
+          }
+          if (_pendingCodeRequestCountryCode != _selectedCountryCode) {
+            _releaseCodeRequest();
+            return;
+          }
+          final currentTarget = _isMainland
+              ? _phoneController.text.trim()
+              : _emailController.text.trim();
+          if (_pendingCodeRequestTarget != currentTarget) {
+            _releaseCodeRequest();
+            return;
+          }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content:
@@ -163,6 +287,35 @@ class _RegisterFormState extends State<RegisterForm> {
             ),
           );
           _startCountdown();
+        } else if (state is AuthCodeSendError && _isAwaitingCodeResult) {
+          final expectedChannel =
+              _pendingCodeRequestCountryCode == 'CN' ? 'phone' : 'email';
+          if (state.type == 'register' &&
+              state.channel == expectedChannel &&
+              state.target == _pendingCodeRequestTarget &&
+              state.requestId == _pendingCodeRequestId) {
+            final currentTarget = _isMainland
+                ? _phoneController.text.trim()
+                : _emailController.text.trim();
+            if (_pendingCodeRequestCountryCode != _selectedCountryCode ||
+                currentTarget != _pendingCodeRequestTarget) {
+              _releaseCodeRequest();
+              return;
+            }
+            _releaseCodeRequest();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  AppLocalizations.of(context)!.translateError(state.message),
+                ),
+              ),
+            );
+          }
+        } else if (state is AuthError &&
+            state is! AuthCodeSendError &&
+            !state.isProfileUpdateTerminal &&
+            _isSubmitting) {
+          setState(() => _isSubmitting = false);
         }
       },
       child: Form(
@@ -179,7 +332,7 @@ class _RegisterFormState extends State<RegisterForm> {
             else
               _buildEmailField(),
             SizedBox(height: 16.h),
-            _buildCodeField(state),
+            _buildCodeField(),
             SizedBox(height: 16.h),
             _buildPasswordField(),
             SizedBox(height: 16.h),
@@ -247,6 +400,7 @@ class _RegisterFormState extends State<RegisterForm> {
     final l10n = AppLocalizations.of(context)!;
     return TextFormField(
       controller: _emailController,
+      onChanged: (_) => _handleCodeTargetChanged(),
       keyboardType: TextInputType.emailAddress,
       decoration: InputDecoration(
         labelText: l10n.email,
@@ -264,7 +418,7 @@ class _RegisterFormState extends State<RegisterForm> {
   }
 
   /// 验证码输入 + 发送按钮（中国大陆为短信验证码，海外为邮箱验证码）
-  Widget _buildCodeField(AuthState state) {
+  Widget _buildCodeField() {
     final l10n = AppLocalizations.of(context)!;
     final isEmail = !_isMainland;
     return Row(
@@ -301,7 +455,10 @@ class _RegisterFormState extends State<RegisterForm> {
           width: 120.w,
           height: 56.h,
           child: ElevatedButton(
-            onPressed: _isSendingCode ? null : _handleSendCode,
+            onPressed:
+                _isSendingCode || _isCodeRequestInProgress || _isSubmitting
+                ? null
+                : _handleSendCode,
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
@@ -312,7 +469,7 @@ class _RegisterFormState extends State<RegisterForm> {
               ),
               padding: EdgeInsets.zero,
             ),
-            child: state is AuthCodeSending
+            child: _isCodeRequestInProgress
                 ? SizedBox(
                     height: 20.h,
                     width: 20.w,
@@ -336,6 +493,7 @@ class _RegisterFormState extends State<RegisterForm> {
     final l10n = AppLocalizations.of(context)!;
     return TextFormField(
       controller: _phoneController,
+      onChanged: (_) => _handleCodeTargetChanged(),
       keyboardType: TextInputType.phone,
       maxLength: 15,
       decoration: InputDecoration(
@@ -433,10 +591,15 @@ class _RegisterFormState extends State<RegisterForm> {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
+          key: const Key('register-submit-button'),
           borderRadius: BorderRadius.circular(14.r),
-          onTap: state is AuthLoading ? null : _handleRegister,
+          onTap: _isCodeRequestInProgress ||
+                  _isSubmitting ||
+                  state is AuthLoading
+              ? null
+              : _handleRegister,
           child: Center(
-            child: state is AuthLoading
+            child: _isSubmitting || state is AuthLoading
                 ? SizedBox(
                     width: 20.h,
                     height: 20.h,
@@ -455,164 +618,6 @@ class _RegisterFormState extends State<RegisterForm> {
                   ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// 国家/地区选择底部弹层：顶部搜索（按名称或代码过滤），按大洲分组的可选列表。
-/// 选择后通过 Navigator.pop 返回 {'code': ..., 'name': ...}
-class _CountryPickerSheet extends StatefulWidget {
-  const _CountryPickerSheet({required this.initialCode});
-
-  final String initialCode;
-
-  @override
-  State<_CountryPickerSheet> createState() => _CountryPickerSheetState();
-}
-
-class _CountryPickerSheetState extends State<_CountryPickerSheet> {
-  final _searchController = TextEditingController();
-  String _query = '';
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  /// 搜索匹配：按国家名称或代码（不区分大小写）
-  bool _matches(Map<dynamic, dynamic> country) {
-    final q = _query.trim().toLowerCase();
-    if (q.isEmpty) return true;
-    final name = (country['name'] as String).toLowerCase();
-    final code = (country['code'] as String).toLowerCase();
-    return name.contains(q) || code.contains(q);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-
-    // 展开为「大洲分组头 + 国家行」的列表，过滤后无匹配时展示空态
-    final children = <Widget>[];
-    var matchCount = 0;
-    for (final continent in continents) {
-      final countries =
-          (continent['countries'] as List<Map<dynamic, dynamic>>)
-              .where(_matches)
-              .toList();
-      if (countries.isEmpty) continue;
-      matchCount += countries.length;
-      children.add(_buildContinentHeader(continent['name'] as String));
-      for (final country in countries) {
-        children.add(_buildCountryTile(country));
-      }
-    }
-
-    return Container(
-      height: 0.78.sh,
-      decoration: BoxDecoration(
-        color: AppColor.surface(context),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20.r)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          children: [
-            Padding(
-              padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 8.h),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      l10n.str('auth_country_region'),
-                      style: TextStyle(
-                        fontSize: 16.sp,
-                        fontWeight: FontWeight.w600,
-                        color: AppColor.textPrimary(context),
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(
-                      Icons.close_rounded,
-                      size: 22.w,
-                      color: AppColor.textSecondary(context),
-                    ),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16.w),
-              child: TextField(
-                controller: _searchController,
-                onChanged: (value) => setState(() => _query = value),
-                decoration: InputDecoration(
-                  hintText: l10n.str('auth_search_country'),
-                  prefixIcon: const Icon(Icons.search),
-                  isDense: true,
-                ),
-              ),
-            ),
-            SizedBox(height: 8.h),
-            Expanded(
-              child: matchCount == 0
-                  ? Center(
-                      child: Text(
-                        l10n.str('auth_no_country_match'),
-                        style: TextStyle(
-                          fontSize: 14.sp,
-                          color: AppColor.textSecondary(context),
-                        ),
-                      ),
-                    )
-                  : ListView(children: children),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// 大洲分组头
-  Widget _buildContinentHeader(String name) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 4.h),
-      child: Text(
-        name,
-        style: TextStyle(
-          fontSize: 12.sp,
-          fontWeight: FontWeight.w600,
-          color: AppColor.textSecondary(context),
-        ),
-      ),
-    );
-  }
-
-  /// 国家行：名称 (代码)，当前选中项高亮并打勾
-  Widget _buildCountryTile(Map<dynamic, dynamic> country) {
-    final code = country['code'] as String;
-    final name = country['name'] as String;
-    final selected = code == widget.initialCode;
-    return ListTile(
-      dense: true,
-      visualDensity: VisualDensity.compact,
-      title: Text(
-        '$name ($code)',
-        style: TextStyle(
-          fontSize: 14.sp,
-          fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-          color: AppColor.textPrimary(context),
-        ),
-      ),
-      trailing: selected
-          ? Icon(Icons.check_rounded, color: AppColors.primary, size: 20.w)
-          : null,
-      onTap: () => Navigator.of(context).pop(
-        <String, String>{'code': code, 'name': name},
       ),
     );
   }

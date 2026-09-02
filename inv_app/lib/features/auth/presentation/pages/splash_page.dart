@@ -119,6 +119,7 @@ class _SplashPageState extends State<SplashPage> {
   @override
   Widget build(BuildContext context) {
     return BlocListener<AuthBloc, AuthState>(
+      listenWhen: (previous, current) => !current.isProfileUpdateTerminal,
       listener: (context, state) {
         if (state is AuthAuthenticated) {
           _continueAfterSplash('/home');

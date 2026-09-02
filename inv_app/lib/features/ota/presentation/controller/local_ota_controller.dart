@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import 'package:inv_app/core/errors/ota_error_types.dart';
 import 'package:inv_app/core/services/local_communication_service.dart';
+import 'package:inv_app/features/ota/data/datasources/local_ota_result_sync_queue.dart';
 import 'package:inv_app/features/ota/domain/entities/local_channel.dart';
 import 'package:inv_app/features/ota/domain/repositories/local_communication_repository.dart';
 import 'package:inv_app/features/ota/domain/repositories/ota_repository.dart';
@@ -96,6 +97,7 @@ class LocalOTAController extends ChangeNotifier {
     Future<bool> Function()? isHotspotConnected,
     Future<bool> Function()? reconnectHotspot,
     VoidCallback? onTerminateConnection,
+    LocalOtaResultSyncQueue? syncQueue,
   })  : _communication = communication,
         _repository = repository,
         _channel = channel,
@@ -103,7 +105,8 @@ class LocalOTAController extends ChangeNotifier {
         _deviceIP = deviceIP,
         _isHotspotConnected = isHotspotConnected,
         _reconnectHotspot = reconnectHotspot,
-        _onTerminateConnection = onTerminateConnection;
+        _onTerminateConnection = onTerminateConnection,
+        _syncQueue = syncQueue;
 
   final LocalCommunicationRepository _communication;
   final OtaRepository _repository;
@@ -113,6 +116,10 @@ class LocalOTAController extends ChangeNotifier {
   final Future<bool> Function()? _isHotspotConnected;
   final Future<bool> Function()? _reconnectHotspot;
   final VoidCallback? _onTerminateConnection;
+
+  /// 升级结果云端同步队列：入队后自动重试直至成功；
+  /// 为 null 时退回旧行为（一次性直报，失败仅日志）
+  final LocalOtaResultSyncQueue? _syncQueue;
 
   /// 轮询总超时（挂钟时间，含热点重连与请求耗时）
   static const Duration _maxPollDuration = Duration(seconds: 180);
@@ -162,7 +169,20 @@ class LocalOTAController extends ChangeNotifier {
       return;
     }
 
-    // ---- 2. 触发/等待重启 ----
+    // ---- 2. 触发升级 ----
+    try {
+      await _communication.triggerUpgrade(_deviceIP);
+    } catch (e) {
+      _emit(_state.copyWith(
+        phase: LocalOTAPhase.failed,
+        uploadProgress: 1.0,
+        error: () => e,
+      ));
+      _onTerminateConnection?.call();
+      return;
+    }
+
+    // ---- 3. 等待重启 ----
     _emit(_state.copyWith(
       phase: LocalOTAPhase.upgrading,
       uploadProgress: 1.0,
@@ -174,7 +194,7 @@ class LocalOTAController extends ChangeNotifier {
       await Future.delayed(const Duration(milliseconds: 500));
     }
 
-    // ---- 3. 轮询升级进度 ----
+    // ---- 4. 轮询升级进度 ----
     await _pollProgress(
       isEsp: isEsp,
       fallbackVersion: fallbackVersion,
@@ -337,9 +357,24 @@ class LocalOTAController extends ChangeNotifier {
     required String chipNewVersion,
     String? mainVersion,
   }) async {
+    // 等待网络恢复（断开热点后需要几秒切回移动网络/普通 WiFi）
+    await Future.delayed(const Duration(seconds: 3));
+    if (_disposed) return;
+
+    final queue = _syncQueue;
+    if (queue != null) {
+      // 入队即尝试同步；失败留在队列，网络恢复/下次启动时自动重试，
+      // 不再静默丢失（旧行为失败仅打日志，云端版本从此与设备不一致）
+      await queue.enqueue(
+        sn: _deviceSN,
+        targetChip: targetChip,
+        newVersion: chipNewVersion,
+        mainVersion: mainVersion,
+      );
+      return;
+    }
+
     try {
-      // 等待网络恢复（断开热点后需要几秒切回移动网络/普通 WiFi）
-      await Future.delayed(const Duration(seconds: 3));
       await _repository.reportLocalOTAResult(
         sn: _deviceSN,
         targetChip: targetChip,

@@ -29,6 +29,11 @@ class OTAUpdateAvailable extends OtaState {
   List<Object?> get props => [info];
 }
 
+/// 升级命令正在提交，尚未获得服务端 task_id。
+class OTATriggering extends OtaState {
+  const OTATriggering();
+}
+
 class OTATriggered extends OtaState {
   final int taskId;
 

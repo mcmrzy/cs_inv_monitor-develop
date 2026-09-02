@@ -71,6 +71,10 @@ class FirmwareDownloadService {
   static const String _keySHA256Prefix = 'firmware_sha256_';
   static const String _keyMetaPrefix = 'firmware_meta_';
 
+  /// 下载中的临时文件后缀：只有校验通过并改名后的文件才是"完整"固件，
+  /// 中断/取消/校验失败时目录里残留的 .part 会在下次续传或清理时处理
+  static const String _partSuffix = '.part';
+
   final StreamController<DownloadProgressEvent> _progressController =
       StreamController<DownloadProgressEvent>.broadcast();
 
@@ -80,6 +84,9 @@ class FirmwareDownloadService {
   /// 并发守卫：同一时刻仅允许一个下载任务，
   /// 避免多页面/多次点击并发下载互相干扰
   int? _activeDownloadId;
+
+  /// 活跃下载的取消令牌（app 级单例后跨页面生效）
+  CancelToken? _activeCancelToken;
 
   /// 下载进度流（按 firmwareId 分流，页面自行过滤关注的任务）
   Stream<DownloadProgressEvent> get progressStream =>
@@ -94,6 +101,14 @@ class FirmwareDownloadService {
     );
   }
 
+  /// 取消指定固件的下载任务（仅当该任务正在进行时生效）。
+  /// 已下载的 .part 分片保留，下次下载续传。
+  void cancelDownload(int firmwareId) {
+    if (_activeDownloadId == firmwareId) {
+      _activeCancelToken?.cancel();
+    }
+  }
+
   Future<String> downloadFirmware({
     required String url,
     required String fileName,
@@ -104,6 +119,7 @@ class FirmwareDownloadService {
     String? version,
     String? signature,
     int? securityVersion,
+    CancelToken? cancelToken,
     void Function(int received, int total)? onProgress,
   }) async {
     // 并发守卫：已有下载任务进行中时拒绝新任务，由调用方提示用户
@@ -113,30 +129,53 @@ class FirmwareDownloadService {
       );
     }
     _activeDownloadId = firmwareId;
+    final serviceToken = cancelToken ?? CancelToken();
+    _activeCancelToken = serviceToken;
 
     final dir = await _getFirmwareDir();
     final filePath = '${dir.path}/$fileName';
     final file = File(filePath);
-
-    int downloadedBytes = 0;
-    if (await file.exists()) {
-      downloadedBytes = await file.length();
-    }
-
-    _emit(firmwareId, 0.0);
+    final partFile = File('$filePath$_partSuffix');
 
     try {
+      // 目标文件已存在：校验通过视为已下载（幂等返回），失败则删除重下
+      if (await file.exists()) {
+        try {
+          await _verifyFirmware(file, expectedSize, expectedSha256);
+          await _persistDownloadRecord(
+            firmwareId,
+            filePath,
+            file,
+            expectedSha256,
+            targetChip: targetChip,
+            version: version,
+            signature: signature,
+            securityVersion: securityVersion,
+          );
+          _emit(firmwareId, 1.0);
+          return filePath;
+        } on FormatException {
+          await file.delete();
+        }
+      }
+
+      final downloadedBytes =
+          await partFile.exists() ? await partFile.length() : 0;
+
+      _emit(firmwareId, 0.0);
+
       try {
-        // 断点续传
         if (downloadedBytes > 0) {
+          // 断点续传：从 .part 分片末尾继续
           try {
             final response = await _dio.download(
               url,
-              filePath,
+              partFile.path,
               fileAccessMode: FileAccessMode.append,
               options: Options(
                 headers: {'Range': 'bytes=$downloadedBytes-'},
               ),
+              cancelToken: serviceToken,
               onReceiveProgress: (received, total) {
                 final overallTotal = total > 0 ? total + downloadedBytes : 0;
                 final progress = overallTotal > 0
@@ -150,74 +189,58 @@ class FirmwareDownloadService {
             // A server that ignores Range returns 200. Appending that response would
             // corrupt the file, so restart once from byte zero.
             if (response.statusCode != HttpStatus.partialContent) {
-              await file.delete();
-              await _dio.download(
+              await partFile.delete();
+              await _downloadFresh(
                 url,
-                filePath,
-                onReceiveProgress: onProgress,
-                deleteOnError: false,
+                partFile,
+                firmwareId,
+                serviceToken,
+                onProgress,
               );
             }
           } on DioException catch (e) {
-            // 416 only means the range is unsatisfiable; integrity still must pass.
+            // 416 only means the range is unsatisfiable; the part file may
+            // already be complete, integrity still must pass.
             if (e.response?.statusCode == 416) {
-              final savedFile = File(filePath);
-              await _verifyFirmware(savedFile, expectedSize, expectedSha256);
-              final fileSize = await savedFile.length();
-              await _sharedPreferences.setString(
-                '$_keyPrefix$firmwareId',
-                filePath,
-              );
-              await _sharedPreferences.setInt(
-                '$_keySizePrefix$firmwareId',
-                fileSize,
-              );
-              if (expectedSha256 != null) {
-                await _sharedPreferences.setString(
-                  '$_keySHA256Prefix$firmwareId',
-                  expectedSha256.toLowerCase(),
+              try {
+                await _verifyFirmware(partFile, expectedSize, expectedSha256);
+              } on FormatException {
+                // 分片不完整：删除后整包重下
+                await partFile.delete();
+                await _downloadFresh(
+                  url,
+                  partFile,
+                  firmwareId,
+                  serviceToken,
+                  onProgress,
                 );
               }
-              await _saveMetadata(
-                firmwareId,
-                targetChip: targetChip,
-                version: version,
-                signature: signature,
-                securityVersion: securityVersion,
-              );
-              _emit(firmwareId, 1.0);
-              return filePath;
+            } else {
+              rethrow;
             }
-            rethrow;
           }
         } else {
-          await _dio.download(
+          await _downloadFresh(
             url,
-            filePath,
-            onReceiveProgress: (received, total) {
-              final progress = total > 0 ? received / total : 0.0;
-              _emit(firmwareId, progress.clamp(0.0, 1.0));
-              onProgress?.call(received, total);
-            },
-            deleteOnError: false,
+            partFile,
+            firmwareId,
+            serviceToken,
+            onProgress,
           );
         }
 
-        final savedFile = File(filePath);
-        await _verifyFirmware(savedFile, expectedSize, expectedSha256);
-        final fileSize = await savedFile.length();
-
-        await _sharedPreferences.setString('$_keyPrefix$firmwareId', filePath);
-        await _sharedPreferences.setInt('$_keySizePrefix$firmwareId', fileSize);
-        if (expectedSha256 != null) {
-          await _sharedPreferences.setString(
-            '$_keySHA256Prefix$firmwareId',
-            expectedSha256.toLowerCase(),
-          );
+        // 校验通过才转正：.part → 正式文件名
+        await _verifyFirmware(partFile, expectedSize, expectedSha256);
+        if (await file.exists()) {
+          await file.delete();
         }
-        // 持久化离线升级所需元数据（无网时从已下载列表直接本地升级）
-        await _saveMetadata(
+        await partFile.rename(filePath);
+
+        await _persistDownloadRecord(
           firmwareId,
+          filePath,
+          File(filePath),
+          expectedSha256,
           targetChip: targetChip,
           version: version,
           signature: signature,
@@ -234,7 +257,59 @@ class FirmwareDownloadService {
     } finally {
       // 无论成功/失败/取消都释放并发守卫
       _activeDownloadId = null;
+      _activeCancelToken = null;
     }
+  }
+
+  /// 整包下载（无断点）：写入 .part 分片
+  Future<void> _downloadFresh(
+    String url,
+    File partFile,
+    int firmwareId,
+    CancelToken cancelToken,
+    void Function(int received, int total)? onProgress,
+  ) async {
+    await _dio.download(
+      url,
+      partFile.path,
+      cancelToken: cancelToken,
+      onReceiveProgress: (received, total) {
+        final progress = total > 0 ? received / total : 0.0;
+        _emit(firmwareId, progress.clamp(0.0, 1.0));
+        onProgress?.call(received, total);
+      },
+      deleteOnError: false,
+    );
+  }
+
+  /// 下载成功后持久化路径/大小/SHA-256 与离线升级元数据
+  Future<void> _persistDownloadRecord(
+    int firmwareId,
+    String filePath,
+    File file,
+    String? expectedSha256, {
+    String? targetChip,
+    String? version,
+    String? signature,
+    int? securityVersion,
+  }) async {
+    final fileSize = await file.length();
+    await _sharedPreferences.setString('$_keyPrefix$firmwareId', filePath);
+    await _sharedPreferences.setInt('$_keySizePrefix$firmwareId', fileSize);
+    if (expectedSha256 != null) {
+      await _sharedPreferences.setString(
+        '$_keySHA256Prefix$firmwareId',
+        expectedSha256.toLowerCase(),
+      );
+    }
+    // 持久化离线升级所需元数据（无网时从已下载列表直接本地升级）
+    await _saveMetadata(
+      firmwareId,
+      targetChip: targetChip,
+      version: version,
+      signature: signature,
+      securityVersion: securityVersion,
+    );
   }
 
   /// 持久化固件升级元数据（目标芯片/版本/签名/安全版本）。
@@ -339,7 +414,10 @@ class FirmwareDownloadService {
       final dir = await _getFirmwareDir();
       if (!await dir.exists()) return;
       await for (final entity in dir.list()) {
-        if (entity is File && !recorded.contains(entity.path)) {
+        // .part 是下载中断的续传分片，不算孤儿（下次下载/终态失败时处理）
+        if (entity is File &&
+            !entity.path.endsWith(_partSuffix) &&
+            !recorded.contains(entity.path)) {
           try {
             await entity.delete();
           } catch (_) {}

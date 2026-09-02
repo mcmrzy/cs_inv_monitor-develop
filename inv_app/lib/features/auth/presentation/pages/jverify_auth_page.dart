@@ -108,11 +108,14 @@ class _JVerifyAuthPageState extends State<JVerifyAuthPage> {
             ),
           ),
           BlocConsumer<AuthBloc, AuthState>(
+            listenWhen: (previous, current) =>
+                !current.isProfileUpdateTerminal,
             listener: (context, state) {
               if (state is AuthAuthenticated) {
                 debugPrint('[JVerifyAuthPage] Login success, navigate to /home');
                 context.go('/home');
-              } else if (state is AuthError) {
+              } else if (state is AuthError &&
+                  state is! AuthCodeSendError) {
                 // 后端登录失败：切失败视图
                 if (mounted) {
                   setState(() {

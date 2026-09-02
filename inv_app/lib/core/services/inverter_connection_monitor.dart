@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:inv_app/core/entities/inverter_data.dart';
 import 'package:wifi_iot/wifi_iot.dart';
@@ -97,8 +98,9 @@ class InverterConnectionMonitor {
         '[InverterMonitor] Inverter not responding '
         '(no response x$_noResponseCount), auto-disconnecting',
       );
+      final callback = onAutoDisconnected;
       stop();
-      _autoDisconnect();
+      _autoDisconnect(callback);
     }
   }
 
@@ -115,7 +117,7 @@ class InverterConnectionMonitor {
     }
   }
 
-  Future<void> _autoDisconnect() async {
+  Future<void> _autoDisconnect(VoidCallback? callback) async {
     try {
       // 1. 断开设备热点连接
       await WiFiForIoTPlugin.disconnect();
@@ -131,7 +133,7 @@ class InverterConnectionMonitor {
     }
 
     // 3. 通知 UI
-    onAutoDisconnected?.call();
+    callback?.call();
   }
 
   void dispose() {

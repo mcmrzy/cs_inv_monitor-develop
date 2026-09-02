@@ -22,7 +22,10 @@ abstract class OtaRepository {
   });
 
   Future<Either<Failure, Map<String, dynamic>>> resendUpgradeCommand(String sn);
-  Future<Either<Failure, Map<String, dynamic>>> getDeviceOTAStatus(String sn);
+  Future<Either<Failure, Map<String, dynamic>>> getDeviceOTAStatus(
+    String sn, {
+    int? taskId,
+  });
   Future<Either<Failure, List<dynamic>>> listUpgradePackages({String? model});
   Future<Either<Failure, Map<String, dynamic>>> installPackage(
     String sn,

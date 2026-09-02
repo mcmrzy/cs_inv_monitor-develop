@@ -1,11 +1,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:inv_app/core/entities/organization.dart';
 import 'package:inv_app/core/services/api_service.dart';
+import 'package:inv_app/core/services/storage_service.dart';
+import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 
 /// 组织上下文存储
 /// 管理用户当前的组织上下文和可用的组织列表
 class OrganizationContextStore extends ChangeNotifier {
   final ApiService _apiService;
+  final StorageService _storageService;
 
   /// 公开 API 服务访问器，供外部组件调用 API
   ApiService get apiService => _apiService;
@@ -39,28 +42,11 @@ class OrganizationContextStore extends ChangeNotifier {
     return _availableOrgs.any((org) => org.id == orgId);
   }
 
-  /// 是否为组织拥有者
-  bool isOrgOwner(int orgId) {
-    // TODO: 需要从后端 API 获取用户的角色信息
-    // 这里暂时返回 true
-    return orgId == _activeOrgId;
-  }
-
-  OrganizationContextStore({required ApiService apiService})
-      : _apiService = apiService;
-
-  /// 设置激活的组织
-  /// 切换上下文到指定的组织
-  void setActiveOrganization(int orgId, [String? orgName]) {
-    final org = _availableOrgs.firstWhere(
-      (o) => o.id == orgId,
-      orElse: () => throw ArgumentError('Organization $orgId not found'),
-    );
-
-    _activeOrgId = orgId;
-    _activeOrgName = orgName ?? org.name;
-    notifyListeners();
-  }
+  OrganizationContextStore({
+    required ApiService apiService,
+    required StorageService storageService,
+  })  : _apiService = apiService,
+        _storageService = storageService;
 
   /// 加载用户可用的所有组织
   Future<void> loadAvailableOrganizations() async {
@@ -72,10 +58,18 @@ class OrganizationContextStore extends ChangeNotifier {
       final orgs = await _apiService.getOrganizations();
       _availableOrgs = orgs;
 
-      // 如果没有激活的组织，自动选择第一个
-      if (_activeOrgId == null && _availableOrgs.isNotEmpty) {
-        _activeOrgId = _availableOrgs.first.id;
-        _activeOrgName = _availableOrgs.first.name;
+      // 只恢复已持久化的认证上下文；不能把列表首项当作已切换。
+      final persistedId = await _storageService.getActiveOrgId();
+      final persistedIndex = persistedId == null
+          ? -1
+          : _availableOrgs.indexWhere((org) => org.id == persistedId);
+      if (persistedIndex >= 0) {
+        final active = _availableOrgs[persistedIndex];
+        _activeOrgId = active.id;
+        _activeOrgName = active.name;
+      } else {
+        _activeOrgId = null;
+        _activeOrgName = null;
       }
 
       _error = null;
@@ -89,12 +83,36 @@ class OrganizationContextStore extends ChangeNotifier {
 
   /// 切换上下文到指定组织
   /// 这是外部调用的主要接口
-  Future<void> switchContextToOrganization(int orgId, String orgName) async {
-    setActiveOrganization(orgId, orgName);
+  Future<void> switchContextToOrganization(
+    int orgId,
+    String orgName,
+    AuthBloc authBloc,
+  ) async {
+    if (!isMemberOf(orgId)) {
+      throw ArgumentError('Organization $orgId not found');
+    }
 
-    // 通知其他 store 更新（如果它们依赖于组织上下文）
-    // 例如：刷新设备列表、告警列表等
-    notifyListeners();
+    _error = null;
+    final authState = authBloc.state;
+    if (authState is AuthAuthenticated &&
+        authState.activeOrganizationId == orgId) {
+      _activeOrgId = orgId;
+      _activeOrgName = orgName;
+      notifyListeners();
+      return;
+    }
+
+    try {
+      // AuthBloc 先完成服务端令牌轮换、权限刷新和持久化事务。
+      await authBloc.switchOrganizationContext(orgId, orgName);
+      _activeOrgId = orgId;
+      _activeOrgName = orgName;
+      notifyListeners();
+    } catch (error) {
+      _error = error.toString();
+      notifyListeners();
+      rethrow;
+    }
   }
 
   /// 退出当前组织上下文

@@ -6,6 +6,7 @@ import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/widgets/jiggle_once.dart';
 import 'package:inv_app/core/widgets/pagination_bar.dart';
 import 'package:inv_app/core/widgets/pressable_gesture_detector.dart';
+import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
@@ -464,9 +465,24 @@ class _DeviceListViewState extends State<DeviceListView> {
 
   // 非排序列表：分页卡片移入列表末尾 item，透明背景
   Widget _buildNonSortList(List<dynamic> visible, int totalPages) {
+    return _wrapWithRefresh(_buildNonSortListInner(visible, totalPages));
+  }
+
+  /// 有 onRefresh 回调时包一层下拉刷新指示器，空列表时仍可下拉触发刷新
+  Widget _wrapWithRefresh(Widget child) {
+    final onRefresh = widget.onRefresh;
+    if (onRefresh == null) return child;
+    return StyledRefreshIndicator(
+      onRefresh: onRefresh,
+      child: child,
+    );
+  }
+
+  /// 非排序列表内部实现：Scrollable 用于承载 RefreshIndicator
+  Widget _buildNonSortListInner(List<dynamic> visible, int totalPages) {
     return ListView.builder(
       controller: _listController,
-      physics: const BouncingScrollPhysics(),
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: EdgeInsets.fromLTRB(16.w, 4.h, 16.w, (widget.bottomPadding ?? 100).h),
       addAutomaticKeepAlives: false,
       addRepaintBoundaries: true,
@@ -498,6 +514,61 @@ class _DeviceListViewState extends State<DeviceListView> {
         );
       },
     );
+  }
+
+  /// 非排序模式：带下拉刷新的分页列表
+  Widget _buildPagedList(List<dynamic> visible, int totalPages) {
+    return _buildNonSortList(visible, totalPages);
+  }
+
+  /// 排序模式：ReorderableListView 包裹下拉刷新
+  Widget _buildSortedList(List<dynamic> filtered) {
+    final list = ReorderableListView.builder(
+      physics: const BouncingScrollPhysics(),
+      buildDefaultDragHandles: false,
+      padding: EdgeInsets.fromLTRB(
+          16.w, 4.h, 16.w, (widget.bottomPadding ?? 100).h),
+      proxyDecorator: (child, index, animation) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeInOut,
+        );
+        return AnimatedBuilder(
+          animation: curved,
+          builder: (_, __) => Transform.scale(
+            scale: 1 + 0.03 * curved.value,
+            child: Material(
+              color: AppColor.surfaceContainer(context),
+              elevation: 6 * curved.value,
+              borderRadius: BorderRadius.circular(16.r),
+              shadowColor: AppColors.primary.withValues(alpha: 0.4),
+              child: child,
+            ),
+          ),
+        );
+      },
+      onReorderItem: (oldIndex, newIndex) {
+        setState(() => _applyReorder(oldIndex, newIndex));
+        widget.onDeviceChanged?.call(
+          _ordered.map((d) => (d['sn'] ?? '').toString()).toList(),
+        );
+      },
+      itemCount: filtered.length,
+      itemBuilder: (_, i) => ReorderableDragStartListener(
+        key: ValueKey(filtered[i]['sn'] ?? i),
+        index: i,
+        child: JiggleOnce(
+          active: widget.sortMode,
+          index: i,
+          child: DeviceCard(
+            device: filtered[i],
+            onLongPressDevice: widget.onLongPressDevice,
+            sortMode: widget.sortMode,
+          ),
+        ),
+      ),
+    );
+    return _wrapWithRefresh(list);
   }
 
   @override
@@ -550,59 +621,8 @@ class _DeviceListViewState extends State<DeviceListView> {
                   size: 168,
                 )
               : widget.sortMode
-                  ? ReorderableListView.builder(
-                      physics: const BouncingScrollPhysics(),
-                      buildDefaultDragHandles: false,
-                      padding: EdgeInsets.fromLTRB(16.w, 4.h, 16.w, (widget.bottomPadding ?? 100).h),
-                      // 拖起时卡片浮起放大，让用户明确感知正在拖动排序
-                      proxyDecorator: (child, index, animation) {
-                        final curved = CurvedAnimation(
-                          parent: animation,
-                          curve: Curves.easeInOut,
-                        );
-                        return AnimatedBuilder(
-                          animation: curved,
-                          builder: (_, __) => Transform.scale(
-                            scale: 1 + 0.03 * curved.value,
-                            child: Material(
-                              color: AppColor.surfaceContainer(context),
-                              elevation: 6 * curved.value,
-                              borderRadius: BorderRadius.circular(16.r),
-                              shadowColor:
-                                  AppColors.primary.withValues(alpha: 0.4),
-                              child: child,
-                            ),
-                          ),
-                        );
-                      },
-                      onReorderItem: (oldIndex, newIndex) {
-                        setState(() => _applyReorder(oldIndex, newIndex));
-                        // 异步更新数据库排序字段
-                        widget.onDeviceChanged?.call(
-                          _ordered
-                              .map((d) => (d['sn'] ?? '').toString())
-                              .toList(),
-                        );
-                      },
-                      itemCount: filtered.length,
-                      itemBuilder: (_, i) => ReorderableDragStartListener(
-                        // key 必须挂在 itemBuilder 返回的顶层 widget 上（SDK 断言）
-                        key: ValueKey(filtered[i]['sn'] ?? i),
-                        index: i,
-                        // 进入排序模式：错相位摇晃入场动画，
-                        // 拖动/重排不重复触发（JiggleOnce 仅 active 变 true 时播放一次）
-                        child: JiggleOnce(
-                          active: widget.sortMode,
-                          index: i,
-                          child: DeviceCard(
-                            device: filtered[i],
-                            onLongPressDevice: widget.onLongPressDevice,
-                            sortMode: widget.sortMode,
-                          ),
-                        ),
-                      ),
-                    )
-                  : _buildNonSortList(visible, totalPages),
+                  ? _buildSortedList(filtered)
+                  : _buildPagedList(visible, totalPages),
         ),
       ],
     );

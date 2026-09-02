@@ -161,9 +161,13 @@ class OtaRepositoryImpl implements OtaRepository {
   @override
   Future<Either<Failure, Map<String, dynamic>>> getDeviceOTAStatus(
     String sn,
+    {int? taskId}
   ) async {
     try {
-      final response = await remoteDataSource.getDeviceOTAStatus(sn);
+      final response = await remoteDataSource.getDeviceOTAStatus(
+        sn,
+        taskId: taskId,
+      );
       return _parseData(response);
     } on DioException catch (e) {
       return Left(_mapError(e));

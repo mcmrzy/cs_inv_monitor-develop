@@ -319,7 +319,8 @@ class _DeviceActionSheetState extends State<DeviceActionSheet>
         } else if (state is station_bloc.DeviceDeleteSuccess &&
             state.sn == _sn) {
           _showResultSnackBar(l10n.str('device_deleted'), success: true);
-        } else if (state is station_bloc.StationError) {
+        } else if (state is station_bloc.StationError &&
+            state is! station_bloc.StationActionError) {
           _showResultSnackBar(
             l10n.str('device_action_failed', {'message': state.message}),
             success: false,

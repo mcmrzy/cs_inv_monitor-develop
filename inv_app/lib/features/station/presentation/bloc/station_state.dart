@@ -56,11 +56,40 @@ class StationDetailLoaded extends StationState {
   List<Object?> get props => [stationId, station, devices, isFromCache];
 }
 
-class StationCreateSuccess extends StationState {}
+class StationCreateSuccess extends StationState {
+  final String requestId;
 
-class StationUpdateSuccess extends StationState {}
+  const StationCreateSuccess({required this.requestId});
 
-class StationDeleteSuccess extends StationState {}
+  @override
+  List<Object?> get props => [requestId];
+}
+
+class StationUpdateSuccess extends StationState {
+  final int stationId;
+  final String requestId;
+
+  const StationUpdateSuccess({
+    required this.stationId,
+    required this.requestId,
+  });
+
+  @override
+  List<Object?> get props => [stationId, requestId];
+}
+
+class StationDeleteSuccess extends StationState {
+  final int stationId;
+  final String requestId;
+
+  const StationDeleteSuccess({
+    required this.stationId,
+    required this.requestId,
+  });
+
+  @override
+  List<Object?> get props => [stationId, requestId];
+}
 
 class DeviceUnbindSuccess extends StationState {
   final String sn;
@@ -117,4 +146,20 @@ class StationError extends StationState {
 
   @override
   List<Object?> get props => [message];
+}
+
+class StationActionError extends StationError {
+  final String action;
+  final String requestId;
+  final int? stationId;
+
+  const StationActionError({
+    required super.message,
+    required this.action,
+    required this.requestId,
+    this.stationId,
+  });
+
+  @override
+  List<Object?> get props => [message, action, requestId, stationId];
 }

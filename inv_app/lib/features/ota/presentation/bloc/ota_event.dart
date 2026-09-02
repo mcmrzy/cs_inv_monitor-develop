@@ -28,11 +28,32 @@ class OTATriggerRequested extends OtaEvent {
 
 class OTAProgressPollRequested extends OtaEvent {
   final String deviceSn;
+  final int? taskId;
+  final int? generation;
 
-  const OTAProgressPollRequested({required this.deviceSn});
+  const OTAProgressPollRequested({
+    required this.deviceSn,
+    this.taskId,
+    this.generation,
+  });
 
   @override
-  List<Object?> get props => [deviceSn];
+  List<Object?> get props => [deviceSn, taskId, generation];
+}
+
+/// Starts a polling session and queries once immediately.
+/// Used by the detail page, whose Bloc has no pre-existing timer.
+class OTAProgressStartPollRequested extends OtaEvent {
+  final String deviceSn;
+  final int? taskId;
+
+  const OTAProgressStartPollRequested({
+    required this.deviceSn,
+    this.taskId,
+  });
+
+  @override
+  List<Object?> get props => [deviceSn, taskId];
 }
 
 class OTAProgressStopPoll extends OtaEvent {

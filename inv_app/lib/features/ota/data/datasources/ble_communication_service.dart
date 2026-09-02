@@ -17,7 +17,7 @@ import 'package:inv_app/features/ota/domain/repositories/local_communication_rep
 /// - 通过 Notify 特征接收升级进度/设备信息
 /// - 通过 Read 特征查询设备状态
 ///
-/// 注意：以下 UUID 为占位符，需与固件团队确认后替换。
+/// UUID 来源：固件团队提供的 CSIV-PR 配网服务规范
 class BleCommunicationService implements LocalCommunicationRepository {
   BleCommunicationService({
     required BleAdapter adapter,
@@ -26,24 +26,25 @@ class BleCommunicationService implements LocalCommunicationRepository {
   final BleAdapter _adapter;
 
   // ---------------------------------------------------------------------------
-  // BLE OTA 服务 UUID 与特征 UUID（占位符，待固件团队确认）
+  // BLE OTA 服务 UUID 与特征 UUID
+  // 挂在 CSIV-PR 配网服务（43534956-5052-...）下，OTA 三个特征前缀 43534F54
   // ---------------------------------------------------------------------------
 
-  /// OTA 服务 UUID
+  /// CSIV-PR 配网服务 UUID
   static const String _otaServiceUuid =
-      '43534956-4f54-1000-8000-00805f9b34fb'; // CSIV-OT 占位
+      '43534956-5052-1000-8000-00805f9b34fb';
 
-  /// 可读特征：设备信息 / 升级进度查询
+  /// OTA STATUS 特征（Read/Notify）：设备信息 / 升级进度查询
   static const String _charReadUuid =
-      '43534956-5244-1000-8000-00805f9b34fb'; // CSIV-RD 占位
+      '43534F54-5354-1000-8000-00805f9b34fb';
 
-  /// 可写特征：固件数据写入 / 升级命令下发
+  /// OTA DATA 特征（Write/Notify）：固件数据写入 + 进度通知
   static const String _charWriteUuid =
-      '43534956-5752-1000-8000-00805f9b34fb'; // CSIV-WR 占位
+      '43534F54-4441-1000-8000-00805f9b34fb';
 
-  /// 通知特征：升级进度推送 / 异步事件通知
+  /// OTA DATA 特征（Notify）：升级进度推送 / 异步事件通知
   static const String _charNotifyUuid =
-      '43534956-4e54-1000-8000-00805f9b34fb'; // CSIV-NT 占位
+      '43534F54-4441-1000-8000-00805f9b34fb';
 
   // ---------------------------------------------------------------------------
   // 传输参数

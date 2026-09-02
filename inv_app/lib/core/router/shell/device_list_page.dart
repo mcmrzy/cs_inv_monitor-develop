@@ -135,6 +135,23 @@ class _DeviceListPageState extends State<DeviceListPage> {
               devices: ds.devices,
               whiteHeader: true,
               sortMode: _sortMode,
+              onRefresh: () async {
+                context
+                    .read<DeviceBloc>()
+                    .add(const DeviceListRequested());
+                // 等待 Bloc 处理完请求：监听到第一个新状态即返回，
+                // 让 RefreshIndicator 有足够时间完成动画
+                await context
+                    .read<DeviceBloc>()
+                    .stream
+                    .firstWhere(
+                      (s) => s is DeviceListLoaded || s is DeviceError,
+                    )
+                    .timeout(
+                      const Duration(seconds: 15),
+                      onTimeout: () => context.read<DeviceBloc>().state,
+                    );
+              },
               onDeviceChanged: (order) {
                 // 拖动即持久化全局设备顺序
                 context

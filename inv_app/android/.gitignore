@@ -13,3 +13,6 @@ key.properties
 **/*.keystore
 **/*.jks
 **/*.pem
+
+# 阿里云短信认证 SDK 原始交付包（未接入 app，含第三方 Demo 高危代码）
+/inv_app/android/aliyun_sms_auth_sdk/
