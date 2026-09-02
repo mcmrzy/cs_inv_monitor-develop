@@ -26,6 +26,7 @@ import 'package:inv_app/features/notification/presentation/bloc/notification_blo
 import 'package:inv_app/features/dashboard/presentation/bloc/dashboard_bloc.dart';
 import 'package:inv_app/core/router/app_router.dart';
 import 'package:inv_app/core/services/jpush_service.dart';
+import 'package:inv_app/features/ota/data/datasources/local_ota_result_sync_queue.dart';
 import 'package:inv_app/core/services/jverify_service.dart';
 import 'package:inv_app/core/services/deep_link_service.dart';
 import 'package:inv_app/core/services/network_status_service.dart';
@@ -81,6 +82,10 @@ void main() {
   };
 
   runApp(InvApp(notificationBloc: notificationBloc));
+
+  // 启动时恢复本地 OTA 升级结果的云端同步队列：
+  // 上次断网/中断遗留的待同步记录在此重试（网络恢复时也会自动重试）
+  unawaited(getIt<LocalOtaResultSyncQueue>().start());
 
   // 网络状态服务初始化：默认乐观在线，启动瞬间不误判离线
   unawaited(getIt<NetworkStatusService>().initialize());

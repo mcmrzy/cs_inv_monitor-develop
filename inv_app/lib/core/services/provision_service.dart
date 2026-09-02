@@ -31,6 +31,22 @@ class ProvisionService {
   String get baseUrl => 'http://$_provisionHost';
 
   Future<List<ScanResult>> scanWiFi() async {
+    const maxRetries = 3;
+    for (var attempt = 0; attempt <= maxRetries; attempt++) {
+      final result = await _doScanWiFi();
+      // 如果返回状态为 scanning 且未超过重试上限，等待后重试
+      if (result == null && attempt < maxRetries) {
+        await Future.delayed(const Duration(seconds: 3));
+        continue;
+      }
+      // result 为 null 表示 scanning 状态且已达上限，返回空列表
+      return result ?? const [];
+    }
+    return const [];
+  }
+
+  /// 单次扫描尝试：返回 null 表示设备仍在 scanning 状态（应重试）
+  Future<List<ScanResult>?> _doScanWiFi() async {
     final client = HttpClient();
     client.connectionTimeout = const Duration(seconds: _httpTimeout);
     try {
@@ -41,8 +57,7 @@ class ProvisionService {
         final body = await response.transform(utf8.decoder).join();
         final data = jsonDecode(body);
         if (data['status'] == 'scanning') {
-          await Future.delayed(const Duration(seconds: 3));
-          return scanWiFi();
+          return null; // 调用方重试
         }
         final networks = data['networks'] as List? ?? [];
         return networks
@@ -57,11 +72,11 @@ class ProvisionService {
           ..sort((a, b) => b.rssi.compareTo(a.rssi));
       }
     } catch (_) {
-      return [];
+      return const [];
     } finally {
       client.close(force: true);
     }
-    return [];
+    return const [];
   }
 
   /// 使用当前 ESP32-C2 App 配网协议发送 Wi-Fi 配置。

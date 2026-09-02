@@ -650,6 +650,11 @@ func (s *OTAService) GetLatestTaskDevice(ctx context.Context, sn string) (*model
 	return s.repo.GetLatestTaskDevice(ctx, sn)
 }
 
+// GetTaskDeviceStatus 获取设备在指定升级任务中的状态，供任务详情页精确轮询。
+func (s *OTAService) GetTaskDeviceStatus(ctx context.Context, sn string, taskID int64) (*model.DeviceUpgrade, error) {
+	return s.repo.GetDeviceUpgradeBySNAndTaskID(ctx, sn, taskID)
+}
+
 // GetDeviceOTAHistory 兼容旧接口
 func (s *OTAService) GetDeviceOTAHistory(ctx context.Context, sn string, page, pageSize int) ([]model.DeviceUpgrade, int, error) {
 	return s.repo.GetDeviceUpgradeHistory(ctx, sn, page, pageSize)

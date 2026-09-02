@@ -20,6 +20,7 @@ import 'package:inv_app/core/data/local_cache_database.dart';
 import 'package:inv_app/core/services/realtime_data_service.dart';
 import 'package:inv_app/core/services/notification_service.dart';
 import 'package:inv_app/features/profile/data/notify_prefs_service.dart';
+import 'package:inv_app/core/services/firmware_download_service.dart';
 import 'package:inv_app/core/services/local_communication_service.dart';
 import 'package:inv_app/core/services/connection_mode_service.dart';
 import 'package:inv_app/core/services/offline/offline_log_api.dart';
@@ -60,6 +61,7 @@ import 'package:inv_app/features/dashboard/data/datasources/dashboard_sse_data_s
 import 'package:inv_app/features/dashboard/data/repositories/dashboard_repository_impl.dart';
 import 'package:inv_app/features/dashboard/domain/repositories/dashboard_repository.dart';
 import 'package:inv_app/features/dashboard/presentation/bloc/dashboard_bloc.dart';
+import 'package:inv_app/features/ota/data/datasources/local_ota_result_sync_queue.dart';
 import 'package:inv_app/features/ota/data/datasources/ota_remote_data_source.dart';
 import 'package:inv_app/features/ota/data/repositories/ota_repository_impl.dart';
 import 'package:inv_app/features/ota/domain/repositories/ota_repository.dart';
@@ -418,6 +420,23 @@ getIt.registerLazySingleton<NotifyPrefsService>(
 
     getIt.registerLazySingleton<DeepLinkService>(
       () => DeepLinkService(),
+    );
+
+    // 固件下载：应用级单例（并发守卫/进度流需跨页面共享，
+    // 页面各自实例化会让守卫形同虚设）
+    getIt.registerLazySingleton<FirmwareDownloadService>(
+      () => FirmwareDownloadService(getIt<Dio>(), getIt()),
+      dispose: (service) => service.dispose(),
+    );
+
+    // 本地 OTA 升级结果的云端同步队列（失败重试，跨启动持久化）
+    getIt.registerLazySingleton<LocalOtaResultSyncQueue>(
+      () => LocalOtaResultSyncQueue(
+        repository: getIt<OtaRepository>(),
+        sharedPreferences: getIt(),
+        networkStatus: getIt<NetworkStatusService>(),
+      ),
+      dispose: (service) => service.dispose(),
     );
   }
 
