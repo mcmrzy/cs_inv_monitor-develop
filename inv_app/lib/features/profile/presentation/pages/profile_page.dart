@@ -143,7 +143,8 @@ class _ProfilePageState extends State<ProfilePage> {
           
           final isLoading = state is AuthLoading || state is AuthInitial;
           // 加载超时 / 出错（如缓存缺失且网络差）时展示失败态 + 手动重试
-          final showLoadError = _loadTimedOut || state is AuthError;
+          final showLoadError = _loadTimedOut ||
+              (state is AuthError && !state.isProfileUpdateTerminal);
 
           return ListView(
             physics: const AlwaysScrollableScrollPhysics(),

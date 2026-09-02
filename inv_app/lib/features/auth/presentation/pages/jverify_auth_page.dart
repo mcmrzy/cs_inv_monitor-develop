@@ -108,6 +108,8 @@ class _JVerifyAuthPageState extends State<JVerifyAuthPage> {
             ),
           ),
           BlocConsumer<AuthBloc, AuthState>(
+            listenWhen: (previous, current) =>
+                !current.isProfileUpdateTerminal,
             listener: (context, state) {
               if (state is AuthAuthenticated) {
                 debugPrint('[JVerifyAuthPage] Login success, navigate to /home');

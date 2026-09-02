@@ -313,6 +313,7 @@ class _RegisterFormState extends State<RegisterForm> {
           }
         } else if (state is AuthError &&
             state is! AuthCodeSendError &&
+            !state.isProfileUpdateTerminal &&
             _isSubmitting) {
           setState(() => _isSubmitting = false);
         }
