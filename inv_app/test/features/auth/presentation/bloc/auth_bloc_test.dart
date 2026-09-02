@@ -698,9 +698,34 @@ void main() {
   });
 
   group('AuthState listener isolation', () {
-    // TODO: AuthState 子类实现 isProfileUpdateTerminal 后补充
-    // profile 终态分类断言（profileSuccess/profileError 为 true，
-    // 普通登录态为 false）。
+    test(
+      'only profile update terminal states are classified as profile flow',
+      () {
+        const success = AuthProfileUpdateSuccess(
+          requestId: 'profile-success',
+          userId: 1,
+          phone: '13800138000',
+        );
+        const error = AuthProfileUpdateError(
+          message: 'profile failed',
+          requestId: 'profile-error',
+        );
+
+        expect(success.isProfileUpdateTerminal, isTrue);
+        expect(error.isProfileUpdateTerminal, isTrue);
+        expect(
+          const AuthAuthenticated(
+            userId: 1,
+            phone: '13800138000',
+          ).isProfileUpdateTerminal,
+          isFalse,
+        );
+        expect(
+          const AuthError(message: 'login failed').isProfileUpdateTerminal,
+          isFalse,
+        );
+      },
+    );
   });
 
   // ---------------------------------------------------------------------------

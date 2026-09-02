@@ -122,9 +122,13 @@ class _EnergyTrendChartState extends State<EnergyTrendChart> {
           ),
         ),
         SizedBox(width: 6.w),
-        Text(
-          label,
-          style: TextStyle(fontSize: 11.sp, color: AppColor.textSecondary(context)),
+        // 窄屏/大字体下标签可能超过图例可用宽度，用 ellipsis 防止横向溢出
+        Flexible(
+          child: Text(
+            label,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 11.sp, color: AppColor.textSecondary(context)),
+          ),
         ),
       ],
     );

@@ -6,6 +6,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:inv_app/core/data/china_regions.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
 import 'package:inv_app/features/station/presentation/pages/create_station_page.dart';
 import 'package:inv_app/features/station/presentation/pages/edit_station_page.dart';
@@ -116,6 +117,7 @@ void main() {
 
   setUpAll(() {
     registerFallbackValue(_FakeStationEvent());
+    initChinaRegions();
   });
 
   setUp(() {
@@ -302,20 +304,27 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextFormField).first, '新建测试电站');
 
-    // 直接跳过 region picker 交互（路由嵌套太深不适合 widget test），
-    // 改为在页面上找创建按钮并触发，验证 bloc 事件派发和 GoRouter 返回。
+    // 走真实两级地区选择器，默认选择中国 / 北京市 / 市辖区 / 东城区。
+    final regionEntry = find.text('选择国家/地区');
+    await tester.ensureVisible(regionEntry);
+    await tester.pumpAndSettle();
+    await tester.tap(regionEntry);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(TextButton, '确认'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(TextButton, '确认'));
+    await tester.pumpAndSettle();
+
     final submit = find.text('创建电站');
     await tester.ensureVisible(submit);
     await tester.tap(submit);
     await tester.pump();
 
-    // 如果提交因缺少国家而失败，验证 StationCreateRequested 未派发即算通过
     final creates = addedEvents.whereType<StationCreateRequested>().toList();
-    if (creates.isEmpty) {
-      // 预期行为：缺少必要字段时不派发创建事件
-      expect(find.byType(CreateStationPage), findsOneWidget);
-      return;
-    }
+    expect(creates, hasLength(1));
+    expect(creates.single.data['province'], '北京市');
+    expect(creates.single.data['city'], '市辖区');
+    expect(creates.single.data['district'], '东城区');
     expect(find.byType(CreateStationPage), findsOneWidget);
 
     stationStates.add(

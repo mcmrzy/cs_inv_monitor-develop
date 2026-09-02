@@ -659,7 +659,20 @@ func (h *OTAHandler) ResendUpgradeCommand(c *gin.Context) {
 // GetDeviceOTAStatus 获取设备当前升级状态
 func (h *OTAHandler) GetDeviceOTAStatus(c *gin.Context) {
 	sn := c.Param("sn")
-	upgrade, err := h.otaService.GetLatestTaskDevice(c.Request.Context(), sn)
+	var (
+		upgrade *model.DeviceUpgrade
+		err     error
+	)
+	if rawTaskID := c.Query("task_id"); rawTaskID != "" {
+		taskID, parseErr := strconv.ParseInt(rawTaskID, 10, 64)
+		if parseErr != nil || taskID <= 0 {
+			response.Error(c, 400, "task_id 参数无效")
+			return
+		}
+		upgrade, err = h.otaService.GetTaskDeviceStatus(c.Request.Context(), sn, taskID)
+	} else {
+		upgrade, err = h.otaService.GetLatestTaskDevice(c.Request.Context(), sn)
+	}
 	if err != nil || upgrade == nil {
 		response.Success(c, gin.H{"status": "idle", "message": "无升级任务"})
 		return

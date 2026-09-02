@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -11,7 +10,6 @@ import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/ota/presentation/bloc/ota_bloc.dart';
 import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 
 class FirmwareListPage extends StatefulWidget {
@@ -31,10 +29,9 @@ class FirmwareListPage extends StatefulWidget {
 }
 
 class _FirmwareListPageState extends State<FirmwareListPage> {
-  final FirmwareDownloadService _downloadService = FirmwareDownloadService(
-    getIt<Dio>(),
-    getIt<SharedPreferences>(),
-  );
+  // 应用级单例：并发守卫与进度流跨页面共享，页面退出不再 dispose
+  final FirmwareDownloadService _downloadService =
+      getIt<FirmwareDownloadService>();
 
   // 跟踪每个package的下载状态
   final Map<int, bool> _downloadedCache = {};
@@ -62,7 +59,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
   @override
   void dispose() {
     _progressSub?.cancel();
-    _downloadService.dispose();
+    // 下载服务是应用级单例，不随页面 dispose
     super.dispose();
   }
 
@@ -322,13 +319,22 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
       ),
       body: BlocConsumer<OtaBloc, OtaState>(
         listenWhen: (prev, curr) =>
-            curr is OTATriggered || curr is OTAProgress || curr is OTAComplete,
+            curr is OTATriggered ||
+            curr is OTAProgress ||
+            curr is OTAComplete ||
+            curr is OTAError,
         listener: (context, state) {
           // Once install is triggered, pop back to OTA page immediately.
           if (state is OTATriggered ||
               state is OTAProgress ||
               state is OTAComplete) {
             Navigator.pop(context);
+          } else if (state is OTAError) {
+            AppToast.show(
+              context,
+              l10n.translateError(state.message),
+              type: ToastType.error,
+            );
           }
         },
         buildWhen: (prev, curr) =>
@@ -336,6 +342,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
             curr is OTAAvailablePackagesLoaded ||
             curr is OTAAvailablePackagesError ||
             curr is OTAFirmwareInstalling ||
+            curr is OTATriggering ||
             curr is OTATriggered,
         builder: (context, state) {
           // Initial kick
@@ -348,7 +355,8 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
           }
 
           if (state is OTAAvailablePackagesLoading ||
-              state is OTAFirmwareInstalling) {
+              state is OTAFirmwareInstalling ||
+              state is OTATriggering) {
             return Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -363,7 +371,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                   ),
                   SizedBox(height: 16.h),
                   Text(
-                    state is OTAFirmwareInstalling
+                    state is OTAFirmwareInstalling || state is OTATriggering
                         ? l10n.installingFirmware
                         : l10n.loadingUpgradeList,
                     style: TextStyle(
