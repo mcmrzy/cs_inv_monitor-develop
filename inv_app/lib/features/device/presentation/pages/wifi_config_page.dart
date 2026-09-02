@@ -14,6 +14,7 @@ import 'package:inv_app/core/widgets/wifi_switch_dialog.dart';
 import 'package:inv_app/core/widgets/wifi_enable_dialog.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
+import 'package:inv_app/features/device/presentation/services/soft_ap_provision_runner.dart';
 import 'package:inv_app/features/device/presentation/widgets/wifi_provision_widgets.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
@@ -30,6 +31,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
   final _provisionService = ProvisionService();
   final _bleProvisioningService = BleProvisioningService();
   final _connectionModeService = getIt<ConnectionModeService>();
+  late final SoftApProvisionRunner _softApProvisionRunner;
 
   WifiProvisionMode _provisionMode = WifiProvisionMode.ble;
 
@@ -45,6 +47,8 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
   String _provisionStatus = '';
   bool _provisionOk = false;
   int _provisionStep = 0;
+  int _wifiOperationId = 0;
+  Future<void> _wifiRouteQueue = Future<void>.value();
 
   final _workingSsidController = TextEditingController();
   final _workingPasswordController = TextEditingController();
@@ -68,6 +72,11 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
   @override
   void initState() {
     super.initState();
+    _softApProvisionRunner = SoftApProvisionRunner(
+      configure: _provisionService.configure,
+      checkStatus: _provisionService.checkStatus,
+      ensureWifiRoute: () => _setForcedWifiRoute(true),
+    );
     _loadCurrentWifiSsid();
     _initBleProvisioning();
     // 自动开始BLE扫描（类似热点配网的自动扫描）
@@ -147,6 +156,8 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
 
   @override
   void dispose() {
+    _cancelWifiOperation();
+    unawaited(_releaseForcedWifiRoute());
     _workingSsidController.dispose();
     _workingPasswordController.dispose();
     _pinController.dispose();
@@ -161,6 +172,44 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
     return !cap.contains('WPA') && !cap.contains('WEP') && !cap.contains('EAP');
   }
 
+  bool _isDeviceApSsid(String ssid) {
+    final normalized = _normalizeSsid(ssid);
+    return normalized.startsWith('CS_INV') ||
+        normalized.startsWith('CS-INV');
+  }
+
+  String _normalizeSsid(String ssid) {
+    return ssid.trim().replaceAll('"', '').toUpperCase();
+  }
+
+  int _beginWifiOperation() => ++_wifiOperationId;
+
+  void _cancelWifiOperation() {
+    _wifiOperationId++;
+  }
+
+  bool _isWifiOperationActive(int operationId) {
+    return mounted && operationId == _wifiOperationId;
+  }
+
+  Future<void> _releaseForcedWifiRoute() async {
+    try {
+      await _setForcedWifiRoute(false);
+    } catch (_) {}
+  }
+
+  Future<void> _setForcedWifiRoute(bool force) {
+    // Android 原生路由切换无法取消。所有 true/false 串行执行，确保模式切换
+    // 或页面退出排入的 false 不会被更早启动、较晚完成的 true 覆盖。
+    final operation = _wifiRouteQueue
+        .catchError((_) {})
+        .then<void>((_) async {
+          await WiFiForIoTPlugin.forceWifiUsage(force);
+        });
+    _wifiRouteQueue = operation;
+    return operation;
+  }
+
   Future<bool> _requestWifiPermissions() async {
     // Android 6+ 扫描WiFi列表必须有位置权限，这是系统限制
     final status = await Permission.location.request();
@@ -168,28 +217,29 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
   }
 
   Future<void> _scanCSInvWiFi() async {
+    final operationId = _beginWifiOperation();
     setState(() {
       _wifiScanning = true;
       _csInvNetworks = [];
     });
     try {
       final granted = await _requestWifiPermissions();
+      if (!_isWifiOperationActive(operationId)) return;
       if (!granted) {
         setState(() => _wifiScanning = false);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(AppLocalizations.of(context)!.wifiPermissionHint),
-              duration: const Duration(seconds: 4),
-            ),
-          );
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.wifiPermissionHint),
+            duration: const Duration(seconds: 4),
+          ),
+        );
         return;
       }
 
       // 请求打开位置服务（Android 11及以下必须开启定位才能扫描WiFi）
       final serviceEnabled = await Permission.location.serviceStatus.isEnabled;
-      if (!serviceEnabled && mounted) {
+      if (!_isWifiOperationActive(operationId)) return;
+      if (!serviceEnabled) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(AppLocalizations.of(context)!.locationServiceHint),
@@ -201,8 +251,9 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       }
 
       // 检查手机 WiFi 是否开启：未开启则引导开启，取消则中止扫描（公共方法，Q1）
-      if (!mounted) return;
+      if (!_isWifiOperationActive(operationId)) return;
       final wifiEnabled = await ensureWifiEnabled(context);
+      if (!_isWifiOperationActive(operationId)) return;
       if (!wifiEnabled) {
         setState(() => _wifiScanning = false);
         return;
@@ -210,15 +261,20 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
 
       // 关键改进：先关闭WiFi强制使用，让系统执行一次新的WiFi扫描
       // Android 系统有4次/2分钟的扫描限制，先关闭再打开可以触发新扫描
-      await WiFiForIoTPlugin.forceWifiUsage(false);
+      await _setForcedWifiRoute(false);
       await Future.delayed(const Duration(milliseconds: 500));
+      if (!_isWifiOperationActive(operationId)) return;
 
       // 多次读取以获取最新结果
       List<ScannedWifiNetwork> allNetworks = [];
       for (int i = 0; i < 3; i++) {
         final networks = await scanWifiNetworks(triggerScan: i == 0);
+        if (!_isWifiOperationActive(operationId)) return;
         allNetworks.addAll(networks);
-        if (i < 2) await Future.delayed(const Duration(milliseconds: 800));
+        if (i < 2) {
+          await Future.delayed(const Duration(milliseconds: 800));
+          if (!_isWifiOperationActive(operationId)) return;
+        }
       }
 
       // 去重并按信号强度排序
@@ -227,8 +283,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       for (final n in allNetworks) {
         final ssid = n.ssid ?? '';
         if (ssid.isEmpty) continue;
-        if (ssid.toUpperCase().startsWith('CS_INV') ||
-            ssid.toUpperCase().startsWith('CS-INV')) {
+        if (_isDeviceApSsid(ssid)) {
           if (!ssidSet.contains(ssid)) {
             ssidSet.add(ssid);
             filtered.add(n);
@@ -238,36 +293,38 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       filtered.sort((a, b) => (b.level ?? -100).compareTo(a.level ?? -100));
 
       // 同时扫描所有附近WiFi（用于后续配网选择）
-      await _scanAllNearbyWifi();
+      await _scanAllNearbyWifi(operationId);
+      if (!_isWifiOperationActive(operationId)) return;
 
       setState(() {
         _csInvNetworks = filtered;
         _wifiScanning = false;
       });
     } catch (e) {
+      if (!_isWifiOperationActive(operationId)) return;
       setState(() => _wifiScanning = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${AppLocalizations.of(context)!.scanFailed}: $e'),
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${AppLocalizations.of(context)!.scanFailed}: $e'),
+        ),
+      );
     }
   }
 
   /// 手机端扫描所有附近WiFi（在连接设备热点之前调用，缓存结果）
-  Future<void> _scanAllNearbyWifi() async {
+  Future<void> _scanAllNearbyWifi(int operationId) async {
     try {
-      await WiFiForIoTPlugin.forceWifiUsage(false);
+      await _setForcedWifiRoute(false);
       await Future.delayed(const Duration(milliseconds: 300));
+      if (!_isWifiOperationActive(operationId)) return;
       final networks = await scanWifiNetworks();
+      if (!_isWifiOperationActive(operationId)) return;
       // 过滤掉设备热点本身和无名称的
       _phoneScannedWifi = networks.where((n) {
         final ssid = n.ssid ?? '';
         if (ssid.isEmpty) return false;
         final upper = ssid.toUpperCase();
-        return !upper.startsWith('CS_INV') && !upper.startsWith('CS-INV');
+        return !_isDeviceApSsid(upper);
       }).toList();
       _phoneScannedWifi
           .sort((a, b) => (b.level ?? -100).compareTo(a.level ?? -100));
@@ -275,10 +332,13 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
   }
 
   Future<void> _connectToAp(ScannedWifiNetwork network) async {
+    if (_provisionStep == 1) return;
+    final operationId = _beginWifiOperation();
+    final l10n = AppLocalizations.of(context)!;
     setState(() {
       _selectedDeviceAp = network;
       _provisionStatus =
-          AppLocalizations.of(context)!.connectingSsid(network.ssid ?? '');
+          l10n.connectingSsid(network.ssid ?? '');
       _provisionStep = 1;
       _nearbyWifiList = [];
       _workingSsidController.clear();
@@ -299,67 +359,74 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
               : NetworkSecurity.WPA,
           joinOnce: true,
         );
+        if (!_isWifiOperationActive(operationId)) return;
         if (connected) break;
         if (attempt < 2) {
           setState(
             () => _provisionStatus =
-                '${AppLocalizations.of(context)!.connectingSsid(ssid)} (${attempt + 2}/3)',
+                '${l10n.connectingSsid(ssid)} (${attempt + 2}/3)',
           );
           await Future.delayed(const Duration(seconds: 1));
+          if (!_isWifiOperationActive(operationId)) return;
         }
       }
 
       if (connected) {
         setState(
           () => _provisionStatus =
-              AppLocalizations.of(context)!.waitingStableConnection,
+              l10n.waitingStableConnection,
         );
 
         // 关键：强制HTTP请求走WiFi而不是移动数据
-        await WiFiForIoTPlugin.forceWifiUsage(true);
+        await _setForcedWifiRoute(true);
+        if (!_isWifiOperationActive(operationId)) return;
 
         // 等待连接稳定，热点分配IP需要时间
         await Future.delayed(const Duration(seconds: 3));
+        if (!_isWifiOperationActive(operationId)) return;
 
         // 验证确实连上了设备热点（增加重试检查）
         String? currentSsid;
         for (int i = 0; i < 3; i++) {
           currentSsid = await WiFiForIoTPlugin.getSSID();
+          if (!_isWifiOperationActive(operationId)) return;
           if (currentSsid != null &&
-              currentSsid.toUpperCase().contains('CS_INV')) {
+              _normalizeSsid(currentSsid) == _normalizeSsid(ssid)) {
             break;
           }
           await Future.delayed(const Duration(seconds: 1));
+          if (!_isWifiOperationActive(operationId)) return;
         }
 
         if (currentSsid == null ||
-            !currentSsid.toUpperCase().contains('CS_INV')) {
-          setState(
-            () => _provisionStatus =
-                AppLocalizations.of(context)!.noDeviceHotspotRetry,
-          );
+            _normalizeSsid(currentSsid) != _normalizeSsid(ssid)) {
+          _showApConnectionFailure(l10n.noDeviceHotspotRetry);
           return;
         }
 
         setState(() {
           _provisionStatus =
-              AppLocalizations.of(context)!.connectedScanning(ssid);
+              l10n.connectedScanning(ssid);
           _provisionStep = 2;
         });
         // 使用手机端已缓存的WiFi列表，不再通过设备扫描
         _usePhoneScannedWifi();
       } else {
-        setState(
-          () => _provisionStatus =
-              AppLocalizations.of(context)!.connectionSsidFailed(ssid),
-        );
+        _showApConnectionFailure(l10n.connectionSsidFailed(ssid));
       }
     } catch (e) {
-      setState(
-        () => _provisionStatus =
-            '${AppLocalizations.of(context)!.connectionFailed}: $e',
-      );
+      if (!_isWifiOperationActive(operationId)) return;
+      _showApConnectionFailure('${l10n.connectionFailed}: $e');
     }
+  }
+
+  void _showApConnectionFailure(String message) {
+    unawaited(_releaseForcedWifiRoute());
+    setState(() {
+      _selectedDeviceAp = null;
+      _provisionStep = 0;
+      _provisionStatus = message;
+    });
   }
 
   /// 使用手机端扫描的WiFi列表（连接热点前已缓存，无需再通过设备扫描）
@@ -385,31 +452,33 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
 
   /// 重新扫描附近 WiFi（手机端，在连接设备热点后临时切回普通模式扫描）
   Future<void> _rescanNearbyWifiFromPhone() async {
+    final operationId = _beginWifiOperation();
+    final l10n = AppLocalizations.of(context)!;
     setState(() {
       _scanningNearbyWifi = true;
     });
     try {
       // 扫描前检查位置权限（Android 6+ 扫描 WiFi 列表必须有位置权限，系统限制）
       final granted = await _requestWifiPermissions();
+      if (!_isWifiOperationActive(operationId)) return;
       if (!granted) {
         setState(() => _scanningNearbyWifi = false);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(AppLocalizations.of(context)!.wifiPermissionHint),
-              duration: const Duration(seconds: 4),
-            ),
-          );
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.wifiPermissionHint),
+            duration: const Duration(seconds: 4),
+          ),
+        );
         return;
       }
   
       // 请求打开位置服务（Android 11 及以下必须开启定位才能扫描 WiFi）
       final serviceEnabled = await Permission.location.serviceStatus.isEnabled;
-      if (!serviceEnabled && mounted) {
+      if (!_isWifiOperationActive(operationId)) return;
+      if (!serviceEnabled) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(AppLocalizations.of(context)!.locationServiceHint),
+            content: Text(l10n.locationServiceHint),
             duration: const Duration(seconds: 4),
           ),
         );
@@ -418,22 +487,28 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       }
   
       // 检查手机 WiFi 是否开启：未开启则引导开启，取消则中止扫描（公共方法，Q1）
-      if (!mounted) return;
+      if (!_isWifiOperationActive(operationId)) return;
       final wifiEnabled = await ensureWifiEnabled(context);
+      if (!_isWifiOperationActive(operationId)) return;
       if (!wifiEnabled) {
         setState(() => _scanningNearbyWifi = false);
         return;
       }
   
       // 临时切回普通 WiFi 模式以执行扫描
-      await WiFiForIoTPlugin.forceWifiUsage(false);
+      await _setForcedWifiRoute(false);
       await Future.delayed(const Duration(milliseconds: 500));
+      if (!_isWifiOperationActive(operationId)) return;
 
       List<ScannedWifiNetwork> networks = [];
       for (int i = 0; i < 2; i++) {
         final result = await scanWifiNetworks(triggerScan: i == 0);
+        if (!_isWifiOperationActive(operationId)) return;
         networks.addAll(result);
-        if (i < 1) await Future.delayed(const Duration(milliseconds: 600));
+        if (i < 1) {
+          await Future.delayed(const Duration(milliseconds: 600));
+          if (!_isWifiOperationActive(operationId)) return;
+        }
       }
 
       // 过滤掉设备热点
@@ -441,7 +516,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         final ssid = n.ssid ?? '';
         if (ssid.isEmpty) return false;
         final upper = ssid.toUpperCase();
-        return !upper.startsWith('CS_INV') && !upper.startsWith('CS-INV');
+        return !_isDeviceApSsid(upper);
       }).toList();
       filtered.sort((a, b) => (b.level ?? -100).compareTo(a.level ?? -100));
 
@@ -457,7 +532,8 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       }
 
       // 切回WiFi强制使用模式
-      await WiFiForIoTPlugin.forceWifiUsage(true);
+      await _setForcedWifiRoute(true);
+      if (!_isWifiOperationActive(operationId)) return;
 
       setState(() {
         _nearbyWifiList = unique
@@ -471,19 +547,19 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             .toList();
         _scanningNearbyWifi = false;
         _provisionStatus = _nearbyWifiList.isEmpty
-            ? AppLocalizations.of(context)!.noWifiFoundInputManually
-            : AppLocalizations.of(context)!
-                .foundNWifi('${_nearbyWifiList.length}');
+            ? l10n.noWifiFoundInputManually
+            : l10n.foundNWifi('${_nearbyWifiList.length}');
         _provisionStep = 2;
       });
     } catch (e) {
       // 确保切回 WiFi 模式（失败也不能阻塞状态复位，避免扫描状态卡死）
       try {
-        await WiFiForIoTPlugin.forceWifiUsage(true);
+        await _setForcedWifiRoute(true);
       } catch (_) {}
+      if (!_isWifiOperationActive(operationId)) return;
       setState(() {
         _scanningNearbyWifi = false;
-        _provisionStatus = '${AppLocalizations.of(context)!.scanFailed}: $e';
+        _provisionStatus = '${l10n.scanFailed}: $e';
       });
     }
   }
@@ -499,88 +575,105 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
   }
 
   Future<void> _sendProvisionConfig() async {
+    final operationId = _beginWifiOperation();
+    final l10n = AppLocalizations.of(context)!;
     final ssid = _workingSsidController.text.trim();
-    final password = _workingPasswordController.text.trim();
+    final password = _workingPasswordController.text;
     if (ssid.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(AppLocalizations.of(context)!.pleaseInputWifiName),
+          content: Text(l10n.pleaseInputWifiName),
         ),
       );
       return;
     }
     setState(() {
       _provisioning = true;
-      _provisionStatus = AppLocalizations.of(context)!.sendingProvisionInfo;
+      _provisionStatus = l10n.sendingProvisionInfo;
       _provisionOk = false;
     });
 
-    // 确保请求走WiFi
-    await WiFiForIoTPlugin.forceWifiUsage(true);
+    final outcome = await _softApProvisionRunner.run(
+      ssid: ssid,
+      password: password,
+      isActive: () => _isWifiOperationActive(operationId),
+      onConfigured: () {
+        if (!_isWifiOperationActive(operationId)) return;
+        setState(() {
+          _provisionStatus = l10n.provisionSuccessConnecting;
+          _provisionStep = 3;
+        });
+      },
+      onWaiting: (attempt) {
+        if (!_isWifiOperationActive(operationId)) return;
+        setState(
+          () => _provisionStatus =
+              l10n.waitingDeviceConnectionN('$attempt'),
+        );
+      },
+    );
+    if (!_isWifiOperationActive(operationId) ||
+        outcome.type == SoftApProvisionOutcomeType.cancelled) {
+      return;
+    }
 
-    var result = await _provisionService.configure(ssid, password);
-
-    if (result.success) {
-      setState(() {
-        _provisionStatus =
-            AppLocalizations.of(context)!.provisionSuccessConnecting;
-        _provisionStep = 3;
-      });
-      await Future.delayed(const Duration(seconds: 2));
-      for (int i = 0; i < 15; i++) {
-        await WiFiForIoTPlugin.forceWifiUsage(true);
-        final status = await _provisionService.checkStatus();
-        if (status.success) {
-          setState(() {
-            _provisioning = false;
-            _provisionOk = true;
-            _provisionStatus = AppLocalizations.of(context)!
-                .provisionCompleteWifiIp(status.ssid ?? '', status.ip ?? '');
-          });
-          _onSoftApProvisionSuccess();
-          return;
-        }
-        if (mounted) {
-          setState(
-            () => _provisionStatus = AppLocalizations.of(context)!
-                .waitingDeviceConnectionN('${i + 1}'),
+    switch (outcome.type) {
+      case SoftApProvisionOutcomeType.connected:
+        setState(() {
+          _provisioning = false;
+          _provisionOk = true;
+          _provisionStatus = l10n.provisionCompleteWifiIp(
+            outcome.ssid ?? '',
+            outcome.ip ?? '',
           );
-        }
-        await Future.delayed(const Duration(seconds: 2));
-      }
-      setState(() {
-        _provisioning = false;
-        _provisionStatus =
-            AppLocalizations.of(context)!.configSentDeviceRestart;
-        _provisionOk = true;
-      });
-      _onSoftApProvisionSuccess();
-    } else {
-      setState(() {
-        _provisioning = false;
-        _provisionStatus = '❌ ${result.message}';
-      });
+        });
+        unawaited(_onSoftApProvisionSuccess(operationId));
+        break;
+      case SoftApProvisionOutcomeType.timedOut:
+        setState(() {
+          _provisioning = false;
+          _provisionOk = false;
+          _provisionStatus = '❌ ${l10n.provisionTimeout}';
+        });
+        break;
+      case SoftApProvisionOutcomeType.failed:
+        setState(() {
+          _provisioning = false;
+          _provisionOk = false;
+          _provisionStatus = '❌ ${outcome.message ?? l10n.sendFailed}';
+        });
+        break;
+      case SoftApProvisionOutcomeType.cancelled:
+        break;
     }
   }
 
-  Future<void> _onSoftApProvisionSuccess() async {
+  Future<void> _onSoftApProvisionSuccess(int operationId) async {
     await Future.delayed(const Duration(seconds: 2));
 
-    if (!mounted) return;
+    if (!_isWifiOperationActive(operationId)) return;
 
     final shouldSwitch =
         await showWifiSwitchDialog(context, originalSsid: _originalSsid);
-    if (!mounted) return;
+    if (!_isWifiOperationActive(operationId)) return;
 
-    if (shouldSwitch && _originalSsid != null) {
+    if (shouldSwitch) {
       try {
-        await WiFiForIoTPlugin.connect(
-          _originalSsid!,
-          password: null,
-          security: NetworkSecurity.WPA,
-          joinOnce: false,
-        );
+        if (_originalSsid != null) {
+          await WiFiForIoTPlugin.connect(
+            _originalSsid!,
+            password: null,
+            security: NetworkSecurity.WPA,
+            joinOnce: false,
+          );
+        }
       } catch (_) {}
+
+      // 即使未能读取原 SSID，也要解除强制 WiFi 路由，让系统恢复移动数据/
+      // 普通网络选择；否则离开配网页后云端请求仍可能锁在设备热点。
+      if (!_isWifiOperationActive(operationId)) return;
+      await _releaseForcedWifiRoute();
+      if (!_isWifiOperationActive(operationId)) return;
 
       // 配网结束回云端（系统兜底切换：不置手动锁，保留断网自动切本地的能力）
       await _connectionModeService.switchToRemote(byUser: false);
@@ -648,7 +741,8 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
 
   Future<void> _sendBleProvisionConfig() async {
     final ssid = _workingSsidController.text.trim();
-    final password = _workingPasswordController.text.trim();
+    // WiFi 密码允许包含合法的首尾空格，不能像 SSID 一样 trim。
+    final password = _workingPasswordController.text;
 
     if (ssid.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -816,12 +910,16 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
   }
 
   void _resetProvision() {
+    _cancelWifiOperation();
+    unawaited(_releaseForcedWifiRoute());
     setState(() {
       _selectedDeviceAp = null;
       _nearbyWifiList = [];
       _provisionStep = 0;
       _provisionStatus = '';
       _provisionOk = false;
+      _provisioning = false;
+      _scanningNearbyWifi = false;
       _workingSsidController.clear();
       _workingPasswordController.clear();
     });
@@ -864,7 +962,10 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
   }
 
   void _selectProvisionMode(WifiProvisionMode mode) {
+    if (mode == _provisionMode) return;
+    _cancelWifiOperation();
     if (mode == WifiProvisionMode.ble) {
+      unawaited(_releaseForcedWifiRoute());
       // 切换到BLE模式时重置热点配网状态
       setState(() {
         _provisionMode = WifiProvisionMode.ble;
@@ -872,6 +973,9 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         _provisionStep = 0;
         _provisionStatus = '';
         _provisionOk = false;
+        _provisioning = false;
+        _wifiScanning = false;
+        _scanningNearbyWifi = false;
       });
       return;
     }
@@ -884,6 +988,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       _provisionStep = 0;
       _provisionStatus = '';
       _provisionOk = false;
+      _provisioning = false;
       _provisionSuccess = false;
     });
     if (_csInvNetworks.isEmpty && !_wifiScanning) _scanCSInvWiFi();
