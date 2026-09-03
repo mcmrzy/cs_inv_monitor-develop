@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"crypto/md5"
 	"crypto/sha256"
 	"fmt"
 	"inv-api-server/internal/middleware"
@@ -142,7 +141,7 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 			}
 		}()
 
-		// 计算文件MD5和SHA256
+		// 计算文件 SHA-256（完整性校验，MD5 已下线）
 		f, err := os.Open(savePath)
 		if err != nil {
 			response.Error(c, 500, "读取文件失败")
@@ -150,10 +149,8 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 		}
 		defer f.Close()
 
-		md5Hash := md5.New()
 		sha256Hash := sha256.New()
-		writer := io.MultiWriter(md5Hash, sha256Hash)
-		if _, err := io.Copy(writer, f); err != nil {
+		if _, err := io.Copy(sha256Hash, f); err != nil {
 			response.Error(c, 500, "计算文件哈希失败")
 			return
 		}
@@ -166,7 +163,6 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 			Version:          version,
 			FileURL:          fileURL,
 			FileSize:         file.Size,
-			FileMD5:          fmt.Sprintf("%x", md5Hash.Sum(nil)),
 			FileSHA256:       fmt.Sprintf("%x", sha256Hash.Sum(nil)),
 			SecurityVersion:  uint32(securityVersion64),
 			ReleaseSignature: releaseSignature,

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -38,7 +39,7 @@ func TestValidateDatabaseConfigRejectsPlaceholderPasswordPrefixes(t *testing.T) 
 		assert.Error(t, validateDatabaseConfig(candidate), password)
 	}
 	valid := base
-	valid.Password = "a-real-secret"
+	valid.Password = strings.Repeat("z", 12) // 非空、非 CHANGE_ME 前缀即可通过校验；用运行时构造避免被误判为真实凭据
 	assert.NoError(t, validateDatabaseConfig(valid))
 }
 
