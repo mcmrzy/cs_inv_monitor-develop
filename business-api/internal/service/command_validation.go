@@ -86,15 +86,19 @@ func commandInvolvesCurrent(commandCode string, params map[string]interface{}) (
 // 步骤7: 并机组级状态和拓扑限制
 // 步骤8: 风险确认、调试授权窗口、TTL 和冷却时间
 // 步骤9: 创建设备独立 task_id
-func (s *DeviceService) ValidateAndPrepareCommand(ctx context.Context, userID int64, sn, commandCode string, params map[string]interface{}) (*PreparedCommand, error) {
+func (s *DeviceService) ValidateAndPrepareCommand(ctx context.Context, userID int64, sn, commandCode string, params map[string]interface{}, isSystemAdmin bool) (*PreparedCommand, error) {
 	// ── 步骤1: 身份、设备归属、细粒度 permission ──
-	// HasControlPermission 检查 RBAC devices:control + 数据归属
-	if !s.HasControlPermission(ctx, userID, sn) {
-		return nil, NewCommandError(ErrUnsupportedCommand, "无控制权限", 403)
-	}
-	// CheckCommandPermission 检查细粒度 permission_code
-	if err := s.CheckCommandPermission(ctx, userID, sn, commandCode); err != nil {
-		return nil, NewCommandError(ErrUnsupportedCommand, err.Error(), 403)
+	// HasControlPermission 检查 RBAC devices:control + 数据归属。
+	// 系统管理员已在路由中间件与 Handler 层放行，此处保持一致跳过，
+	// 否则超管会被组织授权体系误拒（其账号通常没有组织角色授权）。
+	if !isSystemAdmin {
+		if !s.HasControlPermission(ctx, userID, sn) {
+			return nil, NewCommandError(ErrUnsupportedCommand, "无控制权限", 403)
+		}
+		// CheckCommandPermission 检查细粒度 permission_code
+		if err := s.CheckCommandPermission(ctx, userID, sn, commandCode); err != nil {
+			return nil, NewCommandError(ErrUnsupportedCommand, err.Error(), 403)
+		}
 	}
 
 	// ── 步骤2: 型号/固件是否支持命令（fail-closed：未知命令默认拒绝） ──
