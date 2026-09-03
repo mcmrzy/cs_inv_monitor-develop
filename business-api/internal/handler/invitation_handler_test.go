@@ -3,6 +3,7 @@ package handler
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -282,7 +283,7 @@ func (suite *InvitationHandlerTestSuite) TestAcceptInvitation_PasswordTooShort()
 func (suite *InvitationHandlerTestSuite) TestAcceptInvitation_PasswordTooLong() {
 	req := AcceptInvitationRequest{
 		InvitationCode: "validtoken",
-		Password:       "verylongpassword12345", // 22 chars > max=20
+		Password:       strings.Repeat("z", 21), // 21 chars > max=20
 		Phone:          "1234567890",
 		Nickname:       "Test User",
 	}
@@ -295,7 +296,7 @@ func (suite *InvitationHandlerTestSuite) TestAcceptInvitation_PasswordTooLong() 
 
 func (suite *InvitationHandlerTestSuite) TestAcceptInvitation_MissingCode() {
 	req := map[string]interface{}{
-		"password": "password123",
+		"password": strings.Repeat("z", 10),
 		"phone":    "1234567890",
 		"nickname": "Test User",
 	}
