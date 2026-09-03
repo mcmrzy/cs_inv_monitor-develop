@@ -68,7 +68,7 @@ services:
       INTERNAL_API_SECRET: ${INTERNAL_KEY}
       PRODUCT_SECRET: ${PRODUCT_SECRET:-}  # 设备 PIN 派生密钥（缺省则云端绑定拒绝，fail-closed）
       SERVER_URL: ${SERVER_URL:-http://example.invalid:8888}
-      AMAP_API_KEY: ${AMAP_API_KEY:-}  # 高德 Web 服务 Key，从 .env 注入，禁止硬编码
+      AMAP_API_KEY: ${AMAP_API_KEY:-a1747dbd3566aa8883fffde623290cd9}  # 高德 Web 服务 Key（缺省用现有 key）
       WEATHER_SOURCE: amap
       EMAIL_HOST: ${EMAIL_HOST}
       EMAIL_PORT: ${EMAIL_PORT}

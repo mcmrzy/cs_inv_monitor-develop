@@ -223,7 +223,7 @@ services:
       DB_HOST: postgres
       REDIS_HOST: redis
       DEVICE_SERVER_URL: http://inv-device-server:8081
-      AMAP_API_KEY: ${AMAP_API_KEY:-}  # 高德 Web 服务 Key，从 .env.prod 注入；未配置时地理编码回落慢速 OSM
+      AMAP_API_KEY: ${AMAP_API_KEY:-a1747dbd3566aa8883fffde623290cd9}  # 高德 Web 服务 Key（缺省用现有 key，可用 .env.prod 覆盖）
       INTERNAL_KEY: ${INTERNAL_KEY}
       SERVER_URL: ${SERVER_URL}
       DOWNLOAD_URL: ${DOWNLOAD_URL}
