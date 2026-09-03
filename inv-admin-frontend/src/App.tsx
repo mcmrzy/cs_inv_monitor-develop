@@ -69,6 +69,15 @@ const AppRoutes: React.FC = () => (
         </ProtectedRoute>
       }
     />
+    {/* 设备完整详情页：全屏布局（无侧边栏），便于聚焦查看 */}
+    <Route
+      path="/devices/:sn/detail"
+      element={
+        <ProtectedRoute>
+          <DeviceDetailPage />
+        </ProtectedRoute>
+      }
+    />
     <Route
       element={
         <ProtectedRoute>
@@ -94,7 +103,6 @@ const AppRoutes: React.FC = () => (
       <Route path="/remote-settings" element={<RemoteSettingsPage />} />
       <Route path="/batch-settings" element={<BatchSettingsPage />} />
       <Route path="/operation-logs" element={<OperationLogsPage />} />
-      <Route path="/devices/:sn/detail" element={<DeviceDetailPage />} />
       <Route path="/system/system-monitor" element={<SystemMonitorPage />} />
       <Route path="/system/system-config" element={<SystemConfigPage />} />
     </Route>

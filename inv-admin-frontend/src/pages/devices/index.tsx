@@ -648,13 +648,8 @@ const DevicesPage: React.FC = () => {
   }
 
   const openDeviceDetail = (sn: string) => {
-    setDetailSn(sn)
-    setDrawerTab('info')
-    setDetailDrawerOpen(true)
-    setSelectedCommand(null)
-    setCommandParams({})
-    setCommandResult(null)
-    setTelemetryVersion(v => v + 1)
+    // 直接跳转完整详情页（全屏），不再经过抽屉
+    navigate(`/devices/${sn}/detail`)
   }
 
   const handleCommandSelect = (commandName: string) => {
