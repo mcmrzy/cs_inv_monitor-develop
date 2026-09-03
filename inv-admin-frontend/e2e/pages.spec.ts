@@ -25,12 +25,13 @@ test('设备列表展示绑定设备并可进入详情页', async ({ page }) => 
     .first()
   await expect(row).toBeVisible({ timeout: 20_000 })
   await page.screenshot({ path: evidencePath('e2e-page-devices.png'), fullPage: true })
-  // S/N column is an <a> that opens the device detail drawer (not a route change)
+  // S/N column is an <a> that navigates directly to the full-screen detail page
   await row.locator('a').first().click()
-  const drawer = page.locator('.ant-drawer-open')
-  await expect(drawer).toBeVisible({ timeout: 15_000 })
-  await expect(drawer).toContainText(acc.devices[0])
-  await expect(page).toHaveURL(/\/devices$/, { timeout: 10_000 })
+  await expect(page).toHaveURL(new RegExp(`/devices/${acc.devices[0]}/detail$`), { timeout: 10_000 })
+  // 全屏详情页：带返回按钮与 Tabs，无侧边栏布局
+  await expect(page.getByRole('button', { name: /返回|Back/i })).toBeVisible({ timeout: 15_000 })
+  await expect(page.locator('.ant-tabs')).toBeVisible()
+  await expect(page.locator('.ant-layout-sider')).toHaveCount(0)
   await page.screenshot({ path: evidencePath('e2e-page-device-detail.png'), fullPage: true })
 })
 
