@@ -1,0 +1,12 @@
+package middleware
+
+import "github.com/gin-gonic/gin"
+
+// NoStore 强制动态 API 响应禁止任何缓存（浏览器/CDN 边缘节点）。
+// 背景：列表/统计类接口曾被 CDN 按默认策略缓存，导致不同客户端长时间
+// 看到过期数据；源站显式下发 no-store 后，"遵循源站缓存策略"的 CDN
+// 配置才不会回退到默认缓存。
+func NoStore(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
+	c.Next()
+}
