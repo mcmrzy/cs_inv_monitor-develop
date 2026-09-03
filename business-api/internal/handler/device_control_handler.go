@@ -39,7 +39,7 @@ func (h *DeviceHandler) Control(c *gin.Context) {
 	}
 
 	// 9步校验链：ValidateAndPrepareCommand 集成步骤1-8（身份/型号/参数/关系/状态/BMS限制/拓扑/风险确认）
-	prepared, err := h.deviceService.ValidateAndPrepareCommand(c.Request.Context(), userID, sn, req.Command, req.Params)
+	prepared, err := h.deviceService.ValidateAndPrepareCommand(c.Request.Context(), userID, sn, req.Command, req.Params, isAdmin)
 	if err != nil {
 		logger.Error("Control validate and prepare failed", zap.String("sn", sn), zap.String("cmd", req.Command), zap.Error(err))
 		// 处理 CommandError 类型，返回拒绝码
