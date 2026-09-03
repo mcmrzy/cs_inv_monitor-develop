@@ -1747,19 +1747,36 @@ func (r *DeviceRepository) BatchGetRealtimeData(ctx context.Context, sns []strin
 }
 
 func (r *DeviceRepository) EnsureDevice(ctx context.Context, sn string) error {
+	// 软删行是"已移除但仍占用唯一 sn"的记录：重新录入时将其复活，避免
+	// 列表不可见却报 device already exists。仍在用（未软删）的设备不动。
 	query := `INSERT INTO devices (sn, model, rated_power, user_id, status, created_at, updated_at)
 		VALUES ($1, '', 0, 0, 0, NOW(), NOW())
-		ON CONFLICT (sn) DO NOTHING`
+		ON CONFLICT (sn) DO UPDATE SET deleted_at = NULL, updated_at = NOW()
+		WHERE devices.deleted_at IS NOT NULL`
 	_, err := r.db.Exec(ctx, query, sn)
 	return err
 }
 
 // Create inserts a new device with the specified fields. The device is created
-// as unbound (user_id = 0, status = 0). Returns an error if the SN already exists.
+// as unbound (user_id = 0, status = 0). Returns an error if the SN already exists
+// and is still in use (not soft-deleted). 若存在的是软删残留行（列表不可见却占用
+// 唯一 sn），会将其复活重置为未绑定新设备，而非报 already exists。
 func (r *DeviceRepository) Create(ctx context.Context, sn, model string, ratedPower *float64, firmwareArm, firmwareEsp string) error {
 	query := `INSERT INTO devices (sn, model, rated_power, firmware_arm, firmware_esp, user_id, status, created_at, updated_at)
 		VALUES ($1, $2, COALESCE($3, 0), $4, $5, 0, 0, NOW(), NOW())
-		ON CONFLICT (sn) DO NOTHING`
+		ON CONFLICT (sn) DO UPDATE SET
+			deleted_at = NULL,
+			user_id = 0,
+			station_id = NULL,
+			device_key_hash = NULL,
+			timezone = 'Asia/Shanghai',
+			model = EXCLUDED.model,
+			rated_power = EXCLUDED.rated_power,
+			firmware_arm = EXCLUDED.firmware_arm,
+			firmware_esp = EXCLUDED.firmware_esp,
+			status = 0,
+			updated_at = NOW()
+		WHERE devices.deleted_at IS NOT NULL`
 	tag, err := r.db.Exec(ctx, query, sn, model, ratedPower, firmwareArm, firmwareEsp)
 	if err != nil {
 		return err
