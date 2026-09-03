@@ -894,6 +894,8 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 	})
 
 	api := router.Group("/api/v1")
+	// 动态 API 一律禁止缓存（浏览器/CDN），防止边缘缓存吐旧数据
+	api.Use(middleware.NoStore)
 	{
 		// 防暴力破解：仅对认证类公开接口施加 IP 限流（rate=10/s, burst=20）。
 		// 不再对整个 /api/v1 组限流——网关层已提供全局限流(100/s, burst=200)
