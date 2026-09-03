@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Form, Input, Button, Checkbox, App, Space, Alert, Dropdown, Segmented, Select } from 'antd'
 import { UserOutlined, LockOutlined, MailOutlined, PhoneOutlined, SafetyOutlined, CloudOutlined, LineChartOutlined, GlobalOutlined, ApiOutlined } from '@ant-design/icons'
@@ -7,6 +7,7 @@ import useLocaleStore from '@/stores/localeStore'
 import api from '@/services/api'
 import type { User } from '@/types'
 import countriesList from '../../utils/continentsData'
+import { toEnglishCountryName } from '../../utils/countryEnNames'
 import SliderCaptchaModal from '@/components/SliderCaptcha/SliderCaptchaModal'
 
 // Maps the backend user object (snake_case is_system_admin) to the frontend User type.
@@ -33,15 +34,17 @@ const getRandomBg = () => loginBackgrounds[Math.floor(Math.random() * loginBackg
 
 type ActiveTab = 'login' | 'loginByCode' | 'register' | 'reset'
 
-// 从洲与国家映射中提取所有国家选项（扁平化数组）
-const flattenedCountries = countriesList.flatMap((continent: any) => 
-  continent.countries.map((c: any) => ({ value: c.code, label: `${c.name} (${c.code})`, countryName: c.name }))
-)
-const getCountryName = (value: string) => {
-  const found = flattenedCountries.find(c => c.value === value)
-  return found?.countryName || ''
-}
 type Lang = 'zh' | 'en'
+
+// 从洲与国家映射中提取所有国家选项（扁平化数组）；英文界面展示英文国家名
+const buildCountryOptions = (lang: Lang) =>
+  countriesList.flatMap((continent: any) =>
+    continent.countries.map((c: any) => {
+      const zhName = c.name as string
+      const label = lang === 'zh' ? zhName : toEnglishCountryName(zhName)
+      return { value: c.code, label: `${label} (${c.code})`, countryName: zhName }
+    }),
+  )
 
 const i18n: Record<Lang, Record<string, string>> = {
   zh: {
@@ -61,6 +64,7 @@ const i18n: Record<Lang, Record<string, string>> = {
     resetChannelEmail: '邮箱重置', resetChannelPhone: '手机号重置',
     nicknameOptional: '昵称（选填）',
     nickname: '昵称', confirmPassword: '确认密码', newPassword: '新密码', confirmNewPwd: '确认新密码',
+    countryRegion: '国家 / 地区', selectCountry: '选择国家/地区',
     submitRegister: '注 册', hasAccount: '已有账号？', goLogin: '立即登录',
     submitReset: '重置密码', goBack: '返回登录', emailPlaceholder: '注册时使用的邮箱',
     footer: '© 2026 辰烁科技 · 光伏逆变器智能监控平台',
@@ -95,6 +99,7 @@ const i18n: Record<Lang, Record<string, string>> = {
     resetChannelEmail: 'Email', resetChannelPhone: 'Phone',
     nicknameOptional: 'Nickname (optional)',
     nickname: 'Nickname', confirmPassword: 'Confirm Password', newPassword: 'New Password', confirmNewPwd: 'Confirm New Password',
+    countryRegion: 'Country / Region', selectCountry: 'Select country/region',
     submitRegister: 'Sign Up', hasAccount: 'Already have an account? ', goLogin: 'Sign In',
     submitReset: 'Reset Password', goBack: 'Back to Login', emailPlaceholder: 'Your registered email',
     footer: '© 2026 CSERGY · Solar Inverter Smart Monitoring Platform',
@@ -150,6 +155,7 @@ const LoginPage: React.FC = () => {
   }, [loginForm])
 
   const t = i18n[lang]
+  const countryOptions = useMemo(() => buildCountryOptions(lang), [lang])
   const localizeAuthError = (payload: any, fallback: string) => {
     const byCode: Record<number, string> = {
       4001: t.errUserNotFound,
@@ -641,10 +647,10 @@ const LoginPage: React.FC = () => {
                 <div>
                   {/* 国家/地区选择：可搜索的选择器 */}
                   <div style={{ marginBottom: 16 }}>
-                    <div style={{ color: '#374151', fontSize: 14, fontWeight: 500, marginBottom: 8 }}>国家 / 地区</div>
+                    <div style={{ color: '#374151', fontSize: 14, fontWeight: 500, marginBottom: 8 }}>{t.countryRegion}</div>
                     <Select
                       showSearch
-                      placeholder="选择国家/地区"
+                      placeholder={t.selectCountry}
                       value={selectedCountryCode}
                       onChange={(value) => {
                         setSelectedCountryCode(value)
@@ -655,7 +661,7 @@ const LoginPage: React.FC = () => {
                         (option?.label ?? '').toLowerCase().includes(input.toLowerCase()) ||
                         (option?.value ?? '').toLowerCase().includes(input.toLowerCase())
                       }
-                      options={flattenedCountries}
+                      options={countryOptions}
                       style={{ width: '100%' }}
                     />
                   </div>
