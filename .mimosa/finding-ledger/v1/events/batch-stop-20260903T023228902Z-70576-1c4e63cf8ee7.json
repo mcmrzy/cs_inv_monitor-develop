@@ -1,0 +1,36 @@
+{
+  "schemaVersion": "mimosa-finding-ledger-batch/v1",
+  "batchId": "stop-20260903T023228902Z-70576-1c4e63cf8ee7",
+  "runId": "20260903T023228902Z-70576-1c4e63cf8ee7",
+  "runStatus": "completed",
+  "coverage": {
+    "status": "complete",
+    "reasons": []
+  },
+  "source": {
+    "component": "zcode-hook",
+    "operationId": "Stop"
+  },
+  "revision": "c5f4a4dce3194f6c5c5599caa2d8858acc20cb42",
+  "diffHash": "2d9d01ab785cb438e650a33dd93b99d37a278f5e03b8bb6afe3945828118c6ef",
+  "rulesVersion": "unavailable",
+  "sessionHash": "45526b3b79b92833362441e42093aa7510a54686d6ee0e5e2be9b9d367501ac3",
+  "reportRef": ".mimosa/reports/task-review-sess_f8c9ca21-a4a2-4e38-a22a-5a571d5e8482-20260903T023228902Z-70576-1c4e63cf8ee7.json",
+  "events": [],
+  "observedFindingIds": [
+    "mimosa-dbad4cb79a4782807e5c6a45"
+  ],
+  "verifiedFiles": [
+    {
+      "file": "inv-admin-frontend/src/utils/countryEnNames.ts",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "inv-admin-frontend/src/pages/login/index.tsx",
+      "direct": "complete",
+      "projectContext": "partial"
+    }
+  ],
+  "recordedAt": "2026-09-03T02:32:29.164Z"
+}

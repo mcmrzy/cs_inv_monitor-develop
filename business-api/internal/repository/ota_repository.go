@@ -311,7 +311,7 @@ func (r *OTARepository) GetAllUpgradeHistory(ctx context.Context, sns []string, 
 		SELECT id, device_sn, firmware_id, firmware_version, COALESCE(target_chip,''),
 		       COALESCE(old_version,''), status, COALESCE(progress,0), COALESCE(error_message,''),
 		       COALESCE(retry_count,0), pushed_by, started_at, completed_at, created_at, updated_at,
-		       COALESCE(source,''), upgrade_package_id
+		       COALESCE(source,''), upgrade_package_id, COALESCE(task_id, 0)
 		FROM device_upgrades
 	`
 	args := []interface{}{}
@@ -337,13 +337,17 @@ func (r *OTARepository) GetAllUpgradeHistory(ctx context.Context, sns []string, 
 	for rows.Next() {
 		var du model.DeviceUpgrade
 		var pkgID *int64
+		var taskID int64
 		if err := rows.Scan(&du.ID, &du.DeviceSN, &du.FirmwareID, &du.FirmwareVersion, &du.TargetChip,
 			&du.OldVersion, &du.Status, &du.Progress, &du.ErrorMessage,
 			&du.RetryCount, &du.PushedBy, &du.StartedAt, &du.CompletedAt, &du.CreatedAt, &du.UpdatedAt,
-			&du.Source, &pkgID); err != nil {
+			&du.Source, &pkgID, &taskID); err != nil {
 			continue
 		}
 		du.UpgradePackageID = pkgID
+		if taskID > 0 {
+			du.TaskID = &taskID
+		}
 		result = append(result, du)
 	}
 	return result, total, nil
@@ -427,34 +431,45 @@ func (r *OTARepository) GetDeviceUpgradeBySN(ctx context.Context, sn string) (*m
 	return &du, nil
 }
 
-// GetDeviceUpgradeBySNAndTaskID 获取设备在指定升级任务中的记录。
-// 同一设备可能存在多条历史任务，详情页必须按 task_id 精确查询，避免串单。
-func (r *OTARepository) GetDeviceUpgradeBySNAndTaskID(ctx context.Context, sn string, taskID int64) (*model.DeviceUpgrade, error) {
-	var du model.DeviceUpgrade
-	var storedTaskID, pkgID int64
-	err := r.db.QueryRow(ctx, `
+// ListDeviceUpgradesBySNAndTaskID 获取设备在指定任务中的全部芯片升级记录。
+// 升级包可能包含多个芯片，调用方必须基于全部记录计算任务级状态。
+func (r *OTARepository) ListDeviceUpgradesBySNAndTaskID(ctx context.Context, sn string, taskID int64) ([]model.DeviceUpgrade, error) {
+	rows, err := r.db.Query(ctx, `
 		SELECT id, device_sn, firmware_id, firmware_version, COALESCE(target_chip,''),
 		       COALESCE(old_version,''), status, COALESCE(progress,0), COALESCE(error_message,''),
 		       COALESCE(retry_count,0), pushed_by, COALESCE(source,'admin'), started_at, completed_at, created_at, updated_at,
 		       COALESCE(task_id, 0), COALESCE(upgrade_package_id, 0)
 		FROM device_upgrades
 		WHERE device_sn = $1 AND task_id = $2
-		ORDER BY updated_at DESC
-		LIMIT 1
-	`, sn, taskID).Scan(&du.ID, &du.DeviceSN, &du.FirmwareID, &du.FirmwareVersion, &du.TargetChip,
-		&du.OldVersion, &du.Status, &du.Progress, &du.ErrorMessage,
-		&du.RetryCount, &du.PushedBy, &du.Source, &du.StartedAt, &du.CompletedAt, &du.CreatedAt, &du.UpdatedAt,
-		&storedTaskID, &pkgID)
+		ORDER BY target_chip, id
+	`, sn, taskID)
 	if err != nil {
 		return nil, err
 	}
-	if storedTaskID > 0 {
-		du.TaskID = &storedTaskID
+	defer rows.Close()
+
+	result := make([]model.DeviceUpgrade, 0)
+	for rows.Next() {
+		var du model.DeviceUpgrade
+		var storedTaskID, pkgID int64
+		if err := rows.Scan(&du.ID, &du.DeviceSN, &du.FirmwareID, &du.FirmwareVersion, &du.TargetChip,
+			&du.OldVersion, &du.Status, &du.Progress, &du.ErrorMessage,
+			&du.RetryCount, &du.PushedBy, &du.Source, &du.StartedAt, &du.CompletedAt, &du.CreatedAt, &du.UpdatedAt,
+			&storedTaskID, &pkgID); err != nil {
+			return nil, err
+		}
+		if storedTaskID > 0 {
+			du.TaskID = &storedTaskID
+		}
+		if pkgID > 0 {
+			du.UpgradePackageID = &pkgID
+		}
+		result = append(result, du)
 	}
-	if pkgID > 0 {
-		du.UpgradePackageID = &pkgID
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
-	return &du, nil
+	return result, nil
 }
 
 // GetDeviceOTAHistory 兼容旧接口，查询 device_upgrades

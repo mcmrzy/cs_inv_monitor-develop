@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
@@ -262,6 +263,7 @@ class UpgradeHistoryItem {
   final String errorMessage;
   final String source; // admin/app/local
   final int? upgradePackageId;
+  final int? taskId;
   final DateTime createdAt;
 
   const UpgradeHistoryItem({
@@ -273,6 +275,7 @@ class UpgradeHistoryItem {
     required this.errorMessage,
     required this.source,
     required this.upgradePackageId,
+    required this.taskId,
     required this.createdAt,
   });
 
@@ -286,6 +289,7 @@ class UpgradeHistoryItem {
       errorMessage: json['error_message'] as String? ?? '',
       source: json['source'] as String? ?? '',
       upgradePackageId: (json['upgrade_package_id'] as num?)?.toInt(),
+      taskId: (json['task_id'] as num?)?.toInt(),
       createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ??
           DateTime.now(),
     );
@@ -317,6 +321,15 @@ class _UpgradeTile extends StatelessWidget {
         : 'v${item.firmwareVersion}';
     final showRollback = item.canRollback;
     return ListTile(
+      onTap: item.taskId != null && item.taskId! > 0 && item.sn.isNotEmpty
+          ? () {
+              final route = Uri(
+                path: '/ota/${item.sn}/detail',
+                queryParameters: {'task_id': '${item.taskId}'},
+              );
+              context.push(route.toString());
+            }
+          : null,
       leading: Icon(
         Icons.system_update_rounded,
         size: 22.sp,

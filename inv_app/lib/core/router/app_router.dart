@@ -465,9 +465,13 @@ class AppRouter {
         pageBuilder: (context, state) {
           final sn = state.pathParameters['sn']!;
 
-          final taskId = parseNonNegativeRouteInt(
+          final taskId = parsePositiveRouteInt(
             state.uri.queryParameters['task_id'],
           );
+
+          if (taskId == null) {
+            return _invalidRouteParameterPage(state, 'task_id');
+          }
 
           return _slidePage(
             state,
