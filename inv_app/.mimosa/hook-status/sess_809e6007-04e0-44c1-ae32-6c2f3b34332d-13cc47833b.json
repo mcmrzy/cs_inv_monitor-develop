@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "mimosa-hook-status/v1",
+  "recordedAt": "2026-09-02T06:12:06.531Z",
+  "sessionId": "sess_809e6007-04e0-44c1-ae32-6c2f3b34332d",
+  "event": "PostToolUse",
+  "toolName": "Edit",
+  "file": "lib/features/ota/data/datasources/ble_communication_service.dart",
+  "outcome": "clear",
+  "coverage": "complete",
+  "findingCount": 0,
+  "durationMs": 5,
+  "hostState": "hook_complete",
+  "reportHint": ".mimosa/reports/"
+}

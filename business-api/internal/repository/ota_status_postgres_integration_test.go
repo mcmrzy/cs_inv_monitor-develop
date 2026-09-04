@@ -4,72 +4,71 @@ package repository
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// TestGetDeviceUpgradeBySNAndTaskIDSelectsRequestedTask protects the App OTA
+// TestListDeviceUpgradesBySNAndTaskIDSelectsAllChipsForRequestedTask protects the App OTA
 // detail contract: task_id identifies an upgrade_tasks row, so opening an older
 // task must not silently display the device's most recently updated task.
-func TestGetDeviceUpgradeBySNAndTaskIDSelectsRequestedTask(t *testing.T) {
+func TestListDeviceUpgradesBySNAndTaskIDSelectsAllChipsForRequestedTask(t *testing.T) {
 	pool, cleanup := setupCommandTestDB(t)
 	defer cleanup()
 	ctx := context.Background()
 
 	const (
-		deviceSN     = "OTA-STATUS-SN-001"
-		otherSN      = "OTA-STATUS-SN-002"
+		deviceSN      = "OTA-STATUS-SN-001"
+		otherSN       = "OTA-STATUS-SN-002"
 		requestedTask = int64(980001)
 		latestTask    = int64(980002)
 	)
 
 	seedOTAStatusTask(t, pool, requestedTask, "V1.0.0", "completed")
 	seedOTAStatusTask(t, pool, latestTask, "V2.0.0", "running")
-	seedOTAStatusUpgrade(t, pool, deviceSN, 981001, requestedTask, "1.0.0", "success", 100, time.Now().Add(-time.Hour))
-	seedOTAStatusUpgrade(t, pool, deviceSN, 981002, latestTask, "2.0.0", "upgrading", 73, time.Now())
-	seedOTAStatusUpgrade(t, pool, otherSN, 981003, requestedTask, "1.0.1", "failed", 12, time.Now().Add(time.Minute))
+	seedOTAStatusUpgrade(t, pool, deviceSN, 981001, requestedTask, "arm", "1.0.0", "success", 100, time.Now().Add(-time.Hour))
+	seedOTAStatusUpgrade(t, pool, deviceSN, 981004, requestedTask, "esp", "1.0.1", "pending", 0, time.Now().Add(-time.Minute))
+	seedOTAStatusUpgrade(t, pool, deviceSN, 981002, latestTask, "arm", "2.0.0", "upgrading", 73, time.Now())
+	seedOTAStatusUpgrade(t, pool, otherSN, 981003, requestedTask, "arm", "1.0.2", "failed", 12, time.Now().Add(time.Minute))
 
 	repo := NewOTARepository(pool)
-	got, err := repo.GetDeviceUpgradeBySNAndTaskID(ctx, deviceSN, requestedTask)
+	got, err := repo.ListDeviceUpgradesBySNAndTaskID(ctx, deviceSN, requestedTask)
 	require.NoError(t, err)
-	require.NotNil(t, got)
-	assert.Equal(t, deviceSN, got.DeviceSN)
-	assert.Equal(t, "1.0.0", got.FirmwareVersion)
-	assert.Equal(t, "success", got.Status)
-	assert.Equal(t, 100, got.Progress)
-	require.NotNil(t, got.TaskID)
-	assert.Equal(t, requestedTask, *got.TaskID)
+	require.Len(t, got, 2)
+	assert.Equal(t, deviceSN, got[0].DeviceSN)
+	assert.Equal(t, deviceSN, got[1].DeviceSN)
+	for _, item := range got {
+		require.NotNil(t, item.TaskID)
+		assert.Equal(t, requestedTask, *item.TaskID)
+	}
 }
 
-func TestGetDeviceUpgradeBySNAndTaskIDDoesNotCrossDeviceBoundary(t *testing.T) {
+func TestListDeviceUpgradesBySNAndTaskIDDoesNotCrossDeviceBoundary(t *testing.T) {
 	pool, cleanup := setupCommandTestDB(t)
 	defer cleanup()
 	ctx := context.Background()
 
 	const taskID = int64(980101)
 	seedOTAStatusTask(t, pool, taskID, "V3.0.0", "running")
-	seedOTAStatusUpgrade(t, pool, "OTA-STATUS-OWNER", 981101, taskID, "3.0.0", "upgrading", 55, time.Now())
+	seedOTAStatusUpgrade(t, pool, "OTA-STATUS-OWNER", 981101, taskID, "arm", "3.0.0", "upgrading", 55, time.Now())
 
 	repo := NewOTARepository(pool)
-	got, err := repo.GetDeviceUpgradeBySNAndTaskID(ctx, "OTA-STATUS-STRANGER", taskID)
-	assert.Nil(t, got)
-	assert.True(t, errors.Is(err, pgx.ErrNoRows), "unexpected error: %v", err)
+	got, err := repo.ListDeviceUpgradesBySNAndTaskID(ctx, "OTA-STATUS-STRANGER", taskID)
+	require.NoError(t, err)
+	assert.Empty(t, got)
 }
 
-func TestGetDeviceUpgradeBySNAndTaskIDReturnsNoRowsForUnknownTask(t *testing.T) {
+func TestListDeviceUpgradesBySNAndTaskIDReturnsEmptyForUnknownTask(t *testing.T) {
 	pool, cleanup := setupCommandTestDB(t)
 	defer cleanup()
 
 	repo := NewOTARepository(pool)
-	got, err := repo.GetDeviceUpgradeBySNAndTaskID(context.Background(), "OTA-STATUS-SN-404", 989999)
-	assert.Nil(t, got)
-	assert.True(t, errors.Is(err, pgx.ErrNoRows), "unexpected error: %v", err)
+	got, err := repo.ListDeviceUpgradesBySNAndTaskID(context.Background(), "OTA-STATUS-SN-404", 989999)
+	require.NoError(t, err)
+	assert.Empty(t, got)
 }
 
 func seedOTAStatusTask(t *testing.T, pool *pgxpool.Pool, taskID int64, targetVersion, status string) {
@@ -82,18 +81,18 @@ func seedOTAStatusTask(t *testing.T, pool *pgxpool.Pool, taskID int64, targetVer
 	require.NoError(t, err)
 }
 
-func seedOTAStatusUpgrade(t *testing.T, pool *pgxpool.Pool, deviceSN string, firmwareID, taskID int64, version, status string, progress int, updatedAt time.Time) {
+func seedOTAStatusUpgrade(t *testing.T, pool *pgxpool.Pool, deviceSN string, firmwareID, taskID int64, targetChip, version, status string, progress int, updatedAt time.Time) {
 	t.Helper()
 	_, err := pool.Exec(context.Background(), `
 		INSERT INTO firmware_versions (id, model, version, file_url, target_chip, main_version)
-		VALUES ($1, 'CS-INV-TEST', $2, $3, 'arm', $4)
-	`, firmwareID, version, "/firmware/"+version+".bin", "V"+version)
+		VALUES ($1, 'CS-INV-TEST', $2, $3, $4, $5)
+	`, firmwareID, version, "/firmware/"+version+".bin", targetChip, "V"+version)
 	require.NoError(t, err)
 
 	_, err = pool.Exec(context.Background(), `
 		INSERT INTO device_upgrades
 			(device_sn, firmware_id, firmware_version, target_chip, status, progress, task_id, source, updated_at)
-		VALUES ($1, $2, $3, 'arm', $4, $5, $6, 'app', $7)
-	`, deviceSN, firmwareID, version, status, progress, taskID, updatedAt)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, 'app', $8)
+	`, deviceSN, firmwareID, version, targetChip, status, progress, taskID, updatedAt)
 	require.NoError(t, err)
 }

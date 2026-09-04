@@ -1,0 +1,80 @@
+{
+  "schemaVersion": "mimosa-finding-ledger-batch/v1",
+  "batchId": "stop-20260903T124817858Z-90724-023087fc2bc1",
+  "runId": "20260903T124817858Z-90724-023087fc2bc1",
+  "runStatus": "completed",
+  "coverage": {
+    "status": "complete",
+    "reasons": [
+      {
+        "code": "baseline_partial",
+        "stage": "baseline",
+        "target": ".",
+        "detail": "baseline capture had enumeration or snapshot errors",
+        "affectsCompletion": false
+      }
+    ]
+  },
+  "source": {
+    "component": "zcode-hook",
+    "operationId": "Stop"
+  },
+  "revision": "a08667da5d825ba8f082611158525ec6d3465d6c",
+  "diffHash": "0a5a925c3384d1414fd68882cee8a282e8d65f09af4764012dea5ae0141676bd",
+  "rulesVersion": "unavailable",
+  "sessionHash": "45526b3b79b92833362441e42093aa7510a54686d6ee0e5e2be9b9d367501ac3",
+  "reportRef": ".mimosa/reports/task-review-sess_f8c9ca21-a4a2-4e38-a22a-5a571d5e8482-20260903T124817858Z-90724-023087fc2bc1.json",
+  "events": [],
+  "observedFindingIds": [
+    "mimosa-a8e0dd3c16f155a0fc01c03a",
+    "mimosa-d78c4752bfa61d5fa0b4b8da",
+    "mimosa-cfc316332fee033292759ec3",
+    "mimosa-413a03bc94bbca5eb6d78b9f",
+    "mimosa-0f56c3a75e6cd94eaeca8538",
+    "mimosa-395821ef61b14d95fb67b640",
+    "mimosa-73d7085340d9d0c146d966fb",
+    "mimosa-d3a5e174813091bf4ff568f7",
+    "mimosa-f9a8512d31e60d0336e70d3e",
+    "mimosa-6cbbe55e36d143100d21daa2",
+    "mimosa-3fbedc5ad5b7653710950dd2",
+    "mimosa-eaef687efd6596e89018bdc3",
+    "mimosa-bcb9cc051dbb2d11ceb047ae",
+    "mimosa-854d05a0ba51faadd0ae38e7",
+    "mimosa-b732f62694c05ad529e755fd",
+    "mimosa-65dfed1cc929c192ea5e6709",
+    "mimosa-6ed2660d21ba76988286045e"
+  ],
+  "verifiedFiles": [
+    {
+      "file": "internal/repository/device_recreate_postgres_integration_test.go",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "internal/handler/invitation_handler_test.go",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "cmd/channel_migrate/main_test.go",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "internal/handler/ota_handler.go",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "internal/middleware/cache_control.go",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "cmd/main.go",
+      "direct": "complete",
+      "projectContext": "partial"
+    }
+  ],
+  "recordedAt": "2026-09-03T12:48:18.168Z"
+}

@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect } from 'react'
 import lazyWithRetry from '@/utils/lazyWithRetry'
 import { ConfigProvider, App as AntApp, Spin } from 'antd'
 import zhCN from 'antd/es/locale/zh_CN'
@@ -8,7 +8,10 @@ import dayjs from 'dayjs'
 import 'dayjs/locale/zh-cn'
 import MainLayout from '@/layouts/MainLayout'
 import ProtectedRoute from '@/components/ProtectedRoute'
+import PermissionRoute from '@/components/PermissionRoute'
+import OrganizationRoute from '@/components/OrganizationRoute'
 import ErrorBoundary from '@/components/ErrorBoundary'
+import { getRoutePermissions, selectDefaultRoute } from '@/router/routeAccess'
 import useAuthStore from '@/stores/authStore'
 import useLocaleStore from '@/stores/localeStore'
 import useTimezoneStore from '@/stores/timezoneStore'
@@ -39,15 +42,11 @@ const DownloadPage = lazyWithRetry(() => import('@/pages/download'))
 
 const RoleRedirect: React.FC = () => {
   const user = useAuthStore((s) => s.user)
-  const hasPermission = useAuthStore((s) => s.hasPermission)
-  // Non-admin users without dashboard permission go to devices page
-  if (!user?.isSystemAdmin && !hasPermission('dashboard:view') && !hasPermission('admin:manage')) {
-    return <Navigate to="/devices" replace />
-  }
-  return <Navigate to="/dashboard" replace />
+  const hasAnyPermission = useAuthStore((s) => s.hasAnyPermission)
+  return <Navigate to={selectDefaultRoute(user?.isSystemAdmin === true, hasAnyPermission)} replace />
 }
 
-const AppRoutes: React.FC = () => (
+export const AppRoutes: React.FC = () => (
   <Routes>
     <Route path="/login" element={<LoginPage />} />
     <Route path="/invite/:token" element={<InviteAcceptPage />} />
@@ -65,7 +64,9 @@ const AppRoutes: React.FC = () => (
       path="/big-screen"
       element={
         <ProtectedRoute>
-          <BigScreenPage />
+          <PermissionRoute permissions={getRoutePermissions('/big-screen')}>
+            <BigScreenPage />
+          </PermissionRoute>
         </ProtectedRoute>
       }
     />
@@ -74,7 +75,9 @@ const AppRoutes: React.FC = () => (
       path="/devices/:sn/detail"
       element={
         <ProtectedRoute>
-          <DeviceDetailPage />
+          <PermissionRoute permissions={getRoutePermissions('/devices/:sn/detail')}>
+            <DeviceDetailPage />
+          </PermissionRoute>
         </ProtectedRoute>
       }
     />
@@ -85,26 +88,26 @@ const AppRoutes: React.FC = () => (
         </ProtectedRoute>
       }
     >
-      <Route path="/dashboard" element={<DashboardPage />} />
-      <Route path="/devices" element={<DevicesPage />} />
-      <Route path="/ota" element={<OtaPage />} />
-      <Route path="/alerts" element={<AlertsPage />} />
-      <Route path="/work-orders" element={<WorkOrdersPage />} />
-      <Route path="/users" element={<UsersPage />} />
-      <Route path="/organizations" element={<AdminPage />} />
+      <Route path="/dashboard" element={<PermissionRoute permissions={getRoutePermissions('/dashboard')}><DashboardPage /></PermissionRoute>} />
+      <Route path="/devices" element={<PermissionRoute permissions={getRoutePermissions('/devices')}><DevicesPage /></PermissionRoute>} />
+      <Route path="/ota" element={<PermissionRoute permissions={getRoutePermissions('/ota')}><OtaPage /></PermissionRoute>} />
+      <Route path="/alerts" element={<PermissionRoute permissions={getRoutePermissions('/alerts')}><AlertsPage /></PermissionRoute>} />
+      <Route path="/work-orders" element={<PermissionRoute permissions={getRoutePermissions('/work-orders')}><WorkOrdersPage /></PermissionRoute>} />
+      <Route path="/users" element={<PermissionRoute permissions={getRoutePermissions('/users')}><UsersPage /></PermissionRoute>} />
+      <Route path="/organizations" element={<OrganizationRoute><AdminPage /></OrganizationRoute>} />
       {/* 旧路径兼容：/admin → /organizations */}
       <Route path="/admin" element={<Navigate to="/organizations" replace />} />
-      <Route path="/parallel" element={<ParallelPage />} />
-      <Route path="/stations" element={<StationsPage />} />
-      <Route path="/stations/:id" element={<StationDetailPage />} />
-      <Route path="/models" element={<ModelsPage />} />
-      <Route path="/monitoring" element={<MonitoringPage />} />
-      <Route path="/monitoring/:id" element={<StationDetailPage />} />
-      <Route path="/remote-settings" element={<RemoteSettingsPage />} />
-      <Route path="/batch-settings" element={<BatchSettingsPage />} />
-      <Route path="/operation-logs" element={<OperationLogsPage />} />
-      <Route path="/system/system-monitor" element={<SystemMonitorPage />} />
-      <Route path="/system/system-config" element={<SystemConfigPage />} />
+      <Route path="/parallel" element={<PermissionRoute permissions={getRoutePermissions('/parallel')}><ParallelPage /></PermissionRoute>} />
+      <Route path="/stations" element={<PermissionRoute permissions={getRoutePermissions('/stations')}><StationsPage /></PermissionRoute>} />
+      <Route path="/stations/:id" element={<PermissionRoute permissions={getRoutePermissions('/stations/:id')}><StationDetailPage /></PermissionRoute>} />
+      <Route path="/models" element={<PermissionRoute permissions={getRoutePermissions('/models')}><ModelsPage /></PermissionRoute>} />
+      <Route path="/monitoring" element={<PermissionRoute permissions={getRoutePermissions('/monitoring')}><MonitoringPage /></PermissionRoute>} />
+      <Route path="/monitoring/:id" element={<PermissionRoute permissions={getRoutePermissions('/monitoring/:id')}><StationDetailPage /></PermissionRoute>} />
+      <Route path="/remote-settings" element={<PermissionRoute permissions={getRoutePermissions('/remote-settings')}><RemoteSettingsPage /></PermissionRoute>} />
+      <Route path="/batch-settings" element={<PermissionRoute permissions={getRoutePermissions('/batch-settings')}><BatchSettingsPage /></PermissionRoute>} />
+      <Route path="/operation-logs" element={<PermissionRoute permissions={getRoutePermissions('/operation-logs')}><OperationLogsPage /></PermissionRoute>} />
+      <Route path="/system/system-monitor" element={<PermissionRoute permissions={getRoutePermissions('/system/system-monitor')}><SystemMonitorPage /></PermissionRoute>} />
+      <Route path="/system/system-config" element={<PermissionRoute permissions={getRoutePermissions('/system/system-config')}><SystemConfigPage /></PermissionRoute>} />
     </Route>
   </Routes>
 )
