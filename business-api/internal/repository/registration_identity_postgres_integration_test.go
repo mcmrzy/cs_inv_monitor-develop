@@ -68,9 +68,12 @@ func execMigrationFile(t *testing.T, pool *pgxpool.Pool, name string) {
 }
 
 // assertCustomerIdentity 断言用户拥有完整的个人 customer 组织身份：
-// customer 组织（code 标记 + 挂 manufacturer 下）+ 活跃 membership +
-// customer 角色分配 + RoleDefaultPermissions["customer"] 全量授权。
-func assertCustomerIdentity(t *testing.T, pool *pgxpool.Pool, userID int64) {
+// customer 组织（code 标记）+ 活跃 membership + customer 角色分配 +
+// RoleDefaultPermissions["customer"] 全量授权。
+// expectedParent：现行注册路径（CreateUserWithOrgIdentity）传 userID——
+// 每用户自建 tenant-root（ensure_tenant_root(user_id)）后个人组织挂其下；
+// 迁移 107 回填路径传被回填时代实际挂载的 manufacturer 根组织 id。
+func assertCustomerIdentity(t *testing.T, pool *pgxpool.Pool, userID, expectedParent int64) {
 	t.Helper()
 	ctx := context.Background()
 
@@ -89,7 +92,7 @@ func assertCustomerIdentity(t *testing.T, pool *pgxpool.Pool, userID int64) {
 		SELECT code, parent_id FROM organizations WHERE id = $1
 	`, orgID).Scan(&orgCode, &parentID))
 	assert.Equal(t, fmt.Sprintf("personal-%d", userID), orgCode, "personal org must be tagged with code")
-	assert.Equal(t, int64(9100), parentID, "personal org must hang under the manufacturer root")
+	assert.Equal(t, expectedParent, parentID, "personal org parent must match the expected tenant anchor")
 
 	var roleCode, roleStatus string
 	require.NoError(t, pool.QueryRow(ctx, `
@@ -112,9 +115,9 @@ func assertCustomerIdentity(t *testing.T, pool *pgxpool.Pool, userID int64) {
 	var closureDepth int
 	require.NoError(t, pool.QueryRow(ctx, `
 		SELECT depth FROM organization_closure
-		WHERE root_tenant_id = 9100 AND ancestor_id = 9100 AND descendant_id = $1
-	`, orgID).Scan(&closureDepth))
-	assert.Equal(t, 1, closureDepth, "personal org must be a direct child of manufacturer root")
+		WHERE root_tenant_id = $1 AND ancestor_id = $1 AND descendant_id = $2
+	`, expectedParent, orgID).Scan(&closureDepth))
+	assert.Equal(t, 1, closureDepth, "personal org must be a direct child of the tenant anchor")
 }
 
 func TestCreateUserWithOrgIdentityGrantsCustomerBaseline(t *testing.T) {
@@ -130,7 +133,7 @@ func TestCreateUserWithOrgIdentityGrantsCustomerBaseline(t *testing.T) {
 	}
 	require.NoError(t, repo.CreateUserWithOrgIdentity(context.Background(), user))
 	assert.NotZero(t, user.ID)
-	assertCustomerIdentity(t, pool, user.ID)
+	assertCustomerIdentity(t, pool, user.ID, user.ID)
 
 	// 权限码与登录链路（GetUserPermissionCodes）一致
 	codes, err := repo.GetUserPermissionCodes(context.Background(), user.ID)
@@ -194,8 +197,8 @@ func TestMigration107BackfillsOrphanUsers(t *testing.T) {
 	execMigrationFile(t, pool, "107_backfill_personal_orgs_for_users.up.sql")
 	execMigrationFile(t, pool, "108_grant_customer_devices_control.up.sql")
 
-	assertCustomerIdentity(t, pool, 9201)
-	assertCustomerIdentity(t, pool, 9202) // 空昵称用户兜底为 User_<id>
+	assertCustomerIdentity(t, pool, 9201, 9100)
+	assertCustomerIdentity(t, pool, 9202, 9100) // 空昵称用户兜底为 User_<id>
 
 	// 已有身份的用户保持原组织，不被 backfill 改写
 	var existingOrgID int64
@@ -279,7 +282,8 @@ func TestResolveSessionContextHandlesNullPhone(t *testing.T) {
 	resolved, err := authRepo.ResolveDefaultSessionContext(ctx, user.ID)
 	require.NoError(t, err, "default session context must resolve for NULL-phone users")
 	assert.True(t, resolved.Valid())
-	assert.Equal(t, int64(9100), resolved.Actor.RootTenantID)
+	// 每用户自建根租户：根租户 id 即 user.ID
+	assert.Equal(t, user.ID, resolved.Actor.RootTenantID)
 
 	explicit, err := authRepo.ResolveAuthorizationSessionContext(ctx, user.ID, resolved.Actor.OrganizationID)
 	require.NoError(t, err, "explicit session context must resolve for NULL-phone users")
