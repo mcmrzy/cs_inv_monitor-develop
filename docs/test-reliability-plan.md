@@ -98,3 +98,23 @@
 - **存量 lint 债**：golangci-lint 全量开必爆，坚持 `new-from-rev` 增量策略。
 - **schema squash** 涉及 `database/` 敏感区：按 AGENTS.md 要求迁移文件只增不改，squash 产物走新增目录并配回滚说明。
 - 分支保护（P0-1）是 GitHub 仓库设置，代码侧无法自证，需要仓库管理员在 Settings → Branches 落地。
+
+---
+
+## 六、执行进度（随批次更新）
+
+### 批次 1（77319e020）：P0 全部 + P1-8/9/10
+详见提交说明。前端 298 用例全绿；CI timeout/concurrency/golangci-lint/三端覆盖率 artifact/healthcheck/E2E storageState 解耦落地；修复存量红色用例 App.test.tsx。
+
+### 批次 2（da422c5fc）：P1-7 首批
+新增 10 个真库集成测试（设备控制 9 步链 ×6、OTA 生命周期 ×2、超管会话上下文 ×2）；修复 3 个早已失效的存量集成测试（authorization / registration_identity——CI integration-test job 实际为红的根因）。repository+service 集成覆盖率 7.8% → 12.0%。
+
+### 批次 3（本批）：P1-11 核心 + P1-12 校准
+- **新增 `TestActiveMigrationsReplayOnSquashBaseline`**（tests/integration）：把"squash 基线(0..95) + 活跃迁移(096..110) 启动回放"的架构契约变成显式测试——基线不得提前登记 096+、回放必须全部成功、尾部签名对象（config_domain/app_versions/device_key_hash/member_transfer_requests）逐项断言。不再依赖容器启动副作用来暴露基线/迁移冲突。
+- **schema.sql 死代码清理**：移除 device_model_commands 的第二处重复定义（IF NOT EXISTS 永不生效，误导维护者），留注释指向正式定义与能力列来源。基线加载由新增契约测试守护。
+- **P1-12 校准**：渠道契约套件（含 PowerShell 检查器 3 个测试）本地验证全绿；CI 的 ubuntu-latest runner 预装 pwsh，实际不存在 Skip 问题。Go 重写检查器（508 行）性价比低，**降级为 P3 备选**；kin-openapi 全量路由校验保留在 P1-12 待办中。
+- 本地全量验证：root integration 模块、business-api 集成+单测、契约套件全部通过。
+
+### 架构事实记录（防再误判）
+- schema.sql = 迁移 0..95 的 squash 基线 + schema_migrations 登记（77 为历史空号）；`database/migrations/` 活跃目录 = 096..110 真正回放尾部 + 001/018/074..095 已登记死重文件；001..095 历史文件在 `database/migrations.archive/`。
+- 权限码双格式：命令 `permission_code` 用下划线（`devices_control`，按最后一个下划线拆 resource/action），RBAC 授权码用冒号（`devices:control`）。
