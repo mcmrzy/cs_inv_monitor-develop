@@ -256,6 +256,8 @@ jobs:
             docker image prune -f
 
             # ---------- 健康检查函数 ----------
+            # docker-compose.prod.yml 内全部 9 个服务均定义了 healthcheck，
+            # 此处逐一校验容器健康态（与 up --wait 的判定一致），另加宿主侧网关端到端探针
             health_check() {
               echo "=== 服务状态 ==="
               docker compose -f docker-compose.prod.yml --env-file .env.prod ps
@@ -263,39 +265,21 @@ jobs:
               sleep 10
 
               local failed=0
+              local c
+
+              for c in inv-postgres inv-redis inv-kafka mqtt-kafka-bridge device-communication business-api api-gateway inv-admin-frontend inv-nginx; do
+                if docker inspect -f "{{.State.Health.Status}}" "$c" 2>/dev/null | grep -q healthy; then
+                  echo "✅ $c 正常"
+                else
+                  echo "❌ $c 异常"
+                  failed=1
+                fi
+              done
 
               if curl -sf http://127.0.0.1/health > /dev/null 2>&1; then
-                echo "✅ API Gateway 正常"
+                echo "✅ API Gateway HTTP /health 正常"
               else
-                echo "❌ API Gateway 异常"
-                failed=1
-              fi
-
-              if docker ps --format "{{.Names}}" | grep -q inv-admin-frontend && docker inspect -f "{{.State.Running}}" inv-admin-frontend | grep -q true; then
-                echo "✅ Admin Frontend 正常"
-              else
-                echo "❌ Admin Frontend 异常"
-                failed=1
-              fi
-
-              if docker ps --format "{{.Names}}" | grep -q inv-nginx && docker inspect -f "{{.State.Running}}" inv-nginx | grep -q true; then
-                echo "✅ Nginx 正常"
-              else
-                echo "❌ Nginx 异常"
-                failed=1
-              fi
-
-              if docker inspect -f "{{.State.Health.Status}}" inv-kafka 2>/dev/null | grep -q healthy; then
-                echo "✅ Kafka 正常"
-              else
-                echo "❌ Kafka 异常"
-                failed=1
-              fi
-
-              if docker inspect -f "{{.State.Health.Status}}" mqtt-kafka-bridge 2>/dev/null | grep -q healthy; then
-                echo "✅ MQTT-Kafka Bridge 正常"
-              else
-                echo "❌ MQTT-Kafka Bridge 异常"
+                echo "❌ API Gateway HTTP /health 异常"
                 failed=1
               fi
 
