@@ -1,4 +1,10 @@
+import path from 'node:path'
 import { defineConfig } from '@playwright/test'
+
+// storageState 由 setup 项目写入仓库根 e2e_evidence/（与 global-setup 的账号
+// 文件同目录，见 e2e/helpers.ts 的 STORAGE_STATE）。Playwright 以
+// inv-admin-frontend 为 cwd 运行，故从 cwd 向上一级解析。
+const STORAGE_STATE_PATH = path.resolve(process.cwd(), '..', 'e2e_evidence', 'auth-state.json')
 
 /**
  * Playwright E2E configuration for the admin frontend.
@@ -41,8 +47,19 @@ export default defineConfig({
     },
     {
       name: 'chromium',
-      testIgnore: /auth\.setup\.ts/,
-      use: { storageState: './e2e_evidence/auth-state.json' },
+      testIgnore: [/auth\.setup\.ts/, /visual\.spec\.ts/],
+      use: { storageState: STORAGE_STATE_PATH },
+      dependencies: ['setup'],
+    },
+    {
+      // 视觉回归项目：仅在本地生成/校验基线（截图含平台字体渲染，跨平台必炸）。
+      // CI 只跑 setup+chromium 功能项目；Linux 基线种子待专门的 CI 任务补齐。
+      name: 'visual',
+      testMatch: /visual\.spec\.ts/,
+      use: {
+        storageState: STORAGE_STATE_PATH,
+        viewport: { width: 1440, height: 900 },
+      },
       dependencies: ['setup'],
     },
   ],

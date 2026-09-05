@@ -22,10 +22,15 @@ import {
  */
 const acc = loadAccount()
 
-test('未登录访问受保护路由重定向到 /login', async ({ page }) => {
-  await page.goto('/devices')
-  await expect(page).toHaveURL(/\/login/, { timeout: 15_000 })
-  await page.screenshot({ path: evidencePath('e2e-redirect-login.png') })
+test.describe('未登录访问', () => {
+  // 项目级 storageState 会注入登录态；未登录行为必须在空会话下验证
+  test.use({ storageState: { cookies: [], origins: [] } })
+
+  test('未登录访问受保护路由重定向到 /login', async ({ page }) => {
+    await page.goto('/devices')
+    await expect(page).toHaveURL(/\/login/, { timeout: 15_000 })
+    await page.screenshot({ path: evidencePath('e2e-redirect-login.png') })
+  })
 })
 
 test('有效凭据登录成功进入 /dashboard', async ({ page }) => {

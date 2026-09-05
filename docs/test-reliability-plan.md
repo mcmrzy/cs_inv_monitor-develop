@@ -115,6 +115,14 @@
 - **P1-12 校准**：渠道契约套件（含 PowerShell 检查器 3 个测试）本地验证全绿；CI 的 ubuntu-latest runner 预装 pwsh，实际不存在 Skip 问题。Go 重写检查器（508 行）性价比低，**降级为 P3 备选**；kin-openapi 全量路由校验保留在 P1-12 待办中。
 - 本地全量验证：root integration 模块、business-api 集成+单测、契约套件全部通过。
 
+### 批次 4（本批）：P1-7 增量 + P2 视觉防线上线
+- **P1-7 续（2f2f5585d）**：设备核心生命周期真库测试（Create 幂等/Bind 时区继承/权限三分支/可见集并集/Unbind 失权/软删复活）；`setupCommandTestDB` 补齐 096+ 尾部回放——此前业务集成测试全部跑在缺列的纯基线库上，现与生产库形态收敛。覆盖率 12.0% → 12.7%。
+- **P2 视觉防线上线**：
+  - `visual` Playwright 项目（1440×900 视口）+ `e2e/visual.spec.ts` 六页面基线（仪表盘/设备列表/告警中心/OTA/电站管理/电站监控），`maxDiffPixelRatio 0.02` 吸收 antd 表格 ±1px 列宽抖动，dashboard 对 canvas 图表与日期选择器做定位器级 mask（豁免日期驱动画布，卡片框架仍受保护）。
+  - **e2e 种子固化**：global-setup 开头 TRUNCATE 业务表（此前测试库累积 14+ 台历史设备导致列表高度漂移）、设备 SN 固定为 E2E-SN-001/002、账号昵称固定 e2e-admin。
+  - 基线按平台分文件（`*-win32.png` 入库走 LFS）；**CI 只跑 setup+chromium 功能项目**（截图含平台字体渲染，Linux 基线种子待专门任务），本地连续 3 次运行全绿验证。
+  - 顺带修复：storageState 路径错位（setup 写仓库根、项目读 frontend 子目录，会炸 CI）；"未登录重定向"用例在项目级登录态下需显式空会话。
+
 ### 架构事实记录（防再误判）
 - schema.sql = 迁移 0..95 的 squash 基线 + schema_migrations 登记（77 为历史空号）；`database/migrations/` 活跃目录 = 096..110 真正回放尾部 + 001/018/074..095 已登记死重文件；001..095 历史文件在 `database/migrations.archive/`。
 - 权限码双格式：命令 `permission_code` 用下划线（`devices_control`，按最后一个下划线拆 resource/action），RBAC 授权码用冒号（`devices:control`）。
