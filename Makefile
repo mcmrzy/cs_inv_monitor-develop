@@ -3,7 +3,7 @@
 # 用法: make help 查看所有可用命令
 # ============================================================
 
-.PHONY: help build test lint docker clean run test-unit-go test-generate-mocks test-all test-unit test-unit-flutter test-unit-frontend test-integration test-security test-load test-coverage
+.PHONY: help build test lint docker clean run test-unit-go test-generate-mocks test-all test-unit test-unit-flutter test-unit-frontend test-integration test-security test-load test-coverage lint-go
 
 # ---------- 全局变量 ----------
 GO := go
@@ -60,6 +60,14 @@ vet-go: ## Go vet 静态检查
 	cd device-communication && $(GO) vet ./...
 	cd api-gateway && $(GO) vet ./...
 	cd mqtt-kafka-bridge && $(GO) vet ./...
+
+lint-go: ## golangci-lint 静态检查（需安装: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest）
+	@command -v golangci-lint >/dev/null 2>&1 || { echo "golangci-lint 未安装；安装: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest"; exit 1; }
+	for m in business-api device-communication api-gateway mqtt-kafka-bridge; do \
+		echo "=== golangci-lint: $$m ==="; \
+		cd $$m && golangci-lint run ./... || exit 1; \
+		cd - >/dev/null; \
+	done
 
 tidy: ## 所有 Go 模块 go mod tidy
 	cd business-api && $(GO) mod tidy
@@ -160,5 +168,11 @@ test-load: ## 显示负载测试命令
 	@echo "  k6 run business-api/tests/load-test/api-stress.js"
 	@echo "  k6 run business-api/tests/load-test/mqtt-stress.js"
 
-test-coverage: test-unit ## 生成覆盖率报告
-	@echo "Coverage reports generated"
+test-coverage: ## 生成各 Go 模块覆盖率报告（build/coverage/*.out + 总覆盖率摘要）
+	@mkdir -p build/coverage
+	@for m in business-api device-communication api-gateway mqtt-kafka-bridge; do \
+		echo "=== 覆盖率: $$m ==="; \
+		(cd $$m && $(GO) test -count=1 -covermode=atomic -coverprofile=../build/coverage/$$m.out ./... > /dev/null \
+			&& $(GO) tool cover -func=../build/coverage/$$m.out | tail -1); \
+	done
+	@echo "HTML 报告: go tool cover -html=build/coverage/<module>.out"

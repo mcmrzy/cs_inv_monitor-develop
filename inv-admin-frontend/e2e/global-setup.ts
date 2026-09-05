@@ -21,6 +21,8 @@ const E2E_API = process.env.E2E_API_BASE || 'http://localhost:18888'
 const REDIS_URL = process.env.E2E_REDIS_URL || 'redis://:testredispass@127.0.0.1:16379'
 const PG_DSN = process.env.E2E_PG_DSN || 'postgres://testuser:testpass@127.0.0.1:15432/inv_test'
 const PRODUCT_SECRET = process.env.E2E_PRODUCT_SECRET || 'CS_INV_L10_2026_SECRET'
+// E2E 专用测试栈账号密码（与生产无关），CI/本地可用 E2E_TEST_PASSWORD 覆盖
+const TEST_PASSWORD = process.env.E2E_TEST_PASSWORD || 'E2e@2026Pass'
 
 // computeDevicePIN derives the 6-digit nameplate PIN (leading zeros preserved):
 // HMAC-SHA256(secret, sn) first 3 bytes mod 1000000 — must stay in sync with
@@ -101,7 +103,7 @@ export default async function globalSetup(): Promise<void> {
   const suffix = `${Date.now().toString(36)}${Math.floor(Math.random() * 0xffff).toString(36)}`
   const phone = `170${String(Date.now() % 100000000).padStart(8, '0')}`
   const email = `e2e_${suffix}@test.com`
-  const password = 'E2e@2026Pass'
+  const password = TEST_PASSWORD
 
   console.log(`[e2e-setup] registering E2E account ${phone} / ${email}`)
   const token = await registerUser(email, phone, password)

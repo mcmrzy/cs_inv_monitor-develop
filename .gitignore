@@ -135,6 +135,7 @@ mqtt-kafka-bridge/mqtt-kafka-bridge-linux
 
 # E2E 凭据与测试产物（禁止提交：含明文密码与有效 JWT）
 e2e_evidence/auth-storage.json
+e2e_evidence/auth-state.json
 e2e_evidence/e2e-account.json
 e2e_evidence/playwright-report/
 e2e_evidence/playwright-output/
@@ -225,3 +226,18 @@ tools/xiaoshuo_backup/
 
 # ESP32 固件独立仓库（含密钥，禁止提交）
 CS_INV_WIFI/
+
+# ===== 一次性验证/调试产物（2026-09 测试可靠性治理新增）=====
+# 根目录临时输出与日志（_前缀为临时文件约定）
+/_*.log
+/_*.txt
+/_*.json
+/_*.mjs
+/_*.ps1
+/_*.py
+/_viper_test/
+# 本地一次性测试输出
+test-output.log
+api-test.log
+**/test_output.txt
+tmp_viper_test/

@@ -9,6 +9,9 @@ import { defineConfig } from '@playwright/test'
  *   download); CI sets PLAYWRIGHT_CHANNEL=chromium and installs it via
  *   `npx playwright install --with-deps chromium`.
  * - Evidence (reports, screenshots, traces) lands in ../e2e_evidence/.
+ * - The `setup` project logs in once and persists a storageState; the browser
+ *   project depends on it, so specs are order-independent. CI retries
+ *   transient failures twice, locally zero to keep feedback honest.
  */
 export default defineConfig({
   testDir: './e2e',
@@ -17,7 +20,7 @@ export default defineConfig({
   expect: { timeout: 20_000 },
   fullyParallel: false,
   workers: 1,
-  retries: 0,
+  retries: process.env.CI ? 2 : 0,
   reporter: [
     ['list'],
     ['html', { open: 'never', outputFolder: '../e2e_evidence/playwright-report' }],
@@ -31,6 +34,18 @@ export default defineConfig({
     trace: 'retain-on-failure',
     locale: 'zh-CN',
   },
+  projects: [
+    {
+      name: 'setup',
+      testMatch: /auth\.setup\.ts/,
+    },
+    {
+      name: 'chromium',
+      testIgnore: /auth\.setup\.ts/,
+      use: { storageState: './e2e_evidence/auth-state.json' },
+      dependencies: ['setup'],
+    },
+  ],
   outputDir: '../e2e_evidence/playwright-output',
   webServer: {
     command: 'npm run dev',

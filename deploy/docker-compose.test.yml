@@ -117,6 +117,12 @@ services:
       MIGRATION_AUTO_RUN: "true"
     networks:
       - inv-test-net
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8080/health"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+      start_period: 15s
     depends_on:
       postgres:
         condition: service_healthy
@@ -152,6 +158,12 @@ services:
       INTERNAL_KEY: test-internal-key-with-more-than-32-characters
     networks:
       - inv-test-net
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8081/health"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+      start_period: 15s
     depends_on:
       postgres:
         condition: service_healthy
@@ -188,6 +200,12 @@ services:
       - "127.0.0.1:18888:8080"
     networks:
       - inv-test-net
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8080/health"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
     depends_on:
       postgres:
         condition: service_healthy

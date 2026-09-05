@@ -68,7 +68,8 @@ describe('AppRoutes permission integration', () => {
   it('redirects the legacy admin URL through organization access', async () => {
     renderRoutes('/admin')
     await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/organizations'))
-    expect(screen.getByTestId('mock-route-page')).toBeInTheDocument()
+    // OrganizationRoute 异步校验组织权限（loading → allowed）后才渲染页面
+    await waitFor(() => expect(screen.getByTestId('mock-route-page')).toBeInTheDocument())
   })
 
   it('sends an unauthenticated protected URL to login', async () => {

@@ -191,6 +191,12 @@ services:
     networks:
       - inv-prod-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8081/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     depends_on:
       postgres:
         condition: service_healthy
@@ -246,6 +252,13 @@ services:
     networks:
       - inv-prod-network
     restart: unless-stopped
+    # 启动时会自动执行数据库迁移，start_period 需容纳迁移耗时
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
     depends_on:
       postgres:
         condition: service_healthy
@@ -282,10 +295,19 @@ services:
     networks:
       - inv-prod-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     depends_on:
-      - inv-api-server
-      - inv-device-server
-      - redis
+      inv-api-server:
+        condition: service_healthy
+      inv-device-server:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     deploy:
       resources:
         limits:
@@ -306,8 +328,15 @@ services:
     networks:
       - inv-prod-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8080/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     depends_on:
-      - api-gateway
+      api-gateway:
+        condition: service_healthy
     deploy:
       resources:
         limits:
@@ -333,9 +362,18 @@ services:
     networks:
       - inv-prod-network
     restart: unless-stopped
+    # / 由 nginx 反代到 inv-admin-frontend，此探针同时验证代理链路连通
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:80/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     depends_on:
-      - inv-admin-frontend
-      - api-gateway
+      inv-admin-frontend:
+        condition: service_healthy
+      api-gateway:
+        condition: service_healthy
     deploy:
       resources:
         limits:
