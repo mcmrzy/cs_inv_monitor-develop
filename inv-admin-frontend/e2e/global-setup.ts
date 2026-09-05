@@ -35,7 +35,7 @@ function computeDevicePIN(secret: string, sn: string): string {
 
 const EVIDENCE_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'e2e_evidence')
 
-async function registerUser(email: string, phone: string, password: string): Promise<string> {
+async function registerUser(email: string, phone: string, password: string, nickname: string): Promise<string> {
   const redis = createClient({ url: REDIS_URL })
   await redis.connect()
   try {
@@ -49,7 +49,7 @@ async function registerUser(email: string, phone: string, password: string): Pro
     phone,
     password,
     code: '123456',
-    nickname: `e2e_${Date.now()}`,
+    nickname,
   }
   const res = await fetch(`${E2E_API}/api/v1/auth/email-register`, {
     method: 'POST',
@@ -87,6 +87,25 @@ async function promoteToSystemAdmin(phone: string): Promise<void> {
   }
 }
 
+/**
+ * 清空测试栈的业务数据表，保证视觉基线与列表断言不随历史运行漂移：
+ * 测试库是一次性资源（CI 每次全新起栈），残留行只会来自同一台开发机上
+ * 之前的手动/测试运行。TRUNCATE CASCADE 会连带清掉引用这些表的事实数据
+ * （遥测/告警明细等）。必须在注册账号之前执行。
+ */
+async function resetTestData(): Promise<void> {
+  const pool = new pg.Pool({ connectionString: PG_DSN })
+  try {
+    await pool.query(`
+      TRUNCATE user_device_rel, devices, stations, alarms,
+               device_upgrades, firmware_versions, upgrade_tasks
+      RESTART IDENTITY CASCADE
+    `)
+  } finally {
+    await pool.end()
+  }
+}
+
 async function bindDevice(token: string, sn: string): Promise<void> {
   const res = await fetch(`${E2E_API}/api/v1/devices/bind`, {
     method: 'POST',
@@ -100,16 +119,18 @@ async function bindDevice(token: string, sn: string): Promise<void> {
 }
 
 export default async function globalSetup(): Promise<void> {
+  await resetTestData()
+
   const suffix = `${Date.now().toString(36)}${Math.floor(Math.random() * 0xffff).toString(36)}`
   const phone = `170${String(Date.now() % 100000000).padStart(8, '0')}`
   const email = `e2e_${suffix}@test.com`
   const password = TEST_PASSWORD
 
   console.log(`[e2e-setup] registering E2E account ${phone} / ${email}`)
-  const token = await registerUser(email, phone, password)
+  const token = await registerUser(email, phone, password, 'e2e-admin')
   await promoteToSystemAdmin(phone)
 
-  const devices = [`E2E-SN-${suffix.toUpperCase()}`, `E2E-SN2-${suffix.toUpperCase()}`]
+  const devices = ['E2E-SN-001', 'E2E-SN-002']
   for (const sn of devices) {
     await bindDevice(token, sn)
   }

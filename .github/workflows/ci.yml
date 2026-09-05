@@ -193,7 +193,9 @@ jobs:
         working-directory: inv-admin-frontend
         env:
           PLAYWRIGHT_CHANNEL: chromium
-        run: npx playwright test
+        # 只跑功能项目（setup 作为依赖自动先跑）；visual 截图基线含平台字体
+        # 渲染，Linux 基线未种子化前不在 CI 比对，避免跨平台假红
+        run: npx playwright test --project=chromium
       - name: Show service logs on failure
         if: failure()
         run: docker compose -f deploy/docker-compose.test.yml logs --no-color
