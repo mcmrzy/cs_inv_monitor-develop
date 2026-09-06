@@ -132,6 +132,12 @@
 - **Linux 基线种子工作流**：`visual-baseline.yml`（手动触发）在 ubuntu runner 生成 `*-linux.png` artifact，入库后 CI 可启用视觉比对。
 - 覆盖率（repository+service+migration，含集成）18.5%。
 
+### 批次 6（本批）：P2-15 Web 主流程页单测首批
+- dashboard ×5 / devices ×4 / ota ×4 = 13 个新用例，全部走 MSW 假后端，前端合计 36 文件 / 311 用例全绿。
+- 13 个 0 单测页面目录 → 剩 10 个（batch-settings、big-screen、device-detail、download、invite、monitoring、operation-logs、stations、system、work-orders）。
+- 踩坑记录：`@/utils/timezone` 模块级执行 `dayjs.extend(utc)`，mock 它会让页面内 `dayjs().tz()` 崩溃——涉及时区渲染的页面测试不要 mock 该模块。
+- hook 新报的 SSRF/硬编码凭据均位于测试文件（本地测试栈地址、mock 假凭据），属测试代码预期形态。
+
 ### 架构事实记录（防再误判）
 - schema.sql = 迁移 0..95 的 squash 基线 + schema_migrations 登记（77 为历史空号）；`database/migrations/` 活跃目录 = 096..110 真正回放尾部 + 001/018/074..095 已登记死重文件；001..095 历史文件在 `database/migrations.archive/`。
 - 权限码双格式：命令 `permission_code` 用下划线（`devices_control`，按最后一个下划线拆 resource/action），RBAC 授权码用冒号（`devices:control`）。
