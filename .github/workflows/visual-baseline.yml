@@ -1,0 +1,59 @@
+name: Visual Baselines (Linux)
+
+# 视觉回归基线的 Linux 种子任务。
+#
+# 背景：截图基线包含平台字体渲染，Windows 本地生成的 *-win32.png 不能被
+# Linux CI 复用。本工作流在 ubuntu runner 上用 chromium 重新生成 *-linux.png，
+# 人工下载后提交入库；入库后即可在 e2e-test job 中追加 --project=visual
+# 让 CI 参与视觉回归比对。
+#
+# 使用：Actions → Visual Baselines (Linux) → Run workflow →
+#       下载 artifact linux-visual-baselines →
+#       将其中 *.png 拷入 inv-admin-frontend/e2e/visual.spec.ts-snapshots/ →
+#       提交。
+
+on:
+  workflow_dispatch:
+
+jobs:
+  generate-linux-baselines:
+    name: Generate Linux screenshot baselines
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: inv-admin-frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: inv-admin-frontend
+        run: npm ci
+      - name: Install Playwright chromium with system dependencies
+        working-directory: inv-admin-frontend
+        run: |
+          npx playwright install --with-deps chromium
+      - name: Start isolated test stack
+        run: |
+          GO_PROXY=${{ vars.GO_PROXY || 'https://goproxy.cn,direct' }} \
+            docker compose -f deploy/docker-compose.test.yml up -d --build --wait --wait-timeout 300
+      - name: Regenerate baselines (Linux/chromium)
+        working-directory: inv-admin-frontend
+        env:
+          PLAYWRIGHT_CHANNEL: chromium
+        run: npx playwright test --project=visual --update-snapshots
+      - name: Show service logs on failure
+        if: failure()
+        run: docker compose -f deploy/docker-compose.test.yml logs --no-color
+      - name: Stop test environment
+        if: always()
+        run: docker compose -f deploy/docker-compose.test.yml down -v
+      - name: Upload Linux baselines
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-visual-baselines
+          path: inv-admin-frontend/e2e/visual.spec.ts-snapshots/*-linux.png
+          retention-days: 30
