@@ -208,7 +208,13 @@ docs/icon-art-requirements.md
 docs/ota-redesign-plan.md
 docs/ota-refactor-plan.md
 
-# E2E测试输出
+# E2E测试输出（历史证据不入库；仅保留被 test-report-full.md 引用的 k6 压测结果）
+e2e_evidence/*
+!e2e_evidence/k6-api-summary.json
+!e2e_evidence/k6-api-lite-summary.json
+!e2e_evidence/k6-api-lite-rerun-summary.json
+!e2e_evidence/k6-api-100vu-after-fix.json
+!e2e_evidence/k6-api-lite-after-fix.json
 e2e_evidence/render_tree*.txt
 e2e_evidence/widget_tree*.txt
 e2e_evidence/t*.png
