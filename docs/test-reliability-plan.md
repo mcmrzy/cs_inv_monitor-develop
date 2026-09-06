@@ -123,6 +123,15 @@
   - 基线按平台分文件（`*-win32.png` 入库走 LFS）；**CI 只跑 setup+chromium 功能项目**（截图含平台字体渲染，Linux 基线种子待专门任务），本地连续 3 次运行全绿验证。
   - 顺带修复：storageState 路径错位（setup 写仓库根、项目读 frontend 子目录，会炸 CI）；"未登录重定向"用例在项目级登录态下需显式空会话。
 
+### 批次 5（本批）：安全甄别 + 真实 bug 修复 + 剩余待办清理
+- **安全发现甄结**：mimosa 标记的 ota_handler 各"注入入口"逐一查证均为参数化查询（污点误报）；唯一危险模式是 `UpdateUpgradePackage` 以 map key 拼列名——当前调用方 key 硬编码不可利用，已在 repo 边界加列白名单并配注入形态 key 的回归测试。
+- **真实生产 bug 修复（迁移 111）**：`device_cmd_logs.result` 是 VARCHAR(20) 短结果码列，`UpdateCommandLogStatus` 却写入长文本消息，超长 22001 被 `_ =` 吞掉——离线排队/失败路径的审计状态静默停在 pending。result 放宽为 TEXT（只写不读，零兼容风险）。
+- **backfill 工具规则对齐**：`legalOrganizationEdge` 还是 082 之前的层级规则，与数据库约束失配（会把 distributor→customer 放进库、把合法 installer 链误隔离），已对齐 082 触发器。
+- **新增 SendPreparedCommand 真库回归 ×3**（httptest 假设备服务器）：双审计表状态机 + 期望控制态落库 + X-Internal-Key/V2 协议体断言 + 排队/失败路径。
+- **e2e_evidence 去跟踪**：84 个易变证据文件（截图/日志/临时脚本）解除跟踪消除运行噪音，保留被 test-report-full.md 引用的 5 个 k6 结果。
+- **Linux 基线种子工作流**：`visual-baseline.yml`（手动触发）在 ubuntu runner 生成 `*-linux.png` artifact，入库后 CI 可启用视觉比对。
+- 覆盖率（repository+service+migration，含集成）18.5%。
+
 ### 架构事实记录（防再误判）
 - schema.sql = 迁移 0..95 的 squash 基线 + schema_migrations 登记（77 为历史空号）；`database/migrations/` 活跃目录 = 096..110 真正回放尾部 + 001/018/074..095 已登记死重文件；001..095 历史文件在 `database/migrations.archive/`。
 - 权限码双格式：命令 `permission_code` 用下划线（`devices_control`，按最后一个下划线拆 resource/action），RBAC 授权码用冒号（`devices:control`）。
