@@ -145,3 +145,44 @@ func seedOTALifecycleFirmware(t *testing.T, pool *pgxpool.Pool, id int64, versio
 	`, id, version, "/firmware/"+version+".bin", chip, "V"+version)
 	require.NoError(t, err)
 }
+
+// TestUpdateUpgradePackageColumnWhitelist 固化列白名单语义：列名拼入 SQL 的
+// 更新路径只接受白名单列，任何其他 key（哪怕长得像注入 payload）必须被拒绝，
+// 合法更新正常生效。安全甄别（2026-09）确认调用方 key 为硬编码白名单，
+// 此测试防止未来调用方退化。
+func TestUpdateUpgradePackageColumnWhitelist(t *testing.T) {
+	pool, cleanup := setupCommandTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO upgrade_packages(id, model, main_version)
+		VALUES (970001, 'CS-INV-TEST', 'V1.0.0.20990101')
+	`)
+	require.NoError(t, err)
+
+	repo := NewOTARepository(pool)
+
+	// 合法列更新生效
+	require.NoError(t, repo.UpdateUpgradePackage(ctx, 970001, map[string]interface{}{
+		"user_version": "9.9.9",
+		"is_force":     true,
+	}))
+	var userVersion string
+	var isForce bool
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT user_version, is_force FROM upgrade_packages WHERE id=$1`, 970001).
+		Scan(&userVersion, &isForce))
+	assert.Equal(t, "9.9.9", userVersion)
+	assert.True(t, isForce)
+
+	// 非白名单 key 一律拒绝（含注入形态的 key）
+	for _, bad := range []string{
+		"status",
+		"created_by",
+		"id = 1; --",
+	} {
+		updateErr := repo.UpdateUpgradePackage(ctx, 970001, map[string]interface{}{bad: "x"})
+		require.ErrorContains(t, updateErr, "unsupported upgrade_packages column", "key %q must be rejected", bad)
+	}
+}
