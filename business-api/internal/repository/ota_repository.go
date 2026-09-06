@@ -2041,6 +2041,16 @@ func (r *OTARepository) GetDeviceSNsByModel(ctx context.Context, deviceModel str
 	return sns, nil
 }
 
+// upgradePackageUpdatableColumns 允许通过 UpdateUpgradePackage 更新的列白名单。
+// 列名会拼入 SQL（value 走参数），必须拒绝非白名单 key，防止未来调用方把
+// 用户派生的 key 传入演变成 SQL 注入。
+var upgradePackageUpdatableColumns = map[string]struct{}{
+	"user_version":   {},
+	"user_changelog": {},
+	"changelog":      {},
+	"is_force":       {},
+}
+
 // UpdateUpgradePackage 更新升级包字段
 func (r *OTARepository) UpdateUpgradePackage(ctx context.Context, id int64, updates map[string]interface{}) error {
 	if len(updates) == 0 {
@@ -2052,6 +2062,9 @@ func (r *OTARepository) UpdateUpgradePackage(ctx context.Context, id int64, upda
 	argIdx := 1
 
 	for col, val := range updates {
+		if _, ok := upgradePackageUpdatableColumns[col]; !ok {
+			return fmt.Errorf("unsupported upgrade_packages column: %s", col)
+		}
 		setClauses = append(setClauses, fmt.Sprintf("%s = $%d", col, argIdx))
 		args = append(args, val)
 		argIdx++

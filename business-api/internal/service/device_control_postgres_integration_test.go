@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -47,7 +49,36 @@ func setupDeviceControlTestDB(t *testing.T) *pgxpool.Pool {
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, string(contents))
 	require.NoError(t, err)
+	replayControlMigrationTail(t, pool)
 	return pool
+}
+
+// replayControlMigrationTail 回放 database/migrations/ 中 096+ 的 up 迁移，
+// 与 MIGRATION_AUTO_RUN 启动回放一致，使测试库与真实生产库形态收敛
+//（基线只含 0..95 的 DDL，例如 device_cmd_logs.result 的 TEXT 化在 111）。
+func replayControlMigrationTail(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	migrationsDir := filepath.Clean(filepath.Join("..", "..", "..", "database", "migrations"))
+	entries, err := os.ReadDir(migrationsDir)
+	require.NoError(t, err)
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".up.sql") {
+			names = append(names, e.Name())
+		}
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		num := 0
+		fmt.Sscanf(name, "%d", &num)
+		if num < 96 {
+			continue
+		}
+		contents, err := os.ReadFile(filepath.Join(migrationsDir, name))
+		require.NoError(t, err)
+		_, err = pool.Exec(context.Background(), string(contents))
+		require.NoError(t, err, "replay %s on squash baseline", name)
+	}
 }
 
 func controlEnv(key, fallback string) string {
