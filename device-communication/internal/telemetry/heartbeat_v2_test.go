@@ -3,13 +3,15 @@ package telemetry
 import (
 	"bytes"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 )
 
-// V2.1 文档 6.4 完整示例：V2 位置数组 57 值（原始量纲，0.1/0.01 缩放，fan/diag/sock 为 V2.1 新增）。
+// V2.1 文档 6.4 完整示例：V2 位置数组 57 值（原始量纲，0.1/0.01 缩放，fan/diag/sock 为 V2.1 新增）；
+// bms 为 2026-09 储能 BMS 扩展组（45 值，additive，见储能BMS遥测扩展协议设计.md §7.7）。
 const validHeartbeatV2 = `{"v":2,"t":1783000000,"data":{
   "sys":[2050,0,32,0,282,450,431,300,41000,624,0],
   "pv":[1450,82,0,0,12400],
@@ -19,7 +21,8 @@ const validHeartbeatV2 = `{"v":2,"t":1783000000,"data":{
   "eng":[0,0,1250,45678,0,0,1305,23456,0,0,0,0,1870,98765],
   "fan":[88,76],
   "diag":[880,45,68400000],
-  "sock":[3,2,2]
+  "sock":[3,2,2],
+  "bms":[1,805,985,1800,2800,3000,152,3351,3288,63,0,6,28,25,31,25,29,2,2,3,500,584,0,0,0,0,12345,11000,3351,3345,3338,3340,3302,3290,3288,3295,3300,3310,3315,3320,3325,3330,3335,3340,16]
 }}`
 
 func TestParseHeartbeatV2Valid(t *testing.T) {
@@ -88,6 +91,34 @@ func TestParseHeartbeatV2Valid(t *testing.T) {
 	require.Equal(t, uint32(2), *s.Sock.OnlineSocket)
 	require.Equal(t, uint32(2), *s.Sock.OnSocket)
 
+	// bms（2026-09 储能扩展组：soc/soh/容量 0.1 缩放，芯压 mV，温度 ℃）
+	require.Equal(t, uint8(1), *s.BMS.Online)
+	require.InDelta(t, 80.5, *s.BMS.SOC, 0.0001)
+	require.InDelta(t, 98.5, *s.BMS.SOH, 0.0001)
+	require.InDelta(t, 180.0, *s.BMS.CapacityRemain, 0.0001)
+	require.InDelta(t, 280.0, *s.BMS.CapacityFull, 0.0001)
+	require.InDelta(t, 300.0, *s.BMS.CapacityDesign, 0.0001)
+	require.InDelta(t, 152.0, *s.BMS.CycleCount, 0.0001)
+	require.InDelta(t, 3351.0, *s.BMS.CellVoltageMax, 0.0001)
+	require.InDelta(t, 3288.0, *s.BMS.CellVoltageMin, 0.0001)
+	require.InDelta(t, 63.0, *s.BMS.CellVoltageDiff, 0.0001)
+	require.InDelta(t, 0.0, *s.BMS.CellVoltageMaxIdx, 0.0001)
+	require.InDelta(t, 6.0, *s.BMS.CellVoltageMinIdx, 0.0001)
+	require.InDelta(t, 28.0, *s.BMS.CellTempMax, 0.0001)
+	require.InDelta(t, 25.0, *s.BMS.CellTempMin, 0.0001)
+	require.InDelta(t, 31.0, *s.BMS.MOSTemp, 0.0001)
+	require.Equal(t, uint8(2), *s.BMS.BatteryWorkMode)   // 放电
+	require.Equal(t, uint8(2), *s.BMS.MOSStatus)         // 放 MOS 开
+	require.InDelta(t, 50.0, *s.BMS.ChgRequestCurrent, 0.0001)
+	require.InDelta(t, 58.4, *s.BMS.ChgRequestVoltage, 0.0001)
+	require.Equal(t, uint32(0), *s.BMS.FaultStatus)
+	require.InDelta(t, 12345.0, *s.BMS.TotalChgCapacity, 0.0001)
+	require.InDelta(t, 11000.0, *s.BMS.TotalDsgCapacity, 0.0001)
+	require.Len(t, s.BMS.CellVoltages, 16)
+	require.InDelta(t, 3351.0, *s.BMS.CellVoltages[0], 0.0001)
+	require.InDelta(t, 3340.0, *s.BMS.CellVoltages[15], 0.0001)
+	require.Equal(t, uint32(16), *s.BMS.BalanceBitmap)   // 芯 4 均衡
+
 	require.Len(t, s.DataHash, 64)
 	require.JSONEq(t, validHeartbeatV2, string(s.RawEnvelope))
 }
@@ -110,6 +141,31 @@ func TestParseHeartbeatV2Legacy49Values(t *testing.T) {
 	require.Nil(t, s.Fan.MPPTSpeed)
 	require.Nil(t, s.Diag.WorkTimeTotal)
 	require.Nil(t, s.Sock.PairedSocket)
+	require.Nil(t, s.BMS.Online)   // 旧固件无 bms 组：零值结构
+	require.Nil(t, s.BMS.CellVoltages)
+}
+
+// bms 组存在但长度错误 → 格式错误（不按旧固件容忍）
+func TestParseHeartbeatV2RejectsBadBMSLength(t *testing.T) {
+	payload := bytes.Replace([]byte(validHeartbeatV2),
+		[]byte(`"bms":[1,805,985,1800,2800,3000,152,3351,3288,63,0,6,28,25,31,25,29,2,2,3,500,584,0,0,0,0,12345,11000,3351,3345,3338,3340,3302,3290,3288,3295,3300,3310,3315,3320,3325,3330,3335,3340,16]`),
+		[]byte(`"bms":[1,805,985]`), 1)
+	_, err := ParseHeartbeatV2("sn", payload, time.Now())
+	require.ErrorIs(t, err, ErrInvalidHeartbeat)
+}
+
+// bms 离线帧：online=0，其余值 null（ESP 端离线语义）→ null 标记 QualityPartial，字段为 nil
+func TestParseHeartbeatV2BMSOffline(t *testing.T) {
+	nulls := strings.Repeat("null,", 43)
+	payload := bytes.Replace([]byte(validHeartbeatV2),
+		[]byte(`"bms":[1,805,985,1800,2800,3000,152,3351,3288,63,0,6,28,25,31,25,29,2,2,3,500,584,0,0,0,0,12345,11000,3351,3345,3338,3340,3302,3290,3288,3295,3300,3310,3315,3320,3325,3330,3335,3340,16]`),
+		[]byte(`"bms":[0,`+nulls+`null]`), 1)
+	s, err := ParseHeartbeatV2("sn", payload, time.Unix(1783000005, 0))
+	require.NoError(t, err)
+	require.Equal(t, uint8(0), *s.BMS.Online)
+	require.Nil(t, s.BMS.SOC)
+	require.Nil(t, s.BMS.CellVoltages[0])
+	require.Nil(t, s.BMS.BalanceBitmap)
 }
 
 func TestParseHeartbeatV2RejectsArrayLength(t *testing.T) {

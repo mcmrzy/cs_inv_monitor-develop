@@ -255,6 +255,7 @@ class RealtimeDataServiceImpl implements RealtimeDataService {
     CellsData? cellsData;
     DeviceInfo? deviceInfoData;
     MeterData? meterData;
+    BmsData? bmsData;
     
     if (isNested) {
       // 嵌套结构：直接解析
@@ -323,6 +324,11 @@ class RealtimeDataServiceImpl implements RealtimeDataService {
       meterData = realtime['meter'] != null
           ? MeterData.fromJson(extractNestedData(realtime['meter'])!)
           : null;
+
+      // 2026-09 储能 BMS 扩展组（45 字段）
+      if (realtime['bms'] is Map) {
+        bmsData = BmsData.fromJson(extractNestedData(realtime['bms'])!);
+      }
     } else {
       // 扁平结构：顶层键即 V2.1 协议键（服务端 normalizeRealtimeData 展平后），
       // 直接用实体 fromJson 解析，按代表性键做存在性守卫避免全 0 假数据
@@ -360,6 +366,10 @@ class RealtimeDataServiceImpl implements RealtimeDataService {
         fanData = FanData.fromJson(realtime);
       }
 
+      if (realtime.containsKey('bms_online')) {
+        bmsData = BmsData.fromJson(realtime);
+      }
+
       workTimeTotalSec =
           (realtime['work_time_total'] as num?)?.toInt() ?? 0;
     }
@@ -395,6 +405,7 @@ class RealtimeDataServiceImpl implements RealtimeDataService {
       onlineStatus: onlineStatus,
       deviceInfo: deviceInfoData,
       meter: meterData,
+      bms: bmsData,
       loadPower: loadPower,
       updatedAt: updatedAt,
     );
