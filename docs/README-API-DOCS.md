@@ -54,9 +54,10 @@ http://localhost:8080/api/swagger/
 
 ```bash
 # 安装工具
-npm install -g openapi-to-postman
+npm install -g openapi-to-postmanv2@6.3.3
 
 # 生成集合
+mkdir -p docs/postman
 openapi2postmanv2 --spec docs/openapi.yaml --output docs/postman/collection.json
 
 # 导入到 Postman

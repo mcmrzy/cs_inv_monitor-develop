@@ -50,12 +50,6 @@ jobs:
         run: redocly bundle docs/openapi.yaml -o docs/openapi.bundled.yaml
 
       - name: Validate bundled spec
-        # Redocly's built-in struct rule flags some pre-existing UTF-8 example
-        # strings in the spec as schema errors. Treat this step as advisory so
-        # it does not block the rest of the documentation pipeline (bundle,
-        # Postman generation, GitHub Pages deployment). Tighten to blocking
-        # once the spec is brought into full Redocly compliance.
-        continue-on-error: true
         run: redocly lint docs/openapi.bundled.yaml
 
       - name: Upload bundled spec as artifact
@@ -201,10 +195,11 @@ jobs:
           node-version: '20'
 
       - name: Install openapi-to-postman converter
-        run: npm install -g openapi-to-postman
+        run: npm install -g openapi-to-postmanv2@6.3.3
 
       - name: Convert OpenAPI to Postman collection
         run: |
+          mkdir -p docs/postman
           openapi2postmanv2 \
             --spec docs/openapi.yaml \
             --output docs/postman/collection.json \

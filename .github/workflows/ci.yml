@@ -80,7 +80,7 @@ jobs:
         run: npm run build
       - name: Run frontend tests with coverage
         working-directory: inv-admin-frontend
-        run: npm run test:coverage -- --reporter=text --reporter=json-summary
+        run: npm run test:coverage -- --coverage.reporter=text --coverage.reporter=json-summary
       - name: Upload frontend coverage artifact
         uses: actions/upload-artifact@v4
         with:

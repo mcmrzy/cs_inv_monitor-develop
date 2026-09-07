@@ -133,11 +133,17 @@ try {
 Write-Host ""
 Write-Host "Step 7: Generating Postman collection..." -ForegroundColor Yellow
 try {
-    npm list -g openapi-to-postman 2>$null
-    Write-Host "✓ openapi-to-postman already installed" -ForegroundColor Green
+    $installed = npm list -g --depth=0 openapi-to-postmanv2@6.3.3 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        throw "openapi-to-postmanv2@6.3.3 is not installed"
+    }
+    Write-Host "✓ openapi-to-postmanv2 already installed" -ForegroundColor Green
 } catch {
-    Write-Host "Installing openapi-to-postman..." -ForegroundColor Yellow
-    npm install -g openapi-to-postman
+    Write-Host "Installing openapi-to-postmanv2..." -ForegroundColor Yellow
+    npm install -g openapi-to-postmanv2@6.3.3
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to install openapi-to-postmanv2@6.3.3"
+    }
 }
 
 try {
