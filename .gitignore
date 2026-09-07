@@ -247,3 +247,4 @@ test-output.log
 api-test.log
 **/test_output.txt
 tmp_viper_test/
+test-campaign-results/
