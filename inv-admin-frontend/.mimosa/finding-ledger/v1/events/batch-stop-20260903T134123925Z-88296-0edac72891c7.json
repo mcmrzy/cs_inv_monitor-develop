@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "mimosa-finding-ledger-batch/v1",
+  "batchId": "stop-20260903T134123925Z-88296-0edac72891c7",
+  "runId": "20260903T134123925Z-88296-0edac72891c7",
+  "runStatus": "completed",
+  "coverage": {
+    "status": "complete",
+    "reasons": []
+  },
+  "source": {
+    "component": "zcode-hook",
+    "operationId": "Stop"
+  },
+  "revision": "251f129843109b2b795e3e7f39d9aa4126bdc26d",
+  "diffHash": "e0144e9648c67818d698759384a7511e965a2db1984e6a213d0d743293008d1d",
+  "rulesVersion": "unavailable",
+  "sessionHash": "45526b3b79b92833362441e42093aa7510a54686d6ee0e5e2be9b9d367501ac3",
+  "reportRef": ".mimosa/reports/task-review-sess_f8c9ca21-a4a2-4e38-a22a-5a571d5e8482-20260903T134123925Z-88296-0edac72891c7.json",
+  "events": [],
+  "observedFindingIds": [
+    "mimosa-f04f60ea5df66048c3b97731",
+    "mimosa-676c1bbccabfefce65b88874",
+    "mimosa-b1df9761596547d8a77badc0"
+  ],
+  "verifiedFiles": [
+    {
+      "file": "src/App.tsx",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "src/pages/devices/index.tsx",
+      "direct": "complete",
+      "projectContext": "partial"
+    }
+  ],
+  "recordedAt": "2026-09-03T13:41:24.194Z"
+}

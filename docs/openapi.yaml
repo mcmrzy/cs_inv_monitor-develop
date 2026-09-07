@@ -1568,9 +1568,9 @@ components:
       properties:
         success:
           type: boolean
-          message:
-            type: string
-            example: "成员已从组织中移除"
+        message:
+          type: string
+          example: "成员已从组织中移除"
         data:
           type: object
           properties:
@@ -1586,9 +1586,9 @@ components:
       properties:
         success:
           type: boolean
-          message:
-            type: string
-            example: "成员已恢复活跃"
+        message:
+          type: string
+          example: "成员已恢复活跃"
         data:
           type: object
           properties:
@@ -1601,9 +1601,9 @@ components:
       properties:
         success:
           type: boolean
-          message:
-            type: string
-            example: "成员已停用"
+        message:
+          type: string
+          example: "成员已停用"
         data:
           type: object
           properties:

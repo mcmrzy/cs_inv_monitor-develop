@@ -3,11 +3,13 @@ package handler
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"inv-api-server/internal/middleware"
 	"inv-api-server/internal/model"
 	"inv-api-server/internal/repository"
 	"inv-api-server/internal/service"
+	"inv-api-server/pkg/logger"
 	"inv-api-server/pkg/response"
 	"io"
 	"log"
@@ -20,7 +22,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.uber.org/zap"
 )
 
 type OTAHandler struct {
@@ -655,8 +659,23 @@ func (h *OTAHandler) ResendUpgradeCommand(c *gin.Context) {
 // GetDeviceOTAStatus 获取设备当前升级状态
 func (h *OTAHandler) GetDeviceOTAStatus(c *gin.Context) {
 	sn := c.Param("sn")
+	userID := middleware.GetUserID(c)
+	if !middleware.GetIsSystemAdmin(c) {
+		owned, ownershipErr := h.otaService.CheckDeviceOwnership(c.Request.Context(), sn, userID)
+		if ownershipErr != nil {
+			logger.Error("query OTA device ownership failed",
+				zap.String("device_sn", sn), zap.Int64("user_id", userID), zap.Error(ownershipErr))
+			response.Error(c, 500, "查询设备信息失败")
+			return
+		}
+		if !owned {
+			response.Error(c, 403, "设备不属于当前用户")
+			return
+		}
+	}
+
 	var (
-		upgrade *model.DeviceUpgrade
+		upgrade any
 		err     error
 	)
 	if rawTaskID := c.Query("task_id"); rawTaskID != "" {
@@ -669,7 +688,17 @@ func (h *OTAHandler) GetDeviceOTAStatus(c *gin.Context) {
 	} else {
 		upgrade, err = h.otaService.GetLatestTaskDevice(c.Request.Context(), sn)
 	}
-	if err != nil || upgrade == nil {
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			response.Success(c, gin.H{"status": "idle", "message": "无升级任务"})
+			return
+		}
+		logger.Error("query OTA device status failed",
+			zap.String("device_sn", sn), zap.Int64("user_id", userID), zap.Error(err))
+		response.Error(c, 500, "查询升级状态失败")
+		return
+	}
+	if upgrade == nil {
 		response.Success(c, gin.H{"status": "idle", "message": "无升级任务"})
 		return
 	}
@@ -1723,7 +1752,6 @@ func (h *OTAHandler) RollbackToPublishedVersion(c *gin.Context) {
 	}
 	response.Success(c, gin.H{"task_id": taskID, "message": "已回滚到最新发布版本"})
 }
-
 
 // notifyDevicesUpgrade 固件升级任务下发后，按用户通知偏好（notify_ota / 勿扰 / 邮件渠道）
 // 通知设备所属用户；未设置偏好的用户按默认全开处理。

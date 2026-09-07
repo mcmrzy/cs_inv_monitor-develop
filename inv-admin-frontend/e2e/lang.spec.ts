@@ -1,12 +1,12 @@
 import { test, expect } from '@playwright/test'
-import { injectAuthStorage, gotoAuthed, openUserMenu, evidencePath } from './helpers'
+import { gotoAuthed, openUserMenu, evidencePath } from './helpers'
 
 /**
  * i18n: the side navigation must switch between Chinese and English labels
- * through the user menu language switcher.
+ * through the user menu language switcher. Session comes from the `setup`
+ * project's storageState.
  */
 test('语言切换：中文 → English 后导航文案变化并可切回', async ({ page }) => {
-  await injectAuthStorage(page)
   await gotoAuthed(page, '/dashboard')
 
   // Default locale is zh-CN.

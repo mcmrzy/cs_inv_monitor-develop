@@ -1,0 +1,52 @@
+package main
+
+import (
+	"fmt"
+	"os"
+	"strings"
+
+	"github.com/spf13/viper"
+)
+
+type Database struct {
+	Host     string `mapstructure:"host"`
+	Port     int    `mapstructure:"port"`
+	User     string `mapstructure:"user"`
+	Password string `mapstructure:"password"`
+	Database string `mapstructure:"database"`
+	SSLMode  string `mapstructure:"ssl_mode"`
+}
+
+type Config struct {
+	Database Database `mapstructure:"database"`
+}
+
+func main() {
+	os.Setenv("DB_PASSWORD", "InvMonitor@2026!Secure")
+	os.Setenv("DB_HOST", "postgres")
+
+	viper.SetConfigType("yaml")
+	data, err := os.ReadFile("D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/business-api/config.docker.yaml")
+	if err != nil {
+		panic(err)
+	}
+	if err := viper.ReadConfig(strings.NewReader(string(data))); err != nil {
+		panic(err)
+	}
+	viper.BindEnv("database.host", "DB_HOST")
+	viper.BindEnv("database.port", "DB_PORT")
+	viper.BindEnv("database.user", "DB_USER")
+	viper.BindEnv("database.password", "DB_PASSWORD")
+	viper.BindEnv("database.database", "DB_NAME")
+	viper.BindEnv("database.ssl_mode", "DB_SSL_MODE")
+
+	fmt.Println("Get(database.password)      =", viper.GetString("database.password"))
+	fmt.Println("Get(database.host)          =", viper.GetString("database.host"))
+
+	var cfg Config
+	if err := viper.Unmarshal(&cfg); err != nil {
+		panic(err)
+	}
+	fmt.Println("Unmarshal cfg.Database.Password =", cfg.Database.Password)
+	fmt.Println("Unmarshal cfg.Database.Host     =", cfg.Database.Host)
+}

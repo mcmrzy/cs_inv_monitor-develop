@@ -21,6 +21,7 @@ import (
 	"inv-api-server/pkg/logger"
 	"inv-api-server/pkg/timezone"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
@@ -650,9 +651,100 @@ func (s *OTAService) GetLatestTaskDevice(ctx context.Context, sn string) (*model
 	return s.repo.GetLatestTaskDevice(ctx, sn)
 }
 
-// GetTaskDeviceStatus 获取设备在指定升级任务中的状态，供任务详情页精确轮询。
-func (s *OTAService) GetTaskDeviceStatus(ctx context.Context, sn string, taskID int64) (*model.DeviceUpgrade, error) {
-	return s.repo.GetDeviceUpgradeBySNAndTaskID(ctx, sn, taskID)
+// DeviceTaskOTAStatus 是设备在一个升级任务中的聚合状态。
+// package 任务可能包含多个芯片记录，只有全部成功时才返回 success。
+type DeviceTaskOTAStatus struct {
+	DeviceSN     string                `json:"device_sn"`
+	TaskID       int64                 `json:"task_id"`
+	Status       string                `json:"status"`
+	Progress     int                   `json:"progress"`
+	ErrorMessage string                `json:"error_message"`
+	Items        []model.DeviceUpgrade `json:"items"`
+}
+
+// GetTaskDeviceStatus 获取设备在指定升级任务中的聚合状态，供任务详情页精确轮询。
+func (s *OTAService) GetTaskDeviceStatus(ctx context.Context, sn string, taskID int64) (*DeviceTaskOTAStatus, error) {
+	items, err := s.repo.ListDeviceUpgradesBySNAndTaskID(ctx, sn, taskID)
+	if err != nil {
+		return nil, err
+	}
+	if len(items) == 0 {
+		return nil, pgx.ErrNoRows
+	}
+	return aggregateDeviceTaskOTAStatus(sn, taskID, items), nil
+}
+
+func aggregateDeviceTaskOTAStatus(sn string, taskID int64, items []model.DeviceUpgrade) *DeviceTaskOTAStatus {
+	if len(items) == 0 {
+		return nil
+	}
+
+	progressTotal := 0
+	allSucceeded := true
+	anySucceeded := false
+	anyDownloading := false
+	anyUpgrading := false
+	anyFailed := false
+	anyCancelled := false
+	errorMessage := ""
+
+	for _, item := range items {
+		progress := item.Progress
+		if progress < 0 {
+			progress = 0
+		} else if progress > 100 {
+			progress = 100
+		}
+		progressTotal += progress
+
+		switch item.Status {
+		case model.UpgradeStatusSuccess:
+			anySucceeded = true
+		case model.UpgradeStatusFailed:
+			allSucceeded = false
+			anyFailed = true
+			if errorMessage == "" {
+				errorMessage = item.ErrorMessage
+			}
+		case model.UpgradeStatusCancelled:
+			allSucceeded = false
+			anyCancelled = true
+			if errorMessage == "" {
+				errorMessage = item.ErrorMessage
+			}
+		case model.UpgradeStatusDownloading:
+			allSucceeded = false
+			anyDownloading = true
+		case model.UpgradeStatusUpgrading:
+			allSucceeded = false
+			anyUpgrading = true
+		default:
+			allSucceeded = false
+		}
+	}
+
+	status := model.UpgradeStatusPending
+	switch {
+	case anyFailed:
+		status = model.UpgradeStatusFailed
+	case anyCancelled:
+		status = model.UpgradeStatusCancelled
+	case allSucceeded:
+		status = model.UpgradeStatusSuccess
+	case anyDownloading:
+		status = model.UpgradeStatusDownloading
+	case anyUpgrading || anySucceeded:
+		status = model.UpgradeStatusUpgrading
+	}
+
+	return &DeviceTaskOTAStatus{
+		DeviceSN:     sn,
+		TaskID:       taskID,
+		Status:       status,
+		Progress:     progressTotal / len(items),
+		ErrorMessage: errorMessage,
+		Items:        items,
+	}
 }
 
 // GetDeviceOTAHistory 兼容旧接口

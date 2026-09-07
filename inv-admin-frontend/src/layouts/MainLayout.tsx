@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import {
-  Button, Avatar, Dropdown, Badge, Typography, theme, Grid, Form, App, Select, Cascader, Modal, Input, Space, Empty,
+  Button, Avatar, Dropdown, Badge, Typography, theme, Grid, Form, App, Select, Cascader, Modal, Input, Space,
 } from 'antd'
 import { ProLayout, ModalForm, ProFormText, ProFormSelect } from '@ant-design/pro-components'
 import type { ProLayoutProps } from '@ant-design/pro-components'
@@ -18,9 +18,9 @@ import useAuthStore from '@/stores/authStore'
 import useLocaleStore from '@/stores/localeStore'
 import useTimezoneStore from '@/stores/timezoneStore'
 import useTranslation from '@/hooks/useTranslation'
+import useOrganizationAccess from '@/hooks/useOrganizationAccess'
 import api from '@/services/api'
-import { channelApi } from '@/services/channelApi'
-import { queryKeys } from '@/utils/queryKeys'
+import { getRoutePermissions } from '@/router/routeAccess'
 import { TIMEZONE_LIST, REGION_LABELS, getTimezoneLabel } from '@/utils/timezone'
 import { resolveMediaUrl } from '@/utils/urls'
 import UploadAvatar from '@/components/UploadAvatar'
@@ -34,36 +34,25 @@ interface RouteMenuItem {
   permission?: string
 }
 
-const getAdminRoutes = (t: (key: string) => string): RouteMenuItem[] => [
-  { path: '/dashboard', name: t('menu.dashboard'), icon: <DashboardOutlined />, permission: 'dashboard:view' },
-  { path: '/monitoring', name: t('menu.stationMonitor'), icon: <ThunderboltOutlined />, permission: 'devices:view' },
-  { path: '/stations', name: t('menu.stationManage'), icon: <EnvironmentOutlined />, permission: 'stations:view' },
-  { path: '/devices', name: t('menu.deviceManage'), icon: <DesktopOutlined />, permission: 'devices:view' },
-  { path: '/models', name: t('menu.modelManage'), icon: <ExperimentOutlined />, permission: 'models:view' },
-  { path: '/parallel', name: t('menu.parallelManage'), icon: <ClusterOutlined />, permission: 'parallel:view' },
-  { path: '/remote-settings', name: t('menu.remoteSettings'), icon: <ControlOutlined />, permission: 'devices:view' },
-  { path: '/batch-settings', name: t('menu.batchSettings'), icon: <EditOutlined />, permission: 'devices:view' },
-  { path: '/ota', name: t('menu.ota'), icon: <CloudUploadOutlined />, permission: 'firmware:view' },
-  { path: '/alerts', name: t('menu.alertCenter'), icon: <AlertOutlined />, permission: 'alerts:view' },
-  { path: '/work-orders', name: t('menu.workOrders'), icon: <FileTextOutlined />, permission: 'work_orders:view' },
-  // 组织架构对所有登录用户开放（后端按可见范围剪枝 + 角色校验兑底）
-  { path: '/organizations', name: t('menu.orgManagement'), icon: <SettingOutlined /> },
-  { path: '/users', name: t('menu.userManage'), icon: <TeamOutlined />, permission: 'users:view' },
-  { path: '/operation-logs', name: t('menu.operationLogs'), icon: <UnorderedListOutlined />, permission: 'admin:view' },
-  { path: '/system/system-monitor', name: t('menu.systemMonitor'), icon: <HeartOutlined />, permission: 'admin:view' },
-  { path: '/system/system-config', name: t('menu.systemConfig'), icon: <SettingOutlined />, permission: 'admin:manage' },
-]
+const routePermission = (path: string) => getRoutePermissions(path)[0]
 
-const getUserRoutes = (t: (key: string) => string): RouteMenuItem[] => [
-  { path: '/dashboard', name: t('menu.dashboard'), icon: <DashboardOutlined />, permission: 'dashboard:view' },
-  { path: '/monitoring', name: t('menu.stationMonitor'), icon: <ThunderboltOutlined />, permission: 'devices:view' },
-  { path: '/stations', name: t('menu.stationManage'), icon: <EnvironmentOutlined />, permission: 'stations:view' },
-  { path: '/devices', name: t('menu.deviceManage'), icon: <DesktopOutlined />, permission: 'devices:view' },
-  { path: '/remote-settings', name: t('menu.remoteSettings'), icon: <ControlOutlined />, permission: 'devices:view' },
-  { path: '/alerts', name: t('menu.alertCenter'), icon: <AlertOutlined />, permission: 'alerts:view' },
-  { path: '/work-orders', name: t('menu.workOrders'), icon: <FileTextOutlined />, permission: 'work_orders:view' },
-  // 组织架构对所有登录用户开放（后端按可见范围剪枝 + 角色校验兑底）
+const getRoutes = (t: (key: string) => string): RouteMenuItem[] => [
+  { path: '/dashboard', name: t('menu.dashboard'), icon: <DashboardOutlined />, permission: routePermission('/dashboard') },
+  { path: '/monitoring', name: t('menu.stationMonitor'), icon: <ThunderboltOutlined />, permission: routePermission('/monitoring') },
+  { path: '/stations', name: t('menu.stationManage'), icon: <EnvironmentOutlined />, permission: routePermission('/stations') },
+  { path: '/devices', name: t('menu.deviceManage'), icon: <DesktopOutlined />, permission: routePermission('/devices') },
+  { path: '/models', name: t('menu.modelManage'), icon: <ExperimentOutlined />, permission: routePermission('/models') },
+  { path: '/parallel', name: t('menu.parallelManage'), icon: <ClusterOutlined />, permission: routePermission('/parallel') },
+  { path: '/remote-settings', name: t('menu.remoteSettings'), icon: <ControlOutlined />, permission: routePermission('/remote-settings') },
+  { path: '/batch-settings', name: t('menu.batchSettings'), icon: <EditOutlined />, permission: routePermission('/batch-settings') },
+  { path: '/ota', name: t('menu.ota'), icon: <CloudUploadOutlined />, permission: routePermission('/ota') },
+  { path: '/alerts', name: t('menu.alertCenter'), icon: <AlertOutlined />, permission: routePermission('/alerts') },
+  { path: '/work-orders', name: t('menu.workOrders'), icon: <FileTextOutlined />, permission: routePermission('/work-orders') },
   { path: '/organizations', name: t('menu.orgManagement'), icon: <SettingOutlined /> },
+  { path: '/users', name: t('menu.userManage'), icon: <TeamOutlined />, permission: routePermission('/users') },
+  { path: '/operation-logs', name: t('menu.operationLogs'), icon: <UnorderedListOutlined />, permission: routePermission('/operation-logs') },
+  { path: '/system/system-monitor', name: t('menu.systemMonitor'), icon: <HeartOutlined />, permission: routePermission('/system/system-monitor') },
+  { path: '/system/system-config', name: t('menu.systemConfig'), icon: <SettingOutlined />, permission: routePermission('/system/system-config') },
 ]
 
 const MainLayout: React.FC = () => {
@@ -100,76 +89,12 @@ const MainLayout: React.FC = () => {
     if (!screens.md) { setMobileCollapsed(true) } else { setMobileCollapsed(false) }
   }, [screens.md])
 
-  const isAdminRole = user && (user.isSystemAdmin || hasPermission('admin:manage'))
-
-  // 终端用户识别：非系统管理员且所有组织角色并集仅含 customer（无任何管理/渠道角色）
-  // 注意：无组织记录的用户无法获取 roles，保守地视为"有未知权限的普通用户"
-  // → 不应该能看到组织架构入口，除非他们有特定的角色权限
-  const { data: myOrgsData } = useQuery({
-    queryKey: queryKeys.channels.myOrganizations(user?.id),
-    queryFn: async () => {
-      try {
-        const r = await channelApi.getMyOrganizations()
-        // 兼容性处理：后端可能返回 null、单对象或数组
-        const d = r.data?.data
-        if (Array.isArray(d)) return d
-        if (d && typeof d === 'object') return [d] as any[] // 单个对象转为数组
-        return []
-      } catch {
-        // 接口失败（如无组织记录时返回 null）→ 降级为空数组，不阻塞页面渲染
-        return []
-      }
-    },
-    enabled: !!user && !user.isSystemAdmin,
-    retry: false,
-    staleTime: 60_000,
-  })
-
-  const isEndUser = useMemo(() => {
-    if (!user || user.isSystemAdmin) return false
-    // 无组织记录的情况（如新建账户、未邀请加入组织）→ 不属于纯终端用户
-    // 因为没有 roles 信息，保守地不允许访问 org management
-    const orgs = (myOrgsData ?? []) as Array<{ roles?: string[]; role?: string }>
-    if (!Array.isArray(orgs) || orgs.length === 0) return false
-    
-    const roleSet = new Set<string>()
-    for (const org of orgs) {
-      // 优先使用 roles 数组，退化为 role 字段，都不存在则跳过
-      const roles = Array.isArray(org.roles) && org.roles.length > 0 
-        ? org.roles 
-        : org.role ? [org.role] : []
-      roles.forEach((r) => roleSet.add(r))
-    }
-    // 有角色且全部为 customer → 纯终端用户；无角色或有任何管理角色 → 不是终端用户
-    return roleSet.size > 0 && [...roleSet].every((r) => r === 'customer')
-  }, [user, myOrgsData])
-
-  // 检测用户的角色分布状态，用于调试和监控
-  const userRoleStatus = useMemo(() => {
-    if (!user || user.isSystemAdmin) return 'system_admin'
-    const orgs = (myOrgsData ?? []) as Array<{ roles?: string[]; role?: string }>
-    if (!Array.isArray(orgs) || orgs.length === 0) return 'no_organizations'
-    const roleSet = new Set<string>()
-    for (const org of orgs) {
-      const roles = Array.isArray(org.roles) && org.roles.length > 0 
-        ? org.roles 
-        : org.role ? [org.role] : []
-      roles.forEach((r) => roleSet.add(r))
-    }
-    if (roleSet.size === 0) return 'no_role_info'
-    if ([...roleSet].every((r) => r === 'customer')) return 'end_user'
-    return 'org_member' // 有非 customer 角色
-  }, [user, myOrgsData])
-
-  // 用户是否具备访问组织架构的资格：仅系统管理员或有非 customer 组织角色的成员
-  const canAccessOrgManagement = useMemo(
-    () => !userRoleStatus.includes('no_') && (userRoleStatus === 'system_admin' || userRoleStatus === 'org_member'),
-    [userRoleStatus],
-  )
+  const { status: organizationAccessStatus, isEndUser } = useOrganizationAccess()
+  const canAccessOrgManagement = organizationAccessStatus === 'allowed'
 
   // Build ProLayout route config with permission filtering
   const routeConfig = useMemo((): ProLayoutProps['route'] => {
-    const source = isAdminRole ? getAdminRoutes(t) : getUserRoutes(t)
+    const source = getRoutes(t)
     
     // 过滤规则：
     // 1. 非终端用户但有组织成员身份 → 可见；纯终端用户（仅 customer 角色）→ 不可见
@@ -187,9 +112,9 @@ const MainLayout: React.FC = () => {
     )
     return {
       path: '/',
-      routes: filtered.map(({ permission, ...rest }) => rest),
+      routes: filtered.map(({ permission: _permission, ...rest }) => rest),
     }
-  }, [isAdminRole, isEndUser, canAccessOrgManagement, hasPermission, lang, t])
+  }, [isEndUser, canAccessOrgManagement, hasPermission, lang, t])
 
   const handleLogout = () => {
     logout()
@@ -333,16 +258,6 @@ const MainLayout: React.FC = () => {
 
   const siderCollapsed = isMobile ? mobileCollapsed : collapsed
 
-  // 路由级兜底：未授权用户直达 /organizations 时重定向（菜单已隐藏入口，这里拦截 URL 直达）
-  useEffect(() => {
-    if (location.pathname.startsWith('/organizations')) {
-      // 终端用户或无组织记录用户 → 重定向到未授权页
-      if (isEndUser || userRoleStatus === 'no_organizations' || userRoleStatus === 'no_role_info') {
-        navigate('/unauthorized', { replace: true })
-      }
-    }
-  }, [isEndUser, userRoleStatus, location.pathname, navigate])
-
   return (
     <>
       <ProLayout
@@ -396,22 +311,7 @@ const MainLayout: React.FC = () => {
         }}
         contentStyle={{ padding: isMobile ? 12 : 24 }}
       >
-        {/* 无任何可见菜单（如无组织归属用户）：明确提示而非空白菜单死胡同 */}
-        {routeConfig?.routes && routeConfig.routes.length > 0 ? (
-          <Outlet />
-        ) : (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: '80px 16px' }}>
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={
-                <span>
-                  {t('layout.emptyMenuTitle')}
-                  <div style={{ marginTop: 8, fontSize: 13, color: '#8c9cb0' }}>{t('layout.emptyMenuHint')}</div>
-                </span>
-              }
-            />
-          </div>
-        )}
+        <Outlet />
       </ProLayout>
 
       <ModalForm

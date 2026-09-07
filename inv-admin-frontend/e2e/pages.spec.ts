@@ -1,16 +1,11 @@
 import { test, expect } from '@playwright/test'
-import { injectAuthStorage, gotoAuthed, evidencePath, loadAccount } from './helpers'
+import { gotoAuthed, evidencePath, loadAccount } from './helpers'
 
 /**
- * Core page smoke tests (already authenticated via injected session):
- * dashboard, device list → device detail navigation, alerts, OTA,
- * stations and monitoring.
+ * Core page smoke tests. Authentication comes from the `setup` project's
+ * storageState (see playwright.config.ts projects), not from another spec.
  */
 const acc = loadAccount()
-
-test.beforeEach(async ({ page }) => {
-  await injectAuthStorage(page)
-})
 
 test('仪表盘加载', async ({ page }) => {
   await gotoAuthed(page, '/dashboard')

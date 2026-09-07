@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "mimosa-hook-status/v1",
+  "recordedAt": "2026-09-03T13:39:36.992Z",
+  "sessionId": "sess_f8c9ca21-a4a2-4e38-a22a-5a571d5e8482",
+  "event": "PostToolUse",
+  "toolName": "Edit",
+  "file": "inv-admin-frontend/e2e/pages.spec.ts",
+  "outcome": "clear",
+  "coverage": "complete",
+  "findingCount": 0,
+  "durationMs": 10,
+  "hostState": "hook_complete",
+  "reportHint": ".mimosa/reports/"
+}

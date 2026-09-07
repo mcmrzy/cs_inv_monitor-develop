@@ -264,14 +264,16 @@ class OtaBloc extends Bloc<OtaEvent, OtaState> {
           if (status == 'completed' || status == 'success') {
             emit(OTAComplete());
           } else {
+            final serverMessage = (data['error_message'] as String?)?.trim();
             emit(
               OTAError(
-                message: data['error_message'] as String? ??
-                    (status == 'cancelled'
+                message: serverMessage != null && serverMessage.isNotEmpty
+                    ? serverMessage
+                    : status == 'cancelled'
                         ? 'Upgrade cancelled'
                         : status == 'timeout'
                             ? 'Upgrade timed out'
-                            : 'Upgrade failed'),
+                            : 'Upgrade failed',
               ),
             );
           }

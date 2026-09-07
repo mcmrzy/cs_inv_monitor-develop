@@ -1,0 +1,60 @@
+import { test, expect } from '@playwright/test'
+import { injectAuthStorage, gotoAuthed, evidencePath, loadAccount } from './helpers'
+
+/**
+ * Core page smoke tests (already authenticated via injected session):
+ * dashboard, device list → device detail navigation, alerts, OTA,
+ * stations and monitoring.
+ */
+const acc = loadAccount()
+
+test.beforeEach(async ({ page }) => {
+  await injectAuthStorage(page)
+})
+
+test('仪表盘加载', async ({ page }) => {
+  await gotoAuthed(page, '/dashboard')
+  await expect(page.locator('.ant-pro-layout-content')).toBeVisible()
+  await page.screenshot({ path: evidencePath('e2e-page-dashboard.png'), fullPage: true })
+})
+
+test('设备列表展示绑定设备并可进入详情页', async ({ page }) => {
+  await gotoAuthed(page, '/devices')
+  const row = page
+    .locator('.ant-table-row', { hasText: acc.devices[0] })
+    .first()
+  await expect(row).toBeVisible({ timeout: 20_000 })
+  await page.screenshot({ path: evidencePath('e2e-page-devices.png'), fullPage: true })
+  // S/N column is an <a> that navigates directly to the full-screen detail page
+  await row.locator('a').first().click()
+  await expect(page).toHaveURL(new RegExp(`/devices/${acc.devices[0]}/detail$`), { timeout: 10_000 })
+  // 全屏详情页：带返回按钮与 Tabs，无侧边栏布局
+  await expect(page.getByRole('button', { name: /返回|Back/i })).toBeVisible({ timeout: 15_000 })
+  await expect(page.locator('.ant-tabs')).toBeVisible()
+  await expect(page.locator('.ant-layout-sider')).toHaveCount(0)
+  await page.screenshot({ path: evidencePath('e2e-page-device-detail.png'), fullPage: true })
+})
+
+test('告警中心加载', async ({ page }) => {
+  await gotoAuthed(page, '/alerts')
+  await expect(page.locator('.ant-pro-layout-content')).toBeVisible()
+  await page.screenshot({ path: evidencePath('e2e-page-alerts.png'), fullPage: true })
+})
+
+test('OTA 升级页加载', async ({ page }) => {
+  await gotoAuthed(page, '/ota')
+  await expect(page.locator('.ant-pro-layout-content')).toBeVisible()
+  await page.screenshot({ path: evidencePath('e2e-page-ota.png'), fullPage: true })
+})
+
+test('电站管理加载', async ({ page }) => {
+  await gotoAuthed(page, '/stations')
+  await expect(page.locator('.ant-pro-layout-content')).toBeVisible()
+  await page.screenshot({ path: evidencePath('e2e-page-stations.png'), fullPage: true })
+})
+
+test('电站监控加载', async ({ page }) => {
+  await gotoAuthed(page, '/monitoring')
+  await expect(page.locator('.ant-pro-layout-content')).toBeVisible()
+  await page.screenshot({ path: evidencePath('e2e-page-monitoring.png'), fullPage: true })
+})

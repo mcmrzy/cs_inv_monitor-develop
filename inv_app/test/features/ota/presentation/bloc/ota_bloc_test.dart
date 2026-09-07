@@ -419,6 +419,7 @@ void main() {
                 right<Failure, Map<String, dynamic>>({
                   'status': 'cancelled',
                   'progress': 10.0,
+                  'error_message': '',
                 }));
         return otaBloc;
       },
