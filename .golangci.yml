@@ -1,0 +1,36 @@
+# golangci-lint 配置（v2 格式）
+# 运行方式：make lint-go（逐模块执行，本配置位于仓库根，各模块自动向上发现）
+# 策略：CI 仅对 PR 增量代码生效（golangci-lint-action only-new-issues），存量问题不阻塞
+version: "2"
+
+run:
+  timeout: 10m
+
+linters:
+  default: none
+  enable:
+    - errcheck      # 未检查的错误返回值
+    - govet         # 官方 vet 及 govet 扩展检查
+    - ineffassign   # 无效赋值
+    - staticcheck   # 静态检查全集（含 gosimple/stylecheck）
+    - unused        # 未使用的代码
+  settings:
+    staticcheck:
+      checks:
+        - all
+        # ST1000 包注释、ST1003 命名等历史债较多，先只关风格类，保留正确性检查
+        - -ST1000
+        - -ST1003
+        - -ST1020
+        - -ST1021
+        - -ST1022
+  exclusions:
+    rules:
+      # 测试代码中忽略 errcheck（断言辅助/清理函数常有意忽略错误）
+      - path: _test\.go
+        linters:
+          - errcheck
+
+formatters:
+  enable:
+    - gofmt

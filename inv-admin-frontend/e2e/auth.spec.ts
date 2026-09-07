@@ -6,15 +6,14 @@ import {
   loginPasswordInput,
   loginSubmitButton,
   openUserMenu,
-  saveAuthStorage,
-  injectAuthStorage,
   evidencePath,
 } from './helpers'
 
 /**
- * Authentication flows:
+ * Authentication flows (session for other specs comes from the `setup`
+ * project — this file only tests the auth feature itself):
  * - unauthenticated access to a protected route → redirected to /login
- * - valid credentials → /dashboard (+ persisted session for later specs)
+ * - valid credentials → /dashboard
  * - logout from the user menu → back to /login
  * - wrong password → inline error alert, stays on /login
  *
@@ -23,10 +22,15 @@ import {
  */
 const acc = loadAccount()
 
-test('未登录访问受保护路由重定向到 /login', async ({ page }) => {
-  await page.goto('/devices')
-  await expect(page).toHaveURL(/\/login/, { timeout: 15_000 })
-  await page.screenshot({ path: evidencePath('e2e-redirect-login.png') })
+test.describe('未登录访问', () => {
+  // 项目级 storageState 会注入登录态；未登录行为必须在空会话下验证
+  test.use({ storageState: { cookies: [], origins: [] } })
+
+  test('未登录访问受保护路由重定向到 /login', async ({ page }) => {
+    await page.goto('/devices')
+    await expect(page).toHaveURL(/\/login/, { timeout: 15_000 })
+    await page.screenshot({ path: evidencePath('e2e-redirect-login.png') })
+  })
 })
 
 test('有效凭据登录成功进入 /dashboard', async ({ page }) => {
@@ -34,14 +38,11 @@ test('有效凭据登录成功进入 /dashboard', async ({ page }) => {
   await expect(page).toHaveURL(/\/dashboard/, { timeout: 20_000 })
   await expect(page.locator('.ant-pro-layout-content')).toBeVisible()
   await page.screenshot({ path: evidencePath('e2e-login-success.png'), fullPage: true })
-  // Persist the session so subsequent specs (pages/lang) reuse it.
-  await saveAuthStorage(page)
 })
 
 test('登出后回到 /login', async ({ page }) => {
-  await injectAuthStorage(page)
-  await page.goto('/dashboard')
-  await expect(page).not.toHaveURL(/\/login/, { timeout: 20_000 })
+  await login(page, acc)
+  await expect(page).toHaveURL(/\/dashboard/, { timeout: 20_000 })
   await openUserMenu(page)
   await page.getByText(/退出登录|Logout/).click()
   await expect(page).toHaveURL(/\/login/, { timeout: 15_000 })

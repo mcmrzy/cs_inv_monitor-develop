@@ -2175,21 +2175,9 @@ CREATE TABLE IF NOT EXISTS device_model_fields (
 );
 CREATE INDEX IF NOT EXISTS idx_device_model_fields_model_sort ON device_model_fields(model_id, group_code, sort_order);
 
-CREATE TABLE IF NOT EXISTS device_model_commands (
-    id               BIGSERIAL PRIMARY KEY,
-    model_id         BIGINT NOT NULL REFERENCES device_models(id) ON DELETE RESTRICT,
-    command_code     VARCHAR(64) NOT NULL,
-    display_name_key VARCHAR(128) NOT NULL,
-    parameter_schema JSONB NOT NULL DEFAULT '{}'::jsonb,
-    response_schema  JSONB NOT NULL DEFAULT '{}'::jsonb,
-    timeout_seconds  INTEGER NOT NULL DEFAULT 30 CHECK (timeout_seconds BETWEEN 1 AND 3600),
-    risk_level       SMALLINT NOT NULL DEFAULT 1 CHECK (risk_level BETWEEN 1 AND 3),
-    requires_online  BOOLEAN NOT NULL DEFAULT TRUE,
-    is_enabled       BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (model_id, command_code)
-);
+-- device_model_commands 的正式定义见本文件前部（≈244 行）；此处的早期重复定义
+-- 因 IF NOT EXISTS 从不生效，已于 2026-09 基线治理时移除，能力扩展列由
+-- 尾部内联的迁移 049/096 段补充。
 
 CREATE TABLE IF NOT EXISTS device_commands (
     id              BIGSERIAL PRIMARY KEY,

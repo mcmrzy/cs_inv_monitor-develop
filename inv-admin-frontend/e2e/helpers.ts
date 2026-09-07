@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, type Page } from '@playwright/test'
@@ -8,25 +8,12 @@ export function evidencePath(name: string): string {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'e2e_evidence', name)
 }
 
-const AUTH_STORAGE_FILE = 'auth-storage.json'
-
 /**
- * Persists the zustand `auth-storage` localStorage payload so later tests can
- * restore the session via injectAuthStorage() instead of logging in again.
+ * Playwright storageState file written by the `setup` project (auth.setup.ts)
+ * and consumed by the browser projects via `use.storageState`. Keeps every
+ * spec independent of test execution order.
  */
-export async function saveAuthStorage(page: Page): Promise<void> {
-  const raw = await page.evaluate(() => localStorage.getItem('auth-storage'))
-  if (!raw) throw new Error('auth-storage not found in localStorage')
-  writeFileSync(evidencePath(AUTH_STORAGE_FILE), raw, 'utf-8')
-}
-
-/** Injects the previously saved session into the page before any navigation. */
-export async function injectAuthStorage(page: Page): Promise<void> {
-  const raw = readFileSync(evidencePath(AUTH_STORAGE_FILE), 'utf-8')
-  await page.addInitScript((s: string) => {
-    localStorage.setItem('auth-storage', s)
-  }, raw)
-}
+export const STORAGE_STATE = evidencePath('auth-state.json')
 
 export interface E2EAccount {
   account: string
@@ -48,9 +35,9 @@ export function loadAccount(): E2EAccount {
 }
 
 /** Locators for the login form (works in both zh and en). */
-export const loginAccountInput = page => page.getByPlaceholder(/手机号 \/ 邮箱|Phone \/ Email/)
-export const loginPasswordInput = page => page.getByPlaceholder(/密码|Password/)
-export const loginSubmitButton = page => page.locator('button[type="submit"]')
+export const loginAccountInput = (page: Page) => page.getByPlaceholder(/手机号 \/ 邮箱|Phone \/ Email/)
+export const loginPasswordInput = (page: Page) => page.getByPlaceholder(/密码|Password/)
+export const loginSubmitButton = (page: Page) => page.locator('button[type="submit"]')
 
 /** Fills the login form and submits; waits until the app redirects away from /login. */
 export async function login(page: Page, account: E2EAccount): Promise<void> {

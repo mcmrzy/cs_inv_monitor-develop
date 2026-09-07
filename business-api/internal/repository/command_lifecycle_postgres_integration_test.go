@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,6 +20,8 @@ import (
 
 // setupCommandTestDB 为命令生命周期测试创建独立临时库并加载 squash schema
 // （device_commands / device_cmd_logs 均来自 schema.sql 基线）。
+// 基线只含迁移 0..95 的 DDL；096+ 由 migrator 在服务启动时回放（schema.sql
+// 尾部注释即此契约），故这里同样回放 096+ 尾部，使测试库与真实生产库形态收敛。
 func setupCommandTestDB(t *testing.T) (*pgxpool.Pool, func()) {
 	t.Helper()
 	ctx := context.Background()
@@ -41,12 +45,40 @@ func setupCommandTestDB(t *testing.T) (*pgxpool.Pool, func()) {
 	_, err = pool.Exec(ctx, string(schemaBytes))
 	require.NoError(t, err, "load schema.sql")
 
+	replayActiveMigrationTail(t, pool, repoRoot)
+
 	return pool, func() {
 		pool.Close()
 		_, _ = admin.Exec(ctx, `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname=$1`, dbName)
 		_, dropErr := admin.Exec(ctx, "DROP DATABASE IF EXISTS "+dbName)
 		assert.NoError(t, dropErr)
 		admin.Close()
+	}
+}
+
+// replayActiveMigrationTail 按编号顺序执行 database/migrations/ 中 096+ 的
+// up 迁移（与 MIGRATION_AUTO_RUN 的启动回放一致，均设计为幂等可重放）。
+func replayActiveMigrationTail(t *testing.T, pool *pgxpool.Pool, repoRoot string) {
+	t.Helper()
+	entries, err := os.ReadDir(filepath.Join(repoRoot, "database", "migrations"))
+	require.NoError(t, err)
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".up.sql") {
+			names = append(names, e.Name())
+		}
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		num := 0
+		fmt.Sscanf(name, "%d", &num)
+		if num < 96 {
+			continue
+		}
+		contents, err := os.ReadFile(filepath.Join(repoRoot, "database", "migrations", name))
+		require.NoError(t, err)
+		_, err = pool.Exec(context.Background(), string(contents))
+		require.NoError(t, err, "replay %s on squash baseline", name)
 	}
 }
 

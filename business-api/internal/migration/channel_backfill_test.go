@@ -12,11 +12,12 @@ import (
 func ptr[T any](value T) *T { return &value }
 
 func validRoleMappings() []LegacyRoleMapping {
+	// 组织类型链必须满足 082 层级约束（m→a→d→installer 为合法四级链）
 	return []LegacyRoleMapping{
 		{LegacyRole: 1, OrganizationType: "manufacturer", RoleCodes: []string{"org_admin"}},
 		{LegacyRole: 2, OrganizationType: "agent", RoleCodes: []string{"channel_manager"}},
 		{LegacyRole: 3, OrganizationType: "distributor", RoleCodes: []string{"channel_manager"}},
-		{LegacyRole: 5, OrganizationType: "customer", RoleCodes: []string{"viewer"}},
+		{LegacyRole: 5, OrganizationType: "installer", RoleCodes: []string{"viewer"}},
 	}
 }
 

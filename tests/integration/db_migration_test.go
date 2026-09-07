@@ -1950,3 +1950,107 @@ func collectUpMigrations(t *testing.T, dir string) []migrationFile {
 	})
 	return files
 }
+
+// activeMigrationsDir resolves database/migrations specifically (the 096+ tail
+// lives only there; findMigrationsDir may land on the archive instead).
+func activeMigrationsDir(t *testing.T) string {
+	t.Helper()
+	for _, rel := range []string{
+		"../../database/migrations",
+		"../../../database/migrations",
+	} {
+		abs, err := filepath.Abs(rel)
+		if err != nil {
+			continue
+		}
+		if info, err := os.Stat(abs); err == nil && info.IsDir() {
+			for _, m := range collectUpMigrations(t, abs) {
+				if m.Number >= 96 {
+					return abs
+				}
+			}
+		}
+	}
+	t.Fatal("no active migrations directory containing a 096+ tail")
+	return ""
+}
+
+// TestActiveMigrationsReplayOnSquashBaseline pins the squash contract from the
+// replay side: schema.sql baseline records versions 0..95 as applied, and the
+// business containers replay everything newer (096+) at startup via
+// MIGRATION_AUTO_RUN. Container healthchecks exercise that path implicitly;
+// this test replays the same files explicitly on a disposable database so a
+// baseline/migration conflict fails fast with the offending file named.
+func TestActiveMigrationsReplayOnSquashBaseline(t *testing.T) {
+	cfg := LoadConfig()
+	requireService(t, cfg.DBHost, cfg.DBPort, "PostgreSQL")
+
+	adminCfg := cfg
+	adminCfg.DBName = "postgres"
+	adminPool := ConnectDB(t, adminCfg)
+	defer adminPool.Close()
+
+	ctx := context.Background()
+	dbName := fmt.Sprintf("inv_replay_test_%d", time.Now().UnixNano())
+	_, err := adminPool.Exec(ctx, "CREATE DATABASE "+dbName)
+	require.NoError(t, err, "create disposable replay database")
+
+	migrationCfg := cfg
+	migrationCfg.DBName = dbName
+	pool := ConnectDB(t, migrationCfg)
+	defer func() {
+		pool.Close()
+		_, _ = adminPool.Exec(ctx, `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname=$1`, dbName)
+		_, dropErr := adminPool.Exec(ctx, "DROP DATABASE IF EXISTS "+dbName)
+		assert.NoError(t, dropErr, "drop disposable replay database")
+	}()
+
+	// Baseline replay contract needs the ACTIVE migrations dir (096+ tail);
+	// findMigrationsDir may resolve to migrations.archive which has no tail.
+	migrationsDir := activeMigrationsDir(t)
+	schemaPath := filepath.Join(filepath.Dir(migrationsDir), "schema.sql")
+	schemaSQL, err := os.ReadFile(schemaPath)
+	require.NoError(t, err, "read baseline schema")
+	_, err = pool.Exec(ctx, string(schemaSQL))
+	require.NoError(t, err, "squashed schema.sql must apply on empty DB")
+	for _, m := range collectUpMigrations(t, migrationsDir) {
+		if m.Number < 96 {
+			continue
+		}
+		var recorded bool
+		require.NoError(t, pool.QueryRow(ctx,
+			`SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=$1)`, m.Number).Scan(&recorded))
+		require.False(t, recorded, "migration %d is in database/migrations but already recorded in baseline", m.Number)
+	}
+
+	// Replay the active tail in order — this is what api-server does at startup.
+	replayed := 0
+	for _, m := range collectUpMigrations(t, migrationsDir) {
+		if m.Number < 96 {
+			continue
+		}
+		contents := readMigrationFile(t, migrationsDir, m.Name)
+		require.NoError(t, func() error {
+			_, err := pool.Exec(ctx, contents)
+			return err
+		}(), "replay migration %s on squash baseline", m.Name)
+		replayed++
+	}
+	require.GreaterOrEqual(t, replayed, 15, "expected at least the 096..110 tail to replay")
+
+	// Spot-check signature objects introduced by the replayed tail.
+	for _, probe := range []struct{ name, sql string }{
+		{"096 config_domain column", `SELECT EXISTS(SELECT 1 FROM information_schema.columns
+			WHERE table_name='device_model_commands' AND column_name='config_domain')`},
+		{"097 app_versions table", `SELECT to_regclass('public.app_versions') IS NOT NULL`},
+		{"098 devices.device_key_hash", `SELECT EXISTS(SELECT 1 FROM information_schema.columns
+			WHERE table_name='devices' AND column_name='device_key_hash')`},
+		{"105 member_transfer_requests", `SELECT to_regclass('public.member_transfer_requests') IS NOT NULL`},
+		{"108 devices:control grant path", `SELECT EXISTS(SELECT 1 FROM information_schema.columns
+			WHERE table_name='role_permission_grants' AND column_name='permission_code')`},
+	} {
+		var exists bool
+		require.NoError(t, pool.QueryRow(ctx, probe.sql).Scan(&exists), probe.name)
+		assert.True(t, exists, "%s must exist after tail replay", probe.name)
+	}
+}

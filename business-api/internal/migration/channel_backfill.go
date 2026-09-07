@@ -437,9 +437,14 @@ func analyzeOwnershipConflicts(facts []LegacyOwnershipFact) []QuarantineEntry {
 }
 
 func legalOrganizationEdge(parent, child string) bool {
+	// 与 082 层级触发器保持一致：agent←manufacturer、distributor←agent、
+	// installer←distributor、customer←installer|manufacturer。旧规则
+	// （distributor→customer）会被数据库约束拒绝，导致 backfill 中途失败。
 	return (parent == "manufacturer" && child == "agent") ||
 		(parent == "agent" && child == "distributor") ||
-		(parent == "distributor" && child == "customer")
+		(parent == "distributor" && child == "installer") ||
+		(parent == "installer" && child == "customer") ||
+		(parent == "manufacturer" && child == "customer")
 }
 
 type OrganizationBackfillStore interface {

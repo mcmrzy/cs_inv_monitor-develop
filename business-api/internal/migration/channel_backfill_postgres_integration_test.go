@@ -41,17 +41,20 @@ func TestPostgresOrganizationBackfillIsDurableAndIdempotent(t *testing.T) {
 	}()
 
 	repoRoot := filepath.Clean(filepath.Join("..", "..", ".."))
-	for _, path := range []string{
-		filepath.Join(repoRoot, "database", "schema.sql"),
-		filepath.Join(repoRoot, "database", "migrations", "064_create_channel_authorization.up.sql"),
-		filepath.Join(repoRoot, "database", "migrations", "065_extend_audit_outbox.up.sql"),
-		filepath.Join(repoRoot, "database", "migrations", "066_create_channel_backfill_control.up.sql"),
-	} {
-		contents, readErr := os.ReadFile(path)
-		require.NoError(t, readErr)
-		_, execErr := pool.Exec(ctx, string(contents))
-		require.NoError(t, execErr, "execute %s", filepath.Base(path))
-	}
+	// 064/065/066 已 squash 进 schema.sql 基线（迁移文件移入 archive）
+	contents, readErr := os.ReadFile(filepath.Join(repoRoot, "database", "schema.sql"))
+	require.NoError(t, readErr)
+	_, execErr := pool.Exec(ctx, string(contents))
+	require.NoError(t, execErr, "execute schema.sql")
+
+	// 遗留渠道快照按迁移 076 之前的 users 形态读取（role/parent_id 列），
+	// 当前基线已无这两列；此处补建以还原快照来源的历史 schema。
+	_, err = pool.Exec(ctx, `
+		ALTER TABLE users
+			ADD COLUMN IF NOT EXISTS role SMALLINT,
+			ADD COLUMN IF NOT EXISTS parent_id BIGINT
+	`)
+	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `
 		INSERT INTO users(id,phone,password_hash,role,parent_id,status) VALUES
 			(9100,'channel-9100','hash',1,NULL,1),
@@ -200,11 +203,14 @@ func TestPostgresOrganizationBackfillIsDurableAndIdempotent(t *testing.T) {
 }
 
 func validIntegrationMappings() []LegacyRoleMapping {
+	// 两个约束取交集：角色码必须是 083 简化后的五个合法值，组织链必须满足
+	// 082 层级触发器（agent←manufacturer、distributor←agent、installer←
+	// distributor），故四级链为 manufacturer→agent→distributor→installer。
 	return []LegacyRoleMapping{
 		{LegacyRole: 1, OrganizationType: "manufacturer", RoleCodes: []string{"org_admin"}},
-		{LegacyRole: 2, OrganizationType: "agent", RoleCodes: []string{"channel_manager"}},
-		{LegacyRole: 3, OrganizationType: "distributor", RoleCodes: []string{"channel_manager"}},
-		{LegacyRole: 5, OrganizationType: "customer", RoleCodes: []string{"viewer"}},
+		{LegacyRole: 2, OrganizationType: "agent", RoleCodes: []string{"agent"}},
+		{LegacyRole: 3, OrganizationType: "distributor", RoleCodes: []string{"distributor"}},
+		{LegacyRole: 5, OrganizationType: "installer", RoleCodes: []string{"installer"}},
 	}
 }
 

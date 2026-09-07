@@ -42,10 +42,10 @@ func TestAuthorizationPostgresDescendantAllowSiblingAndCrossTenantDeny(t *testin
 	}()
 
 	repoRoot := filepath.Clean(filepath.Join("..", "..", ".."))
+	// schema.sql squash 基线已内联 001-095 全部迁移（含 064/065 授权表），
+	// 归档目录 database/migrations.archive/ 不再参与测试加载
 	for _, path := range []string{
 		filepath.Join(repoRoot, "database", "schema.sql"),
-		filepath.Join(repoRoot, "database", "migrations", "064_create_channel_authorization.up.sql"),
-		filepath.Join(repoRoot, "database", "migrations", "065_extend_audit_outbox.up.sql"),
 	} {
 		contents, readErr := os.ReadFile(path)
 		require.NoError(t, readErr)
@@ -53,20 +53,21 @@ func TestAuthorizationPostgresDescendantAllowSiblingAndCrossTenantDeny(t *testin
 		require.NoError(t, execErr, filepath.Base(path))
 	}
 	_, err = pool.Exec(ctx, `
-		INSERT INTO users(id,phone,password_hash,role,status) VALUES
-			(700,'authz-actor','hash',1,1),(701,'authz-member-102','hash',5,1),(702,'authz-member-103','hash',5,1);
+		INSERT INTO users(id,phone,password_hash,status) VALUES
+			(700,'authz-actor','hash',1),(701,'authz-member-102','hash',1),(702,'authz-member-103','hash',1);
 		INSERT INTO organizations(id,root_tenant_id,parent_id,org_type,code,name,status) VALUES
 			(100,100,NULL,'manufacturer','M-A','Manufacturer A','active'),
 			(101,100,100,'agent','A-1','Agent 1','active'),
 			(102,100,101,'distributor','D-1','Distributor 1','active'),
-			(103,100,102,'customer','C-1','Customer 1','active'),
-			(104,100,100,'agent','A-SIBLING','Sibling Agent','active'),
+			(103,100,102,'installer','I-1','Installer 1','active'),
+			(104,100,103,'customer','C-1','Customer 1','active'),
+			(105,100,100,'agent','A-SIBLING','Sibling Agent','active'),
 			(200,200,NULL,'manufacturer','M-B','Manufacturer B','active'),
 			(201,200,200,'agent','B-1','Agent B','active');
 		INSERT INTO organization_memberships(id,root_tenant_id,organization_id,user_id,status,version)
 		VALUES(1001,100,101,700,'active',1),(1002,100,102,701,'active',1),(1003,100,103,702,'active',1);
 		INSERT INTO membership_role_assignments(id,root_tenant_id,organization_id,membership_id,role_code,status)
-		VALUES(1101,100,101,1001,'channel_manager','active');
+		VALUES(1101,100,101,1001,'agent','active');
 		INSERT INTO role_permission_grants(root_tenant_id,organization_id,role_assignment_id,permission_code,data_scope,scope_definition)
 		VALUES
 			(100,101,1101,'organization:view','organization_and_descendants','{}'::jsonb),
@@ -85,7 +86,7 @@ func TestAuthorizationPostgresDescendantAllowSiblingAndCrossTenantDeny(t *testin
 	}{
 		{name: "active organization", target: "101", allowed: true},
 		{name: "descendant", target: "103", allowed: true},
-		{name: "sibling", target: "104", allowed: false},
+		{name: "sibling", target: "105", allowed: false},
 		{name: "cross tenant", target: "201", allowed: false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -108,16 +109,16 @@ func TestAuthorizationPostgresDescendantAllowSiblingAndCrossTenantDeny(t *testin
 		ids = append(ids, organization.ID)
 	}
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
-	assert.Equal(t, []int64{101, 102, 103}, ids)
+	assert.Equal(t, []int64{101, 102, 103, 104}, ids)
 	visibleCount, err := organizationRepository.CountVisible(ctx, plan)
 	require.NoError(t, err)
-	assert.Equal(t, int64(3), visibleCount)
+	assert.Equal(t, int64(4), visibleCount)
 	visible103, err := organizationRepository.ExistsVisible(ctx, plan, 103)
 	require.NoError(t, err)
 	assert.True(t, visible103)
-	visible104, err := organizationRepository.ExistsVisible(ctx, plan, 104)
+	visible105, err := organizationRepository.ExistsVisible(ctx, plan, 105)
 	require.NoError(t, err)
-	assert.False(t, visible104)
+	assert.False(t, visible105)
 
 	memberPlan, err := service.BuildScope(ctx, actor, "member:view", "member")
 	require.NoError(t, err)
