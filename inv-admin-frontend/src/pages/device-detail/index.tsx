@@ -7,6 +7,7 @@ import EnergyCenterTab from './EnergyCenterTab'
 import StatusTab from './StatusTab'
 import EnergyStatsTab from './EnergyStatsTab'
 import StateCenterTab from './StateCenterTab'
+import BmsTab from './BmsTab'
 import HealthTab from './HealthTab'
 import DiagnosticsTab from './DiagnosticsTab'
 import StrategyTab from './StrategyTab'
@@ -54,6 +55,7 @@ const DeviceDetailPage: React.FC = () => {
         onChange={setActiveTab}
         items={[
           { key: 'energy', label: t('deviceDetail.tab.energy'), children: <EnergyCenterTab sn={sn} /> },
+          { key: 'bms', label: t('deviceDetail.tab.bms'), children: <BmsTab sn={sn} /> },
           { key: 'realtime', label: t('deviceDetail.tab.realtime'), children: <StatusTab sn={sn} /> },
           { key: 'stats', label: t('deviceDetail.tab.stats'), children: <EnergyStatsTab sn={sn} /> },
           { key: 'state', label: t('deviceDetail.tab.state'), children: <StateCenterTab sn={sn} /> },

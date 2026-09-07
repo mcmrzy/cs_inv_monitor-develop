@@ -416,6 +416,122 @@ class CellsData {
       };
 }
 
+/// 2026-09 储能 BMS 扩展组（realtime bms 组，45 字段）。
+/// 量纲已在解析时统一为工程单位：SOC/SOH %、容量 Ah、芯压 mV、温度 ℃、电流 A、电压 V。
+/// 字段定义见 docs/design/储能BMS遥测扩展协议设计.md §7.7。
+class BmsData {
+  final bool online;
+  final double soc;
+  final double soh;
+  final double capacityRemain;
+  final double capacityFull;
+  final double capacityDesign;
+  final int cycleCount;
+  final double cellVoltageMax;
+  final double cellVoltageMin;
+  final double cellVoltageDiff;
+  final int cellVoltageMaxIdx;
+  final int cellVoltageMinIdx;
+  final double cellTempMax;
+  final double cellTempMin;
+  final double mosTemp;
+  final double envTemp;
+  final double pcbTemp;
+
+  /// 0 静置 / 1 充电 / 2 放电 / 3 初始化 / 4 回充
+  final int workMode;
+
+  /// bit0 充MOS bit1 放MOS bit2 预放 bit3 预充
+  final int mosStatus;
+  final int systemMode;
+  final double chgRequestCurrent;
+  final double chgRequestVoltage;
+  final int faultStatus;
+  final int alarmW0;
+  final int alarmW1;
+  final int alarmW2;
+  final double totalChgCapacity;
+  final double totalDsgCapacity;
+
+  /// 16 芯电压（mV，纯值，均衡位在 [balanceBitmap]）
+  final List<double> cellVoltages;
+  final int balanceBitmap;
+
+  const BmsData({
+    this.online = false,
+    this.soc = 0,
+    this.soh = 0,
+    this.capacityRemain = 0,
+    this.capacityFull = 0,
+    this.capacityDesign = 0,
+    this.cycleCount = 0,
+    this.cellVoltageMax = 0,
+    this.cellVoltageMin = 0,
+    this.cellVoltageDiff = 0,
+    this.cellVoltageMaxIdx = 0,
+    this.cellVoltageMinIdx = 0,
+    this.cellTempMax = 0,
+    this.cellTempMin = 0,
+    this.mosTemp = 0,
+    this.envTemp = 0,
+    this.pcbTemp = 0,
+    this.workMode = 0,
+    this.mosStatus = 0,
+    this.systemMode = 0,
+    this.chgRequestCurrent = 0,
+    this.chgRequestVoltage = 0,
+    this.faultStatus = 0,
+    this.alarmW0 = 0,
+    this.alarmW1 = 0,
+    this.alarmW2 = 0,
+    this.totalChgCapacity = 0,
+    this.totalDsgCapacity = 0,
+    this.cellVoltages = const [],
+    this.balanceBitmap = 0,
+  });
+
+  factory BmsData.fromJson(Map<String, dynamic> json) {
+    double d(String key) => (json[key] as num?)?.toDouble() ?? 0;
+    int i(String key) => (json[key] as num?)?.toInt() ?? 0;
+
+    return BmsData(
+      online: i('bms_online') == 1,
+      soc: d('bms_soc'),
+      soh: d('bms_soh'),
+      capacityRemain: d('bms_capacity_remain'),
+      capacityFull: d('bms_capacity_full'),
+      capacityDesign: d('bms_capacity_design'),
+      cycleCount: i('bms_cycle_count'),
+      cellVoltageMax: d('bms_cell_voltage_max'),
+      cellVoltageMin: d('bms_cell_voltage_min'),
+      cellVoltageDiff: d('bms_cell_voltage_diff'),
+      cellVoltageMaxIdx: i('bms_cell_voltage_max_index'),
+      cellVoltageMinIdx: i('bms_cell_voltage_min_index'),
+      cellTempMax: d('bms_cell_temp_max'),
+      cellTempMin: d('bms_cell_temp_min'),
+      mosTemp: d('bms_mos_temp'),
+      envTemp: d('bms_env_temp'),
+      pcbTemp: d('bms_pcb_temp'),
+      workMode: i('bms_battery_work_mode'),
+      mosStatus: i('bms_mos_status'),
+      systemMode: i('bms_system_mode'),
+      chgRequestCurrent: d('bms_chg_request_current'),
+      chgRequestVoltage: d('bms_chg_request_voltage'),
+      faultStatus: i('bms_fault_status'),
+      alarmW0: i('bms_alarm_w0'),
+      alarmW1: i('bms_alarm_w1'),
+      alarmW2: i('bms_alarm_w2'),
+      totalChgCapacity: d('bms_total_chg_capacity'),
+      totalDsgCapacity: d('bms_total_dsg_capacity'),
+      cellVoltages: List<double>.generate(
+        16,
+        (idx) => d('bms_cell_voltage_${idx.toString().padLeft(2, '0')}'),
+      ),
+      balanceBitmap: i('bms_balance_bitmap'),
+    );
+  }
+}
+
 class MeterData {
   final double totalPower;
   final double phaseAPower;
@@ -584,6 +700,9 @@ class InverterRealtime {
   final OnlineStatus? onlineStatus;
   final DeviceInfo? deviceInfo;
   final MeterData? meter;
+
+  /// 2026-09 储能 BMS 扩展组（未接电池/旧固件时为 null）
+  final BmsData? bms;
   final double loadPower;
 
   /// 遥测数据时间戳；缺失时为 null（视为未知，
@@ -603,6 +722,7 @@ class InverterRealtime {
     this.onlineStatus,
     this.deviceInfo,
     this.meter,
+    this.bms,
     this.loadPower = 0,
     this.updatedAt,
   });
@@ -660,6 +780,9 @@ class InverterRealtime {
           : null,
       meter: json['meter'] is Map
           ? MeterData.fromJson(json['meter'] as Map<String, dynamic>)
+          : null,
+      bms: extractGroupData(json['bms']) != null
+          ? BmsData.fromJson(extractGroupData(json['bms'])!)
           : null,
       loadPower: (json['load_power'] as num?)?.toDouble() ?? 0,
       updatedAt:

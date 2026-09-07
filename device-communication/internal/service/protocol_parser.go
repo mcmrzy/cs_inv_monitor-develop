@@ -780,6 +780,48 @@ func buildRealtimeV2(s *telemetryv2.Sample, sn string, eventTimeUnix int64) map[
 		},
 		"timestamp": eventTimeUnix,
 	}
+	// 2026-09 储能 BMS 扩展组（45 值，additive）：缺组/未接电池时省略整组，前端据此渲染空态。
+	// 字段键与迁移 112 telemetry_field_catalog 一致（全局唯一，bms_ 前缀）。
+	if s.BMS.Online != nil || len(s.BMS.CellVoltages) > 0 {
+		bmsData := map[string]interface{}{
+			"bms_online":                 s.BMS.Online,
+			"bms_soc":                    s.BMS.SOC,
+			"bms_soh":                    s.BMS.SOH,
+			"bms_capacity_remain":        s.BMS.CapacityRemain,
+			"bms_capacity_full":          s.BMS.CapacityFull,
+			"bms_capacity_design":        s.BMS.CapacityDesign,
+			"bms_cycle_count":            s.BMS.CycleCount,
+			"bms_cell_voltage_max":       s.BMS.CellVoltageMax,
+			"bms_cell_voltage_min":       s.BMS.CellVoltageMin,
+			"bms_cell_voltage_diff":      s.BMS.CellVoltageDiff,
+			"bms_cell_voltage_max_index": s.BMS.CellVoltageMaxIdx,
+			"bms_cell_voltage_min_index": s.BMS.CellVoltageMinIdx,
+			"bms_cell_temp_max":          s.BMS.CellTempMax,
+			"bms_cell_temp_min":          s.BMS.CellTempMin,
+			"bms_mos_temp":               s.BMS.MOSTemp,
+			"bms_env_temp":               s.BMS.EnvTemp,
+			"bms_pcb_temp":               s.BMS.PCBTemp,
+			"bms_battery_work_mode":      s.BMS.BatteryWorkMode,
+			"bms_mos_status":             s.BMS.MOSStatus,
+			"bms_system_mode":            s.BMS.SystemMode,
+			"bms_chg_request_current":    s.BMS.ChgRequestCurrent,
+			"bms_chg_request_voltage":    s.BMS.ChgRequestVoltage,
+			"bms_fault_status":           s.BMS.FaultStatus,
+			"bms_alarm_w0":               s.BMS.AlarmW0,
+			"bms_alarm_w1":               s.BMS.AlarmW1,
+			"bms_alarm_w2":               s.BMS.AlarmW2,
+			"bms_total_chg_capacity":     s.BMS.TotalChgCapacity,
+			"bms_total_dsg_capacity":     s.BMS.TotalDsgCapacity,
+			"bms_balance_bitmap":         s.BMS.BalanceBitmap,
+		}
+		for i, v := range s.BMS.CellVoltages {
+			bmsData[fmt.Sprintf("bms_cell_voltage_%02d", i)] = v
+		}
+		realtime["bms"] = map[string]interface{}{
+			"data":      bmsData,
+			"timestamp": eventTimeUnix,
+		}
+	}
 	realtime["_sn"] = sn
 	realtime["_msg_type"] = "heartbeat"
 	realtime["_updated_at"] = time.Now().UTC().Format(time.RFC3339)
