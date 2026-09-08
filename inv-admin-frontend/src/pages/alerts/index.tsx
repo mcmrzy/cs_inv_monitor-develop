@@ -20,6 +20,7 @@ import useTranslation from '@/hooks/useTranslation'
 import useTimezoneStore from '@/stores/timezoneStore'
 import StatisticCard from '@/components/StatisticCard'
 import Popconfirm from '@/components/LocalizedPopconfirm'
+import ListPageTable from '@/components/ListPageTable'
 
 const { RangePicker } = DatePicker
 const { Title, Text } = Typography
@@ -174,6 +175,17 @@ const AlertsPage: React.FC = () => {
     onSuccess: () => { message.success(t('alert.confirmSuccess')); invalidate() },
     onError: () => { message.error(t('alert.operationFailed')) },
   })
+
+  // 「确认处理」轻确认：alarms 表无处理备注字段，仅二次确认后标记为已处理
+  const confirmHandle = (id: number) => {
+    modal.confirm({
+      title: t('alert.confirmHandleTitle'),
+      content: t('alert.confirmHandleContent'),
+      okText: t('alert.confirmProcess'),
+      cancelText: t('common.cancel'),
+      onOk: () => handleMutation.mutate(id),
+    })
+  }
 
   const ignoreMutation = useMutation({
     mutationFn: (id: number) => alertApi.ignore(id),
@@ -342,7 +354,7 @@ const AlertsPage: React.FC = () => {
           {String(record.status) === '0' && (
             <>
               <Button type="link" size="small" icon={<CheckOutlined />}
-                onClick={() => handleMutation.mutate(record.id)}
+                onClick={() => confirmHandle(record.id)}
               >{t('alert.confirmProcess')}</Button>
               <Popconfirm
                 title={t('alert.confirmIgnore')}
@@ -475,7 +487,7 @@ const AlertsPage: React.FC = () => {
           {record._type === 'alarm' && String(record.status) === '0' && (
             <>
               <Button type="link" size="small" icon={<CheckOutlined />}
-                onClick={() => handleMutation.mutate(record.id)}
+                onClick={() => confirmHandle(record.id)}
               >{t('alert.confirmProcess')}</Button>
               <Popconfirm
                 title={t('alert.confirmIgnore')}
@@ -643,12 +655,14 @@ const AlertsPage: React.FC = () => {
             style={{ marginBottom: 12 }}
           />
         )}
-        <Table
+        <ListPageTable
           rowKey={(record) => `${record._type || 'alarm'}-${record.id}`}
           columns={getColumns()}
           dataSource={mergedData}
           loading={isLoadingData}
           size="small"
+          persistenceKey="alerts-list"
+          onReload={() => { refetch(); refetchNotify() }}
           locale={{ emptyText: <Empty description={t('common.noData')} /> }}
           pagination={{
             current: page, pageSize, total, showSizeChanger: true,
