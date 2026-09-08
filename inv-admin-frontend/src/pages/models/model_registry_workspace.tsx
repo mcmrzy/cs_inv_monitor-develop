@@ -177,6 +177,7 @@ const ModelRegistryWorkspace: React.FC = () => {
         modal.warning({ title: t('models.registry.validationFailed'), content: result.issues.join(lang === 'zh' ? '；' : '; ') })
       }
     },
+    onError: () => messageApi.error(t('models.registry.validationFailed')),
   })
   const activateModel = useMutation({
     mutationFn: () => modelApi.activateRegistry(selectedModel!.id),
@@ -206,11 +207,13 @@ const ModelRegistryWorkspace: React.FC = () => {
 
   const openModelModal = (model?: DeviceModelItem) => {
     setSelectedModel(model || null)
+    modelForm.resetFields()
     modelForm.setFieldsValue(model || { category: 'inverter', is_active: false })
     setModelModalOpen(true)
   }
   const openFieldModal = (field?: FieldCatalogItem) => {
     setEditingField(field || null)
+    fieldForm.resetFields()
     fieldForm.setFieldsValue(field || {
       field_type: 'float', category: 'system', status: 'active',
       is_timeseries: true, is_aggregatable: true, allowed_aggregates: ['avg', 'min', 'max', 'last'],
@@ -219,6 +222,7 @@ const ModelRegistryWorkspace: React.FC = () => {
   }
   const openCommandModal = (command?: ModelCommandCapability) => {
     setEditingCommand(command || null)
+    commandForm.resetFields()
     commandForm.setFieldsValue({
       ...command, command_code: command?.command_code, display_name_key: command?.display_name_key,
       parameter_schema: JSON.stringify(command?.parameter_schema || { args: [] }, null, 2),
@@ -258,7 +262,7 @@ const ModelRegistryWorkspace: React.FC = () => {
   const protocolColumns = [
     { title: t('models.registry.protocolCode'), dataIndex: 'protocol_code' },
     { title: t('models.registry.version'), dataIndex: 'version', width: 90, render: (value: number) => `v${value}` },
-    { title: 'Schema Hash', dataIndex: 'schema_hash' },
+    { title: t('models.registry.schemaHash'), dataIndex: 'schema_hash' },
     { title: t('models.registry.fieldCount'), dataIndex: 'field_count', width: 90 },
     { title: t('common.status'), dataIndex: 'status', width: 100, render: (value: string) => <Tag color={statusColor[value]}>{statusLabel(value)}</Tag> },
     { title: t('models.registry.releasedAt'), dataIndex: 'released_at', width: 190, render: (value?: string) => value ? new Date(value).toLocaleString(lang === 'zh' ? 'zh-CN' : 'en-US') : '-' },
@@ -455,7 +459,7 @@ const ModelRegistryWorkspace: React.FC = () => {
         <Space size="middle" style={{ display: 'flex' }}>
           <Form.Item name="protocol_code" label={t('models.registry.protocolCode')} rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="version" label={t('models.registry.versionNumber')} rules={[{ required: true }]}><InputNumber min={1} /></Form.Item>
-          <Form.Item name="schema_hash" label="Schema Hash" rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item name="schema_hash" label={t('models.registry.schemaHash')} rules={[{ required: true }]}><Input /></Form.Item>
         </Space>
         <Form.Item name="fields" label={t('models.registry.fixedArrayMapping')} rules={[{ required: true }]}><Input.TextArea rows={14} style={{ fontFamily: 'monospace' }} /></Form.Item>
       </Form>

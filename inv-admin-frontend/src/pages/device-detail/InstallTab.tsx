@@ -20,6 +20,14 @@ interface BatteryProfile {
   chemistry: string
 }
 
+/** 后端 upsert 载荷（business-api UpsertBatteryConfigReq 的 JSON tag） */
+interface BatteryConfigPayload {
+  profile_id: number
+  capacity_ah: number
+  parallel_strings?: number
+  installer_limits?: Record<string, unknown>
+}
+
 const InstallTab: React.FC<InstallTabProps> = ({ sn }) => {
   const { t } = useTranslation()
   const { message } = App.useApp()
@@ -41,25 +49,40 @@ const InstallTab: React.FC<InstallTabProps> = ({ sn }) => {
       const d = r.data?.data ?? {}
       form.setFieldsValue({
         profile_id: d.profile_id ?? null,
+        capacity_ah: d.capacity_ah ?? undefined,
+        parallel_strings: d.parallel_strings ?? undefined,
       })
+      const limits = (d.installer_limits ?? {}) as Record<string, unknown>
       acForm.setFieldsValue({
-        ac_input_type: d.ac_input_type ?? 'grid',
-        grid_mode: d.grid_mode ?? 'off_grid',
-        max_input_current: d.max_input_current ?? 32,
-        max_output_voltage: d.max_output_voltage ?? 230,
+        ac_input_type: limits.ac_input_type ?? 'grid',
+        grid_mode: limits.grid_mode ?? 'off_grid',
+        max_input_current: limits.max_input_current ?? 32,
+        max_output_voltage: limits.max_output_voltage ?? 230,
       })
       return d
     }),
   })
 
   const bindMutation = useMutation({
-    mutationFn: (values: any) => deviceApi.updateBatteryConfig(sn, values),
+    mutationFn: (values: BatteryConfigPayload) => deviceApi.updateBatteryConfig(sn, values),
     onSuccess: () => {
       message.success(t('deviceDetail.install.bindSuccess'))
       queryClient.invalidateQueries({ queryKey: queryKeys.devices.batteryConfig(sn) })
     },
     onError: () => { message.error(t('deviceDetail.install.bindFailed')) },
   })
+
+  /** 组装 upsert 载荷：电池字段 + installer_limits（AC 字段并入 installer_limits 透传） */
+  const buildPayload = (batteryValues: { profile_id: number; capacity_ah: number; parallel_strings?: number }, acValues: Record<string, unknown>): BatteryConfigPayload => {
+    const limits: Record<string, unknown> = {}
+    Object.entries(acValues).forEach(([k, v]) => { if (v != null) limits[k] = v })
+    return {
+      profile_id: batteryValues.profile_id,
+      capacity_ah: batteryValues.capacity_ah,
+      ...(batteryValues.parallel_strings != null ? { parallel_strings: batteryValues.parallel_strings } : {}),
+      installer_limits: limits,
+    }
+  }
 
   const selectedProfile = profiles.find((p) => p.id === form.getFieldValue('profile_id'))
 
@@ -78,26 +101,58 @@ const InstallTab: React.FC<InstallTabProps> = ({ sn }) => {
         style={{ marginBottom: 16, borderRadius: 12 }}
       >
         <Form form={form} layout="vertical" style={{ maxWidth: 600 }}>
-          <Form.Item name="profile_id" label={t('deviceDetail.install.batteryProfile')}>
+          <Form.Item name="profile_id" label={t('deviceDetail.install.batteryProfile')} rules={[{ required: true, message: t('deviceDetail.install.selectProfile') }]}>
             <Select
               placeholder={t('deviceDetail.install.selectProfile')}
               allowClear
+              onChange={(id) => {
+                const p = profiles.find((item) => item.id === id)
+                if (p?.nominal_capacity) {
+                  form.setFieldValue('capacity_ah', p.nominal_capacity)
+                }
+              }}
               options={profiles.map((p) => ({
                 label: `${p.name} (${p.brand || '-'}) — ${p.nominal_voltage ?? '-'}V / ${p.nominal_capacity ?? '-'}Ah`,
                 value: p.id,
               }))}
             />
           </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="capacity_ah"
+                label={t('deviceDetail.install.capacityAh')}
+                rules={[
+                  { required: true, message: t('deviceDetail.install.capacityRequired') },
+                  { type: 'number', min: 1, message: t('deviceDetail.install.capacityPositive') },
+                ]}
+              >
+                <InputNumber min={1} style={{ width: '100%' }} placeholder="100" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="parallel_strings"
+                label={t('deviceDetail.install.parallelStrings')}
+                rules={[{ type: 'number', min: 1, message: t('deviceDetail.install.parallelPositive') }]}
+              >
+                <InputNumber min={1} style={{ width: '100%' }} placeholder="1" />
+              </Form.Item>
+            </Col>
+          </Row>
           {selectedProfile && (
             <Descriptions size="small" bordered column={1} style={{ marginBottom: 16 }}>
-              <Descriptions.Item label="Brand">{selectedProfile.brand || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Chemistry">{selectedProfile.chemistry || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Nominal Voltage">{selectedProfile.nominal_voltage ?? '-'} V</Descriptions.Item>
-              <Descriptions.Item label="Nominal Capacity">{selectedProfile.nominal_capacity ?? '-'} Ah</Descriptions.Item>
+              <Descriptions.Item label={t('deviceDetail.install.brand')}>{selectedProfile.brand || '-'}</Descriptions.Item>
+              <Descriptions.Item label={t('deviceDetail.install.chemistry')}>{selectedProfile.chemistry || '-'}</Descriptions.Item>
+              <Descriptions.Item label={t('deviceDetail.install.nominalVoltage')}>{selectedProfile.nominal_voltage ?? '-'} V</Descriptions.Item>
+              <Descriptions.Item label={t('deviceDetail.install.nominalCapacity')}>{selectedProfile.nominal_capacity ?? '-'} Ah</Descriptions.Item>
             </Descriptions>
           )}
           <Button type="primary" loading={bindMutation.isPending} onClick={async () => {
-            try { bindMutation.mutate(await form.validateFields()) } catch {}
+            try {
+              const batteryValues = await form.validateFields()
+              bindMutation.mutate(buildPayload(batteryValues, acForm.getFieldsValue()))
+            } catch {}
           }}>
             {t('deviceDetail.install.bindProfile')}
           </Button>
@@ -114,18 +169,18 @@ const InstallTab: React.FC<InstallTabProps> = ({ sn }) => {
             <Col span={12}>
               <Form.Item name="ac_input_type" label={t('deviceDetail.install.acInputType')}>
                 <Select options={[
-                  { label: 'Grid', value: 'grid' },
-                  { label: 'Generator', value: 'generator' },
-                  { label: 'Hybrid', value: 'hybrid' },
+                  { label: t('deviceDetail.install.inputGrid'), value: 'grid' },
+                  { label: t('deviceDetail.install.inputGenerator'), value: 'generator' },
+                  { label: t('deviceDetail.install.inputHybrid'), value: 'hybrid' },
                 ]} />
               </Form.Item>
             </Col>
             <Col span={12}>
               <Form.Item name="grid_mode" label={t('deviceDetail.install.gridMode')}>
                 <Select options={[
-                  { label: 'Off-Grid', value: 'off_grid' },
-                  { label: 'On-Grid', value: 'on_grid' },
-                  { label: 'Hybrid', value: 'hybrid' },
+                  { label: t('deviceDetail.install.modeOffGrid'), value: 'off_grid' },
+                  { label: t('deviceDetail.install.modeOnGrid'), value: 'on_grid' },
+                  { label: t('deviceDetail.install.modeHybrid'), value: 'hybrid' },
                 ]} />
               </Form.Item>
             </Col>
@@ -145,7 +200,9 @@ const InstallTab: React.FC<InstallTabProps> = ({ sn }) => {
           <Button type="primary" loading={bindMutation.isPending} onClick={async () => {
             try {
               const acValues = await acForm.validateFields()
-              bindMutation.mutate(acValues)
+              // 后端 upsert 硬校验 profile_id>0 与 capacity_ah>0：AC 保存前先校验电池表单
+              const batteryValues = await form.validateFields()
+              bindMutation.mutate(buildPayload(batteryValues, acValues))
             } catch {}
           }}>
             {t('deviceDetail.install.saveAcConfig')}

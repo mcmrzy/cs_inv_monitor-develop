@@ -40,6 +40,7 @@ export default {
     'system.retryFailed': '重试失败',
     'system.messageDeleted': '消息已删除',
     'system.deleteFailed': '删除失败',
+    'system.confirmDeleteMessage': '确定删除该 DLQ 消息？',
     'system.noDlqMessages': '暂无 DLQ 消息',
 
     /* 系统监控 Tab 标签 */
@@ -170,6 +171,7 @@ export default {
     'system.retryFailed': 'Retry failed',
     'system.messageDeleted': 'Message deleted',
     'system.deleteFailed': 'Delete failed',
+    'system.confirmDeleteMessage': 'Delete this DLQ message?',
     'system.noDlqMessages': 'No DLQ messages',
 
     /* System Monitor Tab Labels */

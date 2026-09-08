@@ -326,7 +326,7 @@ const BmsTab: React.FC<BmsTabProps> = ({ sn }) => {
       { name: 'SOC', unit: '%', color: '#22c55e', yAxis: 0, get: (r: any) => pick(r, ['battery_soc']) },
       { name: t('deviceDetail.bms.voltage'), unit: 'V', color: '#3b82f6', yAxis: 0, get: (r: any) => pick(r, ['battery_voltage']) },
       { name: t('deviceDetail.bms.current'), unit: 'A', color: '#F59E0B', yAxis: 1, get: (r: any) => pick(r, ['battery_current']) },
-      { name: t('deviceDetail.bms.power'), unit: 'kW', color: '#8B5CF6', yAxis: 1, get: (r: any) => pick(r, ['battery_power']) },
+      { name: t('deviceDetail.bms.power'), unit: 'kW', color: '#8B5CF6', yAxis: 1, get: (r: any) => { const v = pick(r, ['battery_power']); return v != null ? v / 1000 : null } },
     ]
     return {
       tooltip: { trigger: 'axis' as const },
@@ -501,8 +501,8 @@ const BmsTab: React.FC<BmsTabProps> = ({ sn }) => {
                 {[
                   { label: t('deviceDetail.bms.packVoltage'), value: m.battVoltage != null ? `${m.battVoltage.toFixed(2)} V` : '--', sub: 'BatVolt' },
                   { label: t('deviceDetail.bms.current'), value: m.battCurrent != null ? `${m.battCurrent.toFixed(1)} A` : '--', sub: t('deviceDetail.bms.chgPositive') },
-                  { label: t('deviceDetail.bms.chargePower'), value: m.batteryChargePower != null ? `${(m.batteryChargePower / 10).toFixed(2)} kW` : '--', sub: t('deviceDetail.bms.charging') },
-                  { label: t('deviceDetail.bms.dischargePower'), value: m.batteryDischargePower != null ? `${(m.batteryDischargePower / 10).toFixed(2)} kW` : '--', sub: t('deviceDetail.bms.discharging') },
+                  { label: t('deviceDetail.bms.chargePower'), value: m.batteryChargePower != null ? `${(m.batteryChargePower / 1000).toFixed(2)} kW` : '--', sub: t('deviceDetail.bms.charging') },
+                  { label: t('deviceDetail.bms.dischargePower'), value: m.batteryDischargePower != null ? `${(m.batteryDischargePower / 1000).toFixed(2)} kW` : '--', sub: t('deviceDetail.bms.discharging') },
                 ].map((it) => (
                   <Col xs={12} md={6} key={it.label}>
                     <div style={{ background: '#f9fafb', borderRadius: 10, padding: '12px 14px' }}>
@@ -515,7 +515,7 @@ const BmsTab: React.FC<BmsTabProps> = ({ sn }) => {
               </Row>
               <div style={{ marginTop: 12 }}>
                 <KvRow label={t('deviceDetail.bms.remainCapacity')}
-                       value={bms.remainCap != null ? `${(bms.remainCap / 10).toFixed(1)} Ah` : '--'} />
+                       value={bms.remainCap != null ? `${bms.remainCap.toFixed(1)} Ah` : '--'} />
                 <div style={{ marginTop: 4 }}>
                   <Progress
                     percent={capPct != null ? Math.round(capPct) : 0}
@@ -525,7 +525,7 @@ const BmsTab: React.FC<BmsTabProps> = ({ sn }) => {
                   />
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#9ca3af' }}>
                     <span>0</span>
-                    <span>{bms.fullCap != null ? `${(bms.fullCap / 10).toFixed(1)} Ah (FCC)` : '--'}</span>
+                    <span>{bms.fullCap != null ? `${bms.fullCap.toFixed(1)} Ah (FCC)` : '--'}</span>
                   </div>
                 </div>
               </div>
