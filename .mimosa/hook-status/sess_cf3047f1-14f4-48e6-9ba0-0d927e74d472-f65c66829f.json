@@ -1,14 +1,14 @@
 {
   "schemaVersion": "mimosa-hook-status/v1",
-  "recordedAt": "2026-09-08T17:23:30.348Z",
-  "sessionId": "sess_5f5b0dc3-51a8-427a-8bf0-db8474f7bdb2",
+  "recordedAt": "2026-09-08T16:45:50.804Z",
+  "sessionId": "sess_cf3047f1-14f4-48e6-9ba0-0d927e74d472",
   "event": "PostToolUse",
   "toolName": "Edit",
-  "file": "business-api/internal/handler/device_handler.go",
+  "file": "inv-admin-frontend/src/services/userApi.ts",
   "outcome": "clear",
   "coverage": "complete",
   "findingCount": 0,
-  "durationMs": 16,
+  "durationMs": 12,
   "hostState": "hook_complete",
   "reportHint": ".mimosa/reports/"
 }
