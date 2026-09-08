@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 /// WGS-84 → GCJ-02 coordinate conversion
 class _Gcj02 {
@@ -283,6 +284,7 @@ class InlineLocationPickerState extends State<InlineLocationPicker> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -366,7 +368,7 @@ class InlineLocationPickerState extends State<InlineLocationPicker> {
                   child: const CircularProgressIndicator(strokeWidth: 2),
                 ),
                 SizedBox(width: 8.w),
-                Text('搜索附近地址...',
+                Text(l10n.str('location_search_nearby'),
                     style: TextStyle(
                         fontSize: 12.sp,
                         color: AppColor.textSecondary(context),
@@ -393,7 +395,7 @@ class InlineLocationPickerState extends State<InlineLocationPicker> {
                       Icon(Icons.near_me,
                           size: 14.sp, color: AppColor.primary(context)),
                       SizedBox(width: 6.w),
-                      Text('附近地址',
+                      Text(l10n.str('location_nearby_addresses'),
                           style: TextStyle(
                               fontSize: 12.sp,
                               color: AppColor.textSecondary(context),

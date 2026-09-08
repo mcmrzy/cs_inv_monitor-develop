@@ -11,6 +11,7 @@ import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/widgets/org_invitation_dialog.dart';
 import 'package:intl/intl.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 /// 可邀请角色按邀请人所属组织类型受限（与后端 inviterAllowedRolesByOrgType 一致）：
 /// manufacturer→{agent,distributor,installer,customer}、agent→{installer,customer}、
@@ -108,28 +109,29 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       appBar: AppBar(
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.mail),
-            SizedBox(width: 8),
-            Text('邀请管理'),
+            const Icon(Icons.mail),
+            const SizedBox(width: 8),
+            Text(l10n.str('invite_management_title')),
           ],
         ),
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [
-            Tab(text: '待接受'),
-            Tab(text: '已接受'),
-            Tab(text: '全部'),
+          tabs: [
+            Tab(text: l10n.str('invite_status_pending')),
+            Tab(text: l10n.str('invite_status_accepted')),
+            Tab(text: l10n.all),
           ],
         ),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loadInvitations,
-            tooltip: '刷新',
+            tooltip: l10n.str('refresh_label'),
           ),
           PermissionGate(
             permissionCode: PermissionCodes.organizationsInvite,
@@ -137,7 +139,7 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
             child: IconButton(
               icon: const Icon(Icons.add),
               onPressed: _showSendInviteDialog,
-              tooltip: '发送邀请',
+              tooltip: l10n.str('invite_send'),
             ),
           ),
         ],
@@ -156,13 +158,14 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
         child: FloatingActionButton.extended(
           onPressed: _showSendInviteDialog,
           icon: const Icon(Icons.person_add),
-          label: const Text('发送邀请'),
+          label: Text(l10n.str('invite_send')),
         ),
       ),
     );
   }
 
   Widget _buildInvitationList(List<OrganizationInvitation> invitations) {
+    final l10n = AppLocalizations.of(context)!;
     if (_isLoading) {
       return const PageSkeleton();
     }
@@ -179,12 +182,12 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
               color: theme.colorScheme.outlineVariant,
             ),
             SizedBox(height: 16.h),
-            Text('加载失败：$_error'),
+            Text(l10n.str('invite_load_failed', {'error': _error!})),
             SizedBox(height: 16.h),
             ElevatedButton.icon(
               onPressed: _loadInvitations,
               icon: const Icon(Icons.refresh),
-              label: const Text('重试'),
+              label: Text(l10n.retry),
             ),
           ],
         ),
@@ -204,7 +207,7 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
             ),
             SizedBox(height: 16.h),
             Text(
-              '暂无邀请数据',
+              l10n.str('invite_empty'),
               style: TextStyle(
                 fontSize: 18.sp,
                 color: theme.colorScheme.onSurfaceVariant,
@@ -309,8 +312,10 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('邀请已发送（邀请链接仅在创建时可见）'),
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(context)!.str('invite_sent_link_once'),
+          ),
         ),
       );
     }
@@ -320,19 +325,20 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
   }
 
   Future<void> _revokeInvitation(int invitationId) async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('确认撤销'),
-        content: const Text('确定要撤销此邀请吗？该邀请链接将失效。'),
+        title: Text(l10n.str('invite_revoke_confirm_title')),
+        content: Text(l10n.str('invite_revoke_confirm_body')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
+            child: Text(l10n.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('撤销'),
+            child: Text(l10n.str('invite_revoke')),
           ),
         ],
       ),
@@ -344,8 +350,8 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('邀请已撤销'),
+            SnackBar(
+              content: Text(l10n.str('invite_revoked')),
             ),
           );
 
@@ -355,7 +361,9 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('撤销失败：$e'),
+              content: Text(
+                l10n.str('invite_revoke_failed', {'error': e.toString()}),
+              ),
             ),
           );
         }
@@ -365,17 +373,18 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
 
   /// 展示创建时返回的邀请链接（完整链接仅此一次可见）
   void _showInviteLinkDialog(String link, String email) {
+    final l10n = AppLocalizations.of(context)!;
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('邀请已发送'),
+        title: Text(l10n.str('invite_sent_title')),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('已向 $email 发送邀请。'),
+            Text(l10n.str('invite_sent_to', {'email': email})),
             SizedBox(height: 12.h),
-            const Text('邀请链接仅此一次可见，请及时分享给受邀人：'),
+            Text(l10n.str('invite_link_once_hint')),
             SizedBox(height: 8.h),
             Container(
               width: double.infinity,
@@ -397,7 +406,7 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('知道了'),
+            child: Text(l10n.str('got_it')),
           ),
         ],
       ),
@@ -416,31 +425,32 @@ class _InvitationCard extends StatelessWidget {
   });
 
   /// 状态 → (颜色, 文案)，对齐后端 status 枚举
-  (Color, String) _statusDisplay(String status) {
+  (Color, String) _statusDisplay(String status, AppLocalizations l10n) {
     switch (status) {
       case 'accepted':
-        return (Colors.green, '已接受');
+        return (Colors.green, l10n.str('invite_status_accepted'));
       case 'rejected':
-        return (Colors.red, '已拒绝');
+        return (Colors.red, l10n.str('invite_status_rejected'));
       case 'expired':
-        return (AppColors.textHint, '已过期');
+        return (AppColors.textHint, l10n.str('invite_status_expired'));
       case 'revoked':
-        return (AppColors.textHint, '已撤销');
+        return (AppColors.textHint, l10n.str('invite_status_revoked'));
       case 'pending':
       default:
-        return (Colors.orange, '待接受');
+        return (Colors.orange, l10n.str('invite_status_pending'));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final (statusColor, statusText) = _statusDisplay(invitation.status);
+    final l10n = AppLocalizations.of(context)!;
+    final (statusColor, statusText) = _statusDisplay(invitation.status, l10n);
     final roleText = invitation.roleCodes.isEmpty
-        ? '未指定'
+        ? l10n.str('invite_role_unspecified')
         : invitation.roleCodes
             .map((c) => OrgMemberRoleExtension.fromApiValue(c).displayName)
-            .join('、');
+            .join(l10n.str('invite_role_separator'));
 
     return Card(
       child: Padding(
@@ -485,7 +495,7 @@ class _InvitationCard extends StatelessWidget {
                       Icons.cancel_outlined,
                       color: Colors.red,
                     ),
-                    tooltip: '撤销邀请',
+                    tooltip: l10n.str('invite_revoke_tooltip'),
                     onPressed: onRevoke,
                   ),
               ],
@@ -503,7 +513,7 @@ class _InvitationCard extends StatelessWidget {
                 ),
                 SizedBox(height: 4.h),
                 Text(
-                  '角色：$roleText',
+                  l10n.str('invite_role_label', {'roles': roleText}),
                   style: TextStyle(
                     fontSize: 14.sp,
                     color: theme.colorScheme.onSurfaceVariant,
@@ -512,7 +522,9 @@ class _InvitationCard extends StatelessWidget {
                 if (invitation.organization != null) ...[
                   SizedBox(height: 4.h),
                   Text(
-                    '组织：${invitation.organization}',
+                    l10n.str('invite_org_label', {
+                      'org': invitation.organization ?? '',
+                    }),
                     style: TextStyle(
                       fontSize: 14.sp,
                       color: theme.colorScheme.onSurfaceVariant,
@@ -522,7 +534,9 @@ class _InvitationCard extends StatelessWidget {
                 if (invitation.inviterName != null) ...[
                   SizedBox(height: 4.h),
                   Text(
-                    '邀请人：${invitation.inviterName}',
+                    l10n.str('invite_inviter_label', {
+                      'name': invitation.inviterName ?? '',
+                    }),
                     style: TextStyle(
                       fontSize: 14.sp,
                       color: theme.colorScheme.onSurfaceVariant,
@@ -542,7 +556,10 @@ class _InvitationCard extends StatelessWidget {
                   ),
                   SizedBox(width: 8.w),
                   Text(
-                    '有效期至：${DateFormat('yyyy-MM-dd HH:mm').format(DateTime.parse(invitation.expiresAt!))}',
+                    l10n.str('invite_expires_at', {
+                      'time': DateFormat('yyyy-MM-dd HH:mm')
+                          .format(DateTime.parse(invitation.expiresAt!)),
+                    }),
                     style: TextStyle(
                       fontSize: 14.sp,
                       color: theme.colorScheme.onSurfaceVariant,

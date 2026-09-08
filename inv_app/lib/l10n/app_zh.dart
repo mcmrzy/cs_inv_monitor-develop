@@ -1796,5 +1796,57 @@ const Map<String, String> zh = {
   'storage_fault_fan_low': '风扇转速低',
   'storage_fault_fan_stall': '风扇堵转',
   'storage_fault_lock': '电池自锁',
+
+  // 设备编辑 / 设备操作（解绑、删除、换绑确认）
+  'device_confirm_unbind': '确认解绑该设备吗？',
+  'device_confirm_delete': '确认删除该设备吗？删除后无法恢复。',
+  'device_rebind_in_dev': '换绑功能开发中',
+
+  // 组织切换
+  'org_hint': '提示',
+  'org_not_in_any': '您不属于任何组织',
+  'org_switch_title': '组织切换',
+  'org_member_device_count': '成员：{members} | 设备：{devices}',
+  'org_current': '当前',
+  'org_switched_to': '已切换到 "{name}"',
+  'org_switch_failed': '切换失败：{error}',
+
+  // 组织邀请管理 / 发送邀请
+  'invite_management_title': '邀请管理',
+  'invite_status_pending': '待接受',
+  'invite_status_accepted': '已接受',
+  'invite_status_rejected': '已拒绝',
+  'invite_status_expired': '已过期',
+  'invite_status_revoked': '已撤销',
+  'invite_send': '发送邀请',
+  'invite_load_failed': '加载失败：{error}',
+  'invite_empty': '暂无邀请数据',
+  'invite_sent_link_once': '邀请已发送（邀请链接仅在创建时可见）',
+  'invite_revoke_confirm_title': '确认撤销',
+  'invite_revoke_confirm_body': '确定要撤销此邀请吗？该邀请链接将失效。',
+  'invite_revoke': '撤销',
+  'invite_revoked': '邀请已撤销',
+  'invite_revoke_failed': '撤销失败：{error}',
+  'invite_sent_title': '邀请已发送',
+  'invite_sent_to': '已向 {email} 发送邀请。',
+  'invite_link_once_hint': '邀请链接仅此一次可见，请及时分享给受邀人：',
+  'invite_role_unspecified': '未指定',
+  'invite_role_separator': '、',
+  'invite_revoke_tooltip': '撤销邀请',
+  'invite_role_label': '角色：{roles}',
+  'invite_org_label': '组织：{org}',
+  'invite_inviter_label': '邀请人：{name}',
+  'invite_expires_at': '有效期至：{time}',
+  'invite_email_required': '请输入邮箱地址',
+  'invite_send_failed': '发送失败：{error}',
+  'invite_email_label': '邮箱地址',
+  'invite_email_hint': '请输入邀请对象的邮箱',
+  'invite_role_field_label': '成员角色',
+  'invite_valid_days_label': '有效期（天）',
+  'invite_valid_days_hint': '默认 7 天',
+
+  // 地图选点（附近地址）
+  'location_search_nearby': '搜索附近地址...',
+  'location_nearby_addresses': '附近地址',
 };
 
