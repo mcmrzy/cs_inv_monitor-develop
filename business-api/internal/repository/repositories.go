@@ -1047,7 +1047,7 @@ func (r *DeviceRepository) List(ctx context.Context, params DeviceListParams) ([
 		params.StationID, params.Status, params.Keyword, params.Model, params.LastOnlineStart, params.LastOnlineEnd)
 
 	var total int64
-	if err := r.db.QueryRow(ctx, countQuery, countArgs...).Scan(&total); err != nil {
+	if err := r.db.QueryRow(ctx, "SELECT COUNT(*)"+countQuery, countArgs...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 

@@ -1,0 +1,1118 @@
+{
+  "schema_version": "mimosa-task-review/v2",
+  "run_id": "20260908T163628788Z-108324-c488f5661e8e",
+  "run_status": "inconclusive",
+  "errors": [
+    {
+      "stage": "candidate-select",
+      "target": "inv-admin-frontend/src/pages/dashboard/index.tsx",
+      "reason": "candidate_limit_exceeded: 22 changed reviewable file(s) were not scanned because the limit is 20"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "inv-admin-frontend/src/utils/passwordRules.ts",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "inv-admin-frontend/src/test/mockCredentials.ts",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/src/utils/passwordRules.ts",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/src/test/mockCredentials.ts",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/src/test/setup.test.tsx",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/src/test/mocks/data.ts",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/src/test/mocks/handlers.ts",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/src/services/api.test.ts",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/src/services/api.ts",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/src/services/userApi.test.ts",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/src/services/userApi.ts",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/src/pages/work-orders/index.tsx",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/src/pages/users/index.tsx",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/src/pages/stations/StationDetailPage.tsx",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/src/pages/stations/components/DeviceStatsCard.tsx",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/src/pages/stations/components/StationDevicesTab.tsx",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/src/pages/ota/index.tsx",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/src/pages/login/index.tsx",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/src/pages/login/LoginPage.test.tsx",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/src/pages/invite/InviteAcceptPage.test.tsx",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/src/pages/download/index.tsx",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/src/pages/devices/index.tsx",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    }
+  ],
+  "coverage": {
+    "schema_version": "mimosa-hook-coverage/v1",
+    "status": "partial",
+    "scope": "hook_observed_diff",
+    "baseline": {
+      "complete": true,
+      "captured_files": 2491,
+      "candidate_limit": 5000,
+      "truncated": false,
+      "enumeration_error_count": 0,
+      "snapshot_error_count": 0,
+      "compensated_target_count": 39
+    },
+    "change_tracking": {
+      "touched_observed": 0,
+      "touched_retained": 0,
+      "truncated": false,
+      "bash_mutation": true,
+      "bash_discovered": 42,
+      "bash_discovery_limit": 80,
+      "bash_discovery_truncated": false
+    },
+    "candidates": {
+      "eligible_files": 42,
+      "selected_files": 20,
+      "limit": 20,
+      "truncated": true
+    },
+    "scanning": {
+      "required_files": 20,
+      "scanned_files": 0,
+      "skipped_files": 0,
+      "failed_files": 20,
+      "project_checks_required": 0,
+      "project_checks_completed": 0
+    },
+    "notification": {
+      "eligible_findings": 0,
+      "detailed_findings": 0,
+      "detail_limit": 3,
+      "truncated": false
+    },
+    "reason_counts": {
+      "candidate_limit_exceeded": 1,
+      "baseline_snapshot_unreadable": 2,
+      "scanner_failed": 20,
+      "project_check_failed": 23
+    },
+    "reasons": [
+      {
+        "code": "candidate_limit_exceeded",
+        "stage": "candidate-select",
+        "target": "inv-admin-frontend/src/pages/dashboard/index.tsx",
+        "detail": "22 changed reviewable file(s) were not scanned because the limit is 20",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "inv-admin-frontend/src/utils/passwordRules.ts",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "inv-admin-frontend/src/test/mockCredentials.ts",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/utils/passwordRules.ts",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/test/mockCredentials.ts",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/test/setup.test.tsx",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/test/mocks/data.ts",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/test/mocks/handlers.ts",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/services/api.test.ts",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/services/api.ts",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/services/userApi.test.ts",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/services/userApi.ts",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/work-orders/index.tsx",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/users/index.tsx",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/stations/StationDetailPage.tsx",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/stations/components/DeviceStatsCard.tsx",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/stations/components/StationDevicesTab.tsx",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/ota/index.tsx",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/login/index.tsx",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/login/LoginPage.test.tsx",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/invite/InviteAcceptPage.test.tsx",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/download/index.tsx",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/devices/index.tsx",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "candidate-select",
+        "target": "inv-admin-frontend/src/pages/dashboard/index.tsx",
+        "detail": "candidate_limit_exceeded: 22 changed reviewable file(s) were not scanned because the limit is 20",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "inv-admin-frontend/src/utils/passwordRules.ts",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "inv-admin-frontend/src/test/mockCredentials.ts",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/utils/passwordRules.ts",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/test/mockCredentials.ts",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/test/setup.test.tsx",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/test/mocks/data.ts",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/test/mocks/handlers.ts",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/services/api.test.ts",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/services/api.ts",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/services/userApi.test.ts",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/services/userApi.ts",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/work-orders/index.tsx",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/users/index.tsx",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/stations/StationDetailPage.tsx",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/stations/components/DeviceStatsCard.tsx",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/stations/components/StationDevicesTab.tsx",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/ota/index.tsx",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/login/index.tsx",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/login/LoginPage.test.tsx",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/invite/InviteAcceptPage.test.tsx",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/download/index.tsx",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/devices/index.tsx",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      }
+    ],
+    "reasons_truncated": false
+  },
+  "generated_at": "2026-09-08T16:36:28.788Z",
+  "session_id": "sess_5f5b0dc3-51a8-427a-8bf0-db8474f7bdb2",
+  "target": ".",
+  "revision": "d63f2418dab8312ac10bb7bf1e3f08570934d358",
+  "rules_version": "unavailable",
+  "diff_hash": "2dfac7e737e086e61c3fa20d308d3ea08e2fae10a46d3571a84c823be2667cac",
+  "diff": {
+    "algorithm": "sha256",
+    "changed_file_count": 20,
+    "changed_files": [
+      {
+        "file": "inv-admin-frontend/src/pages/devices/index.tsx",
+        "ranges": [
+          {
+            "start": 191,
+            "end": 194
+          },
+          {
+            "start": 373,
+            "end": 373
+          },
+          {
+            "start": 376,
+            "end": 401
+          },
+          {
+            "start": 528,
+            "end": 528
+          },
+          {
+            "start": 794,
+            "end": 811
+          },
+          {
+            "start": 999,
+            "end": 1000
+          },
+          {
+            "start": 1012,
+            "end": 1013
+          },
+          {
+            "start": 1057,
+            "end": 1057
+          },
+          {
+            "start": 1496,
+            "end": 1505
+          },
+          {
+            "start": 2364,
+            "end": 2385
+          },
+          {
+            "start": 2436,
+            "end": 2436
+          },
+          {
+            "start": 2440,
+            "end": 2440
+          }
+        ],
+        "before_hash": "ec6d31586737e7411222847284d69918616f0651da73daff5951ace50e240bce",
+        "after_hash": "60d7902e4d2a7cadf903950e1450c8f3fdf5fe886d39a645b72b3fddd7c90ba2"
+      },
+      {
+        "file": "inv-admin-frontend/src/pages/download/index.tsx",
+        "ranges": [
+          {
+            "start": 13,
+            "end": 13
+          },
+          {
+            "start": 29,
+            "end": 29
+          },
+          {
+            "start": 57,
+            "end": 57
+          },
+          {
+            "start": 74,
+            "end": 74
+          },
+          {
+            "start": 82,
+            "end": 83
+          },
+          {
+            "start": 87,
+            "end": 88
+          },
+          {
+            "start": 92,
+            "end": 93
+          },
+          {
+            "start": 97,
+            "end": 98
+          },
+          {
+            "start": 133,
+            "end": 133
+          },
+          {
+            "start": 136,
+            "end": 136
+          },
+          {
+            "start": 144,
+            "end": 144
+          },
+          {
+            "start": 149,
+            "end": 149
+          },
+          {
+            "start": 153,
+            "end": 153
+          },
+          {
+            "start": 157,
+            "end": 157
+          },
+          {
+            "start": 162,
+            "end": 162
+          },
+          {
+            "start": 165,
+            "end": 165
+          },
+          {
+            "start": 174,
+            "end": 174
+          },
+          {
+            "start": 189,
+            "end": 189
+          },
+          {
+            "start": 195,
+            "end": 195
+          },
+          {
+            "start": 220,
+            "end": 220
+          },
+          {
+            "start": 227,
+            "end": 227
+          },
+          {
+            "start": 234,
+            "end": 234
+          }
+        ],
+        "before_hash": "a8b199ced8a2487e2ae6bca35bce471cda03cf0c9867a7423c4ee5c465e23a87",
+        "after_hash": "870b27bf57eb9da9cd3cba4056aa22fc2e017922bb7b061c82720a5d0c3503d6"
+      },
+      {
+        "file": "inv-admin-frontend/src/pages/invite/InviteAcceptPage.test.tsx",
+        "ranges": [
+          {
+            "start": 6,
+            "end": 6
+          },
+          {
+            "start": 76,
+            "end": 77
+          }
+        ],
+        "before_hash": "3ebdf4621dc3443ff4265327eed0af9aac7c4c7df5cd264c55d950b6234278ec",
+        "after_hash": "2cbd74e230976d59c4d0e64a06e9a3ae45fba7f597a259fab3c7c352eff53129"
+      },
+      {
+        "file": "inv-admin-frontend/src/pages/login/index.tsx",
+        "ranges": [
+          {
+            "start": 9,
+            "end": 9
+          },
+          {
+            "start": 60,
+            "end": 60
+          },
+          {
+            "start": 95,
+            "end": 95
+          },
+          {
+            "start": 149,
+            "end": 149
+          },
+          {
+            "start": 153,
+            "end": 153
+          },
+          {
+            "start": 157,
+            "end": 162
+          },
+          {
+            "start": 198,
+            "end": 199
+          },
+          {
+            "start": 203,
+            "end": 204
+          },
+          {
+            "start": 207,
+            "end": 207
+          },
+          {
+            "start": 277,
+            "end": 279
+          },
+          {
+            "start": 281,
+            "end": 281
+          },
+          {
+            "start": 303,
+            "end": 303
+          },
+          {
+            "start": 374,
+            "end": 376
+          },
+          {
+            "start": 378,
+            "end": 378
+          },
+          {
+            "start": 392,
+            "end": 394
+          },
+          {
+            "start": 396,
+            "end": 396
+          }
+        ],
+        "before_hash": "1cfa62ffa593d4ce338287b7ec4ce68c43f4703d4f0ba6d3f9468aa8d493b5ac",
+        "after_hash": "468ca3f18b52b07babc2635e36b3b78526bf4d4364d6ce9db0082a1fc86fbb5f"
+      },
+      {
+        "file": "inv-admin-frontend/src/pages/login/LoginPage.test.tsx",
+        "ranges": [
+          {
+            "start": 8,
+            "end": 8
+          },
+          {
+            "start": 68,
+            "end": 69
+          },
+          {
+            "start": 166,
+            "end": 167
+          }
+        ],
+        "before_hash": "64cefecda9f93f08b2eb7cc062ce8c197f5bb578fffc4d48802e6fa58d7ae5a2",
+        "after_hash": "30ce196439a126e4df6e7dde4cf892c545e0b8092d89ceba37d21c2969a06354"
+      },
+      {
+        "file": "inv-admin-frontend/src/pages/ota/index.tsx",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 1
+          },
+          {
+            "start": 3,
+            "end": 3
+          },
+          {
+            "start": 151,
+            "end": 151
+          },
+          {
+            "start": 172,
+            "end": 188
+          }
+        ],
+        "before_hash": "f35b4885f818e1f8af2039aafe912c77eaf8d4815236eca8043117ee4f387ebf",
+        "after_hash": "10c3b27501bd2879475b32b2a15fcd6f0879e016b3a00a2cc17302ace1a6e680"
+      },
+      {
+        "file": "inv-admin-frontend/src/pages/stations/components/DeviceStatsCard.tsx",
+        "ranges": [
+          {
+            "start": 34,
+            "end": 68
+          }
+        ],
+        "before_hash": "8845c13d552891dcd6bd1f144673310cca12e7c13e7fb5408ed272be73b23bf0",
+        "after_hash": "54ec3155a8cb262e05a8113d8490e594545b6d11bf8ed41f4215537fc0ba33ff"
+      },
+      {
+        "file": "inv-admin-frontend/src/pages/stations/components/StationDevicesTab.tsx",
+        "ranges": [
+          {
+            "start": 191,
+            "end": 191
+          }
+        ],
+        "before_hash": "d26c294e2cdfe70541636ee4fdf11341bf41cf5fb2788d3859001c6f7bfd93de",
+        "after_hash": "6abb9c83c39da5d8e2cdaa35bf1c8bf6be0c78d374138dde6ca173f32b2b3dea"
+      },
+      {
+        "file": "inv-admin-frontend/src/pages/stations/StationDetailPage.tsx",
+        "ranges": [
+          {
+            "start": 19,
+            "end": 19
+          },
+          {
+            "start": 207,
+            "end": 208
+          },
+          {
+            "start": 210,
+            "end": 211
+          },
+          {
+            "start": 213,
+            "end": 221
+          },
+          {
+            "start": 225,
+            "end": 226
+          }
+        ],
+        "before_hash": "f45ddace4b1ea9053f9894aa2c8c7d0a27e7ccf4b21516118e2c5f3cd84f86b6",
+        "after_hash": "124ed48d20d594e4fc32045e9a3689bf99771ad48b6f05c2051cb087f75f5e1b"
+      },
+      {
+        "file": "inv-admin-frontend/src/pages/users/index.tsx",
+        "ranges": [
+          {
+            "start": 4,
+            "end": 4
+          },
+          {
+            "start": 23,
+            "end": 23
+          },
+          {
+            "start": 233,
+            "end": 235
+          },
+          {
+            "start": 281,
+            "end": 283
+          },
+          {
+            "start": 286,
+            "end": 287
+          },
+          {
+            "start": 291,
+            "end": 291
+          },
+          {
+            "start": 293,
+            "end": 293
+          },
+          {
+            "start": 327,
+            "end": 327
+          },
+          {
+            "start": 338,
+            "end": 338
+          }
+        ],
+        "before_hash": "3a0e6fe3ac715f3c55c46d3b070e0867706e7c11b2ba99a5d741f8f35ec84216",
+        "after_hash": "378485c63a9b106d7a79d7f335cd292fd4a2e7a944254b72bcbe63706e84f138"
+      },
+      {
+        "file": "inv-admin-frontend/src/pages/work-orders/index.tsx",
+        "ranges": [
+          {
+            "start": 18,
+            "end": 18
+          },
+          {
+            "start": 47,
+            "end": 47
+          },
+          {
+            "start": 64,
+            "end": 67
+          },
+          {
+            "start": 113,
+            "end": 121
+          },
+          {
+            "start": 127,
+            "end": 127
+          },
+          {
+            "start": 165,
+            "end": 165
+          },
+          {
+            "start": 167,
+            "end": 168
+          },
+          {
+            "start": 173,
+            "end": 200
+          },
+          {
+            "start": 249,
+            "end": 249
+          },
+          {
+            "start": 313,
+            "end": 316
+          },
+          {
+            "start": 381,
+            "end": 403
+          },
+          {
+            "start": 454,
+            "end": 454
+          }
+        ],
+        "before_hash": "dd14c08b2f6342eea764356e478bf5fe2a7ed4d3cb5b0b0f0f227a108ddd2a9b",
+        "after_hash": "19dcd04781aadac763aa49cc0d70c4c5f44db2649d659976dfda87d3f164267c"
+      },
+      {
+        "file": "inv-admin-frontend/src/services/api.test.ts",
+        "ranges": [
+          {
+            "start": 5,
+            "end": 5
+          },
+          {
+            "start": 128,
+            "end": 128
+          }
+        ],
+        "before_hash": "596626b894df5096c1e88d4319cd971d67d3433ade583e25c6b7fb397dcc31b6",
+        "after_hash": "604fe1c14024471052555291059f633f4c7bc71601a4f1ec45fbcca8631b0b1c"
+      },
+      {
+        "file": "inv-admin-frontend/src/services/api.ts",
+        "ranges": [
+          {
+            "start": 31,
+            "end": 34
+          }
+        ],
+        "before_hash": "163fc91fa9fedac08154ac285d4b9e05d4c60fac29c90fe7f1d21675d2a57bb8",
+        "after_hash": "1e788f7630eed7ad4d1e30592414e585a5f7a6c00f8e1faeb200df2923ef8567"
+      },
+      {
+        "file": "inv-admin-frontend/src/services/userApi.test.ts",
+        "ranges": [
+          {
+            "start": 6,
+            "end": 6
+          },
+          {
+            "start": 17,
+            "end": 17
+          },
+          {
+            "start": 21,
+            "end": 22
+          },
+          {
+            "start": 115,
+            "end": 115
+          }
+        ],
+        "before_hash": "d0d2895c791133f1906bb58b772e71f353dea567e02c9f0922abfc3ad222ccf4",
+        "after_hash": "a864d3e9ba383bf5efb84eff019ec66d9ab60aed7417bda998e5877a0ed6b1bf"
+      },
+      {
+        "file": "inv-admin-frontend/src/services/userApi.ts",
+        "ranges": [
+          {
+            "start": 13,
+            "end": 14
+          },
+          {
+            "start": 17,
+            "end": 17
+          }
+        ],
+        "before_hash": "4005001f472a9c2121347356ae530900b7c10a30a77e1d2fed75023bfddcf61f",
+        "after_hash": "f2b6b194cb899dd684e8ab9264f5fba0335c782f34c930b6135dde0230968759"
+      },
+      {
+        "file": "inv-admin-frontend/src/test/mockCredentials.ts",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 26
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "8c035c5f19727738312aaaca68d37cc665714c2e8db3e1c7097d6639d0f3a194"
+      },
+      {
+        "file": "inv-admin-frontend/src/test/mocks/data.ts",
+        "ranges": [
+          {
+            "start": 9,
+            "end": 9
+          },
+          {
+            "start": 245,
+            "end": 245
+          }
+        ],
+        "before_hash": "b52a4d7ab8a339da5711175e57dea60e0f0e4ed3dac670db2ae0b02dc2d1853b",
+        "after_hash": "950e208796f612a594c2a13d702481477e3bc61aa8981ec7bb418f9b23c1f11b"
+      },
+      {
+        "file": "inv-admin-frontend/src/test/mocks/handlers.ts",
+        "ranges": [
+          {
+            "start": 11,
+            "end": 11
+          },
+          {
+            "start": 31,
+            "end": 31
+          },
+          {
+            "start": 47,
+            "end": 47
+          }
+        ],
+        "before_hash": "d02c9eb6002b8da9427f58972c57c3fbbca043813294913da50835de4c5c8da2",
+        "after_hash": "547f1bec867e6860b8cde571f42991c0b6352d82cefae0bf5c4b16f5c59b3971"
+      },
+      {
+        "file": "inv-admin-frontend/src/test/setup.test.tsx",
+        "ranges": [
+          {
+            "start": 17,
+            "end": 17
+          },
+          {
+            "start": 62,
+            "end": 62
+          }
+        ],
+        "before_hash": "f2c69e16f5d4488e605f38ddd05be0b2da8c486cc045a474c03fcfa61899d8f4",
+        "after_hash": "caf00a75b98c45aeff214642bee6f8fb9aad7b149fdd19e73405a38b86be49a4"
+      },
+      {
+        "file": "inv-admin-frontend/src/utils/passwordRules.ts",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 13
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "61b210010de322bb38c5353fffd9fb57f29c56b417aa62b73ddef79972eee090"
+      }
+    ]
+  },
+  "timing": {
+    "started_at": "2026-09-08T16:36:25.276Z",
+    "completed_at": "2026-09-08T16:36:28.788Z",
+    "duration_ms": 3512,
+    "measurement": "hook_wall_clock"
+  },
+  "tokens": {
+    "input": 0,
+    "output": 0,
+    "total": 0,
+    "model_calls": 0,
+    "measurement": "known-zero"
+  },
+  "telemetry": {
+    "schemaVersion": "mimosa-gate-telemetry/v1",
+    "profile": "gate",
+    "operation": "Stop",
+    "outcome": "partial/INCONCLUSIVE",
+    "latencyMs": 3512,
+    "peakMemoryBytes": 97263616,
+    "memoryMeasurement": "max-observed-process-rss",
+    "scannedFiles": 0,
+    "cache": {
+      "hits": 0,
+      "misses": 0,
+      "measurement": "not-applicable"
+    },
+    "denyCount": 0,
+    "tokens": {
+      "input": 0,
+      "output": 0,
+      "total": 0,
+      "modelCalls": 0,
+      "measurement": "known-zero"
+    }
+  },
+  "finding_count": 0,
+  "rewake_finding_count": 0,
+  "evidence_boundary": {
+    "scan": "candidate",
+    "static_fix_verification": "observed_static_only",
+    "runtime_verification": "not_performed"
+  },
+  "finding_events": [],
+  "findings": [],
+  "artifacts": {
+    "immutable_report": ".mimosa/reports/task-review-sess_5f5b0dc3-51a8-427a-8bf0-db8474f7bdb2-20260908T163628788Z-108324-c488f5661e8e.json",
+    "latest_report": ".mimosa/reports/task-review-sess_5f5b0dc3-51a8-427a-8bf0-db8474f7bdb2.json",
+    "history_summary": ".mimosa/history/run-20260908T163628788Z-108324-c488f5661e8e.json"
+  }
+}
