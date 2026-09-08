@@ -86,6 +86,9 @@ export default {
     'batch.dischargeSettings': '放电设置',
     'batch.gridSettings': '电网设置',
     'batch.appSettings': '应用设置',
+    'batch.noControlPermission': '缺少设备控制权限（devices:control），无法执行批量设置',
+    'batch.localHistoryOnly': '仅本机临时记录，不会同步到服务器',
+    'batch.noValidTargets': '没有可执行的目标设备，请重新选择',
   },
   en: {
     'batch.title': 'Batch Settings',
@@ -174,5 +177,8 @@ export default {
     'batch.dischargeSettings': 'Discharge Settings',
     'batch.gridSettings': 'Grid Settings',
     'batch.appSettings': 'Application Settings',
+    'batch.noControlPermission': 'Missing devices:control permission; batch settings cannot be executed',
+    'batch.localHistoryOnly': 'Local temporary records only; not synced to the server',
+    'batch.noValidTargets': 'No valid target devices, please select again',
   },
 }

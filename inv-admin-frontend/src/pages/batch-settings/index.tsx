@@ -1,9 +1,9 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Row, Col, Card, Table, Button, Select, Space, Modal,
   Switch, InputNumber, Typography, Tag, message, Steps, Divider,
-  Progress, Checkbox, Alert, Result, Descriptions,
+  Progress, Checkbox, Alert, Result, Descriptions, Tooltip,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
@@ -14,6 +14,7 @@ import {
 import dayjs from 'dayjs'
 import api from '@/services/api'
 import { deviceApi } from '@/services/deviceApi'
+import useAuthStore from '@/stores/authStore'
 import StatusBadge from '@/components/StatusBadge'
 import { formatInTimezone } from '@/utils/timezone'
 import useTimezoneStore from '@/stores/timezoneStore'
@@ -99,6 +100,10 @@ const BatchSettingsPage: React.FC = () => {
   const { timezone } = useTimezoneStore()
   const queryClient = useQueryClient()
   const [messageApi, contextHolder] = message.useMessage()
+  const user = useAuthStore((state) => state.user)
+  const hasPermission = useAuthStore((state) => state.hasPermission)
+  const canControlDevices = hasPermission('devices:control')
+  const operatorName = user?.nickname || user?.phone || '-'
 
   // 步骤控制
   const [currentStep, setCurrentStep] = useState(0)
@@ -166,6 +171,16 @@ const BatchSettingsPage: React.FC = () => {
     }
     return devices
   }, [devicesRes, selectedStationIds])
+
+  // 设备列表变化（切换电站/过滤）时，清理已不在当前列表中的已选 SN，避免"所见非所发"
+  useEffect(() => {
+    setSelectedDeviceSns((prev) => {
+      if (prev.length === 0) return prev
+      const available = new Set(allDevices.map((d) => d.sn))
+      const next = prev.filter((sn) => available.has(sn))
+      return next.length === prev.length ? prev : next
+    })
+  }, [allDevices])
 
   /* ---------- 设备选择逻辑 ---------- */
 
@@ -243,10 +258,19 @@ const BatchSettingsPage: React.FC = () => {
     setCurrentStep(2)
 
     const payload = buildCommandPayload()
-    const total = selectedDeviceSns.length
+    // 兜底：以当前设备列表求交集，防止状态残留导致对不可见设备下发命令
+    const available = new Set(allDevices.map((d) => d.sn))
+    const targetSns = selectedDeviceSns.filter((sn) => available.has(sn))
+    const total = targetSns.length
     const results: { sn: string; success: boolean; message: string }[] = []
+    if (total === 0) {
+      setExecuting(false)
+      setExecuteDone(true)
+      messageApi.warning(t('batch.noValidTargets'))
+      return
+    }
 
-    const promises = selectedDeviceSns.map((sn) =>
+    const promises = targetSns.map((sn) =>
       deviceApi.sendCommand(sn, payload)
         .then((res) => {
           const d = res.data?.data ?? res.data
@@ -278,7 +302,7 @@ const BatchSettingsPage: React.FC = () => {
     const historyRecord: BatchHistoryRecord = {
       id: `batch_${Date.now()}`,
       timestamp: new Date().toISOString(),
-      operator: t('common.currentUser'),
+      operator: operatorName,
       deviceCount: total,
       parameters: payload.params,
       successCount,
@@ -723,14 +747,16 @@ const BatchSettingsPage: React.FC = () => {
                 </Button>
               )}
               {currentStep === 1 && (
-                <Button
-                  type="primary"
-                  icon={<SendOutlined />}
-                  disabled={!canProceedStep1}
-                  onClick={() => setConfirmVisible(true)}
-                >
-                  {t('batch.previewExecute')}
-                </Button>
+                <Tooltip title={!canControlDevices ? t('batch.noControlPermission') : undefined}>
+                  <Button
+                    type="primary"
+                    icon={<SendOutlined />}
+                    disabled={!canProceedStep1 || !canControlDevices}
+                    onClick={() => setConfirmVisible(true)}
+                  >
+                    {t('batch.previewExecute')}
+                  </Button>
+                </Tooltip>
               )}
             </Space>
           </Col>
@@ -746,9 +772,14 @@ const BatchSettingsPage: React.FC = () => {
         bordered={false}
         style={{ borderRadius: 12 }}
         title={
-          <Space>
-            <HistoryOutlined />
-            <span>{t('batch.recentOps')}</span>
+          <Space direction="vertical" size={0}>
+            <Space>
+              <HistoryOutlined />
+              <span>{t('batch.recentOps')}</span>
+            </Space>
+            <Text type="secondary" style={{ fontSize: 12, fontWeight: 400 }}>
+              {t('batch.localHistoryOnly')}
+            </Text>
           </Space>
         }
         extra={

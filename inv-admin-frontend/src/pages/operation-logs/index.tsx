@@ -111,7 +111,7 @@ const OperationLogsPage: React.FC = () => {
 
   const COMMAND_STATUS_MAP: Record<string, { label: string; color: string }> = {
     pending: { label: t('logs.waiting'), color: 'default' },
-    queued: { label: t('logs.queued') || '排队中', color: 'gold' },
+    queued: { label: t('logs.queued'), color: 'gold' },
     sent: { label: t('logs.sent'), color: 'processing' },
     ack_received: { label: t('logs.deviceConfirmed'), color: 'blue' },
     success: { label: t('logs.success'), color: 'green' },
@@ -151,11 +151,22 @@ const OperationLogsPage: React.FC = () => {
 
   /* ---------- 公共查询参数 ---------- */
 
+  // 后端审计接口按日期（YYYY-MM-DD）过滤：startDate/endDate；
+  // 告警接口同名语义参数为 startTime/endTime（同为 YYYY-MM-DD，见 alarm_handler parseAlarmListParams）
   const buildTimeParams = useCallback(() => {
     const params: any = {}
     if (dateRange) {
-      params.startTime = dateRange[0].toISOString()
-      params.endTime = dateRange[1].toISOString()
+      params.startDate = dateRange[0].format('YYYY-MM-DD')
+      params.endDate = dateRange[1].format('YYYY-MM-DD')
+    }
+    return params
+  }, [dateRange])
+
+  const buildAlarmTimeParams = useCallback(() => {
+    const params: any = {}
+    if (dateRange) {
+      params.startTime = dateRange[0].format('YYYY-MM-DD')
+      params.endTime = dateRange[1].format('YYYY-MM-DD')
     }
     return params
   }, [dateRange])
@@ -201,7 +212,8 @@ const OperationLogsPage: React.FC = () => {
     page: auditPage,
     pageSize: auditPageSize,
     ...buildTimeParams(),
-    ...(userFilter ? { username: userFilter } : {}),
+    // 后端按 operator_name ILIKE 匹配 userId 参数
+    ...(userFilter ? { userId: userFilter } : {}),
     ...(deviceSnFilter ? { keyword: deviceSnFilter } : {}),
   }
 
@@ -223,7 +235,8 @@ const OperationLogsPage: React.FC = () => {
   const handleExportAudit = async () => {
     try {
       const params: any = { ...buildTimeParams(), pageSize: 10000 }
-      if (userFilter) params.username = userFilter
+      if (userFilter) params.userId = userFilter
+      if (deviceSnFilter) params.keyword = deviceSnFilter
       const res = await adminApi.exportAuditLogs(params)
       const blob = res.data as Blob
       const url = window.URL.createObjectURL(blob)
@@ -309,8 +322,9 @@ const OperationLogsPage: React.FC = () => {
 
   const alarmQueryParams = {
     page: alarmPage,
-    pageSize: alarmPageSize,
-    ...buildTimeParams(),
+    // 告警接口读 page_size（snake_case）
+    page_size: alarmPageSize,
+    ...buildAlarmTimeParams(),
     ...(deviceSnFilter ? { keyword: deviceSnFilter } : {}),
   }
 

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { Form, Input, Button, Card, Typography, App, Alert } from 'antd'
 import { LockOutlined, PhoneOutlined, SmileOutlined } from '@ant-design/icons'
 import useAuthStore from '@/stores/authStore'
+import { selectDefaultRoute } from '@/router/routeAccess'
 import api from '@/services/api'
 import type { User } from '@/types'
 import useTranslation from '@/hooks/useTranslation'
@@ -62,14 +63,22 @@ const InviteAcceptPage: React.FC = () => {
         setFatalError(t('invite.accept.invalidToken'))
         return
       }
+      // access_token 为空按失败处理：不能进入无凭证的登录态
+      if (!data.access_token) {
+        message.error(t('invite.accept.failed', { message: t('invite.accept.invalidToken') }))
+        return
+      }
+      const mappedUser = mapBackendUser(data.user as unknown as Record<string, unknown>)
+      const isSystemAdmin = mappedUser.isSystemAdmin
+      const permissions = data.permissions ?? []
       login(
-        data.access_token ?? '',
+        data.access_token,
         data.refresh_token ?? '',
-        mapBackendUser(data.user as unknown as Record<string, unknown>),
-        data.permissions ?? [],
+        mappedUser,
+        permissions,
       )
       message.success(t('invite.accept.success'))
-      navigate('/dashboard', { replace: true })
+      navigate(selectDefaultRoute(isSystemAdmin, (...perms) => permissions.some((p) => perms.includes(p))), { replace: true })
     } catch (err: any) {
       const errData = err?.response?.data
       if (errData?.code === 401) {

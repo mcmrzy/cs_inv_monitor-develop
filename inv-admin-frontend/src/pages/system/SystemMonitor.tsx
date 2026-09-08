@@ -30,6 +30,7 @@ import { formatInTimezone } from '@/utils/timezone'
 import useTimezoneStore from '@/stores/timezoneStore'
 import { queryKeys } from '@/utils/queryKeys'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
+import LocalizedPopconfirm from '@/components/LocalizedPopconfirm'
 import type {
   ServiceStatus,
   DLQItem,
@@ -324,9 +325,14 @@ const DataPipelineTab: React.FC = () => {
           <Button type="link" size="small" icon={<RedoOutlined />}
             loading={retryMutation.isPending && retryMutation.variables === record.id}
             onClick={() => retryMutation.mutate(record.id)}>{t('system.retry')}</Button>
-          <Button type="link" size="small" danger icon={<DeleteOutlined />}
-            loading={deleteMutation.isPending && deleteMutation.variables === record.id}
-            onClick={() => deleteMutation.mutate(record.id)}>{t('common.delete')}</Button>
+          <LocalizedPopconfirm
+            title={t('system.confirmDeleteMessage')}
+            onConfirm={() => deleteMutation.mutate(record.id)}
+            okButtonProps={{ danger: true }}
+          >
+            <Button type="link" size="small" danger icon={<DeleteOutlined />}
+              loading={deleteMutation.isPending && deleteMutation.variables === record.id}>{t('common.delete')}</Button>
+          </LocalizedPopconfirm>
         </Space>
       ),
     },
