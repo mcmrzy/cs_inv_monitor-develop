@@ -5,6 +5,7 @@ import {
   Row, Col, Typography, App, Empty, Tabs, Drawer,
 } from 'antd'
 import Popconfirm from '@/components/LocalizedPopconfirm'
+import ListPageTable from '@/components/ListPageTable'
 import {
   PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined,
   LockOutlined, StopOutlined, CheckCircleOutlined, TeamOutlined,
@@ -295,8 +296,15 @@ const UsersPage: React.FC = () => {
         </Row>
       </Card>
 
-      <Table<User> rowKey="id" columns={columns} dataSource={data} loading={isLoading} size="middle"
-          locale={{ emptyText: <Empty description={t('common.noData')} /> }}
+      <ListPageTable<User>
+        rowKey="id"
+        columns={columns}
+        dataSource={data}
+        loading={isLoading}
+        size="middle"
+        persistenceKey="users-list"
+        onReload={() => refetch()}
+        locale={{ emptyText: <Empty description={t('common.noData')} /> }}
         pagination={{ current: page, pageSize, total, showSizeChanger: true, showTotal: (totalCount) => t('common.total', { total: totalCount }), onChange: (p, ps) => { setPage(p); setPageSize(ps) } }} />
 
       <Modal title={editingUser ? t('user.editUser') : t('user.addUserTitle')} open={modalOpen}

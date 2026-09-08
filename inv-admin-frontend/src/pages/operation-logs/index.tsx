@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
-  Row, Col, Card, Table, Tabs, DatePicker, Select, Button, Tag,
+  Row, Col, Card, Tabs, DatePicker, Select, Button, Tag,
   Space, Typography, Input, App,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
@@ -20,6 +20,7 @@ import { formatInTimezone } from '@/utils/timezone'
 import useTimezoneStore from '@/stores/timezoneStore'
 import useTranslation from '@/hooks/useTranslation'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
+import ListPageTable from '@/components/ListPageTable'
 
 const { Title, Text } = Typography
 const { RangePicker } = DatePicker
@@ -533,11 +534,13 @@ const OperationLogsPage: React.FC = () => {
               </Button>
             </Row>
           </Card>
-          <Table<AuditLog>
+          <ListPageTable<AuditLog>
             rowKey="id"
             columns={auditColumns}
             dataSource={auditData}
             loading={auditLoading}
+            persistenceKey="operation-logs-audit"
+            onReload={() => refetchAudit()}
             pagination={{
               current: auditPage,
               pageSize: auditPageSize,
@@ -565,11 +568,13 @@ const OperationLogsPage: React.FC = () => {
               </Button>
             </Row>
           </Card>
-          <Table<AlarmRecord>
+          <ListPageTable<AlarmRecord>
             rowKey="id"
             columns={alarmColumns}
             dataSource={alarmData}
             loading={alarmLoading}
+            persistenceKey="operation-logs-alarm"
+            onReload={() => refetchAlarms()}
             rowClassName={(record: any) =>
               String(record.alarm_level) === '3' ? 'alert-row-critical' : ''
             }
@@ -600,11 +605,13 @@ const OperationLogsPage: React.FC = () => {
               </Button>
             </Row>
           </Card>
-          <Table<CommandRecord>
+          <ListPageTable<CommandRecord>
             rowKey="id"
             columns={cmdColumns}
             dataSource={cmdData}
             loading={cmdLoading}
+            persistenceKey="operation-logs-command"
+            onReload={() => refetchCommands()}
             pagination={{
               current: cmdPage,
               pageSize: cmdPageSize,
