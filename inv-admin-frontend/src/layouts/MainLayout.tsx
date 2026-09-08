@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Button, Avatar, Dropdown, Badge, Typography, theme, Grid, Form, App, Select, Cascader, Modal, Input, Space, Tooltip,
+  Button, Dropdown, Badge, Typography, Grid, Form, App, Modal, Input, Space, Tooltip,
 } from 'antd'
 import { ProLayout, ModalForm, ProFormText, ProFormSelect } from '@ant-design/pro-components'
 import type { ProLayoutProps } from '@ant-design/pro-components'
@@ -123,10 +123,8 @@ const MainLayout: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false)
   const [mobileCollapsed, setMobileCollapsed] = useState(true)
   const [passwordModalOpen, setPasswordModalOpen] = useState(false)
-  const [passwordLoading, setPasswordLoading] = useState(false)
   const [passwordForm] = Form.useForm()
   const [profileModalOpen, setProfileModalOpen] = useState(false)
-  const [profileLoading, setProfileLoading] = useState(false)
   const [profileForm] = Form.useForm()
   const [profileAvatar, setProfileAvatar] = useState('')
   const [timezoneModalOpen, setTimezoneModalOpen] = useState(false)
@@ -143,7 +141,6 @@ const MainLayout: React.FC = () => {
   const fetchTimezone = useTimezoneStore((s) => s.fetchTimezone)
   const queryClient = useQueryClient()
   const { t } = useTranslation()
-  const { token: themeToken } = theme.useToken()
   const screens = Grid.useBreakpoint()
   const { message } = App.useApp()
 
@@ -183,7 +180,7 @@ const MainLayout: React.FC = () => {
       path: '/',
       routes: groups,
     }
-  }, [isEndUser, canAccessOrgManagement, hasPermission, lang, t])
+  }, [isEndUser, canAccessOrgManagement, hasPermission, t])
 
   const handleLogout = () => {
     logout()
@@ -210,7 +207,6 @@ const MainLayout: React.FC = () => {
     email?: string
     region?: string[]
   }) => {
-    setProfileLoading(true)
     try {
       // 将region数组转换为country和region_name
       const submitValues: Record<string, unknown> = {
@@ -247,13 +243,10 @@ const MainLayout: React.FC = () => {
       }
     } catch {
       message.error(t('msg.profileUpdateFailed'))
-    } finally {
-      setProfileLoading(false)
     }
   }
 
   const handleChangePassword = async (values: { old_password: string; new_password: string }) => {
-    setPasswordLoading(true)
     try {
       const res = await api.post('/auth/change-password', {
         old_password: values.old_password,
@@ -269,8 +262,6 @@ const MainLayout: React.FC = () => {
       passwordForm.resetFields()
     } catch {
       message.error(t('msg.passwordCheckFailed'))
-    } finally {
-      setPasswordLoading(false)
     }
   }
 
@@ -282,11 +273,6 @@ const MainLayout: React.FC = () => {
     { key: 'timezone', icon: <ClockCircleOutlined />, label: t('header.timezone'), onClick: () => setTimezoneModalOpen(true) },
     { type: 'divider' as const },
     { key: 'logout', icon: <LogoutOutlined />, label: t('header.logout'), danger: true, onClick: handleLogout },
-  ]
-
-  const langMenuItems = [
-    { key: 'zh', label: '中文' },
-    { key: 'en', label: 'English' },
   ]
 
   const currentTimezone = user?.timezone || 'Asia/Shanghai'
@@ -588,7 +574,7 @@ const MainLayout: React.FC = () => {
             phoneForm.resetFields()
             // 刷新用户信息
             queryClient.invalidateQueries({ queryKey: ['user', 'profile'] })
-          } catch (error) {
+          } catch {
             // 验证失败
           }
         }}
@@ -676,7 +662,7 @@ const MainLayout: React.FC = () => {
             emailForm.resetFields()
             // 刷新用户信息
             queryClient.invalidateQueries({ queryKey: ['user', 'profile'] })
-          } catch (error) {
+          } catch {
             // 验证失败
           }
         }}

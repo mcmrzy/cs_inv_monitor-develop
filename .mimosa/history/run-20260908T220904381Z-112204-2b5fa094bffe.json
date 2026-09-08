@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "mimosa-finding-history/v1",
+  "runId": "20260908T220904381Z-112204-2b5fa094bffe",
+  "runStatus": "inconclusive",
+  "errors": [
+    "scan:inv-admin-frontend/src/components/BulkOperationProgress.tsx: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/src/components/DynamicTable.tsx: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/src/components/RegionPicker.tsx: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+  ],
+  "target": ".",
+  "revision": "59ca2abf40575c33d6fa575ad6d10d727cfe04dc",
+  "diffHash": "db51af0ad987b3a29da53b1888745dcca87fe473451267ac10ca6a9bb6f76d27",
+  "rulesVersion": "unavailable",
+  "recordedAt": "2026-09-08T22:09:04.381Z",
+  "timing": {
+    "startedAt": "2026-09-08T22:09:01.557Z",
+    "completedAt": "2026-09-08T22:09:04.381Z",
+    "durationMs": 2824
+  },
+  "tokens": {
+    "input": 0,
+    "output": 0,
+    "total": 0,
+    "modelCalls": 0,
+    "measurement": "known-zero"
+  },
+  "findings": {
+    "total": 0,
+    "bySeverity": {},
+    "byStatus": {}
+  },
+  "coverage": {
+    "status": "partial",
+    "reasonCounts": {
+      "scanner_failed": 3,
+      "project_check_failed": 3
+    }
+  },
+  "evidenceBoundary": "static_only",
+  "immutableReport": ".mimosa/reports/task-review-sess_5f5b0dc3-51a8-427a-8bf0-db8474f7bdb2-20260908T220904381Z-112204-2b5fa094bffe.json"
+}
