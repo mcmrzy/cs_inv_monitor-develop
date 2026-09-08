@@ -207,6 +207,76 @@ func TestAuthRejectsRevokedAndUnavailableAuthorizationContext(t *testing.T) {
 	}
 }
 
+// ==================== AuthWithQueryToken（SSE 专用） ====================
+
+func TestAuthWithQueryToken_查询参数Token可通过(t *testing.T) {
+	jwtSvc, mr := setupJWTService(t)
+	defer mr.Close()
+
+	accessToken := generateContextToken(t, jwtSvc, 9, "13700137000", false)
+
+	r := gin.New()
+	r.Use(AuthWithQueryToken(jwtSvc))
+	r.GET("/stream", func(c *gin.Context) {
+		c.JSON(200, gin.H{"user_id": GetUserID(c), "is_system_admin": GetIsSystemAdmin(c)})
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/stream?token="+accessToken, nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, 200, w.Code)
+	var body map[string]interface{}
+	_ = json.Unmarshal(w.Body.Bytes(), &body)
+	assert.Equal(t, float64(9), body["user_id"])
+	assert.Equal(t, false, body["is_system_admin"])
+}
+
+func TestAuthWithQueryToken_缺失Token仍返回401(t *testing.T) {
+	// 边界：header/cookie/query 均无 token 时，行为与标准 Auth 一致（401）
+	jwtSvc, mr := setupJWTService(t)
+	defer mr.Close()
+
+	r := gin.New()
+	r.Use(AuthWithQueryToken(jwtSvc))
+	r.GET("/stream", func(c *gin.Context) { c.Status(200) })
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/stream", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, 401, w.Code)
+	resp := parseResponseBody(t, w)
+	assert.Contains(t, resp.Message, "missing")
+}
+
+func TestAuthWithQueryToken_Header鉴权行为不变(t *testing.T) {
+	// 边界：携带 Authorization 头时不读取查询参数，行为与标准 Auth 完全一致
+	jwtSvc, mr := setupJWTService(t)
+	defer mr.Close()
+
+	accessToken := generateContextToken(t, jwtSvc, 5, "13600136000", false)
+
+	r := gin.New()
+	r.Use(AuthWithQueryToken(jwtSvc))
+	r.GET("/stream", func(c *gin.Context) {
+		c.JSON(200, gin.H{"user_id": GetUserID(c)})
+	})
+
+	// 1) 合法 header 通过
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/stream?token=invalid.token", nil)
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	r.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	// 2) 非法查询参数 token 被拒绝，不会因 query 通道而被绕过
+	w2 := httptest.NewRecorder()
+	req2, _ := http.NewRequest("GET", "/stream?token=invalid.token", nil)
+	r.ServeHTTP(w2, req2)
+	assert.Equal(t, 401, w2.Code)
+}
+
 // ==================== OptionalAuth 中间件 ====================
 
 func TestOptionalAuth_无Token仍通过(t *testing.T) {

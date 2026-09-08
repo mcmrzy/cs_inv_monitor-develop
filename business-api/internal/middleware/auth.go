@@ -87,6 +87,25 @@ func Auth(jwtService *service.JWTService, validators ...AuthorizationContextVali
 	}
 }
 
+// AuthWithQueryToken 是 SSE 路由（如 /system/pipeline-health/stream）专用的鉴权包装：
+// EventSource 无法携带 Authorization 头，当请求既无 Authorization 头也无
+// access_token cookie 时，从 token 查询参数注入 Bearer token 后复用标准 Auth 逻辑。
+// 仅用于显式注册本中间件的路由，其余路由鉴权行为不变。
+// 注意：token 值不会被写入任何日志。
+func AuthWithQueryToken(jwtService *service.JWTService, validators ...AuthorizationContextValidator) gin.HandlerFunc {
+	auth := Auth(jwtService, validators...)
+	return func(c *gin.Context) {
+		if c.GetHeader("Authorization") == "" {
+			if _, cookieErr := c.Cookie("access_token"); cookieErr != nil {
+				if token := c.Query("token"); token != "" {
+					c.Request.Header.Set("Authorization", "Bearer "+token)
+				}
+			}
+		}
+		auth(c)
+	}
+}
+
 func OptionalAuth(jwtService *service.JWTService, validators ...AuthorizationContextValidator) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")

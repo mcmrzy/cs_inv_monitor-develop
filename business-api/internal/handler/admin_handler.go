@@ -59,12 +59,16 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 	pageSize := getPageSize(c, 10)
 	keyword := c.Query("keyword")
 	status := getQueryInt(c, "status", -1)
+	// org_role：按组织类型过滤（manufacturer/agent/distributor/installer/customer，
+	// 兼容展示别名 org_admin=manufacturer），由 repo 层归一化并拼装 EXISTS 过滤
+	orgRole := c.Query("org_role")
 
 	result, err := h.userRepo.List(c.Request.Context(), repository.ListUsersParams{
 		Page:     page,
 		PageSize: pageSize,
 		Keyword:  keyword,
 		Status:   status,
+		OrgRole:  orgRole,
 	})
 	if err != nil {
 		response.Error(c, 500, "查询用户列表失败")

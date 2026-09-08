@@ -19,7 +19,10 @@ func NewAlarmHandler(alarmService *service.AlarmService) *AlarmHandler {
 	return &AlarmHandler{alarmService: alarmService}
 }
 
-func (h *AlarmHandler) List(c *gin.Context) {
+// parseAlarmListParams 解析告警列表查询参数。
+// startTime/endTime 为 YYYY-MM-DD 日期（与 notifications 列表接口同名参数语义一致：
+// 按 created_at 日期范围过滤，含边界日期），缺省时不追加任何时间条件，行为不变。
+func parseAlarmListParams(c *gin.Context) repository.AlarmListParams {
 	userID := middleware.GetUserID(c)
 	isSystemAdmin := middleware.GetIsSystemAdmin(c)
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -28,6 +31,8 @@ func (h *AlarmHandler) List(c *gin.Context) {
 	statusStr := c.Query("status")
 	keyword := c.Query("keyword")
 	alarmLevelStr := c.Query("alarmLevel")
+	startTime := c.Query("startTime")
+	endTime := c.Query("endTime")
 
 	var stationID int64
 	if stationIDStr != "" {
@@ -51,16 +56,22 @@ func (h *AlarmHandler) List(c *gin.Context) {
 		pageSize = 20
 	}
 
-	params := repository.AlarmListParams{
+	return repository.AlarmListParams{
 		UserID:        userID,
 		StationID:     stationID,
 		Status:        status,
 		AlarmLevel:    alarmLevel,
 		Keyword:       keyword,
+		StartTime:     startTime,
+		EndTime:       endTime,
 		Page:          page,
 		PageSize:      pageSize,
 		IsSystemAdmin: isSystemAdmin,
 	}
+}
+
+func (h *AlarmHandler) List(c *gin.Context) {
+	params := parseAlarmListParams(c)
 
 	alarms, total, err := h.alarmService.List(c.Request.Context(), params)
 	if err != nil {
@@ -68,7 +79,7 @@ func (h *AlarmHandler) List(c *gin.Context) {
 		return
 	}
 
-	response.Page(c, alarms, total, page, pageSize)
+	response.Page(c, alarms, total, params.Page, params.PageSize)
 }
 
 func (h *AlarmHandler) GetByID(c *gin.Context) {
