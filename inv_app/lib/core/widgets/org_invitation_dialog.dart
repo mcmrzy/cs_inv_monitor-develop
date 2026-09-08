@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/entities/organization.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 typedef SendOrganizationInvitation = Future<Map<String, dynamic>> Function({
   required String email,
@@ -60,11 +61,12 @@ class _OrgInvitationDialogState extends State<OrgInvitationDialog> {
   Future<void> _submit() async {
     if (_isSubmitting) return;
 
+    final l10n = AppLocalizations.of(context)!;
     final email = _emailController.text.trim();
     final days = int.tryParse(_daysController.text) ?? 7;
     if (email.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入邮箱地址')),
+        SnackBar(content: Text(l10n.str('invite_email_required'))),
       );
       return;
     }
@@ -85,13 +87,18 @@ class _OrgInvitationDialogState extends State<OrgInvitationDialog> {
       if (!mounted) return;
       setState(() => _isSubmitting = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('发送失败：$error')),
+        SnackBar(
+          content: Text(
+            l10n.str('invite_send_failed', {'error': error.toString()}),
+          ),
+        ),
       );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return PopScope(
       canPop: !_isSubmitting,
       child: Padding(
@@ -108,7 +115,7 @@ class _OrgInvitationDialogState extends State<OrgInvitationDialog> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    '发送邀请',
+                    l10n.str('invite_send'),
                     style: TextStyle(
                       fontSize: 20.sp,
                       fontWeight: FontWeight.bold,
@@ -125,19 +132,19 @@ class _OrgInvitationDialogState extends State<OrgInvitationDialog> {
               TextField(
                 controller: _emailController,
                 enabled: !_isSubmitting,
-                decoration: const InputDecoration(
-                  labelText: '邮箱地址',
-                  hintText: '请输入邀请对象的邮箱',
-                  prefixIcon: Icon(Icons.email),
+                decoration: InputDecoration(
+                  labelText: l10n.str('invite_email_label'),
+                  hintText: l10n.str('invite_email_hint'),
+                  prefixIcon: const Icon(Icons.email),
                 ),
                 textInputAction: TextInputAction.next,
               ),
               SizedBox(height: 16.h),
               DropdownButtonFormField<String>(
                 initialValue: _roleCode,
-                decoration: const InputDecoration(
-                  labelText: '成员角色',
-                  prefixIcon: Icon(Icons.badge),
+                decoration: InputDecoration(
+                  labelText: l10n.str('invite_role_field_label'),
+                  prefixIcon: const Icon(Icons.badge),
                 ),
                 items: OrgMemberRole.values
                     .where((role) => widget.allowedRoles.contains(role.apiValue))
@@ -160,10 +167,10 @@ class _OrgInvitationDialogState extends State<OrgInvitationDialog> {
               TextField(
                 controller: _daysController,
                 enabled: !_isSubmitting,
-                decoration: const InputDecoration(
-                  labelText: '有效期（天）',
-                  hintText: '默认 7 天',
-                  prefixIcon: Icon(Icons.calendar_today),
+                decoration: InputDecoration(
+                  labelText: l10n.str('invite_valid_days_label'),
+                  hintText: l10n.str('invite_valid_days_hint'),
+                  prefixIcon: const Icon(Icons.calendar_today),
                 ),
                 keyboardType: TextInputType.number,
               ),
@@ -175,7 +182,7 @@ class _OrgInvitationDialogState extends State<OrgInvitationDialog> {
                         dimension: 18.w,
                         child: const CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Text('发送邀请'),
+                    : Text(l10n.str('invite_send')),
               ),
             ],
           ),

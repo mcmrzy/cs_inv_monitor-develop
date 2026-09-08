@@ -1848,5 +1848,60 @@ const Map<String, String> en = {
   'storage_fault_fan_low': 'Fan Speed Low',
   'storage_fault_fan_stall': 'Fan Stalled',
   'storage_fault_lock': 'Battery Locked',
+
+  // Device edit / device actions (unbind, delete, rebind confirmations)
+  'device_confirm_unbind': 'Unbind this device?',
+  'device_confirm_delete': 'Delete this device? This cannot be undone.',
+  'device_rebind_in_dev': 'Rebinding is under development',
+
+  // Organization switcher
+  'org_hint': 'Notice',
+  'org_not_in_any': 'You do not belong to any organization',
+  'org_switch_title': 'Switch Organization',
+  'org_member_device_count': 'Members: {members} | Devices: {devices}',
+  'org_current': 'Current',
+  'org_switched_to': 'Switched to "{name}"',
+  'org_switch_failed': 'Switch failed: {error}',
+
+  // Organization invitations / send invite
+  'invite_management_title': 'Invitations',
+  'invite_status_pending': 'Pending',
+  'invite_status_accepted': 'Accepted',
+  'invite_status_rejected': 'Rejected',
+  'invite_status_expired': 'Expired',
+  'invite_status_revoked': 'Revoked',
+  'invite_send': 'Send Invite',
+  'invite_load_failed': 'Failed to load: {error}',
+  'invite_empty': 'No invitations yet',
+  'invite_sent_link_once':
+      'Invitation sent (the invite link is only visible at creation)',
+  'invite_revoke_confirm_title': 'Confirm Revoke',
+  'invite_revoke_confirm_body':
+      'Revoke this invitation? The invite link will become invalid.',
+  'invite_revoke': 'Revoke',
+  'invite_revoked': 'Invitation revoked',
+  'invite_revoke_failed': 'Revoke failed: {error}',
+  'invite_sent_title': 'Invitation Sent',
+  'invite_sent_to': 'Invitation sent to {email}.',
+  'invite_link_once_hint':
+      'The invite link is visible only once. Share it with the invitee now:',
+  'invite_role_unspecified': 'Unspecified',
+  'invite_role_separator': ', ',
+  'invite_revoke_tooltip': 'Revoke invitation',
+  'invite_role_label': 'Roles: {roles}',
+  'invite_org_label': 'Organization: {org}',
+  'invite_inviter_label': 'Inviter: {name}',
+  'invite_expires_at': 'Valid until: {time}',
+  'invite_email_required': 'Please enter an email address',
+  'invite_send_failed': 'Send failed: {error}',
+  'invite_email_label': 'Email Address',
+  'invite_email_hint': 'Enter the email of the invitee',
+  'invite_role_field_label': 'Member Role',
+  'invite_valid_days_label': 'Validity (days)',
+  'invite_valid_days_hint': 'Defaults to 7 days',
+
+  // Map location picker (nearby addresses)
+  'location_search_nearby': 'Searching nearby addresses...',
+  'location_nearby_addresses': 'Nearby Addresses',
 };
 
