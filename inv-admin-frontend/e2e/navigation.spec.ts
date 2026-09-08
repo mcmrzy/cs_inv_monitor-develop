@@ -235,11 +235,42 @@ test.describe('侧边栏菜单点击导航', () => {
     { label: '操作记录', url: /\/operation-logs/ },
   ]
 
+  // UX 改版后侧边栏菜单由 16 项平铺改为 4 个分组（总览/资产管理/设备运维/系统管理），
+  // 子项默认折叠，仅当前路由所在分组自动展开；点击子项前可能需先展开所属分组。
+  const menuGroupOf: Record<string, string> = {
+    仪表盘: '总览',
+    电站监控: '总览',
+    电站管理: '资产管理',
+    设备管理: '资产管理',
+    型号管理: '资产管理',
+    并机管理: '资产管理',
+    OTA升级: '设备运维',
+    通知中心: '设备运维',
+    工单管理: '设备运维',
+    远程设置: '设备运维',
+    批量设置: '设备运维',
+    用户管理: '系统管理',
+    组织架构: '系统管理',
+    操作记录: '系统管理',
+  }
+
   for (const { label, url } of menuCases) {
     test(`侧边栏点击「${label}」跳转到对应路由`, async ({ page }) => {
       await gotoAuthed(page, '/dashboard')
       await expect(page.locator('.ant-menu')).toBeVisible()
-      await page.locator('.ant-menu').getByText(label, { exact: true }).click()
+      const item = page.locator('.ant-menu').getByText(label, { exact: true })
+      if (!(await item.isVisible().catch(() => false))) {
+        const group = menuGroupOf[label]
+        // 分组标题可能渲染在侧边栏子菜单或顶栏（mix 布局），两种容器都尝试
+        const groupInMenu = page.locator('.ant-menu-submenu-title', { hasText: group }).first()
+        if (await groupInMenu.isVisible().catch(() => false)) {
+          await groupInMenu.click()
+        } else {
+          await page.getByText(group, { exact: true }).first().click()
+        }
+        await expect(item).toBeVisible({ timeout: 5_000 })
+      }
+      await item.click()
       await expect(page).toHaveURL(url, { timeout: 10_000 })
       await expect(page.locator('.ant-pro-layout-content')).toBeVisible()
     })
