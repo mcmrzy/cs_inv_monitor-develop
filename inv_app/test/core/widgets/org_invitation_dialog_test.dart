@@ -1,14 +1,26 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inv_app/core/widgets/org_invitation_dialog.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 Widget _host({required SendOrganizationInvitation onSubmit}) {
   return ScreenUtilInit(
     designSize: const Size(375, 812),
     builder: (_, __) => MaterialApp(
+      // 断言基于中文文案，钉住 locale
+      locale: const Locale('zh'),
+      // 弹窗文案已接入 l10n，测试宿主需提供本地化委托
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: AppLocalizations.supportedLocales,
       home: Builder(
         builder: (context) => Scaffold(
           body: ElevatedButton(
@@ -31,6 +43,8 @@ Widget _host({required SendOrganizationInvitation onSubmit}) {
 
 Future<void> _open(WidgetTester tester, Widget host) async {
   await tester.pumpWidget(host);
+  // 本地化委托异步加载翻译，需再泵一帧 home 才挂载
+  await tester.pump();
   await tester.tap(find.text('打开'));
   await tester.pumpAndSettle();
 }
