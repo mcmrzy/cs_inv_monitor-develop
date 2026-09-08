@@ -197,7 +197,8 @@ class ServiceLocator {
   static Completer<bool>? _refreshCompleter;
 
   /// 刷新 access token（Dio 拦截器与 SSE 等非 Dio 请求共用）。
-  /// 返回 true 表示刷新成功且新 token 已保存；false 表示刷新失败（已触发登出）。
+  /// 返回 true 表示刷新成功且新 token 已保存；false 表示刷新失败
+  /// （仅当服务端明确拒绝 refresh token 时才触发登出，网络类异常保留 token）。
   static Future<bool> refreshAccessToken() async {
     if (_tokenRefreshLock) {
       _refreshCompleter ??= Completer<bool>();
@@ -271,7 +272,14 @@ class ServiceLocator {
       return false;
     } catch (e) {
       _finishTokenRefresh(false);
-      getIt<AuthBloc>().add(AuthLogoutRequested());
+      // 仅当服务端明确拒绝 refresh token（401/403）时才登出；
+      // 连接超时/断网/5xx 等临时故障保留 token，等待后续请求重试刷新，
+      // 避免一次网络抖动把用户登出并清空本地数据。
+      if (e is DioException &&
+          e.type == DioExceptionType.badResponse &&
+          (e.response?.statusCode == 401 || e.response?.statusCode == 403)) {
+        getIt<AuthBloc>().add(AuthLogoutRequested());
+      }
       return false;
     }
   }
@@ -532,7 +540,11 @@ getIt.registerLazySingleton<NotifyPrefsService>(
   }
 
   static void _initBloc() {
-    getIt.registerFactory(
+    // AuthBloc 必须全局单例：Dio 拦截器/refreshAccessToken 在 401 时向
+    // getIt<AuthBloc>() 派发 AuthLogoutRequested，而 main.dart 的 BlocListener
+    // 监听的是 BlocProvider 创建的实例；若注册为 factory，拦截器每次拿到全新
+    // 实例（幽灵 bloc），登出事件无人监听，token 已清但页面不跳登录页。
+    getIt.registerLazySingleton(
       () => AuthBloc(
         loginUseCase: getIt(),
         registerUseCase: getIt(),

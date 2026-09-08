@@ -386,17 +386,22 @@ class _AddDevicePageState extends State<AddDevicePage>
         '/device/qr-bind?sn=${Uri.encodeQueryComponent(sn)}&pin=${Uri.encodeQueryComponent(pin)}',
       );
     } finally {
-      if (!mounted) return;
-      _qrScanGuard.release(resetPayload: true);
-      setState(() {
-        _scanning = false;
-        _lastScanned = '';
-        _scannedPin = '';
-      });
-      try {
-        await _cameraController?.start();
-      } catch (_) {
-        // The scanner will report its own state if restarting is unavailable.
+      // finally 中禁止 return（会吞掉 try 块的异常）：
+      // mounted 检查只用于守卫后续 UI 状态/相机恢复语句
+      if (mounted) {
+        _qrScanGuard.release(resetPayload: true);
+        setState(() {
+          _scanning = false;
+          _lastScanned = '';
+          _scannedPin = '';
+        });
+      }
+      if (mounted) {
+        try {
+          await _cameraController?.start();
+        } catch (_) {
+          // The scanner will report its own state if restarting is unavailable.
+        }
       }
     }
   }

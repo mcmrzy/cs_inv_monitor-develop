@@ -217,4 +217,137 @@ void main() {
       dataSource.disconnect();
     });
   });
+
+  test(
+    'a data line split across chunks at a CJK char boundary is reassembled',
+    () {
+      fakeAsync((async) {
+        final responseStream = StreamController<Uint8List>();
+        when(
+          () => dio.get<ResponseBody>(
+            '/dashboard/sse',
+            cancelToken: any(named: 'cancelToken'),
+            options: any(named: 'options'),
+          ),
+        ).thenAnswer((_) async => responseFor(responseStream));
+
+        final events = <Map<String, dynamic>>[];
+        dataSource.connectToSSE().listen(events.add);
+        async.flushMicrotasks();
+        expect(responseStream.hasListener, isTrue);
+
+        // “文”的 UTF-8 编码为 3 字节：chunk1 在其中间截断，多字节字符被劈开。
+        // 旧实现按单个 chunk utf8.decode 会抛 FormatException 并中断订阅；
+        // 增量解码必须等齐字节后重组，且跨 chunk 的 data 行不能丢。
+        final wen = utf8.encode('文');
+        expect(wen.length, 3);
+        final chunk1 = <int>[
+          ...utf8.encode('data: {"msg":"中'),
+          ...wen.sublist(0, 2),
+        ];
+        final chunk2 = <int>[
+          ...wen.sublist(2),
+          ...utf8.encode('事件"}\n'),
+          ...utf8.encode('data: {"n":2}\n'),
+        ];
+
+        responseStream.add(Uint8List.fromList(chunk1));
+        async.flushMicrotasks();
+        // 半截事件不解析、不丢，等待后续 chunk
+        expect(events, isEmpty);
+
+        responseStream.add(Uint8List.fromList(chunk2));
+        async.flushMicrotasks();
+        expect(events, [
+          {'msg': '中文事件'},
+          {'n': 2},
+        ]);
+
+        dataSource.disconnect();
+        responseStream.close();
+        async.flushMicrotasks();
+      });
+    },
+  );
+
+  test('a malformed data line is skipped without killing the subscription', () {
+    fakeAsync((async) {
+      final responseStream = StreamController<Uint8List>();
+      when(
+        () => dio.get<ResponseBody>(
+          '/dashboard/sse',
+          cancelToken: any(named: 'cancelToken'),
+          options: any(named: 'options'),
+        ),
+      ).thenAnswer((_) async => responseFor(responseStream));
+
+      final events = <Map<String, dynamic>>[];
+      dataSource.connectToSSE().listen(events.add);
+      async.flushMicrotasks();
+
+      responseStream.add(
+        Uint8List.fromList(utf8.encode('data: {not-valid-json\n')),
+      );
+      responseStream.add(
+        Uint8List.fromList(utf8.encode('data: {"ok":1}\n')),
+      );
+      async.flushMicrotasks();
+      expect(events, [
+        {'ok': 1},
+      ]);
+
+      // 坏行只跳过自身，订阅仍存活：后续完整事件继续送达
+      responseStream.add(
+        Uint8List.fromList(utf8.encode('data: {"ok":2}\n')),
+      );
+      async.flushMicrotasks();
+      expect(events.last, {'ok': 2});
+
+      dataSource.disconnect();
+      responseStream.close();
+      async.flushMicrotasks();
+    });
+  });
+
+  test(
+    'reconnect exhaustion surfaces SSEConnectionLostException on the stream',
+    () {
+      fakeAsync((async) {
+        var requests = 0;
+        when(
+          () => dio.get<ResponseBody>(
+            '/dashboard/sse',
+            cancelToken: any(named: 'cancelToken'),
+            options: any(named: 'options'),
+          ),
+        ).thenAnswer((_) async {
+          requests++;
+          return Response<ResponseBody>(
+            requestOptions: RequestOptions(path: '/dashboard/sse'),
+            data: ResponseBody(const Stream<Uint8List>.empty(), 200),
+          );
+        });
+
+        final errors = <Object>[];
+        dataSource.connectToSSE().listen((_) {}, onError: errors.add);
+        async.flushMicrotasks();
+
+        for (final delaySeconds in [5, 10, 15, 20, 25]) {
+          async.elapse(Duration(seconds: delaySeconds));
+          async.flushMicrotasks();
+        }
+        expect(requests, 6);
+        expect(errors, hasLength(1));
+        final loss = errors.single as SSEConnectionLostException;
+        expect(loss.attempts, DashboardSSEDataSource.maxReconnectAttempts);
+
+        // 耗尽后放弃重连，不再发起新请求
+        async.elapse(const Duration(minutes: 1));
+        async.flushMicrotasks();
+        expect(requests, 6);
+
+        dataSource.disconnect();
+      });
+    },
+  );
 }
