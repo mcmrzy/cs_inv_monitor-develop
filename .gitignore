@@ -258,3 +258,8 @@ test-campaign-results/
 
 # mimosa 扫描基线快照缓存(体积大且可再生)不入库
 .mimosa/hook-state/*.baseline/
+.night_round.lock
+
+# 固件树去留待人工决策, 暂不入库(夜间战役 2026-09-09 报告)
+/external/储能bms/
+/external/driver_arm/

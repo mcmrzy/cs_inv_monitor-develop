@@ -1,14 +1,14 @@
 {
   "schemaVersion": "mimosa-hook-status/v1",
-  "recordedAt": "2026-09-08T17:23:30.348Z",
+  "recordedAt": "2026-09-08T20:04:27.919Z",
   "sessionId": "sess_5f5b0dc3-51a8-427a-8bf0-db8474f7bdb2",
   "event": "PostToolUse",
   "toolName": "Edit",
-  "file": "business-api/internal/handler/device_handler.go",
+  "file": "inv-admin-frontend/e2e/lang.spec.ts",
   "outcome": "clear",
   "coverage": "complete",
   "findingCount": 0,
-  "durationMs": 16,
+  "durationMs": 14,
   "hostState": "hook_complete",
   "reportHint": ".mimosa/reports/"
 }

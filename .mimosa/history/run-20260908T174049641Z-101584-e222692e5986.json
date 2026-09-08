@@ -1,0 +1,57 @@
+{
+  "schemaVersion": "mimosa-finding-history/v1",
+  "runId": "20260908T174049641Z-101584-e222692e5986",
+  "runStatus": "inconclusive",
+  "errors": [
+    "baseline-read:inv-admin-frontend/src/pages/devices/components/BulkDeviceOperationModal.test.tsx: baseline_snapshot_unreadable: file is missing from task baseline",
+    "baseline-read:business-api/internal/handler/admin_handler_audit_test.go: baseline_snapshot_unreadable: file is missing from task baseline",
+    "scan:tests/integration/api_e2e_test.go: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/src/pages/system/SystemMonitor.tsx: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/src/pages/operation-logs/index.tsx: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/src/pages/models/model_registry_workspace.tsx: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/src/pages/invite/InviteAcceptPage.tsx: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/src/pages/devices/index.tsx: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/src/pages/devices/components/BulkDeviceOperationModal.test.tsx: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/src/pages/device-detail/BmsTab.tsx: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/src/pages/device-detail/DiagnosticsTab.tsx: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/src/pages/device-detail/InstallTab.tsx: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/src/pages/device-detail/StrategyTab.tsx: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/src/pages/batch-settings/index.tsx: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/src/locales/devices.ts: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:business-api/internal/repository/repositories.go: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:business-api/internal/handler/admin_handler.go: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:business-api/internal/handler/admin_handler_audit_test.go: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+  ],
+  "target": ".",
+  "revision": "37cb5425c4dd0cc1d2fd0ec2d5e01bc2e91d0bb7",
+  "diffHash": "c14b222a7a0686cb96d63476f82c0cd987410fdbe8e46546c392401a4a53180b",
+  "rulesVersion": "unavailable",
+  "recordedAt": "2026-09-08T17:40:49.641Z",
+  "timing": {
+    "startedAt": "2026-09-08T17:40:46.353Z",
+    "completedAt": "2026-09-08T17:40:49.641Z",
+    "durationMs": 3288
+  },
+  "tokens": {
+    "input": 0,
+    "output": 0,
+    "total": 0,
+    "modelCalls": 0,
+    "measurement": "known-zero"
+  },
+  "findings": {
+    "total": 0,
+    "bySeverity": {},
+    "byStatus": {}
+  },
+  "coverage": {
+    "status": "partial",
+    "reasonCounts": {
+      "baseline_snapshot_unreadable": 2,
+      "scanner_failed": 16,
+      "project_check_failed": 18
+    }
+  },
+  "evidenceBoundary": "static_only",
+  "immutableReport": ".mimosa/reports/task-review-sess_5f5b0dc3-51a8-427a-8bf0-db8474f7bdb2-20260908T174049641Z-101584-e222692e5986.json"
+}
