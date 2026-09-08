@@ -12,8 +12,16 @@ import { gotoAuthed, openUserMenu } from './helpers'
 const content = (page: Page) => page.locator('.ant-pro-layout-content')
 
 async function switchLang(page: Page, to: 'en' | 'zh'): Promise<void> {
-  await openUserMenu(page)
-  await page.getByText(to === 'en' ? 'English' : '中文', { exact: true }).click()
+  const item = page.getByText(to === 'en' ? 'English' : '中文', { exact: true })
+  // 慢循环下头像点击可能落在页面水合完成前，下拉菜单未弹出导致目标项
+  // 永不出现（soak 战役 c63/c83 两次 90s 超时）。改为「不可见就重新点
+  // 头像」的自愈重试，直到菜单项可点。
+  await expect(async () => {
+    if (!(await item.isVisible().catch(() => false))) {
+      await openUserMenu(page)
+    }
+    await item.click({ timeout: 3_000 })
+  }).toPass({ timeout: 30_000 })
 }
 
 test.describe('页面级语言切换', () => {

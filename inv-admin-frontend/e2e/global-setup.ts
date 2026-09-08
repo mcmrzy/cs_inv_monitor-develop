@@ -92,14 +92,24 @@ async function promoteToSystemAdmin(phone: string): Promise<void> {
  * 测试库是一次性资源（CI 每次全新起栈），残留行只会来自同一台开发机上
  * 之前的手动/测试运行。TRUNCATE CASCADE 会连带清掉引用这些表的事实数据
  * （遥测/告警明细等）。必须在注册账号之前执行。
+ *
+ * users 也一并清空：每轮注册的 e2e 账号会留下个人组织链（组织/成员关系/
+ * 角色授权），长期 soak 中不断累积拖慢登录与组织解析查询（8 小时战役实测
+ * E2E 单轮耗时 180s→270s 单调爬升）。
  */
 async function resetTestData(): Promise<void> {
   const pool = new pg.Pool({ connectionString: PG_DSN })
   try {
+    // organizations 必须随 users 一起清：root 集成测试每循环也会遗留组织行，
+    // 8 小时 soak 后 organizations 积到 2.6 万行、root_tenant_id 占满小整数，
+    // 新注册用户的个人根组织（root_tenant_id=user.id）会撞
+    // uq_organizations_root_code 唯一约束导致注册 500。
+    // CASCADE 连带清空 memberships/closure/quotas/tenant_roots 等引用链。
     await pool.query(`
       TRUNCATE user_device_rel, devices, stations, alarms,
-               device_upgrades, firmware_versions, upgrade_tasks
-      RESTART IDENTITY CASCADE
+               device_upgrades, firmware_versions, upgrade_tasks,
+               users, organizations
+      CASCADE
     `)
   } finally {
     await pool.end()

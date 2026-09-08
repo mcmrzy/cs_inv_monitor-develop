@@ -124,7 +124,9 @@ test.describe('OTA 升级交互', () => {
 test.describe('列表空态', () => {
   test('电站管理空态显示暂无数据', async ({ page }) => {
     await gotoAuthed(page, '/stations')
-    await expect(page.getByText('电站管理', { exact: true })).toBeVisible()
+    // 「电站管理」同时出现在侧边栏菜单与页面标题，必须限定内容区，
+    // 否则 strict mode 双元素命中（soak 战役 c9/c19/c59/c70 四次发作）
+    await expect(content(page).getByRole('heading', { name: '电站管理' })).toBeVisible()
     await expect(page.locator('.ant-empty', { hasText: '暂无数据' })).toBeVisible({ timeout: 20_000 })
   })
 
