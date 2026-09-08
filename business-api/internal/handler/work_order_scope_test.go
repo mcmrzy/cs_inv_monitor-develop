@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -44,5 +45,58 @@ func TestWorkOrderDataScopeParenthesized(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestWorkOrderSLAFilter 工单列表 sla 参数过滤：
+// 正向——"overdue" 追加 "sla_deadline 已过且状态非 resolved/closed" 条件；
+// 边界——空值与其他取值均不追加条件（行为不变）。
+func TestWorkOrderSLAFilter(t *testing.T) {
+	overdue := workOrderSLAFilter("overdue")
+	for _, want := range []string{
+		"w.sla_deadline IS NOT NULL",
+		"w.sla_deadline < NOW()",
+		"w.status NOT IN ('resolved','closed')",
+	} {
+		if !strings.Contains(overdue, want) {
+			t.Fatalf("sla=overdue filter missing %q, got: %s", want, overdue)
+		}
+	}
+
+	// 条件需自带括号，避免与外部 AND/OR 拼接时优先级错乱
+	if !strings.HasPrefix(overdue, " AND (") || !strings.HasSuffix(overdue, ")") {
+		t.Fatalf("sla filter must start with ' AND (' and end with ')', got: %s", overdue)
+	}
+
+	for _, sla := range []string{"", "ok", "overdue2", "OVERDUE"} {
+		if got := workOrderSLAFilter(sla); got != "" {
+			t.Fatalf("sla=%q should not filter, got: %s", sla, got)
+		}
+	}
+}
+
+// TestWorkOrderRequestResolutionBinding 工单状态更新请求体的 resolution 可选字段
+// （契约：JSON 字段名 "resolution"，持久化到 work_orders.resolution，该列已存在）。
+func TestWorkOrderRequestResolutionBinding(t *testing.T) {
+	// 正向：resolution 随状态更新一并提交并被绑定
+	var req workOrderRequest
+	if err := json.Unmarshal([]byte(`{"status":"resolved","resolution":"replaced the DC board"}`), &req); err != nil {
+		t.Fatalf("bind request: %v", err)
+	}
+	if req.Status != "resolved" {
+		t.Fatalf("status = %q, want resolved", req.Status)
+	}
+	if req.Resolution != "replaced the DC board" {
+		t.Fatalf("resolution = %q, want %q", req.Resolution, "replaced the DC board")
+	}
+
+	// 边界：不传 resolution 时为空串；Update 使用 COALESCE(NULLIF($8,''),resolution)
+	// 不会覆盖工单已有解决方案
+	var empty workOrderRequest
+	if err := json.Unmarshal([]byte(`{"status":"open"}`), &empty); err != nil {
+		t.Fatalf("bind request: %v", err)
+	}
+	if empty.Resolution != "" {
+		t.Fatalf("resolution should default to empty, got %q", empty.Resolution)
 	}
 }

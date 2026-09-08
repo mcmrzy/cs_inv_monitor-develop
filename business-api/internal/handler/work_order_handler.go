@@ -86,7 +86,9 @@ func (h *WorkOrderHandler) List(c *gin.Context) {
 	defer cancel()
 
 	// status 支持逗号分隔多值（如 resolved,closed），保持单值兼容
-	filter := workOrderDataScope("w", isSystemAdmin, 1) + ` AND ($2='' OR w.status=ANY(string_to_array($2, ','))) AND ($3='' OR w.priority=$3)`
+	filter := workOrderDataScope("w", isSystemAdmin, 1) + ` AND ($2='' OR w.status=ANY(string_to_array($2, ','))) AND ($3='' OR w.priority=$3)` +
+		// sla=overdue：SLA 已超期（sla_deadline 已过）且状态非 resolved/closed
+		workOrderSLAFilter(c.Query("sla"))
 	var total int64
 	if err := h.db.QueryRow(ctx, `SELECT COUNT(*) FROM work_orders w WHERE `+filter, userID, status, priority).Scan(&total); err != nil {
 		logger.Error("list work orders count failed",
@@ -431,6 +433,16 @@ func normalizeWorkOrderRequest(req *workOrderRequest) {
 
 func validPriority(value string) bool {
 	return value == "low" || value == "medium" || value == "high" || value == "urgent"
+}
+
+// workOrderSLAFilter 返回工单列表 sla 参数对应的 SQL 过滤条件。
+// "overdue"：sla_deadline 已过且状态非 resolved/closed；
+// 其他值（含空串）返回空串，即不追加任何过滤条件，行为不变。
+func workOrderSLAFilter(sla string) string {
+	if sla != "overdue" {
+		return ""
+	}
+	return ` AND (w.sla_deadline IS NOT NULL AND w.sla_deadline < NOW() AND w.status NOT IN ('resolved','closed'))`
 }
 
 func validWorkOrderStatus(value string) bool {

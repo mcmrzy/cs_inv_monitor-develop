@@ -8,6 +8,7 @@ import (
 
 	"inv-api-server/internal/middleware"
 	"inv-api-server/internal/model"
+	"inv-api-server/internal/repository"
 	"inv-api-server/internal/service"
 	"inv-api-server/pkg/logger"
 	"inv-api-server/pkg/response"
@@ -50,7 +51,12 @@ func NewDeviceHandler(deviceService *service.DeviceService, alarmService *servic
 	}
 }
 
-func (h *DeviceHandler) List(c *gin.Context) {
+// parseDeviceListParams 解析设备列表查询参数。
+// model 为型号前缀过滤（devices.model 为 VARCHAR，前缀匹配即兼容精确匹配）；
+// lastOnlineStart/lastOnlineEnd 为最后在线时间范围，支持 RFC3339 与
+// 'YYYY-MM-DD HH:mm:ss'（前端发送 RFC3339 UTC）。参数缺省时行为不变；
+// 时间格式非法时返回参数错误。
+func parseDeviceListParams(c *gin.Context) (repository.DeviceListParams, error) {
 	userID := middleware.GetUserID(c)
 	isAdmin := middleware.GetIsSystemAdmin(c)
 
@@ -70,6 +76,7 @@ func (h *DeviceHandler) List(c *gin.Context) {
 	stationIDStr := c.Query("station_id")
 	statusStr := c.Query("status")
 	keyword := c.Query("keyword")
+	modelStr := c.Query("model")
 
 	var stationID int64
 	if stationIDStr != "" {
@@ -81,16 +88,37 @@ func (h *DeviceHandler) List(c *gin.Context) {
 		status, _ = strconv.Atoi(statusStr)
 	}
 
-	var devices []*model.Device
-	var total int64
-	var err error
-
-	if isAdmin {
-		devices, total, err = h.deviceService.GetAll(c.Request.Context(), stationID, status, keyword, page, pageSize)
-	} else {
-		devices, total, err = h.deviceService.GetByUserID(c.Request.Context(), userID, stationID, status, keyword, page, pageSize)
+	lastOnlineStart, err := parseListTimeParam(c, "lastOnlineStart")
+	if err != nil {
+		return repository.DeviceListParams{}, err
+	}
+	lastOnlineEnd, err := parseListTimeParam(c, "lastOnlineEnd")
+	if err != nil {
+		return repository.DeviceListParams{}, err
 	}
 
+	return repository.DeviceListParams{
+		UserID:          userID,
+		StationID:       stationID,
+		Status:          status,
+		Keyword:         keyword,
+		Model:           modelStr,
+		LastOnlineStart: lastOnlineStart,
+		LastOnlineEnd:   lastOnlineEnd,
+		Page:            page,
+		PageSize:        pageSize,
+		IsSystemAdmin:   isAdmin,
+	}, nil
+}
+
+func (h *DeviceHandler) List(c *gin.Context) {
+	params, err := parseDeviceListParams(c)
+	if err != nil {
+		response.Error(c, 400, err.Error())
+		return
+	}
+
+	devices, total, err := h.deviceService.List(c.Request.Context(), params)
 	if err != nil {
 		response.Error(c, 500, "system error")
 		return
@@ -110,7 +138,7 @@ func (h *DeviceHandler) List(c *gin.Context) {
 		}
 	}
 
-	response.Page(c, devices, total, page, pageSize)
+	response.Page(c, devices, total, params.Page, params.PageSize)
 }
 
 func (h *DeviceHandler) GetDetail(c *gin.Context) {

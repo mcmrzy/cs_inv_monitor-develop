@@ -14,5 +14,4 @@ export const userApi = {
   getInstallers: () => api.get('/users', { params: { org_role: 'installer' }, expectedDataShape: 'page' }),
   getChildren: (id: string | number, params?: any) => api.get(`/users/${id}/children`, { params, expectedDataShape: 'page' }),
   updateParent: (id: string | number, parentId: number | null) => api.put(`/users/${id}/parent`, { parentId }),
-  getStationOwners: () => api.get('/users', { params: { org_role: 'station_owner' }, expectedDataShape: 'page' }),
 }
