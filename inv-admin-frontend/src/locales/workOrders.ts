@@ -50,6 +50,11 @@ export default {
     'wo.viewModeTable': '表格',
     'wo.viewModeBoard': '看板',
     'wo.templatePrefill': '（模板预填）',
+    'wo.confirmStatusTitle': '确认更改状态',
+    'wo.confirmStatusContent': '确定将该工单状态更改为「{{status}}」吗？',
+    'wo.resolutionTitle': '更改状态为「{{status}}」— 请填写解决方案',
+    'wo.resolutionPlaceholder': '请描述问题原因与处理措施（必填）',
+    'wo.resolutionRequired': '状态更改为已解决/已关闭时必须填写解决方案',
   },
   en: {
     'wo.title': 'Work Orders',
@@ -102,5 +107,10 @@ export default {
     'wo.viewModeTable': 'Table',
     'wo.viewModeBoard': 'Board',
     'wo.templatePrefill': ' (Template Prefilled)',
+    'wo.confirmStatusTitle': 'Confirm Status Change',
+    'wo.confirmStatusContent': 'Change this work order status to "{{status}}"?',
+    'wo.resolutionTitle': 'Change status to "{{status}}" — resolution required',
+    'wo.resolutionPlaceholder': 'Describe the root cause and resolution (required)',
+    'wo.resolutionRequired': 'A resolution is required when marking an order resolved/closed',
   },
 }
