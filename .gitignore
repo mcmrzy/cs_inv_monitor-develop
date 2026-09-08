@@ -248,3 +248,13 @@ api-test.log
 **/test_output.txt
 tmp_viper_test/
 test-campaign-results/
+
+# ZCode CLI 会话临时目录
+.zcode/
+
+# 嵌套在子目录里的 mimosa 缓存不入库(根目录 .mimosa 会话状态仍跟踪)
+.mimosa/
+!/.mimosa/
+
+# mimosa 扫描基线快照缓存(体积大且可再生)不入库
+.mimosa/hook-state/*.baseline/

@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "mimosa-finding-history/v1",
+  "runId": "20260905T205202444Z-49292-cbcb147654d4",
+  "runStatus": "inconclusive",
+  "errors": [
+    "baseline-read:business-api/internal/repository/auth_session_postgres_integration_test.go: baseline_snapshot_unreadable: file is missing from task baseline",
+    "baseline-read:business-api/internal/repository/ota_lifecycle_postgres_integration_test.go: baseline_snapshot_unreadable: file is missing from task baseline"
+  ],
+  "target": ".",
+  "revision": "da422c5fc22eacb6e2fd081cec48eebb5dfd1673",
+  "diffHash": "267e2b482937df40cfcab42db3709bfa91913489f6ddaf6ad7a7f9c3ae0497ff",
+  "rulesVersion": "unavailable",
+  "recordedAt": "2026-09-05T20:52:02.444Z",
+  "timing": {
+    "startedAt": "2026-09-05T20:52:01.190Z",
+    "completedAt": "2026-09-05T20:52:02.444Z",
+    "durationMs": 1254
+  },
+  "tokens": {
+    "input": 0,
+    "output": 0,
+    "total": 0,
+    "modelCalls": 0,
+    "measurement": "known-zero"
+  },
+  "findings": {
+    "total": 0,
+    "bySeverity": {},
+    "byStatus": {}
+  },
+  "coverage": {
+    "status": "partial",
+    "reasonCounts": {
+      "baseline_snapshot_unreadable": 2,
+      "project_check_failed": 2
+    }
+  },
+  "evidenceBoundary": "static_only",
+  "immutableReport": ".mimosa/reports/task-review-sess_6023e950-763f-44a9-a65f-1fc8081897ef-20260905T205202444Z-49292-cbcb147654d4.json"
+}

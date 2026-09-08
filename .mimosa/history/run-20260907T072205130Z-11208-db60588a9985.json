@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "mimosa-finding-history/v1",
+  "runId": "20260907T072205130Z-11208-db60588a9985",
+  "runStatus": "inconclusive",
+  "errors": [
+    "scan:external/驱动arm/App/App/source/UsartBMS485/UsartBms0.c: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:external/驱动arm/App/App/source/Collector/Collector.c: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:external/驱动arm/App/App/source/Collector/CollectorParamAddr.h: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:external/驱动arm/App/App/source/BMS/BMS.h: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+  ],
+  "target": ".",
+  "revision": "6346015c0c31c4eb765bd49a181b9ad64e16ab58",
+  "diffHash": "6e7ec3f62063a66a0c523a5dfff6c2df4f8f8ef6bb5b4330c1020b532c051fe6",
+  "rulesVersion": "unavailable",
+  "recordedAt": "2026-09-07T07:22:05.130Z",
+  "timing": {
+    "startedAt": "2026-09-07T07:22:02.718Z",
+    "completedAt": "2026-09-07T07:22:05.130Z",
+    "durationMs": 2412
+  },
+  "tokens": {
+    "input": 0,
+    "output": 0,
+    "total": 0,
+    "modelCalls": 0,
+    "measurement": "known-zero"
+  },
+  "findings": {
+    "total": 0,
+    "bySeverity": {},
+    "byStatus": {}
+  },
+  "coverage": {
+    "status": "partial",
+    "reasonCounts": {
+      "scanner_failed": 4,
+      "project_check_failed": 4
+    }
+  },
+  "evidenceBoundary": "static_only",
+  "immutableReport": ".mimosa/reports/task-review-sess_878930cb-cf9e-4a2f-a61f-4bbacb9476e9-20260907T072205130Z-11208-db60588a9985.json"
+}

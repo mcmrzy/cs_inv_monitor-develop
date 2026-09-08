@@ -114,5 +114,5 @@ void main() {
     // 释放呼吸动画 ticker，避免测试结束后残留活跃 Ticker。
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
-  });
+  }, tags: 'golden');
 }

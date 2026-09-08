@@ -162,5 +162,5 @@ void main() {
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
-  });
+  }, tags: 'golden');
 }
