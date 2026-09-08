@@ -113,7 +113,7 @@ const DashboardPage: React.FC = () => {
     : (Array.isArray(energyTrendRes?.data?.data) ? energyTrendRes.data.data : []) as any[]
 
   // 30日发电趋势数据
-  const { data: trend30DaysRes, error: trend30DaysError, refetch: refetchTrend30Days } = useQuery({
+  const { data: trend30DaysRes, isLoading: trend30DaysLoading, error: trend30DaysError, refetch: refetchTrend30Days } = useQuery({
     queryKey: ['dashboard', 'trend30Days'],
     queryFn: () => dashboardApi.getTrend('30days').then((r) => r.data),
     refetchInterval: 15000,
@@ -288,7 +288,7 @@ const DashboardPage: React.FC = () => {
 
   /* 电站排行 */
   const [rankingPeriod, setRankingPeriod] = useState('today')
-  const { data: rankingRes, error: rankingError, refetch: refetchRanking } = useQuery({
+  const { data: rankingRes, isLoading: rankingLoading, error: rankingError, refetch: refetchRanking } = useQuery({
     queryKey: ['dashboard', 'stationRanking', rankingPeriod],
     queryFn: () => dashboardApi.getStationRanking({ period: rankingPeriod, limit: 8 }).then((r) => r.data),
   })
@@ -384,6 +384,7 @@ const DashboardPage: React.FC = () => {
       <ProCard gutter={[16, 16]} style={{ marginTop: 16 }}>
         <ProCard colSpan={{ xs: 24, lg: 16 }} bordered={false} style={{ borderRadius: 12 }}
           title={<Space><LineChartOutlined style={{ color: '#fa8c16' }} /><span>{t('station.genTrend30Days')}</span></Space>}
+          loading={trend30DaysLoading}
         >
           {trend30DaysData.length > 0 ? (
             <ReactECharts option={trend30DaysOption} style={{ height: 300 }} />
@@ -457,6 +458,7 @@ const DashboardPage: React.FC = () => {
       <ProCard gutter={[16, 16]} style={{ marginTop: 16 }}>
         <ProCard colSpan={{ xs: 24, lg: 10 }} bordered={false} style={{ borderRadius: 12 }}
           title={t('dash.stationRank')}
+          loading={rankingLoading}
           extra={
             <Segmented size="small" value={rankingPeriod} onChange={(v) => setRankingPeriod(v as string)}
               options={[

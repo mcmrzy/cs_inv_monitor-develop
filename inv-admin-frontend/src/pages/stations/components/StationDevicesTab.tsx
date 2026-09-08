@@ -188,7 +188,7 @@ const StationDevicesTab: React.FC<StationDevicesTabProps> = ({ stationId, timezo
                     </Row>
                     <div style={{ marginBottom: 6 }}>
                       {!dev.model_id || dev.model_id === 0 ? (
-                        <Tag color="orange">未绑定型号</Tag>
+                        <Tag color="orange">{t('station.modelNotBound')}</Tag>
                       ) : (
                         <Tag color={typeCfg.color}>{typeCfg.label}</Tag>
                       )}
