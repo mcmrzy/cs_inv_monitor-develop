@@ -271,10 +271,38 @@ void main() {
   // StationCreateRequested
   // ---------------------------------------------------------------------------
   group('StationCreateRequested', () {
-    test(
-      'emits [StationCreateSuccess, ...] on success',
-      skip: true, // Connectivity() platform channel unavailable in test
-      () {},
+    blocTest<StationBloc, StationState>(
+      'emits [StationCreateSuccess, StationSummaryLoaded] on success',
+      build: () {
+        when(() => mockStationRepository.create(any())).thenAnswer(
+          (_) async => right<Failure, void>(null),
+        );
+        // 成功后会联动刷新摘要；测试环境未注册 NetworkStatusService，
+        // bloc 内部 _hasNetwork() 的 catch 兜底按有网络处理，无需平台通道。
+        when(() => mockStationRepository.getSummary()).thenAnswer(
+          (_) async => right<Failure, Map<String, dynamic>>({
+            'stations': [createTestStationMap()],
+            'summary': {'total_power': 100.0},
+          }),
+        );
+        when(() => mockDataCacheService.save(any(), any()))
+            .thenAnswer((_) async {});
+        return stationBloc;
+      },
+      act: (bloc) => bloc.add(
+        const StationCreateRequested(
+          data: {'name': 'New Station'},
+          requestId: 'create-request',
+        ),
+      ),
+      expect: () => [
+        isA<StationCreateSuccess>().having(
+          (s) => s.requestId,
+          'requestId',
+          'create-request',
+        ),
+        isA<StationSummaryLoaded>(),
+      ],
     );
 
     blocTest<StationBloc, StationState>(
@@ -307,10 +335,37 @@ void main() {
   // StationUpdateRequested
   // ---------------------------------------------------------------------------
   group('StationUpdateRequested', () {
-    test(
-      'emits [StationUpdateSuccess, ...] on success',
-      skip: true, // Connectivity() platform channel unavailable in test
-      () {},
+    blocTest<StationBloc, StationState>(
+      'emits [StationUpdateSuccess, StationSummaryLoaded] on success',
+      build: () {
+        when(() => mockStationRepository.update(any(), any())).thenAnswer(
+          (_) async => right<Failure, void>(null),
+        );
+        // 成功后会联动刷新摘要；测试环境未注册 NetworkStatusService，
+        // bloc 内部 _hasNetwork() 的 catch 兜底按有网络处理，无需平台通道。
+        when(() => mockStationRepository.getSummary()).thenAnswer(
+          (_) async => right<Failure, Map<String, dynamic>>({
+            'stations': [createTestStationMap()],
+            'summary': {'total_power': 100.0},
+          }),
+        );
+        when(() => mockDataCacheService.save(any(), any()))
+            .thenAnswer((_) async {});
+        return stationBloc;
+      },
+      act: (bloc) => bloc.add(
+        const StationUpdateRequested(
+          stationId: 1,
+          data: {'name': 'Updated'},
+          requestId: 'update-request',
+        ),
+      ),
+      expect: () => [
+        isA<StationUpdateSuccess>()
+            .having((s) => s.stationId, 'stationId', 1)
+            .having((s) => s.requestId, 'requestId', 'update-request'),
+        isA<StationSummaryLoaded>(),
+      ],
     );
 
     blocTest<StationBloc, StationState>(
@@ -345,10 +400,36 @@ void main() {
   // StationDeleteRequested
   // ---------------------------------------------------------------------------
   group('StationDeleteRequested', () {
-    test(
-      'emits [StationDeleteSuccess, ...] on success',
-      skip: true, // Connectivity() platform channel unavailable in test
-      () {},
+    blocTest<StationBloc, StationState>(
+      'emits [StationDeleteSuccess, StationSummaryLoaded] on success',
+      build: () {
+        when(() => mockStationRepository.delete(any())).thenAnswer(
+          (_) async => right<Failure, void>(null),
+        );
+        // 成功后会联动刷新摘要；测试环境未注册 NetworkStatusService，
+        // bloc 内部 _hasNetwork() 的 catch 兜底按有网络处理，无需平台通道。
+        when(() => mockStationRepository.getSummary()).thenAnswer(
+          (_) async => right<Failure, Map<String, dynamic>>({
+            'stations': [createTestStationMap()],
+            'summary': {'total_power': 100.0},
+          }),
+        );
+        when(() => mockDataCacheService.save(any(), any()))
+            .thenAnswer((_) async {});
+        return stationBloc;
+      },
+      act: (bloc) => bloc.add(
+        const StationDeleteRequested(
+          stationId: 1,
+          requestId: 'delete-request',
+        ),
+      ),
+      expect: () => [
+        isA<StationDeleteSuccess>()
+            .having((s) => s.stationId, 'stationId', 1)
+            .having((s) => s.requestId, 'requestId', 'delete-request'),
+        isA<StationSummaryLoaded>(),
+      ],
     );
 
     blocTest<StationBloc, StationState>(

@@ -324,11 +324,12 @@ class StationBloc extends Bloc<StationEvent, StationState> {
           requestId: event.requestId,
         ),
       ),
-      (_) async {
-        // 联动删除本地快照（含下属设备），避免离网模式展示已删除的电站
-        try {
-          await localCache?.deleteStation('${event.stationId}');
-        } catch (_) {}
+      (_) {
+        // 联动删除本地快照（含下属设备），避免离网模式展示已删除的电站。
+        // 快照清理是尽力而为的异步操作，不能在 emit 前 await：
+        // fold 的 async 闭包不会被等待，emit 会落到事件处理器结束之后，
+        // 违反 bloc 的 emit 契约（状态丢失/StateError）。
+        unawaited(_deleteLocalStationSnapshot(event.stationId));
         emit(
           StationDeleteSuccess(
             stationId: event.stationId,
@@ -338,6 +339,13 @@ class StationBloc extends Bloc<StationEvent, StationState> {
         add(StationSummaryRequested());
       },
     );
+  }
+
+  /// 删除本地电站快照（尽力而为，失败静默）
+  Future<void> _deleteLocalStationSnapshot(int stationId) async {
+    try {
+      await localCache?.deleteStation('$stationId');
+    } catch (_) {}
   }
 
   Future<void> _onDeviceUnbindRequested(
