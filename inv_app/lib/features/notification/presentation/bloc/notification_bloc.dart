@@ -139,6 +139,7 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     this.notificationDataSource,
   }) : super(NotificationInitial()) {
     on<SystemNotificationsRequested>(_onSystemNotificationsRequested);
+    on<SystemNotificationsLoadMoreRequested>(_onSystemNotificationsLoadMoreRequested);
     on<SystemNotificationDeleteRequested>(_onSystemNotificationDeleteRequested);
     on<SystemNotificationsClearRequested>(_onSystemNotificationsClearRequested);
     on<_MqttStatusUpdate>(_onMqttStatusUpdate);
@@ -216,19 +217,28 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     final List<SystemNotification> allNotifications = [];
 
     // 1. 从后端获取设备通知（上线/离线等）
-    // 首次加载使用较小的pageSize，减少请求数据量
+    // 首次/刷新加载固定第一页（pageSize 与分页加载保持一致），配合"加载更多"翻页
+    var backendTotal = 0;
     if (notificationDataSource != null) {
       try {
         final response =
-            await notificationDataSource!.getList(page: 1, pageSize: 20);
+            await notificationDataSource!.getList(page: 1, pageSize: pageSize);
         final data = response.data;
         if (data != null) {
           final responseData = data['data'] ?? data;
-          final items = responseData is Map
-              ? (responseData['items'] ?? [])
-              : (responseData is List ? responseData : []);
-          if (items is List) {
-            for (final item in items) {
+          if (responseData is Map) {
+            final rawTotal = responseData['total'];
+            if (rawTotal is int) backendTotal = rawTotal;
+            final items = responseData['items'] ?? [];
+            if (items is List) {
+              for (final item in items) {
+                if (item is Map<String, dynamic>) {
+                  allNotifications.add(SystemNotification.fromBackendJson(item));
+                }
+              }
+            }
+          } else if (responseData is List) {
+            for (final item in responseData) {
               if (item is Map<String, dynamic>) {
                 allNotifications.add(SystemNotification.fromBackendJson(item));
               }
@@ -288,9 +298,91 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     allNotifications.addAll(localStored);
 
     // 推送通知桌面小组件：最新告警标题 + 告警条数（fire-and-forget）
+    // 角标语义保持"当前告警规模"：只统计首页已加载数据，加载更多不回写角标
     _pushNotificationWidget(allNotifications);
 
-    emit(SystemNotificationsLoaded(notifications: allNotifications));
+    emit(
+      SystemNotificationsLoaded(
+        notifications: allNotifications,
+        page: 1,
+        hasMore: _computeHasMore(
+          backendCount: _countBackend(allNotifications),
+          total: backendTotal,
+        ),
+      ),
+    );
+  }
+
+  /// 首页 pageSize（后端 /notifications 支持 page/page_size）
+  static const int pageSize = 20;
+
+  /// 统计列表中来自后端的通知条数（本地 OTA/APP 更新通知不计入分页）
+  static int _countBackend(List<SystemNotification> notifications) =>
+      notifications.where((n) => n.fromBackend).length;
+
+  /// 是否还有更多后端通知：total 可信时按 total 判断，缺失时按"满页"兜底
+  static bool _computeHasMore({required int backendCount, required int total}) {
+    if (total > 0) return backendCount < total;
+    return backendCount >= pageSize;
+  }
+
+  /// 加载更多：取下一页后端通知并追加（按 id 去重），本地通知保持不变
+  Future<void> _onSystemNotificationsLoadMoreRequested(
+    SystemNotificationsLoadMoreRequested event,
+    Emitter<NotificationState> emit,
+  ) async {
+    final current = state;
+    if (current is! SystemNotificationsLoaded || !current.hasMore) return;
+    if (notificationDataSource == null) return;
+
+    final nextPage = current.page + 1;
+    try {
+      final response =
+          await notificationDataSource!.getList(page: nextPage, pageSize: pageSize);
+      final data = response.data;
+      if (data == null) return;
+      final responseData = data['data'] ?? data;
+
+      var total = 0;
+      final freshItems = <SystemNotification>[];
+      if (responseData is Map) {
+        final rawTotal = responseData['total'];
+        if (rawTotal is int) total = rawTotal;
+        final items = responseData['items'];
+        if (items is List) {
+          for (final item in items) {
+            if (item is Map<String, dynamic>) {
+              freshItems.add(SystemNotification.fromBackendJson(item));
+            }
+          }
+        }
+      }
+
+      // 按 id 去重追加（正常翻页不会重复，防御重复推送/并发刷新）
+      final existingIds = current.notifications
+          .where((n) => n.id != null)
+          .map((n) => n.id)
+          .toSet();
+      final merged = List<SystemNotification>.of(current.notifications)
+        ..addAll(
+          freshItems
+              .where((n) => n.id == null || !existingIds.contains(n.id))
+              .toList(),
+        );
+
+      emit(
+        SystemNotificationsLoaded(
+          notifications: merged,
+          page: nextPage,
+          hasMore: _computeHasMore(
+            backendCount: _countBackend(merged),
+            total: total,
+          ),
+        ),
+      );
+    } catch (_) {
+      // 加载失败保持原状态：hasMore 仍为 true，用户可再次尝试
+    }
   }
 
   /// 单条本地缓存通知解析：失败返回 null（调用方跳过该条）

@@ -1204,6 +1204,7 @@ const Map<String, String> zh = {
   'notif_clear_all_hint': '清空全部通知记录',
   'notif_batch_manage_hint': '多选后批量删除',
   'notif_mark_handled_hint': '标记为已处理',
+  'notif_load_more': '加载更多',
 
   // 其他
   'search_alarm_hint': '搜索告警设备/SN',

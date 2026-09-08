@@ -297,6 +297,177 @@ void main() {
       },
     );
   });
+
+  // ---------------------------------------------------------------------------
+  // SystemNotificationsLoadMoreRequested（分页加载更多）
+  // ---------------------------------------------------------------------------
+  group('SystemNotificationsLoadMoreRequested', () {
+    blocTest<NotificationBloc, NotificationState>(
+      'first load reports hasMore when backend total exceeds page size',
+      build: () {
+        // 20 条（满页），total=45 → 还有更多
+        final items = List.generate(20, (i) {
+          return {
+            'id': i + 1,
+            'notify_type': 'device_online',
+            'title': 'Device Online',
+            'content': 'Device SN_$i is online',
+            'created_at': DateTime(2024, 1, 1).toIso8601String(),
+            'device_sn': 'SN_$i',
+          };
+        });
+        when(
+          () => mockNotificationDataSource.getList(
+            page: any(named: 'page'),
+            pageSize: any(named: 'pageSize'),
+          ),
+        ).thenAnswer(
+          (_) async => _fakeResponse({
+            'data': {'items': items, 'total': 45},
+          }),
+        );
+        when(() => mockStorageService.getString(any()))
+            .thenAnswer((_) async => null);
+        when(() => mockAppUpdateService.checkUpdate(any()))
+            .thenAnswer((_) async => AppUpdateInfo(hasUpdate: false));
+        return notificationBloc;
+      },
+      act: (bloc) => bloc.add(const SystemNotificationsRequested()),
+      expect: () => [
+        isA<SystemNotificationsLoaded>()
+            .having((s) => s.page, 'page', 1)
+            .having((s) => s.hasMore, 'hasMore', true)
+            .having(
+              (s) => s.notifications.length,
+              'notifications.length',
+              20,
+            ),
+      ],
+    );
+
+    blocTest<NotificationBloc, NotificationState>(
+      'load more fetches next page and appends new backend notifications',
+      build: () {
+        final pages = <int, List<Map<String, dynamic>>>{
+          1: [
+            {
+              'id': 1,
+              'notify_type': 'device_online',
+              'title': 'Device Online',
+              'content': 'first page item',
+              'created_at': DateTime(2024, 1, 2).toIso8601String(),
+              'device_sn': 'SN_1',
+            },
+          ],
+          2: [
+            {
+              'id': 2,
+              'notify_type': 'device_offline',
+              'title': 'Device Offline',
+              'content': 'second page item',
+              'created_at': DateTime(2024, 1, 1).toIso8601String(),
+              'device_sn': 'SN_2',
+            },
+          ],
+        };
+        when(
+          () => mockNotificationDataSource.getList(
+            page: any(named: 'page'),
+            pageSize: any(named: 'pageSize'),
+          ),
+        ).thenAnswer((inv) async {
+          final page = inv.namedArguments[#page] as int;
+          return _fakeResponse({
+            'data': {'items': pages[page]!, 'total': 2},
+          });
+        });
+        when(() => mockStorageService.getString(any()))
+            .thenAnswer((_) async => null);
+        when(() => mockAppUpdateService.checkUpdate(any()))
+            .thenAnswer((_) async => AppUpdateInfo(hasUpdate: false));
+        return notificationBloc;
+      },
+      act: (bloc) async {
+        bloc.add(const SystemNotificationsRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        bloc.add(const SystemNotificationsLoadMoreRequested());
+      },
+      wait: const Duration(milliseconds: 50),
+      expect: () => [
+        isA<SystemNotificationsLoaded>()
+            .having((s) => s.page, 'page', 1)
+            .having((s) => s.hasMore, 'hasMore', true),
+        isA<SystemNotificationsLoaded>()
+            .having((s) => s.page, 'page', 2)
+            // total=2 全部加载完 → 没有更多
+            .having((s) => s.hasMore, 'hasMore', false)
+            .having(
+              (s) => s.notifications.map((n) => n.id).toList(),
+              'notification ids',
+              [1, 2],
+            ),
+      ],
+      verify: (_) {
+        verify(
+          () => mockNotificationDataSource.getList(
+            page: 2,
+            pageSize: 20,
+          ),
+        ).called(1);
+      },
+    );
+
+    blocTest<NotificationBloc, NotificationState>(
+      'load more is ignored when hasMore is false',
+      build: () {
+        when(
+          () => mockNotificationDataSource.getList(
+            page: any(named: 'page'),
+            pageSize: any(named: 'pageSize'),
+          ),
+        ).thenAnswer(
+          (_) async => _fakeResponse({
+            'data': {
+              'items': [
+                {
+                  'id': 1,
+                  'notify_type': 'device_online',
+                  'title': 'Device Online',
+                  'content': 'only item',
+                  'created_at': DateTime(2024, 1, 1).toIso8601String(),
+                  'device_sn': 'SN_1',
+                },
+              ],
+              'total': 1,
+            },
+          }),
+        );
+        when(() => mockStorageService.getString(any()))
+            .thenAnswer((_) async => null);
+        when(() => mockAppUpdateService.checkUpdate(any()))
+            .thenAnswer((_) async => AppUpdateInfo(hasUpdate: false));
+        return notificationBloc;
+      },
+      act: (bloc) async {
+        bloc.add(const SystemNotificationsRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        bloc.add(const SystemNotificationsLoadMoreRequested());
+      },
+      wait: const Duration(milliseconds: 50),
+      expect: () => [
+        isA<SystemNotificationsLoaded>()
+            .having((s) => s.hasMore, 'hasMore', false),
+      ],
+      verify: (_) {
+        verifyNever(
+          () => mockNotificationDataSource.getList(
+            page: 2,
+            pageSize: any(named: 'pageSize'),
+          ),
+        );
+      },
+    );
+  });
 }
 
 /// Creates a fake Dio Response for testing.
