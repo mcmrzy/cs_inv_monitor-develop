@@ -147,7 +147,7 @@ const UpgradeTasksTab: React.FC = () => {
   const { message } = App.useApp()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
-  const [statusFilter, setStatusFilter] = useState<string>('active')
+  const [statusFilter, setStatusFilter] = useState<string>('')
   const [createOpen, setCreateOpen] = useState(false)
   const [currentStep, setCurrentStep] = useState(0)
   const [taskType, setTaskType] = useState<'single' | 'package'>('single')
