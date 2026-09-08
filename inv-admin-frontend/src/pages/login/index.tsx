@@ -6,6 +6,7 @@ import useAuthStore from '@/stores/authStore'
 import useLocaleStore from '@/stores/localeStore'
 import api from '@/services/api'
 import type { User } from '@/types'
+import { selectDefaultRoute } from '@/router/routeAccess'
 import countriesList from '../../utils/continentsData'
 import { toEnglishCountryName } from '../../utils/countryEnNames'
 import SliderCaptchaModal from '@/components/SliderCaptcha/SliderCaptchaModal'
@@ -56,7 +57,7 @@ const i18n: Record<Lang, Record<string, string>> = {
     welcome: '欢迎回来', createAcc: '创建账号', resetPwd: '重置密码',
     welcomeSub: '登录您的账户以继续', createSub: '注册新账户开始使用', resetSub: '通过邮箱或手机号重置密码',
     login: '密码登录', loginByCode: '验证码登录',
-    account: '手机号 / 邮箱', password: '密码', remember: '记住密码', forgot: '忘记密码？',
+    account: '手机号 / 邮箱', password: '密码', remember: '记住账号', forgot: '忘记密码？',
     submitLogin: '登 录', noAccount: '还没有账号？', goRegister: '立即注册',
     phone: '手机号', email: '邮箱', code: '验证码', sendCode: '发送验证码', resendCode: 's 后重发',
     loginByPhoneCode: '手机号登录', loginByEmailCode: '邮箱登录',
@@ -91,7 +92,7 @@ const i18n: Record<Lang, Record<string, string>> = {
     welcome: 'Welcome Back', createAcc: 'Create Account', resetPwd: 'Reset Password',
     welcomeSub: 'Sign in to your account', createSub: 'Register a new account', resetSub: 'Reset via email or phone',
     login: 'Password Login', loginByCode: 'Code Login',
-    account: 'Phone / Email', password: 'Password', remember: 'Remember password', forgot: 'Forgot password?',
+    account: 'Phone / Email', password: 'Password', remember: 'Remember account', forgot: 'Forgot password?',
     submitLogin: 'Sign In', noAccount: "Don't have an account? ", goRegister: 'Register',
     phone: 'Phone', email: 'Email', code: 'Verification Code', sendCode: 'Send Code', resendCode: 's',
     loginByPhoneCode: 'Phone Login', loginByEmailCode: 'Email Login',
@@ -145,14 +146,19 @@ const LoginPage: React.FC = () => {
   const [phoneRegisterForm] = Form.useForm()
   const [selectedCountryCode, setSelectedCountryCode] = useState<'CN' | string>('CN') // 默认中国
 
-  // 从 localStorage 读取保存的账号和密码并自动填充
+  // 从 localStorage 读取记住的账号并自动填充（仅记住账号，绝不持久化密码）
   useEffect(() => {
     const savedAccount = localStorage.getItem('remembered_account')
-    const savedPassword = localStorage.getItem('remembered_password')
     if (savedAccount) {
-      loginForm.setFieldsValue({ account: savedAccount, password: savedPassword || '', remember: true })
+      loginForm.setFieldsValue({ account: savedAccount, remember: true })
     }
   }, [loginForm])
+
+  // 登录/注册成功后按角色与权限选择默认落地页（而非硬编码 /dashboard）
+  const navigateAfterAuth = (user: User, permissions: string[]) => {
+    const hasAnyPermission = (...perms: string[]) => perms.some((p) => permissions.includes(p))
+    navigate(selectDefaultRoute(Boolean(user.isSystemAdmin), hasAnyPermission), { replace: true })
+  }
 
   const t = i18n[lang]
   const countryOptions = useMemo(() => buildCountryOptions(lang), [lang])
@@ -189,14 +195,16 @@ const LoginPage: React.FC = () => {
       return false
     }
 
+    const mappedUser = mapBackendUser(data.user as unknown as Record<string, unknown>)
+    const permissions = data.permissions ?? []
     login(
       data.token ?? data.accessToken ?? data.access_token ?? '',
       data.refresh_token ?? data.refreshToken ?? '',
-      mapBackendUser(data.user as unknown as Record<string, unknown>),
-      data.permissions ?? [],
+      mappedUser,
+      permissions,
     )
     message.success(t.successRegister)
-    navigate('/dashboard', { replace: true })
+    navigateAfterAuth(mappedUser, permissions)
     return true
   }
   useEffect(() => {
@@ -266,9 +274,11 @@ const LoginPage: React.FC = () => {
       }
       const data = (d?.data ?? d) as { token?: string; accessToken?: string; access_token?: string; refresh_token?: string; refreshToken?: string; permissions?: string[]; user: User }
       if (!data.user) { showError(t.errLogin); return }
-      login(data.token ?? data.accessToken ?? data.access_token ?? '', data.refresh_token ?? data.refreshToken ?? '', mapBackendUser(data.user as unknown as Record<string, unknown>), data.permissions ?? [])
+      const mappedUser = mapBackendUser(data.user as unknown as Record<string, unknown>)
+      const permissions = data.permissions ?? []
+      login(data.token ?? data.accessToken ?? data.access_token ?? '', data.refresh_token ?? data.refreshToken ?? '', mappedUser, permissions)
       message.success(t.successLogin)
-      navigate('/dashboard', { replace: true })
+      navigateAfterAuth(mappedUser, permissions)
     } catch (err: any) {
       const errData = err?.response?.data
       // 如果需要验证码，弹出验证码
@@ -290,13 +300,11 @@ const LoginPage: React.FC = () => {
   // 登录按钮点击
   const onLogin = async (values: { account: string; password: string; remember?: boolean }) => {
     await performLogin(values)
-    // 登录成功后保存账号和密码（performLogin 成功会 navigate，所以这里只在未跳转时执行）
+    // 仅记住账号；明文密码绝不写入 localStorage
     if (values.remember) {
       localStorage.setItem('remembered_account', values.account)
-      localStorage.setItem('remembered_password', values.password)
     } else {
       localStorage.removeItem('remembered_account')
-      localStorage.removeItem('remembered_password')
     }
   }
 
@@ -363,9 +371,11 @@ const LoginPage: React.FC = () => {
       if (d?.code !== undefined && d.code !== 0) { showError(localizeAuthError(d, t.errLogin)); return }
       const data = (d?.data ?? d) as { token?: string; accessToken?: string; access_token?: string; refresh_token?: string; refreshToken?: string; permissions?: string[]; user: User }
       if (!data.user) { showError(t.errLogin); return }
-      login(data.token ?? data.accessToken ?? data.access_token ?? '', data.refresh_token ?? data.refreshToken ?? '', mapBackendUser(data.user as unknown as Record<string, unknown>), data.permissions ?? [])
+      const mappedUser = mapBackendUser(data.user as unknown as Record<string, unknown>)
+      const permissions = data.permissions ?? []
+      login(data.token ?? data.accessToken ?? data.access_token ?? '', data.refresh_token ?? data.refreshToken ?? '', mappedUser, permissions)
       message.success(t.successLogin)
-      navigate('/dashboard', { replace: true })
+      navigateAfterAuth(mappedUser, permissions)
     } catch (err: any) { showError(localizeAuthError(err?.response?.data, t.errLogin)) }
     finally { setLoading(false) }
   }
@@ -379,9 +389,11 @@ const LoginPage: React.FC = () => {
       if (d?.code !== undefined && d.code !== 0) { showError(localizeAuthError(d, t.errLogin)); return }
       const data = (d?.data ?? d) as { token?: string; accessToken?: string; access_token?: string; refresh_token?: string; refreshToken?: string; permissions?: string[]; user: User }
       if (!data.user) { showError(t.errLogin); return }
-      login(data.token ?? data.accessToken ?? data.access_token ?? '', data.refresh_token ?? data.refreshToken ?? '', mapBackendUser(data.user as unknown as Record<string, unknown>), data.permissions ?? [])
+      const mappedUser = mapBackendUser(data.user as unknown as Record<string, unknown>)
+      const permissions = data.permissions ?? []
+      login(data.token ?? data.accessToken ?? data.access_token ?? '', data.refresh_token ?? data.refreshToken ?? '', mappedUser, permissions)
       message.success(t.successLogin)
-      navigate('/dashboard', { replace: true })
+      navigateAfterAuth(mappedUser, permissions)
     } catch (err: any) { showError(localizeAuthError(err?.response?.data, t.errLogin)) }
     finally { setLoading(false) }
   }

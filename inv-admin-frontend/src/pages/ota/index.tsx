@@ -1,5 +1,6 @@
-import React, { useState, useCallback, useMemo } from 'react'
+import React, { useState, useCallback, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import {
   Tabs,
   Button,
@@ -167,6 +168,23 @@ const UpgradeTasksTab: React.FC = () => {
   const [rollbackSn, setRollbackSn] = useState('')
   const [rollbackPackageId, setRollbackPackageId] = useState<number | null>(null)
   const [rollbackPackageList, setRollbackPackageList] = useState<any[]>([])
+
+  // 支持从设备列表「批量操作 → 创建OTA任务」跳转预填：/ota?create=1&sns=SN1,SN2
+  // 读取后立即清除 URL 参数，避免刷新页面时重复触发
+  const [searchParams, setSearchParams] = useSearchParams()
+  useEffect(() => {
+    if (searchParams.get('create') === '1') {
+      const sns = (searchParams.get('sns') || '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+      if (sns.length > 0) {
+        setSelectedDeviceSns(sns)
+        setCreateOpen(true)
+      }
+      setSearchParams({}, { replace: true })
+    }
+  }, [searchParams, setSearchParams])
 
   // 查询任务列表
   const queryParams: any = { page, pageSize }

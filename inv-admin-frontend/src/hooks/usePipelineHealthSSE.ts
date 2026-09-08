@@ -16,6 +16,8 @@ interface UsePipelineHealthSSEReturn {
 
 const SSE_URL = `${API_BASE}/system/pipeline-health/stream`;
 const RECONNECT_DELAY_MS = 5000;
+/** 连续失败达到该次数后停止自动重连（避免无限重连），手动 reconnect 可重置计数 */
+const MAX_RECONNECT_ATTEMPTS = 5;
 
 export function usePipelineHealthSSE(): UsePipelineHealthSSEReturn {
   const [event, setEvent] = useState<PipelineHealthSSEEvent | null>(null);
@@ -24,6 +26,7 @@ export function usePipelineHealthSSE(): UsePipelineHealthSSEReturn {
   const esRef = useRef<EventSource | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const mountedRef = useRef(true);
+  const failureCountRef = useRef(0);
 
   const token = useAuthStore((s) => s.token);
 
@@ -46,6 +49,7 @@ export function usePipelineHealthSSE(): UsePipelineHealthSSEReturn {
 
     es.addEventListener('open', () => {
       if (!mountedRef.current) return;
+      failureCountRef.current = 0; // 连接成功，重置连续失败计数
       setConnected(true);
       setError(null);
     });
@@ -64,10 +68,18 @@ export function usePipelineHealthSSE(): UsePipelineHealthSSEReturn {
     es.addEventListener('error', () => {
       if (!mountedRef.current) return;
       setConnected(false);
-      setError('SSE connection lost');
       // 浏览器 EventSource 内置重连，但连接彻底失败时需要手动处理
       if (es.readyState === EventSource.CLOSED) {
+        failureCountRef.current += 1;
+        if (failureCountRef.current >= MAX_RECONNECT_ATTEMPTS) {
+          // 连续失败达上限：停止自动重连，置错误状态，等待手动刷新重置
+          setError('SSE connection failed after multiple attempts');
+          return;
+        }
+        setError('SSE connection lost');
         reconnectTimerRef.current = setTimeout(connect, RECONNECT_DELAY_MS);
+      } else {
+        setError('SSE connection lost');
       }
     });
   }, [token]);
@@ -86,6 +98,7 @@ export function usePipelineHealthSSE(): UsePipelineHealthSSEReturn {
   }, [connect]);
 
   const reconnect = useCallback(() => {
+    failureCountRef.current = 0; // 手动刷新重置失败计数
     if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
     connect();
   }, [connect]);

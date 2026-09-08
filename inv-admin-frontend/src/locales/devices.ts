@@ -162,7 +162,6 @@ export default {
     'dev.rowNum': '行号',
     'dev.errorInfo': '错误信息',
     'dev.pleaseEnterUnbindReason': '请输入解绑原因',
-    'dev.otaTaskCreated': 'OTA任务创建功能 - 选中设备',
     'dev.searchPlaceholder': '搜索序列号、型号...',
     'dev.batchOpsCount': '批量操作 ({{count}})',
     'dev.workStatus': '工作状态',
@@ -228,6 +227,8 @@ export default {
     'dev.pushFailed': '推送失败',
     'dev.pv1Voltage': 'PV1 电压',
     'dev.pv2Voltage': 'PV2 电压',
+    'dev.modelUnbound': '未绑定型号',
+    'dev.telemetryLoadFailed': '遥测数据加载失败',
   },
   en: {
     'dev.listLoadFailed': 'Failed to load devices. The empty list shown is not a valid result.',
@@ -392,7 +393,6 @@ export default {
     'dev.rowNum': 'Row',
     'dev.errorInfo': 'Error Info',
     'dev.pleaseEnterUnbindReason': 'Please enter unbind reason',
-    'dev.otaTaskCreated': 'OTA task created - selected devices',
     'dev.searchPlaceholder': 'Search SN, model...',
     'dev.batchOpsCount': 'Batch Operations ({{count}})',
     'dev.workStatus': 'Work Status',
@@ -458,5 +458,7 @@ export default {
     'dev.pushFailed': 'Push failed',
     'dev.pv1Voltage': 'PV1 Voltage',
     'dev.pv2Voltage': 'PV2 Voltage',
+    'dev.modelUnbound': 'No Model Bound',
+    'dev.telemetryLoadFailed': 'Failed to load telemetry data',
   },
 }
