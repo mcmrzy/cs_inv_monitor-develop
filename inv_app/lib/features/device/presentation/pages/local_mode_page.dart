@@ -49,6 +49,8 @@ class _LocalModePageState extends State<LocalModePage> {
 
   Future<void> _initMode() async {
     await _modeService.init();
+    // init 是异步的，页面可能已销毁：不再创建订阅/触发 setState
+    if (!mounted) return;
     _modeSubscription = _modeService.modeStream.listen((mode) {
       if (mounted) setState(() {});
     });
@@ -169,6 +171,8 @@ class _LocalModePageState extends State<LocalModePage> {
     await _discoveryService.disconnectFromAP();
     await _modeService.switchToRemote();
     _commService.disconnect();
+    // 两段 await 之后页面可能已销毁
+    if (!mounted) return;
     setState(() {
       _connectedSSID = null;
     });
@@ -270,6 +274,7 @@ class _LocalModePageState extends State<LocalModePage> {
               } else {
                 await _disconnect();
               }
+              if (!mounted) return;
               setState(() {});
             },
           ),

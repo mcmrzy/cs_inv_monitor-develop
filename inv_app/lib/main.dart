@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:go_router/go_router.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:inv_app/core/config/app_config.dart';
 import 'package:inv_app/core/services/ble/ble_direct_service.dart';
@@ -287,8 +286,14 @@ class _InvAppState extends State<InvApp> {
             // 避免未登录使用本地功能时被云端 401/登出事件踢出
             if (getIt<ConnectionModeService>().isLocal) return;
             // Splash 页自行处理未登录分流（一键登录/登录页）；
-            // 此处仅兜底登出/Token 过期等场景
-            final currentPath = GoRouterState.of(context).matchedLocation;
+            // 此处仅兜底登出/Token 过期等场景。
+            // 注意：本 BlocListener 位于 MaterialApp.router 之外，
+            // context 不在 Router 的 ModalRoute 内，GoRouterState.of 必抛，
+            // 因此从 router 自身的当前路由配置读取路径（go_router 17.3.0 API）
+            final currentPath = AppRouter
+                    .router.routerDelegate.currentConfiguration.lastOrNull
+                    ?.matchedLocation ??
+                '';
             if (currentPath != '/splash' &&
                 currentPath != '/jverify-login' &&
                 currentPath != '/login') {

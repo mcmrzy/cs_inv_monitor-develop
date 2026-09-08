@@ -8,7 +8,14 @@ abstract class NotificationEvent extends Equatable {
 }
 
 class SystemNotificationsRequested extends NotificationEvent {
-  const SystemNotificationsRequested();
+  /// 是否用户手动刷新（下拉/点击刷新按钮）：
+  /// 手动刷新与首载一样需要检查 App 更新；SSE/推送等自动刷新跳过
+  final bool manual;
+
+  const SystemNotificationsRequested({this.manual = false});
+
+  @override
+  List<Object?> get props => [manual];
 }
 
 /// 删除单条系统通知：后端通知走 DELETE /notifications/:id，本地通知直接删存储

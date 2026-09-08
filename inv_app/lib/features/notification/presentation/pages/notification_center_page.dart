@@ -24,11 +24,13 @@ import 'package:inv_app/l10n/app_localizations.dart';
 /// immediate.
 class NotificationRefreshScheduler {
   NotificationRefreshScheduler({
-    required VoidCallback onRefresh,
+    required this.onRefresh,
     this.delay = const Duration(milliseconds: 300),
-  }) : _onRefresh = onRefresh;
+  });
 
-  final VoidCallback _onRefresh;
+  /// manual=true：用户手动触发的立即刷新；manual=false：实时突发合并刷新
+  final void Function(bool manual) onRefresh;
+
   final Duration delay;
   Timer? _timer;
   bool _disposed = false;
@@ -39,7 +41,7 @@ class NotificationRefreshScheduler {
     _timer?.cancel();
     _timer = Timer(delay, () {
       _timer = null;
-      if (!_disposed) _onRefresh();
+      if (!_disposed) onRefresh(false);
     });
   }
 
@@ -48,7 +50,7 @@ class NotificationRefreshScheduler {
 
     _timer?.cancel();
     _timer = null;
-    _onRefresh();
+    onRefresh(true);
   }
 
   void dispose() {
@@ -138,10 +140,16 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
     _refreshScheduler.refreshNow();
   }
 
-  void _dispatchRefreshRequests() {
+  void _dispatchRefreshRequests([bool manual = false]) {
     if (!mounted) return;
     context.read<AlarmBloc>().add(const AlarmListRequested());
-    context.read<NotificationBloc>().add(const SystemNotificationsRequested());
+    context.read<NotificationBloc>().add(
+          SystemNotificationsRequested(
+            // 手动刷新（下拉/重试）与自动刷新（SSE 突发）区分：
+            // 手动时 bloc 侧会同时检查 App 更新
+            manual: manual,
+          ),
+        );
   }
 
   @override

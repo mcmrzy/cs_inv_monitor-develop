@@ -56,16 +56,25 @@ class SystemNotification {
       };
 
   factory SystemNotification.fromJson(Map<String, dynamic> json) {
-    final type = SystemNotificationType.values[json['type'] as int];
-    final title = json['title'] as String;
+    // type 是枚举 index：历史版本写入了已删除的枚举值时，
+    // 直接取 values[...] 会 RangeError，越界回退 deviceOnline（上线通知语义最中性）
+    final typeIndex = json['type'] is int ? json['type'] as int : -1;
+    final type = typeIndex >= 0 &&
+            typeIndex < SystemNotificationType.values.length
+        ? SystemNotificationType.values[typeIndex]
+        : SystemNotificationType.deviceOnline;
+    final title = json['title'] as String? ?? '';
     final legacyVersion = type == SystemNotificationType.appUpdate
         ? RegExp(r'v([^\s]+)').firstMatch(title)?.group(1)
         : null;
     return SystemNotification(
       type: type,
       title: title,
-      subtitle: json['subtitle'] as String,
-      timestamp: DateTime.parse(json['timestamp'] as String).toLocal(),
+      subtitle: json['subtitle'] as String? ?? '',
+      timestamp: json['timestamp'] is String
+          ? DateTime.tryParse(json['timestamp'] as String)?.toLocal() ??
+              DateTime.now()
+          : DateTime.now(),
       deviceSn: json['deviceSn'] as String?,
       version: json['version'] as String? ?? legacyVersion,
     );
@@ -120,6 +129,10 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
   StreamSubscription<dynamic>? _otaSub;
   Timer? _debounceTimer;
 
+  /// 各设备上次的在线状态：实时数据流是周期轮询（约 3s 一条），
+  /// 状态未变化时重复触发通知列表刷新纯属浪费，只有翻转时才 add 事件
+  final Map<String, bool> _lastOnlineStatus = {};
+
   NotificationBloc({
     required this.deviceRepository,
     this.realtimeDataService,
@@ -137,10 +150,14 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
   void _subscribeToMqtt() {
     // 监听设备实时数据流，触发刷新（后端已自动插入通知）
     _realtimeSub = realtimeDataService?.realtimeDataStream.listen((rt) {
+      final online = rt.onlineStatus?.online ?? false;
+      // 状态相对上次未变化（轮询流约 3s 一条）不重复刷新，仅翻转时触发
+      if (_lastOnlineStatus[rt.deviceSN] == online) return;
+      _lastOnlineStatus[rt.deviceSN] = online;
       add(
         _MqttStatusUpdate(
           deviceSn: rt.deviceSN,
-          isOnline: rt.onlineStatus?.online ?? false,
+          isOnline: online,
         ),
       );
     });
@@ -224,6 +241,7 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     }
 
     // 2. 加载本地存储的 OTA/APP 更新通知
+    // 单条解析失败（版本升级后字段变化等）只跳过该条，不再整批丢弃
     final storage = getIt<StorageService>();
     final storedJson = await storage.getString(_localNotifKey);
     List<SystemNotification> localStored = [];
@@ -231,13 +249,15 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
       try {
         final decoded = json.decode(storedJson) as List;
         localStored = decoded
-            .map((e) => SystemNotification.fromJson(e as Map<String, dynamic>))
+            .whereType<Map<String, dynamic>>()
+            .map(_tryParseStoredNotification)
+            .whereType<SystemNotification>()
             .toList();
       } catch (_) {}
     }
 
-    // 3. 检查 App 更新（仅首次或手动刷新时检查）
-    if (state is! SystemNotificationsLoaded) {
+    // 3. 检查 App 更新（首载或手动刷新时检查，见 SystemNotificationsRequested.manual）
+    if (event.manual || state is! SystemNotificationsLoaded) {
       try {
         final updateService = getIt<AppUpdateService>();
         final info = await updateService.checkUpdate(AppConfig.versionCode);
@@ -271,6 +291,17 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     _pushNotificationWidget(allNotifications);
 
     emit(SystemNotificationsLoaded(notifications: allNotifications));
+  }
+
+  /// 单条本地缓存通知解析：失败返回 null（调用方跳过该条）
+  static SystemNotification? _tryParseStoredNotification(
+    Map<String, dynamic> json,
+  ) {
+    try {
+      return SystemNotification.fromJson(json);
+    } catch (_) {
+      return null;
+    }
   }
 
   /// 将最新告警信息推送到通知桌面小组件
@@ -309,18 +340,24 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
         // 删除失败不阻断本地刷新（列表会重新拉取真实状态）
       }
     } else {
-      // 本地通知（OTA/APP 更新）：按类型+标题+时间戳从存储中移除
+      // 本地通知（OTA/APP 更新）：按类型+标题+时间戳从存储中移除。
+      // 单条解析失败只剔除该条（写回时顺带清理坏条目），不再让整批删除失败
       final storage = getIt<StorageService>();
       final storedJson = await storage.getString(_localNotifKey);
       if (storedJson != null && storedJson.isNotEmpty) {
         try {
           final decoded = json.decode(storedJson) as List;
-          final remaining = decoded.where((e) {
-            final n = SystemNotification.fromJson(e as Map<String, dynamic>);
-            return !(n.type == event.notification.type &&
+          final remaining = <Map<String, dynamic>>[];
+          for (final e in decoded) {
+            if (e is! Map<String, dynamic>) continue;
+            final n = _tryParseStoredNotification(e);
+            // 解析失败的条目：写回时剔除，避免永久滞留
+            if (n == null) continue;
+            final isTarget = n.type == event.notification.type &&
                 n.title == event.notification.title &&
-                n.timestamp == event.notification.timestamp);
-          }).toList();
+                n.timestamp == event.notification.timestamp;
+            if (!isTarget) remaining.add(e);
+          }
           await storage.saveString(_localNotifKey, json.encode(remaining));
         } catch (_) {}
       }

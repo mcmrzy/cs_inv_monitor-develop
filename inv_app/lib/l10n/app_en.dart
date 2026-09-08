@@ -1405,6 +1405,11 @@ const Map<String, String> en = {
   'click_to_set_email': 'Click to set email',
   'click_to_set_phone': 'Click to set phone',
   'click_to_set_region': 'Click to set region',
+  // Contact change dialog descriptions and failure prompt
+  // (moved from hardcoded Chinese in edit profile page)
+  'profile_enter_new_phone': 'Enter the new phone number',
+  'profile_enter_new_email': 'Enter the new email address',
+  'verify_failed': 'Verification failed',
 
   // === BLE direct (settings) ===
   'ble_direct_enabled': 'Connect via BLE',
