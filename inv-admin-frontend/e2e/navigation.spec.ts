@@ -172,7 +172,7 @@ test.describe('全屏页面', () => {
     await expect(page.getByText(new RegExp(`设备序列号:\\s*${acc.devices[0]}`))).toBeVisible()
     await expect(page.locator('.ant-tabs-tab')).toHaveCount(11)
     await expect(page.locator('.ant-layout-sider')).toHaveCount(0)
-    await expect(page.locator('.ant-menu')).toHaveCount(0)
+    await expect(page.locator('.ant-menu-root')).toHaveCount(0)
   })
 
   test('设备详情全屏页（第二台设备）：SN 正确展示', async ({ page }) => {
@@ -199,7 +199,7 @@ test.describe('全屏页面', () => {
     await expect(page.locator('.bs-header-title')).toHaveText('辰烁科技联网监控平台')
     await expect(page.locator('.bs-online-badge')).toContainText('在线率')
     await expect(page.locator('.ant-layout-sider')).toHaveCount(0)
-    await expect(page.locator('.ant-menu')).toHaveCount(0)
+    await expect(page.locator('.ant-menu-root')).toHaveCount(0)
   })
 
   test('/download App 下载页：标题与下载按钮', async ({ page }) => {
@@ -257,11 +257,11 @@ test.describe('侧边栏菜单点击导航', () => {
   for (const { label, url } of menuCases) {
     test(`侧边栏点击「${label}」跳转到对应路由`, async ({ page }) => {
       await gotoAuthed(page, '/dashboard')
-      await expect(page.locator('.ant-menu')).toBeVisible()
+      await expect(page.locator('.ant-menu-root')).toBeVisible()
       // 菜单就绪锚点：当前路由(仪表盘)所在分组自动展开完成后才算就绪，
       // 消除 openKeys 异步解析期间的初始化竞态（慢机器上曾耗尽重试）
-      await expect(page.locator('.ant-menu').getByText('仪表盘', { exact: true })).toBeVisible({ timeout: 10_000 })
-      const item = page.locator('.ant-menu').getByText(label, { exact: true })
+      await expect(page.locator('.ant-menu-root').getByText('仪表盘', { exact: true })).toBeVisible({ timeout: 10_000 })
+      const item = page.locator('.ant-menu-root').getByText(label, { exact: true })
       if (!(await item.isVisible().catch(() => false))) {
         const group = menuGroupOf[label]
         // 分组标题可能渲染在侧边栏子菜单或顶栏（mix 布局），两种容器都尝试
