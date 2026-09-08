@@ -10,28 +10,11 @@ import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:inv_app/features/profile/presentation/pages/edit_profile_page.dart';
 import 'package:mocktail/mocktail.dart';
 
+import '../../../../helpers/drain_real_loop.dart';
 import '../../../../helpers/mock_providers.dart';
 import '../../../../helpers/pump_app.dart';
 
 class _FakeAuthEvent extends Fake implements AuthEvent {}
-
-/// Wraps [testWidgets] to suppress RenderFlex overflow errors at the
-/// framework level so they are never queued for [tester.takeException].
-void _testWidgets(String description, WidgetTesterCallback callback,
-    {bool skip = false}) {
-  testWidgets(description, (tester) async {
-    final originalOnError = FlutterError.onError;
-    FlutterError.onError = (FlutterErrorDetails details) {
-      if (details.toString().contains('overflowed')) return;
-      originalOnError?.call(details);
-    };
-    try {
-      await callback(tester);
-    } finally {
-      FlutterError.onError = originalOnError;
-    }
-  }, skip: skip);
-}
 
 void main() {
   late MockAuthBloc authBloc;
@@ -96,7 +79,7 @@ void main() {
     await tester.ensureVisible(getAvatarButton());
   }
 
-  _testWidgets('头像选择等待期间快速连点只启动一次', (tester) async {
+  testWidgets('头像选择等待期间快速连点只启动一次', (tester) async {
     final picked = Completer<String?>();
     var pickCount = 0;
     await pumpPage(
@@ -129,7 +112,7 @@ void main() {
     expect(tester.widget<PopScope>(find.byType(PopScope)).canPop, isTrue);
   });
 
-  _testWidgets('选图取消后释放锁并允许重试', (tester) async {
+  testWidgets('选图取消后释放锁并允许重试', (tester) async {
     var pickCount = 0;
     await pumpPage(
       tester,
@@ -148,7 +131,7 @@ void main() {
     expect(tester.widget<GestureDetector>(getAvatarButton()).onTap, isNotNull);
   });
 
-  _testWidgets('页面销毁后忽略迟到的选图结果', (tester) async {
+  testWidgets('页面销毁后忽略迟到的选图结果', (tester) async {
     final picked = Completer<String?>();
     await pumpPage(
       tester,
@@ -164,8 +147,7 @@ void main() {
     verifyNever(() => authBloc.add(any()));
   });
 
-  // TODO: mock bloc state 不随 stream 更新导致 _awaitProfileResult 逻辑走错
-  _testWidgets('头像上传后等资料保存确认并忽略重复终态', skip: true, (tester) async {
+  testWidgets('头像上传后等资料保存确认并忽略重复终态', (tester) async {
     await pumpPage(
       tester,
       pickAvatarPath: () async => '/tmp/source.jpg',
@@ -206,15 +188,16 @@ void main() {
 
     authStates.add(savedState);
     authStates.add(savedState);
-    await tester.pump();
-    await tester.pump();
+    // broadcast 流投递 + subscription.cancel 需要多轮微任务才收敛，
+    // 连续 pump 给跨 zone 的异步链足够机会落定。
+    await drainRealEventLoop(tester);
 
     expect(tester.takeException(), isNull);
     expect(tester.widget<GestureDetector>(getAvatarButton()).onTap, isNotNull);
     expect(tester.widget<PopScope>(find.byType(PopScope)).canPop, isTrue);
   });
 
-  _testWidgets('头像资料保存超时后仍接收同请求迟到成功并刷新头像', skip: true, (tester) async {
+  testWidgets('头像资料保存超时后仍接收同请求迟到成功并刷新头像', (tester) async {
     final renderedAvatarUrls = <String>[];
     await pumpPage(
       tester,
@@ -248,8 +231,7 @@ void main() {
         ),
       ),
     );
-    await tester.pump();
-    await tester.pump();
+    await drainRealEventLoop(tester);
 
     expect(
       renderedAvatarUrls.any((url) => url.endsWith('/late-avatar.jpg')),
@@ -261,7 +243,7 @@ void main() {
     await tester.pump();
   });
 
-  _testWidgets('头像资料保存超时后销毁页面会取消迟到结果监听', (tester) async {
+  testWidgets('头像资料保存超时后销毁页面会取消迟到结果监听', (tester) async {
     await pumpPage(
       tester,
       pickAvatarPath: () async => '/tmp/source.jpg',
