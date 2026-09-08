@@ -65,8 +65,8 @@ describe('LoginPage', () => {
 
   it('should show remember account checkbox', () => {
     renderWithProviders(<LoginPage />)
-    // 组件 i18n 文案为「记住密码」（zh remember）
-    expect(screen.getByText('记住密码')).toBeInTheDocument()
+    // 组件 i18n 文案为「记住账号」（仅记住账号，不再持久化密码）
+    expect(screen.getByText('记住账号')).toBeInTheDocument()
   })
 
   it('should show forgot password link', () => {

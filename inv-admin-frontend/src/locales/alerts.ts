@@ -52,6 +52,11 @@ export default {
     'alert.otaAvailable': 'OTA更新',
     'alert.alarmCleared': '告警恢复',
     'alert.deviceAlarm': '设备告警',
+    'alert.clearAllConfirmTitle': '清空全部告警与通知',
+    'alert.clearAllConfirmContent': '将清空全部告警与通知记录，不可恢复',
+    'alert.clearAllOk': '清空全部',
+    'alert.confirmDeleteRecord': '确认删除该记录？',
+    'alert.stationFallbackName': '电站#{{id}}',
   },
   en: {
     'alert.title': 'Notification Center',
@@ -106,5 +111,10 @@ export default {
     'alert.otaAvailable': 'OTA Available',
     'alert.alarmCleared': 'Alarm Cleared',
     'alert.deviceAlarm': 'Device Alarm',
+    'alert.clearAllConfirmTitle': 'Clear All Alarms & Notifications',
+    'alert.clearAllConfirmContent': 'All alarm and notification records will be permanently cleared. This cannot be undone.',
+    'alert.clearAllOk': 'Clear All',
+    'alert.confirmDeleteRecord': 'Delete this record?',
+    'alert.stationFallbackName': 'Station #{{id}}',
   },
 }

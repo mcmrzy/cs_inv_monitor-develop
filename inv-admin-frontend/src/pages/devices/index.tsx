@@ -188,6 +188,10 @@ const DevicesPage: React.FC = () => {
   const [pageSize, setPageSize] = useState(20)
   const [filters, setFilters] = useState<DeviceFilters>({})
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
+  // 批量控制命令（受控状态，避免从 DOM 取 antd Select 值失败的假动作）
+  const [batchControlOpen, setBatchControlOpen] = useState(false)
+  const [batchCmd, setBatchCmd] = useState<'restart' | 'query_status'>('restart')
+  const [batchControlExecuting, setBatchControlExecuting] = useState(false)
 
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
@@ -366,30 +370,35 @@ const DevicesPage: React.FC = () => {
 
   const [telemetryData, setTelemetryData] = useState<any[]>([]);
   const [telemetryLoading, setTelemetryLoading] = useState(false);
-
-  const fetchTelemetry = useCallback(async (sn: string, range: [dayjs.Dayjs, dayjs.Dayjs]) => {
-    if (!sn) return;
-    setTelemetryLoading(true);
-    try {
-      const s = range[0].toISOString();
-      const e = range[1].toISOString();
-      const res = await deviceApi.getTelemetry(sn, { startTime: s, endTime: e, pageSize: 500 });
-      const payload = res.data;
-      const inner = payload?.data ?? payload;
-      const items = Array.isArray(inner?.items) ? inner.items : (Array.isArray(inner) ? inner : []);
-      setTelemetryData(items);
-    } catch (err: any) {
-      setTelemetryData([]);
-    } finally {
-      setTelemetryLoading(false);
-    }
-  }, []);
+  const [telemetryError, setTelemetryError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (detailDrawerOpen && detailSn) {
-      fetchTelemetry(detailSn, telemetryRange);
-    }
-  }, [detailDrawerOpen, detailSn, telemetryRange, telemetryVersion, fetchTelemetry]);
+    if (!detailDrawerOpen || !detailSn) return;
+    // 竞态保护：快速切换时间范围时，旧响应不得覆盖新响应
+    let cancelled = false;
+    const fetchTelemetry = async () => {
+      setTelemetryLoading(true);
+      setTelemetryError(null);
+      try {
+        const s = telemetryRange[0].toISOString();
+        const e = telemetryRange[1].toISOString();
+        const res = await deviceApi.getTelemetry(detailSn, { startTime: s, endTime: e, pageSize: 500 });
+        const payload = res.data;
+        const inner = payload?.data ?? payload;
+        const items = Array.isArray(inner?.items) ? inner.items : (Array.isArray(inner) ? inner : []);
+        if (!cancelled) setTelemetryData(items);
+      } catch (err: any) {
+        if (!cancelled) {
+          setTelemetryData([]);
+          setTelemetryError(err?.response?.data?.message || err?.message || t('dev.telemetryLoadFailed'));
+        }
+      } finally {
+        if (!cancelled) setTelemetryLoading(false);
+      }
+    };
+    fetchTelemetry();
+    return () => { cancelled = true };
+  }, [detailDrawerOpen, detailSn, telemetryRange, telemetryVersion, t]);
 
   useEffect(() => {
     modelApi.listModels().then((res) => {
@@ -516,7 +525,7 @@ const DevicesPage: React.FC = () => {
   const { data: installersRes, error: installersError, refetch: refetchInstallers } = useQuery({
     queryKey: ['users', 'installers'],
     queryFn: () =>
-      userApi.list({ role: 4, pageSize: 100 }).then((res) => {
+      userApi.list({ org_role: 'installer', pageSize: 100 }).then((res) => {
         const d = res.data?.data ?? res.data
         const items = Array.isArray(d) ? d : (d?.items ?? [])
         return items as Array<{ id: number; nickname: string; phone: string }>
@@ -782,6 +791,24 @@ const DevicesPage: React.FC = () => {
     requestUnbindMutation.mutate({ sn: unbindTargetSn, reason: unbindReason })
   }
 
+  const handleBatchControlSubmit = async () => {
+    setBatchControlExecuting(true)
+    try {
+      await commandApi.batchControl({
+        device_sns: selectedRowKeys.map(String),
+        command: batchCmd,
+        params: {},
+      })
+      messageApi.success(t('dev.batchControlSuccess'))
+      setSelectedRowKeys([])
+      setBatchControlOpen(false)
+    } catch {
+      messageApi.error(t('dev.batchControlFailed'))
+    } finally {
+      setBatchControlExecuting(false)
+    }
+  }
+
   const handleImportFile = (file: File) => {
     setImportFile(file)
     setImportResult(null)
@@ -969,7 +996,8 @@ const DevicesPage: React.FC = () => {
       label: t('dev.createOTATask'),
       icon: <DownloadOutlined />,
       onClick: () => {
-        messageApi.info(t('dev.otaTaskCreated') + ': ' + selectedRowKeys.join(', '))
+        // 跳转 OTA 页并预填所选设备（ota 页读取 create/sns 参数自动打开创建向导）
+        navigate('/ota?create=1&sns=' + selectedRowKeys.map(String).join(','))
       },
     },
     {
@@ -981,39 +1009,8 @@ const DevicesPage: React.FC = () => {
           messageApi.warning(t('dev.selectDevicesFirst'))
           return
         }
-        modal.confirm({
-          title: t('dev.batchControlTitle'),
-          content: (
-            <div>
-              <p>{t('dev.batchControlConfirm', { count: selectedRowKeys.length, cmd: 'restart' })}</p>
-              <Select
-                defaultValue="restart"
-                style={{ width: '100%', marginTop: 8 }}
-                options={[
-                  { label: 'restart', value: 'restart' },
-                  { label: 'query_status', value: 'query_status' },
-                ]}
-                id="batch-cmd-select"
-              />
-            </div>
-          ),
-          okText: t('common.confirm'),
-          cancelText: t('common.cancel'),
-          onOk: () => {
-            const cmdSelect = document.getElementById('batch-cmd-select') as HTMLSelectElement
-            const cmd = cmdSelect?.value || 'restart'
-            return commandApi.batchControl({
-              device_sns: selectedRowKeys.map(String),
-              command: cmd,
-              params: {},
-            }).then(() => {
-              messageApi.success(t('dev.batchControlSuccess'))
-              setSelectedRowKeys([])
-            }).catch(() => {
-              messageApi.error(t('dev.batchControlFailed'))
-            })
-          },
-        })
+        setBatchCmd('restart')
+        setBatchControlOpen(true)
       },
     },
   ]
@@ -1057,7 +1054,7 @@ const DevicesPage: React.FC = () => {
       responsive: ['sm'],
       render: (_: any, record: any) => {
         if (!record.model_id || record.model_id === 0) {
-          return <Tag color="orange">未绑定型号</Tag>
+          return <Tag color="orange">{t('dev.modelUnbound')}</Tag>
         }
         const devType = getCategoryType(record.model_category ?? '')
         const cfg = deviceTypeConfig[devType]
@@ -1496,6 +1493,16 @@ const DevicesPage: React.FC = () => {
                 <Button icon={<DownloadOutlined />}>{t('dev.export')}</Button>
               </Dropdown>
             </Space>
+            {telemetryError && (
+              <Alert
+                type="warning"
+                showIcon
+                closable
+                message={telemetryError}
+                style={{ marginBottom: 12 }}
+                onClose={() => setTelemetryError(null)}
+              />
+            )}
             {telemetryLoading ? (
               <Spin tip={t('dev.loadingHistory')} />
             ) : telemetryData && telemetryData.length > 0 ? (
@@ -2354,6 +2361,28 @@ const DevicesPage: React.FC = () => {
         )}
       </Drawer>
 
+      {/* 批量控制命令Modal */}
+      <Modal
+        title={t('dev.batchControlTitle')}
+        open={batchControlOpen}
+        onCancel={() => setBatchControlOpen(false)}
+        onOk={handleBatchControlSubmit}
+        confirmLoading={batchControlExecuting}
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
+      >
+        <p>{t('dev.batchControlConfirm', { count: selectedRowKeys.length, cmd: batchCmd })}</p>
+        <Select
+          value={batchCmd}
+          style={{ width: '100%', marginTop: 8 }}
+          onChange={(v) => setBatchCmd(v)}
+          options={[
+            { label: 'restart', value: 'restart' },
+            { label: 'query_status', value: 'query_status' },
+          ]}
+        />
+      </Modal>
+
       {/* 绑定电站Modal */}
       <Modal
         title={t('dev.bindStation')}
@@ -2404,11 +2433,11 @@ const DevicesPage: React.FC = () => {
         destroyOnHidden
       >
         <div style={{ marginBottom: 16 }}>
-          <Text>{t('dev.deviceSN')}：</Text>
+          <Text>{t('dev.deviceSN')}: </Text>
           <Text strong>{assignTargetSn}</Text>
         </div>
         <div>
-          <Text>{t('dev.selectInstaller')}：</Text>
+          <Text>{t('dev.selectInstaller')}: </Text>
           <Select
             style={{ width: '100%', marginTop: 8 }}
             placeholder={t('dev.selectInstallerPlaceholder')}

@@ -14,12 +14,12 @@ describe('userApi', () => {
       expect(data.total).toBe(mockUsers.length)
     })
 
-    it('should filter users by role', async () => {
+    it('should filter users by org_role', async () => {
       server.use(
         http.get('/api/v1/users', ({ request }) => {
           const url = new URL(request.url)
-          const role = url.searchParams.get('role')
-          const filtered = mockUsers.filter((u) => String(u.role) === role)
+          const orgRole = url.searchParams.get('org_role')
+          const filtered = orgRole === 'installer' ? mockUsers.filter((u) => u.role === 4) : []
           return HttpResponse.json({
             code: 0,
             data: paginatedResponse(filtered, filtered.length),

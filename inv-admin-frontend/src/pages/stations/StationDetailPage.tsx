@@ -16,6 +16,7 @@ import { deviceApi } from '@/services/deviceApi'
 import { getAlarmLevelDisplay, getAlarmMessageI18nKey } from '@/utils/constants'
 import { formatInTimezone } from '@/utils/timezone'
 import { safeNum } from '@/utils/format'
+import dayjs from 'dayjs'
 import useTimezoneStore from '@/stores/timezoneStore'
 import useTranslation from '@/hooks/useTranslation'
 import useAuthStore from '@/stores/authStore'
@@ -203,20 +204,31 @@ const StationDetailPage: React.FC = () => {
   })
 
   // 统计数据（用于概览Tab的EnergySummaryCards）
+  // 日期一律取站点时区（无站点时区回退浏览器本地时区），避免 UTC 日期与后端按站点时区的日粒度聚合错位
+  const stationTimezone = station?.timezone
   const { data: statsSummary } = useQuery({
-    queryKey: ['station-stats-summary', id],
+    queryKey: ['station-stats-summary', id, stationTimezone ?? null],
+    enabled: !!id && station != null,
     queryFn: async () => {
+      const tz = stationTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone
+      const tzDate = (amount: number, unit: 'day' | 'year'): string => {
+        try {
+          return dayjs().tz(tz).add(amount, unit).format('YYYY-MM-DD')
+        } catch {
+          return dayjs().add(amount, unit).format('YYYY-MM-DD')
+        }
+      }
+      const todayStr = tzDate(0, 'day')
       const res = await api.get(`/stations/${id}/statistics`, {
         expectedDataShape: 'array',
         params: {
-          start_date: (() => { const d = new Date(); d.setFullYear(d.getFullYear() - 1); return d.toISOString().split('T')[0] })(),
-          end_date: new Date().toISOString().split('T')[0],
+          start_date: tzDate(-1, 'year'),
+          end_date: todayStr,
           period: 'day',
         }
       })
       const raw = res?.data?.data ?? res?.data ?? []
       const arr = Array.isArray(raw) ? raw : []
-      const todayStr = new Date().toISOString().split('T')[0]
       const monthStr = todayStr.substring(0, 7)
       const yearStr = todayStr.substring(0, 4)
       let todayVal = 0, monthVal = 0, yearVal = 0, totalVal = 0
@@ -230,7 +242,6 @@ const StationDetailPage: React.FC = () => {
       })
       return { today: todayVal, month: monthVal, year: yearVal, total: totalVal }
     },
-    enabled: !!id,
   })
 
   // 从设备实时数据聚合能量值 + 实时功率（normalizeRealtimeData 展平后同时存在扁平和嵌套字段）

@@ -28,7 +28,10 @@ function parseJwtExp(token: string): number | null {
   try {
     const payload = token.split('.')[1]
     if (!payload) return null
-    const decoded = JSON.parse(atob(payload))
+    // JWT 使用 base64url 编码：需要把 -/_ 归一化为标准 base64 字符并补齐 padding
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/')
+    const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4)
+    const decoded = JSON.parse(atob(padded))
     return decoded.exp ?? null
   } catch {
     return null
