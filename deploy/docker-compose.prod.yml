@@ -10,7 +10,7 @@ services:
   postgres:
     image: timescale/timescaledb:latest-pg18
     container_name: inv-postgres
-    command: postgres -c max_connections=300 -c shared_buffers=256MB
+    command: postgres -c max_connections=300 -c shared_buffers=256MB -c idle_in_transaction_session_timeout=300000
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${DB_PASSWORD}
@@ -192,7 +192,9 @@ services:
       - inv-prod-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8081/health"]
+      # Container liveness must not depend on the external MQTT broker.
+      # /health remains the MQTT/Redis readiness endpoint for diagnostics.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8081/metrics"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -301,13 +303,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
-    depends_on:
-      inv-api-server:
-        condition: service_healthy
-      inv-device-server:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
     deploy:
       resources:
         limits:
@@ -336,7 +331,7 @@ services:
       start_period: 15s
     depends_on:
       api-gateway:
-        condition: service_healthy
+        condition: service_started
     deploy:
       resources:
         limits:
@@ -362,18 +357,18 @@ services:
     networks:
       - inv-prod-network
     restart: unless-stopped
-    # / 由 nginx 反代到 inv-admin-frontend，此探针同时验证代理链路连通
+    # 纯容器存活探针，不依赖域名跳转、CDN 或任何上游服务。
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:80/"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8082/livez"]
       interval: 15s
       timeout: 5s
       retries: 5
       start_period: 15s
     depends_on:
       inv-admin-frontend:
-        condition: service_healthy
+        condition: service_started
       api-gateway:
-        condition: service_healthy
+        condition: service_started
     deploy:
       resources:
         limits:

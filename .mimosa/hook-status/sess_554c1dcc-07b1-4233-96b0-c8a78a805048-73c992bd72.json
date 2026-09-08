@@ -1,14 +1,14 @@
 {
   "schemaVersion": "mimosa-hook-status/v1",
-  "recordedAt": "2026-09-05T02:56:38.744Z",
-  "sessionId": "sess_2ae3ef72-92e0-4c14-9f07-c2309502f3c2",
+  "recordedAt": "2026-09-08T09:45:50.370Z",
+  "sessionId": "sess_554c1dcc-07b1-4233-96b0-c8a78a805048",
   "event": "PostToolUse",
-  "toolName": "Write",
-  "file": ".zcode/tmp/focus_edge.ps1",
+  "toolName": "Edit",
+  "file": "inv-admin-frontend/src/pages/ota/index.tsx",
   "outcome": "clear",
   "coverage": "complete",
   "findingCount": 0,
-  "durationMs": 3,
+  "durationMs": 24,
   "hostState": "hook_complete",
   "reportHint": ".mimosa/reports/"
 }

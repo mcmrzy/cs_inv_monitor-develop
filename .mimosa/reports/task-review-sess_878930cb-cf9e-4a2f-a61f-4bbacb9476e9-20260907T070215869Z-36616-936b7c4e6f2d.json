@@ -1,0 +1,235 @@
+{
+  "schema_version": "mimosa-task-review/v2",
+  "run_id": "20260907T070215869Z-36616-936b7c4e6f2d",
+  "run_status": "inconclusive",
+  "errors": [
+    {
+      "stage": "scan",
+      "target": "external/驱动arm/App/App/source/Collector/Collector.c",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "external/驱动arm/App/App/source/Collector/CollectorParamAddr.h",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    }
+  ],
+  "coverage": {
+    "schema_version": "mimosa-hook-coverage/v1",
+    "status": "partial",
+    "scope": "hook_observed_diff",
+    "baseline": {
+      "complete": true,
+      "captured_files": 2459,
+      "candidate_limit": 5000,
+      "truncated": false,
+      "enumeration_error_count": 0,
+      "snapshot_error_count": 0,
+      "compensated_target_count": 2
+    },
+    "change_tracking": {
+      "touched_observed": 0,
+      "touched_retained": 0,
+      "truncated": false,
+      "bash_mutation": true,
+      "bash_discovered": 2,
+      "bash_discovery_limit": 80,
+      "bash_discovery_truncated": false
+    },
+    "candidates": {
+      "eligible_files": 2,
+      "selected_files": 2,
+      "limit": 20,
+      "truncated": false
+    },
+    "scanning": {
+      "required_files": 2,
+      "scanned_files": 0,
+      "skipped_files": 0,
+      "failed_files": 2,
+      "project_checks_required": 0,
+      "project_checks_completed": 0
+    },
+    "notification": {
+      "eligible_findings": 0,
+      "detailed_findings": 0,
+      "detail_limit": 3,
+      "truncated": false
+    },
+    "reason_counts": {
+      "scanner_failed": 2,
+      "project_check_failed": 2
+    },
+    "reasons": [
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "external/驱动arm/App/App/source/Collector/Collector.c",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "external/驱动arm/App/App/source/Collector/CollectorParamAddr.h",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "external/驱动arm/App/App/source/Collector/Collector.c",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "external/驱动arm/App/App/source/Collector/CollectorParamAddr.h",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      }
+    ],
+    "reasons_truncated": false
+  },
+  "generated_at": "2026-09-07T07:02:15.869Z",
+  "session_id": "sess_878930cb-cf9e-4a2f-a61f-4bbacb9476e9",
+  "target": ".",
+  "revision": "6346015c0c31c4eb765bd49a181b9ad64e16ab58",
+  "rules_version": "unavailable",
+  "diff_hash": "1c3b451dc5bfad73854a58f3e7b30e14c624e4b70227d3e91b50cc85dad00068",
+  "diff": {
+    "algorithm": "sha256",
+    "changed_file_count": 2,
+    "changed_files": [
+      {
+        "file": "external/驱动arm/App/App/source/Collector/Collector.c",
+        "ranges": [
+          {
+            "start": 390,
+            "end": 391
+          },
+          {
+            "start": 395,
+            "end": 410
+          },
+          {
+            "start": 414,
+            "end": 419
+          },
+          {
+            "start": 423,
+            "end": 423
+          },
+          {
+            "start": 460,
+            "end": 463
+          },
+          {
+            "start": 466,
+            "end": 475
+          }
+        ],
+        "before_hash": "6ccf904daedb7b868757ad9305764777ec680b20e60881e70072342b8c81a274",
+        "after_hash": "4340aafa0fc8e8c9953b28e88df5ad885178b53e1c0a56dba320402bc50b1d37"
+      },
+      {
+        "file": "external/驱动arm/App/App/source/Collector/CollectorParamAddr.h",
+        "ranges": [
+          {
+            "start": 7,
+            "end": 90
+          },
+          {
+            "start": 109,
+            "end": 117
+          },
+          {
+            "start": 126,
+            "end": 130
+          },
+          {
+            "start": 135,
+            "end": 186
+          },
+          {
+            "start": 191,
+            "end": 191
+          },
+          {
+            "start": 212,
+            "end": 212
+          },
+          {
+            "start": 219,
+            "end": 234
+          },
+          {
+            "start": 240,
+            "end": 240
+          },
+          {
+            "start": 282,
+            "end": 290
+          },
+          {
+            "start": 298,
+            "end": 332
+          }
+        ],
+        "before_hash": "2cbb3090d090d5434d0dc23b77c66722a72eee96a277c24e1c5b4a1095623502",
+        "after_hash": "0de389e32a1ffdfff0d6ae653314733b1f61de85d1c083d9fa696a004781b7a5"
+      }
+    ]
+  },
+  "timing": {
+    "started_at": "2026-09-07T07:02:13.392Z",
+    "completed_at": "2026-09-07T07:02:15.869Z",
+    "duration_ms": 2477,
+    "measurement": "hook_wall_clock"
+  },
+  "tokens": {
+    "input": 0,
+    "output": 0,
+    "total": 0,
+    "model_calls": 0,
+    "measurement": "known-zero"
+  },
+  "telemetry": {
+    "schemaVersion": "mimosa-gate-telemetry/v1",
+    "profile": "gate",
+    "operation": "Stop",
+    "outcome": "partial/INCONCLUSIVE",
+    "latencyMs": 2477,
+    "peakMemoryBytes": 99581952,
+    "memoryMeasurement": "max-observed-process-rss",
+    "scannedFiles": 0,
+    "cache": {
+      "hits": 0,
+      "misses": 0,
+      "measurement": "not-applicable"
+    },
+    "denyCount": 0,
+    "tokens": {
+      "input": 0,
+      "output": 0,
+      "total": 0,
+      "modelCalls": 0,
+      "measurement": "known-zero"
+    }
+  },
+  "finding_count": 0,
+  "rewake_finding_count": 0,
+  "evidence_boundary": {
+    "scan": "candidate",
+    "static_fix_verification": "observed_static_only",
+    "runtime_verification": "not_performed"
+  },
+  "finding_events": [],
+  "findings": [],
+  "artifacts": {
+    "immutable_report": ".mimosa/reports/task-review-sess_878930cb-cf9e-4a2f-a61f-4bbacb9476e9-20260907T070215869Z-36616-936b7c4e6f2d.json",
+    "latest_report": ".mimosa/reports/task-review-sess_878930cb-cf9e-4a2f-a61f-4bbacb9476e9.json",
+    "history_summary": ".mimosa/history/run-20260907T070215869Z-36616-936b7c4e6f2d.json"
+  }
+}

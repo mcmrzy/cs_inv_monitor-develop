@@ -1,0 +1,82 @@
+{
+  "schemaVersion": "mimosa-finding-ledger-batch/v1",
+  "batchId": "stop-20260906T175233552Z-118872-2cfa57fb8dd6",
+  "runId": "20260906T175233552Z-118872-2cfa57fb8dd6",
+  "runStatus": "inconclusive",
+  "coverage": {
+    "status": "partial",
+    "reasons": [
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "business-api/internal/service/device_send_command_postgres_integration_test.go",
+        "detail": "file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "business-api/internal/service/device_send_command_postgres_integration_test.go",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affectsCompletion": true
+      }
+    ]
+  },
+  "source": {
+    "component": "zcode-hook",
+    "operationId": "Stop"
+  },
+  "revision": "aac2dd6d9aa15fa9bed1187e09909588551915e2",
+  "diffHash": "f48020b84f29e4656c05bd0882190b5747f1a5519f387aca0e9eaaeadf241335",
+  "rulesVersion": "unavailable",
+  "sessionHash": "d52a60e9f6a2041915f069c9f5866ef707d043d2826acebfcfb03a0e08c74ac0",
+  "reportRef": ".mimosa/reports/task-review-sess_6023e950-763f-44a9-a65f-1fc8081897ef-20260906T175233552Z-118872-2cfa57fb8dd6.json",
+  "events": [],
+  "observedFindingIds": [
+    "mimosa-476cb2888a1f9275638b69b1",
+    "mimosa-5f7c104a02017cc7f48fe1ef",
+    "mimosa-818101badc0f3f373e01907b",
+    "mimosa-2e413de58fbd9cf054e6f212",
+    "mimosa-6a7f05746c2999b1f6ff4ea9",
+    "mimosa-d6a1362fb68c9265aabb2eaa",
+    "mimosa-6d956ebe616e0c0b3a1a717f"
+  ],
+  "verifiedFiles": [
+    {
+      "file": "business-api/internal/repository/ota_repository.go",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "business-api/internal/repository/ota_lifecycle_postgres_integration_test.go",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "business-api/internal/service/device_control_postgres_integration_test.go",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "business-api/internal/service/device_send_command_postgres_integration_test.go",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "business-api/internal/migration/channel_backfill.go",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "business-api/internal/migration/channel_backfill_postgres_integration_test.go",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "business-api/internal/migration/channel_backfill_test.go",
+      "direct": "complete",
+      "projectContext": "partial"
+    }
+  ],
+  "recordedAt": "2026-09-06T17:52:33.833Z"
+}
