@@ -6,6 +6,7 @@
  */
 
 import type { User, Device, Firmware, Alert, WorkOrder, UpgradeTask, PaginatedResponse } from '@/types'
+import { MOCK_REFRESH_TOKEN } from '@/test/mockCredentials'
 
 /** 超级管理员用户 */
 export const mockAdminUser: User = {
@@ -241,7 +242,7 @@ export const mockLoginResponse = {
   message: 'success',
   data: {
     token: 'mock-jwt-token',
-    refresh_token: 'mock-refresh-token',
+    refresh_token: MOCK_REFRESH_TOKEN,
     user: mockAdminUser,
     permissions: ['dashboard:view', 'devices:view', 'firmware:view', 'alerts:view', 'users:view', 'admin:view'],
   },

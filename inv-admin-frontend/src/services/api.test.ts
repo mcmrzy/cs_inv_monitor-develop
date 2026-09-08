@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import axios from 'axios'
 import { http, HttpResponse } from 'msw'
 import { server } from '@/test/mocks/server'
+import { MOCK_LOGIN_PASSWORD } from '@/test/mockCredentials'
 import useAuthStore from '@/stores/authStore'
 import api, { authApi } from './api'
 
@@ -124,7 +125,7 @@ describe('Response Interceptor - 401 Token Refresh', () => {
 
 describe('authApi', () => {
   it('login should post credentials and return tokens', async () => {
-    const res = await authApi.login({ account: 'admin@example.com', password: 'Admin123' })
+    const res = await authApi.login({ account: 'admin@example.com', password: MOCK_LOGIN_PASSWORD })
     expect(res.data.data?.token).toBe('mock-jwt-token')
     expect(res.data.data?.refresh_token).toBe('mock-refresh-token')
   })

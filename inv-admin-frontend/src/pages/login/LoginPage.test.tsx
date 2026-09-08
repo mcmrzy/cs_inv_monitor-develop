@@ -5,6 +5,7 @@ import { http, HttpResponse } from 'msw'
 import { useLocation } from 'react-router-dom'
 import { server } from '@/test/mocks/server'
 import { mockLoginResponse } from '@/test/mocks/data'
+import { mockToken, mockRefreshToken } from '@/test/mockCredentials'
 import { renderWithProviders } from '@/test/test-utils'
 import LoginPage from './index'
 import useAuthStore from '@/stores/authStore'
@@ -162,8 +163,8 @@ describe('LoginPage', () => {
           code: 0,
           message: 'success',
           data: {
-            access_token: 'registered-access-token',
-            refresh_token: 'registered-refresh-token',
+            access_token: mockToken('registered'),
+            refresh_token: mockRefreshToken('registered'),
             user: { id: 9, phone: '13800000099', nickname: 'u', status: 1 },
             permissions: ['dashboard:view'],
           },

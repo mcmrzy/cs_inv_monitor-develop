@@ -3,6 +3,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
 import { server } from '@/test/mocks/server'
+import { mockToken, mockRefreshToken } from '@/test/mockCredentials'
 import { renderAsAdmin } from '@/test/test-utils'
 import InviteAcceptPage from './InviteAcceptPage'
 
@@ -72,8 +73,8 @@ describe('InviteAcceptPage', () => {
           data: {
             invitation_id: 9,
             user: { id: 9, phone: '13800000005', nickname: '受邀用户', role: 3, status: 1 },
-            access_token: 'invite-access-token',
-            refresh_token: 'invite-refresh-token',
+            access_token: mockToken('invite'),
+            refresh_token: mockRefreshToken('invite'),
             permissions: ['dashboard:view'],
           },
         }),
