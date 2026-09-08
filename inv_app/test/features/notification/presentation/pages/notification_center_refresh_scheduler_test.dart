@@ -8,7 +8,7 @@ void main() {
       fakeAsync((async) {
         var refreshCount = 0;
         final scheduler = NotificationRefreshScheduler(
-          onRefresh: () => refreshCount++,
+          onRefresh: (_) => refreshCount++,
         );
 
         scheduler.schedule();
@@ -29,7 +29,7 @@ void main() {
       fakeAsync((async) {
         var refreshCount = 0;
         final scheduler = NotificationRefreshScheduler(
-          onRefresh: () => refreshCount++,
+          onRefresh: (_) => refreshCount++,
         );
 
         scheduler.schedule();
@@ -45,7 +45,7 @@ void main() {
       fakeAsync((async) {
         var refreshCount = 0;
         final scheduler = NotificationRefreshScheduler(
-          onRefresh: () => refreshCount++,
+          onRefresh: (_) => refreshCount++,
         );
 
         scheduler.schedule();
@@ -61,7 +61,7 @@ void main() {
       fakeAsync((async) {
         var refreshCount = 0;
         final scheduler = NotificationRefreshScheduler(
-          onRefresh: () => refreshCount++,
+          onRefresh: (_) => refreshCount++,
         );
 
         scheduler.schedule();

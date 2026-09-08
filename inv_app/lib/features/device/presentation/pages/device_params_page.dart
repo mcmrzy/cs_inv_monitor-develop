@@ -27,9 +27,19 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
   String _searchQuery = '';
   bool _isApplying = false;
 
+  /// 本页是否有参数请求在途（加载/应用）：
+  /// DeviceBloc 是全局共享的，任意页面都可能发出 DeviceError，
+  /// 只有本页请求在途时才消费错误事件（弹 SnackBar），避免误弹他人错误
+  bool _paramsRequestInFlight = false;
+
   @override
   void initState() {
     super.initState();
+    _requestParams();
+  }
+
+  void _requestParams() {
+    _paramsRequestInFlight = true;
     context
         .read<DeviceBloc>()
         .add(DeviceLocalParamsRequested(deviceIP: widget.deviceIP));
@@ -123,7 +133,15 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
     for (final entry in _modifiedValues.entries) {
       if (entry.value != _originalValues[entry.key]) {
         changes[entry.key] = MapEntry(_originalValues[entry.key], entry.value);
-        final param = _params.firstWhere((p) => p.key == entry.key);
+        // 参数可能被刷新后移除，缺失时按非危险参数兜底
+        final param = _params.firstWhere(
+          (p) => p.key == entry.key,
+          orElse: () => DeviceParam(
+            key: entry.key,
+            label: entry.key,
+            value: entry.value,
+          ),
+        );
         if (param.isDangerous) {
           dangerousKeys.add(entry.key);
         }
@@ -150,6 +168,7 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
     }
 
     if (!mounted) return;
+    _paramsRequestInFlight = true;
     context.read<DeviceBloc>().add(
           DeviceLocalParamsUpdateRequested(
             deviceIP: widget.deviceIP,
@@ -181,6 +200,7 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
       body: BlocConsumer<DeviceBloc, DeviceState>(
         listener: (context, state) {
           if (state is DeviceParamsUpdateSuccess) {
+            _paramsRequestInFlight = false;
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(AppLocalizations.of(context)!.paramSetSuccess),
@@ -196,6 +216,10 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
           }
           if (state is DeviceError) {
             setState(() => _isApplying = false);
+            // DeviceBloc 全局共享：仅消费本页在途请求产生的错误，
+            // 其他页面/轮询的错误事件不在这里弹 SnackBar
+            if (!_paramsRequestInFlight) return;
+            _paramsRequestInFlight = false;
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
@@ -204,6 +228,9 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
                 backgroundColor: AppColors.error,
               ),
             );
+          }
+          if (state is DeviceParamsLoaded) {
+            _paramsRequestInFlight = false;
           }
         },
         builder: (context, state) {
@@ -222,7 +249,18 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
           if (state is DeviceParamsLoaded) {
             _params = _parseParams(state.params);
             _originalValues = {for (final p in _params) p.key: p.value};
-            _modifiedValues = {for (final p in _params) p.key: p.value};
+            // 键级合并：保留用户尚未提交的修改（下拉刷新/重读参数后编辑不丢），
+            // 仅保留仍存在于最新参数表中的 key，避免陈旧 key 残留
+            final keptModified = <String, dynamic>{
+              for (final entry in _modifiedValues.entries)
+                if (_originalValues.containsKey(entry.key) &&
+                    entry.value != _originalValues[entry.key])
+                  entry.key: entry.value,
+            };
+            _modifiedValues = <String, dynamic>{
+              ..._originalValues,
+              ...keptModified,
+            };
           }
 
           if (_params.isEmpty) {
@@ -283,9 +321,7 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
               Expanded(
                 child: StyledRefreshIndicator(
                   onRefresh: () async {
-                    context.read<DeviceBloc>().add(
-                          DeviceLocalParamsRequested(deviceIP: widget.deviceIP),
-                        );
+                    _requestParams();
                   },
                   child: ListView.builder(
                     padding:

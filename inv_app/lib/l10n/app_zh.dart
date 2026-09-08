@@ -1353,6 +1353,10 @@ const Map<String, String> zh = {
   'click_to_set_email': '点击设置邮箱',
   'click_to_set_phone': '点击设置手机',
   'click_to_set_region': '点击设置地区',
+  // 联系方式变更弹窗描述与失败提示（原页面硬编码中文迁移）
+  'profile_enter_new_phone': '请输入新的手机号码',
+  'profile_enter_new_email': '请输入新的邮箱地址',
+  'verify_failed': '验证失败',
 
   // === BLE 直连（设置页）===
   'ble_direct_enabled': '通过 BLE 直连设备',

@@ -1575,6 +1575,15 @@ class AppLocalizations {
       _localizedStrings['click_to_set_phone'] ?? 'Click to set phone';
   String get clickToSetRegion =>
       _localizedStrings['click_to_set_region'] ?? 'Click to set region';
+  // 联系方式变更弹窗描述与失败提示（原页面硬编码中文迁移）
+  String get profileEnterNewPhone =>
+      _localizedStrings['profile_enter_new_phone'] ??
+      'Enter the new phone number';
+  String get profileEnterNewEmail =>
+      _localizedStrings['profile_enter_new_email'] ??
+      'Enter the new email address';
+  String get verifyFailed =>
+      _localizedStrings['verify_failed'] ?? 'Verification failed';
 
   // BLE 直连
   String get bleDirectEnabled => _localizedStrings['ble_direct_enabled']!;
