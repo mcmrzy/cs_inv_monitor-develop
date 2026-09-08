@@ -258,6 +258,9 @@ test.describe('侧边栏菜单点击导航', () => {
     test(`侧边栏点击「${label}」跳转到对应路由`, async ({ page }) => {
       await gotoAuthed(page, '/dashboard')
       await expect(page.locator('.ant-menu')).toBeVisible()
+      // 菜单就绪锚点：当前路由(仪表盘)所在分组自动展开完成后才算就绪，
+      // 消除 openKeys 异步解析期间的初始化竞态（慢机器上曾耗尽重试）
+      await expect(page.locator('.ant-menu').getByText('仪表盘', { exact: true })).toBeVisible({ timeout: 10_000 })
       const item = page.locator('.ant-menu').getByText(label, { exact: true })
       if (!(await item.isVisible().catch(() => false))) {
         const group = menuGroupOf[label]

@@ -12,6 +12,8 @@ test('语言切换：中文 → English 后导航文案变化并可切回', asyn
   // Default locale is zh-CN.
   // UX 改版后侧边栏按 4 个分组折叠，子项仅在所属分组展开后可见，先按需展开。
   const menu = page.locator('.ant-menu')
+  // 菜单就绪锚点：等待初始路由所在分组自动展开完成，消除初始化竞态
+  await expect(menu.getByText('仪表盘', { exact: true })).toBeVisible({ timeout: 10_000 })
   const ensureGroupOpen = async (group: string, itemText: string) => {
     const item = menu.getByText(itemText, { exact: true })
     if (await item.isVisible().catch(() => false)) return
