@@ -727,43 +727,50 @@ class _LoginFormState extends State<LoginForm> {
     return Row(
       children: [
         // 自绘圆角勾选框，替代原生 Checkbox
+        // 外包 48x48 触控热区，满足最小点击目标
         GestureDetector(
           onTap: () {
             setState(() {
               _rememberPassword = !_rememberPassword;
             });
           },
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 20.w,
-                height: 20.w,
-                decoration: BoxDecoration(
-                  color: _rememberPassword
-                      ? AppColors.primary
-                      : AppColor.surfaceContainer(context),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: _rememberPassword
-                        ? AppColors.primary
-                        : AppColor.outline(context),
-                    width: 1.5,
+          child: SizedBox(
+            width: 48.w,
+            height: 48.w,
+            child: Center(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 20.w,
+                    height: 20.w,
+                    decoration: BoxDecoration(
+                      color: _rememberPassword
+                          ? AppColors.primary
+                          : AppColor.surfaceContainer(context),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: _rememberPassword
+                            ? AppColors.primary
+                            : AppColor.outline(context),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: _rememberPassword
+                        ? const Icon(Icons.check, size: 14, color: Colors.white)
+                        : null,
                   ),
-                ),
-                child: _rememberPassword
-                    ? const Icon(Icons.check, size: 14, color: Colors.white)
-                    : null,
+                  SizedBox(width: 8.w),
+                  Text(
+                    l10n.rememberPassword,
+                    style: TextStyle(
+                      fontSize: 14.sp,
+                      color: AppColor.textSecondary(context),
+                    ),
+                  ),
+                ],
               ),
-              SizedBox(width: 8.w),
-              Text(
-                l10n.rememberPassword,
-                style: TextStyle(
-                  fontSize: 14.sp,
-                  color: AppColor.textSecondary(context),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
         const Spacer(),

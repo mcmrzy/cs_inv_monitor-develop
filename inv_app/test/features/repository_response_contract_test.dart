@@ -79,6 +79,7 @@ void main() {
         () => remote.getList(
           stationId: any(named: 'stationId'),
           status: any(named: 'status'),
+          alarmLevel: any(named: 'alarmLevel'),
           page: any(named: 'page'),
           pageSize: any(named: 'pageSize'),
         ),

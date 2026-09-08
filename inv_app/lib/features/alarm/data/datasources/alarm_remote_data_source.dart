@@ -8,6 +8,7 @@ class AlarmRemoteDataSource {
   Future<Response> getList({
     int? stationId,
     int? status,
+    int? alarmLevel,
     int page = 1,
     int pageSize = 20,
   }) async {
@@ -17,6 +18,8 @@ class AlarmRemoteDataSource {
     };
     if (stationId != null) params['station_id'] = stationId;
     if (status != null) params['status'] = status;
+    // 告警级别筛选（与 Web 端一致）：1=严重 2=警告 3=提示
+    if (alarmLevel != null && alarmLevel > 0) params['alarmLevel'] = alarmLevel;
     return await dio.get('/alarms', queryParameters: params);
   }
 
