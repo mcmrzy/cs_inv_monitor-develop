@@ -116,6 +116,7 @@ const Map<String, String> en = {
 
   // Device
   'device_management': 'Device Management',
+  'device_management_hint': 'Manage devices under this station',
   'device_detail': 'Device Detail',
   'add_device': 'Add Device',
   'scan_code': 'Scan Code',
@@ -193,7 +194,7 @@ const Map<String, String> en = {
   'info_level': 'Info',
   'important': 'Important',
   'general': 'General',
-  'recent_alarms': 'Recent Alarms',
+  'recent_alarms': 'Recent Alerts',
   'view_all': 'View All',
   'no_alarms': 'No Alarms',
   'unknown_alarm': 'Unknown Alarm',
@@ -206,7 +207,7 @@ const Map<String, String> en = {
   'grid_input': 'Grid Input',
   'grid_output': 'Grid Output',
   'power_trend': 'Power Trend',
-  'energy_trend': 'Energy Overview',
+  'energy_trend': 'Generation Trend',
   'select_date': 'Select Date',
   'trend_7days': '7-Day Trend',
   'generation': 'Generation',
@@ -237,7 +238,7 @@ const Map<String, String> en = {
   'upgrade_result': 'Result',
   'current_device': 'Current Device',
   'new_version_found': 'New Version Found',
-  'start_upgrade': 'Start Upgrade',
+  'start_upgrade': 'Execute',
   'firmware_list': 'Firmware List',
   'already_latest': 'Already Latest',
   'changelog': 'Changelog',
@@ -433,7 +434,7 @@ const Map<String, String> en = {
   'china': 'China',
 
   // OTA additions
-  'ota_title': 'Device Firmware Upgrade',
+  'ota_title': 'OTA Upgrade',
   'ota_settings_hint': 'Manage firmware versions & upgrades',
   'pre_download_failed': 'Pre-download failed: {error}',
   'downloaded': 'Downloaded',
@@ -470,6 +471,9 @@ const Map<String, String> en = {
   'ota_exit_confirm_title': 'Upgrade in progress',
   'ota_exit_confirm_message':
       'The device is flashing firmware. Leaving now will disconnect the device and interrupt the upgrade, which may prevent the device from booting. Leave anyway?',
+  'ota_start_confirm_title': 'Start remote upgrade',
+  'ota_start_confirm_message':
+      'The device will pause reporting and output during the upgrade, which takes about {minutes} minutes. Make sure the device network and power stay stable. Start the upgrade now?',
   'ota_exit_anyway': 'Leave anyway',
   'ota_keep_upgrading': 'Continue upgrading',
   'ota_exit_page': 'Exit page',
@@ -526,6 +530,16 @@ const Map<String, String> en = {
   'device_offline_warning':
       'Device offline, control commands may not be delivered',
   'command_send_failed': 'Failed to send command: {error}',
+  'command_send_failed_retry':
+      'Failed to send command. Check your network and try again',
+  'risk_level_high': 'High Risk',
+  'risk_level_medium': 'Medium Risk',
+  'run_mode_standby': 'Standby',
+  'run_mode_inverting': 'Inverting',
+  'run_mode_bypass': 'Bypass',
+  'run_mode_fault': 'Fault',
+  'run_mode_charging': 'Charging',
+  'run_mode_discharging': 'Discharging',
   'control_tab_running': 'Running',
   'control_tab_battery': 'Battery Protection',
   'control_tab_energy_plan': 'Energy Plan',
@@ -982,7 +996,7 @@ const Map<String, String> en = {
   'realtime': 'Real-time',
   'generation_data': 'Generation Data',
   'trend_analysis': 'Trend Analysis',
-  'station_ranking': 'Station Ranking',
+  'station_ranking': 'Station Generation Ranking',
   'alarm_info': 'Alarm Info',
   'offline_data_hint': 'Offline data, may not be latest',
   'sn_format_error': 'SN format error',

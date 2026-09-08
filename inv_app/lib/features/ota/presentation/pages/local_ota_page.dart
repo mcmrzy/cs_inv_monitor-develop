@@ -1001,10 +1001,10 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                       Text(
                         _stepLabel(step),
                         style: TextStyle(
-                          fontSize: 10.sp,
+                          fontSize: 12.sp,
                           color: isCurrent || isCompleted
                               ? AppColor.textPrimary(context)
-                              : AppColor.textHint(context),
+                              : AppColor.textSecondary(context),
                           fontWeight:
                               isCurrent ? FontWeight.w600 : FontWeight.w400,
                         ),

@@ -155,17 +155,18 @@ class _DashboardOverviewPageState extends State<DashboardOverviewPage> {
 
   Widget _buildPartialFailureBanner(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    // 与 _buildCacheBanner 一致的 warning 语义色方案
     return Container(
       margin: EdgeInsets.fromLTRB(16.w, 0, 16.w, 12.h),
       padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
       decoration: BoxDecoration(
-        color: Colors.orange.shade50,
+        color: AppColors.warning.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(10.r),
-        border: Border.all(color: Colors.orange.shade200),
+        border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
-          Icon(Icons.warning_amber_rounded, color: Colors.orange.shade800),
+          const Icon(Icons.warning_amber_rounded, color: AppColors.warning),
           SizedBox(width: 10.w),
           Expanded(child: Text(l10n.failedToLoad)),
           TextButton(

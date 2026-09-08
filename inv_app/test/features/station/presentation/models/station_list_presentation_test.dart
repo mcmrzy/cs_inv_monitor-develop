@@ -87,5 +87,37 @@ void main() {
 
       expect(result, stations);
     });
+
+    group('addressText', () {
+      test('joins non-empty province/city/district without country prefix',
+          () {
+        final station = {
+          'province': '广东省',
+          'city': '深圳市',
+          'district': '南山区',
+        };
+
+        final text = StationListPresentation.addressText(station);
+
+        expect(text, '广东省 深圳市 南山区');
+        expect(text.contains('中国'), isFalse,
+            reason: 'address must not hard-code a China prefix');
+      });
+
+      test('skips empty and missing segments', () {
+        expect(
+          StationListPresentation.addressText({
+            'province': '广东省',
+            'city': '',
+            'district': null,
+          }),
+          '广东省',
+        );
+        expect(
+          StationListPresentation.addressText(<String, dynamic>{}),
+          '',
+        );
+      });
+    });
   });
 }

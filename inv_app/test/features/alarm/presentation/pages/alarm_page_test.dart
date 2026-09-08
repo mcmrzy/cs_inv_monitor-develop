@@ -58,13 +58,14 @@ void main() {
     expect(find.text(message), findsOneWidget);
 
     // 无关重建（非错误的状态变化）不应再次弹出错误提示：
-    // 提示由 listener 触发一次，随 SnackBar 时长自动消失。
+    // 提示由 listener 触发一次，随 SnackBar（AppToast 错误时长 2.5s）自动消失。
     // 注意：一次 pump 推进过长时间会让 SnackBar 的消失动画在同一帧内
     // 无法完成，需分段推进时间。
     states.add(const AlarmListLoaded(alarms: [], total: 1));
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
     await tester.pump(const Duration(seconds: 2));
+    await tester.pump(const Duration(milliseconds: 500));
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text(message), findsNothing);
   });

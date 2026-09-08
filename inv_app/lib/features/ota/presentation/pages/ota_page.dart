@@ -110,6 +110,38 @@ class _OTAPageState extends State<OTAPage> {
     super.dispose();
   }
 
+  /// 远程升级防呆：点击"开始升级"先弹二次确认（升级期间设备暂停上报与输出），
+  /// 用户确认后才下发升级命令
+  Future<void> _confirmStartUpgrade(VoidCallback onConfirmed) async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.str('ota_start_confirm_title')),
+        content: Text(l10n.str('ota_start_confirm_message', {'minutes': '10'})),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              l10n.confirm,
+              style: TextStyle(
+                color: Theme.of(ctx).colorScheme.primary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      onConfirmed();
+    }
+  }
+
   Future<void> _startPreDownload(
     int firmwareId,
     String url,
@@ -196,25 +228,20 @@ class _OTAPageState extends State<OTAPage> {
         child: BlocBuilder<OtaBloc, OtaState>(
           builder: (context, state) {
             // 升级进行中或已完成
+            Widget page;
             if (state is OTAProgress) {
-              return _buildProgress(state);
-            }
-            if (state is OTAComplete) {
-              return _buildComplete();
-            }
-            if (state is OTATriggering || state is OTATriggered) {
-              return _buildTriggering();
-            }
-
-            if (_cachedState is OTAUpdateAvailable) {
-              return _buildUpdateAvailable(_cachedState as OTAUpdateAvailable);
-            }
-            if (_cachedState is OTAUpToDate) {
-              return _buildUpToDate(_cachedState as OTAUpToDate);
-            }
-            if (state is OTAError) {
+              page = _buildProgress(state);
+            } else if (state is OTAComplete) {
+              page = _buildComplete();
+            } else if (state is OTATriggering || state is OTATriggered) {
+              page = _buildTriggering();
+            } else if (_cachedState is OTAUpdateAvailable) {
+              page = _buildUpdateAvailable(_cachedState as OTAUpdateAvailable);
+            } else if (_cachedState is OTAUpToDate) {
+              page = _buildUpToDate(_cachedState as OTAUpToDate);
+            } else if (state is OTAError) {
               // 小烁警告动作插画：升级查询失败/离线态（美术路由 C6/ota-failure）
-              return XiaoshuoStatePanel(
+              page = XiaoshuoStatePanel(
                 asset: CsergyAssets.xiaoshuoWarning,
                 title:
                     AppLocalizations.of(context)!.translateError(state.message),
@@ -233,9 +260,19 @@ class _OTAPageState extends State<OTAPage> {
                   child: Text(l10n.retry),
                 ),
               );
+            } else {
+              page = _buildSkeletonBody();
             }
 
-            return _buildSkeletonBody();
+            // 远程升级进行中拦截返回：二次确认后才允许退出，防止误退中断升级
+            return PopScope(
+              canPop: state is! OTAProgress,
+              onPopInvokedWithResult: (didPop, _) {
+                if (didPop) return;
+                _confirmExitWhileUpgrading();
+              },
+              child: page,
+            );
           },
         ),
       ),
@@ -453,7 +490,7 @@ class _OTAPageState extends State<OTAPage> {
             child: ElevatedButton(
               onPressed: _triggering
                   ? null
-                  : () {
+                  : () => _confirmStartUpgrade(() {
                       setState(() => _triggering = true);
                       // 使用 package_id 触发升级（后端已改为 package_id）
                       context.read<OtaBloc>().add(
@@ -462,7 +499,7 @@ class _OTAPageState extends State<OTAPage> {
                               packageId: firmwareId,
                             ),
                           );
-                    },
+                    }),
               style: ElevatedButton.styleFrom(
                 backgroundColor:
                     _triggering ? AppColor.textHint(context) : AppColors.primary,
@@ -834,12 +871,12 @@ class _OTAPageState extends State<OTAPage> {
             child: ElevatedButton(
               onPressed: _triggering
                   ? null
-                  : () {
+                  : () => _confirmStartUpgrade(() {
                       setState(() => _triggering = true);
                       context
                           .read<OtaBloc>()
                           .add(OTAPackageTriggerRequested(sn: widget.deviceSN));
-                    },
+                    }),
               style: ElevatedButton.styleFrom(
                 backgroundColor:
                     _triggering ? AppColor.textHint(context) : AppColors.primary,
@@ -1365,6 +1402,36 @@ class _OTAPageState extends State<OTAPage> {
     );
   }
 
+  /// 远程升级进行中误触返回时弹出二次确认（PopScope canPop=false 时由
+  /// 系统返回手势/导航栏返回键触发），参照 local_ota_page 同名模式
+  Future<void> _confirmExitWhileUpgrading() async {
+    final l10n = AppLocalizations.of(context)!;
+    final shouldExit = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.str('ota_exit_confirm_title')),
+        content: Text(l10n.str('ota_exit_confirm_message')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.str('ota_keep_upgrading')),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              l10n.str('ota_exit_anyway'),
+              style: TextStyle(color: Theme.of(ctx).colorScheme.error),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (shouldExit == true && mounted) {
+      // 用户确认退出：程序式 pop 不受 PopScope canPop 限制
+      Navigator.of(context).pop();
+    }
+  }
+
   Widget _buildProgress(OTAProgress state) {
     final l10n = AppLocalizations.of(context)!;
     final percent = state.progress.clamp(0.0, 100.0).toStringAsFixed(0);
@@ -1414,6 +1481,29 @@ class _OTAPageState extends State<OTAPage> {
               fontWeight: FontWeight.w700,
               color: AppColors.primary,
             ),
+          ),
+          SizedBox(height: 24.h),
+          // 升级中警示：请勿断电（warning 语义色，强提醒）
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.warning_amber_rounded,
+                size: 16.sp,
+                color: AppColors.warning,
+              ),
+              SizedBox(width: 6.w),
+              Flexible(
+                child: Text(
+                  l10n.doNotDisconnect,
+                  style: TextStyle(
+                    fontSize: 13.sp,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.warning,
+                  ),
+                ),
+              ),
+            ],
           ),
           SizedBox(height: 40.h),
         ],

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:inv_app/l10n/app_zh.dart' as zh;
 import 'package:inv_app/l10n/app_en.dart' as en;
@@ -14,13 +15,19 @@ class AppLocalizations {
   /// 获取字符串，支持参数替换
   /// 用法: l10n.str('time_minutes_ago', {'minutes': '5'}) => '5分钟前'
   String str(String key, [Map<String, String>? params]) {
-    var value = _localizedStrings[key] ?? key;
-    if (params != null) {
-      params.forEach((k, v) {
-        value = value.replaceAll('{$k}', v);
-      });
+    var value = _localizedStrings[key];
+    if (value == null) {
+      if (kDebugMode) {
+        debugPrint('missing l10n: $key');
+      }
+      value = key;
     }
-    return value;
+    if (params == null || params.isEmpty) return value;
+    String result = value;
+    params.forEach((k, v) {
+      result = result.replaceAll('{$k}', v);
+    });
+    return result;
   }
 
   static const LocalizationsDelegate<AppLocalizations> delegate =

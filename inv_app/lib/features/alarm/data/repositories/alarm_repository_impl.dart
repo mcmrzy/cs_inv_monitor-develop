@@ -55,6 +55,7 @@ class AlarmRepositoryImpl implements AlarmRepository {
   Future<Either<Failure, Map<String, dynamic>>> getList({
     int? stationId,
     int? status,
+    int? alarmLevel,
     int page = 1,
     int pageSize = 20,
   }) async {
@@ -62,6 +63,7 @@ class AlarmRepositoryImpl implements AlarmRepository {
       final response = await remoteDataSource.getList(
         stationId: stationId,
         status: status,
+        alarmLevel: alarmLevel,
         page: page,
         pageSize: pageSize,
       );
