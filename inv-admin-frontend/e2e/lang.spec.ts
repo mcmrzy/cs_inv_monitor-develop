@@ -11,7 +11,7 @@ test('语言切换：中文 → English 后导航文案变化并可切回', asyn
 
   // Default locale is zh-CN.
   // UX 改版后侧边栏按 4 个分组折叠，子项仅在所属分组展开后可见，先按需展开。
-  const menu = page.locator('.ant-menu')
+  const menu = page.locator('.ant-menu-root')
   // 菜单就绪锚点：等待初始路由所在分组自动展开完成，消除初始化竞态
   await expect(menu.getByText('仪表盘', { exact: true })).toBeVisible({ timeout: 10_000 })
   const ensureGroupOpen = async (group: string, itemText: string) => {
@@ -36,6 +36,9 @@ test('语言切换：中文 → English 后导航文案变化并可切回', asyn
   // Switch back to Chinese.
   await openUserMenu(page)
   await page.getByText('中文', { exact: true }).click()
+  // 语言切换会重挂菜单并重置分组展开状态，切回后需按需重新展开
+  await ensureGroupOpen('资产管理', '设备管理')
+  await ensureGroupOpen('设备运维', 'OTA升级')
   await expect(menu.getByText('设备管理', { exact: true })).toBeVisible({ timeout: 15_000 })
   await page.screenshot({ path: evidencePath('e2e-lang-zh.png'), fullPage: true })
 })
