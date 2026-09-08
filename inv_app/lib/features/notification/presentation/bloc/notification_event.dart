@@ -18,6 +18,12 @@ class SystemNotificationsRequested extends NotificationEvent {
   List<Object?> get props => [manual];
 }
 
+/// 加载更多系统通知（分页）：基于当前 SystemNotificationsLoaded 的页码取下一页，
+/// 后端条目追加到现有列表；无更多（hasMore=false）时 handler 直接忽略
+class SystemNotificationsLoadMoreRequested extends NotificationEvent {
+  const SystemNotificationsLoadMoreRequested();
+}
+
 /// 删除单条系统通知：后端通知走 DELETE /notifications/:id，本地通知直接删存储
 class SystemNotificationDeleteRequested extends NotificationEvent {
   final SystemNotification notification;

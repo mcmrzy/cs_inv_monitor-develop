@@ -224,6 +224,10 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
                   );
                 }
 
+                // 系统通知分页加载更多：仅后端通知参与分页（告警/本地通知不受影响）
+                final notifHasMore = notifState is SystemNotificationsLoaded &&
+                    notifState.hasMore;
+
                 return Column(
                   children: [
                     if (_cachedAlarmState is AlarmListLoaded &&
@@ -234,14 +238,24 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
                         onRefresh: () async => _refreshAll(),
                         child: ListView.builder(
                           padding: EdgeInsets.all(12.w),
-                          itemCount: items.length,
-                          itemBuilder: (context, index) => _buildItemCard(
-                            context,
-                            items[index],
-                            l10n,
-                            index: index,
-                            batchMode: _batchMode,
-                          ),
+                          itemCount: items.length + (notifHasMore ? 1 : 0),
+                          itemBuilder: (context, index) {
+                            // 列表末尾"加载更多"入口（hasMore 时追加一项）
+                            if (notifHasMore && index == items.length) {
+                              return _LoadMoreTile(
+                                onLoadMore: () => context
+                                    .read<NotificationBloc>()
+                                    .add(const SystemNotificationsLoadMoreRequested()),
+                              );
+                            }
+                            return _buildItemCard(
+                              context,
+                              items[index],
+                              l10n,
+                              index: index,
+                              batchMode: _batchMode,
+                            );
+                          },
                         ),
                       ),
                     ),
@@ -1145,6 +1159,66 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
       return l10n.updateDetailsHint;
     }
     return notification.subtitle;
+  }
+}
+
+// ==================== 加载更多入口 ====================
+
+/// 通知列表末尾的"加载更多"按钮：自带加载中转圈，防止连点重复请求。
+/// 数据由 NotificationBloc 加载（SystemNotificationsLoadMoreRequested），
+/// 完成后 bloc 发新状态，hasMore=false 时该入口随列表自动消失。
+class _LoadMoreTile extends StatefulWidget {
+  final VoidCallback onLoadMore;
+
+  const _LoadMoreTile({required this.onLoadMore});
+
+  @override
+  State<_LoadMoreTile> createState() => _LoadMoreTileState();
+}
+
+class _LoadMoreTileState extends State<_LoadMoreTile> {
+  bool _loading = false;
+
+  Future<void> _handleTap() async {
+    if (_loading) return;
+    setState(() => _loading = true);
+    widget.onLoadMore();
+    try {
+      // 等 bloc 发出下一次加载完成的新状态（超时兜底，避免永久转圈）
+      await context.read<NotificationBloc>().stream.firstWhere(
+            (s) => s is SystemNotificationsLoaded,
+          );
+    } catch (_) {
+      // 流关闭等异常：复位即可
+    }
+    if (mounted) setState(() => _loading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 6.h),
+      child: Center(
+        child: _loading
+            ? const Padding(
+                padding: EdgeInsets.all(10),
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2.4),
+                ),
+              )
+            : TextButton.icon(
+                onPressed: _handleTap,
+                icon: const Icon(Icons.expand_more_rounded, size: 18),
+                label: Text(
+                  l10n.str('notif_load_more'),
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+      ),
+    );
   }
 }
 

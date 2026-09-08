@@ -1244,6 +1244,7 @@ const Map<String, String> en = {
   'notif_clear_all_hint': 'Clear all notification records',
   'notif_batch_manage_hint': 'Select multiple to delete in batch',
   'notif_mark_handled_hint': 'Mark as handled',
+  'notif_load_more': 'Load More',
 
   // Other
   'search_alarm_hint': 'Search alarm device/SN',
