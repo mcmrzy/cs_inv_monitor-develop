@@ -142,9 +142,10 @@ func (h *OrganizationHandler) Create(c *gin.Context) {
 		return
 	}
 	defer func() {
-		if err != nil {
-			tx.Rollback(ctx)
-		}
+		// 无条件回滚：Commit 之后的 Rollback 仅返回 ErrTxClosed，无副作用。
+		// 条件式「err != nil 才回滚」会漏掉 err 为 nil 的 early-return 路径
+		// （DeleteOrg 的"存在子节点"分支曾因此泄漏事务，连接带锁直至池枯竭）。
+		_ = tx.Rollback(ctx)
 	}()
 
 	// Get user's root_tenant_id from actor context
@@ -563,9 +564,10 @@ func (h *OrganizationHandler) Update(c *gin.Context) {
 		return
 	}
 	defer func() {
-		if err != nil {
-			tx.Rollback(ctx)
-		}
+		// 无条件回滚：Commit 之后的 Rollback 仅返回 ErrTxClosed，无副作用。
+		// 条件式「err != nil 才回滚」会漏掉 err 为 nil 的 early-return 路径
+		// （DeleteOrg 的"存在子节点"分支曾因此泄漏事务，连接带锁直至池枯竭）。
+		_ = tx.Rollback(ctx)
 	}()
 
 	tenantID := middleware.GetRootTenantID(c)
@@ -640,9 +642,10 @@ func (h *OrganizationHandler) Delete(c *gin.Context) {
 		return
 	}
 	defer func() {
-		if err != nil {
-			tx.Rollback(ctx)
-		}
+		// 无条件回滚：Commit 之后的 Rollback 仅返回 ErrTxClosed，无副作用。
+		// 条件式「err != nil 才回滚」会漏掉 err 为 nil 的 early-return 路径
+		// （DeleteOrg 的"存在子节点"分支曾因此泄漏事务，连接带锁直至池枯竭）。
+		_ = tx.Rollback(ctx)
 	}()
 
 	tenantID := middleware.GetRootTenantID(c)
@@ -793,9 +796,10 @@ func (h *OrganizationHandler) ToggleStatus(c *gin.Context) {
 		return
 	}
 	defer func() {
-		if err != nil {
-			tx.Rollback(ctx)
-		}
+		// 无条件回滚：Commit 之后的 Rollback 仅返回 ErrTxClosed，无副作用。
+		// 条件式「err != nil 才回滚」会漏掉 err 为 nil 的 early-return 路径
+		// （DeleteOrg 的"存在子节点"分支曾因此泄漏事务，连接带锁直至池枯竭）。
+		_ = tx.Rollback(ctx)
 	}()
 
 	tenantID := middleware.GetRootTenantID(c)

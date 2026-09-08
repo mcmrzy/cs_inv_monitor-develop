@@ -138,6 +138,12 @@
 - 踩坑记录：`@/utils/timezone` 模块级执行 `dayjs.extend(utc)`，mock 它会让页面内 `dayjs().tz()` 崩溃——涉及时区渲染的页面测试不要 mock 该模块。
 - hook 新报的 SSRF/硬编码凭据均位于测试文件（本地测试栈地址、mock 假凭据），属测试代码预期形态。
 
+### 批次 7：8 小时持续测试战役（soak）+ 修复清单
+- **战役数据**：90 循环 / 8h04m，470 次套件执行、**63,463 次用例执行**、净测试执行时间约 8 小时（28,916 秒）。套件成绩：E2E 83 绿/7 红、business-api 集成 90/0 红（361×90=32,490 次零失败）、root 集成 88/2、vitest 90/0、Flutter 22/0、Go 单元 88/0。
+- **失败归纳（9 份留证）**：① E2E `电站管理空态` strict mode 歧义 ×5（惯犯，已修：heading 限定）② E2E `组织架构 i18n` 菜单点击 90s 超时 ×2（已修：switchLang 自愈重试）③ root 集成 `TestMQTTDeviceOnlineOffline` LWT 10s 窗口 ×2（2.2% 发作率，已修：窗口放宽 30s）。
+- **耗时劣化根因确诊**：E2E 单轮 180s→270s 单调爬升 = 测试库累积——root 集成测试每循环遗留组织行，8h 后 **organizations 达 26,072 行**且 root_tenant_id 占满小整数，还引发注册撞 `uq_organizations_root_code` 的 500。修复：global-setup 清空范围加入 users+organizations（CASCADE 连带组织链）。
+- 修复涉及：flows.spec/i18n.spec/global-setup/mqtt_flow_test（LWT 30s 窗口）。
+
 ### 架构事实记录（防再误判）
 - schema.sql = 迁移 0..95 的 squash 基线 + schema_migrations 登记（77 为历史空号）；`database/migrations/` 活跃目录 = 096..110 真正回放尾部 + 001/018/074..095 已登记死重文件；001..095 历史文件在 `database/migrations.archive/`。
 - 权限码双格式：命令 `permission_code` 用下划线（`devices_control`，按最后一个下划线拆 resource/action），RBAC 授权码用冒号（`devices:control`）。
