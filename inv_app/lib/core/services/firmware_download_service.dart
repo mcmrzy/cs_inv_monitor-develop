@@ -436,6 +436,10 @@ class FirmwareDownloadService {
     await _sharedPreferences.remove('$_keyMetaPrefix$firmwareId');
   }
 
+  /// 校验固件大小/SHA-256，失败抛 FormatException。
+  /// 只校验不删除文件：删除职责归调用方（catch 中先判 exists 再删），
+  /// 避免"校验失败已删 + 调用方二次删除不存在文件"抛 FileSystemException，
+  /// 导致损坏固件无法重新下载。
   Future<void> _verifyFirmware(
     File file,
     int? expectedSize,
@@ -444,14 +448,12 @@ class FirmwareDownloadService {
     if (expectedSize != null &&
         expectedSize > 0 &&
         await file.length() != expectedSize) {
-      await file.delete();
       throw const FormatException('Firmware size verification failed');
     }
     final normalized = expectedSha256?.trim().toLowerCase() ?? '';
     if (normalized.isNotEmpty) {
       final actual = (await sha256.bind(file.openRead()).first).toString();
       if (actual != normalized) {
-        await file.delete();
         throw const FormatException('Firmware SHA-256 verification failed');
       }
     }
