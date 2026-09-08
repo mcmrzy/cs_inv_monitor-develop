@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Card,
   Typography,
@@ -10,7 +10,6 @@ import {
   Spin,
   Result,
   Descriptions,
-  Timeline,
 } from 'antd';
 import {
   CheckCircleOutlined,
@@ -62,7 +61,6 @@ export function BulkOperationProgress({
   const { t } = useTranslation();
   const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
-  const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // React Query for initial job status fetch
