@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "mimosa-finding-ledger-batch/v1",
+  "batchId": "stop-20260908T201216081Z-110960-f040c31e2a89",
+  "runId": "20260908T201216081Z-110960-f040c31e2a89",
+  "runStatus": "completed",
+  "coverage": {
+    "status": "complete",
+    "reasons": []
+  },
+  "source": {
+    "component": "zcode-hook",
+    "operationId": "Stop"
+  },
+  "revision": "2c954c68129137fb6609e483e4abd7439b8d16d4",
+  "diffHash": "e6e4f854fc333e03c2903a7366b980767ca8ff4418f920a6162973ae688aedf1",
+  "rulesVersion": "unavailable",
+  "sessionHash": "6ea839a70df5336e9690d3ffa1350b6dd189dbb24fc84dec5961bf33eb481017",
+  "reportRef": ".mimosa/reports/task-review-sess_5f5b0dc3-51a8-427a-8bf0-db8474f7bdb2-20260908T201216081Z-110960-f040c31e2a89.json",
+  "events": [],
+  "observedFindingIds": [],
+  "verifiedFiles": [
+    {
+      "file": "inv-admin-frontend/e2e/navigation.spec.ts",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "inv-admin-frontend/e2e/lang.spec.ts",
+      "direct": "complete",
+      "projectContext": "partial"
+    }
+  ],
+  "recordedAt": "2026-09-08T20:12:16.364Z"
+}

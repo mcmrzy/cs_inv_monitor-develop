@@ -4,7 +4,6 @@ import { renderWithProviders } from '@/test/test-utils'
 import { mockAdminUser } from '@/test/mocks/data'
 import ProtectedRoute from './ProtectedRoute'
 import useAuthStore from '@/stores/authStore'
-import { Role } from '@/types'
 
 describe('ProtectedRoute', () => {
   beforeEach(() => {

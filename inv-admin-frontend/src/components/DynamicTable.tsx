@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react'
 import { Table, Button, Checkbox, Space, Popover, Input, Tooltip, Empty } from 'antd'
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table'
-import { SettingOutlined, SearchOutlined, SortAscendingOutlined, SortDescendingOutlined } from '@ant-design/icons'
+import { SettingOutlined, SortAscendingOutlined, SortDescendingOutlined } from '@ant-design/icons'
 import useTranslation from '@/hooks/useTranslation'
 
 export interface FieldMeta {
