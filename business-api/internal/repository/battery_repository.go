@@ -3,8 +3,10 @@ package repository
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -200,6 +202,10 @@ func (r *BatteryRepository) GetDeviceBatteryConfig(ctx context.Context, sn strin
 		FROM device_battery_config WHERE device_sn = $1`, sn).Scan(
 		&cfg.DeviceSN, &cfg.ProfileID, &cfg.CapacityAh, &cfg.ParallelStrings,
 		&installerLimits, &reportedBMS, &cfg.Revision, &cfg.ConfiguredBy, &cfg.ConfiguredAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// 未绑定电池模板是正常状态，交由 handler 返回 404，而非 500
+		return nil, nil
+	}
 	if err != nil {
 		return nil, err
 	}
