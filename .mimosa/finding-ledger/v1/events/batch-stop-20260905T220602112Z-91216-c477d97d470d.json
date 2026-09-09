@@ -1,0 +1,80 @@
+{
+  "schemaVersion": "mimosa-finding-ledger-batch/v1",
+  "batchId": "stop-20260905T220602112Z-91216-c477d97d470d",
+  "runId": "20260905T220602112Z-91216-c477d97d470d",
+  "runStatus": "inconclusive",
+  "coverage": {
+    "status": "partial",
+    "reasons": [
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "business-api/internal/repository/device_core_postgres_integration_test.go",
+        "detail": "file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "business-api/internal/repository/device_core_postgres_integration_test.go",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "agent-check",
+        "target": ".",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affectsCompletion": true
+      }
+    ]
+  },
+  "source": {
+    "component": "zcode-hook",
+    "operationId": "Stop"
+  },
+  "revision": "9f971b3acfc8eaee84b5c3f3cedd4481e652d91b",
+  "diffHash": "7b3b42ce570beeb0ed5f3316629c65c849027c29f968bd4128c31c0319227c5e",
+  "rulesVersion": "unavailable",
+  "sessionHash": "d52a60e9f6a2041915f069c9f5866ef707d043d2826acebfcfb03a0e08c74ac0",
+  "reportRef": ".mimosa/reports/task-review-sess_6023e950-763f-44a9-a65f-1fc8081897ef-20260905T220602112Z-91216-c477d97d470d.json",
+  "events": [],
+  "observedFindingIds": [
+    "mimosa-2e3c25b8858a005a2bafb550",
+    "mimosa-25bfbad7bb629ee0af907419",
+    "mimosa-59617a5decd63c8f3166ae36"
+  ],
+  "verifiedFiles": [
+    {
+      "file": "business-api/internal/repository/command_lifecycle_postgres_integration_test.go",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "inv-admin-frontend/playwright.config.ts",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "inv-admin-frontend/e2e/visual.spec.ts",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "inv-admin-frontend/e2e/auth.spec.ts",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "inv-admin-frontend/e2e/global-setup.ts",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "business-api/internal/repository/device_core_postgres_integration_test.go",
+      "direct": "complete",
+      "projectContext": "partial"
+    }
+  ],
+  "recordedAt": "2026-09-05T22:06:02.475Z"
+}

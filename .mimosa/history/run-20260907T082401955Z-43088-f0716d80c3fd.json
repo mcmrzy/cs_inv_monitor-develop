@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "mimosa-finding-history/v1",
+  "runId": "20260907T082401955Z-43088-f0716d80c3fd",
+  "runStatus": "inconclusive",
+  "errors": [
+    "baseline-read:external/驱动arm/App/App/source/OSAL/cpu_ac6.c: baseline_snapshot_unreadable: file is missing from task baseline",
+    "baseline-read:external/驱动arm/App/App/.vscode/settings.json: baseline_snapshot_unreadable: file is missing from task baseline",
+    "baseline-read:external/驱动arm/App/App/.mimocode/package-lock.json: baseline_snapshot_unreadable: file is missing from task baseline",
+    "baseline-read:external/驱动arm/App/App/.mimocode/package.json: baseline_snapshot_unreadable: file is missing from task baseline",
+    "baseline-read:external/通讯esp/main/telemetry/arm_param_check.c: baseline_snapshot_unreadable: file is missing from task baseline",
+    "scan:external/驱动arm/App/App/source/OSAL/cpu_ac6.c: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:external/通讯esp/main/telemetry/arm_param.h: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:external/通讯esp/main/telemetry/arm_param_check.c: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:external/通讯esp/main/telemetry/arm_poll.c: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:external/通讯esp/main/telemetry/arm_poll.h: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:external/通讯esp/main/telemetry/telemetry.c: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "supply-chain-check:.: stop_budget_exhausted: focused supply-chain check was not run before the gate budget",
+    "agent-check:.: stop_budget_exhausted: focused agent configuration check was not run before the gate budget"
+  ],
+  "target": ".",
+  "revision": "6346015c0c31c4eb765bd49a181b9ad64e16ab58",
+  "diffHash": "209665d56c9305e6b60529071b5f5900f7fd011fc9400d2c1bdad4731ddde340",
+  "rulesVersion": "unavailable",
+  "recordedAt": "2026-09-07T08:24:01.955Z",
+  "timing": {
+    "startedAt": "2026-09-07T08:23:58.921Z",
+    "completedAt": "2026-09-07T08:24:01.955Z",
+    "durationMs": 3034
+  },
+  "tokens": {
+    "input": 0,
+    "output": 0,
+    "total": 0,
+    "modelCalls": 0,
+    "measurement": "known-zero"
+  },
+  "findings": {
+    "total": 0,
+    "bySeverity": {},
+    "byStatus": {}
+  },
+  "coverage": {
+    "status": "partial",
+    "reasonCounts": {
+      "baseline_snapshot_unreadable": 5,
+      "scanner_failed": 6,
+      "stop_budget_exhausted": 2,
+      "project_check_failed": 13
+    }
+  },
+  "evidenceBoundary": "static_only",
+  "immutableReport": ".mimosa/reports/task-review-sess_878930cb-cf9e-4a2f-a61f-4bbacb9476e9-20260907T082401955Z-43088-f0716d80c3fd.json"
+}

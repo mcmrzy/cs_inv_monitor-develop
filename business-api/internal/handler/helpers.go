@@ -2,8 +2,10 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"strconv"
+	"time"
 
 	"inv-api-server/internal/model"
 
@@ -67,6 +69,25 @@ func getQueryInt64(c *gin.Context, key string, defaultValue int64) int64 {
 		return defaultValue
 	}
 	return v
+}
+
+// listTimeParamLayouts 列表过滤时间参数支持的格式：
+// RFC3339（前端默认，如 2026-01-02T00:00:00Z）、'YYYY-MM-DD HH:mm:ss'、'YYYY-MM-DD'。
+var listTimeParamLayouts = []string{time.RFC3339, "2006-01-02 15:04:05", "2006-01-02"}
+
+// parseListTimeParam 解析时间型列表过滤参数。参数缺失时返回 (nil, nil)，
+// 命中任一支持格式时返回对应时间，格式非法时返回参数错误。
+func parseListTimeParam(c *gin.Context, name string) (*time.Time, error) {
+	s := c.Query(name)
+	if s == "" {
+		return nil, nil
+	}
+	for _, layout := range listTimeParamLayouts {
+		if t, err := time.Parse(layout, s); err == nil {
+			return &t, nil
+		}
+	}
+	return nil, fmt.Errorf("invalid %s, expect RFC3339 or 'YYYY-MM-DD HH:mm:ss'", name)
 }
 
 // parsePagination 统一分页参数解析，返回 page 和 pageSize。

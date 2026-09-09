@@ -285,7 +285,7 @@ func TestDeviceManagementFlow(t *testing.T) {
 	resp, status = doJSON(t, client, "GET", cfg.APIBaseURL+"/api/v1/devices", nil, token)
 	assert.Equal(t, 200, status)
 	assert.Equal(t, 0, resp.Code, "list devices should succeed")
-	t.Logf("list devices: status=%d code=%d", status, resp.Code)
+	t.Logf("list devices: status=%d code=%d msg=%s", status, resp.Code, resp.Message)
 
 	// Step 3: Get device detail
 	resp, status = doJSON(t, client, "GET", cfg.APIBaseURL+"/api/v1/devices/by-sn/"+testSN, nil, token)

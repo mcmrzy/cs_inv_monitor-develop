@@ -59,12 +59,16 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 	pageSize := getPageSize(c, 10)
 	keyword := c.Query("keyword")
 	status := getQueryInt(c, "status", -1)
+	// org_role：按组织类型过滤（manufacturer/agent/distributor/installer/customer，
+	// 兼容展示别名 org_admin=manufacturer），由 repo 层归一化并拼装 EXISTS 过滤
+	orgRole := c.Query("org_role")
 
 	result, err := h.userRepo.List(c.Request.Context(), repository.ListUsersParams{
 		Page:     page,
 		PageSize: pageSize,
 		Keyword:  keyword,
 		Status:   status,
+		OrgRole:  orgRole,
 	})
 	if err != nil {
 		response.Error(c, 500, "查询用户列表失败")
@@ -204,20 +208,13 @@ func (h *AdminHandler) ListAllModels(c *gin.Context) {
 	response.Success(c, models)
 }
 
-func (h *AdminHandler) GetAuditLogs(c *gin.Context) {
-	ctx := c.Request.Context()
-	page := getQueryInt(c, "page", 1)
-	pageSize := getPageSize(c, 10)
-	if pageSize > 100 {
-		pageSize = 100
-	}
-	offset := (page - 1) * pageSize
-
-	userID := c.Query("userId")
-	action := c.Query("action")
-	startDate := c.Query("startDate")
-	endDate := c.Query("endDate")
-
+// buildAuditLogsWhere 构造审计日志查询的 WHERE 子句与占位符参数，
+// 供列表（GetAuditLogs）与导出（ExportAuditLogs）共用，保证两条路径过滤行为一致。
+// keyword 为设备 SN 模糊匹配：audit_logs 表没有独立的 device_sn 列，设备类操作
+// （create/update/delete/bind/unbind）的 SN 记录在 resource_id 中，因此以
+// resource_id::text 代表设备 SN 字段参与匹配，同时对 operator_name / action 做模糊匹配。
+// keyword 为空时不追加任何条件，行为与原有逻辑完全一致。
+func buildAuditLogsWhere(userID, action, keyword, startDate, endDate string) (string, []interface{}) {
 	where := "WHERE 1=1"
 	args := []interface{}{}
 	argIdx := 1
@@ -225,6 +222,11 @@ func (h *AdminHandler) GetAuditLogs(c *gin.Context) {
 	if userID != "" {
 		where += fmt.Sprintf(" AND operator_name ILIKE $%d", argIdx)
 		args = append(args, "%"+userID+"%")
+		argIdx++
+	}
+	if keyword != "" {
+		where += fmt.Sprintf(" AND (resource_id::text ILIKE $%d OR operator_name ILIKE $%d OR action ILIKE $%d)", argIdx, argIdx, argIdx)
+		args = append(args, "%"+keyword+"%")
 		argIdx++
 	}
 	if action != "" {
@@ -242,6 +244,25 @@ func (h *AdminHandler) GetAuditLogs(c *gin.Context) {
 		args = append(args, endDate+" 23:59:59")
 		argIdx++
 	}
+	return where, args
+}
+
+func (h *AdminHandler) GetAuditLogs(c *gin.Context) {
+	ctx := c.Request.Context()
+	page := getQueryInt(c, "page", 1)
+	pageSize := getPageSize(c, 10)
+	if pageSize > 100 {
+		pageSize = 100
+	}
+	offset := (page - 1) * pageSize
+
+	userID := c.Query("userId")
+	action := c.Query("action")
+	startDate := c.Query("startDate")
+	endDate := c.Query("endDate")
+	keyword := c.Query("keyword")
+
+	where, args := buildAuditLogsWhere(userID, action, keyword, startDate, endDate)
 
 	var total int64
 	countQuery := "SELECT COUNT(*) FROM audit_logs " + where
@@ -259,7 +280,7 @@ func (h *AdminHandler) GetAuditLogs(c *gin.Context) {
 		FROM audit_logs %s
 		ORDER BY created_at DESC
 		LIMIT $%d OFFSET $%d
-	`, where, argIdx, argIdx+1)
+	`, where, len(args)+1, len(args)+2)
 	args = append(args, pageSize, offset)
 
 	rows, err := h.db.Query(ctx, query, args...)
@@ -306,21 +327,10 @@ func (h *AdminHandler) ExportAuditLogs(c *gin.Context) {
 	ctx := c.Request.Context()
 	startDate := c.Query("startDate")
 	endDate := c.Query("endDate")
+	keyword := c.Query("keyword")
 
-	where := "WHERE 1=1"
-	args := []interface{}{}
-	argIdx := 1
-
-	if startDate != "" {
-		where += fmt.Sprintf(" AND created_at >= $%d", argIdx)
-		args = append(args, startDate+" 00:00:00")
-		argIdx++
-	}
-	if endDate != "" {
-		where += fmt.Sprintf(" AND created_at <= $%d", argIdx)
-		args = append(args, endDate+" 23:59:59")
-		argIdx++
-	}
+	// 与列表接口共用同一 WHERE 构造，保证 keyword 等过滤语义一致
+	where, args := buildAuditLogsWhere("", "", keyword, startDate, endDate)
 
 	query := fmt.Sprintf(`
 		SELECT id, COALESCE(operator_id,0), COALESCE(operator_name,''), COALESCE(action,''),

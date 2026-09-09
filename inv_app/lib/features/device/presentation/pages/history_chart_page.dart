@@ -18,16 +18,25 @@ class HistoryChartPage extends StatefulWidget {
   State<HistoryChartPage> createState() => _HistoryChartPageState();
 }
 
+/// 单个图表点：后端行解析出的时间 + 按指标映射出的 y 值
+class _ChartPoint {
+  final DateTime time;
+  final double value;
+  const _ChartPoint(this.time, this.value);
+}
+
 class _HistoryChartPageState extends State<HistoryChartPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   int _selectedMetricIndex = 0;
   DateTime _selectedDate = DateTime.now();
 
+  // 指标 chip：设备维度历史接口（GET /devices/by-sn/:sn/history）仅返回
+  // time/avg_power/max_power/energy_produce/avg_temperature/run_minutes，
+  // 没有电池充/放电字段（battery_charge/discharge 只存在于电站级接口），
+  // 故充电/放电 chip 移除——不映射相似字段伪造数据（审计 P0 ④的取舍）。
   List<(String, String, Color)> _getMetrics(AppLocalizations l10n) => [
         (l10n.powerGeneration, 'pv', Colors.orange),
-        (l10n.chargeAmount, 'charge', AppColors.success),
-        (l10n.dischargeAmount, 'discharge', Colors.blue),
         (l10n.load, 'load', Colors.purple),
       ];
 
@@ -56,15 +65,21 @@ class _HistoryChartPageState extends State<HistoryChartPage>
 
   String get _currentPeriod => _periods[_tabController.index];
 
-  static const _metricKeys = ['pv', 'charge', 'discharge', 'load'];
+  static const _metricKeys = ['pv', 'load'];
   static const _metricColors = [
     Colors.orange,
-    AppColors.success,
-    Colors.blue,
     Colors.purple,
   ];
 
-  String get _currentMetric => _metricKeys[_selectedMetricIndex];
+  String get _currentMetric =>
+      _metricKeys[_selectedMetricIndex.clamp(0, _metricKeys.length - 1)];
+
+  /// UI 周期 → 后端 period。
+  /// day 档改走小时表（后端 period='hour' → device_telemetry_hour），
+  /// 拿到整天 24 个小时桶；此前发 period='day' 且 start==end，
+  /// 落到日表只回 1 行（审计 P0 ②）。
+  /// month/year/total 走日表（device_energy_day）逐日聚合（审计 P0 ③）。
+  String get _apiPeriod => _currentPeriod == 'day' ? 'hour' : _currentPeriod;
 
   void _requestData() {
     final now = _selectedDate;
@@ -94,7 +109,7 @@ class _HistoryChartPageState extends State<HistoryChartPage>
     context.read<DeviceBloc>().add(
           DeviceHistoryRequested(
             sn: widget.deviceSN,
-            period: _currentPeriod,
+            period: _apiPeriod,
             startDate: startDate,
             endDate: endDate,
             metric: _currentMetric,
@@ -158,18 +173,63 @@ class _HistoryChartPageState extends State<HistoryChartPage>
     }
   }
 
-  List<FlSpot> _convertToFlSpots(List<Map<String, dynamic>> data) {
-    final spots = <FlSpot>[];
-    for (int i = 0; i < data.length; i++) {
-      final item = data[i];
-      final x = (item['x'] as num?)?.toDouble() ?? i.toDouble();
-      final y = (item['y'] as num?)?.toDouble() ?? 0.0;
-      spots.add(FlSpot(x, y));
+  double? _asDouble(dynamic raw) {
+    if (raw is num) return raw.toDouble();
+    if (raw is String) return double.tryParse(raw);
+    return null;
+  }
+
+  /// 后端 `time` 字段（Go time.Time → RFC3339 字符串）解析为本地时间做 x 轴。
+  /// 此前页面读不存在的 `item['x']/item['y']`，恒回退 0（审计 P0 ①）。
+  DateTime? _parseTime(dynamic raw) {
+    if (raw is DateTime) return raw.toLocal();
+    if (raw is String) return DateTime.tryParse(raw)?.toLocal();
+    return null;
+  }
+
+  /// 按当前指标从后端行数据映射 y 值：
+  /// - 发电 pv → energy_produce（小时表=daily_pv_energy，日表=pv_energy）
+  /// - 负载 load → avg_power（小时表=avg_ac_power 平均交流输出功率）；
+  ///   日表无负载/平均功率字段（avg_power 恒为 NULL→0），
+  ///   退化为 max_power（max_ac_power 当日峰值，最接近的可用字段）
+  double? _yForItem(Map<String, dynamic> item) {
+    switch (_currentMetric) {
+      case 'pv':
+        return _asDouble(item['energy_produce']);
+      case 'load':
+        final raw =
+            _currentPeriod == 'day' ? item['avg_power'] : item['max_power'];
+        return _asDouble(raw);
+      default:
+        return null;
     }
-    if (spots.isEmpty) {
-      spots.add(const FlSpot(0, 0));
+  }
+
+  /// 后端行 → 图表点。time 无法解析或 y 字段缺失的行跳过，
+  /// 宁可展示空态也不画 0 平线（审计 P0 ⑤）。
+  List<_ChartPoint> _mapToChartPoints(List<Map<String, dynamic>> data) {
+    final points = <_ChartPoint>[];
+    for (final item in data) {
+      final time = _parseTime(item['time']);
+      final y = _yForItem(item);
+      if (time == null || y == null) continue;
+      points.add(_ChartPoint(time, y));
     }
-    return spots;
+    return points;
+  }
+
+  /// x 值：day=小时(含分钟小数)、month=日、year=月；total 用索引均分
+  double _xOf(_ChartPoint point, int index) {
+    switch (_currentPeriod) {
+      case 'day':
+        return point.time.hour + point.time.minute / 60.0;
+      case 'month':
+        return point.time.day.toDouble();
+      case 'year':
+        return point.time.month.toDouble();
+      default:
+        return index.toDouble();
+    }
   }
 
   @override
@@ -292,9 +352,22 @@ class _HistoryChartPageState extends State<HistoryChartPage>
                   );
                 }
                 if (state is DeviceHistoryLoaded) {
-                  final spots = _convertToFlSpots(state.data);
-                  final metricColor = _metricColors[_selectedMetricIndex];
-                  return _buildChart(spots, metricColor);
+                  final points = _mapToChartPoints(state.data);
+                  if (points.isEmpty) {
+                    // 后端无该档数据：展示空态而不是画 0 平线（审计 P0 ⑤）
+                    return XiaoshuoStatePanel(
+                      asset: CsergyAssets.emptyRecord,
+                      title: l10n.noData,
+                      size: 160,
+                    );
+                  }
+                  final spots = <FlSpot>[
+                    for (var i = 0; i < points.length; i++)
+                      FlSpot(_xOf(points[i], i), points[i].value),
+                  ];
+                  final metricColor = _metricColors[
+                      _selectedMetricIndex.clamp(0, _metricColors.length - 1)];
+                  return _buildChart(spots, points, metricColor);
                 }
                 // 小烁查询空态插画：历史数据为空（美术路由 S4/empty-record）
                 return XiaoshuoStatePanel(
@@ -311,7 +384,11 @@ class _HistoryChartPageState extends State<HistoryChartPage>
     );
   }
 
-  Widget _buildChart(List<FlSpot> spots, Color color) {
+  Widget _buildChart(
+    List<FlSpot> spots,
+    List<_ChartPoint> points,
+    Color color,
+  ) {
     double minY = 0;
     double maxY = 1;
     if (spots.isNotEmpty) {
@@ -326,6 +403,17 @@ class _HistoryChartPageState extends State<HistoryChartPage>
       minY = (minY - padding).clamp(0, double.infinity);
       maxY = maxY + padding;
     }
+
+    // 单点数据：minX==maxX 时扩出可视区间，只渲染数据点
+    double minX = spots.first.x;
+    double maxX = spots.last.x;
+    if (minX == maxX) {
+      minX = minX - 0.5;
+      maxX = maxX + 0.5;
+    }
+
+    // 负载是功率（kW），发电是电量（kWh），tooltip 单位随指标
+    final unit = _currentMetric == 'load' ? 'kW' : 'kWh';
 
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 16.w),
@@ -355,7 +443,7 @@ class _HistoryChartPageState extends State<HistoryChartPage>
                 reservedSize: 30,
                 interval: _calculateBottomInterval(spots),
                 getTitlesWidget: (value, meta) =>
-                    _buildBottomTitle(value, meta, spots),
+                    _buildBottomTitle(value, meta, points),
               ),
             ),
             leftTitles: AxisTitles(
@@ -377,8 +465,8 @@ class _HistoryChartPageState extends State<HistoryChartPage>
               left: BorderSide(color: AppColor.divider(context)),
             ),
           ),
-          minX: spots.first.x,
-          maxX: spots.last.x,
+          minX: minX,
+          maxX: maxX,
           minY: minY,
           maxY: maxY,
           lineBarsData: [
@@ -414,7 +502,7 @@ class _HistoryChartPageState extends State<HistoryChartPage>
               getTooltipItems: (touchedSpots) {
                 return touchedSpots.map((spot) {
                   return LineTooltipItem(
-                    '${spot.y.toStringAsFixed(2)} kWh',
+                    '${spot.y.toStringAsFixed(2)} $unit',
                     TextStyle(
                       color: Colors.white,
                       fontSize: 12.sp,
@@ -438,7 +526,11 @@ class _HistoryChartPageState extends State<HistoryChartPage>
     return interval;
   }
 
-  Widget _buildBottomTitle(double value, TitleMeta meta, List<FlSpot> spots) {
+  Widget _buildBottomTitle(
+    double value,
+    TitleMeta meta,
+    List<_ChartPoint> points,
+  ) {
     final period = _currentPeriod;
     final l10n = AppLocalizations.of(context)!;
     String text;
@@ -449,7 +541,11 @@ class _HistoryChartPageState extends State<HistoryChartPage>
     } else if (period == 'year') {
       text = '${value.toInt()}${l10n.month}';
     } else {
-      text = '${value.toInt()}';
+      // total 档 x 是索引：用对应点的月-日做标签（点按时间升序）
+      final index = value.toInt().clamp(0, points.length - 1);
+      final t = points[index].time;
+      text =
+          '${t.month.toString().padLeft(2, '0')}-${t.day.toString().padLeft(2, '0')}';
     }
     return SideTitleWidget(
       meta: meta,

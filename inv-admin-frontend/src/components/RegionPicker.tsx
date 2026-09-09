@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Modal, Input } from 'antd';
 import { EnvironmentOutlined } from '@ant-design/icons';
-import continentsData, { ContinentOption } from '../utils/continentsData';
+import continentsData from '../utils/continentsData';
 import regionData, { RegionOption } from '../utils/regionData';
 
 interface RegionPickerProps {
@@ -29,13 +29,7 @@ const RegionPicker: React.FC<RegionPickerProps> = ({
   // 第二步：省/市(/区) 选择
   const [selectedRegion, setSelectedRegion] = useState<string>(value[1] || '');
   const [selectedCity, setSelectedCity] = useState<string>(value[2] || '');
-  
-  // 滚动位置
-  const [continentScrollTop, setContinentScrollTop] = useState(0);
-  const [countryScrollTop, setCountryScrollTop] = useState(0);
-  const [regionScrollTop, setRegionScrollTop] = useState(0);
-  const [cityScrollTop, setCityScrollTop] = useState(0);
-  
+
   const continentRef = useRef<HTMLDivElement>(null);
   const countryRef = useRef<HTMLDivElement>(null);
   const regionRef = useRef<HTMLDivElement>(null);
@@ -175,12 +169,7 @@ const RegionPicker: React.FC<RegionPickerProps> = ({
       regionRef.current.scrollTop = 0;
     }
   };
-  
-  // 返回第一步
-  const handleBackStep = () => {
-    setStep('country');
-  };
-  
+
   // 确认选择
   const handleConfirm = () => {
     if (step === 'country') {
@@ -235,7 +224,6 @@ const RegionPicker: React.FC<RegionPickerProps> = ({
         <div
           ref={continentRef}
           style={styles.scrollContainer}
-          onScroll={(e) => setContinentScrollTop(e.currentTarget.scrollTop)}
         >
           {continentsData.map((continent, idx) => (
             <div
@@ -258,7 +246,6 @@ const RegionPicker: React.FC<RegionPickerProps> = ({
         <div
           ref={countryRef}
           style={styles.scrollContainer}
-          onScroll={(e) => setCountryScrollTop(e.currentTarget.scrollTop)}
         >
           {currentCountries.map((country, idx) => (
             <div
@@ -294,7 +281,6 @@ const RegionPicker: React.FC<RegionPickerProps> = ({
           <div
             ref={regionRef}
             style={styles.scrollContainer}
-            onScroll={(e) => setRegionScrollTop(e.currentTarget.scrollTop)}
           >
             {regionsWithUnlimited.map((region) => (
               <div
@@ -318,7 +304,6 @@ const RegionPicker: React.FC<RegionPickerProps> = ({
             <div
               ref={cityRef}
               style={styles.scrollContainer}
-              onScroll={(e) => setCityScrollTop(e.currentTarget.scrollTop)}
             >
               {currentCities.map((city) => (
                 <div

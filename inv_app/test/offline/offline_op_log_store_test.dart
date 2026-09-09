@@ -32,7 +32,9 @@ void main() {
         params: {'power_w': seq * 100},
         result: 'ok',
         channel: 'ble',
-        opTime: DateTime.utc(2026, 8, 10, 0, 0, seq),
+        // prune 的 30 天保留分支与墙钟比较: 样本必须用相对当前时间构造,
+        // 硬编码日期一旦越过保留边界会让全部样本被判"超期"而整批删除
+        opTime: DateTime.now().toUtc().subtract(Duration(hours: 1, seconds: seq)),
       );
 
   test('add then pending returns the log with pending status', () async {

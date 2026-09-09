@@ -58,11 +58,10 @@ Future<void> _openDialog(WidgetTester tester, Widget host) async {
   await tester.pumpAndSettle();
 }
 
-/// Drains queued Flutter errors, failing on any non-overflow exception.
+/// Fails the test if any exception (including RenderFlex overflow) was queued.
 void _expectNoException(WidgetTester tester) {
-  Object? exception;
-  while ((exception = tester.takeException()) != null) {
-    if (exception.toString().contains('overflowed')) continue;
+  final exception = tester.takeException();
+  if (exception != null) {
     fail('Unexpected exception: $exception');
   }
 }

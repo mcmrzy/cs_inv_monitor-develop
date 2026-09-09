@@ -9,6 +9,10 @@ on:
       - main
   workflow_dispatch:
 
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
 jobs:
   build:
     name: Build & Push Images
@@ -137,7 +141,85 @@ jobs:
             database/migrations/ \
           | ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
               ${{ secrets.SERVER_USERNAME }}@${{ secrets.SERVER_HOST }} \
-              "cd /opt/inv-mqtt && tar xzf -"
+              'set -Eeuo pipefail
+               cd /opt/inv-mqtt
+               incoming_dir=$(mktemp -d /opt/inv-mqtt/.deploy-incoming.XXXXXX)
+               candidate_dir=$(mktemp -d /opt/inv-mqtt/.deploy-candidate.XXXXXX)
+               database_candidate_dir=$(mktemp -d /opt/inv-mqtt/.database-candidate.XXXXXX)
+               backup_dir=$(mktemp -d /opt/inv-mqtt/.deploy-backup.XXXXXX)
+               database_backup_dir=$(mktemp -d /opt/inv-mqtt/.database-backup.XXXXXX)
+               backup_ready=0
+               activation_started=0
+               cleanup_sync() {
+                 rm -rf "$incoming_dir" "$candidate_dir" "$database_candidate_dir" "$backup_dir" "$database_backup_dir"
+               }
+               restore_sync() {
+                 rc=$?
+                 trap - EXIT
+                 if [ "$rc" -ne 0 ] && [ "$activation_started" = "1" ] && [ "$backup_ready" = "1" ]; then
+                   echo "同步部署文件失败，原位恢复旧文件（exit=$rc）" >&2
+                   cp -a "$backup_dir/docker-compose.prod.yml" /opt/inv-mqtt/deploy/
+                   cp -a "$backup_dir/nginx-proxy.conf" /opt/inv-mqtt/deploy/
+                   cp -a "$backup_dir/.env.prod" /opt/inv-mqtt/deploy/
+                   mkdir -p /opt/inv-mqtt/deploy/configs /opt/inv-mqtt/deploy/mosquitto
+                   cp -a "$backup_dir/configs/." /opt/inv-mqtt/deploy/configs/
+                   cp -a "$backup_dir/mosquitto/." /opt/inv-mqtt/deploy/mosquitto/
+                   cp -a "$database_backup_dir/." /opt/inv-mqtt/database/
+                 fi
+                 cleanup_sync
+                 exit "$rc"
+               }
+               trap restore_sync EXIT
+               tar xzf - -C "$incoming_dir"
+               test -s "$incoming_dir/deploy/docker-compose.prod.yml"
+               test -s "$incoming_dir/deploy/nginx-proxy.conf"
+               test -d "$incoming_dir/deploy/configs"
+               test -d "$incoming_dir/deploy/mosquitto"
+               test -s /opt/inv-mqtt/deploy/.env.prod
+               cp -a /opt/inv-mqtt/deploy/. "$candidate_dir/"
+               cp -a "$incoming_dir/deploy/docker-compose.prod.yml" "$candidate_dir/"
+               cp -a "$incoming_dir/deploy/nginx-proxy.conf" "$candidate_dir/"
+               rm -rf "$candidate_dir/configs" "$candidate_dir/mosquitto"
+               cp -a "$incoming_dir/deploy/configs" "$candidate_dir/configs"
+               cp -a "$incoming_dir/deploy/mosquitto" "$candidate_dir/mosquitto"
+               test -s "$candidate_dir/.env.prod"
+               test -s "$candidate_dir/docker-compose.prod.yml"
+               test -s "$candidate_dir/nginx-proxy.conf"
+               test -d "$candidate_dir/configs"
+               test -d "$candidate_dir/mosquitto"
+               cp -a /opt/inv-mqtt/database/. "$database_candidate_dir/"
+               cp -a "$incoming_dir/database/." "$database_candidate_dir/"
+               test -s "$database_candidate_dir/schema.sql"
+               test -s "$database_candidate_dir/migration_timescaledb.sql"
+               test -d "$database_candidate_dir/migrations"
+               cp -a /opt/inv-mqtt/deploy/. "$backup_dir/"
+               cp -a /opt/inv-mqtt/database/. "$database_backup_dir/"
+               test -s "$backup_dir/.env.prod"
+               test -s "$backup_dir/docker-compose.prod.yml"
+               test -s "$backup_dir/nginx-proxy.conf"
+               test -d "$backup_dir/configs"
+               test -d "$backup_dir/mosquitto"
+               test -s "$database_backup_dir/schema.sql"
+               backup_ready=1
+               rm -rf /opt/inv-mqtt/deploy.previous.next
+               cp -a "$backup_dir" /opt/inv-mqtt/deploy.previous.next
+               test -s /opt/inv-mqtt/deploy.previous.next/.env.prod
+               test -s /opt/inv-mqtt/deploy.previous.next/docker-compose.prod.yml
+               test -s /opt/inv-mqtt/deploy.previous.next/nginx-proxy.conf
+               activation_started=1
+               cp -a "$candidate_dir/docker-compose.prod.yml" /opt/inv-mqtt/deploy/
+               cp -a "$candidate_dir/nginx-proxy.conf" /opt/inv-mqtt/deploy/
+               cp -a "$candidate_dir/configs/." /opt/inv-mqtt/deploy/configs/
+               cp -a "$candidate_dir/mosquitto/." /opt/inv-mqtt/deploy/mosquitto/
+               cp -a "$database_candidate_dir/." /opt/inv-mqtt/database/
+               test -s /opt/inv-mqtt/deploy/docker-compose.prod.yml
+               test -s /opt/inv-mqtt/deploy/nginx-proxy.conf
+               test -s /opt/inv-mqtt/database/schema.sql
+               rm -rf /opt/inv-mqtt/deploy.previous
+               mv /opt/inv-mqtt/deploy.previous.next /opt/inv-mqtt/deploy.previous
+               activation_started=0
+               trap - EXIT
+               cleanup_sync'
 
       - name: Deploy to server via SSH
         uses: appleboy/ssh-action@v1
@@ -148,15 +230,104 @@ jobs:
           port: 22
           command_timeout: 30m
           script: |
+            set -Eeuo pipefail
             cd /opt/inv-mqtt/deploy
 
-            # ---------- 保存当前 IMAGE_TAG 用于回滚 ----------
+            # Sync 步骤保留 .env.prod，因此这里读到的是候选部署前的镜像版本。
             PREV_IMAGE_TAG=$(grep '^IMAGE_TAG=' .env.prod 2>/dev/null | cut -d= -f2 || true)
+
+            # ---------- 失败诊断 ----------
+            capture_diagnostics() {
+              echo "=== 部署失败诊断：Compose 状态 ==="
+              docker compose -f docker-compose.prod.yml --env-file .env.prod ps -a || true
+
+              echo "=== 部署失败诊断：容器 Health ==="
+              local c
+              for c in inv-postgres inv-redis inv-kafka mqtt-kafka-bridge device-communication business-api api-gateway inv-admin-frontend inv-nginx; do
+                docker inspect -f "${c}: status={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}} error={{.State.Error}}" "$c" 2>/dev/null || echo "${c}: missing"
+              done
+
+              echo "=== 部署失败诊断：关键服务日志（最近 200 行） ==="
+              docker compose -f docker-compose.prod.yml --env-file .env.prod logs --tail 200 || true
+            }
+
+            rollback_release() {
+              local reason="$1"
+              local previous_dir=/opt/inv-mqtt/deploy.previous
+              echo "⚠️ ${reason}，恢复上一版部署配置与镜像：${PREV_IMAGE_TAG:-none}"
+
+              if [ -z "$PREV_IMAGE_TAG" ] || [ "$PREV_IMAGE_TAG" = "CHANGE_ME_GIT_COMMIT_SHA" ]; then
+                echo "❌ 没有可用的前一版本镜像，无法回滚，需要人工介入！"
+                return 1
+              fi
+              if [ ! -s "$previous_dir/.env.prod" ] || \
+                 [ ! -s "$previous_dir/docker-compose.prod.yml" ] || \
+                 [ ! -s "$previous_dir/nginx-proxy.conf" ] || \
+                 [ ! -d "$previous_dir/configs" ] || \
+                 [ ! -d "$previous_dir/mosquitto" ]; then
+                echo "❌ 上一版部署配置不完整，无法执行安全回滚！"
+                return 1
+              fi
+
+              DEPLOY_PHASE=restore_previous_release
+              if ! cp -a "$previous_dir/docker-compose.prod.yml" /opt/inv-mqtt/deploy/ || \
+                 ! cp -a "$previous_dir/nginx-proxy.conf" /opt/inv-mqtt/deploy/ || \
+                 ! cp -a "$previous_dir/.env.prod" /opt/inv-mqtt/deploy/ || \
+                 ! cp -a "$previous_dir/configs/." /opt/inv-mqtt/deploy/configs/ || \
+                 ! cp -a "$previous_dir/mosquitto/." /opt/inv-mqtt/deploy/mosquitto/; then
+                echo "❌ 恢复上一版部署配置失败，需要人工介入！"
+                return 1
+              fi
+              echo "✅ 已恢复上一版部署配置"
+
+              cd /opt/inv-mqtt/deploy
+              sed -i '/^IMAGE_TAG=/d' .env.prod
+              echo "IMAGE_TAG=$PREV_IMAGE_TAG" >> .env.prod
+
+              DEPLOY_PHASE=pull_previous_images
+              if ! docker compose -f docker-compose.prod.yml --env-file .env.prod pull; then
+                echo "❌ 无法拉取前一版本镜像，回滚失败！需要人工介入！"
+                return 1
+              fi
+
+              DEPLOY_PHASE=start_previous_stack
+              if ! docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --remove-orphans --wait --wait-timeout 180; then
+                echo "❌ 前一版本容器未能恢复健康！"
+                capture_diagnostics
+                return 1
+              fi
+
+              # nginx 使用固定镜像和 bind mount，恢复旧配置后必须主动加载。
+              DEPLOY_PHASE=reload_previous_nginx
+              if ! docker exec inv-nginx nginx -t || ! docker exec inv-nginx nginx -s reload; then
+                echo "❌ 前一版本 Nginx 配置恢复失败！"
+                capture_diagnostics
+                return 1
+              fi
+              return 0
+            }
+
+            on_deploy_error() {
+              local rc=$?
+              trap - ERR
+              echo "❌ 部署脚本异常退出（阶段：${DEPLOY_PHASE:-unknown}，exit=$rc）"
+              capture_diagnostics
+              if rollback_release "unexpected error"; then
+                echo "✅ 异常后已恢复上一版本 ($PREV_IMAGE_TAG)"
+              else
+                echo "❌ 异常后的自动回滚失败，需要人工介入！"
+              fi
+              exit "$rc"
+            }
+            trap on_deploy_error ERR
+
+            # ---------- 保存当前 IMAGE_TAG 用于回滚 ----------
             echo "=== 部署信息 ==="
             echo "当前 IMAGE_TAG: ${PREV_IMAGE_TAG:-none}"
             echo "目标 IMAGE_TAG: ${{ env.DEPLOY_SHA }}"
 
             # ---------- 设置新镜像 tag ----------
+            DEPLOY_PHASE=activate_candidate_tag
             sed -i '/^IMAGE_TAG=/d' .env.prod
             echo "IMAGE_TAG=${{ env.DEPLOY_SHA }}" >> .env.prod
 
@@ -179,6 +350,7 @@ jobs:
             remove_legacy_container mqtt-kafka-bridge
 
             # ---------- 拉取新镜像 ----------
+            DEPLOY_PHASE=pull_candidate_images
             docker compose -f docker-compose.prod.yml --env-file .env.prod pull
 
             # ---------- 上传数据持久化迁移（仅首次） ----------
@@ -200,10 +372,15 @@ jobs:
             fi
 
             # ---------- 更新容器 ----------
-            docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --remove-orphans --wait --wait-timeout 180
+            DEPLOY_PHASE=start_candidate_stack
+            deploy_up_failed=0
+            if ! docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --remove-orphans --wait --wait-timeout 180; then
+              echo "❌ Docker Compose 未在等待窗口内达到存活状态"
+              deploy_up_failed=1
+            fi
 
             # ---------- 上传数据恢复（迁移第二步） ----------
-            if [ ! -f "$MIGRATED_FLAG" ]; then
+            if [ "$deploy_up_failed" = "0" ] && [ ! -f "$MIGRATED_FLAG" ]; then
               restored=0
               if [ -d "$BACKUP_DIR/uploads" ] && [ -n "$(ls -A "$BACKUP_DIR/uploads" 2>/dev/null)" ]; then
                 echo "=== [迁移] 恢复 uploads → 持久卷 ==="
@@ -239,21 +416,24 @@ jobs:
               fi
             fi
 
-            # ---------- 保留最近 N 个镜像 tag，清理旧镜像 ----------
-            KEEP_COUNT=3
-            REGISTRY_OWNER="${{ github.repository_owner }}"
-            for svc in inv-device-server mqtt-kafka-bridge inv-api-server api-gateway inv-admin-frontend; do
-              echo "=== 清理 ${svc} 旧镜像（保留最近 ${KEEP_COUNT} 个 tag）==="
-              docker images "ghcr.io/${REGISTRY_OWNER}/${svc}" --format '{{.Tag}}' \
-                | grep -v '^latest$' \
-                | tail -n +$((KEEP_COUNT + 1)) \
-                | while read -r old_tag; do
-                  echo "  移除旧镜像: ghcr.io/${REGISTRY_OWNER}/${svc}:${old_tag}"
-                  docker rmi "ghcr.io/${REGISTRY_OWNER}/${svc}:${old_tag}" 2>/dev/null || true
-                done
-            done
-            # 清理悬空镜像
-            docker image prune -f
+            # ---------- 成功后清理旧镜像 ----------
+            # 清理属于维护动作，失败不能把一个已健康的新版本回滚。
+            cleanup_old_images() {
+              local keep_count=3
+              local registry_owner="${{ github.repository_owner }}"
+              local svc
+              for svc in inv-device-server mqtt-kafka-bridge inv-api-server api-gateway inv-admin-frontend; do
+                echo "=== 清理 ${svc} 旧镜像（保留最近 ${keep_count} 个 tag）==="
+                docker images "ghcr.io/${registry_owner}/${svc}" --format '{{.Tag}}' \
+                  | grep -v '^latest$' \
+                  | tail -n +$((keep_count + 1)) \
+                  | while read -r old_tag; do
+                    echo "  移除旧镜像: ghcr.io/${registry_owner}/${svc}:${old_tag}"
+                    docker rmi "ghcr.io/${registry_owner}/${svc}:${old_tag}" 2>/dev/null || true
+                  done || true
+              done
+              docker image prune -f || true
+            }
 
             # ---------- 健康检查函数 ----------
             # docker-compose.prod.yml 内全部 9 个服务均定义了 healthcheck，
@@ -265,18 +445,19 @@ jobs:
               sleep 10
 
               local failed=0
-              local c
+              local c state
 
               for c in inv-postgres inv-redis inv-kafka mqtt-kafka-bridge device-communication business-api api-gateway inv-admin-frontend inv-nginx; do
-                if docker inspect -f "{{.State.Health.Status}}" "$c" 2>/dev/null | grep -q healthy; then
+                state=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else if .State.Running}}running{{else}}stopped{{end}}' "$c" 2>/dev/null || true)
+                if [ "$state" = "healthy" ] || [ "$state" = "running" ]; then
                   echo "✅ $c 正常"
                 else
-                  echo "❌ $c 异常"
+                  echo "❌ $c 异常 (${state:-missing})"
                   failed=1
                 fi
               done
 
-              if curl -sf http://127.0.0.1/health > /dev/null 2>&1; then
+              if curl -sf http://127.0.0.1:8080/health > /dev/null 2>&1; then
                 echo "✅ API Gateway HTTP /health 正常"
               else
                 echo "❌ API Gateway HTTP /health 异常"
@@ -286,34 +467,27 @@ jobs:
               return $failed
             }
 
+            # MQTT 是外部依赖：就绪失败必须留痕，但不能让它阻止公网入口启动。
+            report_external_readiness() {
+              if docker exec device-communication wget -q -O /dev/null http://localhost:8081/health 2>/dev/null; then
+                echo "✅ Device Server MQTT/Redis 就绪"
+              else
+                echo "⚠️ Device Server 已存活，但 MQTT/Redis 尚未就绪；请检查下方日志"
+                docker logs --tail 100 device-communication 2>&1 || true
+              fi
+            }
+
             # ---------- 执行健康检查 ----------
-            if health_check; then
+            if [ "$deploy_up_failed" = "0" ] && health_check; then
+              report_external_readiness
+              cleanup_old_images
               echo "🎉 部署成功完成！"
             else
               echo "⚠️ 健康检查失败，开始自动回滚..."
-
-              # 检查是否有可用的前一版本
-              if [ -z "$PREV_IMAGE_TAG" ] || [ "$PREV_IMAGE_TAG" = "CHANGE_ME_GIT_COMMIT_SHA" ]; then
-                echo "❌ 没有可用的前一版本镜像，无法回滚，需要人工介入！"
-                exit 1
-              fi
-
-              # 回滚到前一版本
-              echo "回滚到 IMAGE_TAG=$PREV_IMAGE_TAG"
-              sed -i '/^IMAGE_TAG=/d' .env.prod
-              echo "IMAGE_TAG=$PREV_IMAGE_TAG" >> .env.prod
-
-              # 拉取前一版本镜像
-              if ! docker compose -f docker-compose.prod.yml --env-file .env.prod pull; then
-                echo "❌ 无法拉取前一版本镜像，回滚失败！需要人工介入！"
-                exit 1
-              fi
-
-              # 用前一版本重启服务
-              docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --remove-orphans --wait --wait-timeout 180
-
-              # 回滚后健康检查
-              if health_check; then
+              capture_diagnostics
+              trap - ERR
+              if rollback_release "candidate health check failed" && health_check; then
+                report_external_readiness
                 echo "✅ 回滚成功，服务已恢复到前一版本 ($PREV_IMAGE_TAG)"
                 echo "⚠️ 本次部署已回滚，请检查新版本问题后重新部署"
                 exit 1

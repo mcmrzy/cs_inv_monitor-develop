@@ -4,7 +4,11 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/data/alarm_code_mapping.dart';
+import 'package:inv_app/core/widgets/app_toast.dart';
+import 'package:inv_app/core/widgets/pagination_bar.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
+import 'package:inv_app/core/theme/csergy_assets.dart';
+import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 import 'package:inv_app/features/alarm/presentation/bloc/alarm_bloc.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
@@ -19,12 +23,30 @@ class AlarmPage extends StatefulWidget {
 class _AlarmPageState extends State<AlarmPage> {
   AlarmState? _cachedState;
 
+  /// 级别筛选（与 Web 端 alarmLevel 对齐）：null=全部 1=严重 2=警告 3=提示
+  int? _selectedLevel;
+
+  /// 当前页码（1-based），由底部 PaginationBar 驱动
+  int _currentPage = 1;
+  static const int _pageSize = 20;
+
+  AlarmListRequested _buildRequest() => AlarmListRequested(
+        page: _currentPage,
+        pageSize: _pageSize,
+        alarmLevel: _selectedLevel,
+      );
+
+  void _request() {
+    context.read<AlarmBloc>().add(_buildRequest());
+  }
+
   Future<void> _refresh() async {
     final bloc = context.read<AlarmBloc>();
+    final request = _buildRequest();
     final completed = bloc.stream.firstWhere(
       (state) => state is AlarmListLoaded || state is AlarmError,
     );
-    bloc.add(const AlarmListRequested());
+    bloc.add(request);
     try {
       await completed.timeout(const Duration(seconds: 15));
     } catch (_) {
@@ -32,10 +54,25 @@ class _AlarmPageState extends State<AlarmPage> {
     }
   }
 
+  void _onLevelSelected(int? level) {
+    if (_selectedLevel == level) return;
+    setState(() {
+      _selectedLevel = level;
+      _currentPage = 1;
+      _cachedState = null;
+    });
+    _request();
+  }
+
+  void _onPageChanged(int page) {
+    setState(() => _currentPage = page);
+    _request();
+  }
+
   @override
   void initState() {
     super.initState();
-    context.read<AlarmBloc>().add(const AlarmListRequested());
+    _request();
   }
 
   @override
@@ -46,11 +83,10 @@ class _AlarmPageState extends State<AlarmPage> {
       body: BlocConsumer<AlarmBloc, AlarmState>(
         listener: (context, state) {
           if (state is AlarmError && _cachedState != null) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(l10n.translateError(state.message)),
-                duration: const Duration(seconds: 2),
-              ),
+            AppToast.show(
+              context,
+              l10n.translateError(state.message),
+              type: ToastType.error,
             );
           }
         },
@@ -61,43 +97,36 @@ class _AlarmPageState extends State<AlarmPage> {
 
           if (_cachedState is AlarmListLoaded) {
             final ds = _cachedState as AlarmListLoaded;
+            final totalPages =
+                (ds.total / _pageSize).ceil().clamp(1, 1 << 30).toInt();
             if (ds.alarms.isEmpty) {
               return StyledRefreshIndicator(
                 onRefresh: _refresh,
                 child: ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   children: [
-                    SizedBox(height: 120.h),
-                    Center(
-                      child: Column(
-                        children: [
-                          Icon(
-                            Icons.notifications_none,
-                            size: 64.sp,
-                            color: AppColor.textHint(context),
-                          ),
-                          SizedBox(height: 16.h),
-                          Text(
-                            l10n.noAlarms,
-                            style: TextStyle(
-                              color: AppColor.textHint(context),
-                              fontSize: 16.sp,
-                            ),
-                          ),
-                        ],
+                    SizedBox(height: 80.h),
+                    XiaoshuoStatePanel(
+                      asset: CsergyAssets.xiaoshuoEmpty,
+                      title: l10n.noAlarms,
+                      size: 176,
+                      action: TextButton.icon(
+                        onPressed: _refresh,
+                        icon: const Icon(Icons.refresh),
+                        label: Text(l10n.retry),
                       ),
                     ),
+                    _buildLevelFilterChips(context, l10n),
                   ],
                 ),
               );
             }
             return Column(
               children: [
+                _buildLevelFilterChips(context, l10n),
                 if (ds.isFromCache)
                   OfflineDataBanner(
-                    onRetry: () => context
-                        .read<AlarmBloc>()
-                        .add(const AlarmListRequested()),
+                    onRetry: _request,
                   ),
                 Expanded(
                   child: StyledRefreshIndicator(
@@ -108,6 +137,14 @@ class _AlarmPageState extends State<AlarmPage> {
                       itemBuilder: (context, index) =>
                           _buildAlarmCard(context, ds.alarms[index], l10n),
                     ),
+                  ),
+                ),
+                SafeArea(
+                  top: false,
+                  child: PaginationBar(
+                    currentPage: _currentPage,
+                    totalPages: totalPages,
+                    onPageChanged: _onPageChanged,
                   ),
                 ),
               ],
@@ -131,9 +168,7 @@ class _AlarmPageState extends State<AlarmPage> {
                   ),
                   SizedBox(height: 12.h),
                   FilledButton.icon(
-                    onPressed: () => context
-                        .read<AlarmBloc>()
-                        .add(const AlarmListRequested()),
+                    onPressed: _request,
                     icon: const Icon(Icons.refresh),
                     label: Text(l10n.retry),
                   ),
@@ -144,6 +179,52 @@ class _AlarmPageState extends State<AlarmPage> {
 
           return _buildSkeletonList();
         },
+      ),
+    );
+  }
+
+  /// 顶部级别筛选 Chip 行：全部 / 严重 / 警告 / 提示
+  Widget _buildLevelFilterChips(BuildContext context, AppLocalizations l10n) {
+    final entries = <int?, String>{
+      null: l10n.all,
+      1: l10n.severe,
+      2: l10n.warningLevel,
+      3: l10n.infoLevel,
+    };
+    return Container(
+      width: double.infinity,
+      color: AppColor.surfaceContainer(context),
+      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: entries.entries
+              .map(
+                (e) => Padding(
+                  padding: EdgeInsets.only(right: 8.w),
+                  child: ChoiceChip(
+                    label: Text(e.value),
+                    selected: _selectedLevel == e.key,
+                    onSelected: (_) => _onLevelSelected(e.key),
+                    labelStyle: TextStyle(
+                      fontSize: 12.sp,
+                      color: _selectedLevel == e.key
+                          ? Colors.white
+                          : AppColor.textSecondary(context),
+                    ),
+                    selectedColor: AppColors.primary,
+                    showCheckmark: false,
+                    visualDensity: VisualDensity.compact,
+                    side: BorderSide(
+                      color: _selectedLevel == e.key
+                          ? AppColors.primary
+                          : AppColor.border(context),
+                    ),
+                  ),
+                ),
+              )
+              .toList(),
+        ),
       ),
     );
   }

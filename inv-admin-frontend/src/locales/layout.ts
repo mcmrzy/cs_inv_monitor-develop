@@ -97,6 +97,7 @@ export default {
     'msg.emailChanged': '邮箱更改成功',
     'msg.newEmailRequired': '请输入新邮箱',
     'msg.invalidEmail': '请输入有效的邮箱地址',
+    'msg.sendCodeFailed': '验证码发送失败',
   },
   en: {
     'app.title': 'CSERGY',
@@ -196,5 +197,6 @@ export default {
     'msg.emailChanged': 'Email changed',
     'msg.newEmailRequired': 'Please enter new email',
     'msg.invalidEmail': 'Please enter a valid email address',
+    'msg.sendCodeFailed': 'Failed to send code',
   },
 }

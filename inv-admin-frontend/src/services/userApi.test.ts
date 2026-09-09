@@ -3,6 +3,7 @@ import { http, HttpResponse } from 'msw'
 import { server } from '@/test/mocks/server'
 import { userApi } from './userApi'
 import { mockUsers, paginatedResponse } from '@/test/mocks/data'
+import { MOCK_NEW_PASSWORD } from '@/test/mockCredentials'
 
 describe('userApi', () => {
   describe('list', () => {
@@ -13,12 +14,12 @@ describe('userApi', () => {
       expect(data.total).toBe(mockUsers.length)
     })
 
-    it('should filter users by role', async () => {
+    it('should filter users by org_role', async () => {
       server.use(
         http.get('/api/v1/users', ({ request }) => {
           const url = new URL(request.url)
-          const role = url.searchParams.get('role')
-          const filtered = mockUsers.filter((u) => String(u.role) === role)
+          const orgRole = url.searchParams.get('org_role')
+          const filtered = orgRole === 'installer' ? mockUsers.filter((u) => u.role === 4) : []
           return HttpResponse.json({
             code: 0,
             data: paginatedResponse(filtered, filtered.length),
@@ -111,7 +112,7 @@ describe('userApi', () => {
         }),
       )
 
-      const res = await userApi.resetPassword(1, { password: 'NewPass123' })
+      const res = await userApi.resetPassword(1, { password: MOCK_NEW_PASSWORD })
       expect(res.data.code).toBe(0)
     })
   })

@@ -389,11 +389,36 @@ type ListUsersParams struct {
 	PageSize int
 	Keyword  string
 	Status   int
+	// OrgRole 按用户所属组织的类型（organizations.org_type，取值为
+	// manufacturer/agent/distributor/installer/customer）过滤用户。
+	// 空串表示不过滤；"org_admin" 是 "manufacturer" 在管理端的展示别名，
+	// 会归一化后参与过滤。非法值匹配不到任何组织，结果为空。
+	OrgRole string
 }
 
 type ListUsersResult struct {
 	Items []model.User
 	Total int64
+}
+
+// applyUserListOrgRoleFilter 向用户列表查询与计数查询追加
+// "用户存在指定组织类型的 active 成员关系" 过滤条件。
+// 使用 EXISTS 保证用户属于多个组织（或同类型组织多次加入）时不产生重复行。
+// orgRole 为空时原样返回，查询行为不变。
+func applyUserListOrgRoleFilter(baseQuery, countQuery string, args []interface{}, orgRole string) (string, string, []interface{}) {
+	if orgRole == "" {
+		return baseQuery, countQuery, args
+	}
+	if orgRole == "org_admin" {
+		// 管理端将 manufacturer 组织类型展示为 org_admin（见 AdminHandler.ListUsers）
+		orgRole = "manufacturer"
+	}
+	clause := fmt.Sprintf(` AND EXISTS (
+		SELECT 1 FROM organization_memberships om
+		JOIN organizations o ON o.id = om.organization_id AND o.deleted_at IS NULL
+		WHERE om.user_id = users.id AND om.status = 'active' AND o.org_type = $%d
+	)`, len(args)+1)
+	return baseQuery + clause, countQuery + clause, append(args, orgRole)
 }
 
 func (r *UserRepository) List(ctx context.Context, params ListUsersParams) (*ListUsersResult, error) {
@@ -418,6 +443,8 @@ func (r *UserRepository) List(ctx context.Context, params ListUsersParams) (*Lis
 		countQuery += fmt.Sprintf(" AND status = $%d", len(args)+1)
 		args = append(args, params.Status)
 	}
+
+	baseQuery, countQuery, args = applyUserListOrgRoleFilter(baseQuery, countQuery, args, params.OrgRole)
 
 	var total int64
 	countArgs := make([]interface{}, len(args))
@@ -919,15 +946,27 @@ func (r *DeviceRepository) GetBySN(ctx context.Context, sn string) (*model.Devic
 	return &device, nil
 }
 
-func (r *DeviceRepository) GetByUserID(ctx context.Context, userID int64, stationID int64, status int, keyword string, page, pageSize int) ([]*model.Device, int64, error) {
-	offset := (page - 1) * pageSize
+// DeviceListParams 设备列表查询参数（DeviceRepository.List / DeviceService.List 共用）。
+// Status < 0 表示不过滤状态；LastOnlineStart/LastOnlineEnd 为可选的最后在线时间范围。
+type DeviceListParams struct {
+	UserID          int64
+	StationID       int64
+	Status          int
+	Keyword         string
+	Model           string
+	LastOnlineStart *time.Time
+	LastOnlineEnd   *time.Time
+	Page            int
+	PageSize        int
+	IsSystemAdmin   bool
+}
 
-	allowedSNsSubquery := `(SELECT sn FROM devices WHERE user_id = $1 AND deleted_at IS NULL UNION SELECT device_sn FROM user_device_rel WHERE user_id = $1)`
-
-	baseQuery := fmt.Sprintf(` FROM devices d LEFT JOIN device_models dm ON d.model_id = dm.id LEFT JOIN v_device_latest rd ON rd.device_sn = d.sn LEFT JOIN stations s ON s.id = d.station_id WHERE d.deleted_at IS NULL AND d.sn IN %s`, allowedSNsSubquery)
-	args := []interface{}{userID}
-	argIdx := 2
-
+// appendDeviceListFilters 向设备列表查询追加共享过滤条件
+// （电站/状态/关键字/型号前缀/最后在线时间范围）。
+// baseQuery 需已包含 FROM/WHERE 骨架；返回拼接后的查询、更新后的参数
+// 与下一个可用占位符序号。分页查询与 COUNT 查询共用本函数，保证两者条件一致。
+// 过滤参数为零值时原样返回，查询行为不变。
+func appendDeviceListFilters(baseQuery string, args []interface{}, argIdx int, stationID int64, status int, keyword, modelStr string, lastOnlineStart, lastOnlineEnd *time.Time) (string, []interface{}, int) {
 	if stationID > 0 {
 		baseQuery += fmt.Sprintf(" AND d.station_id = $%d", argIdx)
 		args = append(args, stationID)
@@ -946,32 +985,79 @@ func (r *DeviceRepository) GetByUserID(ctx context.Context, userID int64, statio
 		argIdx++
 	}
 
-	countQuery := fmt.Sprintf(`SELECT COUNT(*) FROM devices d LEFT JOIN device_models dm ON d.model_id = dm.id LEFT JOIN stations s ON s.id = d.station_id WHERE d.deleted_at IS NULL AND d.sn IN %s`, allowedSNsSubquery)
-	countArgs := []interface{}{userID}
-	countIdx := 2
-	if stationID > 0 {
-		countQuery += fmt.Sprintf(" AND d.station_id = $%d", countIdx)
-		countArgs = append(countArgs, stationID)
-		countIdx++
+	// d.model 为 VARCHAR 型号字符串，按前缀匹配（完整型号即精确匹配）
+	if modelStr != "" {
+		baseQuery += fmt.Sprintf(" AND d.model ILIKE $%d", argIdx)
+		args = append(args, modelStr+"%")
+		argIdx++
 	}
-	if status >= 0 {
-		countQuery += fmt.Sprintf(" AND d.status = $%d", countIdx)
-		countArgs = append(countArgs, status)
-		countIdx++
+
+	if lastOnlineStart != nil {
+		baseQuery += fmt.Sprintf(" AND d.last_online_at >= $%d", argIdx)
+		args = append(args, *lastOnlineStart)
+		argIdx++
 	}
-	if keyword != "" {
-		countQuery += fmt.Sprintf(" AND (d.sn ILIKE $%d OR d.model ILIKE $%d OR dm.model_code ILIKE $%d OR dm.model_name ILIKE $%d)", countIdx, countIdx, countIdx, countIdx)
-		countArgs = append(countArgs, "%"+keyword+"%")
-		countIdx++
+
+	if lastOnlineEnd != nil {
+		baseQuery += fmt.Sprintf(" AND d.last_online_at <= $%d", argIdx)
+		args = append(args, *lastOnlineEnd)
+		argIdx++
 	}
+
+	return baseQuery, args, argIdx
+}
+
+// deviceListFromClauses 返回设备列表查询的 FROM/WHERE 骨架。
+// 分页查询含 v_device_latest 关联以取实时字段，COUNT 查询无需该关联。
+func deviceListFromClauses() (listFrom, countFrom string) {
+	listFrom = ` FROM devices d LEFT JOIN device_models dm ON d.model_id = dm.id LEFT JOIN v_device_latest rd ON rd.device_sn = d.sn LEFT JOIN stations s ON s.id = d.station_id WHERE d.deleted_at IS NULL`
+	countFrom = ` FROM devices d LEFT JOIN device_models dm ON d.model_id = dm.id LEFT JOIN stations s ON s.id = d.station_id WHERE d.deleted_at IS NULL`
+	return
+}
+
+// deviceListScopeClause 返回数据范围条件：系统管理员可见全部设备，
+// 普通用户仅可见自有及共享设备（返回子查询片段；子查询使用 $1 绑定 userID）。
+func deviceListScopeClause(isSystemAdmin bool) string {
+	if isSystemAdmin {
+		return ""
+	}
+	return ` AND d.sn IN (SELECT sn FROM devices WHERE user_id = $1 AND deleted_at IS NULL UNION SELECT device_sn FROM user_device_rel WHERE user_id = $1)`
+}
+
+func (r *DeviceRepository) List(ctx context.Context, params DeviceListParams) ([]*model.Device, int64, error) {
+	offset := (params.Page - 1) * params.PageSize
+
+	listFrom, countFrom := deviceListFromClauses()
+	scope := deviceListScopeClause(params.IsSystemAdmin)
+	listFrom += scope
+	countFrom += scope
+
+	// 数据范围参数：管理员无额外参数（过滤从 $1 起），普通用户 userID 占用 $1（过滤从 $2 起）
+	scopeArgs := []interface{}{}
+	argStart := 1
+	if !params.IsSystemAdmin {
+		scopeArgs = append(scopeArgs, params.UserID)
+		argStart = 2
+	}
+
+	baseQuery, args, argIdx := appendDeviceListFilters(listFrom, append([]interface{}{}, scopeArgs...), argStart,
+		params.StationID, params.Status, params.Keyword, params.Model, params.LastOnlineStart, params.LastOnlineEnd)
+
+	countQuery, countArgs, _ := appendDeviceListFilters(countFrom, append([]interface{}{}, scopeArgs...), argStart,
+		params.StationID, params.Status, params.Keyword, params.Model, params.LastOnlineStart, params.LastOnlineEnd)
+
 	var total int64
-	if err := r.db.QueryRow(ctx, countQuery, countArgs...).Scan(&total); err != nil {
+	if err := r.db.QueryRow(ctx, "SELECT COUNT(*)"+countQuery, countArgs...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
-	query := `SELECT ` + deviceListSelectColumns + baseQuery + ` ORDER BY d.global_sort_order, d.created_at DESC, d.id LIMIT $` + fmt.Sprintf("%d", argIdx) + ` OFFSET $` + fmt.Sprintf("%d", argIdx+1)
+	orderClause := ` ORDER BY d.created_at DESC`
+	if !params.IsSystemAdmin {
+		orderClause = ` ORDER BY d.global_sort_order, d.created_at DESC, d.id`
+	}
+	query := `SELECT ` + deviceListSelectColumns + baseQuery + orderClause + ` LIMIT $` + fmt.Sprintf("%d", argIdx) + ` OFFSET $` + fmt.Sprintf("%d", argIdx+1)
 
-	args = append(args, pageSize, offset)
+	args = append(args, params.PageSize, offset)
 
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
@@ -1012,95 +1098,26 @@ func (r *DeviceRepository) GetByUserID(ctx context.Context, userID int64, statio
 	return devices, total, nil
 }
 
+func (r *DeviceRepository) GetByUserID(ctx context.Context, userID int64, stationID int64, status int, keyword string, page, pageSize int) ([]*model.Device, int64, error) {
+	return r.List(ctx, DeviceListParams{
+		UserID:    userID,
+		StationID: stationID,
+		Status:    status,
+		Keyword:   keyword,
+		Page:      page,
+		PageSize:  pageSize,
+	})
+}
+
 func (r *DeviceRepository) GetAll(ctx context.Context, stationID int64, status int, keyword string, page, pageSize int) ([]*model.Device, int64, error) {
-	offset := (page - 1) * pageSize
-
-	baseQuery := ` FROM devices d LEFT JOIN device_models dm ON d.model_id = dm.id LEFT JOIN v_device_latest rd ON rd.device_sn = d.sn LEFT JOIN stations s ON s.id = d.station_id WHERE d.deleted_at IS NULL`
-	args := []interface{}{}
-	argIdx := 1
-
-	if stationID > 0 {
-		baseQuery += fmt.Sprintf(" AND d.station_id = $%d", argIdx)
-		args = append(args, stationID)
-		argIdx++
-	}
-
-	if status >= 0 {
-		baseQuery += fmt.Sprintf(" AND d.status = $%d", argIdx)
-		args = append(args, status)
-		argIdx++
-	}
-
-	if keyword != "" {
-		baseQuery += fmt.Sprintf(" AND (d.sn ILIKE $%d OR d.model ILIKE $%d OR dm.model_code ILIKE $%d OR dm.model_name ILIKE $%d)", argIdx, argIdx, argIdx, argIdx)
-		args = append(args, "%"+keyword+"%")
-		argIdx++
-	}
-
-	countQuery := `SELECT COUNT(*) FROM devices d LEFT JOIN device_models dm ON d.model_id = dm.id LEFT JOIN stations s ON s.id = d.station_id WHERE d.deleted_at IS NULL`
-	countArgs := []interface{}{}
-	countIdx := 1
-	if stationID > 0 {
-		countQuery += fmt.Sprintf(" AND d.station_id = $%d", countIdx)
-		countArgs = append(countArgs, stationID)
-		countIdx++
-	}
-	if status >= 0 {
-		countQuery += fmt.Sprintf(" AND d.status = $%d", countIdx)
-		countArgs = append(countArgs, status)
-		countIdx++
-	}
-	if keyword != "" {
-		countQuery += fmt.Sprintf(" AND (d.sn ILIKE $%d OR d.model ILIKE $%d OR dm.model_code ILIKE $%d OR dm.model_name ILIKE $%d)", countIdx, countIdx, countIdx, countIdx)
-		countArgs = append(countArgs, "%"+keyword+"%")
-		countIdx++
-	}
-	var total int64
-	if err := r.db.QueryRow(ctx, countQuery, countArgs...).Scan(&total); err != nil {
-		return nil, 0, err
-	}
-
-	query := `SELECT ` + deviceListSelectColumns + baseQuery + ` ORDER BY d.created_at DESC LIMIT $` + fmt.Sprintf("%d", argIdx) + ` OFFSET $` + fmt.Sprintf("%d", argIdx+1)
-
-	args = append(args, pageSize, offset)
-
-	rows, err := r.db.Query(ctx, query, args...)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer rows.Close()
-
-	devices := make([]*model.Device, 0)
-	for rows.Next() {
-		var device model.Device
-		var stationID sql.NullInt64
-		var lastOnlineAt sql.NullTime
-		if err := rows.Scan(
-			&device.ID, &device.SN, &device.Model, &device.ModelID, &device.ModelCategory, &device.Manufacturer,
-			&device.FirmwareArm, &device.FirmwareEsp,
-			&device.FirmwareDSP, &device.FirmwareBMS, &device.MainVersion,
-			&device.DeviceType,
-			&device.RatedPower, &device.RatedVoltage, &device.RatedFreq,
-			&device.BatteryVoltage, &device.BatteryType, &device.CellCount,
-			&stationID, &device.UserID, &device.Status, &device.Timezone,
-			&device.CurrentPower, &device.DailyEnergy,
-			&lastOnlineAt,
-			&device.CreatedAt, &device.UpdatedAt,
-			&device.StationName,
-			&device.Alias, &device.Remark,
-		); err != nil {
-			return nil, 0, err
-		}
-		if stationID.Valid {
-			device.StationID = &stationID.Int64
-		}
-		if lastOnlineAt.Valid {
-			device.LastOnlineAt = &lastOnlineAt.Time
-		}
-		devices = append(devices, &device)
-	}
-
-	return devices, total, nil
+	return r.List(ctx, DeviceListParams{
+		StationID:     stationID,
+		Status:        status,
+		Keyword:       keyword,
+		Page:          page,
+		PageSize:      pageSize,
+		IsSystemAdmin: true,
+	})
 }
 
 func (r *DeviceRepository) GetByStationID(ctx context.Context, stationID int64) ([]*model.Device, error) {
@@ -2920,9 +2937,30 @@ type AlarmListParams struct {
 	Status       int
 	AlarmLevel   int
 	Keyword      string
-	Page         int
-	PageSize     int
+	// StartTime/EndTime 为 YYYY-MM-DD 日期字符串（可选），按 created_at 日期范围
+	// 过滤且含边界日期（endTime 截止到当日 23:59:59），语义与 notifications
+	// 列表接口的同名参数一致。为空时不追加条件。
+	StartTime     string
+	EndTime       string
+	Page          int
+	PageSize      int
 	IsSystemAdmin bool
+}
+
+// appendAlarmDateRangeFilter 追加 created_at 日期范围过滤（YYYY-MM-DD，含边界日期）。
+// 参数为空时原样返回，查询行为不变。
+func appendAlarmDateRangeFilter(baseQuery string, args []interface{}, argIdx int, startTime, endTime string) (string, []interface{}, int) {
+	if startTime != "" {
+		baseQuery += fmt.Sprintf(" AND created_at >= $%d", argIdx)
+		args = append(args, startTime)
+		argIdx++
+	}
+	if endTime != "" {
+		baseQuery += fmt.Sprintf(" AND created_at <= $%d", argIdx)
+		args = append(args, endTime+" 23:59:59")
+		argIdx++
+	}
+	return baseQuery, args, argIdx
 }
 
 func (r *AlarmRepository) List(ctx context.Context, params AlarmListParams) ([]*model.Alarm, int64, error) {
@@ -2966,6 +3004,8 @@ func (r *AlarmRepository) List(ctx context.Context, params AlarmListParams) ([]*
 		args = append(args, "%"+params.Keyword+"%")
 		argIdx++
 	}
+
+	baseQuery, args, argIdx = appendAlarmDateRangeFilter(baseQuery, args, argIdx, params.StartTime, params.EndTime)
 
 	countQuery := `SELECT COUNT(*) ` + baseQuery
 	var total int64

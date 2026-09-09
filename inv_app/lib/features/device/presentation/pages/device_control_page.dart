@@ -8,7 +8,9 @@ import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/entities/device_model_field.dart';
 import 'package:inv_app/core/utils/api_response.dart';
 import 'package:inv_app/core/utils/energy_schedule.dart';
+import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
+import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 
 import 'package:inv_app/l10n/app_localizations.dart';
@@ -52,6 +54,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
   int _failedSectionCount = 0;
   bool _isOnline = false;
   Timer? _pollTimer;
+  Timer? _refreshTimer;
   int _pollGeneration = 0;
   Map<String, int> _riskLevels = {};
 
@@ -86,11 +89,17 @@ class _DeviceControlPageState extends State<DeviceControlPage>
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
     _fetchAllData();
+    // 自动刷新：30s 静默轮询（不闪骨架屏），保持控制页数据新鲜
+    _refreshTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _fetchAllData(showLoading: false),
+    );
   }
 
   @override
   void dispose() {
     _pollTimer?.cancel();
+    _refreshTimer?.cancel();
     _tabController.dispose();
     super.dispose();
   }
@@ -99,8 +108,10 @@ class _DeviceControlPageState extends State<DeviceControlPage>
   //  Data fetching
   // ─────────────────────────────────────────────────────────────────────
 
-  Future<void> _fetchAllData() async {
-    if (mounted) {
+  /// 拉取全部数据。默认展示骨架屏；下拉刷新/定时轮询时 [showLoading]=false
+  /// 避免整页闪烁（参照 device_storage_page 的静默刷新模式）
+  Future<void> _fetchAllData({bool showLoading = true}) async {
+    if (mounted && showLoading) {
       setState(() => _loading = true);
     }
     final results = await Future.wait([
@@ -342,13 +353,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
       final success = code == 0;
 
       if (!success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('❌ $msg'),
-            backgroundColor: AppColors.error,
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        AppToast.show(context, msg, type: ToastType.error);
         return;
       }
 
@@ -359,32 +364,21 @@ class _DeviceControlPageState extends State<DeviceControlPage>
       }
 
       if (taskID == null || taskID.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('✅ $msg'),
-            backgroundColor: AppColors.success,
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        AppToast.show(context, msg, type: ToastType.success);
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.str('control_waiting_execution')),
-          backgroundColor: AppColors.info,
-          duration: const Duration(seconds: 3),
-        ),
-      );
+      AppToast.show(context, l10n.str('control_waiting_execution'));
 
       _pollCommandStatus(taskID);
     } catch (e) {
+      // 异常细节仅记录日志，用户侧给可行动的固定话术
+      debugPrint('command send failed [$commandCode]: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l10n.str('command_send_failed', {'error': '$e'})),
-            backgroundColor: AppColors.error,
-          ),
+        AppToast.show(
+          context,
+          l10n.str('command_send_failed_retry'),
+          type: ToastType.error,
         );
       }
     }
@@ -466,41 +460,32 @@ class _DeviceControlPageState extends State<DeviceControlPage>
     final l10n = AppLocalizations.of(context)!;
 
     String message;
-    Color color;
+    ToastType type;
 
     switch (status) {
       case 'acknowledged':
       case 'executing':
         message = l10n.str('control_executing');
-        color = AppColors.info;
+        type = ToastType.info;
         break;
       case 'success':
       case 'completed':
         message = l10n.str('control_applied');
-        color = AppColors.success;
+        type = ToastType.success;
         break;
       case 'timeout':
       case 'failed':
       case 'cancelled':
         message = l10n.str('control_execution_failed');
-        color = AppColors.error;
+        type = ToastType.error;
         break;
       default:
         message = l10n.str('control_waiting_execution');
-        color = AppColors.info;
+        type = ToastType.info;
         break;
     }
 
-    final isTerminal = _isTerminalStatus(status);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: color,
-        duration: isTerminal
-            ? const Duration(seconds: 3)
-            : const Duration(seconds: 2),
-      ),
-    );
+    AppToast.show(context, message, type: type);
   }
 
   bool _isTerminalStatus(String status) {
@@ -656,29 +641,32 @@ class _DeviceControlPageState extends State<DeviceControlPage>
   // ─────────────────────────────────────────────────────────────────────
 
   Widget _buildRunningTab() {
-    return ListView(
-      padding: EdgeInsets.all(16.w),
-      children: [
-        _buildOfflineWarning(),
+    return StyledRefreshIndicator(
+      onRefresh: () => _fetchAllData(showLoading: false),
+      child: ListView(
+        padding: EdgeInsets.all(16.w),
+        children: [
+          _buildOfflineWarning(),
 
-        // AC 输出开关
-        _buildAcOutputCard(),
+          // AC 输出开关
+          _buildAcOutputCard(),
 
-        SizedBox(height: 12.h),
+          SizedBox(height: 12.h),
 
-        // 当前运行模式
-        _buildRunModeCard(),
+          // 当前运行模式
+          _buildRunModeCard(),
 
-        SizedBox(height: 12.h),
+          SizedBox(height: 12.h),
 
-        // 能源流简化展示
-        _buildEnergyFlowCard(),
+          // 能源流简化展示
+          _buildEnergyFlowCard(),
 
-        SizedBox(height: 12.h),
+          SizedBox(height: 12.h),
 
-        // 临时静音按钮
-        _buildMuteCard(),
-      ],
+          // 临时静音按钮
+          _buildMuteCard(),
+        ],
+      ),
     );
   }
 
@@ -743,7 +731,9 @@ class _DeviceControlPageState extends State<DeviceControlPage>
                     borderRadius: BorderRadius.circular(4.r),
                   ),
                   child: Text(
-                    'R$riskLevel',
+                    riskLevel >= 3
+                        ? l10n.str('risk_level_high')
+                        : l10n.str('risk_level_medium'),
                     style: TextStyle(
                       fontSize: 10.sp,
                       color: AppColors.warning,
@@ -794,6 +784,8 @@ class _DeviceControlPageState extends State<DeviceControlPage>
     final l10n = AppLocalizations.of(context)!;
     final command = turnOn ? 'ac_on' : 'ac_off';
     final riskLevel = _riskLevels[command] ?? 0;
+    // 不做乐观更新：UI 状态由命令终态成功后的 _fetchAllData() 回填，
+    // 避免命令失败时开关状态与设备实际状态不一致
     if (riskLevel >= 2) {
       _showConfirmDialog(
         turnOn
@@ -804,12 +796,10 @@ class _DeviceControlPageState extends State<DeviceControlPage>
             : l10n.str('control_disable_ac_confirm'),
         () {
           _sendCommand(command);
-          setState(() => _acOutputOn = turnOn);
         },
       );
     } else {
       _sendCommand(command);
-      setState(() => _acOutputOn = turnOn);
     }
   }
 
@@ -819,7 +809,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
     final runMode = _rtPick(_realtimeData, 'run_mode', 'sys', 'work_state') ??
         _realtimeData['running_mode'] ??
         _realtimeData['mode'];
-    final modeStr = runMode?.toString() ?? '—';
+    final modeStr = _mapRunMode(runMode, l10n);
     return Container(
       decoration: AppColor.card(context),
       padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 16.h),
@@ -866,6 +856,32 @@ class _DeviceControlPageState extends State<DeviceControlPage>
         ],
       ),
     );
+  }
+
+  /// 运行模式枚举 → 语义文案（与 Web 端 workState 映射对齐：
+  /// 0=待机 1=逆变 2=旁路 4=故障；未知值原样展示）
+  String _mapRunMode(dynamic runMode, AppLocalizations l10n) {
+    if (runMode == null) return '—';
+    switch (runMode.toString()) {
+      case '0':
+      case 'standby':
+        return l10n.str('run_mode_standby');
+      case '1':
+      case 'inverting':
+        return l10n.str('run_mode_inverting');
+      case '2':
+      case 'bypass':
+        return l10n.str('run_mode_bypass');
+      case '4':
+      case 'fault':
+        return l10n.str('run_mode_fault');
+      case 'charging':
+        return l10n.str('run_mode_charging');
+      case 'discharging':
+        return l10n.str('run_mode_discharging');
+      default:
+        return runMode.toString();
+    }
   }
 
   Widget _buildEnergyFlowCard() {

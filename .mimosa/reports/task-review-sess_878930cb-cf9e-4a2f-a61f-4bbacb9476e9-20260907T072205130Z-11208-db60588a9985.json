@@ -1,0 +1,375 @@
+{
+  "schema_version": "mimosa-task-review/v2",
+  "run_id": "20260907T072205130Z-11208-db60588a9985",
+  "run_status": "inconclusive",
+  "errors": [
+    {
+      "stage": "scan",
+      "target": "external/驱动arm/App/App/source/UsartBMS485/UsartBms0.c",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "external/驱动arm/App/App/source/Collector/Collector.c",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "external/驱动arm/App/App/source/Collector/CollectorParamAddr.h",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "external/驱动arm/App/App/source/BMS/BMS.h",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    }
+  ],
+  "coverage": {
+    "schema_version": "mimosa-hook-coverage/v1",
+    "status": "partial",
+    "scope": "hook_observed_diff",
+    "baseline": {
+      "complete": true,
+      "captured_files": 2459,
+      "candidate_limit": 5000,
+      "truncated": false,
+      "enumeration_error_count": 0,
+      "snapshot_error_count": 0,
+      "compensated_target_count": 4
+    },
+    "change_tracking": {
+      "touched_observed": 0,
+      "touched_retained": 0,
+      "truncated": false,
+      "bash_mutation": true,
+      "bash_discovered": 4,
+      "bash_discovery_limit": 80,
+      "bash_discovery_truncated": false
+    },
+    "candidates": {
+      "eligible_files": 4,
+      "selected_files": 4,
+      "limit": 20,
+      "truncated": false
+    },
+    "scanning": {
+      "required_files": 4,
+      "scanned_files": 0,
+      "skipped_files": 0,
+      "failed_files": 4,
+      "project_checks_required": 0,
+      "project_checks_completed": 0
+    },
+    "notification": {
+      "eligible_findings": 0,
+      "detailed_findings": 0,
+      "detail_limit": 3,
+      "truncated": false
+    },
+    "reason_counts": {
+      "scanner_failed": 4,
+      "project_check_failed": 4
+    },
+    "reasons": [
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "external/驱动arm/App/App/source/UsartBMS485/UsartBms0.c",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "external/驱动arm/App/App/source/Collector/Collector.c",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "external/驱动arm/App/App/source/Collector/CollectorParamAddr.h",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "external/驱动arm/App/App/source/BMS/BMS.h",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "external/驱动arm/App/App/source/UsartBMS485/UsartBms0.c",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "external/驱动arm/App/App/source/Collector/Collector.c",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "external/驱动arm/App/App/source/Collector/CollectorParamAddr.h",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "external/驱动arm/App/App/source/BMS/BMS.h",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      }
+    ],
+    "reasons_truncated": false
+  },
+  "generated_at": "2026-09-07T07:22:05.130Z",
+  "session_id": "sess_878930cb-cf9e-4a2f-a61f-4bbacb9476e9",
+  "target": ".",
+  "revision": "6346015c0c31c4eb765bd49a181b9ad64e16ab58",
+  "rules_version": "unavailable",
+  "diff_hash": "6e7ec3f62063a66a0c523a5dfff6c2df4f8f8ef6bb5b4330c1020b532c051fe6",
+  "diff": {
+    "algorithm": "sha256",
+    "changed_file_count": 4,
+    "changed_files": [
+      {
+        "file": "external/驱动arm/App/App/source/BMS/BMS.h",
+        "ranges": [
+          {
+            "start": 11,
+            "end": 16
+          },
+          {
+            "start": 18,
+            "end": 25
+          },
+          {
+            "start": 49,
+            "end": 63
+          },
+          {
+            "start": 68,
+            "end": 68
+          },
+          {
+            "start": 70,
+            "end": 75
+          },
+          {
+            "start": 77,
+            "end": 77
+          },
+          {
+            "start": 126,
+            "end": 126
+          },
+          {
+            "start": 128,
+            "end": 133
+          },
+          {
+            "start": 135,
+            "end": 135
+          },
+          {
+            "start": 186,
+            "end": 192
+          }
+        ],
+        "before_hash": "8ae384ff489b66b00344b017c4c5f078fbe262181d7b94952c9b3b4e0c31e058",
+        "after_hash": "0898acc1d15d0586c96bcbd24e1e96f2c3a37ce69adcb3dc60f321c0f2842134"
+      },
+      {
+        "file": "external/驱动arm/App/App/source/Collector/Collector.c",
+        "ranges": [
+          {
+            "start": 16,
+            "end": 16
+          },
+          {
+            "start": 316,
+            "end": 318
+          },
+          {
+            "start": 478,
+            "end": 549
+          },
+          {
+            "start": 553,
+            "end": 553
+          },
+          {
+            "start": 566,
+            "end": 566
+          }
+        ],
+        "before_hash": "4340aafa0fc8e8c9953b28e88df5ad885178b53e1c0a56dba320402bc50b1d37",
+        "after_hash": "fb9e4c3964e90579c4f3f1de658c521639afce2b45b861ef2dacdcedf65bf854"
+      },
+      {
+        "file": "external/驱动arm/App/App/source/Collector/CollectorParamAddr.h",
+        "ranges": [
+          {
+            "start": 7,
+            "end": 90
+          },
+          {
+            "start": 97,
+            "end": 97
+          },
+          {
+            "start": 109,
+            "end": 117
+          },
+          {
+            "start": 126,
+            "end": 130
+          },
+          {
+            "start": 135,
+            "end": 221
+          },
+          {
+            "start": 225,
+            "end": 226
+          },
+          {
+            "start": 228,
+            "end": 228
+          },
+          {
+            "start": 249,
+            "end": 249
+          },
+          {
+            "start": 319,
+            "end": 327
+          },
+          {
+            "start": 335,
+            "end": 369
+          }
+        ],
+        "before_hash": "0de389e32a1ffdfff0d6ae653314733b1f61de85d1c083d9fa696a004781b7a5",
+        "after_hash": "817dfe95dd4df3a0d22b7c124d5c102873a1179206cf8ef06dbce9221d1c45ca"
+      },
+      {
+        "file": "external/驱动arm/App/App/source/UsartBMS485/UsartBms0.c",
+        "ranges": [
+          {
+            "start": 38,
+            "end": 38
+          },
+          {
+            "start": 43,
+            "end": 43
+          },
+          {
+            "start": 46,
+            "end": 46
+          },
+          {
+            "start": 64,
+            "end": 67
+          },
+          {
+            "start": 69,
+            "end": 72
+          },
+          {
+            "start": 77,
+            "end": 79
+          },
+          {
+            "start": 81,
+            "end": 81
+          },
+          {
+            "start": 89,
+            "end": 90
+          },
+          {
+            "start": 92,
+            "end": 96
+          },
+          {
+            "start": 100,
+            "end": 100
+          },
+          {
+            "start": 104,
+            "end": 105
+          },
+          {
+            "start": 144,
+            "end": 145
+          },
+          {
+            "start": 148,
+            "end": 150
+          }
+        ],
+        "before_hash": "7619cbb67f9979a774775cf98fafd4600b775f399442bd48667e63bd4fec69a4",
+        "after_hash": "8398c0e94e54e8e57488d409d0deeaa101b14a168441c108d65adb33e85b5d26"
+      }
+    ]
+  },
+  "timing": {
+    "started_at": "2026-09-07T07:22:02.718Z",
+    "completed_at": "2026-09-07T07:22:05.130Z",
+    "duration_ms": 2412,
+    "measurement": "hook_wall_clock"
+  },
+  "tokens": {
+    "input": 0,
+    "output": 0,
+    "total": 0,
+    "model_calls": 0,
+    "measurement": "known-zero"
+  },
+  "telemetry": {
+    "schemaVersion": "mimosa-gate-telemetry/v1",
+    "profile": "gate",
+    "operation": "Stop",
+    "outcome": "partial/INCONCLUSIVE",
+    "latencyMs": 2412,
+    "peakMemoryBytes": 102522880,
+    "memoryMeasurement": "max-observed-process-rss",
+    "scannedFiles": 0,
+    "cache": {
+      "hits": 0,
+      "misses": 0,
+      "measurement": "not-applicable"
+    },
+    "denyCount": 0,
+    "tokens": {
+      "input": 0,
+      "output": 0,
+      "total": 0,
+      "modelCalls": 0,
+      "measurement": "known-zero"
+    }
+  },
+  "finding_count": 0,
+  "rewake_finding_count": 0,
+  "evidence_boundary": {
+    "scan": "candidate",
+    "static_fix_verification": "observed_static_only",
+    "runtime_verification": "not_performed"
+  },
+  "finding_events": [],
+  "findings": [],
+  "artifacts": {
+    "immutable_report": ".mimosa/reports/task-review-sess_878930cb-cf9e-4a2f-a61f-4bbacb9476e9-20260907T072205130Z-11208-db60588a9985.json",
+    "latest_report": ".mimosa/reports/task-review-sess_878930cb-cf9e-4a2f-a61f-4bbacb9476e9.json",
+    "history_summary": ".mimosa/history/run-20260907T072205130Z-11208-db60588a9985.json"
+  }
+}

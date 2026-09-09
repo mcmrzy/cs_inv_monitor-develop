@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Button, Avatar, Dropdown, Badge, Typography, theme, Grid, Form, App, Select, Cascader, Modal, Input, Space,
+  Button, Dropdown, Badge, Typography, Grid, Form, App, Modal, Input, Space, Tooltip,
 } from 'antd'
 import { ProLayout, ModalForm, ProFormText, ProFormSelect } from '@ant-design/pro-components'
 import type { ProLayoutProps } from '@ant-design/pro-components'
@@ -13,6 +13,7 @@ import {
   EnvironmentOutlined, LockOutlined, FileTextOutlined,
   HeartOutlined, ControlOutlined, UnorderedListOutlined,
   EditOutlined, ExperimentOutlined, GlobalOutlined, ClockCircleOutlined,
+  BellOutlined, AppstoreOutlined, ToolOutlined, FundProjectionScreenOutlined,
 } from '@ant-design/icons'
 import useAuthStore from '@/stores/authStore'
 import useLocaleStore from '@/stores/localeStore'
@@ -20,6 +21,9 @@ import useTimezoneStore from '@/stores/timezoneStore'
 import useTranslation from '@/hooks/useTranslation'
 import useOrganizationAccess from '@/hooks/useOrganizationAccess'
 import api from '@/services/api'
+import { alertApi } from '@/services/alertApi'
+import { queryKeys } from '@/utils/queryKeys'
+import { passwordRule } from '@/utils/passwordRules'
 import { getRoutePermissions } from '@/router/routeAccess'
 import { TIMEZONE_LIST, REGION_LABELS, getTimezoneLabel } from '@/utils/timezone'
 import { resolveMediaUrl } from '@/utils/urls'
@@ -34,35 +38,93 @@ interface RouteMenuItem {
   permission?: string
 }
 
+interface RouteMenuGroup {
+  path: string
+  name: string
+  icon: React.ReactNode
+  items: RouteMenuItem[]
+}
+
 const routePermission = (path: string) => getRoutePermissions(path)[0]
 
-const getRoutes = (t: (key: string) => string): RouteMenuItem[] => [
-  { path: '/dashboard', name: t('menu.dashboard'), icon: <DashboardOutlined />, permission: routePermission('/dashboard') },
-  { path: '/monitoring', name: t('menu.stationMonitor'), icon: <ThunderboltOutlined />, permission: routePermission('/monitoring') },
-  { path: '/stations', name: t('menu.stationManage'), icon: <EnvironmentOutlined />, permission: routePermission('/stations') },
-  { path: '/devices', name: t('menu.deviceManage'), icon: <DesktopOutlined />, permission: routePermission('/devices') },
-  { path: '/models', name: t('menu.modelManage'), icon: <ExperimentOutlined />, permission: routePermission('/models') },
-  { path: '/parallel', name: t('menu.parallelManage'), icon: <ClusterOutlined />, permission: routePermission('/parallel') },
-  { path: '/remote-settings', name: t('menu.remoteSettings'), icon: <ControlOutlined />, permission: routePermission('/remote-settings') },
-  { path: '/batch-settings', name: t('menu.batchSettings'), icon: <EditOutlined />, permission: routePermission('/batch-settings') },
-  { path: '/ota', name: t('menu.ota'), icon: <CloudUploadOutlined />, permission: routePermission('/ota') },
-  { path: '/alerts', name: t('menu.alertCenter'), icon: <AlertOutlined />, permission: routePermission('/alerts') },
-  { path: '/work-orders', name: t('menu.workOrders'), icon: <FileTextOutlined />, permission: routePermission('/work-orders') },
-  { path: '/organizations', name: t('menu.orgManagement'), icon: <SettingOutlined /> },
-  { path: '/users', name: t('menu.userManage'), icon: <TeamOutlined />, permission: routePermission('/users') },
-  { path: '/operation-logs', name: t('menu.operationLogs'), icon: <UnorderedListOutlined />, permission: routePermission('/operation-logs') },
-  { path: '/system/system-monitor', name: t('menu.systemMonitor'), icon: <HeartOutlined />, permission: routePermission('/system/system-monitor') },
-  { path: '/system/system-config', name: t('menu.systemConfig'), icon: <SettingOutlined />, permission: routePermission('/system/system-config') },
+/** 侧边导航分组：总览 / 资产管理 / 设备运维 / 系统管理 */
+const getMenuGroups = (t: (key: string) => string): RouteMenuGroup[] => [
+  {
+    path: '/group-overview',
+    name: t('menu.overview'),
+    icon: <DashboardOutlined />,
+    items: [
+      { path: '/dashboard', name: t('menu.dashboard'), icon: <DashboardOutlined />, permission: routePermission('/dashboard') },
+      { path: '/monitoring', name: t('menu.stationMonitor'), icon: <ThunderboltOutlined />, permission: routePermission('/monitoring') },
+      { path: '/big-screen', name: t('menu.bigScreen'), icon: <FundProjectionScreenOutlined />, permission: routePermission('/big-screen') },
+    ],
+  },
+  {
+    path: '/group-assets',
+    name: t('menu.assets'),
+    icon: <AppstoreOutlined />,
+    items: [
+      { path: '/stations', name: t('menu.stationManage'), icon: <EnvironmentOutlined />, permission: routePermission('/stations') },
+      { path: '/devices', name: t('menu.deviceManage'), icon: <DesktopOutlined />, permission: routePermission('/devices') },
+      { path: '/models', name: t('menu.modelManage'), icon: <ExperimentOutlined />, permission: routePermission('/models') },
+      { path: '/parallel', name: t('menu.parallelManage'), icon: <ClusterOutlined />, permission: routePermission('/parallel') },
+    ],
+  },
+  {
+    path: '/group-ops',
+    name: t('menu.deviceOps'),
+    icon: <ToolOutlined />,
+    items: [
+      { path: '/ota', name: t('menu.ota'), icon: <CloudUploadOutlined />, permission: routePermission('/ota') },
+      { path: '/alerts', name: t('menu.alertCenter'), icon: <AlertOutlined />, permission: routePermission('/alerts') },
+      { path: '/work-orders', name: t('menu.workOrders'), icon: <FileTextOutlined />, permission: routePermission('/work-orders') },
+      { path: '/remote-settings', name: t('menu.remoteSettings'), icon: <ControlOutlined />, permission: routePermission('/remote-settings') },
+      { path: '/batch-settings', name: t('menu.batchSettings'), icon: <EditOutlined />, permission: routePermission('/batch-settings') },
+    ],
+  },
+  {
+    path: '/group-system',
+    name: t('menu.system'),
+    icon: <SettingOutlined />,
+    items: [
+      { path: '/users', name: t('menu.userManage'), icon: <TeamOutlined />, permission: routePermission('/users') },
+      { path: '/organizations', name: t('menu.orgManagement'), icon: <SettingOutlined /> },
+      { path: '/operation-logs', name: t('menu.operationLogs'), icon: <UnorderedListOutlined />, permission: routePermission('/operation-logs') },
+      { path: '/system/system-monitor', name: t('menu.systemMonitor'), icon: <HeartOutlined />, permission: routePermission('/system/system-monitor') },
+      { path: '/system/system-config', name: t('menu.systemConfig'), icon: <SettingOutlined />, permission: routePermission('/system/system-config') },
+    ],
+  },
 ]
+
+/** 顶栏告警铃铛：展示未处理告警数（60s 轮询），点击跳转通知中心 */
+const AlertBell: React.FC = () => {
+  const navigate = useNavigate()
+  const { t } = useTranslation()
+  const { data: alertStats } = useQuery({
+    queryKey: queryKeys.alerts.stats(),
+    queryFn: () => alertApi.getStats().then((r) => r.data?.data ?? { total: 0, unhandled: 0, handled: 0, critical: 0 }),
+    refetchInterval: 60000,
+  })
+  const unhandled = Number((alertStats as { unhandled?: number | string } | undefined)?.unhandled ?? 0)
+  return (
+    <Tooltip title={t('menu.alertCenter')}>
+      <Button
+        type="text"
+        size="small"
+        aria-label={t('menu.alertCenter')}
+        icon={<Badge count={unhandled} size="small"><BellOutlined style={{ fontSize: 16 }} /></Badge>}
+        onClick={() => navigate('/alerts')}
+      />
+    </Tooltip>
+  )
+}
 
 const MainLayout: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false)
   const [mobileCollapsed, setMobileCollapsed] = useState(true)
   const [passwordModalOpen, setPasswordModalOpen] = useState(false)
-  const [passwordLoading, setPasswordLoading] = useState(false)
   const [passwordForm] = Form.useForm()
   const [profileModalOpen, setProfileModalOpen] = useState(false)
-  const [profileLoading, setProfileLoading] = useState(false)
   const [profileForm] = Form.useForm()
   const [profileAvatar, setProfileAvatar] = useState('')
   const [timezoneModalOpen, setTimezoneModalOpen] = useState(false)
@@ -79,7 +141,6 @@ const MainLayout: React.FC = () => {
   const fetchTimezone = useTimezoneStore((s) => s.fetchTimezone)
   const queryClient = useQueryClient()
   const { t } = useTranslation()
-  const { token: themeToken } = theme.useToken()
   const screens = Grid.useBreakpoint()
   const { message } = App.useApp()
 
@@ -94,27 +155,32 @@ const MainLayout: React.FC = () => {
 
   // Build ProLayout route config with permission filtering
   const routeConfig = useMemo((): ProLayoutProps['route'] => {
-    const source = getRoutes(t)
-    
     // 过滤规则：
     // 1. 非终端用户但有组织成员身份 → 可见；纯终端用户（仅 customer 角色）→ 不可见
     // 2. 无组织记录或角色信息 → 不可见
     // 3. 其他菜单按权限过滤
-    const filtered = source.filter(
-      (item) => {
-        if (item.path === '/organizations') {
-          // 组织架构只对有效组织成员开放
-          return canAccessOrgManagement && !isEndUser
-        }
-        // 其他菜单按权限过滤
-        return !item.permission || hasPermission(item.permission)
-      },
-    )
+    const filterItem = (item: RouteMenuItem) => {
+      if (item.path === '/organizations') {
+        // 组织架构只对有效组织成员开放
+        return canAccessOrgManagement && !isEndUser
+      }
+      // 其他菜单按权限过滤
+      return !item.permission || hasPermission(item.permission)
+    }
+    const groups = getMenuGroups(t)
+      .map((group) => ({
+        path: group.path,
+        name: group.name,
+        icon: group.icon,
+        routes: group.items.filter(filterItem).map(({ permission: _permission, ...rest }) => rest),
+      }))
+      // 过滤后为空的分组不展示，避免空 submenu
+      .filter((group) => group.routes.length > 0)
     return {
       path: '/',
-      routes: filtered.map(({ permission: _permission, ...rest }) => rest),
+      routes: groups,
     }
-  }, [isEndUser, canAccessOrgManagement, hasPermission, lang, t])
+  }, [isEndUser, canAccessOrgManagement, hasPermission, t])
 
   const handleLogout = () => {
     logout()
@@ -141,7 +207,6 @@ const MainLayout: React.FC = () => {
     email?: string
     region?: string[]
   }) => {
-    setProfileLoading(true)
     try {
       // 将region数组转换为country和region_name
       const submitValues: Record<string, unknown> = {
@@ -178,13 +243,10 @@ const MainLayout: React.FC = () => {
       }
     } catch {
       message.error(t('msg.profileUpdateFailed'))
-    } finally {
-      setProfileLoading(false)
     }
   }
 
   const handleChangePassword = async (values: { old_password: string; new_password: string }) => {
-    setPasswordLoading(true)
     try {
       const res = await api.post('/auth/change-password', {
         old_password: values.old_password,
@@ -200,8 +262,6 @@ const MainLayout: React.FC = () => {
       passwordForm.resetFields()
     } catch {
       message.error(t('msg.passwordCheckFailed'))
-    } finally {
-      setPasswordLoading(false)
     }
   }
 
@@ -213,11 +273,6 @@ const MainLayout: React.FC = () => {
     { key: 'timezone', icon: <ClockCircleOutlined />, label: t('header.timezone'), onClick: () => setTimezoneModalOpen(true) },
     { type: 'divider' as const },
     { key: 'logout', icon: <LogoutOutlined />, label: t('header.logout'), danger: true, onClick: handleLogout },
-  ]
-
-  const langMenuItems = [
-    { key: 'zh', label: '中文' },
-    { key: 'en', label: 'English' },
   ]
 
   const currentTimezone = user?.timezone || 'Asia/Shanghai'
@@ -258,6 +313,23 @@ const MainLayout: React.FC = () => {
 
   const siderCollapsed = isMobile ? mobileCollapsed : collapsed
 
+  // 当前路由所在分组自动展开（含 /system/xxx 子路径），其余分组由用户手动开合
+  const activeGroupKey = useMemo(() => {
+    const hit = getMenuGroups(t).find((group) =>
+      group.items.some(
+        (item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`),
+      ),
+    )
+    return hit?.path
+  }, [location.pathname, t])
+
+  const [manualOpenKeys, setManualOpenKeys] = useState<string[]>([])
+  const menuOpenKeys = useMemo(() => {
+    const keys = new Set(manualOpenKeys)
+    if (activeGroupKey) keys.add(activeGroupKey)
+    return [...keys]
+  }, [manualOpenKeys, activeGroupKey])
+
   return (
     <>
       <ProLayout
@@ -277,6 +349,10 @@ const MainLayout: React.FC = () => {
         route={routeConfig}
         location={{ pathname: location.pathname }}
         menu={{ locale: false }}
+        menuProps={{
+          openKeys: menuOpenKeys,
+          onOpenChange: (keys) => setManualOpenKeys(Array.from(new Set(keys))),
+        }}
         token={{
           sider: {
             colorBgMenuItemSelected: '#e6f4ff',
@@ -291,9 +367,15 @@ const MainLayout: React.FC = () => {
           },
         }}
         menuItemRender={(item, dom) => (
-          <a onClick={(e) => { e.preventDefault(); if (item.path) navigate(item.path) }}>{dom}</a>
+          <a
+            href={item.path}
+            onClick={(e) => { e.preventDefault(); if (item.path) navigate(item.path) }}
+          >
+            {dom}
+          </a>
         )}
         actionsRender={() => [
+          <AlertBell key="alert-bell" />,
           user && (
             <Badge key="role" color={user.isSystemAdmin ? '#eb2f96' : '#1677ff'} text={<Typography.Text style={{ fontSize: 12 }}>{user.isSystemAdmin ? t('header.systemAdmin') : (hasPermission('admin:manage') ? t('header.orgAdmin') : t('header.member'))}</Typography.Text>} />
           ),
@@ -342,7 +424,7 @@ const MainLayout: React.FC = () => {
           label={t('modal.newPassword')}
           rules={[
             { required: true, message: t('msg.newPasswordRequired') },
-            { min: 6, message: t('msg.pwdMinLength') },
+            ...passwordRule(t),
           ]}
           fieldProps={{ prefix: <LockOutlined />, placeholder: t('modal.newPasswordPlaceholder') }}
         />
@@ -492,7 +574,7 @@ const MainLayout: React.FC = () => {
             phoneForm.resetFields()
             // 刷新用户信息
             queryClient.invalidateQueries({ queryKey: ['user', 'profile'] })
-          } catch (error) {
+          } catch {
             // 验证失败
           }
         }}
@@ -525,7 +607,7 @@ const MainLayout: React.FC = () => {
                     const res = await api.post('/auth/send-phone-code', { phone })
                     const responseData = res.data as Record<string, unknown>
                     if (responseData?.code !== undefined && responseData.code !== 0) {
-                      message.error((responseData.message as string) || 'Failed to send code')
+                      message.error((responseData.message as string) || t('msg.sendCodeFailed'))
                       return
                     }
                     message.success(t('modal.sendCode') + ' ✓')
@@ -542,7 +624,7 @@ const MainLayout: React.FC = () => {
                       })
                     }, 1000)
                   } catch {
-                    message.error('Failed to send code')
+                    message.error(t('msg.sendCodeFailed'))
                   }
                 }}
                 disabled={codeSending}
@@ -580,7 +662,7 @@ const MainLayout: React.FC = () => {
             emailForm.resetFields()
             // 刷新用户信息
             queryClient.invalidateQueries({ queryKey: ['user', 'profile'] })
-          } catch (error) {
+          } catch {
             // 验证失败
           }
         }}
@@ -616,7 +698,7 @@ const MainLayout: React.FC = () => {
                     const res = await api.post('/auth/send-email-change-code', { email })
                     const responseData = res.data as Record<string, unknown>
                     if (responseData?.code !== undefined && responseData.code !== 0) {
-                      message.error((responseData.message as string) || 'Failed to send code')
+                      message.error((responseData.message as string) || t('msg.sendCodeFailed'))
                       return
                     }
                     message.success(t('modal.sendCode') + ' ✓')
@@ -633,7 +715,7 @@ const MainLayout: React.FC = () => {
                       })
                     }, 1000)
                   } catch {
-                    message.error('Failed to send code')
+                    message.error(t('msg.sendCodeFailed'))
                   }
                 }}
                 disabled={codeSending}

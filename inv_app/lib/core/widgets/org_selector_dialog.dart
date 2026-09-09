@@ -4,6 +4,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/stores/organization_context_store.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 /// 组织选择对话框
 /// 用于在多个组织之间切换
@@ -29,15 +30,16 @@ class _OrgSelectorDialogState extends State<OrgSelectorDialog> {
       listenable: _orgStore!,
       builder: (context, _) {
         final theme = Theme.of(context);
+        final l10n = AppLocalizations.of(context)!;
         final orgs = _orgStore!.availableOrgs;
 
         if (_orgStore!.isLoading) {
-          return const AlertDialog(
+          return AlertDialog(
             content: Row(
               children: [
-                CircularProgressIndicator(),
-                SizedBox(width: 16),
-                Text('加载中...'),
+                const CircularProgressIndicator(),
+                const SizedBox(width: 16),
+                Text(l10n.loading),
               ],
             ),
           );
@@ -45,12 +47,12 @@ class _OrgSelectorDialogState extends State<OrgSelectorDialog> {
 
         if (orgs.isEmpty) {
           return AlertDialog(
-            title: const Text('提示'),
-            content: const Text('您不属于任何组织'),
+            title: Text(l10n.str('org_hint')),
+            content: Text(l10n.str('org_not_in_any')),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('确定'),
+                child: Text(l10n.confirm),
               ),
             ],
           );
@@ -61,7 +63,7 @@ class _OrgSelectorDialogState extends State<OrgSelectorDialog> {
             children: [
               Icon(Icons.groups, color: theme.colorScheme.primary),
               SizedBox(width: 8.w),
-              const Text('组织切换'),
+              Text(l10n.str('org_switch_title')),
             ],
           ),
           content: SingleChildScrollView(
@@ -120,7 +122,12 @@ class _OrgSelectorDialogState extends State<OrgSelectorDialog> {
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('成员：${org.memberCount} | 设备：${org.deviceCount}'),
+                      Text(
+                        l10n.str('org_member_device_count', {
+                          'members': '${org.memberCount}',
+                          'devices': '${org.deviceCount}',
+                        }),
+                      ),
                       if (org.description != null &&
                           org.description!.isNotEmpty)
                         Padding(
@@ -148,7 +155,7 @@ class _OrgSelectorDialogState extends State<OrgSelectorDialog> {
                             borderRadius: BorderRadius.circular(12.r),
                           ),
                           child: Text(
-                            '当前',
+                            l10n.str('org_current'),
                             style: TextStyle(
                               fontSize: 12.sp,
                               color: AppColors.success,
@@ -167,7 +174,11 @@ class _OrgSelectorDialogState extends State<OrgSelectorDialog> {
                       if (!context.mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('已切换到 "${org.name}"'),
+                          content: Text(
+                            l10n.str('org_switched_to', {
+                              'name': org.name,
+                            }),
+                          ),
                           duration: const Duration(seconds: 2),
                         ),
                       );
@@ -175,7 +186,13 @@ class _OrgSelectorDialogState extends State<OrgSelectorDialog> {
                     } catch (error) {
                       if (!context.mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('切换失败：$error')),
+                        SnackBar(
+                          content: Text(
+                            l10n.str('org_switch_failed', {
+                              'error': error.toString(),
+                            }),
+                          ),
+                        ),
                       );
                     }
                   },
@@ -186,7 +203,7 @@ class _OrgSelectorDialogState extends State<OrgSelectorDialog> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('取消'),
+              child: Text(l10n.cancel),
             ),
           ],
         );

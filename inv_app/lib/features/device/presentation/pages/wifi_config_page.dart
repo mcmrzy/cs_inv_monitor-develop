@@ -46,6 +46,8 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
   bool _provisioning = false;
   String _provisionStatus = '';
   bool _provisionOk = false;
+  /// 配网失败标记：驱动状态条错误样式（替代旧的 '❌' 前缀字符串探测）
+  bool _provisionFailed = false;
   int _provisionStep = 0;
   int _wifiOperationId = 0;
   Future<void> _wifiRouteQueue = Future<void>.value();
@@ -591,6 +593,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       _provisioning = true;
       _provisionStatus = l10n.sendingProvisionInfo;
       _provisionOk = false;
+      _provisionFailed = false;
     });
 
     final outcome = await _softApProvisionRunner.run(
@@ -622,6 +625,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         setState(() {
           _provisioning = false;
           _provisionOk = true;
+          _provisionFailed = false;
           _provisionStatus = l10n.provisionCompleteWifiIp(
             outcome.ssid ?? '',
             outcome.ip ?? '',
@@ -633,14 +637,16 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         setState(() {
           _provisioning = false;
           _provisionOk = false;
-          _provisionStatus = '❌ ${l10n.provisionTimeout}';
+          _provisionFailed = true;
+          _provisionStatus = l10n.provisionTimeout;
         });
         break;
       case SoftApProvisionOutcomeType.failed:
         setState(() {
           _provisioning = false;
           _provisionOk = false;
-          _provisionStatus = '❌ ${outcome.message ?? l10n.sendFailed}';
+          _provisionFailed = true;
+          _provisionStatus = outcome.message ?? l10n.sendFailed;
         });
         break;
       case SoftApProvisionOutcomeType.cancelled:
@@ -918,6 +924,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       _provisionStep = 0;
       _provisionStatus = '';
       _provisionOk = false;
+      _provisionFailed = false;
       _provisioning = false;
       _scanningNearbyWifi = false;
       _workingSsidController.clear();
@@ -988,6 +995,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       _provisionStep = 0;
       _provisionStatus = '';
       _provisionOk = false;
+      _provisionFailed = false;
       _provisioning = false;
       _provisionSuccess = false;
     });

@@ -3,9 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Row, Col, Card, Table, Button, Input, Select, Space, Modal, Form,
-  Drawer, Descriptions, Slider, Tooltip, message, Typography,
-  Dropdown, Tag, DatePicker, Divider, Spin, Empty, Upload, Tabs,
-  Input as AntInput, InputNumber, Switch, Alert, List, Grid,
+  Descriptions, message, Typography,
+  Dropdown, Tag, DatePicker, Divider, Upload, Tabs,
+  Input as AntInput, Alert,
 } from 'antd'
 import Popconfirm from '@/components/LocalizedPopconfirm'
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table'
@@ -13,27 +13,23 @@ import type { MenuProps } from 'antd'
 import {
   PlusOutlined, SearchOutlined, ReloadOutlined, SettingOutlined,
   DownloadOutlined, DeleteOutlined, LinkOutlined, EditOutlined,
-  EyeOutlined, ExclamationCircleOutlined, ThunderboltOutlined,
+  EyeOutlined, ThunderboltOutlined, MoreOutlined,
   UploadOutlined, InboxOutlined, CheckOutlined, CloseOutlined,
   DisconnectOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
-import ReactECharts from '@/lib/echarts'
 import { deviceApi } from '@/services/deviceApi'
 import api from '@/services/api'
 import { commandApi } from '@/services/commandApi'
 import { modelApi } from '@/services/modelApi'
 import { userApi } from '@/services/userApi'
 import useAuthStore from '@/stores/authStore'
-import { type CommandCapability, type ParameterSchema, type SchemaArg } from '@/types'
 import useTranslation from '@/hooks/useTranslation'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
 import StatusBadge from '@/components/StatusBadge'
-import { useModelFields, DynamicFieldRenderer, DynamicStatCards } from '@/components/dyna'
 import { formatInTimezone } from '@/utils/timezone'
 import useTimezoneStore from '@/stores/timezoneStore'
-import { toRtEnvelope, extractEnergyMetrics, type EnergyMetrics } from '@/pages/device-detail/energyUtils'
-import FirmwareUpgradeTab from './components/FirmwareUpgradeTab'
+import BulkDeviceOperationModal, { type BulkFailure } from './components/BulkDeviceOperationModal'
 
 const { Text, Title } = Typography
 const { RangePicker } = DatePicker
@@ -57,13 +53,6 @@ interface DeviceRecord {
   user_phone?: string
   owner?: { phone: string; nickname: string }
   installer?: { nickname: string; phone: string }
-}
-
-interface RealtimeData {
-  online?: { online: boolean; rssi: number; ip: string }
-  _raw?: Record<string, any>
-  _metrics?: EnergyMetrics
-  [key: string]: any
 }
 
 interface DeviceFilters {
@@ -95,89 +84,15 @@ interface UnbindRequestRecord {
   created_at: string
 }
 
-interface CommandParam {
-  name: string
-  label: string
-  type: 'number' | 'string' | 'boolean' | 'select'
-  required: boolean
-  options?: { label: string; value: any }[]
-  min?: number
-  max?: number
-  defaultValue?: any
-  unit?: string
-}
-
-interface CommandTemplate {
-  name: string
-  label: string
-  description: string
-  category: 'power' | 'battery' | 'grid' | 'system' | 'ota'
-  params: CommandParam[]
-  requiresConfirm: boolean
-  confirmationMessage?: string
-}
-
-function parseCapabilitySchema(raw: unknown): ParameterSchema | null {
-  if (!raw) return null
-  if (typeof raw === 'string') {
-    try { return JSON.parse(raw) as ParameterSchema } catch { return null }
-  }
-  return typeof raw === 'object' && raw !== null && 'args' in raw
-    ? raw as ParameterSchema
-    : null
-}
-
-function mapCapabilityParam(arg: SchemaArg): CommandParam {
-  const hasEnum = Array.isArray(arg.enum) && arg.enum.length > 0
-  return {
-    name: arg.key,
-    label: arg.label || arg.description || arg.key,
-    type: hasEnum ? 'select' : arg.type === 'integer' || arg.type === 'number' ? 'number' : arg.type,
-    required: arg.required ?? false,
-    options: hasEnum ? arg.enum!.map((value) => ({ label: String(value), value })) : undefined,
-    min: arg.min,
-    max: arg.max,
-    defaultValue: arg.default,
-    unit: arg.unit,
-  }
-}
-
-function mapCapabilityToTemplate(capability: CommandCapability): CommandTemplate {
-  const supportedCategories = new Set(['power', 'battery', 'grid', 'system', 'ota'])
-  const category = supportedCategories.has(capability.config_domain || '')
-    ? capability.config_domain as CommandTemplate['category']
-    : 'system'
-  const schema = parseCapabilitySchema(capability.parameter_schema)
-  const label = capability.ui_schema?.display_name || capability.display_name || capability.command_code
-  return {
-    name: capability.command_code,
-    label,
-    description: capability.display_name && capability.display_name !== label ? capability.display_name : '',
-    category,
-    params: (schema?.args ?? []).map(mapCapabilityParam),
-    requiresConfirm: capability.risk_level >= 3 || capability.confirmation_mode === 'required',
-    confirmationMessage: capability.risk_level >= 3 ? label : undefined,
-  }
-}
-
 const DevicesPage: React.FC = () => {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { timezone } = useTimezoneStore()
 
-  const COMMAND_CATEGORY_LABELS: Record<string, string> = {
-    power: t('dev.powerControl'),
-    battery: t('dev.batteryManage'),
-    grid: t('dev.gridProtect'),
-    system: t('dev.systemControl'),
-    ota: t('dev.remoteUpgrade'),
-  }
-
   const { user, hasPermission } = useAuthStore()
   const [messageApi, contextHolder] = message.useMessage()
   const [modal, modalContextHolder] = Modal.useModal()
-  const screens = Grid.useBreakpoint()
   const isSuperAdmin = user?.isSystemAdmin
   const isAdmin = isSuperAdmin || hasPermission('devices:manage')
   const isEndUser = !isAdmin
@@ -188,30 +103,20 @@ const DevicesPage: React.FC = () => {
   const [pageSize, setPageSize] = useState(20)
   const [filters, setFilters] = useState<DeviceFilters>({})
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
+  // 批量控制命令（受控状态，避免从 DOM 取 antd Select 值失败的假动作）
+  const [batchControlOpen, setBatchControlOpen] = useState(false)
+  const [batchCmd, setBatchCmd] = useState<'restart' | 'query_status'>('restart')
+  const [batchControlExecuting, setBatchControlExecuting] = useState(false)
 
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
-  const [editingDevice, setEditingDevice] = useState<DeviceRecord | null>(null)
   const [addForm] = Form.useForm()
   const [editForm] = Form.useForm()
 
-  const [detailDrawerOpen, setDetailDrawerOpen] = useState(false)
-  const [detailDevice, setDetailDevice] = useState<DeviceRecord | null>(null)
-  const [detailSn, setDetailSn] = useState<string>('')
-  const [telemetryRange, setTelemetryRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
-    dayjs().subtract(1, 'day'),
-    dayjs(),
-  ])
-  const [powerLimit, setPowerLimit] = useState<number>(0)
-  const [drawerTab, setDrawerTab] = useState<string>('info')
-  const [telemetryVersion, setTelemetryVersion] = useState(0)
-
-  const [selectedCommand, setSelectedCommand] = useState<CommandTemplate | null>(null)
-  const [commandParams, setCommandParams] = useState<Record<string, any>>({})
-  const [executing, setExecuting] = useState(false)
-  const [confirmModalOpen, setConfirmModalOpen] = useState(false)
-  const [pendingExecution, setPendingExecution] = useState<{ commandName: string; params: Record<string, any> } | null>(null)
-  const [commandResult, setCommandResult] = useState<{ success: boolean; message: string } | null>(null)
+  // 批量解绑/删除进度弹窗（串行逐台执行，逐条上报进度）
+  const [bulkOpen, setBulkOpen] = useState(false)
+  const [bulkAction, setBulkAction] = useState<'unbind' | 'delete'>('unbind')
+  const [bulkSns, setBulkSns] = useState<string[]>([])
 
   const [importModalOpen, setImportModalOpen] = useState(false)
   const [importFile, setImportFile] = useState<File | null>(null)
@@ -241,9 +146,13 @@ const DevicesPage: React.FC = () => {
   const [bindDeviceForm] = Form.useForm()
 
   const [modelOptions, setModelOptions] = useState<{ label: string; value: string; model: any }[]>([])
-  // modelFields hook 移到 deviceDetail useMemo 之后（line ~1500），以确保使用 API 返回的实际设备数据
 
-  // 编辑弹窗中当前选中的型号（用于联动预览该型号的额定参数）
+  // 新增/编辑弹窗中当前选中的型号（用于联动预览该型号的额定参数）
+  const watchedAddModel = Form.useWatch('model', addForm)
+  const selectedAddModel = useMemo(
+    () => modelOptions.find((o) => o.value === watchedAddModel)?.model ?? null,
+    [modelOptions, watchedAddModel],
+  )
   const watchedEditModel = Form.useWatch('model', editForm)
   const selectedEditModel = useMemo(
     () => modelOptions.find((o) => o.value === watchedEditModel)?.model ?? null,
@@ -280,117 +189,6 @@ const DevicesPage: React.FC = () => {
       }),
   })
 
-  const { data: deviceDetailRaw, error: deviceDetailError, refetch: refetchDeviceDetail } = useQuery({
-    queryKey: ['deviceDetail', detailSn],
-    queryFn: () =>
-      deviceApi.getDeviceBySn(detailSn).then((res) => {
-        const d = res.data
-        const inner = d?.data ?? d ?? {}
-        return inner as { device?: DeviceRecord; realtime_data?: any; online_status?: any }
-      }),
-    enabled: !!detailSn && detailDrawerOpen,
-  })
-
-  const { data: realtimeData, isLoading: realtimeLoading, error: realtimeError, refetch: refetchRealtime } = useQuery({
-    queryKey: ['deviceRealtime', detailSn],
-    queryFn: () =>
-      deviceApi.getRealtime(detailSn).then((res) => {
-        const d = res.data
-        const inner = d?.data ?? d ?? {}
-        // 与电站健康/设备详情页同一套 V2.1 解析（energyUtils）
-        const env = toRtEnvelope(inner)
-        const raw = env.realtime
-
-        // Build aliased raw data for DynamicFieldRenderer compatibility
-        const rawForFields: Record<string, any> = { ...(raw || {}) }
-
-        // Add aliases so DB field_key names can find the data
-        // AC aliases
-        if (rawForFields.apparent_power != null) rawForFields.ac_apparent = rawForFields.apparent_power
-        if (rawForFields.power_factor != null) rawForFields.ac_pf = rawForFields.power_factor
-        if (rawForFields.load_rate != null) rawForFields.ac_load_percent = rawForFields.load_rate
-        if (rawForFields.voltage_thd != null) rawForFields.ac_thd_v = rawForFields.voltage_thd
-
-        // Battery aliases
-        if (rawForFields.battery_soc != null) rawForFields.batt_soc = rawForFields.battery_soc
-        if (rawForFields.battery_voltage != null) rawForFields.batt_voltage = rawForFields.battery_voltage
-        if (rawForFields.battery_current != null) rawForFields.batt_current = rawForFields.battery_current
-        if (rawForFields.battery_power != null) rawForFields.batt_power = rawForFields.battery_power
-        if (rawForFields.battery_soh != null) rawForFields.batt_soh = rawForFields.battery_soh
-        if (rawForFields.cycle_count != null) rawForFields.batt_cycle_count = rawForFields.cycle_count
-        if (rawForFields.cell_max_temp != null) rawForFields.batt_temp_max = rawForFields.cell_max_temp
-        if (rawForFields.cell_min_temp != null) rawForFields.batt_temp_min = rawForFields.cell_min_temp
-        if (rawForFields.cell_max_voltage != null) rawForFields.batt_cell_volt_max = rawForFields.cell_max_voltage
-        if (rawForFields.cell_min_voltage != null) rawForFields.batt_cell_volt_min = rawForFields.cell_min_voltage
-        if (rawForFields.charge_status != null) rawForFields.batt_charge_state = rawForFields.charge_status
-        if (rawForFields.battery_avg_temp != null) rawForFields.batt_temp_battery = rawForFields.battery_avg_temp
-        if (rawForFields.rated_capacity != null) rawForFields.batt_capacity_total = rawForFields.rated_capacity
-        if (rawForFields.battery_capacity != null) rawForFields.batt_capacity_remain = rawForFields.battery_capacity
-
-        // PV aliases
-        if (rawForFields.pv1_voltage != null) rawForFields.pv_pv1_voltage = rawForFields.pv1_voltage
-        if (rawForFields.pv1_current != null) rawForFields.pv_pv1_current = rawForFields.pv1_current
-        if (rawForFields.pv1_power != null) rawForFields.pv_pv1_power = rawForFields.pv1_power
-        if (rawForFields.pv2_voltage != null) rawForFields.pv_pv2_voltage = rawForFields.pv2_voltage
-        if (rawForFields.pv2_current != null) rawForFields.pv_pv2_current = rawForFields.pv2_current
-        if (rawForFields.pv2_power != null) rawForFields.pv_pv2_power = rawForFields.pv2_power
-
-        // Status aliases
-        if (rawForFields.inverter_temp != null) rawForFields.temp_inv = rawForFields.inverter_temp
-        if (rawForFields.heatsink_temp != null) rawForFields.temp_mos = rawForFields.heatsink_temp
-        if (rawForFields.ambient_temp != null) rawForFields.temp_env = rawForFields.ambient_temp
-        if (rawForFields.run_status != null) rawForFields.work_state = rawForFields.run_status
-
-        // V2 展平字段 → V1 键别名（型号 field_key 兼容 + 面板回退）
-        if (rawForFields.ac_output_voltage != null) {
-          rawForFields.ac_voltage = rawForFields.ac_output_voltage
-          rawForFields.voltage = rawForFields.ac_output_voltage
-        }
-        if (rawForFields.output_power != null) {
-          rawForFields.ac_power = rawForFields.output_power
-          rawForFields.power = rawForFields.output_power
-        }
-        if (rawForFields.output_current != null) rawForFields.ac_current = rawForFields.output_current
-        if (rawForFields.ac_output_frequency != null) rawForFields.ac_frequency = rawForFields.ac_output_frequency
-        if (rawForFields.pv_total_power != null) rawForFields.pv_power = rawForFields.pv_total_power
-
-        return {
-          online: { online: raw?.online ?? false, rssi: raw?.rssi || 0, ip: raw?.ip || '' },
-          _raw: rawForFields,
-          _metrics: extractEnergyMetrics(raw),
-        } as RealtimeData
-      }),
-    enabled: !!detailSn && detailDrawerOpen,
-    refetchInterval: 5000,
-  })
-
-  const [telemetryData, setTelemetryData] = useState<any[]>([]);
-  const [telemetryLoading, setTelemetryLoading] = useState(false);
-
-  const fetchTelemetry = useCallback(async (sn: string, range: [dayjs.Dayjs, dayjs.Dayjs]) => {
-    if (!sn) return;
-    setTelemetryLoading(true);
-    try {
-      const s = range[0].toISOString();
-      const e = range[1].toISOString();
-      const res = await deviceApi.getTelemetry(sn, { startTime: s, endTime: e, pageSize: 500 });
-      const payload = res.data;
-      const inner = payload?.data ?? payload;
-      const items = Array.isArray(inner?.items) ? inner.items : (Array.isArray(inner) ? inner : []);
-      setTelemetryData(items);
-    } catch (err: any) {
-      setTelemetryData([]);
-    } finally {
-      setTelemetryLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (detailDrawerOpen && detailSn) {
-      fetchTelemetry(detailSn, telemetryRange);
-    }
-  }, [detailDrawerOpen, detailSn, telemetryRange, telemetryVersion, fetchTelemetry]);
-
   useEffect(() => {
     modelApi.listModels().then((res) => {
       const models = res.data?.data ?? res.data ?? []
@@ -417,21 +215,6 @@ const DevicesPage: React.FC = () => {
       }),
     enabled: canDirectUnbind && unbindApprovalTab === 'approvals',
   })
-
-  const { data: commandTemplatesRes, error: commandTemplatesError, refetch: refetchCommandTemplates } = useQuery({
-    queryKey: ['commandTemplates', detailSn],
-    queryFn: () =>
-      commandApi.getTemplates(detailSn).then((res) => {
-        const d = res.data
-        const inner = d?.data ?? d
-        return (inner as CommandCapability[])
-          .filter((capability) => capability.is_enabled)
-          .map(mapCapabilityToTemplate)
-      }),
-    enabled: !!detailSn && detailDrawerOpen,
-  })
-
-  const commandTemplates = Array.isArray(commandTemplatesRes) ? commandTemplatesRes : []
 
   const createMutation = useMutation({
     mutationFn: (data: any) => deviceApi.createDevice(data).then((r) => r.data),
@@ -516,7 +299,7 @@ const DevicesPage: React.FC = () => {
   const { data: installersRes, error: installersError, refetch: refetchInstallers } = useQuery({
     queryKey: ['users', 'installers'],
     queryFn: () =>
-      userApi.list({ role: 4, pageSize: 100 }).then((res) => {
+      userApi.list({ org_role: 'installer', pageSize: 100 }).then((res) => {
         const d = res.data?.data ?? res.data
         const items = Array.isArray(d) ? d : (d?.items ?? [])
         return items as Array<{ id: number; nickname: string; phone: string }>
@@ -602,17 +385,25 @@ const DevicesPage: React.FC = () => {
     setAddModalOpen(true)
   }
 
+  // modelOptions 里必须存在该型号（防止绕过 Select 校验提交脏数据）
+  const isKnownModel = (model: string) => !!model && modelOptions.some((o) => o.value === model)
+
   const handleAddSubmit = async () => {
     try {
       const values = await addForm.validateFields()
-      createMutation.mutate(values)
+      if (!isKnownModel(values.model)) {
+        messageApi.error(t('dev.modelInvalid'))
+        return
+      }
+      // 携带 model_id：与编辑弹窗一致，后端按所选型号同步全部型号关联参数
+      const selected = modelOptions.find((o) => o.value === values.model)
+      createMutation.mutate({ ...values, model_id: selected?.model?.id })
     } catch {
       // validation failed
     }
   }
 
   const handleEdit = (record: any) => {
-    setEditingDevice(record)
     editForm.setFieldsValue({
       sn: record.sn,
       model: record.model,
@@ -623,6 +414,10 @@ const DevicesPage: React.FC = () => {
   const handleEditSubmit = async () => {
     try {
       const values = await editForm.validateFields()
+      if (!isKnownModel(values.model)) {
+        messageApi.error(t('dev.modelInvalid'))
+        return
+      }
       const selected = modelOptions.find((o) => o.value === values.model)
       // 携带 model_id：后端按所选型号同步更新设备的全部型号关联参数
       updateMutation.mutate({ ...values, model_id: selected?.model?.id ?? undefined })
@@ -652,112 +447,6 @@ const DevicesPage: React.FC = () => {
     navigate(`/devices/${sn}/detail`)
   }
 
-  const handleCommandSelect = (commandName: string) => {
-    const template = commandTemplates.find((t) => t.name === commandName)
-    setSelectedCommand(template || null)
-    if (template && Array.isArray(template.params)) {
-      const defaults: Record<string, any> = {}
-      template.params.forEach((p) => {
-        if (p.defaultValue !== undefined) {
-          defaults[p.name] = p.defaultValue
-        }
-      })
-      setCommandParams(defaults)
-    } else {
-      setCommandParams({})
-    }
-    setCommandResult(null)
-  }
-
-  const handleParamChange = (name: string, value: any) => {
-    setCommandParams((prev) => ({ ...prev, [name]: value }))
-  }
-
-  const handleExecuteCommand = () => {
-    if (!selectedCommand || !detailSn) return
-
-    if (selectedCommand.requiresConfirm) {
-      setPendingExecution({
-        commandName: selectedCommand.name,
-        params: commandParams,
-      })
-      setConfirmModalOpen(true)
-      return
-    }
-
-    doExecuteCommand(selectedCommand.name, commandParams)
-  }
-
-  const doExecuteCommand = async (commandName: string, params: Record<string, any>) => {
-    setExecuting(true)
-    setCommandResult(null)
-    try {
-      const res = await commandApi.execute(detailSn, {
-        command: commandName,
-        params,
-      })
-      const result = res.data?.data ?? res.data
-      setCommandResult({ success: result?.success ?? true, message: result?.message ?? t('dev.commandSent') })
-      if (result?.success !== false) {
-        messageApi.success(t('dev.commandSent'))
-      } else {
-        messageApi.warning(result?.message || t('dev.commandFailed'))
-      }
-    } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || t('dev.commandFailed')
-      setCommandResult({ success: false, message: msg })
-      messageApi.error(msg)
-    } finally {
-      setExecuting(false)
-    }
-  }
-
-  const handleConfirmExecute = () => {
-    setConfirmModalOpen(false)
-    if (pendingExecution) {
-      doExecuteCommand(pendingExecution.commandName, pendingExecution.params)
-      setPendingExecution(null)
-    }
-  }
-
-  const handleExportTelemetry = async (format: 'csv' | 'excel') => {
-    if (!detailSn) return
-    try {
-      const res = await deviceApi.exportTelemetry(detailSn, format, {
-        startTime: telemetryRange[0].toISOString(),
-        endTime: telemetryRange[1].toISOString(),
-      })
-      const blob = res.data as Blob
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      const ext = format === 'excel' ? 'xlsx' : 'csv'
-      link.download = `${detailSn}_telemetry_${Date.now()}.${ext}`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(url)
-      messageApi.success(t('dev.exportSuccess', { format: format === 'excel' ? 'Excel' : 'CSV' }))
-    } catch (err: any) {
-      messageApi.error(t('dev.exportFailed') + (err?.message || ''))
-    }
-  }
-
-  const exportMenuItems: MenuProps['items'] = [
-    {
-      key: 'csv',
-      label: t('common.exportCSV'),
-      icon: <DownloadOutlined />,
-      onClick: () => handleExportTelemetry('csv'),
-    },
-    {
-      key: 'excel',
-      label: t('common.exportExcel'),
-      icon: <DownloadOutlined />,
-      onClick: () => handleExportTelemetry('excel'),
-    },
-  ]
-
   const handleUnbind = (record: DeviceRecord) => {
     if (canDirectUnbind) {
       modal.confirm({
@@ -780,6 +469,86 @@ const DevicesPage: React.FC = () => {
       return
     }
     requestUnbindMutation.mutate({ sn: unbindTargetSn, reason: unbindReason })
+  }
+
+  const handleBatchControlSubmit = async () => {
+    setBatchControlExecuting(true)
+    try {
+      await commandApi.batchControl({
+        device_sns: selectedRowKeys.map(String),
+        command: batchCmd,
+        params: {},
+      })
+      messageApi.success(t('dev.batchControlSuccess'))
+      setSelectedRowKeys([])
+      setBatchControlOpen(false)
+    } catch {
+      messageApi.error(t('dev.batchControlFailed'))
+    } finally {
+      setBatchControlExecuting(false)
+    }
+  }
+
+  // 批量解绑/删除：确认后打开进度弹窗，串行逐台执行并逐条上报进度
+  const startBatchOperation = (action: 'unbind' | 'delete') => {
+    const sns = selectedRowKeys.map(String)
+    if (sns.length === 0) {
+      messageApi.warning(t('dev.selectDevicesFirst'))
+      return
+    }
+    modal.confirm({
+      title: action === 'unbind' ? t('dev.batchUnbind') : t('dev.batchDelete'),
+      content: action === 'unbind'
+        ? t('dev.confirmBatchUnbind', { count: sns.length })
+        : t('dev.confirmBatchDelete', { count: sns.length }),
+      okText: action === 'unbind' ? t('common.confirm') : t('dev.confirmBatchDeleteBtn'),
+      cancelText: t('common.cancel'),
+      okButtonProps: action === 'delete' ? { danger: true } : undefined,
+      onOk: () => {
+        setBulkAction(action)
+        setBulkSns(sns)
+        setBulkOpen(true)
+      },
+    })
+  }
+
+  const handleBulkExecute = useCallback(async (sn: string) => {
+    if (bulkAction === 'unbind') {
+      await deviceApi.unbindDevice(sn)
+    } else {
+      await deviceApi.deleteDevice(sn)
+    }
+  }, [bulkAction])
+
+  const handleBulkSettled = useCallback((result: { success: string[]; failures: BulkFailure[] }) => {
+    queryClient.invalidateQueries({ queryKey: ['devices'] })
+    if (result.failures.length === 0) {
+      messageApi.success(bulkAction === 'unbind' ? t('dev.batchUnbindComplete') : t('dev.batchDeleteComplete'))
+      setSelectedRowKeys([])
+      setBulkOpen(false)
+    } else {
+      messageApi.warning(t('dev.bulkPartialFailed', { success: result.success.length, failed: result.failures.length }))
+    }
+  }, [bulkAction, messageApi, queryClient, t])
+
+  // 行内快捷指令（自原详情抽屉迁移）：重启需二次确认，查询状态直接下发；离线设备禁用
+  const handleQuickCommand = (sn: string, command: 'restart' | 'query_status') => {
+    if (command === 'restart') {
+      // Dropdown 菜单项无法内嵌 Popconfirm，使用等效的 modal.confirm 二次确认
+      modal.confirm({
+        title: t('dev.confirmRestart'),
+        okText: t('dev.confirmRestartBtn'),
+        cancelText: t('common.cancel'),
+        onOk: () =>
+          commandApi.execute(sn, { command: 'restart', params: {} })
+            .then(() => messageApi.success(t('dev.restartSuccess')))
+            .catch(() => messageApi.error(t('dev.restartFailed'))),
+      })
+      return
+    }
+    commandApi.execute(sn, { command: 'query_status', params: {} })
+      .then(() => messageApi.success(t('dev.querySuccess')))
+      .catch(() => messageApi.error(t('dev.queryFailed')))
   }
 
   const handleImportFile = (file: File) => {
@@ -922,54 +691,22 @@ const DevicesPage: React.FC = () => {
       label: t('dev.batchUnbind'),
       icon: <LinkOutlined />,
       danger: true,
-      onClick: () => {
-        modal.confirm({
-          title: t('dev.batchUnbind'),
-          content: t('dev.confirmBatchUnbind', { count: selectedRowKeys.length }),
-          okText: t('common.confirm'),
-          cancelText: t('common.cancel'),
-          onOk: () => {
-            Promise.all(selectedRowKeys.map((sn) => deviceApi.unbindDevice(String(sn))))
-              .then(() => {
-                messageApi.success(t('dev.batchUnbindComplete'))
-                queryClient.invalidateQueries({ queryKey: ['devices'] })
-                setSelectedRowKeys([])
-              })
-              .catch(() => messageApi.error(t('dev.partialUnbindFailed')))
-          },
-        })
-      },
+      onClick: () => startBatchOperation('unbind'),
     },
     {
       key: 'delete',
       label: t('dev.batchDelete'),
       icon: <DeleteOutlined />,
       danger: true,
-      onClick: () => {
-        modal.confirm({
-          title: t('dev.batchDelete'),
-          content: t('dev.confirmBatchDelete', { count: selectedRowKeys.length }),
-          okText: t('dev.confirmBatchDeleteBtn'),
-          cancelText: t('common.cancel'),
-          okButtonProps: { danger: true },
-          onOk: () => {
-            Promise.all(selectedRowKeys.map((sn) => deviceApi.deleteDevice(String(sn))))
-              .then(() => {
-                messageApi.success(t('dev.batchDeleteComplete'))
-                queryClient.invalidateQueries({ queryKey: ['devices'] })
-                setSelectedRowKeys([])
-              })
-              .catch(() => messageApi.error(t('dev.partialDeleteFailed')))
-          },
-        })
-      },
+      onClick: () => startBatchOperation('delete'),
     },
     {
       key: 'ota',
       label: t('dev.createOTATask'),
       icon: <DownloadOutlined />,
       onClick: () => {
-        messageApi.info(t('dev.otaTaskCreated') + ': ' + selectedRowKeys.join(', '))
+        // 跳转 OTA 页并预填所选设备（ota 页读取 create/sns 参数自动打开创建向导）
+        navigate('/ota?create=1&sns=' + selectedRowKeys.map(String).join(','))
       },
     },
     {
@@ -981,39 +718,8 @@ const DevicesPage: React.FC = () => {
           messageApi.warning(t('dev.selectDevicesFirst'))
           return
         }
-        modal.confirm({
-          title: t('dev.batchControlTitle'),
-          content: (
-            <div>
-              <p>{t('dev.batchControlConfirm', { count: selectedRowKeys.length, cmd: 'restart' })}</p>
-              <Select
-                defaultValue="restart"
-                style={{ width: '100%', marginTop: 8 }}
-                options={[
-                  { label: 'restart', value: 'restart' },
-                  { label: 'query_status', value: 'query_status' },
-                ]}
-                id="batch-cmd-select"
-              />
-            </div>
-          ),
-          okText: t('common.confirm'),
-          cancelText: t('common.cancel'),
-          onOk: () => {
-            const cmdSelect = document.getElementById('batch-cmd-select') as HTMLSelectElement
-            const cmd = cmdSelect?.value || 'restart'
-            return commandApi.batchControl({
-              device_sns: selectedRowKeys.map(String),
-              command: cmd,
-              params: {},
-            }).then(() => {
-              messageApi.success(t('dev.batchControlSuccess'))
-              setSelectedRowKeys([])
-            }).catch(() => {
-              messageApi.error(t('dev.batchControlFailed'))
-            })
-          },
-        })
+        setBatchCmd('restart')
+        setBatchControlOpen(true)
       },
     },
   ]
@@ -1057,7 +763,7 @@ const DevicesPage: React.FC = () => {
       responsive: ['sm'],
       render: (_: any, record: any) => {
         if (!record.model_id || record.model_id === 0) {
-          return <Tag color="orange">未绑定型号</Tag>
+          return <Tag color="orange">{t('dev.modelUnbound')}</Tag>
         }
         const devType = getCategoryType(record.model_category ?? '')
         const cfg = deviceTypeConfig[devType]
@@ -1201,6 +907,30 @@ const DevicesPage: React.FC = () => {
                   </Button>
                 </Popconfirm>
               )}
+              <Dropdown
+                menu={{
+                  items: [
+                    {
+                      key: 'restart',
+                      icon: <ReloadOutlined />,
+                      label: t('dev.restartDevice'),
+                      disabled: record.status === 0,
+                      onClick: () => handleQuickCommand(record.sn, 'restart'),
+                    },
+                    {
+                      key: 'query_status',
+                      icon: <ThunderboltOutlined />,
+                      label: t('dev.queryStatus'),
+                      disabled: record.status === 0,
+                      onClick: () => handleQuickCommand(record.sn, 'query_status'),
+                    },
+                  ],
+                }}
+              >
+                <Button type="link" size="small" icon={<MoreOutlined />}>
+                  {t('dev.moreActions')}
+                </Button>
+              </Dropdown>
             </>
           )}
         </Space>
@@ -1208,522 +938,81 @@ const DevicesPage: React.FC = () => {
     },
   ]
 
-  const telemetryOption = useMemo(() => {
-    if (!telemetryData || telemetryData.length === 0) return {}
-    const times = telemetryData.map((item: any) =>
-      formatInTimezone(item.timestamp ?? item.time, timezone, 'MM-DD HH:mm'),
-    )
-    const powers = telemetryData.map((item: any) => parseFloat(Number(item.ac_power ?? item.power ?? item.acPower ?? 0).toFixed(1)))
-    const voltages = telemetryData.map((item: any) => parseFloat(Number(item.ac_voltage ?? item.voltage ?? item.acVoltage ?? 0).toFixed(1)))
-    const currents = telemetryData.map((item: any) => parseFloat(Number(item.ac_current ?? item.current ?? item.acCurrent ?? 0).toFixed(2)))
-
-    return {
-      tooltip: {
-        trigger: 'axis' as const,
-      },
-      legend: {
-        data: [t('dev.power') + '(W)', t('dev.voltage') + '(V)', t('dev.current') + '(A)'],
-      },
-      grid: {
-        left: '3%',
-        right: '4%',
-        bottom: '3%',
-        containLabel: true,
-      },
-      xAxis: {
-        type: 'category' as const,
-        data: times,
-        boundaryGap: false,
-      },
-      yAxis: {
-        type: 'value' as const,
-      },
-      series: [
-        {
-          name: t('dev.power') + '(W)',
-          type: 'line',
-          data: powers,
-          smooth: true,
-          lineStyle: { color: '#fa8c16' },
-          symbol: 'none',
-        },
-        {
-          name: t('dev.voltage') + '(V)',
-          type: 'line',
-          data: voltages,
-          smooth: true,
-          lineStyle: { color: '#1677ff' },
-          symbol: 'none',
-        },
-        {
-          name: t('dev.current') + '(A)',
-          type: 'line',
-          data: currents,
-          smooth: true,
-          lineStyle: { color: '#52c41a' },
-          symbol: 'none',
-        },
-      ],
-    }
-  }, [telemetryData])
-
-  const renderRealtimePanel = () => {
-    if (realtimeLoading) return <Spin tip={t('common.loading')} />
-    const m = realtimeData?._metrics
-    if (!m) return <Empty description={t('dev.noRealtimeData')} />
-
-    // 统一 V2.1 解析（与电站健康同一套 energyUtils），null 显示 '--' 而非 0
-    const raw = realtimeData?._raw ?? {}
-    const fmt = (v: number | null | undefined, digits = 1) => (v != null ? v.toFixed(digits) : '--')
-    const powerFactor = raw.power_factor ?? raw.ac_pf ?? null
-    const battTemp = raw.cell_max_temp ?? raw.battery_avg_temp ?? raw.temp_bat ?? null
-    const workStateText = raw.work_state ?? raw.run_status ?? (m.workState != null ? String(m.workState) : null)
-
-    return (
-      <Row gutter={[12, 12]}>
-        <Col span={24}>
-          <Card size="small" title={t('dev.acSide')} style={{ background: '#f7f8fa', borderColor: '#e8e8e8' }}>
-            <Row gutter={[12, 8]}>
-              <Col span={8}>
-                <Text type="secondary">{t('dev.voltage')}</Text>
-                <br />
-                <Text strong>{fmt(m.acVoltage)} V</Text>
-              </Col>
-              <Col span={8}>
-                <Text type="secondary">{t('dev.current')}</Text>
-                <br />
-                <Text strong>{fmt(m.acCurrent, 2)} A</Text>
-              </Col>
-              <Col span={8}>
-                <Text type="secondary">{t('dev.power')}</Text>
-                <br />
-                <Text strong>{fmt(m.loadPower)} W</Text>
-              </Col>
-              <Col span={8}>
-                <Text type="secondary">{t('dev.frequency')}</Text>
-                <br />
-                <Text strong>{fmt(m.acFrequency)} Hz</Text>
-              </Col>
-              <Col span={8}>
-                <Text type="secondary">{t('dev.powerFactor')}</Text>
-                <br />
-                <Text strong>{powerFactor != null ? Number(powerFactor).toFixed(2) : '--'}</Text>
-              </Col>
-            </Row>
-          </Card>
-        </Col>
-        <Col span={24}>
-          <Card size="small" title={t('dev.pvSide')} style={{ background: '#f7f8fa', borderColor: '#e8e8e8' }}>
-            <Row gutter={[12, 8]}>
-              <Col span={8}>
-                <Text type="secondary">{t('dev.pv1Voltage')}</Text>
-                <br />
-                <Text strong>{fmt(m.pv1Voltage)} V</Text>
-              </Col>
-              <Col span={8}>
-                <Text type="secondary">{t('dev.pv2Voltage')}</Text>
-                <br />
-                <Text strong>{fmt(m.pv2Voltage)} V</Text>
-              </Col>
-              <Col span={8}>
-                <Text type="secondary">{t('dev.power')}</Text>
-                <br />
-                <Text strong>{fmt(m.pvPower)} W</Text>
-              </Col>
-            </Row>
-          </Card>
-        </Col>
-        <Col span={24}>
-          <Card size="small" title={t('dev.battery')} style={{ background: '#f7f8fa', borderColor: '#e8e8e8' }}>
-            <Row gutter={[12, 8]}>
-              <Col span={6}>
-                <Text type="secondary">SOC</Text>
-                <br />
-                <Text strong>{fmt(m.battSoc)} %</Text>
-              </Col>
-              <Col span={6}>
-                <Text type="secondary">{t('dev.voltage')}</Text>
-                <br />
-                <Text strong>{fmt(m.battVoltage, 2)} V</Text>
-              </Col>
-              <Col span={6}>
-                <Text type="secondary">{t('dev.current')}</Text>
-                <br />
-                <Text strong>{fmt(m.battCurrent, 2)} A</Text>
-              </Col>
-              <Col span={6}>
-                <Text type="secondary">{t('dev.temperature')}</Text>
-                <br />
-                <Text strong>{battTemp != null ? `${Number(battTemp).toFixed(1)} °C` : '--'}</Text>
-              </Col>
-            </Row>
-          </Card>
-        </Col>
-        <Col span={24}>
-          <Card size="small" title={t('dev.systemInfo')} style={{ background: '#f7f8fa', borderColor: '#e8e8e8' }}>
-            <Row gutter={[12, 8]}>
-              <Col span={6}>
-                <Text type="secondary">{t('dev.workStatus')}</Text>
-                <br />
-                <Text strong>{workStateText ?? '-'}</Text>
-              </Col>
-              <Col span={6}>
-                <Text type="secondary">{t('dev.faultCode')}</Text>
-                <br />
-                <Text strong style={{ color: m.faultCode ? '#ff4d4f' : undefined }}>
-                  {m.faultCode || t('dev.none')}
-                </Text>
-              </Col>
-              <Col span={6}>
-                <Text type="secondary">{t('dev.inverterTemp')}</Text>
-                <br />
-                <Text strong>{fmt(m.inverterTemp)} °C</Text>
-              </Col>
-              <Col span={6}>
-                <Text type="secondary">{t('dev.ambientTemp')}</Text>
-                <br />
-                <Text strong>{fmt(m.ambientTemp)} °C</Text>
-              </Col>
-            </Row>
-          </Card>
-        </Col>
-      </Row>
-    )
-  }
-
-  const deviceDetail = useMemo(() => {
-    const base = deviceDetailRaw?.device ?? detailDevice
-    if (!base) return undefined
-    const rt = deviceDetailRaw?.realtime_data ?? realtimeData
-    if (!rt) return base
-
-    // 从嵌套的 info 对象中提取设备信息（支持 {info: {...}} 和 {info: {data: {...}}} 两种格式）
-    let rtInfo: any = rt.info
-    if (rtInfo && typeof rtInfo === 'object' && rtInfo.data && typeof rtInfo.data === 'object') {
-      rtInfo = rtInfo.data
-    }
-
-    return {
-      ...base,
-      model: base.model || rtInfo?.model || rt.model || '',
-      // 单位纪律（V2.1）：DB base.rated_power 为 kW（权威）；realtime info 组 rated_power 为协议 W 原值，需 ÷1000 换算 kW
-      rated_power: (base as any).rated_power || (rtInfo?.rated_power != null ? Number(rtInfo.rated_power) / 1000 : rt.rated_power || 0),
-      firmware_version: (base as any).firmware_arm || rtInfo?.firmware_arm || (base as any).firmware_version || '',
-      hardware_version: (base as any).firmware_esp || rtInfo?.firmware_esp || (base as any).hardware_version || '',
-      manufacturer: (base as any).manufacturer || rtInfo?.manufacturer || '',
-    }
-  }, [deviceDetailRaw, detailDevice, realtimeData])
-  const modelFields = useModelFields(deviceDetail?.model, (deviceDetail as any)?.model_id)
-  const currentStatus = deviceDetail?.status ?? 0
-
-  const drawerTabItems = [
-    {
-      key: 'info',
-      label: t('dev.deviceInfo'),
-      children: deviceDetail && (
-        <>
-          <Card size="small" title={t('dev.deviceInfo')} style={{ marginBottom: 16 }}>
-            <Descriptions column={2} size="small">
-              <Descriptions.Item label={t('dev.serialNumber')}>{deviceDetail.sn}</Descriptions.Item>
-              <Descriptions.Item label={t('common.model')}>{deviceDetail.model ?? '-'}</Descriptions.Item>
-              <Descriptions.Item label={t('dev.ratedPower')}>
-                {(deviceDetail as any).rated_power != null ? `${(deviceDetail as any).rated_power} kW` : '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label={t('dev.firmwareVersion')}>
-                {(deviceDetail as any).firmware_arm || (deviceDetail as any).firmware_version || '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label={t('dev.hardwareVersion')}>
-                {(deviceDetail as any).firmware_esp || (deviceDetail as any).hardware_version || '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label={t('common.status')}>
-                <StatusBadge status={currentStatus} />
-              </Descriptions.Item>
-              <Descriptions.Item label={t('common.owner')}>
-                {deviceDetail.owner?.nickname || deviceDetail.owner?.phone || '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label={t('common.installer')}>
-                {deviceDetail.installer?.nickname || deviceDetail.installer?.phone || '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label={t('common.lastOnline')}>
-                {formatInTimezone((deviceDetail as any).last_online_at, (deviceDetail as any).timezone, 'YYYY-MM-DD HH:mm:ss')}
-              </Descriptions.Item>
-            </Descriptions>
-          </Card>
-
-          {modelFields?.cache && modelFields.cache.showFields.length > 0 && (
-            <Card size="small" title={`${deviceDetail?.model ?? ''} ${t('dev.statusOverview')}`} style={{ marginBottom: 16 }}>
-              <DynamicStatCards
-                fields={modelFields.cache.showFields.slice(0, 6)}
-                data={realtimeData?._raw ?? {}}
-              />
-            </Card>
-          )}
-
-          {modelFields?.cache && modelFields.cache.showFields.length > 0 ? (
-            <Card size="small" title={`${deviceDetail?.model ?? ''} ${t('dev.realtimeData')}`} style={{ marginBottom: 16 }}>
-              <DynamicFieldRenderer
-                fields={modelFields.cache.showFields}
-                data={realtimeData?._raw ?? {}}
-                column={2}
-                size="small"
-              />
-            </Card>
-          ) : (
-            <Card size="small" title={t('dev.realtimeTelemetry')} style={{ marginBottom: 16 }}>
-              {renderRealtimePanel()}
-            </Card>
-          )}
-
-          <Card size="small" title={t('dev.historyTelemetry')} style={{ marginBottom: 16 }}>
-            <Space style={{ marginBottom: 12 }}>
-              <RangePicker
-                value={telemetryRange}
-                onChange={(dates) => {
-                  if (dates && dates[0] && dates[1]) {
-                    setTelemetryRange([dates[0], dates[1]])
-                  }
-                }}
-                showTime
-              />
-              <Button
-                onClick={() => {
-                  setTelemetryVersion(v => v + 1)
-                }}
-              >
-                {t('dev.query')}
-              </Button>
-              <Dropdown menu={{ items: exportMenuItems }}>
-                <Button icon={<DownloadOutlined />}>{t('dev.export')}</Button>
-              </Dropdown>
-            </Space>
-            {telemetryLoading ? (
-              <Spin tip={t('dev.loadingHistory')} />
-            ) : telemetryData && telemetryData.length > 0 ? (
-              <ReactECharts key={telemetryVersion} option={telemetryOption} notMerge={true} style={{ height: 280 }} />
-            ) : (
-              <div style={{ textAlign: 'center', padding: 40 }}>
-                <Empty description={`${t('dev.noRealtimeData')} (${detailSn}, ${telemetryRange[0].format('MM-DD HH:mm')} ~ ${telemetryRange[1].format('MM-DD HH:mm')})`} />
-              </div>
-            )}
-          </Card>
-
-          {modelFields?.cache && modelFields.cache.controlFields.length > 0 && (
-            <Card size="small" title={t('dev.modelControl')} style={{ marginBottom: 16 }}>
-              <List
-                size="small"
-                dataSource={modelFields.cache.controlFields}
-                renderItem={(field) => {
-                  const params = (field as any).control_params || {};
-                  const label = params.label || field.field_name;
-                  const needConfirm = params.confirm === true;
-                  const confirmMsg = params.confirm_message || t('dev.confirmExecute', { label });
-                  const inputType = params.input_type;
-
-                  const executeCommand = (cmdParams: any = {}) => {
-                    return commandApi.execute(detailSn!, { command: field.field_key, params: cmdParams })
-                      .then(() => message.success(t('dev.commandSent')))
-                      .catch((e: any) => message.error(t('dev.commandFailed') + `: ${e.message}`));
-                  };
-
-                  return (
-                    <List.Item
-                      actions={[
-                        <Button
-                          key="control"
-                          type="primary"
-                          size="small"
-                          icon={<ThunderboltOutlined />}
-                          onClick={() => {
-                            if (inputType === 'number') {
-                              // 数值输入弹窗
-                              let numValue = params.min ?? 0;
-                              modal.confirm({
-                                title: label,
-                                width: 400,
-                                content: (
-                                  <div>
-                                    <p>{t('dev.rangeHint', { min: params.min ?? 0, max: params.max ?? 10000, unit: params.unit || '' })}</p>
-                                    <InputNumber
-                                      min={params.min ?? 0}
-                                      max={params.max ?? 10000}
-                                      step={params.step ?? 1}
-                                      defaultValue={params.min ?? 0}
-                                      style={{ width: '100%' }}
-                                      addonAfter={params.unit || ''}
-                                      onChange={(v) => { numValue = v ?? 0; }}
-                                    />
-                                  </div>
-                                ),
-                                onOk: () => executeCommand({ value: numValue }),
-                              });
-                            } else if (needConfirm) {
-                              modal.confirm({
-                                title: label,
-                                content: confirmMsg,
-                                onOk: () => executeCommand(),
-                              });
-                            } else {
-                              executeCommand();
-                            }
-                          }}
-                        >
-                          {t('dev.send')}
-                        </Button>,
-                      ]}
-                    >
-                      <List.Item.Meta
-                        title={label}
-                        description={`${t('dev.param')}: ${field.field_key} | ${t('common.model')}: ${field.field_type}`}
-                      />
-                    </List.Item>
-                  );
-                }}
-              />
-            </Card>
-          )}
-
-          <Card size="small" title={t('dev.deviceControl')}>
-            <div style={{ marginBottom: 12 }}>
-              <Text strong>{t('dev.selectTemplate')}</Text>
-              <Select
-                placeholder={t('dev.selectTemplatePlaceholder')}
-                style={{ width: '100%', marginTop: 6 }}
-                value={selectedCommand?.name}
-                onChange={handleCommandSelect}
-                showSearch
-                optionFilterProp="label"
-                options={(() => {
-                  const groups: Record<string, CommandTemplate[]> = {}
-                  commandTemplates.forEach((t) => {
-                    if (!groups[t.category]) groups[t.category] = []
-                    groups[t.category].push(t)
-                  })
-                  return Object.entries(groups).flatMap(([category, templates]) => [
-                    { label: COMMAND_CATEGORY_LABELS[category] || category, value: `group_${category}`, disabled: true },
-                    ...templates.map((t) => ({
-                      label: `${t.label} - ${t.description}`,
-                      value: t.name,
-                    })),
-                  ])
-                })()}
-              />
-            </div>
-
-            {selectedCommand && selectedCommand.params.length > 0 && (
-              <Card size="small" style={{ marginBottom: 12, background: '#f7f8fa', borderColor: '#e8e8e8' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {selectedCommand.params.map((param) => (
-                    <div key={param.name}>
-                      <div style={{ marginBottom: 4 }}>
-                        <Text>{param.label}</Text>
-                        {param.required && <Text type="danger"> *</Text>}
-                        {param.unit && <Text type="secondary" style={{ marginLeft: 4 }}>({param.unit})</Text>}
-                      </div>
-                      {param.type === 'number' && (
-                        <InputNumber
-                          style={{ width: '100%' }}
-                          min={param.min}
-                          max={param.max}
-                          value={commandParams[param.name] as number}
-                          onChange={(v) => handleParamChange(param.name, v)}
-                          placeholder={`${param.min ?? 0} ~ ${param.max ?? 100}`}
-                        />
-                      )}
-                      {param.type === 'string' && (
-                        <Input
-                          value={commandParams[param.name] as string}
-                          onChange={(e) => handleParamChange(param.name, e.target.value)}
-                          placeholder={`${t('common.pleaseInput')}${param.label}`}
-                        />
-                      )}
-                      {param.type === 'boolean' && (
-                        <Switch
-                          checked={!!commandParams[param.name]}
-                          onChange={(v) => handleParamChange(param.name, v)}
-                        />
-                      )}
-                      {param.type === 'select' && param.options && (
-                        <Select
-                          style={{ width: '100%' }}
-                          value={commandParams[param.name]}
-                          onChange={(v) => handleParamChange(param.name, v)}
-                          options={param.options.map((o) => ({
-                            label: o.label,
-                            value: o.value,
-                          }))}
-                        />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            )}
-
-            {selectedCommand && selectedCommand.requiresConfirm && (
-              <Alert
-                message={t('dev.note')}
-                description={selectedCommand.confirmationMessage || t('dev.needConfirm')}
-                type="warning"
-                showIcon
-                style={{ marginBottom: 12 }}
-              />
-            )}
-
-            {commandResult && (
-              <Alert
-                message={commandResult.success ? t('dev.executeSuccess') : t('dev.executeFailed')}
-                description={commandResult.message}
-                type={commandResult.success ? 'success' : 'error'}
-                showIcon
-                closable
-                style={{ marginBottom: 12 }}
-                onClose={() => setCommandResult(null)}
-              />
-            )}
-
-            <Space style={{ marginBottom: 12 }}>
-              <Button
-                type="primary"
-                icon={<ThunderboltOutlined />}
-                onClick={handleExecuteCommand}
-                loading={executing}
-                disabled={!selectedCommand || currentStatus === 0}
-              >
-                {selectedCommand
-                  ? t('dev.executeCmd', { label: selectedCommand.label })
-                  : t('dev.pleaseSelectTemplate')}
-              </Button>
-              {selectedCommand && (
-                <Button onClick={() => { setSelectedCommand(null); setCommandParams({}); setCommandResult(null) }}>
-                  {t('dev.resetSelection')}
-                </Button>
-              )}
-              <Button
-                icon={<ReloadOutlined />}
-                onClick={() => queryClient.invalidateQueries({ queryKey: ['commandTemplates', detailSn] })}
-              >
-                {t('dev.refreshTemplate')}
-              </Button>
-            </Space>
-          </Card>
-        </>
-      ),
-    },
-    {
-      key: 'firmware',
-      label: t('dev.firmwareUpgradeTab'),
-      children: detailSn ? <FirmwareUpgradeTab sn={detailSn} /> : null,
-    },
-  ]
-
   const secondaryQueryFailure = [
-    { error: deviceDetailError, retry: refetchDeviceDetail },
-    { error: realtimeError, retry: refetchRealtime },
     { error: unbindRequestsError, retry: refetchUnbindRequests },
-    { error: commandTemplatesError, retry: refetchCommandTemplates },
     { error: installersError, retry: refetchInstallers },
     { error: stationsListError, retry: refetchStationsList },
   ].find((item) => item.error)
+
+  // 新增/编辑弹窗共用的型号字段：showSearch Select + 必填 + 选中型号联动预览额定参数
+  const renderModelFormItem = (selectedModel: any) => (
+    <>
+      <Form.Item
+        name="model"
+        label={t('common.model')}
+        rules={[{ required: true, message: t('common.required') }]}
+      >
+        <Select
+          showSearch
+          placeholder={t('common.select')}
+          optionFilterProp="label"
+          options={modelOptions}
+        />
+      </Form.Item>
+      {selectedModel && (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={t('dev.modelLinkedPreview')}
+          description={
+            <Descriptions size="small" column={2} bordered style={{ marginTop: 8 }}>
+              <Descriptions.Item label={t('common.modelName')}>
+                {selectedModel.model_name || '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label={t('common.manufacturer')}>
+                {selectedModel.manufacturer || '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label={t('common.ratedPower')}>
+                {selectedModel.rated_power_w
+                  ? `${selectedModel.rated_power_w} W`
+                  : selectedModel.rated_power_kw
+                    ? `${selectedModel.rated_power_kw} kW`
+                    : '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label={t('common.ratedVoltage')}>
+                {selectedModel.rated_voltage_v ? `${selectedModel.rated_voltage_v} V` : '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label={t('common.ratedFreq')}>
+                {selectedModel.rated_frequency_hz ? `${selectedModel.rated_frequency_hz} Hz` : '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label={t('common.deviceType')}>
+                {selectedModel.category || '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label={t('common.batteryVoltage')}>
+                {selectedModel.battery_voltage_v ? `${selectedModel.battery_voltage_v} V` : '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label={t('common.batteryType')}>
+                {selectedModel.battery_type || '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label={t('common.cellCount')}>
+                {selectedModel.cell_count ?? '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label={t('common.mpptCount')}>
+                {selectedModel.mppt_count ?? '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label={t('common.tempSensorCount')}>
+                {selectedModel.temp_sensor_count ?? '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label={t('common.parallelSupport')}>
+                {selectedModel.supports_parallel ? t('common.yes') : t('common.no')}
+              </Descriptions.Item>
+            </Descriptions>
+          }
+        />
+      )}
+    </>
+  )
 
   return (
     <div>
@@ -1975,9 +1264,7 @@ const DevicesPage: React.FC = () => {
           >
             <Input placeholder={t('dev.deviceSN')} />
           </Form.Item>
-          <Form.Item name="model" label={t('common.model')}>
-            <Input placeholder={t('common.model')} />
-          </Form.Item>
+          {renderModelFormItem(selectedAddModel)}
         </Form>
       </Modal>
 
@@ -2026,37 +1313,6 @@ const DevicesPage: React.FC = () => {
       </Modal>
 
       <Modal
-        title={t('dev.confirmExecute')}
-        open={confirmModalOpen}
-        onOk={handleConfirmExecute}
-        onCancel={() => { setConfirmModalOpen(false); setPendingExecution(null) }}
-        okText={t('common.confirm')}
-        cancelText={t('common.cancel')}
-        okButtonProps={{ danger: true }}
-      >
-        <div style={{ marginBottom: 12 }}>
-          <Alert
-            message={selectedCommand?.label || pendingExecution?.commandName}
-            description={
-              selectedCommand?.confirmationMessage ||
-              t('dev.needConfirm')
-            }
-            type="warning"
-            showIcon
-          />
-        </div>
-        {pendingExecution?.params && Object.keys(pendingExecution.params).length > 0 && (
-          <Descriptions size="small" column={1} bordered>
-            {Object.entries(pendingExecution.params).map(([key, value]) => (
-              <Descriptions.Item key={key} label={key}>
-                {String(value)}
-              </Descriptions.Item>
-            ))}
-          </Descriptions>
-        )}
-      </Modal>
-
-      <Modal
         title={t('dev.editDeviceTitle')}
         open={editModalOpen}
         onCancel={() => setEditModalOpen(false)}
@@ -2070,70 +1326,7 @@ const DevicesPage: React.FC = () => {
           <Form.Item name="sn" label={t('dev.deviceSN')}>
             <Input disabled />
           </Form.Item>
-          <Form.Item
-            name="model"
-            label={t('common.model')}
-            rules={[{ required: true, message: t('common.required') }]}
-          >
-            <Select
-              showSearch
-              placeholder={t('common.select')}
-              optionFilterProp="label"
-              options={modelOptions}
-            />
-          </Form.Item>
-          {selectedEditModel && (
-            <Alert
-              type="info"
-              showIcon
-              style={{ marginBottom: 16 }}
-              message={t('dev.modelLinkedPreview')}
-              description={
-                <Descriptions size="small" column={2} bordered style={{ marginTop: 8 }}>
-                  <Descriptions.Item label={t('common.modelName')}>
-                    {selectedEditModel.model_name || '-'}
-                  </Descriptions.Item>
-                  <Descriptions.Item label={t('common.manufacturer')}>
-                    {selectedEditModel.manufacturer || '-'}
-                  </Descriptions.Item>
-                  <Descriptions.Item label={t('common.ratedPower')}>
-                    {selectedEditModel.rated_power_w
-                      ? `${selectedEditModel.rated_power_w} W`
-                      : selectedEditModel.rated_power_kw
-                        ? `${selectedEditModel.rated_power_kw} kW`
-                        : '-'}
-                  </Descriptions.Item>
-                  <Descriptions.Item label={t('common.ratedVoltage')}>
-                    {selectedEditModel.rated_voltage_v ? `${selectedEditModel.rated_voltage_v} V` : '-'}
-                  </Descriptions.Item>
-                  <Descriptions.Item label={t('common.ratedFreq')}>
-                    {selectedEditModel.rated_frequency_hz ? `${selectedEditModel.rated_frequency_hz} Hz` : '-'}
-                  </Descriptions.Item>
-                  <Descriptions.Item label={t('common.deviceType')}>
-                    {selectedEditModel.category || '-'}
-                  </Descriptions.Item>
-                  <Descriptions.Item label={t('common.batteryVoltage')}>
-                    {selectedEditModel.battery_voltage_v ? `${selectedEditModel.battery_voltage_v} V` : '-'}
-                  </Descriptions.Item>
-                  <Descriptions.Item label={t('common.batteryType')}>
-                    {selectedEditModel.battery_type || '-'}
-                  </Descriptions.Item>
-                  <Descriptions.Item label={t('common.cellCount')}>
-                    {selectedEditModel.cell_count ?? '-'}
-                  </Descriptions.Item>
-                  <Descriptions.Item label={t('common.mpptCount')}>
-                    {selectedEditModel.mppt_count ?? '-'}
-                  </Descriptions.Item>
-                  <Descriptions.Item label={t('common.tempSensorCount')}>
-                    {selectedEditModel.temp_sensor_count ?? '-'}
-                  </Descriptions.Item>
-                  <Descriptions.Item label={t('common.parallelSupport')}>
-                    {selectedEditModel.supports_parallel ? t('common.yes') : t('common.no')}
-                  </Descriptions.Item>
-                </Descriptions>
-              }
-            />
-          )}
+          {renderModelFormItem(selectedEditModel)}
         </Form>
       </Modal>
 
@@ -2280,79 +1473,41 @@ const DevicesPage: React.FC = () => {
         </Form>
       </Modal>
 
-      <Drawer
-        title={
-          <Space>
-            <span>{t('dev.deviceDetail')}</span>
-            {deviceDetail && <StatusBadge status={deviceDetail.status} />}
-          </Space>
-        }
-        width={screens.md ? 720 : '100%'}
-        open={detailDrawerOpen}
-        onClose={() => {
-          setDetailDrawerOpen(false)
-          setDetailSn('')
-          setDetailDevice(null)
-          setDrawerTab('info')
+      {/* 批量解绑/删除进度弹窗 */}
+      <BulkDeviceOperationModal
+        open={bulkOpen}
+        title={bulkAction === 'unbind' ? t('dev.batchUnbind') : t('dev.batchDelete')}
+        sns={bulkSns}
+        execute={handleBulkExecute}
+        onCancel={() => {
+          setBulkOpen(false)
+          // 中途取消也可能已有部分成功，仍需刷新列表
+          queryClient.invalidateQueries({ queryKey: ['devices'] })
         }}
-        extra={
-          <Space>
-            <Button
-              icon={<EyeOutlined />}
-              onClick={() => {
-                if (!detailSn) return
-                setDetailDrawerOpen(false)
-                navigate(`/devices/${detailSn}/detail`)
-              }}
-            >
-              {t('dev.viewFullDetail')}
-            </Button>
-            {currentStatus !== 0 && (
-              <>
-                <Popconfirm
-                  title={t('dev.confirmRestart')}
-                  onConfirm={() => {
-                    commandApi.execute(detailSn, { command: 'restart', params: {} })
-                      .then(() => {
-                        messageApi.success(t('dev.restartSuccess'))
-                      })
-                      .catch(() => messageApi.error(t('dev.restartFailed')))
-                  }}
-                  okText={t('dev.confirmRestartBtn')}
-                  cancelText={t('common.cancel')}
-                >
-                  <Button icon={<ReloadOutlined />}>{t('dev.restartDevice')}</Button>
-                </Popconfirm>
-                <Button
-                  icon={<ThunderboltOutlined />}
-                  onClick={() => {
-                    commandApi.execute(detailSn, { command: 'query_status', params: {} })
-                      .then(() => {
-                        messageApi.success(t('dev.querySuccess'))
-                      })
-                      .catch(() => messageApi.error(t('dev.queryFailed')))
-                  }}
-                >
-                  {t('dev.queryStatus')}
-                </Button>
-              </>
-            )}
-            {currentStatus === 0 && (
-              <Tag color="red">{t('dev.deviceOffline')}</Tag>
-            )}
-          </Space>
-        }
+        onSettled={handleBulkSettled}
+      />
+
+      {/* 批量控制命令Modal */}
+      <Modal
+        title={t('dev.batchControlTitle')}
+        open={batchControlOpen}
+        onCancel={() => setBatchControlOpen(false)}
+        onOk={handleBatchControlSubmit}
+        confirmLoading={batchControlExecuting}
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
       >
-        {deviceDetail ? (
-          <Tabs
-            activeKey={drawerTab}
-            onChange={setDrawerTab}
-            items={drawerTabItems}
-          />
-        ) : (
-          <Spin tip={t('common.loading')} />
-        )}
-      </Drawer>
+        <p>{t('dev.batchControlConfirm', { count: selectedRowKeys.length, cmd: batchCmd })}</p>
+        <Select
+          value={batchCmd}
+          style={{ width: '100%', marginTop: 8 }}
+          onChange={(v) => setBatchCmd(v)}
+          options={[
+            { label: 'restart', value: 'restart' },
+            { label: 'query_status', value: 'query_status' },
+          ]}
+        />
+      </Modal>
 
       {/* 绑定电站Modal */}
       <Modal
@@ -2404,11 +1559,11 @@ const DevicesPage: React.FC = () => {
         destroyOnHidden
       >
         <div style={{ marginBottom: 16 }}>
-          <Text>{t('dev.deviceSN')}：</Text>
+          <Text>{t('dev.deviceSN')}: </Text>
           <Text strong>{assignTargetSn}</Text>
         </div>
         <div>
-          <Text>{t('dev.selectInstaller')}：</Text>
+          <Text>{t('dev.selectInstaller')}: </Text>
           <Select
             style={{ width: '100%', marginTop: 8 }}
             placeholder={t('dev.selectInstallerPlaceholder')}

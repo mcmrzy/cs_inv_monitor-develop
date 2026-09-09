@@ -1,0 +1,254 @@
+{
+  "schema_version": "mimosa-task-review/v2",
+  "run_id": "20260906T175233552Z-118872-2cfa57fb8dd6",
+  "run_status": "inconclusive",
+  "errors": [
+    {
+      "stage": "baseline-read",
+      "target": "business-api/internal/service/device_send_command_postgres_integration_test.go",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    }
+  ],
+  "coverage": {
+    "schema_version": "mimosa-hook-coverage/v1",
+    "status": "partial",
+    "scope": "hook_observed_diff",
+    "baseline": {
+      "complete": true,
+      "captured_files": 854,
+      "candidate_limit": 5000,
+      "truncated": false,
+      "enumeration_error_count": 0,
+      "snapshot_error_count": 0,
+      "compensated_target_count": 7
+    },
+    "change_tracking": {
+      "touched_observed": 3,
+      "touched_retained": 3,
+      "truncated": false,
+      "bash_mutation": true,
+      "bash_discovered": 8,
+      "bash_discovery_limit": 80,
+      "bash_discovery_truncated": false
+    },
+    "candidates": {
+      "eligible_files": 8,
+      "selected_files": 8,
+      "limit": 20,
+      "truncated": false
+    },
+    "scanning": {
+      "required_files": 7,
+      "scanned_files": 7,
+      "skipped_files": 0,
+      "failed_files": 0,
+      "project_checks_required": 2,
+      "project_checks_completed": 2
+    },
+    "notification": {
+      "eligible_findings": 0,
+      "detailed_findings": 0,
+      "detail_limit": 3,
+      "truncated": false
+    },
+    "reason_counts": {
+      "baseline_snapshot_unreadable": 1,
+      "project_check_failed": 1
+    },
+    "reasons": [
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "business-api/internal/service/device_send_command_postgres_integration_test.go",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "business-api/internal/service/device_send_command_postgres_integration_test.go",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      }
+    ],
+    "reasons_truncated": false
+  },
+  "generated_at": "2026-09-06T17:52:33.552Z",
+  "session_id": "sess_6023e950-763f-44a9-a65f-1fc8081897ef",
+  "target": ".",
+  "revision": "aac2dd6d9aa15fa9bed1187e09909588551915e2",
+  "rules_version": "unavailable",
+  "diff_hash": "f48020b84f29e4656c05bd0882190b5747f1a5519f387aca0e9eaaeadf241335",
+  "diff": {
+    "algorithm": "sha256",
+    "changed_file_count": 8,
+    "changed_files": [
+      {
+        "file": ".github/workflows/visual-baseline.yml",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 59
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "576af209ac13e7b93d71e17543c2d156c125c1f92b8f2a4c4885a821a9cffe90"
+      },
+      {
+        "file": "business-api/internal/migration/channel_backfill_postgres_integration_test.go",
+        "ranges": [
+          {
+            "start": 44,
+            "end": 57
+          },
+          {
+            "start": 206,
+            "end": 208
+          },
+          {
+            "start": 211,
+            "end": 213
+          }
+        ],
+        "before_hash": "d4396fce8b91bbac25231d51ff757ab53821a07e3bd77cdf9f60014147d3cd14",
+        "after_hash": "9e3ff5308dd9695473b57d50cea6d6394e5b1d9184859bca00bcbbb39ae581a4"
+      },
+      {
+        "file": "business-api/internal/migration/channel_backfill_test.go",
+        "ranges": [
+          {
+            "start": 15,
+            "end": 15
+          },
+          {
+            "start": 20,
+            "end": 20
+          }
+        ],
+        "before_hash": "757b2fe132c5e4a759a1a4e70c80d741b16ecc0261db1a13ebd3a3213f9ab5d5",
+        "after_hash": "4b11712ea2f67cd46ff857b2bc76164be9c5d03e723279efbb0772f18105c996"
+      },
+      {
+        "file": "business-api/internal/migration/channel_backfill.go",
+        "ranges": [
+          {
+            "start": 440,
+            "end": 442
+          },
+          {
+            "start": 445,
+            "end": 447
+          }
+        ],
+        "before_hash": "457878ff7610aec6556f7ffed128789e051397291ac82e00ddf843e7c1e39540",
+        "after_hash": "f2c5f2261661d953eedb18fc2627a0b4967b6393b20f2bd2960fc1d7a516e1fe"
+      },
+      {
+        "file": "business-api/internal/repository/ota_lifecycle_postgres_integration_test.go",
+        "ranges": [
+          {
+            "start": 148,
+            "end": 188
+          }
+        ],
+        "before_hash": "5db0adbb24f58212ae665e5cd27d8811f2f40b44da33788feac5316c67af8c02",
+        "after_hash": "87cb3556869018fa8fc749975251e3331c43772219e123f0e8e4bf776c47b4df"
+      },
+      {
+        "file": "business-api/internal/repository/ota_repository.go",
+        "ranges": [
+          {
+            "start": 2044,
+            "end": 2053
+          },
+          {
+            "start": 2065,
+            "end": 2067
+          }
+        ],
+        "before_hash": "806768c2091804846163a671d8fe490b59a938d55dd686a3076921b94250a094",
+        "after_hash": "1950239346df4e650dd30d4eca88ba1a5536d6690388e4d8cde3d3faae215985"
+      },
+      {
+        "file": "business-api/internal/service/device_control_postgres_integration_test.go",
+        "ranges": [
+          {
+            "start": 10,
+            "end": 11
+          },
+          {
+            "start": 52,
+            "end": 52
+          },
+          {
+            "start": 56,
+            "end": 83
+          }
+        ],
+        "before_hash": "91638ccb556137889c9973c3476837e60c4ee297328c4fb7def33819faa9f9ad",
+        "after_hash": "2bbdcdd3f70ab0b3cf967e3589f407cf1cdec8690fd11420bd56f1efc237953d"
+      },
+      {
+        "file": "business-api/internal/service/device_send_command_postgres_integration_test.go",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 142
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "5235825f6122902b92abc812c9c835e088b9d5cd31978d4014ab6e045735a708"
+      }
+    ]
+  },
+  "timing": {
+    "started_at": "2026-09-06T17:52:31.529Z",
+    "completed_at": "2026-09-06T17:52:33.552Z",
+    "duration_ms": 2023,
+    "measurement": "hook_wall_clock"
+  },
+  "tokens": {
+    "input": 0,
+    "output": 0,
+    "total": 0,
+    "model_calls": 0,
+    "measurement": "known-zero"
+  },
+  "telemetry": {
+    "schemaVersion": "mimosa-gate-telemetry/v1",
+    "profile": "gate",
+    "operation": "Stop",
+    "outcome": "partial/INCONCLUSIVE",
+    "latencyMs": 2023,
+    "peakMemoryBytes": 151670784,
+    "memoryMeasurement": "max-observed-process-rss",
+    "scannedFiles": 7,
+    "cache": {
+      "hits": 0,
+      "misses": 0,
+      "measurement": "not-applicable"
+    },
+    "denyCount": 0,
+    "tokens": {
+      "input": 0,
+      "output": 0,
+      "total": 0,
+      "modelCalls": 0,
+      "measurement": "known-zero"
+    }
+  },
+  "finding_count": 0,
+  "rewake_finding_count": 0,
+  "evidence_boundary": {
+    "scan": "candidate",
+    "static_fix_verification": "observed_static_only",
+    "runtime_verification": "not_performed"
+  },
+  "finding_events": [],
+  "findings": [],
+  "artifacts": {
+    "immutable_report": ".mimosa/reports/task-review-sess_6023e950-763f-44a9-a65f-1fc8081897ef-20260906T175233552Z-118872-2cfa57fb8dd6.json",
+    "latest_report": ".mimosa/reports/task-review-sess_6023e950-763f-44a9-a65f-1fc8081897ef.json",
+    "history_summary": ".mimosa/history/run-20260906T175233552Z-118872-2cfa57fb8dd6.json"
+  }
+}

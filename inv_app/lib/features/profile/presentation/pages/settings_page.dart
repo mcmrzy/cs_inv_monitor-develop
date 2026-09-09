@@ -27,11 +27,16 @@ class _SettingsPageState extends State<SettingsPage> {
   final _localeService = getIt<LocaleService>();
 
   String _themeMode = 'system';
-  String _unitType = 'kW';
   String? _savedLocale;
   String _currentLocale = 'zh';
   String _currentTimezone = TimezoneUtils.defaultTimezone;
   bool _loading = true;
+
+  // TODO(功率单位)：此前的"功率单位 kW/W"设置是假设置——只改内存变量，
+  // 不持久化、也不影响任何页面的数值/单位展示，切换后毫无效果，比没有设置
+  // 更伤信任，已移除入口。后续如需恢复，需同时实现：
+  // 1) 单位偏好持久化（StorageService）；2) 全局数值格式化层，
+  // 在功率/电量展示处按偏好做换算与单位标注，两者齐备后再放开入口。
 
   @override
   void initState() {
@@ -127,63 +132,6 @@ class _SettingsPageState extends State<SettingsPage> {
     if (mounted) {
       setState(() => _themeMode = selected);
     }
-  }
-
-  void _showUnitDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => SimpleDialog(
-        title: Text(l10n.selectPowerUnit),
-        children: [
-          SimpleDialogOption(
-            onPressed: () {
-              setState(() => _unitType = 'kW');
-              Navigator.pop(context);
-              AppToast.show(
-                context,
-                l10n.str('unit_changed', {'unit': 'kW'}),
-                type: ToastType.success,
-              );
-            },
-            child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 8.h),
-              child: Row(
-                children: [
-                  Text('kW', style: TextStyle(fontSize: 16.sp)),
-                  if (_unitType == 'kW') ...[
-                    const Spacer(),
-                    const Icon(Icons.check, color: AppColors.primary),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          SimpleDialogOption(
-            onPressed: () {
-              setState(() => _unitType = 'W');
-              Navigator.pop(context);
-              AppToast.show(
-                context,
-                l10n.str('unit_changed', {'unit': 'W'}),
-                type: ToastType.success,
-              );
-            },
-            child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 8.h),
-              child: Row(
-                children: [
-                  Text('W', style: TextStyle(fontSize: 16.sp)),
-                  if (_unitType == 'W') ...[
-                    const Spacer(),
-                    const Icon(Icons.check, color: AppColors.primary),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   void _showTimezoneDialog() {
@@ -357,13 +305,6 @@ class _SettingsPageState extends State<SettingsPage> {
                       ? l10n.str('theme_light')
                       : l10n.str('theme_system'),
               onTap: _showThemeDialog,
-            ),
-            SettingsValueRow(
-              icon: Icons.electric_bolt,
-              accent: AppColors.purple,
-              title: l10n.unitSwitch,
-              subtitle: _unitType,
-              onTap: _showUnitDialog,
             ),
             SettingsValueRow(
               icon: Icons.public,

@@ -10,18 +10,22 @@ abstract class AlarmEvent extends Equatable {
 class AlarmListRequested extends AlarmEvent {
   final int? stationId;
   final int? status;
+
+  /// 告警级别筛选（与 Web 端 alarmLevel 参数对齐）：1=严重 2=警告 3=提示，null=全部
+  final int? alarmLevel;
   final int page;
   final int pageSize;
 
   const AlarmListRequested({
     this.stationId,
     this.status,
+    this.alarmLevel,
     this.page = 1,
     this.pageSize = 20,
   });
 
   @override
-  List<Object?> get props => [stationId, status, page, pageSize];
+  List<Object?> get props => [stationId, status, alarmLevel, page, pageSize];
 }
 
 class AlarmDetailRequested extends AlarmEvent {

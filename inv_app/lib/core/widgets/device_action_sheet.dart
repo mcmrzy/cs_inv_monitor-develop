@@ -164,7 +164,7 @@ class _DeviceActionSheetState extends State<DeviceActionSheet>
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(l10n.unbind),
-        content: const Text('确认解绑该设备吗？'),
+        content: Text(l10n.str('device_confirm_unbind')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),

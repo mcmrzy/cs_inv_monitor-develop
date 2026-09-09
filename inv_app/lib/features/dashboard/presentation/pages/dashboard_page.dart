@@ -169,6 +169,10 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget _buildPowerHero(BuildContext context, InverterRealtime? data) {
     final l10n = AppLocalizations.of(context)!;
     final activePower = (data?.ac?.power ?? 0) / 1000.0;
+    // 仪表盘量程取设备额定功率（W→kW），缺省回退 6.2kW，并夹紧到合理区间
+    final ratedPowerKw = (data?.deviceInfo?.ratedPower ?? 0) / 1000.0;
+    final maxPower =
+        ratedPowerKw > 0 ? ratedPowerKw.clamp(1.0, 100.0).toDouble() : 6.2;
 
     return Container(
       padding: EdgeInsets.symmetric(vertical: 24.w, horizontal: 20.w),
@@ -186,7 +190,7 @@ class _DashboardPageState extends State<DashboardPage> {
           SizedBox(height: 12.h),
           PowerGauge(
             power: activePower,
-            maxPower: 6.2,
+            maxPower: maxPower,
             size: 180.w,
             textColor: Colors.white,
             subtextColor: Colors.white70,
@@ -224,7 +228,7 @@ class _DashboardPageState extends State<DashboardPage> {
         SizedBox(width: 8.w),
         _quickStatChip(
           context,
-          'PF',
+          l10n.str('energy_power_factor'),
           pf.toStringAsFixed(2),
           Icons.tune,
           AppColors.blue,
@@ -259,8 +263,10 @@ class _DashboardPageState extends State<DashboardPage> {
             SizedBox(height: 2.h),
             Text(
               label,
-              style:
-                  TextStyle(fontSize: 10.sp, color: AppColor.outline(context)),
+              style: TextStyle(
+                fontSize: 12.sp,
+                color: AppColor.textSecondary(context),
+              ),
             ),
           ],
         ),
@@ -751,7 +757,10 @@ class _DashboardPageState extends State<DashboardPage> {
           SizedBox(height: 1.h),
           Text(
             item.label,
-            style: TextStyle(fontSize: 10.sp, color: AppColor.outline(context)),
+            style: TextStyle(
+              fontSize: 12.sp,
+              color: AppColor.textSecondary(context),
+            ),
           ),
         ],
       ),
@@ -860,7 +869,10 @@ class _DashboardPageState extends State<DashboardPage> {
           SizedBox(height: 2.h),
           Text(
             label,
-            style: TextStyle(fontSize: 10.sp, color: AppColor.outline(context)),
+            style: TextStyle(
+              fontSize: 12.sp,
+              color: AppColor.textSecondary(context),
+            ),
           ),
         ],
       ),

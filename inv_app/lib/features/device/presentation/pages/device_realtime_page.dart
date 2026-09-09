@@ -462,6 +462,11 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
           foregroundColor: AppColor.textPrimary(context),
           actions: [
             IconButton(
+              icon: const Icon(Icons.battery_charging_full_rounded),
+              tooltip: AppLocalizations.of(context)!.str('storage_title'),
+              onPressed: () => context.push('/device/${widget.sn}/storage'),
+            ),
+            IconButton(
               icon: const Icon(Icons.refresh_rounded),
               onPressed: () {
                 setState(() => _loading = true);

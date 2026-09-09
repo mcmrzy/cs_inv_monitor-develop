@@ -14,6 +14,7 @@ import { http, HttpResponse } from 'msw'
 import { renderWithProviders, screen, waitFor } from './test-utils'
 import { server } from './mocks/server'
 import { mockAdminUser, mockDevices, mockUsers, mockFirmwares } from './mocks/data'
+import { MOCK_LOGIN_PASSWORD } from '@/test/mockCredentials'
 import api from '@/services/api'
 
 // ─── 1. Vitest 基础能力 ───────────────────────────────────────────────────────
@@ -58,7 +59,7 @@ describe('MSW Mock Server', () => {
   it('拦截登录请求并返回 mock 数据', async () => {
     const res = await api.post('/auth/login', {
       account: 'admin@example.com',
-      password: 'Admin123',
+      password: MOCK_LOGIN_PASSWORD,
     })
     expect(res.data.code).toBe(0)
     expect(res.data.data).toHaveProperty('token')

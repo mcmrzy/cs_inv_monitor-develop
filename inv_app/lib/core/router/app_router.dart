@@ -27,6 +27,7 @@ import 'package:inv_app/features/station/presentation/pages/create_station_page.
 import 'package:inv_app/features/station/presentation/pages/edit_station_page.dart';
 
 import 'package:inv_app/features/device/presentation/pages/device_realtime_page.dart';
+import 'package:inv_app/features/device/presentation/pages/device_storage_page.dart';
 
 import 'package:inv_app/features/device/presentation/pages/device_op_logs_page.dart';
 
@@ -311,6 +312,16 @@ class AppRouter {
           final sn = state.pathParameters['sn']!;
 
           return _slidePage(state, HistoryChartPage(deviceSN: sn));
+        },
+      ),
+      // 储能 BMS 页（必须在 /device/:sn 之后声明，路径更具体者先匹配的规则见 :264 注释）
+      GoRoute(
+        path: '/device/:sn/storage',
+        name: 'deviceStorage',
+        pageBuilder: (context, state) {
+          final sn = state.pathParameters['sn']!;
+
+          return _slidePage(state, DeviceStoragePage(sn: sn));
         },
       ),
       GoRoute(

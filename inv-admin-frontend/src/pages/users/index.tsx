@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Card, Table, Button, Modal, Form, Input, Select, Tag, Space,
+  Card, Table, Button, Modal, Form, Input, Select, Tag, Space, Tooltip,
   Row, Col, Typography, App, Empty, Tabs, Drawer,
 } from 'antd'
 import Popconfirm from '@/components/LocalizedPopconfirm'
+import ListPageTable from '@/components/ListPageTable'
 import {
   PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined,
   LockOutlined, StopOutlined, CheckCircleOutlined, TeamOutlined,
@@ -20,6 +21,7 @@ import { formatInTimezone } from '@/utils/timezone'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
 import useTimezoneStore from '@/stores/timezoneStore'
 import { roleLabel } from '@/utils/roleLabel'
+import { passwordRule } from '@/utils/passwordRules'
 
 const { Title } = Typography
 
@@ -229,7 +231,9 @@ const UsersPage: React.FC = () => {
             {canManage && <Button type="link" size="small" icon={<LockOutlined />} onClick={() => { setResetUserId(record.id); pwdForm.resetFields(); setResetPwdOpen(true) }}>{t('user.resetPassword')}</Button>}
             {isSuperAdmin && (
               <Popconfirm title={t('user.confirmDelete')} onConfirm={() => deleteMutation.mutate(record.id)}>
-                <Button type="link" size="small" danger icon={<DeleteOutlined />} />
+                <Tooltip title={t('user.delete')}>
+                  <Button type="link" size="small" danger icon={<DeleteOutlined />} aria-label={t('user.delete')} />
+                </Tooltip>
               </Popconfirm>
             )}
           </Space>
@@ -275,25 +279,32 @@ const UsersPage: React.FC = () => {
       </Title>
       <Tabs activeKey={adminFilter === true ? 'admin' : 'all'} onChange={handleTabChange} items={adminTabs} style={{ marginBottom: 16 }} />
       <Card bordered={false} style={{ marginBottom: 16, borderRadius: 12 }}>
-        <Row gutter={16} align="middle">
-          <Col>
-            <Input.Search allowClear placeholder={t('user.searchPlaceholder')} style={{ width: 240 }}
+        <Row gutter={[12, 12]} align="middle">
+          <Col xs={24} sm={12} md={8}>
+            <Input.Search allowClear placeholder={t('user.searchPlaceholder')} style={{ width: '100%' }}
               value={keyword} onChange={(e) => setKeyword(e.target.value)} onSearch={() => { setPage(1); refetch() }} />
           </Col>
-          <Col>
-            <Select allowClear placeholder={t('user.filterStatus')} style={{ width: 120 }}
+          <Col xs={12} sm={6} md={5}>
+            <Select allowClear placeholder={t('user.filterStatus')} style={{ width: '100%' }}
               value={statusFilter} onChange={(val) => { setStatusFilter(val); setPage(1) }}
               options={Object.entries(STATUS_MAP).map(([k, v]) => ({ label: v.label, value: Number(k) }))} />
           </Col>
-          <Col><Button icon={<ReloadOutlined />} onClick={() => refetch()}>{t('common.refresh')}</Button></Col>
+          <Col xs={12} sm={6} md={4}><Button icon={<ReloadOutlined />} onClick={() => refetch()}>{t('common.refresh')}</Button></Col>
           {canManage && (
-            <Col><Button type="primary" icon={<PlusOutlined />} onClick={openAdd}>{t('user.addUser')}</Button></Col>
+            <Col xs={24} sm={12} md={4}><Button type="primary" icon={<PlusOutlined />} onClick={openAdd}>{t('user.addUser')}</Button></Col>
           )}
         </Row>
       </Card>
 
-      <Table<User> rowKey="id" columns={columns} dataSource={data} loading={isLoading} size="middle"
-          locale={{ emptyText: <Empty description={t('common.noData')} /> }}
+      <ListPageTable<User>
+        rowKey="id"
+        columns={columns}
+        dataSource={data}
+        loading={isLoading}
+        size="middle"
+        persistenceKey="users-list"
+        onReload={() => refetch()}
+        locale={{ emptyText: <Empty description={t('common.noData')} /> }}
         pagination={{ current: page, pageSize, total, showSizeChanger: true, showTotal: (totalCount) => t('common.total', { total: totalCount }), onChange: (p, ps) => { setPage(p); setPageSize(ps) } }} />
 
       <Modal title={editingUser ? t('user.editUser') : t('user.addUserTitle')} open={modalOpen}
@@ -321,7 +332,7 @@ const UsersPage: React.FC = () => {
             </Form.Item>
           )}
           {!editingUser && (
-            <Form.Item name="password" label={t('user.newPassword')} rules={[{ required: true, message: t('user.pleaseInputPassword') }, { min: 6, message: t('user.pwdMinLength') }]}>
+            <Form.Item name="password" label={t('user.newPassword')} rules={[{ required: true, message: t('user.pleaseInputPassword') }, ...passwordRule(t)]}>
               <Input.Password placeholder={t('user.pleaseInputPassword')} />
             </Form.Item>
           )}
@@ -332,7 +343,7 @@ const UsersPage: React.FC = () => {
         onCancel={() => { setResetPwdOpen(false); pwdForm.resetFields() }} onOk={handleResetPwd}
         confirmLoading={resetPwdMutation.isPending} destroyOnHidden>
         <Form form={pwdForm} layout="vertical">
-          <Form.Item name="password" label={t('user.newPassword')} rules={[{ required: true, message: t('user.pleaseInputPassword') }, { min: 6, message: t('user.pwdMinLength') }]}>
+          <Form.Item name="password" label={t('user.newPassword')} rules={[{ required: true, message: t('user.pleaseInputPassword') }, ...passwordRule(t)]}>
             <Input.Password placeholder={t('user.pleaseInputPassword')} />
           </Form.Item>
           <Form.Item name="confirmPassword" label={t('user.confirmPassword')} dependencies={['password']}

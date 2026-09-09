@@ -1303,7 +1303,13 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			pipelineHealthGroup.DELETE("/dlq/messages/:id", deps.DLQHandler.Delete)
 
 			// Task 13: SSE pipeline health stream (implemented in ws_handler.go)
-			pipelineHealthGroup.GET("/pipeline-health/stream", handler.PipelineHealthSSE(deps.RDB))
+			// SSE 由 EventSource 访问，无法携带 Authorization 头，故该路由单独
+			// 使用 AuthWithQueryToken（额外接受 token 查询参数）；
+			// 其余 /system 路由仍走组级 Auth，鉴权行为不变。
+			pipelineHealthSSE := api.Group("/system")
+			pipelineHealthSSE.GET("/pipeline-health/stream",
+				middleware.AuthWithQueryToken(deps.JWTService, deps.AuthorizationContextValidator),
+				handler.PipelineHealthSSE(deps.RDB))
 		}
 	}
 

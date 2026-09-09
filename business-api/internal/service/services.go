@@ -524,6 +524,12 @@ func (s *DeviceService) GetAll(ctx context.Context, stationID int64, status int,
 	return s.repo.GetAll(ctx, stationID, status, keyword, page, pageSize)
 }
 
+// List 按结构化参数查询设备列表（支持 model 前缀过滤与最后在线时间范围），
+// 是 GetByUserID/GetAll 的统一入口，系统管理员与普通用户共用。
+func (s *DeviceService) List(ctx context.Context, params repository.DeviceListParams) ([]*model.Device, int64, error) {
+	return s.repo.List(ctx, params)
+}
+
 func (s *DeviceService) GetByStationID(ctx context.Context, stationID int64) ([]*model.Device, error) {
 	return s.repo.GetByStationID(ctx, stationID)
 }

@@ -363,7 +363,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
       builder: (_) => ContactChangeDialog(
         icon: Icons.phone_android,
         title: l10n.changePhone,
-        description: '请输入新的手机号码',
+        description: l10n.profileEnterNewPhone,
         valueLabel: l10n.newPhone,
         valueHint: l10n.phoneHint,
         valueKeyboardType: TextInputType.phone,
@@ -400,10 +400,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
   Future<bool> _sendPhoneCodeForDialog(String phone) async {
     if (!await _ensureAuthenticated()) return false;
     if (!mounted) return false;
+    final l10n = AppLocalizations.of(context)!;
     if (phone.isEmpty) {
       AppToast.show(
         context,
-        AppLocalizations.of(context)!.phoneRequired,
+        l10n.phoneRequired,
         type: ToastType.info,
       );
       return false;
@@ -426,7 +427,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
         }
         return true;
       } else {
-        throw Exception(response.data['message'] ?? '发送失败');
+        throw Exception(response.data['message'] ?? l10n.sendFailed);
       }
     } catch (e) {
       if (mounted) {
@@ -440,10 +441,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
   Future<bool> _verifyPhoneCode(String newPhone, String code) async {
     if (!await _ensureAuthenticated()) return false;
     if (!mounted) return false;
+    final l10n = AppLocalizations.of(context)!;
     if (newPhone.isEmpty || code.isEmpty) {
       AppToast.show(
         context,
-        AppLocalizations.of(context)!.fillAllFields,
+        l10n.fillAllFields,
         type: ToastType.info,
       );
       return false;
@@ -462,7 +464,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
       if (response.statusCode == 200 && response.data['code'] == 0) {
         return true;
       } else {
-        throw Exception(response.data['message'] ?? '验证失败');
+        throw Exception(response.data['message'] ?? l10n.verifyFailed);
       }
     } catch (e) {
       if (mounted) {
@@ -491,7 +493,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
       builder: (_) => ContactChangeDialog(
         icon: Icons.email_outlined,
         title: l10n.changeEmail,
-        description: '请输入新的邮箱地址',
+        description: l10n.profileEnterNewEmail,
         valueLabel: l10n.newEmail,
         valueHint: l10n.emailHint,
         valueKeyboardType: TextInputType.emailAddress,
@@ -510,10 +512,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
   /// 发送邮箱验证码（弹窗内使用）
   Future<bool> _sendEmailCodeForDialog(String email) async {
+    final l10n = AppLocalizations.of(context)!;
     if (email.isEmpty) {
       AppToast.show(
         context,
-        AppLocalizations.of(context)!.emailRequired,
+        l10n.emailRequired,
         type: ToastType.info,
       );
       return false;
@@ -536,7 +539,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
         }
         return true;
       } else {
-        throw Exception(response.data['message'] ?? '发送失败');
+        throw Exception(response.data['message'] ?? l10n.sendFailed);
       }
     } catch (e) {
       if (mounted) {
@@ -548,10 +551,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
   /// 验证邮箱验证码
   Future<bool> _verifyEmailCode(String newEmail, String code) async {
+    final l10n = AppLocalizations.of(context)!;
     if (newEmail.isEmpty || code.isEmpty) {
       AppToast.show(
         context,
-        AppLocalizations.of(context)!.fillAllFields,
+        l10n.fillAllFields,
         type: ToastType.info,
       );
       return false;
@@ -570,7 +574,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
       if (response.statusCode == 200 && response.data['code'] == 0) {
         return true;
       } else {
-        throw Exception(response.data['message'] ?? '验证失败');
+        throw Exception(response.data['message'] ?? l10n.verifyFailed);
       }
     } catch (e) {
       if (mounted) {
@@ -710,6 +714,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
               child: Column(
                 children: [
                   _buildReadOnlyField(
+                    // 字段 key：占位符按 key 匹配而非本地化 label（label 随语言变化）
+                    fieldKey: 'nickname',
                     label: l10n.nickname,
                     value: _nicknameController.text,
                     icon: Icons.person_outline,
@@ -720,6 +726,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                   ),
                   Divider(height: 1.h, indent: 16.w, endIndent: 16.w),
                   _buildReadOnlyField(
+                    fieldKey: 'phone',
                     label: l10n.phone,
                     value: _phoneController.text,
                     icon: Icons.phone_outlined,
@@ -730,6 +737,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                   ),
                   Divider(height: 1.h, indent: 16.w, endIndent: 16.w),
                   _buildReadOnlyField(
+                    fieldKey: 'email',
                     label: l10n.email,
                     value: _emailController.text,
                     icon: Icons.email_outlined,
@@ -743,6 +751,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                   Divider(height: 1.h, indent: 16.w, endIndent: 16.w),
                   // 所有已登录用户均显示密码入口：无密码账号显示“设置密码”，有密码账号显示“修改密码”
                   _buildReadOnlyField(
+                    fieldKey: 'password',
                     label: _isSetPasswordMode
                         ? l10n.setPassword
                         : l10n.changePassword,
@@ -861,6 +870,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
   }
 
   Widget _buildReadOnlyField({
+    required String fieldKey,
     required String label,
     required String value,
     required IconData icon,
@@ -868,9 +878,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
     required AppLocalizations l10n,
   }) {
     // 如果值为空，显示"点击设置..."的提示
-    final displayValue = value.isNotEmpty 
-      ? value 
-      : _getPlaceholderText(label, l10n);
+    final displayValue = value.isNotEmpty
+      ? value
+      : _getPlaceholderText(fieldKey, l10n);
 
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.w),
@@ -922,16 +932,18 @@ class _EditProfilePageState extends State<EditProfilePage> {
     );
   }
   
-  /// 根据字段标签获取占位符文本
-  String _getPlaceholderText(String label, AppLocalizations l10n) {
-    switch (label) {
-      case '昵称':
+  /// 根据字段 key 获取占位符文本。
+  /// 不能按本地化 label 匹配：label 随语言切换（英文下是 Nickname 等），
+  /// 按 label 匹配会导致非中文环境全部回退 '-'
+  String _getPlaceholderText(String fieldKey, AppLocalizations l10n) {
+    switch (fieldKey) {
+      case 'nickname':
         return l10n.clickToSetNickname;
-      case '邮箱':
+      case 'email':
         return l10n.clickToSetEmail;
-      case '手机':
+      case 'phone':
         return l10n.clickToSetPhone;
-      case '地区':
+      case 'region':
         return l10n.clickToSetRegion;
       default:
         return '-';

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "mimosa-hook-status/v1",
+  "recordedAt": "2026-09-08T19:32:35.604Z",
+  "sessionId": "sess_cf3047f1-14f4-48e6-9ba0-0d927e74d472",
+  "event": "PostToolUse",
+  "toolName": "Edit",
+  "file": "C:/Users/29538/.zcode/cli/memories/projects/cs_inv_monitor-develop-738e769c95477738/memory/cs-inv-overnight-bugfix-campaign-20260909.md",
+  "outcome": "clear",
+  "coverage": "complete",
+  "findingCount": 0,
+  "durationMs": 4,
+  "hostState": "hook_complete",
+  "reportHint": ".mimosa/reports/"
+}

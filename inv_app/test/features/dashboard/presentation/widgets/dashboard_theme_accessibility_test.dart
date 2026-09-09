@@ -40,25 +40,8 @@ Widget _host(
   );
 }
 
-/// Wraps [testWidgets] to suppress RenderFlex overflow errors at the
-/// framework level so they are never queued for [tester.takeException].
-void _testWidgets(String description, WidgetTesterCallback callback) {
-  testWidgets(description, (tester) async {
-    final originalOnError = FlutterError.onError;
-    FlutterError.onError = (FlutterErrorDetails details) {
-      if (details.toString().contains('overflowed')) return;
-      originalOnError?.call(details);
-    };
-    try {
-      await callback(tester);
-    } finally {
-      FlutterError.onError = originalOnError;
-    }
-  });
-}
-
 void main() {
-  _testWidgets('recent alarms uses readable neutral colors in dark mode',
+  testWidgets('recent alarms uses readable neutral colors in dark mode',
       (tester) async {
     await tester.pumpWidget(
       _host(
@@ -78,9 +61,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // 排空溢出异常（RenderFlex overflow 属于已知无害布局警告）
-    while (tester.takeException() != null) {}
-
     final title = tester.widget<Text>(find.text('Grid voltage warning'));
     final device = tester.widget<Text>(find.text('INV-001'));
 
@@ -88,7 +68,7 @@ void main() {
     expect(device.style?.color, isNot(Colors.transparent));
   });
 
-  _testWidgets('range selector fits narrow width at 2x text scale',
+  testWidgets('range selector fits narrow width at 2x text scale',
       (tester) async {
     await tester.pumpWidget(
       _host(
@@ -106,7 +86,7 @@ void main() {
     expect(find.byType(TrendTimeRangeSelector), findsOneWidget);
   });
 
-  _testWidgets('range selector exposes selected button semantics and callbacks',
+  testWidgets('range selector exposes selected button semantics and callbacks',
       (tester) async {
     final semantics = tester.ensureSemantics();
     final selected = <String>[];

@@ -284,11 +284,13 @@ func TestMQTTDeviceOnlineOffline(t *testing.T) {
 	// Disconnect abruptly - LWT should fire
 	deviceClient.Disconnect(0)
 
-	// Wait for offline will message
+	// Wait for offline will message. 30s window: 本测试常与其他套件同机并发
+	// （soak 战役），EMQX 的半关检测与遗嘱投递可能被调度延迟拖过 10s
+	//（90 循环中 2 次 2.2% 发作）；断言的是遗嘱机制有效而非投递延迟。
 	select {
 	case status := <-statusCh:
 		assert.Contains(t, status, "offline")
-	case <-time.After(10 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("did not receive LWT offline message")
 	}
 }

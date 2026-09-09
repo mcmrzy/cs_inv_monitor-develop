@@ -1,0 +1,264 @@
+{
+  "schema_version": "mimosa-task-review/v2",
+  "run_id": "20260905T205202444Z-49292-cbcb147654d4",
+  "run_status": "inconclusive",
+  "errors": [
+    {
+      "stage": "baseline-read",
+      "target": "business-api/internal/repository/auth_session_postgres_integration_test.go",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "business-api/internal/repository/ota_lifecycle_postgres_integration_test.go",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    }
+  ],
+  "coverage": {
+    "schema_version": "mimosa-hook-coverage/v1",
+    "status": "partial",
+    "scope": "hook_observed_diff",
+    "baseline": {
+      "complete": true,
+      "captured_files": 849,
+      "candidate_limit": 5000,
+      "truncated": false,
+      "enumeration_error_count": 0,
+      "snapshot_error_count": 0,
+      "compensated_target_count": 3
+    },
+    "change_tracking": {
+      "touched_observed": 2,
+      "touched_retained": 2,
+      "truncated": false,
+      "bash_mutation": true,
+      "bash_discovered": 5,
+      "bash_discovery_limit": 80,
+      "bash_discovery_truncated": false
+    },
+    "candidates": {
+      "eligible_files": 5,
+      "selected_files": 5,
+      "limit": 20,
+      "truncated": false
+    },
+    "scanning": {
+      "required_files": 5,
+      "scanned_files": 5,
+      "skipped_files": 0,
+      "failed_files": 0,
+      "project_checks_required": 0,
+      "project_checks_completed": 0
+    },
+    "notification": {
+      "eligible_findings": 0,
+      "detailed_findings": 0,
+      "detail_limit": 3,
+      "truncated": false
+    },
+    "reason_counts": {
+      "baseline_snapshot_unreadable": 2,
+      "project_check_failed": 2
+    },
+    "reasons": [
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "business-api/internal/repository/auth_session_postgres_integration_test.go",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "business-api/internal/repository/ota_lifecycle_postgres_integration_test.go",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "business-api/internal/repository/auth_session_postgres_integration_test.go",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "business-api/internal/repository/ota_lifecycle_postgres_integration_test.go",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      }
+    ],
+    "reasons_truncated": false
+  },
+  "generated_at": "2026-09-05T20:52:02.444Z",
+  "session_id": "sess_6023e950-763f-44a9-a65f-1fc8081897ef",
+  "target": ".",
+  "revision": "da422c5fc22eacb6e2fd081cec48eebb5dfd1673",
+  "rules_version": "unavailable",
+  "diff_hash": "267e2b482937df40cfcab42db3709bfa91913489f6ddaf6ad7a7f9c3ae0497ff",
+  "diff": {
+    "algorithm": "sha256",
+    "changed_file_count": 5,
+    "changed_files": [
+      {
+        "file": "business-api/internal/repository/auth_session_postgres_integration_test.go",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 96
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "f2c8897d2c2423c79ae4ed917386d851b4318b7d29eb2e6fe2c27ca8443bb0f4"
+      },
+      {
+        "file": "business-api/internal/repository/ota_lifecycle_postgres_integration_test.go",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 147
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "5db0adbb24f58212ae665e5cd27d8811f2f40b44da33788feac5316c67af8c02"
+      },
+      {
+        "file": "business-api/internal/repository/registration_identity_postgres_integration_test.go",
+        "ranges": [
+          {
+            "start": 71,
+            "end": 76
+          },
+          {
+            "start": 95,
+            "end": 95
+          },
+          {
+            "start": 118,
+            "end": 120
+          },
+          {
+            "start": 136,
+            "end": 136
+          },
+          {
+            "start": 200,
+            "end": 201
+          },
+          {
+            "start": 285,
+            "end": 286
+          }
+        ],
+        "before_hash": "da8e99af34c2238d761ead265c69e4c0c70a27ee21fac89014531f2da2587b13",
+        "after_hash": "10f76951c278195631911cb7ba903427347a7271b3c611ed3c669c194cc8a8c8"
+      },
+      {
+        "file": "business-api/internal/service/authorization_postgres_integration_test.go",
+        "ranges": [
+          {
+            "start": 45,
+            "end": 46
+          },
+          {
+            "start": 56,
+            "end": 57
+          },
+          {
+            "start": 62,
+            "end": 64
+          },
+          {
+            "start": 70,
+            "end": 70
+          },
+          {
+            "start": 89,
+            "end": 89
+          },
+          {
+            "start": 112,
+            "end": 112
+          },
+          {
+            "start": 115,
+            "end": 115
+          },
+          {
+            "start": 119,
+            "end": 119
+          },
+          {
+            "start": 121,
+            "end": 121
+          }
+        ],
+        "before_hash": "18dd20c86aac8b43b40ebae73b0311ac9a1dd1f653b23b4e0868eafbd0e9a87e",
+        "after_hash": "c15aeda93e9e669c0b34b80cf65bbeb29f2b95e5926de760248705a1cd1194e6"
+      },
+      {
+        "file": "business-api/internal/service/device_control_postgres_integration_test.go",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 200
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "91638ccb556137889c9973c3476837e60c4ee297328c4fb7def33819faa9f9ad"
+      }
+    ]
+  },
+  "timing": {
+    "started_at": "2026-09-05T20:52:01.190Z",
+    "completed_at": "2026-09-05T20:52:02.444Z",
+    "duration_ms": 1254,
+    "measurement": "hook_wall_clock"
+  },
+  "tokens": {
+    "input": 0,
+    "output": 0,
+    "total": 0,
+    "model_calls": 0,
+    "measurement": "known-zero"
+  },
+  "telemetry": {
+    "schemaVersion": "mimosa-gate-telemetry/v1",
+    "profile": "gate",
+    "operation": "Stop",
+    "outcome": "partial/INCONCLUSIVE",
+    "latencyMs": 1254,
+    "peakMemoryBytes": 208248832,
+    "memoryMeasurement": "max-observed-process-rss",
+    "scannedFiles": 5,
+    "cache": {
+      "hits": 0,
+      "misses": 0,
+      "measurement": "not-applicable"
+    },
+    "denyCount": 0,
+    "tokens": {
+      "input": 0,
+      "output": 0,
+      "total": 0,
+      "modelCalls": 0,
+      "measurement": "known-zero"
+    }
+  },
+  "finding_count": 0,
+  "rewake_finding_count": 0,
+  "evidence_boundary": {
+    "scan": "candidate",
+    "static_fix_verification": "observed_static_only",
+    "runtime_verification": "not_performed"
+  },
+  "finding_events": [],
+  "findings": [],
+  "artifacts": {
+    "immutable_report": ".mimosa/reports/task-review-sess_6023e950-763f-44a9-a65f-1fc8081897ef-20260905T205202444Z-49292-cbcb147654d4.json",
+    "latest_report": ".mimosa/reports/task-review-sess_6023e950-763f-44a9-a65f-1fc8081897ef.json",
+    "history_summary": ".mimosa/history/run-20260905T205202444Z-49292-cbcb147654d4.json"
+  }
+}

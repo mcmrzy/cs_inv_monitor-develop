@@ -31,38 +31,41 @@ const StatBlock: React.FC<{
   today: number
   total: number
   unit?: string
-}> = ({ icon, color, label, today, total, unit = 'kWh' }) => (
-  <div style={{
-    background: `${color}08`,
-    borderRadius: 10,
-    padding: '12px 16px',
-    borderLeft: `3px solid ${color}`,
-  }}>
-    <Text type="secondary" style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4, marginBottom: 8 }}>
-      <span style={{ color }}>{icon}</span> {label}
-    </Text>
-    <Row gutter={8}>
-      <Col span={12}>
-        <Statistic
-          title={<Text style={{ fontSize: 11, color: '#999' }}>今日</Text>}
-          value={today?.toFixed(1) ?? 0}
-          precision={1}
-          suffix={unit}
-          valueStyle={{ color, fontSize: 18, fontWeight: 600 }}
-        />
-      </Col>
-      <Col span={12}>
-        <Statistic
-          title={<Text style={{ fontSize: 11, color: '#999' }}>累计</Text>}
-          value={total?.toFixed(0) ?? 0}
-          precision={0}
-          suffix={unit}
-          valueStyle={{ color, fontSize: 18, fontWeight: 600 }}
-        />
-      </Col>
-    </Row>
-  </div>
-)
+}> = ({ icon, color, label, today, total, unit = 'kWh' }) => {
+  const { t } = useTranslation()
+  return (
+    <div style={{
+      background: `${color}08`,
+      borderRadius: 10,
+      padding: '12px 16px',
+      borderLeft: `3px solid ${color}`,
+    }}>
+      <Text type="secondary" style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4, marginBottom: 8 }}>
+        <span style={{ color }}>{icon}</span> {label}
+      </Text>
+      <Row gutter={8}>
+        <Col span={12}>
+          <Statistic
+            title={<Text style={{ fontSize: 11, color: '#999' }}>{t('station.today')}</Text>}
+            value={today?.toFixed(1) ?? 0}
+            precision={1}
+            suffix={unit}
+            valueStyle={{ color, fontSize: 18, fontWeight: 600 }}
+          />
+        </Col>
+        <Col span={12}>
+          <Statistic
+            title={<Text style={{ fontSize: 11, color: '#999' }}>{t('station.cumulative')}</Text>}
+            value={total?.toFixed(0) ?? 0}
+            precision={0}
+            suffix={unit}
+            valueStyle={{ color, fontSize: 18, fontWeight: 600 }}
+          />
+        </Col>
+      </Row>
+    </div>
+  )
+}
 
 const DeviceStatsCard: React.FC<DeviceStatsCardProps> = ({ data }) => {
   const { t } = useTranslation()
