@@ -1217,6 +1217,10 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			authMembers.POST("/bulk-transfer", deps.MemberLifecycleHandler.BulkTransfer)
 		}
 
+		// APP version checks must work before a user session exists. Keep this
+		// endpoint outside the authenticated OTA management group.
+		api.GET("/ota/app/check", deps.OTAHandler.CheckAppUpdate)
+
 		otaGroup := api.Group("/ota").Use(middleware.Auth(deps.JWTService, deps.AuthorizationContextValidator))
 		{
 			// 闇€瑕佹潈闄愮殑绠＄悊鎺ュ彛
@@ -1282,7 +1286,6 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			otaGroup.POST("/rollback-to-published", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.RollbackToPublishedVersion)
 
 			// App鐗堟湰绠＄悊
-			otaGroup.GET("/app/check", deps.OTAHandler.CheckAppUpdate) // APP妫€鏌ユ洿鏂帮紙鏃犻渶棰濆鏉冮檺锛?
 			otaGroup.GET("/app/versions", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.ListAppVersions)
 			otaGroup.POST("/app/versions", middleware.RequirePermission(deps.PermChecker, "ota", "create"), deps.OTAHandler.CreateAppVersion)
 			otaGroup.DELETE("/app/versions/:id", middleware.RequirePermission(deps.PermChecker, "ota", "delete"), deps.OTAHandler.DeleteAppVersion)
