@@ -1872,6 +1872,8 @@ func (r *DeviceRepository) AddToStation(ctx context.Context, sn string, stationI
 	if err == nil {
 		r.invalidateDeviceCache(ctx, sn)
 		r.updateStationCapacity(ctx, stationID)
+		// 绑定在线设备时电站应立即联动为正常，而非等待下一次设备状态事件
+		r.SyncStationStatus(ctx)
 	}
 	return err
 }
@@ -1887,6 +1889,8 @@ func (r *DeviceRepository) RemoveFromStation(ctx context.Context, sn string) err
 		r.invalidateDeviceCache(ctx, sn)
 		if oldStationID > 0 {
 			r.updateStationCapacity(ctx, oldStationID)
+			// 移走的可能是站内最后一台在线设备，电站应联动为离线
+			r.SyncStationStatus(ctx)
 		}
 	}
 	return err
@@ -2054,10 +2058,10 @@ func (r *DeviceRepository) MarkDeviceOffline(ctx context.Context, sn string) (*O
 	}
 
 	changed := result.RowsAffected() > 0
-	if changed {
-		// 同步电站状态
-		r.SyncStationStatus(ctx)
-	}
+	// 无论 changed 与否都同步电站状态：60 秒兜底扫描（MarkStaleDevicesOffline）
+	// 可能已先行把设备批量置 0，此时 changed=false，但电站状态仍需联动，
+	// 否则全离线电站会永远卡在建站默认的"正常"
+	r.SyncStationStatus(ctx)
 
 	return &OfflineResult{
 		Changed:   changed,
@@ -2869,7 +2873,8 @@ func (r *DeviceRepository) GetCommandHistory(ctx context.Context, sn string, pag
 	}
 	defer rows.Close()
 
-	var commands []map[string]interface{}
+	// 初始化为空切片：JSON 序列化为 [] 而非 null，避免前端分页契约校验失败
+	commands := make([]map[string]interface{}, 0)
 	for rows.Next() {
 		var id int64
 		var deviceSn, cmdName, taskID, status string
