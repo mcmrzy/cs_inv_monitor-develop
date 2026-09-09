@@ -149,7 +149,8 @@ func (r *EnergyScheduleRepository) ListActiveOverrides(ctx context.Context, sn s
 	}
 	defer rows.Close()
 
-	var overrides []ControlOverride
+	// 初始化为空切片：JSON 序列化为 [] 而非 null，避免前端数组契约校验失败
+	overrides := make([]ControlOverride, 0)
 	for rows.Next() {
 		var o ControlOverride
 		var valueRaw []byte

@@ -174,6 +174,9 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 	userGroup.Any("/api/v1/alert-rules", p.Handler())
 	userGroup.Any("/api/v1/models/*action", p.Handler())
 	userGroup.Any("/api/v1/models", p.Handler())
+	// 电池模板目录 — 设备详情「安装配置」页读取（business-api BatteryHandler，登录即可）
+	userGroup.Any("/api/v1/battery-profiles/*action", p.Handler())
+	userGroup.Any("/api/v1/battery-profiles", p.Handler())
 	userGroup.Any("/api/v1/field-catalog", p.Handler())
 	userGroup.Any("/api/v1/protocol-versions/*action", p.Handler())
 	userGroup.Any("/api/v1/protocol-versions", p.Handler())
