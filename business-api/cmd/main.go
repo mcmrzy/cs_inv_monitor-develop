@@ -398,6 +398,12 @@ func runHeartbeatCheck(deviceRepo *repository.DeviceRepository, db *pgxpool.Pool
 					}
 				}
 			}
+			// 周期性对账：把电站状态收敛到站内设备实况。事件驱动的联动会
+			// 漏掉"设备早已离线、电站却停在历史值"的存量数据，这里兜底自愈
+			// （SQL 仅更新状态不一致的行，无变化时不产生写入）。
+			if err := deviceRepo.SyncStationStatus(context.Background()); err != nil {
+				logger.Error("Station status reconciliation failed", zap.Error(err))
+			}
 		}
 	}
 }
