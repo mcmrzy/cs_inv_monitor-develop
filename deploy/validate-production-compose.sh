@@ -63,6 +63,26 @@ if ! grep -Fq 'http://localhost:8081/metrics' <<<"$device_block"; then
   echo "inv-device-server container healthcheck must use the liveness endpoint /metrics" >&2
   exit 1
 fi
+
+frontend_block="$(service_block inv-admin-frontend)"
+if ! grep -Fq 'http://127.0.0.1:8080/' <<<"$frontend_block"; then
+  echo "inv-admin-frontend healthcheck must use its IPv4 listener at 127.0.0.1:8080" >&2
+  exit 1
+fi
+if grep -Fq 'http://localhost:8080/' <<<"$frontend_block"; then
+  echo "inv-admin-frontend healthcheck must not depend on localhost IPv6 resolution" >&2
+  exit 1
+fi
+if ! grep -Fq -- '- "8080"' <<<"$frontend_block"; then
+  echo "inv-admin-frontend must expose the port it actually listens on: 8080" >&2
+  exit 1
+fi
+
+redis_block="$(service_block redis)"
+if ! grep -Fq -- '--maxmemory 384mb' <<<"$redis_block"; then
+  echo "redis maxmemory must leave runtime overhead below the 512M container limit" >&2
+  exit 1
+fi
 if grep -Fq 'http://localhost:8081/health' <<<"$device_block"; then
   echo "inv-device-server container healthcheck must not gate startup on MQTT readiness" >&2
   exit 1
@@ -83,6 +103,30 @@ if ! grep -Fq 'http://127.0.0.1:8082/livez' <<<"$nginx_block"; then
 fi
 if ! grep -Fq 'listen 127.0.0.1:8082;' "$nginx_file" || ! grep -Fq 'location = /livez' "$nginx_file"; then
   echo "nginx config must define the local-only liveness endpoint /livez" >&2
+  exit 1
+fi
+if ! grep -Fq './configs/nginx-security-headers.conf:/etc/nginx/snippets/security-headers.conf:ro' <<<"$nginx_block"; then
+  echo "nginx must mount the shared security-header snippet" >&2
+  exit 1
+fi
+if ! grep -Fq 'location ^~ /assets/' "$nginx_file"; then
+  echo "nginx immutable caching must be limited to Vite hashed /assets/" >&2
+  exit 1
+fi
+if ! grep -Fq 'public, max-age=86400, must-revalidate' "$nginx_file"; then
+  echo "fixed-name static assets must use a short revalidating cache policy" >&2
+  exit 1
+fi
+if (( $(grep -Fc 'include /etc/nginx/snippets/security-headers.conf;' "$nginx_file" || true) < 9 )); then
+  echo "nginx cache locations must preserve shared security headers" >&2
+  exit 1
+fi
+if ! grep -A14 -F 'server_name sim.jiuxiaoyw.online;' "$nginx_file" | grep -Fq '/etc/letsencrypt/live/sim.jiuxiaoyw.online/fullchain.pem'; then
+  echo "sim vhost must serve the certificate that contains sim.jiuxiaoyw.online" >&2
+  exit 1
+fi
+if (( $(grep -Fc 'location /.well-known/acme-challenge/' "$nginx_file" || true) < 6 )); then
+  echo "every HTTP certificate vhost must expose the ACME webroot challenge" >&2
   exit 1
 fi
 
