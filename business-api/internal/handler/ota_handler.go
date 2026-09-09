@@ -158,6 +158,12 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 			response.Error(c, 500, "计算文件哈希失败")
 			return
 		}
+		if strings.EqualFold(targetChip, "esp") {
+			if err := service.ValidateESPImageVersion(f, version); err != nil {
+				response.Error(c, 400, err.Error())
+				return
+			}
+		}
 
 		fileURL := fmt.Sprintf("/firmware/%s", filename)
 
