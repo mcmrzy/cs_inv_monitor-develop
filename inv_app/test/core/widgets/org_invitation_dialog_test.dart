@@ -1,14 +1,26 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inv_app/core/widgets/org_invitation_dialog.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 Widget _host({required SendOrganizationInvitation onSubmit}) {
   return ScreenUtilInit(
     designSize: const Size(375, 812),
     builder: (_, __) => MaterialApp(
+      // 断言基于中文文案，钉住 locale
+      locale: const Locale('zh'),
+      // 弹窗文案已接入 l10n，测试宿主需提供本地化委托
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: AppLocalizations.supportedLocales,
       home: Builder(
         builder: (context) => Scaffold(
           body: ElevatedButton(
@@ -31,29 +43,14 @@ Widget _host({required SendOrganizationInvitation onSubmit}) {
 
 Future<void> _open(WidgetTester tester, Widget host) async {
   await tester.pumpWidget(host);
+  // 本地化委托异步加载翻译，需再泵一帧 home 才挂载
+  await tester.pump();
   await tester.tap(find.text('打开'));
   await tester.pumpAndSettle();
 }
 
-/// Wraps [testWidgets] to suppress RenderFlex overflow errors at the
-/// framework level so they are never queued for [tester.takeException].
-void _testWidgets(String description, WidgetTesterCallback callback) {
-  testWidgets(description, (tester) async {
-    final originalOnError = FlutterError.onError;
-    FlutterError.onError = (FlutterErrorDetails details) {
-      if (details.toString().contains('overflowed')) return;
-      originalOnError?.call(details);
-    };
-    try {
-      await callback(tester);
-    } finally {
-      FlutterError.onError = originalOnError;
-    }
-  });
-}
-
 void main() {
-  _testWidgets('关闭弹窗时释放输入控制器', (tester) async {
+  testWidgets('关闭弹窗时释放输入控制器', (tester) async {
     await _open(
       tester,
       _host(
@@ -80,7 +77,7 @@ void main() {
     }
   });
 
-  _testWidgets('请求 pending 时阻止重复提交和关闭', (tester) async {
+  testWidgets('请求 pending 时阻止重复提交和关闭', (tester) async {
     final result = Completer<Map<String, dynamic>>();
     var submitCount = 0;
     await _open(
@@ -115,7 +112,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  _testWidgets('请求完成前页面销毁不再操作弹窗状态', (tester) async {
+  testWidgets('请求完成前页面销毁不再操作弹窗状态', (tester) async {
     final result = Completer<Map<String, dynamic>>();
     await _open(
       tester,

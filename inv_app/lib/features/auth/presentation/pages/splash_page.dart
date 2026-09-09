@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/config/app_config.dart';
+import 'package:inv_app/core/router/app_router.dart';
 import 'package:inv_app/core/services/connection_mode_service.dart';
 import 'package:inv_app/core/services/jverify_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
@@ -30,6 +31,9 @@ class _SplashPageState extends State<SplashPage> {
   /// 与系统启动屏衔接保证品牌开屏可见
   static const Duration _minDisplay = Duration(milliseconds: 1200);
 
+  /// 待恢复的冷启动深链回调（见 _restoreDeepLinkOnTop）
+  VoidCallback? _pendingDeepLinkRestore;
+
   @override
   void initState() {
     super.initState();
@@ -37,6 +41,17 @@ class _SplashPageState extends State<SplashPage> {
     // 并行启动：登录态检查 + 一键登录预检查，互不阻塞、互不等待
     _jverifyPrefetch = _prefetchJVerify();
     context.read<AuthBloc>().add(AuthCheckRequested());
+  }
+
+  @override
+  void dispose() {
+    // 若 go 的路由变更回调尚未触发（理论上不会），移除监听避免泄漏
+    final handler = _pendingDeepLinkRestore;
+    _pendingDeepLinkRestore = null;
+    if (handler != null) {
+      AppRouter.router.routerDelegate.removeListener(handler);
+    }
+    super.dispose();
   }
 
   /// 等待开屏最短展示时长结束（不足则补齐剩余时间）
@@ -89,17 +104,54 @@ class _SplashPageState extends State<SplashPage> {
     _canOneClick = canOneClick;
   }
 
+  /// 读取冷启动窗口内被 push 到 Splash 之上的深链完整 URI（含 query）。
+  /// Splash 的 1.2s 最短展示期间，智能链接（csinv://bind）与小组件
+  /// （invapp://notifications）的冷启动路径已把深链页压栈
+  /// （见 main.dart _initDeepLinks/_initWidgetDeepLinks）；
+  /// 栈顶仍是 Splash 说明没有深链，返回 null。
+  String? _pendingDeepLinkUri() {
+    final config = AppRouter.router.routerDelegate.currentConfiguration;
+    final topLocation = config.lastOrNull?.matchedLocation ?? '';
+    if (topLocation.isEmpty || topLocation == '/splash') return null;
+    return config.uri.toString();
+  }
+
+  /// 把深链压回栈顶（go 之后调用）。go/push 经由异步解析生效，
+  /// 紧跟 go 的 push 会捕获到旧的 currentConfiguration 作为 base，
+  /// 因此监听一次路由配置变更（go 真正落地）后再 push，
+  /// 保证最终栈为 [目标基础页, 深链页]。
+  void _restoreDeepLinkOnTop(String uri) {
+    void onStackChanged() {
+      _pendingDeepLinkRestore = null;
+      AppRouter.router.routerDelegate.removeListener(onStackChanged);
+      AppRouter.router.push(uri);
+    }
+
+    _pendingDeepLinkRestore = onStackChanged;
+    AppRouter.router.routerDelegate.addListener(onStackChanged);
+  }
+
   /// 登录分流前统一收口：首次安装/版本升级需先展示引导页，
   /// 通过 extra 将登录分流目标传给 /onboarding，完成后原路返回
   Future<void> _continueAfterSplash(String target) async {
     await _waitMinDisplay();
     final needsOnboarding = await OnboardingStorage().needsOnboarding();
     if (!mounted) return;
+
     if (needsOnboarding) {
+      // 引导优先：深链放弃（引导完成前叠加深链页体验割裂，
+      // 用户可重新扫码/点小组件再次进入）
       context.go('/onboarding', extra: target);
-    } else {
-      context.go(target);
+      return;
     }
+    // 冷启动深链保护：go 会按目标位置重建栈、丢掉已被压栈的深链页。
+    // 先在 go 之前记录栈顶深链（此时路由配置尚未被 go 改写），
+    // go 落地后把深链原样压回栈顶（首页在底、深链在顶）
+    final pendingDeepLink = _pendingDeepLinkUri();
+    if (pendingDeepLink != null) {
+      _restoreDeepLinkOnTop(pendingDeepLink);
+    }
+    context.go(target);
   }
 
   /// 未登录分流：等待并行中的预检查收尾（≤1.2s），完成后跳转

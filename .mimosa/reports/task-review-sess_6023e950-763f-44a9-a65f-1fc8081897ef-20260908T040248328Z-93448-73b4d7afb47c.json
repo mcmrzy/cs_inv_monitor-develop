@@ -1,0 +1,1138 @@
+{
+  "schema_version": "mimosa-task-review/v2",
+  "run_id": "20260908T040248328Z-93448-73b4d7afb47c",
+  "run_status": "inconclusive",
+  "errors": [
+    {
+      "stage": "candidate-select",
+      "target": "external/driver_arm/App/App/source/GUI/CDC.c",
+      "reason": "candidate_limit_exceeded: 40 changed reviewable file(s) were not scanned because the limit is 20"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "inv-admin-frontend/src/pages/work-orders/WorkOrdersPage.test.tsx",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "inv-admin-frontend/src/pages/system/SystemPages.test.tsx",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "inv-admin-frontend/src/pages/stations/StationsPage.test.tsx",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "inv-admin-frontend/src/pages/operation-logs/OperationLogsPage.test.tsx",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "inv-admin-frontend/src/pages/monitoring/MonitoringPage.test.tsx",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "inv-admin-frontend/src/pages/invite/InviteAcceptPage.test.tsx",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "inv-admin-frontend/src/pages/download/DownloadPage.test.tsx",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "inv-admin-frontend/src/pages/device-detail/DeviceDetailPage.test.tsx",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "inv-admin-frontend/src/pages/big-screen/BigScreenPage.test.tsx",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "inv-admin-frontend/src/pages/batch-settings/BatchSettingsPage.test.tsx",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/e2e/global-setup.ts",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "tests/integration/mqtt_flow_test.go",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv_app/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/src/pages/work-orders/WorkOrdersPage.test.tsx",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/src/pages/system/SystemPages.test.tsx",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/src/pages/stations/StationsPage.test.tsx",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/src/pages/operation-logs/OperationLogsPage.test.tsx",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/src/pages/monitoring/MonitoringPage.test.tsx",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/src/pages/invite/InviteAcceptPage.test.tsx",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/src/pages/download/DownloadPage.test.tsx",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/src/pages/device-detail/DeviceDetailPage.test.tsx",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/src/pages/big-screen/BigScreenPage.test.tsx",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/src/pages/batch-settings/BatchSettingsPage.test.tsx",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/e2e/flows.spec.ts",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/e2e/i18n.spec.ts",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "external/driver_arm/Boot/Boot/source/GUI/halLcd.c",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "external/driver_arm/Boot/Boot/source/GUI/halLcd.h",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "external/driver_arm/Boot/Boot/source/Collector/CRC32.c",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "external/driver_arm/Boot/Boot/source/Collector/Update.c",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "external/driver_arm/App/App/source/Keyboard/keyboard.c",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    }
+  ],
+  "coverage": {
+    "schema_version": "mimosa-hook-coverage/v1",
+    "status": "partial",
+    "scope": "hook_observed_diff",
+    "baseline": {
+      "complete": true,
+      "captured_files": 3306,
+      "candidate_limit": 5000,
+      "truncated": false,
+      "enumeration_error_count": 0,
+      "snapshot_error_count": 0,
+      "compensated_target_count": 46
+    },
+    "change_tracking": {
+      "touched_observed": 1,
+      "touched_retained": 1,
+      "truncated": false,
+      "bash_mutation": true,
+      "bash_discovered": 60,
+      "bash_discovery_limit": 80,
+      "bash_discovery_truncated": false
+    },
+    "candidates": {
+      "eligible_files": 60,
+      "selected_files": 20,
+      "limit": 20,
+      "truncated": true
+    },
+    "scanning": {
+      "required_files": 20,
+      "scanned_files": 0,
+      "skipped_files": 0,
+      "failed_files": 20,
+      "project_checks_required": 0,
+      "project_checks_completed": 0
+    },
+    "notification": {
+      "eligible_findings": 0,
+      "detailed_findings": 0,
+      "detail_limit": 3,
+      "truncated": false
+    },
+    "reason_counts": {
+      "candidate_limit_exceeded": 1,
+      "baseline_snapshot_unreadable": 10,
+      "scanner_failed": 20,
+      "project_check_failed": 31
+    },
+    "reasons": [
+      {
+        "code": "candidate_limit_exceeded",
+        "stage": "candidate-select",
+        "target": "external/driver_arm/App/App/source/GUI/CDC.c",
+        "detail": "40 changed reviewable file(s) were not scanned because the limit is 20",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "inv-admin-frontend/src/pages/work-orders/WorkOrdersPage.test.tsx",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "inv-admin-frontend/src/pages/system/SystemPages.test.tsx",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "inv-admin-frontend/src/pages/stations/StationsPage.test.tsx",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "inv-admin-frontend/src/pages/operation-logs/OperationLogsPage.test.tsx",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "inv-admin-frontend/src/pages/monitoring/MonitoringPage.test.tsx",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "inv-admin-frontend/src/pages/invite/InviteAcceptPage.test.tsx",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "inv-admin-frontend/src/pages/download/DownloadPage.test.tsx",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "inv-admin-frontend/src/pages/device-detail/DeviceDetailPage.test.tsx",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "inv-admin-frontend/src/pages/big-screen/BigScreenPage.test.tsx",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "inv-admin-frontend/src/pages/batch-settings/BatchSettingsPage.test.tsx",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/e2e/global-setup.ts",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "tests/integration/mqtt_flow_test.go",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv_app/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/work-orders/WorkOrdersPage.test.tsx",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/system/SystemPages.test.tsx",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/stations/StationsPage.test.tsx",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/operation-logs/OperationLogsPage.test.tsx",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/monitoring/MonitoringPage.test.tsx",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/invite/InviteAcceptPage.test.tsx",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/download/DownloadPage.test.tsx",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/device-detail/DeviceDetailPage.test.tsx",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/big-screen/BigScreenPage.test.tsx",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/batch-settings/BatchSettingsPage.test.tsx",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/e2e/flows.spec.ts",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/e2e/i18n.spec.ts",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "external/driver_arm/Boot/Boot/source/GUI/halLcd.c",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "external/driver_arm/Boot/Boot/source/GUI/halLcd.h",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "external/driver_arm/Boot/Boot/source/Collector/CRC32.c",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "external/driver_arm/Boot/Boot/source/Collector/Update.c",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "external/driver_arm/App/App/source/Keyboard/keyboard.c",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "candidate-select",
+        "target": "external/driver_arm/App/App/source/GUI/CDC.c",
+        "detail": "candidate_limit_exceeded: 40 changed reviewable file(s) were not scanned because the limit is 20",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "inv-admin-frontend/src/pages/work-orders/WorkOrdersPage.test.tsx",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "inv-admin-frontend/src/pages/system/SystemPages.test.tsx",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "inv-admin-frontend/src/pages/stations/StationsPage.test.tsx",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "inv-admin-frontend/src/pages/operation-logs/OperationLogsPage.test.tsx",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "inv-admin-frontend/src/pages/monitoring/MonitoringPage.test.tsx",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "inv-admin-frontend/src/pages/invite/InviteAcceptPage.test.tsx",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "inv-admin-frontend/src/pages/download/DownloadPage.test.tsx",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "inv-admin-frontend/src/pages/device-detail/DeviceDetailPage.test.tsx",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "inv-admin-frontend/src/pages/big-screen/BigScreenPage.test.tsx",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "inv-admin-frontend/src/pages/batch-settings/BatchSettingsPage.test.tsx",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/e2e/global-setup.ts",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "tests/integration/mqtt_flow_test.go",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv_app/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/work-orders/WorkOrdersPage.test.tsx",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/system/SystemPages.test.tsx",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/stations/StationsPage.test.tsx",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/operation-logs/OperationLogsPage.test.tsx",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/monitoring/MonitoringPage.test.tsx",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/invite/InviteAcceptPage.test.tsx",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/download/DownloadPage.test.tsx",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/device-detail/DeviceDetailPage.test.tsx",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/big-screen/BigScreenPage.test.tsx",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/pages/batch-settings/BatchSettingsPage.test.tsx",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/e2e/flows.spec.ts",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/e2e/i18n.spec.ts",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "external/driver_arm/Boot/Boot/source/GUI/halLcd.c",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "external/driver_arm/Boot/Boot/source/GUI/halLcd.h",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "external/driver_arm/Boot/Boot/source/Collector/CRC32.c",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "external/driver_arm/Boot/Boot/source/Collector/Update.c",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "external/driver_arm/App/App/source/Keyboard/keyboard.c",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      }
+    ],
+    "reasons_truncated": false
+  },
+  "generated_at": "2026-09-08T04:02:48.328Z",
+  "session_id": "sess_6023e950-763f-44a9-a65f-1fc8081897ef",
+  "target": ".",
+  "revision": "591c69434de12c7c41671abf333426eea680bbb0",
+  "rules_version": "unavailable",
+  "diff_hash": "b53a962483f079fa4c7d851dc81f0bd5939d0d9ea11371e6feaa242920b5b2a8",
+  "diff": {
+    "algorithm": "sha256",
+    "changed_file_count": 20,
+    "changed_files": [
+      {
+        "file": "external/driver_arm/App/App/source/Keyboard/keyboard.c",
+        "ranges": [
+          {
+            "start": 16,
+            "end": 16
+          },
+          {
+            "start": 45,
+            "end": 45
+          },
+          {
+            "start": 258,
+            "end": 258
+          },
+          {
+            "start": 277,
+            "end": 277
+          },
+          {
+            "start": 289,
+            "end": 289
+          },
+          {
+            "start": 320,
+            "end": 320
+          },
+          {
+            "start": 341,
+            "end": 341
+          },
+          {
+            "start": 353,
+            "end": 353
+          }
+        ],
+        "before_hash": "462b8eb51b22c349842e7cdc0491c23fef5f466d28884d917bd088963a6dcba7",
+        "after_hash": "9bcd4a453deb87033791b2de5ecbe74060a8494ffef4374c40a8ec5fb1852976"
+      },
+      {
+        "file": "external/driver_arm/Boot/Boot/source/Collector/CRC32.c",
+        "ranges": [
+          {
+            "start": 19,
+            "end": 27
+          },
+          {
+            "start": 33,
+            "end": 37
+          }
+        ],
+        "before_hash": "d4076a245777c496cd114e2a2e4626011065be863d059dd85dcb6e52feedb840",
+        "after_hash": "bb297223a7073d77398bdd3c6869bf1cbf96230657879b8ce78bbc28ece06b83"
+      },
+      {
+        "file": "external/driver_arm/Boot/Boot/source/Collector/Update.c",
+        "ranges": [
+          {
+            "start": 19,
+            "end": 19
+          },
+          {
+            "start": 21,
+            "end": 28
+          },
+          {
+            "start": 37,
+            "end": 37
+          },
+          {
+            "start": 85,
+            "end": 85
+          },
+          {
+            "start": 89,
+            "end": 89
+          },
+          {
+            "start": 95,
+            "end": 95
+          },
+          {
+            "start": 100,
+            "end": 100
+          },
+          {
+            "start": 108,
+            "end": 108
+          },
+          {
+            "start": 119,
+            "end": 119
+          },
+          {
+            "start": 130,
+            "end": 130
+          },
+          {
+            "start": 137,
+            "end": 137
+          },
+          {
+            "start": 170,
+            "end": 170
+          },
+          {
+            "start": 212,
+            "end": 212
+          },
+          {
+            "start": 222,
+            "end": 222
+          },
+          {
+            "start": 238,
+            "end": 238
+          },
+          {
+            "start": 249,
+            "end": 249
+          },
+          {
+            "start": 288,
+            "end": 288
+          },
+          {
+            "start": 338,
+            "end": 338
+          },
+          {
+            "start": 344,
+            "end": 344
+          },
+          {
+            "start": 347,
+            "end": 347
+          },
+          {
+            "start": 354,
+            "end": 354
+          },
+          {
+            "start": 360,
+            "end": 360
+          },
+          {
+            "start": 363,
+            "end": 363
+          },
+          {
+            "start": 373,
+            "end": 373
+          },
+          {
+            "start": 381,
+            "end": 381
+          },
+          {
+            "start": 390,
+            "end": 390
+          },
+          {
+            "start": 408,
+            "end": 408
+          },
+          {
+            "start": 439,
+            "end": 439
+          }
+        ],
+        "before_hash": "78ac48afafddb0f2e9de4e73b80e15c4640565709e1c31b8f9b4a23dbed50491",
+        "after_hash": "8e10bd27e327d81817425904bff60a0181c4a6e8e215b47c2afc9456d76ab3f0"
+      },
+      {
+        "file": "external/driver_arm/Boot/Boot/source/GUI/halLcd.c",
+        "ranges": [
+          {
+            "start": 8,
+            "end": 8
+          },
+          {
+            "start": 144,
+            "end": 145
+          },
+          {
+            "start": 206,
+            "end": 206
+          },
+          {
+            "start": 236,
+            "end": 236
+          },
+          {
+            "start": 255,
+            "end": 256
+          },
+          {
+            "start": 326,
+            "end": 326
+          },
+          {
+            "start": 331,
+            "end": 331
+          },
+          {
+            "start": 333,
+            "end": 333
+          },
+          {
+            "start": 339,
+            "end": 339
+          },
+          {
+            "start": 342,
+            "end": 342
+          },
+          {
+            "start": 349,
+            "end": 349
+          },
+          {
+            "start": 352,
+            "end": 352
+          },
+          {
+            "start": 355,
+            "end": 355
+          },
+          {
+            "start": 382,
+            "end": 382
+          },
+          {
+            "start": 414,
+            "end": 414
+          }
+        ],
+        "before_hash": "c5bddb943a58b98ab82c7c980dd7243f66721a672e840e226fe2408a109af94d",
+        "after_hash": "81b26f9f70bbc4dce68b55b5f90c82732a67c72b694006253870a69aa99f22df"
+      },
+      {
+        "file": "external/driver_arm/Boot/Boot/source/GUI/halLcd.h",
+        "ranges": [
+          {
+            "start": 19,
+            "end": 40
+          }
+        ],
+        "before_hash": "db1da8eaec21d59faabcb2e795f3c12a6fbe498f3950e0e64858a14c5b2c37ce",
+        "after_hash": "4c522b8c3ec3df0beeb16058a033fcbcbc5bc5b82a77254b5c19cae3b0b2766e"
+      },
+      {
+        "file": "inv_app/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java",
+        "ranges": [
+          {
+            "start": 63,
+            "end": 67
+          }
+        ],
+        "before_hash": "31aa4b43202ea60a961c48aecb52f0e5b598138bbd02b9ec5fb9ce7f324ef74d",
+        "after_hash": "46bc41d9f2744ad166d9d57efdbe93bf880527b0e6884129892294ea97317dc5"
+      },
+      {
+        "file": "inv-admin-frontend/e2e/flows.spec.ts",
+        "ranges": [
+          {
+            "start": 127,
+            "end": 129
+          }
+        ],
+        "before_hash": "c6961563ef3a4f3ff690d8639c4ff9d29dbb2269307e2742e3c4d661c344b139",
+        "after_hash": "5017609777ea14a3802aecdab4bad9405eb50def0362c29fd6c8616e6d4edf70"
+      },
+      {
+        "file": "inv-admin-frontend/e2e/global-setup.ts",
+        "ranges": [
+          {
+            "start": 95,
+            "end": 98
+          },
+          {
+            "start": 103,
+            "end": 107
+          },
+          {
+            "start": 110,
+            "end": 112
+          }
+        ],
+        "before_hash": "2a41fd95a9f48dea25c8531464000ce5a9a4ff1f04dde9f113df96be273517e7",
+        "after_hash": "b91da6f0f39cfe9f39cfad9eb43042d625b847aa2be495f2c8728f20c5ca5246"
+      },
+      {
+        "file": "inv-admin-frontend/e2e/i18n.spec.ts",
+        "ranges": [
+          {
+            "start": 15,
+            "end": 24
+          }
+        ],
+        "before_hash": "ce5895dcf533f4449f011b0f370b22391e31f18f280e82342cf83e3483f2656c",
+        "after_hash": "14f9276377429e13c577ff3726681c46b0b98e405d0cbb373ad4d1d2347056cb"
+      },
+      {
+        "file": "inv-admin-frontend/src/pages/batch-settings/BatchSettingsPage.test.tsx",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 78
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "1a6f950ee2bf441f7217646b40093f7ca4f6fe13fdb178148c0ef719ca30936d"
+      },
+      {
+        "file": "inv-admin-frontend/src/pages/big-screen/BigScreenPage.test.tsx",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 123
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "6c3ac849ce28af0ed1283458fc89a306b69c057fd09a0cc5ef5a2b6b3ad3331d"
+      },
+      {
+        "file": "inv-admin-frontend/src/pages/device-detail/DeviceDetailPage.test.tsx",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 80
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "8f9fbc75af625b9c000e60cef08f615ed046befbb062dba6da26cd61132e26d9"
+      },
+      {
+        "file": "inv-admin-frontend/src/pages/download/DownloadPage.test.tsx",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 73
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "59e677c48606fce93fda5e2ebbc4c4698fb5199fa81cd298f377e0a655691053"
+      },
+      {
+        "file": "inv-admin-frontend/src/pages/invite/InviteAcceptPage.test.tsx",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 118
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "3ebdf4621dc3443ff4265327eed0af9aac7c4c7df5cd264c55d950b6234278ec"
+      },
+      {
+        "file": "inv-admin-frontend/src/pages/monitoring/MonitoringPage.test.tsx",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 100
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "21cfb7004e1c2a886ca766f584a8ae0411ab2bcc611a2d8b00090d734fc933c0"
+      },
+      {
+        "file": "inv-admin-frontend/src/pages/operation-logs/OperationLogsPage.test.tsx",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 81
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "9922806f35a456d46b6514395f991bd9dccd83979cbae8128b4100675747e64c"
+      },
+      {
+        "file": "inv-admin-frontend/src/pages/stations/StationsPage.test.tsx",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 114
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "d4886686be69b07f19a9bb0477948b07cd453a8f4b279fa7af20efdc356b6cb3"
+      },
+      {
+        "file": "inv-admin-frontend/src/pages/system/SystemPages.test.tsx",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 118
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "eb5acd820173d31bf6b63a8e4437f736336e6f4cb458561789795d162cc3ecdd"
+      },
+      {
+        "file": "inv-admin-frontend/src/pages/work-orders/WorkOrdersPage.test.tsx",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 103
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "a5800fea89b0bf0719c8b7ca14c70831afca6e72d720dc8c9a3851fd5dde18a5"
+      },
+      {
+        "file": "tests/integration/mqtt_flow_test.go",
+        "ranges": [
+          {
+            "start": 287,
+            "end": 289
+          },
+          {
+            "start": 293,
+            "end": 293
+          }
+        ],
+        "before_hash": "f3ff8be16d79b0c0c0e26c554088822aa2b0eea8254f5d50d8c6d629f90a9589",
+        "after_hash": "a8ba605cbddd24e6701e926cf8d3db1408636e5d938fb2f73571e9f6ac53df4c"
+      }
+    ]
+  },
+  "timing": {
+    "started_at": "2026-09-08T04:02:45.322Z",
+    "completed_at": "2026-09-08T04:02:48.328Z",
+    "duration_ms": 3006,
+    "measurement": "hook_wall_clock"
+  },
+  "tokens": {
+    "input": 0,
+    "output": 0,
+    "total": 0,
+    "model_calls": 0,
+    "measurement": "known-zero"
+  },
+  "telemetry": {
+    "schemaVersion": "mimosa-gate-telemetry/v1",
+    "profile": "gate",
+    "operation": "Stop",
+    "outcome": "partial/INCONCLUSIVE",
+    "latencyMs": 3006,
+    "peakMemoryBytes": 97792000,
+    "memoryMeasurement": "max-observed-process-rss",
+    "scannedFiles": 0,
+    "cache": {
+      "hits": 0,
+      "misses": 0,
+      "measurement": "not-applicable"
+    },
+    "denyCount": 0,
+    "tokens": {
+      "input": 0,
+      "output": 0,
+      "total": 0,
+      "modelCalls": 0,
+      "measurement": "known-zero"
+    }
+  },
+  "finding_count": 0,
+  "rewake_finding_count": 0,
+  "evidence_boundary": {
+    "scan": "candidate",
+    "static_fix_verification": "observed_static_only",
+    "runtime_verification": "not_performed"
+  },
+  "finding_events": [],
+  "findings": [],
+  "artifacts": {
+    "immutable_report": ".mimosa/reports/task-review-sess_6023e950-763f-44a9-a65f-1fc8081897ef-20260908T040248328Z-93448-73b4d7afb47c.json",
+    "latest_report": ".mimosa/reports/task-review-sess_6023e950-763f-44a9-a65f-1fc8081897ef.json",
+    "history_summary": ".mimosa/history/run-20260908T040248328Z-93448-73b4d7afb47c.json"
+  }
+}

@@ -96,7 +96,7 @@ class _DeviceEditPageState extends State<DeviceEditPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(l10n.unbind),
-        content: const Text('确认解绑该设备吗？'),
+        content: Text(l10n.str('device_confirm_unbind')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -124,7 +124,7 @@ class _DeviceEditPageState extends State<DeviceEditPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(l10n.deleteDevice),
-        content: const Text('确认删除该设备吗？删除后无法恢复。'),
+        content: Text(l10n.str('device_confirm_delete')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -316,7 +316,7 @@ class _DeviceEditPageState extends State<DeviceEditPage> {
             onTap: () {
               // TODO: 实现换绑逻辑，需要选择新电站（与列表原行为一致）
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('换绑功能开发中')),
+                SnackBar(content: Text(l10n.str('device_rebind_in_dev'))),
               );
             },
           ),

@@ -1,0 +1,80 @@
+{
+  "schemaVersion": "mimosa-finding-ledger-batch/v1",
+  "batchId": "stop-20260907T072205130Z-11208-db60588a9985",
+  "runId": "20260907T072205130Z-11208-db60588a9985",
+  "runStatus": "inconclusive",
+  "coverage": {
+    "status": "partial",
+    "reasons": [
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "external/驱动arm/App/App/source/UsartBMS485/UsartBms0.c",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affectsCompletion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "external/驱动arm/App/App/source/Collector/Collector.c",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affectsCompletion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "external/驱动arm/App/App/source/Collector/CollectorParamAddr.h",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affectsCompletion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "external/驱动arm/App/App/source/BMS/BMS.h",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "external/驱动arm/App/App/source/UsartBMS485/UsartBms0.c",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "external/驱动arm/App/App/source/Collector/Collector.c",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "external/驱动arm/App/App/source/Collector/CollectorParamAddr.h",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "external/驱动arm/App/App/source/BMS/BMS.h",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affectsCompletion": true
+      }
+    ]
+  },
+  "source": {
+    "component": "zcode-hook",
+    "operationId": "Stop"
+  },
+  "revision": "6346015c0c31c4eb765bd49a181b9ad64e16ab58",
+  "diffHash": "6e7ec3f62063a66a0c523a5dfff6c2df4f8f8ef6bb5b4330c1020b532c051fe6",
+  "rulesVersion": "unavailable",
+  "sessionHash": "9d751d67f2478c545ea9345425c227a847b2f35ac2da0a8d18e32d7abb6319ad",
+  "reportRef": ".mimosa/reports/task-review-sess_878930cb-cf9e-4a2f-a61f-4bbacb9476e9-20260907T072205130Z-11208-db60588a9985.json",
+  "events": [],
+  "observedFindingIds": [],
+  "verifiedFiles": [],
+  "recordedAt": "2026-09-07T07:22:05.455Z"
+}

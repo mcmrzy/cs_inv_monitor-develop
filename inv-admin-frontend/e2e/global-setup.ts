@@ -17,7 +17,36 @@ import { fileURLToPath } from 'node:url'
  * 5. Persists credentials + device S/Ns to ../e2e_evidence/e2e-account.json.
  */
 
-const E2E_API = process.env.E2E_API_BASE || 'http://localhost:18888'
+// E2E_API 只允许指向本机测试栈：显式校验 scheme 与 host，防止
+// E2E_API_BASE 被误配后把带凭据的注册/登录请求打到任意地址（SSRF）。
+// 其他测试主机（如 docker 网络内的服务名）需通过 E2E_API_ALLOWED_HOSTS 显式放行。
+function resolveE2EApiBase(): string {
+  const raw = process.env.E2E_API_BASE || 'http://localhost:18888'
+  let url: URL
+  try {
+    url = new URL(raw)
+  } catch {
+    throw new Error(`[e2e-setup] E2E_API_BASE 不是合法 URL: ${raw}`)
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new Error(`[e2e-setup] E2E_API_BASE 仅允许 http/https 协议: ${raw}`)
+  }
+  const loopbackHosts = new Set(['localhost', '127.0.0.1', '0.0.0.0', '::1', '[::1]'])
+  const extraHosts = (process.env.E2E_API_ALLOWED_HOSTS ?? '')
+    .split(',')
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean)
+  const host = url.hostname.toLowerCase()
+  if (!loopbackHosts.has(host) && !extraHosts.includes(host)) {
+    throw new Error(
+      `[e2e-setup] E2E_API_BASE 仅允许指向本机测试栈，收到: ${raw}；` +
+        `如确需其他测试主机，请将其加入 E2E_API_ALLOWED_HOSTS（逗号分隔）`,
+    )
+  }
+  return raw.replace(/\/+$/, '')
+}
+
+const E2E_API = resolveE2EApiBase()
 const REDIS_URL = process.env.E2E_REDIS_URL || 'redis://:testredispass@127.0.0.1:16379'
 const PG_DSN = process.env.E2E_PG_DSN || 'postgres://testuser:testpass@127.0.0.1:15432/inv_test'
 const PRODUCT_SECRET = process.env.E2E_PRODUCT_SECRET || 'CS_INV_L10_2026_SECRET'
@@ -92,14 +121,24 @@ async function promoteToSystemAdmin(phone: string): Promise<void> {
  * 测试库是一次性资源（CI 每次全新起栈），残留行只会来自同一台开发机上
  * 之前的手动/测试运行。TRUNCATE CASCADE 会连带清掉引用这些表的事实数据
  * （遥测/告警明细等）。必须在注册账号之前执行。
+ *
+ * users 也一并清空：每轮注册的 e2e 账号会留下个人组织链（组织/成员关系/
+ * 角色授权），长期 soak 中不断累积拖慢登录与组织解析查询（8 小时战役实测
+ * E2E 单轮耗时 180s→270s 单调爬升）。
  */
 async function resetTestData(): Promise<void> {
   const pool = new pg.Pool({ connectionString: PG_DSN })
   try {
+    // organizations 必须随 users 一起清：root 集成测试每循环也会遗留组织行，
+    // 8 小时 soak 后 organizations 积到 2.6 万行、root_tenant_id 占满小整数，
+    // 新注册用户的个人根组织（root_tenant_id=user.id）会撞
+    // uq_organizations_root_code 唯一约束导致注册 500。
+    // CASCADE 连带清空 memberships/closure/quotas/tenant_roots 等引用链。
     await pool.query(`
       TRUNCATE user_device_rel, devices, stations, alarms,
-               device_upgrades, firmware_versions, upgrade_tasks
-      RESTART IDENTITY CASCADE
+               device_upgrades, firmware_versions, upgrade_tasks,
+               users, organizations
+      CASCADE
     `)
   } finally {
     await pool.end()

@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "mimosa-finding-history/v1",
+  "runId": "20260905T195034815Z-38720-1c7475940243",
+  "runStatus": "inconclusive",
+  "errors": [
+    "baseline-read:inv-admin-frontend/e2e/auth.setup.ts: baseline_snapshot_unreadable: file is missing from task baseline",
+    "scan:inv-admin-frontend/e2e/global-setup.ts: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:tools/gen_app_icons.py: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/playwright.config.ts: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/src/App.test.tsx: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/e2e/auth.setup.ts: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/e2e/auth.spec.ts: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/e2e/helpers.ts: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/e2e/lang.spec.ts: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/e2e/pages.spec.ts: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "supply-chain-check:.: stop_budget_exhausted: focused supply-chain check was not run before the gate budget",
+    "agent-check:.: stop_budget_exhausted: focused agent configuration check was not run before the gate budget"
+  ],
+  "target": ".",
+  "revision": "77319e020ccea1237b156d357fd4c74abbd1ce7c",
+  "diffHash": "a05d79713d31e4185566baf10f8a6a9df040ea0d18bb12d92e18ad6ac26b6677",
+  "rulesVersion": "unavailable",
+  "recordedAt": "2026-09-05T19:50:34.815Z",
+  "timing": {
+    "startedAt": "2026-09-05T19:50:32.190Z",
+    "completedAt": "2026-09-05T19:50:34.815Z",
+    "durationMs": 2625
+  },
+  "tokens": {
+    "input": 0,
+    "output": 0,
+    "total": 0,
+    "modelCalls": 0,
+    "measurement": "known-zero"
+  },
+  "findings": {
+    "total": 0,
+    "bySeverity": {},
+    "byStatus": {}
+  },
+  "coverage": {
+    "status": "partial",
+    "reasonCounts": {
+      "baseline_snapshot_unreadable": 1,
+      "scanner_failed": 9,
+      "stop_budget_exhausted": 2,
+      "project_check_failed": 12
+    }
+  },
+  "evidenceBoundary": "static_only",
+  "immutableReport": ".mimosa/reports/task-review-sess_6023e950-763f-44a9-a65f-1fc8081897ef-20260905T195034815Z-38720-1c7475940243.json"
+}

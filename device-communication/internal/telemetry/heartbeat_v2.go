@@ -37,6 +37,7 @@ type heartbeatDataV2 struct {
 	Fan  []json.RawMessage `json:"fan"`
 	Diag []json.RawMessage `json:"diag"`
 	Sock []json.RawMessage `json:"sock"`
+	BMS  []json.RawMessage `json:"bms"`
 	// V2.2+ 固件新增（ARM 在线标志，实测设备 H1CNA00135000014 已上报）；
 	// 暂无落库列，此处仅为通过 DisallowUnknownFields 严格校验，避免整条拒绝
 	ArmOnline *bool `json:"arm_online"`
@@ -54,6 +55,11 @@ var v2Scales = map[string][]float64{
 	"fan":  {1, 1},
 	"diag": {0.1, 1, 1},
 	"sock": {1, 1, 1},
+	// bms 45 值（2026-09 储能 BMS 扩展组，additive）：
+	// online, soc/soh/3容量(0.1), cycle, 极值芯压×5(mV), 温度×5(℃), 模式×3,
+	// 请求电流/电压(0.1), 故障/告警位图×4, 累计容量×2(Ah), 芯压×16(mV), 均衡位图
+	"bms": {1, 0.1, 0.1, 0.1, 0.1, 0.1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.1, 0.1, 1, 1, 1, 1, 1, 1,
+		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
 }
 
 func ParseHeartbeatV2(deviceSN string, payload []byte, receivedAt time.Time) (*Sample, error) {
@@ -105,6 +111,13 @@ func ParseHeartbeatV2(deviceSN string, payload []byte, receivedAt time.Time) (*S
 		if pair.got != pair.want && !(name == "fan" && pair.got == 3) {
 			return nil, fmt.Errorf("%w: %s length %d, want %d", ErrInvalidHeartbeat, name, pair.got, pair.want)
 		}
+	}
+	// 2026-09 储能 BMS 扩展组（45 值，additive）：缺组 = 旧采集器固件或未接电池，合法（QualityPartial）；
+	// 存在则长度必须精确
+	if len(data.BMS) == 0 {
+		s.QualityFlags |= QualityPartial
+	} else if len(data.BMS) != 45 {
+		return nil, fmt.Errorf("%w: bms length %d, want 45", ErrInvalidHeartbeat, len(data.BMS))
 	}
 
 	vals := func(group string, in []json.RawMessage) ([]*float64, error) {
@@ -179,6 +192,10 @@ func ParseHeartbeatV2(deviceSN string, payload []byte, receivedAt time.Time) (*S
 	if err != nil {
 		return nil, err
 	}
+	rawBMS, err := vals("bms", data.BMS)
+	if err != nil {
+		return nil, err
+	}
 	sys := scaled("sys", rawSys)
 	pv := scaled("pv", rawPV)
 	ac := scaled("ac", rawAC)
@@ -188,6 +205,7 @@ func ParseHeartbeatV2(deviceSN string, payload []byte, receivedAt time.Time) (*S
 	fan := scaled("fan", rawFan)
 	diag := scaled("diag", rawDiag)
 	sock := scaled("sock", rawSock)
+	bms := scaled("bms", rawBMS)
 
 	bounded := func(p *float64, min, max float64) *float64 {
 		if p != nil && (*p < min || *p > max) {
@@ -310,6 +328,43 @@ func ParseHeartbeatV2(deviceSN string, payload []byte, receivedAt time.Time) (*S
 			OnlineSocket: u32(sock[1]),
 			OnSocket:     u32(sock[2]),
 		}
+	}
+	// 2026-09 储能 BMS 扩展组（45 值，additive）：缺组时保留零值结构
+	if len(bms) == 45 {
+		s.BMS = BMS{
+			Online:            u8(bms[0], 1),
+			SOC:               bounded(bms[1], 0, 100),
+			SOH:               bounded(bms[2], 0, 100),
+			CapacityRemain:    bounded(bms[3], 0, 6554),
+			CapacityFull:      bounded(bms[4], 0, 6554),
+			CapacityDesign:    bounded(bms[5], 0, 6554),
+			CycleCount:        bounded(bms[6], 0, 65535),
+			CellVoltageMax:    bounded(bms[7], 0, 8191),
+			CellVoltageMin:    bounded(bms[8], 0, 8191),
+			CellVoltageDiff:   bounded(bms[9], 0, 8191),
+			CellVoltageMaxIdx: bounded(bms[10], 0, 15),
+			CellVoltageMinIdx: bounded(bms[11], 0, 15),
+			CellTempMax:       bounded(bms[12], -60, 150),
+			CellTempMin:       bounded(bms[13], -60, 150),
+			MOSTemp:           bounded(bms[14], -40, 150),
+			EnvTemp:           bounded(bms[15], -40, 85),
+			PCBTemp:           bounded(bms[16], -40, 150),
+			BatteryWorkMode:   u8(bms[17], 7),
+			MOSStatus:         u8(bms[18], 15),
+			SystemMode:        u8(bms[19], 255),
+			ChgRequestCurrent: bounded(bms[20], 0, 500),
+			ChgRequestVoltage: bounded(bms[21], 0, 1000),
+			FaultStatus:       u32(bms[22]),
+			AlarmW0:           u32(bms[23]),
+			AlarmW1:           u32(bms[24]),
+			AlarmW2:           u32(bms[25]),
+			TotalChgCapacity:  bounded(bms[26], 0, 1e9),
+			TotalDsgCapacity:  bounded(bms[27], 0, 1e9),
+			BalanceBitmap:     u32(bms[44]),
+		}
+		cells := make([]*float64, 16)
+		copy(cells, bms[28:44])
+		s.BMS.CellVoltages = cells
 	}
 
 	return s, nil

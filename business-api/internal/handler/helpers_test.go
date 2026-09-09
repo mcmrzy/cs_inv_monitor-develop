@@ -4,9 +4,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseID(t *testing.T) {
@@ -166,6 +168,46 @@ func TestParsePagination(t *testing.T) {
 			page, pageSize := parsePagination(c)
 			assert.Equal(t, tt.wantPage, page)
 			assert.Equal(t, tt.wantPageSize, pageSize)
+		})
+	}
+}
+
+func TestParseListTimeParam(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	tests := []struct {
+		name      string
+		rawQuery  string
+		wantNil   bool
+		wantValue time.Time
+		wantErr   bool
+	}{
+		{"RFC3339 UTC", "lastOnlineStart=2026-01-02T03:04:05Z", false, time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC), false},
+		{"datetime format", "lastOnlineStart=2026-01-02%2003%3A04%3A05", false, time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC), false},
+		{"plain date", "lastOnlineStart=2026-01-02", false, time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC), false},
+		{"missing param", "", true, time.Time{}, false},
+		{"invalid format", "lastOnlineStart=not-a-time", true, time.Time{}, true},
+		{"invalid date value", "lastOnlineStart=2026-13-99", true, time.Time{}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequest(http.MethodGet, "/?"+tt.rawQuery, nil)
+
+			got, err := parseListTimeParam(c, "lastOnlineStart")
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			if tt.wantNil {
+				assert.Nil(t, got)
+				return
+			}
+			require.NotNil(t, got)
+			assert.True(t, tt.wantValue.Equal(*got), "want %v, got %v", tt.wantValue, *got)
 		})
 	}
 }

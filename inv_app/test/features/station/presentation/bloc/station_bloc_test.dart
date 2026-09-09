@@ -1,13 +1,25 @@
+import 'dart:async';
+
 import 'package:bloc_test/bloc_test.dart';
 import 'package:fpdart/fpdart.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
+import 'package:inv_app/core/data/local_cache_database.dart';
 import 'package:inv_app/core/errors/failures.dart';
+import 'package:inv_app/core/services/ble/ble_device_manager.dart';
+import 'package:inv_app/core/services/offline/offline_op_log_store.dart';
 
 import '../../../../helpers/mock_providers.dart';
 import '../../../../helpers/test_data.dart';
+
+/// 解绑/删除副作用依赖的本地 mock（验证 fold-emit 契约用）
+class _MockBleDeviceKeyStore extends Mock implements BleDeviceKeyStore {}
+
+class _MockOfflineOpLogStore extends Mock implements OfflineOpLogStore {}
+
+class _MockLocalCacheDatabase extends Mock implements LocalCacheDatabase {}
 
 void main() {
   late StationBloc stationBloc;
@@ -271,10 +283,38 @@ void main() {
   // StationCreateRequested
   // ---------------------------------------------------------------------------
   group('StationCreateRequested', () {
-    test(
-      'emits [StationCreateSuccess, ...] on success',
-      skip: true, // Connectivity() platform channel unavailable in test
-      () {},
+    blocTest<StationBloc, StationState>(
+      'emits [StationCreateSuccess, StationSummaryLoaded] on success',
+      build: () {
+        when(() => mockStationRepository.create(any())).thenAnswer(
+          (_) async => right<Failure, void>(null),
+        );
+        // 成功后会联动刷新摘要；测试环境未注册 NetworkStatusService，
+        // bloc 内部 _hasNetwork() 的 catch 兜底按有网络处理，无需平台通道。
+        when(() => mockStationRepository.getSummary()).thenAnswer(
+          (_) async => right<Failure, Map<String, dynamic>>({
+            'stations': [createTestStationMap()],
+            'summary': {'total_power': 100.0},
+          }),
+        );
+        when(() => mockDataCacheService.save(any(), any()))
+            .thenAnswer((_) async {});
+        return stationBloc;
+      },
+      act: (bloc) => bloc.add(
+        const StationCreateRequested(
+          data: {'name': 'New Station'},
+          requestId: 'create-request',
+        ),
+      ),
+      expect: () => [
+        isA<StationCreateSuccess>().having(
+          (s) => s.requestId,
+          'requestId',
+          'create-request',
+        ),
+        isA<StationSummaryLoaded>(),
+      ],
     );
 
     blocTest<StationBloc, StationState>(
@@ -307,10 +347,37 @@ void main() {
   // StationUpdateRequested
   // ---------------------------------------------------------------------------
   group('StationUpdateRequested', () {
-    test(
-      'emits [StationUpdateSuccess, ...] on success',
-      skip: true, // Connectivity() platform channel unavailable in test
-      () {},
+    blocTest<StationBloc, StationState>(
+      'emits [StationUpdateSuccess, StationSummaryLoaded] on success',
+      build: () {
+        when(() => mockStationRepository.update(any(), any())).thenAnswer(
+          (_) async => right<Failure, void>(null),
+        );
+        // 成功后会联动刷新摘要；测试环境未注册 NetworkStatusService，
+        // bloc 内部 _hasNetwork() 的 catch 兜底按有网络处理，无需平台通道。
+        when(() => mockStationRepository.getSummary()).thenAnswer(
+          (_) async => right<Failure, Map<String, dynamic>>({
+            'stations': [createTestStationMap()],
+            'summary': {'total_power': 100.0},
+          }),
+        );
+        when(() => mockDataCacheService.save(any(), any()))
+            .thenAnswer((_) async {});
+        return stationBloc;
+      },
+      act: (bloc) => bloc.add(
+        const StationUpdateRequested(
+          stationId: 1,
+          data: {'name': 'Updated'},
+          requestId: 'update-request',
+        ),
+      ),
+      expect: () => [
+        isA<StationUpdateSuccess>()
+            .having((s) => s.stationId, 'stationId', 1)
+            .having((s) => s.requestId, 'requestId', 'update-request'),
+        isA<StationSummaryLoaded>(),
+      ],
     );
 
     blocTest<StationBloc, StationState>(
@@ -345,10 +412,36 @@ void main() {
   // StationDeleteRequested
   // ---------------------------------------------------------------------------
   group('StationDeleteRequested', () {
-    test(
-      'emits [StationDeleteSuccess, ...] on success',
-      skip: true, // Connectivity() platform channel unavailable in test
-      () {},
+    blocTest<StationBloc, StationState>(
+      'emits [StationDeleteSuccess, StationSummaryLoaded] on success',
+      build: () {
+        when(() => mockStationRepository.delete(any())).thenAnswer(
+          (_) async => right<Failure, void>(null),
+        );
+        // 成功后会联动刷新摘要；测试环境未注册 NetworkStatusService，
+        // bloc 内部 _hasNetwork() 的 catch 兜底按有网络处理，无需平台通道。
+        when(() => mockStationRepository.getSummary()).thenAnswer(
+          (_) async => right<Failure, Map<String, dynamic>>({
+            'stations': [createTestStationMap()],
+            'summary': {'total_power': 100.0},
+          }),
+        );
+        when(() => mockDataCacheService.save(any(), any()))
+            .thenAnswer((_) async {});
+        return stationBloc;
+      },
+      act: (bloc) => bloc.add(
+        const StationDeleteRequested(
+          stationId: 1,
+          requestId: 'delete-request',
+        ),
+      ),
+      expect: () => [
+        isA<StationDeleteSuccess>()
+            .having((s) => s.stationId, 'stationId', 1)
+            .having((s) => s.requestId, 'requestId', 'delete-request'),
+        isA<StationSummaryLoaded>(),
+      ],
     );
 
     blocTest<StationBloc, StationState>(
@@ -375,6 +468,69 @@ void main() {
               'delete-request',
             ),
       ],
+    );
+  });
+  // ---------------------------------------------------------------------------
+  // P1 fold-emit 契约（DeviceUnbindRequested / DeviceDeleteRequested）
+  // ---------------------------------------------------------------------------
+  group('device side-effect emit contract', () {
+    setUpAll(() {
+      // mocktail：any() 匹配自定义类型需要注册 fallback（解绑副作用日志）
+      registerFallbackValue(
+        OfflineOpLog(
+          logId: 'fallback',
+          deviceSn: 'fallback',
+          action: 'unbind',
+          channel: 'cloud',
+          opTime: DateTime.fromMillisecondsSinceEpoch(0),
+        ),
+      );
+    });
+
+    blocTest<StationBloc, StationState>(
+      'emits DeviceUnbindSuccess without awaiting slow local side effects',
+      build: () {
+        final keyStore = _MockBleDeviceKeyStore();
+        final logStore = _MockOfflineOpLogStore();
+        final sideEffectGate = Completer<void>();
+        when(() => keyStore.delete(any()))
+            .thenAnswer((_) => sideEffectGate.future);
+        when(() => logStore.add(any())).thenAnswer((_) async {});
+        when(() => mockStationRepository.unbindDevice(any())).thenAnswer(
+          (_) async => right<Failure, void>(null),
+        );
+        return StationBloc(
+          repository: mockStationRepository,
+          storageService: mockStorageService,
+          dataCacheService: mockDataCacheService,
+          bleKeyStore: keyStore,
+          offlineLogStore: logStore,
+        );
+      },
+      act: (bloc) => bloc.add(const DeviceUnbindRequested(sn: 'TEST_SN_1')),
+      // 副作用（keyStore.delete 被门控）未完成也必须先发出成功状态
+      expect: () => [isA<DeviceUnbindSuccess>()],
+    );
+
+    blocTest<StationBloc, StationState>(
+      'emits DeviceDeleteSuccess without awaiting slow local snapshot cleanup',
+      build: () {
+        final localCache = _MockLocalCacheDatabase();
+        final sideEffectGate = Completer<void>();
+        when(() => localCache.deleteDevice(any()))
+            .thenAnswer((_) => sideEffectGate.future);
+        when(() => mockStationRepository.deleteDevice(any())).thenAnswer(
+          (_) async => right<Failure, void>(null),
+        );
+        return StationBloc(
+          repository: mockStationRepository,
+          storageService: mockStorageService,
+          dataCacheService: mockDataCacheService,
+          localCache: localCache,
+        );
+      },
+      act: (bloc) => bloc.add(const DeviceDeleteRequested(sn: 'TEST_SN_1')),
+      expect: () => [isA<DeviceDeleteSuccess>()],
     );
   });
 }

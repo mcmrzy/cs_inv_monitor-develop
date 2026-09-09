@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "mimosa-finding-history/v1",
+  "runId": "20260905T220602112Z-91216-c477d97d470d",
+  "runStatus": "inconclusive",
+  "errors": [
+    "baseline-read:business-api/internal/repository/device_core_postgres_integration_test.go: baseline_snapshot_unreadable: file is missing from task baseline",
+    "agent-check:.: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+  ],
+  "target": ".",
+  "revision": "9f971b3acfc8eaee84b5c3f3cedd4481e652d91b",
+  "diffHash": "7b3b42ce570beeb0ed5f3316629c65c849027c29f968bd4128c31c0319227c5e",
+  "rulesVersion": "unavailable",
+  "recordedAt": "2026-09-05T22:06:02.112Z",
+  "timing": {
+    "startedAt": "2026-09-05T22:05:59.682Z",
+    "completedAt": "2026-09-05T22:06:02.112Z",
+    "durationMs": 2430
+  },
+  "tokens": {
+    "input": 0,
+    "output": 0,
+    "total": 0,
+    "modelCalls": 0,
+    "measurement": "known-zero"
+  },
+  "findings": {
+    "total": 0,
+    "bySeverity": {},
+    "byStatus": {}
+  },
+  "coverage": {
+    "status": "partial",
+    "reasonCounts": {
+      "baseline_snapshot_unreadable": 1,
+      "project_check_failed": 2
+    }
+  },
+  "evidenceBoundary": "static_only",
+  "immutableReport": ".mimosa/reports/task-review-sess_6023e950-763f-44a9-a65f-1fc8081897ef-20260905T220602112Z-91216-c477d97d470d.json"
+}

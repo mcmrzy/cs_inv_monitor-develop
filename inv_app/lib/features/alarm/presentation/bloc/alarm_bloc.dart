@@ -85,6 +85,7 @@ class AlarmBloc extends Bloc<AlarmEvent, AlarmState> {
     final result = await repository.getList(
       stationId: event.stationId,
       status: event.status,
+      alarmLevel: event.alarmLevel,
       page: event.page,
       pageSize: event.pageSize,
     );

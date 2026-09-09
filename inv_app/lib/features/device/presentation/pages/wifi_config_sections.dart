@@ -413,7 +413,7 @@ extension _WifiConfigProvisionSections on _WifiConfigPageState {
             decoration: BoxDecoration(
               color: _provisionOk
                   ? AppColors.badgeNormalBg
-                  : (_provisionStatus.contains('❌')
+                  : (_provisionFailed
                       ? AppColors.badgeAlarmBg
                       : AppColor.primarySoft(context)),
               borderRadius: BorderRadius.circular(12.r),
@@ -423,13 +423,11 @@ extension _WifiConfigProvisionSections on _WifiConfigPageState {
                 Icon(
                   _provisionOk
                       ? Icons.check_circle
-                      : (_provisionStatus.contains('❌')
-                          ? Icons.error
-                          : Icons.info),
+                      : (_provisionFailed ? Icons.error : Icons.info),
                   size: 20.sp,
                   color: _provisionOk
                       ? AppColors.successLight
-                      : (_provisionStatus.contains('❌')
+                      : (_provisionFailed
                           ? AppColors.errorLight
                           : AppColors.primary),
                 ),

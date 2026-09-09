@@ -10,7 +10,7 @@ services:
   postgres:
     image: timescale/timescaledb:latest-pg18
     container_name: inv-postgres
-    command: postgres -c max_connections=300 -c shared_buffers=256MB
+    command: postgres -c max_connections=300 -c shared_buffers=256MB -c idle_in_transaction_session_timeout=300000
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${DB_PASSWORD}
@@ -56,7 +56,7 @@ services:
       - "6379"
     volumes:
       - redis-data:/data
-    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru --notify-keyspace-events Ex"]
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --appendonly yes --maxmemory 384mb --maxmemory-policy allkeys-lru --notify-keyspace-events Ex"]
     networks:
       - inv-prod-network
     restart: unless-stopped
@@ -192,7 +192,9 @@ services:
       - inv-prod-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8081/health"]
+      # Container liveness must not depend on the external MQTT broker.
+      # /health remains the MQTT/Redis readiness endpoint for diagnostics.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8081/metrics"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -301,13 +303,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
-    depends_on:
-      inv-api-server:
-        condition: service_healthy
-      inv-device-server:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
     deploy:
       resources:
         limits:
@@ -324,19 +319,19 @@ services:
     image: ghcr.io/mcmrzy/inv-admin-frontend:${IMAGE_TAG:?IMAGE_TAG must be an immutable release tag}
     container_name: inv-admin-frontend
     expose:
-      - "80"
+      - "8080"
     networks:
       - inv-prod-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8080/"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
       interval: 15s
       timeout: 5s
       retries: 5
       start_period: 15s
     depends_on:
       api-gateway:
-        condition: service_healthy
+        condition: service_started
     deploy:
       resources:
         limits:
@@ -356,24 +351,25 @@ services:
       - "443:443"
     volumes:
       - ./nginx-proxy.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./configs/nginx-security-headers.conf:/etc/nginx/snippets/security-headers.conf:ro
       - inv-nginx-logs:/var/log/nginx  # 访问/错误日志持久化，容器重建不丢
       - /etc/letsencrypt:/etc/letsencrypt:ro  # SSL 证书挂载
       - /var/www/certbot:/var/www/certbot:ro  # ACME 挑战文件
     networks:
       - inv-prod-network
     restart: unless-stopped
-    # / 由 nginx 反代到 inv-admin-frontend，此探针同时验证代理链路连通
+    # 纯容器存活探针，不依赖域名跳转、CDN 或任何上游服务。
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:80/"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8082/livez"]
       interval: 15s
       timeout: 5s
       retries: 5
       start_period: 15s
     depends_on:
       inv-admin-frontend:
-        condition: service_healthy
+        condition: service_started
       api-gateway:
-        condition: service_healthy
+        condition: service_started
     deploy:
       resources:
         limits:

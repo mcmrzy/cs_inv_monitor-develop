@@ -20,6 +20,20 @@ abstract final class StationListPresentation {
       (station['status'] ?? 1) != 1 ||
       (station['online_count'] ?? 0) == 0;
 
+  /// 电站地址文案：省/市/区非空段拼接，空段跳过。
+  /// 不再硬编码"中国"前缀（海外电站/空地址时避免错误前缀）。
+  static String addressText(dynamic station) {
+    final parts = <String>[
+      if ((station['province'] as String?)?.isNotEmpty == true)
+        station['province'] as String,
+      if ((station['city'] as String?)?.isNotEmpty == true)
+        station['city'] as String,
+      if ((station['district'] as String?)?.isNotEmpty == true)
+        station['district'] as String,
+    ];
+    return parts.join(' ');
+  }
+
   static StationListCounts counts(List<dynamic> stations) {
     return StationListCounts(
       total: stations.length,

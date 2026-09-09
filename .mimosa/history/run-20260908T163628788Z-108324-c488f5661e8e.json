@@ -1,0 +1,63 @@
+{
+  "schemaVersion": "mimosa-finding-history/v1",
+  "runId": "20260908T163628788Z-108324-c488f5661e8e",
+  "runStatus": "inconclusive",
+  "errors": [
+    "candidate-select:inv-admin-frontend/src/pages/dashboard/index.tsx: candidate_limit_exceeded: 22 changed reviewable file(s) were not scanned because the limit is 20",
+    "baseline-read:inv-admin-frontend/src/utils/passwordRules.ts: baseline_snapshot_unreadable: file is missing from task baseline",
+    "baseline-read:inv-admin-frontend/src/test/mockCredentials.ts: baseline_snapshot_unreadable: file is missing from task baseline",
+    "scan:inv-admin-frontend/src/utils/passwordRules.ts: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/src/test/mockCredentials.ts: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/src/test/setup.test.tsx: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/src/test/mocks/data.ts: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/src/test/mocks/handlers.ts: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/src/services/api.test.ts: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/src/services/api.ts: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/src/services/userApi.test.ts: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/src/services/userApi.ts: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/src/pages/work-orders/index.tsx: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/src/pages/users/index.tsx: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/src/pages/stations/StationDetailPage.tsx: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/src/pages/stations/components/DeviceStatsCard.tsx: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/src/pages/stations/components/StationDevicesTab.tsx: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/src/pages/ota/index.tsx: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/src/pages/login/index.tsx: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/src/pages/login/LoginPage.test.tsx: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/src/pages/invite/InviteAcceptPage.test.tsx: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/src/pages/download/index.tsx: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+    "scan:inv-admin-frontend/src/pages/devices/index.tsx: scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+  ],
+  "target": ".",
+  "revision": "d63f2418dab8312ac10bb7bf1e3f08570934d358",
+  "diffHash": "2dfac7e737e086e61c3fa20d308d3ea08e2fae10a46d3571a84c823be2667cac",
+  "rulesVersion": "unavailable",
+  "recordedAt": "2026-09-08T16:36:28.788Z",
+  "timing": {
+    "startedAt": "2026-09-08T16:36:25.276Z",
+    "completedAt": "2026-09-08T16:36:28.788Z",
+    "durationMs": 3512
+  },
+  "tokens": {
+    "input": 0,
+    "output": 0,
+    "total": 0,
+    "modelCalls": 0,
+    "measurement": "known-zero"
+  },
+  "findings": {
+    "total": 0,
+    "bySeverity": {},
+    "byStatus": {}
+  },
+  "coverage": {
+    "status": "partial",
+    "reasonCounts": {
+      "candidate_limit_exceeded": 1,
+      "baseline_snapshot_unreadable": 2,
+      "scanner_failed": 20,
+      "project_check_failed": 23
+    }
+  },
+  "evidenceBoundary": "static_only",
+  "immutableReport": ".mimosa/reports/task-review-sess_5f5b0dc3-51a8-427a-8bf0-db8474f7bdb2-20260908T163628788Z-108324-c488f5661e8e.json"
+}

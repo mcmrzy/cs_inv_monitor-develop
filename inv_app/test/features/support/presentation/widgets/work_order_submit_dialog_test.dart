@@ -66,25 +66,8 @@ Future<void> _open(WidgetTester tester, Widget host) async {
   await tester.pumpAndSettle();
 }
 
-/// Wraps [testWidgets] to suppress RenderFlex overflow errors at the
-/// framework level so they are never queued for [tester.takeException].
-void _testWidgets(String description, WidgetTesterCallback callback) {
-  testWidgets(description, (tester) async {
-    final originalOnError = FlutterError.onError;
-    FlutterError.onError = (FlutterErrorDetails details) {
-      if (details.toString().contains('overflowed')) return;
-      originalOnError?.call(details);
-    };
-    try {
-      await callback(tester);
-    } finally {
-      FlutterError.onError = originalOnError;
-    }
-  });
-}
-
 void main() {
-  _testWidgets('弹窗关闭时释放标题和描述 controllers', (tester) async {
+  testWidgets('弹窗关闭时释放标题和描述 controllers', (tester) async {
     await _open(tester, _host());
 
     final controllers = tester
@@ -101,7 +84,7 @@ void main() {
     }
   });
 
-  _testWidgets('图片选择返回时弹窗已关闭不更新销毁状态', (tester) async {
+  testWidgets('图片选择返回时弹窗已关闭不更新销毁状态', (tester) async {
     final picked = Completer<List<XFile>>();
     await _open(tester, _host(pickImages: () => picked.future));
 
@@ -116,7 +99,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  _testWidgets('图片选择 pending 时快速连点只启动一次', (tester) async {
+  testWidgets('图片选择 pending 时快速连点只启动一次', (tester) async {
     final picked = Completer<List<XFile>>();
     var pickCount = 0;
     await _open(
@@ -143,7 +126,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  _testWidgets('退场期间快速连点提交只返回一次且不误退底层页', (tester) async {
+  testWidgets('退场期间快速连点提交只返回一次且不误退底层页', (tester) async {
     var submittedCount = 0;
     WorkOrderSubmitData? submittedData;
     await _open(

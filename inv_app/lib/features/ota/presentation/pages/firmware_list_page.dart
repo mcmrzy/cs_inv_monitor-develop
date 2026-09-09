@@ -35,8 +35,14 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
 
   // 跟踪每个package的下载状态
   final Map<int, bool> _downloadedCache = {};
+  // 进度表：packageId → 整包粗粒度进度（已完成芯片数/总芯片数），
+  // 同时 firmwareId → 当前芯片字节级进度（由进度流写入）
   final Map<int, double> _downloadingProgress = {};
+  // 正在下载的芯片 firmwareId 集合：进度流事件以 firmwareId 分发，
+  // 下载期间加入、该芯片完成/失败后移除，保证事件过滤命中
   final Set<int> _downloadingIds = {};
+  // 正在执行预下载流程的 packageId 集合：卡片"下载中"状态渲染 + 防重复点击
+  final Set<int> _preDownloadingPackageIds = {};
   final Set<int> _checkedDownloadIds = {};
 
   /// 下载进度订阅（页面生命周期内单一订阅，dispose 时 cancel）
@@ -122,7 +128,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
     final packageId = (pkg is Map) ? (pkg['id'] as int? ?? 0) : 0;
 
     setState(() {
-      _downloadingIds.add(packageId);
+      _preDownloadingPackageIds.add(packageId);
       _downloadingProgress[packageId] = 0.0;
     });
 
@@ -147,22 +153,41 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
             final alreadyDownloaded =
                 await _downloadService.isFirmwareDownloaded(firmwareId);
             if (!alreadyDownloaded) {
-              await _downloadService.downloadFirmware(
-                url: downloadUrl,
-                fileName: fileName,
-                firmwareId: firmwareId,
-                expectedSize: (chip['file_size'] as num?)?.toInt(),
-                expectedSha256: chip['file_sha256'] as String?,
-                // 持久化离线升级元数据，支持无网时从已下载列表直接本地升级
-                targetChip: chip['target_chip'] as String?,
-                version: chip['firmware_version'] as String?,
-                signature: chip['release_signature'] as String?,
-                securityVersion: (chip['security_version'] as num?)?.toInt(),
-              );
+              // 进度流事件以 firmwareId 分发：下载前把当前芯片的 firmwareId
+              // 加入跟踪集合并预置字节级进度键，让订阅过滤命中
+              if (mounted) {
+                setState(() {
+                  _downloadingIds.add(firmwareId);
+                  _downloadingProgress[firmwareId] = 0.0;
+                });
+              }
+              try {
+                await _downloadService.downloadFirmware(
+                  url: downloadUrl,
+                  fileName: fileName,
+                  firmwareId: firmwareId,
+                  expectedSize: (chip['file_size'] as num?)?.toInt(),
+                  expectedSha256: chip['file_sha256'] as String?,
+                  // 持久化离线升级元数据，支持无网时从已下载列表直接本地升级
+                  targetChip: chip['target_chip'] as String?,
+                  version: chip['firmware_version'] as String?,
+                  signature: chip['release_signature'] as String?,
+                  securityVersion: (chip['security_version'] as num?)?.toInt(),
+                );
+              } finally {
+                // 该芯片完成/失败后清理字节级进度键，切换到下一芯片时
+                // 由循环重新写入新键，避免旧键残留污染卡片进度
+                if (mounted) {
+                  setState(() {
+                    _downloadingIds.remove(firmwareId);
+                    _downloadingProgress.remove(firmwareId);
+                  });
+                }
+              }
             }
             downloadedCount++;
 
-            // 更新进度
+            // 更新整包粗粒度进度
             if (mounted) {
               setState(() {
                 _downloadingProgress[packageId] = downloadedCount / totalItems;
@@ -179,7 +204,8 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
       if (mounted) {
         setState(() {
           _downloadedCache[packageId] = true;
-          _downloadingIds.remove(packageId);
+          _preDownloadingPackageIds.remove(packageId);
+          _downloadingProgress.remove(packageId);
         });
 
         final l10n = AppLocalizations.of(context)!;
@@ -189,7 +215,16 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
       debugPrint('[PreDownload] Error: $e');
       if (mounted) {
         setState(() {
-          _downloadingIds.remove(packageId);
+          _preDownloadingPackageIds.remove(packageId);
+          _downloadingProgress.remove(packageId);
+          // 清理该包所有芯片可能残留的字节级进度键
+          for (final chip in chips) {
+            if (chip is Map) {
+              final firmwareId = chip['firmware_id'] as int? ?? 0;
+              _downloadingIds.remove(firmwareId);
+              _downloadingProgress.remove(firmwareId);
+            }
+          }
         });
 
         final l10n = AppLocalizations.of(context)!;
@@ -570,10 +605,21 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
       _restorePackageDownloadState(pkg);
     });
 
-    // 检查下载状态
+    // 检查下载状态：
+    // - "下载中"以整包预下载流程为准（_preDownloadingPackageIds）
+    // - 字节级进度以当前正在下载的芯片 firmwareId 为键，取不到时
+    //   回退到整包粗粒度进度（芯片间隙/已完成 N/M 阶段）
     final isDownloaded = _downloadedCache[id] ?? false;
-    final isDownloading = _downloadingIds.contains(id);
-    final downloadProgress = _downloadingProgress[id] ?? 0.0;
+    final isDownloading = _preDownloadingPackageIds.contains(id);
+    final activeFirmwareId = items
+        .whereType<Map>()
+        .map((item) => item['firmware_id'] as int? ?? 0)
+        .firstWhere(_downloadingIds.contains, orElse: () => 0);
+    final downloadProgress = (activeFirmwareId > 0
+            ? _downloadingProgress[activeFirmwareId]
+            : null) ??
+        _downloadingProgress[id] ??
+        0.0;
 
     return Container(
       margin: EdgeInsets.only(bottom: 12.h),

@@ -19,23 +19,6 @@ import '../../../../helpers/pump_app.dart';
 
 class _FakeStationEvent extends Fake implements StationEvent {}
 
-/// Wraps [testWidgets] to suppress RenderFlex overflow errors at the
-/// framework level so they are never queued for [tester.takeException].
-void _testWidgets(String description, WidgetTesterCallback callback) {
-  testWidgets(description, (tester) async {
-    final originalOnError = FlutterError.onError;
-    FlutterError.onError = (FlutterErrorDetails details) {
-      if (details.toString().contains('overflowed')) return;
-      originalOnError?.call(details);
-    };
-    try {
-      await callback(tester);
-    } finally {
-      FlutterError.onError = originalOnError;
-    }
-  });
-}
-
 const _sourcePageKey = Key('station-action-source-page');
 const _homePageKey = Key('station-action-home-page');
 
@@ -135,7 +118,7 @@ void main() {
     await stationStates.close();
   });
 
-  _testWidgets('创建电站选图等待期间快速连点只启动一次并在取消后解锁',
+  testWidgets('创建电站选图等待期间快速连点只启动一次并在取消后解锁',
       (tester) async {
     final pending = Completer<StationImageUploadResult?>();
     var launches = 0;
@@ -166,7 +149,7 @@ void main() {
     expect(tester.widget<PopScope>(find.byType(PopScope)).canPop, isTrue);
   });
 
-  _testWidgets('编辑电站页面销毁后忽略迟到的图片结果', (tester) async {
+  testWidgets('编辑电站页面销毁后忽略迟到的图片结果', (tester) async {
     final pending = Completer<StationImageUploadResult?>();
     var launches = 0;
     await pumpApp(
@@ -196,7 +179,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  _testWidgets('未发起操作时忽略共享 Bloc 的电站成功和错误状态',
+  testWidgets('未发起操作时忽略共享 Bloc 的电站成功和错误状态',
       (tester) async {
     await pumpApp(
       tester,
@@ -213,7 +196,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  _testWidgets('编辑页忽略其他电站的更新和删除成功状态', (tester) async {
+  testWidgets('编辑页忽略其他电站的更新和删除成功状态', (tester) async {
     await pumpApp(
       tester,
       const EditStationPage(stationId: 7),
@@ -238,7 +221,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  _testWidgets('删除确认入口快速连点只派发一次删除事件', (tester) async {
+  testWidgets('删除确认入口快速连点只派发一次删除事件', (tester) async {
     await pumpApp(
       tester,
       const EditStationPage(stationId: 7),
@@ -296,7 +279,7 @@ void main() {
     );
   });
 
-  _testWidgets('匹配的创建成功状态通过 GoRouter 返回来源页', (tester) async {
+  testWidgets('匹配的创建成功状态通过 GoRouter 返回来源页', (tester) async {
     final router = await _pumpStationRouter(tester, stationBloc);
     addTearDown(router.dispose);
 
@@ -336,7 +319,7 @@ void main() {
     expect(router.routeInformationProvider.value.uri.path, '/source');
   });
 
-  _testWidgets('匹配的更新成功状态通过 GoRouter 返回来源页', (tester) async {
+  testWidgets('匹配的更新成功状态通过 GoRouter 返回来源页', (tester) async {
     final router = await _pumpStationRouter(tester, stationBloc);
     addTearDown(router.dispose);
 
@@ -384,7 +367,7 @@ void main() {
     expect(router.routeInformationProvider.value.uri.path, '/source');
   });
 
-  _testWidgets('匹配的删除成功状态通过 GoRouter 跳转首页', (tester) async {
+  testWidgets('匹配的删除成功状态通过 GoRouter 跳转首页', (tester) async {
     final router = await _pumpStationRouter(tester, stationBloc);
     addTearDown(router.dispose);
 

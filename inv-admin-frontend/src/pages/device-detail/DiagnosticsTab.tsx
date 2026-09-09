@@ -48,7 +48,7 @@ const DiagnosticsTab: React.FC<DiagnosticsTabProps> = ({ sn }) => {
   const isOnline = controlState?.sync_status === 'in_sync' || controlState?.sync_status === 'pending'
 
   const selfTestMutation = useMutation({
-    mutationFn: () => deviceApi.sendCommand(sn, { command_code: 'self_test', args: {} }),
+    mutationFn: () => deviceApi.sendCommand(sn, { command: 'self_test', params: {} }),
     onSuccess: () => {
       message.success(t('deviceDetail.diagnostics.sendSuccess'))
       queryClient.invalidateQueries({ queryKey: queryKeys.devices.commands(sn) })
@@ -57,7 +57,7 @@ const DiagnosticsTab: React.FC<DiagnosticsTabProps> = ({ sn }) => {
   })
 
   const faultResetMutation = useMutation({
-    mutationFn: () => deviceApi.sendCommand(sn, { command_code: 'fault_reset', args: {} }),
+    mutationFn: () => deviceApi.sendCommand(sn, { command: 'fault_reset', params: {} }),
     onSuccess: () => {
       message.success(t('deviceDetail.diagnostics.sendSuccess'))
       queryClient.invalidateQueries({ queryKey: queryKeys.devices.commands(sn) })

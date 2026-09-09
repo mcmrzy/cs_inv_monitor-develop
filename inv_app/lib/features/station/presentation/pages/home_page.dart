@@ -521,8 +521,8 @@ class _HomePageState extends State<HomePage> {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 38.w,
-        height: 38.w,
+        width: 44.w,
+        height: 44.w,
         decoration: BoxDecoration(
           color: AppColor.surfaceHover(context),
           borderRadius: BorderRadius.circular(12.r),
@@ -664,14 +664,7 @@ class _HomePageState extends State<HomePage> {
     final totalEnergy = (station['total_energy'] ?? 0).toDouble();
     final ok = StationListPresentation.isNormal(station);
     final hasFault = StationListPresentation.hasFault(station);
-    final province = station['province'] ?? '';
-    final city = station['city'] ?? '';
-    final district = station['district'] ?? '';
-    final addressParts = <String>[];
-    if (province is String && province.isNotEmpty) addressParts.add(province);
-    if (city is String && city.isNotEmpty) addressParts.add(city);
-    if (district is String && district.isNotEmpty) addressParts.add(district);
-    final addressText = '${l10n.china} ${addressParts.join(' ')}';
+    final addressText = StationListPresentation.addressText(station);
 
     final badgeColor = ok
         ? AppColors.badgeNormalText
@@ -698,17 +691,9 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _showStationMenu(BuildContext context, dynamic station) {
-    final l10n = AppLocalizations.of(context)!;
     final id = station['station_id'] ?? station['id'] ?? 0;
     final name = station['station_name'] ?? station['name'] ?? '';
-    final province = station['province'] ?? '';
-    final city = station['city'] ?? '';
-    final district = station['district'] ?? '';
-    final addressParts = <String>[];
-    if (province is String && province.isNotEmpty) addressParts.add(province);
-    if (city is String && city.isNotEmpty) addressParts.add(city);
-    if (district is String && district.isNotEmpty) addressParts.add(district);
-    final addressText = '${l10n.china} ${addressParts.join(' ')}';
+    final addressText = StationListPresentation.addressText(station);
 
     showModalBottomSheet(
       context: context,
@@ -1229,10 +1214,10 @@ class _StationActionSheetState extends State<_StationActionSheet>
               _animatedItem(
                 3,
                 _buildActionItem(
-                  icon: Icons.link_off_rounded,
-                  color: AppColors.error,
-                  title: l10n.str('remove_device'),
-                  subtitle: l10n.deviceManagement,
+                  icon: Icons.devices_rounded,
+                  color: AppColors.primary,
+                  title: l10n.deviceManagement,
+                  subtitle: l10n.str('device_management_hint'),
                   onTap: widget.onManageDevices,
                 ),
               ),
@@ -1494,7 +1479,10 @@ class _StationCardState extends State<_StationCard>
         SizedBox(height: 2.h),
         Text(
           label,
-          style: TextStyle(fontSize: 10.sp, color: AppColor.textHint(context)),
+          style: TextStyle(
+            fontSize: 12.sp,
+            color: AppColor.textSecondary(context),
+          ),
         ),
       ],
     );

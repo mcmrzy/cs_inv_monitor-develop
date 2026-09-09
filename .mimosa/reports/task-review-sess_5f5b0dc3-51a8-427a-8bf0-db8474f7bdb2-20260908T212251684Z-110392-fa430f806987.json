@@ -1,0 +1,195 @@
+{
+  "schema_version": "mimosa-task-review/v2",
+  "run_id": "20260908T212251684Z-110392-fa430f806987",
+  "run_status": "inconclusive",
+  "errors": [
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/e2e/lang.spec.ts",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/e2e/navigation.spec.ts",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    }
+  ],
+  "coverage": {
+    "schema_version": "mimosa-hook-coverage/v1",
+    "status": "partial",
+    "scope": "hook_observed_diff",
+    "baseline": {
+      "complete": true,
+      "captured_files": 2435,
+      "candidate_limit": 5000,
+      "truncated": false,
+      "enumeration_error_count": 0,
+      "snapshot_error_count": 0,
+      "compensated_target_count": 2
+    },
+    "change_tracking": {
+      "touched_observed": 0,
+      "touched_retained": 0,
+      "truncated": false,
+      "bash_mutation": true,
+      "bash_discovered": 2,
+      "bash_discovery_limit": 80,
+      "bash_discovery_truncated": false
+    },
+    "candidates": {
+      "eligible_files": 2,
+      "selected_files": 2,
+      "limit": 20,
+      "truncated": false
+    },
+    "scanning": {
+      "required_files": 2,
+      "scanned_files": 0,
+      "skipped_files": 0,
+      "failed_files": 2,
+      "project_checks_required": 0,
+      "project_checks_completed": 0
+    },
+    "notification": {
+      "eligible_findings": 0,
+      "detailed_findings": 0,
+      "detail_limit": 3,
+      "truncated": false
+    },
+    "reason_counts": {
+      "scanner_failed": 2,
+      "project_check_failed": 2
+    },
+    "reasons": [
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/e2e/lang.spec.ts",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/e2e/navigation.spec.ts",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/e2e/lang.spec.ts",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/e2e/navigation.spec.ts",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      }
+    ],
+    "reasons_truncated": false
+  },
+  "generated_at": "2026-09-08T21:22:51.684Z",
+  "session_id": "sess_5f5b0dc3-51a8-427a-8bf0-db8474f7bdb2",
+  "target": ".",
+  "revision": "0ae3cd42e7f0f2e1c7e23442c0158495396a8d38",
+  "rules_version": "unavailable",
+  "diff_hash": "aa5022c04f7008e5a8fcc21b67686d3b091d1a7861e364a34fa434589ff21f77",
+  "diff": {
+    "algorithm": "sha256",
+    "changed_file_count": 2,
+    "changed_files": [
+      {
+        "file": "inv-admin-frontend/e2e/lang.spec.ts",
+        "ranges": [
+          {
+            "start": 14,
+            "end": 14
+          },
+          {
+            "start": 39,
+            "end": 41
+          }
+        ],
+        "before_hash": "29f9c673992d7663c160692b8a055131c316cd317aa1bc321dbf60d5fa79e236",
+        "after_hash": "f00144440245c7c829e760bfa82704e81251984bb78526ff9e1333c9985adfa4"
+      },
+      {
+        "file": "inv-admin-frontend/e2e/navigation.spec.ts",
+        "ranges": [
+          {
+            "start": 175,
+            "end": 175
+          },
+          {
+            "start": 202,
+            "end": 202
+          },
+          {
+            "start": 260,
+            "end": 260
+          },
+          {
+            "start": 263,
+            "end": 264
+          }
+        ],
+        "before_hash": "feb90f6767ed84b4cb2b74f1ba5f75a5c262e522e5ad331a101fbf256bf3b5b0",
+        "after_hash": "96c4044bd7cdb37daf9e4d74d88d7f497fc54c84da65ad08a49bbb78d1cd5cac"
+      }
+    ]
+  },
+  "timing": {
+    "started_at": "2026-09-08T21:22:48.947Z",
+    "completed_at": "2026-09-08T21:22:51.684Z",
+    "duration_ms": 2737,
+    "measurement": "hook_wall_clock"
+  },
+  "tokens": {
+    "input": 0,
+    "output": 0,
+    "total": 0,
+    "model_calls": 0,
+    "measurement": "known-zero"
+  },
+  "telemetry": {
+    "schemaVersion": "mimosa-gate-telemetry/v1",
+    "profile": "gate",
+    "operation": "Stop",
+    "outcome": "partial/INCONCLUSIVE",
+    "latencyMs": 2737,
+    "peakMemoryBytes": 101728256,
+    "memoryMeasurement": "max-observed-process-rss",
+    "scannedFiles": 0,
+    "cache": {
+      "hits": 0,
+      "misses": 0,
+      "measurement": "not-applicable"
+    },
+    "denyCount": 0,
+    "tokens": {
+      "input": 0,
+      "output": 0,
+      "total": 0,
+      "modelCalls": 0,
+      "measurement": "known-zero"
+    }
+  },
+  "finding_count": 0,
+  "rewake_finding_count": 0,
+  "evidence_boundary": {
+    "scan": "candidate",
+    "static_fix_verification": "observed_static_only",
+    "runtime_verification": "not_performed"
+  },
+  "finding_events": [],
+  "findings": [],
+  "artifacts": {
+    "immutable_report": ".mimosa/reports/task-review-sess_5f5b0dc3-51a8-427a-8bf0-db8474f7bdb2-20260908T212251684Z-110392-fa430f806987.json",
+    "latest_report": ".mimosa/reports/task-review-sess_5f5b0dc3-51a8-427a-8bf0-db8474f7bdb2.json",
+    "history_summary": ".mimosa/history/run-20260908T212251684Z-110392-fa430f806987.json"
+  }
+}

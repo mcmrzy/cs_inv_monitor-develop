@@ -145,18 +145,18 @@ const StrategyTab: React.FC<StrategyTabProps> = ({ sn }) => {
             <Col span={12}>
               <Form.Item name="charge_priority" label={t('deviceDetail.strategy.chargePriority')}>
                 <Select options={[
-                  { label: 'Balanced', value: 'balanced' },
-                  { label: 'PV Priority', value: 'pv_priority' },
-                  { label: 'Grid Priority', value: 'grid_priority' },
+                  { label: t('deviceDetail.strategy.balanced'), value: 'balanced' },
+                  { label: t('deviceDetail.strategy.pvPriority'), value: 'pv_priority' },
+                  { label: t('deviceDetail.strategy.gridPriority'), value: 'grid_priority' },
                 ]} />
               </Form.Item>
             </Col>
             <Col span={12}>
               <Form.Item name="discharge_priority" label={t('deviceDetail.strategy.dischargePriority')}>
                 <Select options={[
-                  { label: 'Balanced', value: 'balanced' },
-                  { label: 'Load Priority', value: 'load_priority' },
-                  { label: 'Grid Feed-in', value: 'grid_feed_in' },
+                  { label: t('deviceDetail.strategy.balanced'), value: 'balanced' },
+                  { label: t('deviceDetail.strategy.loadPriority'), value: 'load_priority' },
+                  { label: t('deviceDetail.strategy.gridFeedIn'), value: 'grid_feed_in' },
                 ]} />
               </Form.Item>
             </Col>
@@ -208,10 +208,10 @@ const StrategyTab: React.FC<StrategyTabProps> = ({ sn }) => {
         <Form form={overrideForm} layout="vertical" preserve={false}>
           <Form.Item name="override_type" label={t('deviceDetail.strategy.overrideType')} rules={[{ required: true }]}>
             <Select options={[
-              { label: 'Force Charge', value: 'force_charge' },
-              { label: 'Force Discharge', value: 'force_discharge' },
-              { label: 'Pause', value: 'pause' },
-              { label: 'Standby', value: 'standby' },
+              { label: t('deviceDetail.strategy.forceCharge'), value: 'force_charge' },
+              { label: t('deviceDetail.strategy.forceDischarge'), value: 'force_discharge' },
+              { label: t('deviceDetail.strategy.pause'), value: 'pause' },
+              { label: t('deviceDetail.strategy.standby'), value: 'standby' },
             ]} />
           </Form.Item>
           <Form.Item name="override_value" label={t('deviceDetail.strategy.overrideValue')}>

@@ -10,6 +10,7 @@ import {
   CloudSyncOutlined,
 } from '@ant-design/icons'
 import api from '@/services/api'
+import useTranslation from '@/hooks/useTranslation'
 
 const { Title, Text, Paragraph } = Typography
 
@@ -25,6 +26,7 @@ interface AppVersionInfo {
 }
 
 const DownloadPage: React.FC = () => {
+  const { t } = useTranslation()
   const [loading, setLoading] = useState(true)
   const [versionInfo, setVersionInfo] = useState<AppVersionInfo | null>(null)
   const [downloading, setDownloading] = useState(false)
@@ -52,7 +54,7 @@ const DownloadPage: React.FC = () => {
 
   const handleDownload = () => {
     if (!versionInfo?.download_url) {
-      message.warning('暂无可用下载链接')
+      message.warning(t('dl.noDownloadUrl'))
       return
     }
 
@@ -69,7 +71,7 @@ const DownloadPage: React.FC = () => {
   }
 
   const formatFileSize = (bytes: number) => {
-    if (!bytes) return '约 100 MB'
+    if (!bytes) return t('dl.approxSize')
     const mb = bytes / (1024 * 1024)
     return `${mb.toFixed(1)} MB`
   }
@@ -77,23 +79,23 @@ const DownloadPage: React.FC = () => {
   const features = [
     {
       icon: <LineChartOutlined style={{ fontSize: 28, color: '#1a73e8' }} />,
-      title: '实时监控',
-      desc: '随时查看设备运行状态',
+      title: t('dl.featureMonitor'),
+      desc: t('dl.featureMonitorDesc'),
     },
     {
       icon: <ThunderboltOutlined style={{ fontSize: 28, color: '#f59e0b' }} />,
-      title: '数据分析',
-      desc: '发电量趋势统计分析',
+      title: t('dl.featureAnalytics'),
+      desc: t('dl.featureAnalyticsDesc'),
     },
     {
       icon: <NotificationOutlined style={{ fontSize: 28, color: '#ef4444' }} />,
-      title: '告警推送',
-      desc: '异常情况即时通知',
+      title: t('dl.featureAlerts'),
+      desc: t('dl.featureAlertsDesc'),
     },
     {
       icon: <CloudSyncOutlined style={{ fontSize: 28, color: '#22c55e' }} />,
-      title: '远程运维',
-      desc: 'OTA固件远程升级',
+      title: t('dl.featureOta'),
+      desc: t('dl.featureOtaDesc'),
     },
   ]
 
@@ -128,10 +130,10 @@ const DownloadPage: React.FC = () => {
             </svg>
           </div>
           <Title level={2} style={{ margin: '16px 0 8px', color: '#1a1a1a' }}>
-            辰烁光伏逆变
+            {t('dl.appTitle')}
           </Title>
           <Text type="secondary" style={{ fontSize: 16 }}>
-            光伏电站智能监控平台
+            {t('dl.subtitle')}
           </Text>
         </div>
 
@@ -139,28 +141,28 @@ const DownloadPage: React.FC = () => {
         <Card style={styles.versionCard} bordered={false}>
           {loading ? (
             <div style={{ textAlign: 'center', padding: '20px 0' }}>
-              <Spin tip="获取版本信息..." />
+              <Spin tip={t('dl.loadingVersion')} />
             </div>
           ) : versionInfo ? (
             <Space direction="vertical" size={8} style={{ width: '100%' }}>
               <div style={styles.versionRow}>
-                <Text type="secondary">最新版本</Text>
+                <Text type="secondary">{t('dl.latestVersion')}</Text>
                 <Tag color="blue">v{versionInfo.latest_version_name}</Tag>
               </div>
               <div style={styles.versionRow}>
-                <Text type="secondary">文件大小</Text>
+                <Text type="secondary">{t('dl.fileSize')}</Text>
                 <Text>{formatFileSize(versionInfo.file_size)}</Text>
               </div>
               <div style={styles.versionRow}>
-                <Text type="secondary">支持系统</Text>
+                <Text type="secondary">{t('dl.supportedOs')}</Text>
                 <Text>Android 7.0+</Text>
               </div>
               {versionInfo.changelog && (
                 <div style={{ marginTop: 8 }}>
-                  <Text type="secondary">更新内容</Text>
+                  <Text type="secondary">{t('dl.changelog')}</Text>
                   <Paragraph
                     style={{ marginTop: 4, marginBottom: 0 }}
-                    ellipsis={{ rows: 3, expandable: true, symbol: '展开' }}
+                    ellipsis={{ rows: 3, expandable: true, symbol: t('dl.expand') }}
                   >
                     {versionInfo.changelog}
                   </Paragraph>
@@ -169,7 +171,7 @@ const DownloadPage: React.FC = () => {
             </Space>
           ) : (
             <div style={{ textAlign: 'center', padding: '20px 0' }}>
-              <Text type="secondary">版本信息加载中...</Text>
+              <Text type="secondary">{t('dl.versionLoading')}</Text>
             </div>
           )}
         </Card>
@@ -184,13 +186,13 @@ const DownloadPage: React.FC = () => {
           style={styles.downloadBtn}
           block
         >
-          {downloading ? '正在下载...' : '下载 Android 安装包'}
+          {downloading ? t('dl.downloading') : t('dl.downloadBtn')}
         </Button>
 
         {/* 系统要求 */}
         <div style={styles.androidBadge}>
           <AndroidOutlined style={{ fontSize: 20, color: '#3ddc84' }} />
-          <span>Android 专用</span>
+          <span>{t('dl.androidOnly')}</span>
         </div>
 
         {/* 功能特性 */}
@@ -215,21 +217,21 @@ const DownloadPage: React.FC = () => {
         <div style={styles.securityTip}>
           <SafetyCertificateOutlined style={{ color: '#52c41a', marginRight: 8 }} />
           <Text type="secondary" style={{ fontSize: 12 }}>
-            官方正版 · 安全无毒 · 签名验证通过
+            {t('dl.securityTip')}
           </Text>
         </div>
 
         {/* 底部信息 */}
         <div style={styles.footer}>
           <Text type="secondary" style={{ fontSize: 12 }}>
-            &copy; 2026 辰烁科技 ·{' '}
+            {t('dl.footerCopyright')} ·{' '}
             <a href="https://csergy.com" target="_blank" rel="noopener noreferrer">
               csergy.com
             </a>
           </Text>
           <br />
           <Text type="secondary" style={{ fontSize: 12 }}>
-            光伏逆变器智能监控平台
+            {t('dl.footerDesc')}
           </Text>
         </div>
       </div>

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "mimosa-hook-status/v1",
+  "recordedAt": "2026-09-08T09:45:50.370Z",
+  "sessionId": "sess_554c1dcc-07b1-4233-96b0-c8a78a805048",
+  "event": "PostToolUse",
+  "toolName": "Edit",
+  "file": "inv-admin-frontend/src/pages/ota/index.tsx",
+  "outcome": "clear",
+  "coverage": "complete",
+  "findingCount": 0,
+  "durationMs": 24,
+  "hostState": "hook_complete",
+  "reportHint": ".mimosa/reports/"
+}

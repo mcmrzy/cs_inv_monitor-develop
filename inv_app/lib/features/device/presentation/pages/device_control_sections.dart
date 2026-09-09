@@ -7,7 +7,9 @@ part of 'device_control_page.dart';
 extension _DeviceControlTabSections on _DeviceControlPageState {
   Widget _buildBatteryProtectionTab() {
     final l10n = AppLocalizations.of(context)!;
-    return ListView(
+    return StyledRefreshIndicator(
+      onRefresh: () => _fetchAllData(showLoading: false),
+      child: ListView(
       padding: EdgeInsets.all(16.w),
       children: [
         _buildOfflineWarning(),
@@ -51,7 +53,8 @@ extension _DeviceControlTabSections on _DeviceControlPageState {
 
         // BMS 实时限制
         _buildBmsLimitsCard(),
-      ],
+        ],
+      ),
     );
   }
 
@@ -332,7 +335,9 @@ extension _DeviceControlTabSections on _DeviceControlPageState {
 
   Widget _buildEnergyScheduleTab() {
     final l10n = AppLocalizations.of(context)!;
-    return ListView(
+    return StyledRefreshIndicator(
+      onRefresh: () => _fetchAllData(showLoading: false),
+      child: ListView(
       padding: EdgeInsets.all(16.w),
       children: [
         _buildOfflineWarning(),
@@ -461,7 +466,8 @@ extension _DeviceControlTabSections on _DeviceControlPageState {
             ],
           ),
         ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -690,7 +696,9 @@ extension _DeviceControlTabSections on _DeviceControlPageState {
 
   Widget _buildDeviceInfoTab() {
     final l10n = AppLocalizations.of(context)!;
-    return ListView(
+    return StyledRefreshIndicator(
+      onRefresh: () => _fetchAllData(showLoading: false),
+      child: ListView(
       padding: EdgeInsets.all(16.w),
       children: [
         // 安装配置只读展示
@@ -719,7 +727,8 @@ extension _DeviceControlTabSections on _DeviceControlPageState {
 
         // 命令记录
         _buildCommandHistoryCard(),
-      ],
+        ],
+      ),
     );
   }
 

@@ -10,8 +10,8 @@ export const userApi = {
   toggleStatus: (id: string | number, newStatus: number) => api.put(`/users/${id}/toggle`, { status: newStatus }),
   updateMemberRole: (membershipId: number, role: string) =>
     api.put(`/members/memberships/${membershipId}/role`, { role }),
-  getInstallers: () => api.get('/users', { params: { role: 4 }, expectedDataShape: 'page' }),
+  // 后端按组织角色过滤（org_role），旧的数值 role 参数已废弃
+  getInstallers: () => api.get('/users', { params: { org_role: 'installer' }, expectedDataShape: 'page' }),
   getChildren: (id: string | number, params?: any) => api.get(`/users/${id}/children`, { params, expectedDataShape: 'page' }),
   updateParent: (id: string | number, parentId: number | null) => api.put(`/users/${id}/parent`, { parentId }),
-  getStationOwners: () => api.get('/users', { params: { role: 'station_owner' }, expectedDataShape: 'page' }),
 }

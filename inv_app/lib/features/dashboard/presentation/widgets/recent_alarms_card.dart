@@ -47,42 +47,52 @@ class RecentAlarmsCard extends StatelessWidget {
                 ),
               ),
               SizedBox(width: 10.w),
-              Text(
-                l10n.recentAlarms,
-                style: TextStyle(
-                  fontSize: 15.sp,
-                  fontWeight: FontWeight.w600,
-                  color: AppColor.textPrimary(context),
+              Expanded(
+                child: Text(
+                  l10n.recentAlarms,
+                  style: TextStyle(
+                    fontSize: 15.sp,
+                    fontWeight: FontWeight.w600,
+                    color: AppColor.textPrimary(context),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-              const Spacer(),
-              GestureDetector(
-                onTap: () => context.go('/alarms'),
-                child: Container(
-                  padding:
-                      EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12.r),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        l10n.viewAll,
-                        style: TextStyle(
-                          fontSize: 11.sp,
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w500,
+              SizedBox(width: 8.w),
+              Flexible(
+                child: GestureDetector(
+                  onTap: () => context.go('/alarms'),
+                  child: Container(
+                    padding:
+                        EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12.r),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            l10n.viewAll,
+                            style: TextStyle(
+                              fontSize: 11.sp,
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
-                      SizedBox(width: 2.w),
-                      Icon(
-                        Icons.arrow_forward_ios,
-                        size: 10.w,
-                        color: AppColors.primary,
-                      ),
-                    ],
+                        SizedBox(width: 2.w),
+                        Icon(
+                          Icons.arrow_forward_ios,
+                          size: 10.w,
+                          color: AppColors.primary,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -213,21 +223,25 @@ class RecentAlarmsCard extends StatelessWidget {
                         ),
                       ),
                       SizedBox(width: 8.w),
-                      Container(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: 8.w,
-                          vertical: 3.h,
-                        ),
-                        decoration: BoxDecoration(
-                          color: levelColor.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(6.r),
-                        ),
-                        child: Text(
-                          levelLabel,
-                          style: TextStyle(
-                            fontSize: 10.sp,
-                            color: levelColor,
-                            fontWeight: FontWeight.w600,
+                      Flexible(
+                        child: Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 8.w,
+                            vertical: 3.h,
+                          ),
+                          decoration: BoxDecoration(
+                            color: levelColor.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6.r),
+                          ),
+                          child: Text(
+                            levelLabel,
+                            style: TextStyle(
+                              fontSize: 10.sp,
+                              color: levelColor,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ),
@@ -243,11 +257,15 @@ class RecentAlarmsCard extends StatelessWidget {
                           color: AppColor.textHint(context),
                         ),
                         SizedBox(width: 4.w),
-                        Text(
-                          deviceSn,
-                          style: TextStyle(
-                            fontSize: 11.sp,
-                            color: AppColor.textHint(context),
+                        Flexible(
+                          child: Text(
+                            deviceSn,
+                            style: TextStyle(
+                              fontSize: 11.sp,
+                              color: AppColor.textHint(context),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         SizedBox(width: 12.w),
@@ -258,11 +276,15 @@ class RecentAlarmsCard extends StatelessWidget {
                         color: AppColor.textHint(context),
                       ),
                       SizedBox(width: 4.w),
-                      Text(
-                        timeAgo,
-                        style: TextStyle(
-                          fontSize: 11.sp,
-                          color: AppColor.textHint(context),
+                      Flexible(
+                        child: Text(
+                          timeAgo,
+                          style: TextStyle(
+                            fontSize: 11.sp,
+                            color: AppColor.textHint(context),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],

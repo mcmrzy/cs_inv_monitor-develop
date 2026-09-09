@@ -261,12 +261,6 @@ class _ProfileSetupDialogState extends State<ProfileSetupDialog> {
       }
     } finally {
       await subscription?.cancel();
-      if (identical(_saveSubscription, subscription)) {
-        _saveSubscription = null;
-      }
-      if (identical(_saveCompleter, completer)) {
-        _saveCompleter = null;
-      }
     }
   }
 

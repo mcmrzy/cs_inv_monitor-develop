@@ -283,9 +283,7 @@ void main() {
   // DELETE
   // ---------------------------------------------------------------------------
   group('DELETE', () {
-    test('returns Right on successful response',
-        skip: true, // TODO: investigate mock matching issue with Dio.delete
-        () async {
+    test('returns Right on successful response', () async {
       final response = Response(
         requestOptions: RequestOptions(),
         statusCode: 200,

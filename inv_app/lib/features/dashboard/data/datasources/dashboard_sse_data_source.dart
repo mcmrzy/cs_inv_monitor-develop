@@ -2,12 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 /// SSE数据源 - 实现实时数据更新
 class DashboardSSEDataSource {
   final Dio dio;
   StreamController<Map<String, dynamic>>? _controller;
-  StreamSubscription<List<int>>? _responseSubscription;
+  StreamSubscription<String>? _responseSubscription;
   CancelToken? _requestCancelToken;
   bool _isConnected = false;
   bool _stopped = true;
@@ -88,11 +89,17 @@ class DashboardSSEDataSource {
     final Stream<List<int>>? responseStream = response.data?.stream;
     if (responseStream == null) return;
 
-    final subscription = responseStream.listen(
-      (data) {
+    // 增量解码：utf8.decoder 维护跨 chunk 的多字节状态（CJK 字符被
+    // chunk 边界截断时不会 FormatException 崩溃），LineSplitter 只放行
+    // 已收到换行符的完整行（跨 chunk 拆分的事件不会丢失/半截解析）。
+    final lineStream = utf8.decoder
+        .bind(responseStream)
+        .transform(const LineSplitter());
+
+    final subscription = lineStream.listen(
+      (line) {
         if (!_isCurrentGeneration(generation)) return;
-        final String chunk = utf8.decode(data);
-        _processSSEData(chunk);
+        _processSSELine(line);
       },
       onDone: () {
         if (_isCurrentGeneration(generation)) {
@@ -114,33 +121,31 @@ class DashboardSSEDataSource {
     }
   }
 
-  void _processSSEData(String chunk) {
-    final lines = chunk.split('\n');
-
-    for (final line in lines) {
-      if (line.startsWith('data: ')) {
-        final data = line.substring(6).trim();
-        if (data.isNotEmpty) {
-          try {
-            final jsonData = json.decode(data) as Map<String, dynamic>;
-            _reconnectAttempts = 0;
-            _controller?.add(jsonData);
-          } catch (e) {
-            // 忽略解析错误
-          }
+  /// 处理一条完整的 SSE 行（不含行尾换行符）。
+  /// 单行 JSON 解析失败只跳过该行（debugPrint 记录），不影响订阅与后续事件。
+  void _processSSELine(String line) {
+    if (line.startsWith('data: ')) {
+      final data = line.substring(6).trim();
+      if (data.isNotEmpty) {
+        try {
+          final jsonData = json.decode(data) as Map<String, dynamic>;
+          _reconnectAttempts = 0;
+          _controller?.add(jsonData);
+        } catch (e) {
+          debugPrint('[DashboardSSE] Failed to parse data line: $e');
         }
-      } else if (line.startsWith('event: ')) {
-        // 处理事件类型
-        // 可以根据事件类型做特殊处理
-      } else if (line.startsWith('id: ')) {
-        // 处理事件ID
-        // 可以用于断线重连
-      } else if (line.startsWith('retry: ')) {
-        // 处理重连时间
-        final retryTime = int.tryParse(line.substring(7).trim());
-        if (retryTime != null) {
-          // 可以用于设置重连间隔
-        }
+      }
+    } else if (line.startsWith('event: ')) {
+      // 处理事件类型
+      // 可以根据事件类型做特殊处理
+    } else if (line.startsWith('id: ')) {
+      // 处理事件ID
+      // 可以用于断线重连
+    } else if (line.startsWith('retry: ')) {
+      // 处理重连时间
+      final retryTime = int.tryParse(line.substring(7).trim());
+      if (retryTime != null) {
+        // 可以用于设置重连间隔
       }
     }
   }
@@ -204,6 +209,12 @@ class DashboardSSEDataSource {
           _connect(generation);
         }
       });
+    } else {
+      // 重连耗尽：向事件流发送明确错误，UI（bloc onError）可感知
+      // 长连接已不可用并切换到断连状态，而不是停留在"已连接"假象
+      _controller?.addError(
+        SSEConnectionLostException(attempts: _reconnectAttempts),
+      );
     }
   }
 
@@ -265,6 +276,25 @@ class SSEEventType {
   static const String alarmUpdate = 'alarm_update';
   static const String deviceUpdate = 'device_update';
   static const String heartbeat = 'heartbeat';
+}
+
+/// SSE 重连耗尽后抛出的连接丢失错误。
+///
+/// [_handleDisconnection] 在重连次数达到 [DashboardSSEDataSource.maxReconnectAttempts]
+/// 仍失败时向事件流 addError，UI 层（bloc 的 onError）可据此感知长连接
+/// 已不可用并展示断连状态。
+class SSEConnectionLostException implements Exception {
+  final String message;
+  final int attempts;
+
+  const SSEConnectionLostException({
+    this.message = 'SSE connection lost after exhausting reconnect attempts',
+    this.attempts = 0,
+  });
+
+  @override
+  String toString() =>
+      'SSEConnectionLostException(attempts: $attempts, message: $message)';
 }
 
 /// SSE事件数据

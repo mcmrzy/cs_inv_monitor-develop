@@ -5,6 +5,7 @@ abstract class AlarmRepository {
   Future<Either<Failure, Map<String, dynamic>>> getList({
     int? stationId,
     int? status,
+    int? alarmLevel,
     int page,
     int pageSize,
   });

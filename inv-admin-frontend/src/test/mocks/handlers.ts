@@ -8,6 +8,7 @@
  */
 
 import { http, HttpResponse } from 'msw'
+import { MOCK_LOGIN_PASSWORD, mockRefreshToken } from '@/test/mockCredentials'
 import {
   mockLoginResponse,
   mockDevices,
@@ -27,7 +28,7 @@ export const handlers = [
   /** 登录 */
   http.post(`${API_BASE}/auth/login`, async ({ request }) => {
     const body = (await request.json()) as { account: string; password: string }
-    if (body.account === 'admin@example.com' && body.password === 'Admin123') {
+    if (body.account === 'admin@example.com' && body.password === MOCK_LOGIN_PASSWORD) {
       return HttpResponse.json(mockLoginResponse)
     }
     return HttpResponse.json(
@@ -43,7 +44,7 @@ export const handlers = [
       message: 'success',
       data: {
         token: 'mock-refreshed-jwt-token',
-        refresh_token: 'mock-refreshed-refresh-token',
+        refresh_token: mockRefreshToken('mock-refreshed'),
       },
     })
   }),

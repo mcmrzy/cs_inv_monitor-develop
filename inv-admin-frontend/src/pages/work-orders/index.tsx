@@ -15,6 +15,7 @@ import type { UploadFile } from 'antd/es/upload/interface'
 import dayjs from 'dayjs'
 import { workOrderApi, type WorkOrderDetail, type WorkOrderTemplate } from '@/services/workOrderApi'
 import { deviceApi } from '@/services/deviceApi'
+import api from '@/services/api'
 import useAuthStore from '@/stores/authStore'
 import useTranslation from '@/hooks/useTranslation'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
@@ -43,7 +44,7 @@ function getSlaStatus(slaDeadline?: string, status?: string): 'ontime' | 'approa
 
 const WorkOrdersPage: React.FC = () => {
   const queryClient = useQueryClient()
-  const { message } = App.useApp()
+  const { message, modal } = App.useApp()
   const { t } = useTranslation()
   const { timezone } = useTimezoneStore()
   const { user, hasPermission } = useAuthStore()
@@ -60,6 +61,10 @@ const WorkOrdersPage: React.FC = () => {
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailId, setDetailId] = useState<string | null>(null)
+  // 状态变更确认：resolved/closed 需先填写解决方案
+  const [statusTarget, setStatusTarget] = useState<{ id: string; status: string } | null>(null)
+  const [resolutionOpen, setResolutionOpen] = useState(false)
+  const [resolutionForm] = Form.useForm()
   const [form] = Form.useForm()
 
   // 设备列表查询（用于工单关联设备SN下拉选择）
@@ -105,16 +110,21 @@ const WorkOrdersPage: React.FC = () => {
     overdue: { label: t('wo.expired'), color: '#ff4d4f', icon: <WarningOutlined /> },
   }
 
-  const queryParams = { page, page_size: pageSize, status: statusFilter || undefined, priority: priorityFilter || undefined }
+  // SLA 状态为服务端筛选（契约：列表接口支持 sla=overdue 查询参数，
+  // 逾期 = sla_deadline 已过且状态非 resolved/closed），不再对当前页做本地过滤
+  const queryParams = {
+    page,
+    page_size: pageSize,
+    status: statusFilter || undefined,
+    priority: priorityFilter || undefined,
+    sla: slaFilter || undefined,
+  }
 
   const { data: listRes, isLoading, error: listError, refetch } = useQuery({
     queryKey: queryKeys.workOrders.list(queryParams),
     queryFn: () => workOrderApi.list(queryParams).then((r) => {
       const rawItems = r.data?.data?.items
-      let items = Array.isArray(rawItems) ? rawItems : []
-      if (slaFilter) {
-        items = items.filter((item: WorkOrder) => getSlaStatus(item.sla_deadline, item.status) === slaFilter)
-      }
+      const items = Array.isArray(rawItems) ? rawItems : []
       return { items, total: r.data?.data?.total ?? 0 }
     }),
   })
@@ -152,11 +162,41 @@ const WorkOrdersPage: React.FC = () => {
     onError: () => { message.error(t('wo.createFailed')) },
   })
 
+  // 状态更新：按契约在状态更新请求体中携带 resolution 字段（标记 resolved/closed 时必填）
   const statusMutation = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: string }) => workOrderApi.updateStatus(id, status),
+    mutationFn: ({ id, status, resolution }: { id: string; status: string; resolution?: string }) =>
+      api.patch(`/work-orders/${id}/status`, { status, ...(resolution ? { resolution } : {}) }),
     onSuccess: () => { message.success(t('wo.statusUpdateSuccess')); invalidate(); if (detailId) queryClient.invalidateQueries({ queryKey: queryKeys.workOrders.detail(detailId) }) },
     onError: () => { message.error(t('wo.statusUpdateFailed')) },
   })
+
+  /** 状态变更入口：resolved/closed 弹窗强制录入解决方案，其余状态轻量确认 */
+  const triggerStatusChange = (id: string, status: string) => {
+    if (status === 'resolved' || status === 'closed') {
+      resolutionForm.resetFields()
+      setStatusTarget({ id, status })
+      setResolutionOpen(true)
+      return
+    }
+    modal.confirm({
+      title: t('wo.confirmStatusTitle'),
+      content: t('wo.confirmStatusContent', { status: WO_STATUS_MAP[status]?.label || status }),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
+      onOk: () => { statusMutation.mutate({ id, status }) },
+    })
+  }
+
+  const handleResolutionSubmit = async () => {
+    if (!statusTarget) return
+    try {
+      const values = await resolutionForm.validateFields()
+      statusMutation.mutate({ id: statusTarget.id, status: statusTarget.status, resolution: values.resolution })
+      setResolutionOpen(false)
+      setStatusTarget(null)
+      resolutionForm.resetFields()
+    } catch { /* validation failed */ }
+  }
 
   const escalateMutation = useMutation({
     mutationFn: (id: string) => workOrderApi.escalate(id),
@@ -206,7 +246,7 @@ const WorkOrdersPage: React.FC = () => {
       render: (_: any, record: WorkOrder) => (
         <Space>
           <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => { setDetailId(record.id); setDetailOpen(true) }}>{t('wo.viewDetail')}</Button>
-          <Dropdown menu={{ items: WO_STATUS_OPTIONS.map((s) => ({ key: s, label: WO_STATUS_MAP[s]?.label || s })), onClick: ({ key }) => statusMutation.mutate({ id: record.id, status: key }) }}>
+          <Dropdown menu={{ items: WO_STATUS_OPTIONS.map((s) => ({ key: s, label: WO_STATUS_MAP[s]?.label || s })), onClick: ({ key }) => triggerStatusChange(record.id, key) }}>
             <Button type="link" size="small">{t('wo.changeStatus')} <DownOutlined /></Button>
           </Dropdown>
           {record.status !== 'resolved' && record.status !== 'closed' && (
@@ -270,10 +310,10 @@ const WorkOrdersPage: React.FC = () => {
       )}
       <Title level={4} style={{ marginBottom: 16 }}><FileTextOutlined style={{ marginRight: 8 }} />{t('wo.title')}</Title>
       <Row gutter={16} style={{ marginBottom: 16 }}>
-        <Col span={6}><StatisticCard size="small" title={t('wo.pending')} value={stats?.open ?? 0} valueStyle={{ color: '#1677ff' }} /></Col>
-        <Col span={6}><StatisticCard size="small" title={t('wo.processing')} value={stats?.inProgress ?? 0} valueStyle={{ color: '#1677ff' }} /></Col>
-        <Col span={6}><StatisticCard size="small" title={t('wo.resolved')} value={stats?.resolved ?? 0} valueStyle={{ color: '#52c41a' }} /></Col>
-        <Col span={6}><StatisticCard size="small" title={t('wo.closed')} value={stats?.closed ?? 0} /></Col>
+        <Col xs={12} md={6}><StatisticCard size="small" title={t('wo.pending')} value={stats?.open ?? 0} valueStyle={{ color: '#1677ff' }} /></Col>
+        <Col xs={12} md={6}><StatisticCard size="small" title={t('wo.processing')} value={stats?.inProgress ?? 0} valueStyle={{ color: '#1677ff' }} /></Col>
+        <Col xs={12} md={6}><StatisticCard size="small" title={t('wo.resolved')} value={stats?.resolved ?? 0} valueStyle={{ color: '#52c41a' }} /></Col>
+        <Col xs={12} md={6}><StatisticCard size="small" title={t('wo.closed')} value={stats?.closed ?? 0} /></Col>
       </Row>
 
       <Card bordered={false} style={{ marginBottom: 16, borderRadius: 12 }}>
@@ -338,6 +378,29 @@ const WorkOrdersPage: React.FC = () => {
         </Form>
       </Modal>
 
+      {/* 标记为已解决/已关闭时必须录入解决方案 */}
+      <Modal
+        title={t('wo.resolutionTitle', { status: statusTarget ? (WO_STATUS_MAP[statusTarget.status]?.label || statusTarget.status) : '' })}
+        open={resolutionOpen}
+        onCancel={() => { setResolutionOpen(false); setStatusTarget(null); resolutionForm.resetFields() }}
+        onOk={handleResolutionSubmit}
+        okText={t('common.submit')}
+        cancelText={t('common.cancel')}
+        confirmLoading={statusMutation.isPending}
+        destroyOnHidden
+        maskClosable={false}
+      >
+        <Form form={resolutionForm} layout="vertical">
+          <Form.Item
+            name="resolution"
+            label={t('wo.solution')}
+            rules={[{ required: true, message: t('wo.resolutionRequired') }]}
+          >
+            <TextArea rows={4} maxLength={500} showCount placeholder={t('wo.resolutionPlaceholder')} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
       <Drawer title={t('wo.orderDetail')} open={detailOpen} onClose={() => { setDetailOpen(false); setDetailId(null) }} width={640} destroyOnClose>
         {detail && (
           <div>
@@ -388,7 +451,7 @@ const WorkOrdersPage: React.FC = () => {
             </Card>
 
             <Space>
-              <Dropdown menu={{ items: WO_STATUS_OPTIONS.map((s) => ({ key: s, label: WO_STATUS_MAP[s]?.label || s })), onClick: ({ key }) => statusMutation.mutate({ id: detail.id, status: key }) }}>
+              <Dropdown menu={{ items: WO_STATUS_OPTIONS.map((s) => ({ key: s, label: WO_STATUS_MAP[s]?.label || s })), onClick: ({ key }) => triggerStatusChange(detail.id, key) }}>
                 <Button>{t('wo.changeStatus')} <DownOutlined /></Button>
               </Dropdown>
               {detail.status !== 'resolved' && detail.status !== 'closed' && (

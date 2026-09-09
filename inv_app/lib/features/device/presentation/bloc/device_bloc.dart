@@ -328,29 +328,39 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     final result = await repository.unbind(event.sn);
     result.fold(
       (failure) => emit(DeviceError(message: failure.message)),
-      (_) async {
-        // 解绑副作用：清本地 BLE 凭证 + 记录解绑操作日志（本地完成，失败不影响解绑结果）
-        try {
-          final keyStore = bleKeyStore ?? getIt<BleDeviceKeyStore>();
-          await keyStore.delete(event.sn);
-          final logStore = offlineLogStore ?? getIt<OfflineOpLogStore>();
-          await logStore.add(
-            OfflineOpLog(
-              logId: newOfflineLogId(),
-              deviceSn: event.sn,
-              action: 'unbind',
-              channel: 'cloud',
-              opTime: DateTime.now(),
-            ),
-          );
-          // 联动删除本地快照，避免离网模式展示已解绑的设备
-          await localCache?.deleteDevice(event.sn);
-        } catch (_) {
-          // 本地副作用失败不阻塞解绑结果
-        }
+      (_) {
+        // 解绑副作用：清本地 BLE 凭证 + 记录解绑操作日志 + 删本地快照
+        // （本地完成，失败不影响解绑结果）。
+        // 副作用是尽力而为的异步操作，不能在 emit 前 await：
+        // fold 的 async 闭包不会被等待，emit 会落到事件处理器结束之后，
+        // 违反 bloc 的 emit 契约（状态丢失/StateError），
+        // 抽成私有方法用 unawaited 执行，fold 内同步 emit（同 station_bloc 删除电站范式）
+        unawaited(_runUnbindSideEffects(event.sn));
         emit(DeviceUnbindSuccess());
       },
     );
+  }
+
+  /// 解绑的本地副作用（尽力而为，失败静默）
+  Future<void> _runUnbindSideEffects(String sn) async {
+    try {
+      final keyStore = bleKeyStore ?? getIt<BleDeviceKeyStore>();
+      await keyStore.delete(sn);
+      final logStore = offlineLogStore ?? getIt<OfflineOpLogStore>();
+      await logStore.add(
+        OfflineOpLog(
+          logId: newOfflineLogId(),
+          deviceSn: sn,
+          action: 'unbind',
+          channel: 'cloud',
+          opTime: DateTime.now(),
+        ),
+      );
+      // 联动删除本地快照，避免离网模式展示已解绑的设备
+      await localCache?.deleteDevice(sn);
+    } catch (_) {
+      // 本地副作用失败不阻塞解绑结果
+    }
   }
 
   Future<void> _onUpdateRequested(

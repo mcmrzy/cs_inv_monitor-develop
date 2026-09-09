@@ -19,6 +19,8 @@ import type { Alert } from '@/types'
 import useTranslation from '@/hooks/useTranslation'
 import useTimezoneStore from '@/stores/timezoneStore'
 import StatisticCard from '@/components/StatisticCard'
+import Popconfirm from '@/components/LocalizedPopconfirm'
+import ListPageTable from '@/components/ListPageTable'
 
 const { RangePicker } = DatePicker
 const { Title, Text } = Typography
@@ -36,7 +38,7 @@ interface NotificationItem {
 const AlertsPage: React.FC = () => {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
-  const { message } = App.useApp()
+  const { message, modal } = App.useApp()
   const { t } = useTranslation()
   const { timezone } = useTimezoneStore()
   const [page, setPage] = useState(1)
@@ -101,7 +103,7 @@ const AlertsPage: React.FC = () => {
 
   const stationOptions = useMemo(() => {
     if (!Array.isArray(stationsData)) return []
-    return stationsData.map((s: any) => ({ label: s.name || `电站#${s.id}`, value: s.id }))
+    return stationsData.map((s: any) => ({ label: s.name || t('alert.stationFallbackName', { id: s.id }), value: s.id }))
   }, [stationsData])
 
   const [notifyTypeFilter, setNotifyTypeFilter] = useState<string>()
@@ -173,6 +175,17 @@ const AlertsPage: React.FC = () => {
     onSuccess: () => { message.success(t('alert.confirmSuccess')); invalidate() },
     onError: () => { message.error(t('alert.operationFailed')) },
   })
+
+  // 「确认处理」轻确认：alarms 表无处理备注字段，仅二次确认后标记为已处理
+  const confirmHandle = (id: number) => {
+    modal.confirm({
+      title: t('alert.confirmHandleTitle'),
+      content: t('alert.confirmHandleContent'),
+      okText: t('alert.confirmProcess'),
+      cancelText: t('common.cancel'),
+      onOk: () => handleMutation.mutate(id),
+    })
+  }
 
   const ignoreMutation = useMutation({
     mutationFn: (id: number) => alertApi.ignore(id),
@@ -341,17 +354,25 @@ const AlertsPage: React.FC = () => {
           {String(record.status) === '0' && (
             <>
               <Button type="link" size="small" icon={<CheckOutlined />}
-                onClick={() => handleMutation.mutate(record.id)}
+                onClick={() => confirmHandle(record.id)}
               >{t('alert.confirmProcess')}</Button>
-              <Button type="link" size="small" icon={<StopOutlined />}
-                onClick={() => ignoreMutation.mutate(record.id)}
-              >{t('alert.ignore')}</Button>
+              <Popconfirm
+                title={t('alert.confirmIgnore')}
+                onConfirm={() => ignoreMutation.mutate(record.id)}
+              >
+                <Button type="link" size="small" icon={<StopOutlined />}
+                >{t('alert.ignore')}</Button>
+              </Popconfirm>
             </>
           )}
           <Button type="link" size="small" onClick={() => openTrace(record.device_sn)}>{t('alert.trace')}</Button>
-          <Button type="link" size="small" danger icon={<DeleteOutlined />}
-            onClick={() => deleteAlarmMutation.mutate(record.id)}
-          >{t('alert.delete') || '删除'}</Button>
+          <Popconfirm
+            title={t('alert.confirmDeleteRecord')}
+            onConfirm={() => deleteAlarmMutation.mutate(record.id)}
+          >
+            <Button type="link" size="small" danger icon={<DeleteOutlined />}
+            >{t('alert.delete') || '删除'}</Button>
+          </Popconfirm>
         </Space>
       ),
     },
@@ -384,9 +405,13 @@ const AlertsPage: React.FC = () => {
     {
       title: t('common.operation'), key: 'action', width: 80,
       render: (_: any, record: any) => (
-        <Button type="link" size="small" danger icon={<DeleteOutlined />}
-          onClick={() => deleteNotifyMutation.mutate(record.id)}
-        >{t('alert.delete') || '删除'}</Button>
+        <Popconfirm
+          title={t('alert.confirmDeleteRecord')}
+          onConfirm={() => deleteNotifyMutation.mutate(record.id)}
+        >
+          <Button type="link" size="small" danger icon={<DeleteOutlined />}
+          >{t('alert.delete') || '删除'}</Button>
+        </Popconfirm>
       ),
     },
   ]
@@ -462,22 +487,29 @@ const AlertsPage: React.FC = () => {
           {record._type === 'alarm' && String(record.status) === '0' && (
             <>
               <Button type="link" size="small" icon={<CheckOutlined />}
-                onClick={() => handleMutation.mutate(record.id)}
+                onClick={() => confirmHandle(record.id)}
               >{t('alert.confirmProcess')}</Button>
-              <Button type="link" size="small" icon={<StopOutlined />}
-                onClick={() => ignoreMutation.mutate(record.id)}
-              >{t('alert.ignore')}</Button>
+              <Popconfirm
+                title={t('alert.confirmIgnore')}
+                onConfirm={() => ignoreMutation.mutate(record.id)}
+              >
+                <Button type="link" size="small" icon={<StopOutlined />}
+                >{t('alert.ignore')}</Button>
+              </Popconfirm>
             </>
           )}
           {record._type === 'alarm' && (
             <Button type="link" size="small" onClick={() => openTrace(record.device_sn)}>{t('alert.trace')}</Button>
           )}
-          <Button type="link" size="small" danger icon={<DeleteOutlined />}
-            onClick={() => record._type === 'notification'
+          <Popconfirm
+            title={t('alert.confirmDeleteRecord')}
+            onConfirm={() => (record._type === 'notification'
               ? deleteNotifyMutation.mutate(record.id)
-              : deleteAlarmMutation.mutate(record.id)
-            }
-          >{t('alert.delete') || '删除'}</Button>
+              : deleteAlarmMutation.mutate(record.id))}
+          >
+            <Button type="link" size="small" danger icon={<DeleteOutlined />}
+            >{t('alert.delete') || '删除'}</Button>
+          </Popconfirm>
         </Space>
       ),
     },
@@ -490,7 +522,12 @@ const AlertsPage: React.FC = () => {
   }
 
   const isLoadingData = activeTab === 'notification' ? notifyLoading : isLoading
-  const total = activeTab === 'notification' ? (notifyRes?.total ?? 0) : (listRes?.total ?? 0)
+  // 「全部」tab 展示告警+通知合并列表，total 需两者相加
+  const total = activeTab === 'notification'
+    ? (notifyRes?.total ?? 0)
+    : activeTab === 'all'
+      ? (listRes?.total ?? 0) + (notifyRes?.total ?? 0)
+      : (listRes?.total ?? 0)
 
   return (
     <div>
@@ -580,7 +617,14 @@ const AlertsPage: React.FC = () => {
           </Col>
           <Col>
             <Button danger icon={<ClearOutlined />}
-              onClick={() => clearAllMutation.mutate()}
+              onClick={() => modal.confirm({
+                title: t('alert.clearAllConfirmTitle'),
+                content: t('alert.clearAllConfirmContent'),
+                okText: t('alert.clearAllOk'),
+                cancelText: t('common.cancel'),
+                okButtonProps: { danger: true },
+                onOk: () => clearAllMutation.mutate(),
+              })}
               loading={clearAllMutation.isPending}
             >{t('alert.clearAll') || '清除通知记录'}</Button>
           </Col>
@@ -611,12 +655,14 @@ const AlertsPage: React.FC = () => {
             style={{ marginBottom: 12 }}
           />
         )}
-        <Table
+        <ListPageTable
           rowKey={(record) => `${record._type || 'alarm'}-${record.id}`}
           columns={getColumns()}
           dataSource={mergedData}
           loading={isLoadingData}
           size="small"
+          persistenceKey="alerts-list"
+          onReload={() => { refetch(); refetchNotify() }}
           locale={{ emptyText: <Empty description={t('common.noData')} /> }}
           pagination={{
             current: page, pageSize, total, showSizeChanger: true,

@@ -5,6 +5,7 @@ import { http, HttpResponse } from 'msw'
 import { useLocation } from 'react-router-dom'
 import { server } from '@/test/mocks/server'
 import { mockLoginResponse } from '@/test/mocks/data'
+import { mockToken, mockRefreshToken } from '@/test/mockCredentials'
 import { renderWithProviders } from '@/test/test-utils'
 import LoginPage from './index'
 import useAuthStore from '@/stores/authStore'
@@ -64,8 +65,8 @@ describe('LoginPage', () => {
 
   it('should show remember account checkbox', () => {
     renderWithProviders(<LoginPage />)
-    // 组件 i18n 文案为「记住密码」（zh remember）
-    expect(screen.getByText('记住密码')).toBeInTheDocument()
+    // 组件 i18n 文案为「记住账号」（仅记住账号，不再持久化密码）
+    expect(screen.getByText('记住账号')).toBeInTheDocument()
   })
 
   it('should show forgot password link', () => {
@@ -162,8 +163,8 @@ describe('LoginPage', () => {
           code: 0,
           message: 'success',
           data: {
-            access_token: 'registered-access-token',
-            refresh_token: 'registered-refresh-token',
+            access_token: mockToken('registered'),
+            refresh_token: mockRefreshToken('registered'),
             user: { id: 9, phone: '13800000099', nickname: 'u', status: 1 },
             permissions: ['dashboard:view'],
           },

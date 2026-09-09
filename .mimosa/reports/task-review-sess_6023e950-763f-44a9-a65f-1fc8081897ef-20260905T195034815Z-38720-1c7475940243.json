@@ -1,0 +1,593 @@
+{
+  "schema_version": "mimosa-task-review/v2",
+  "run_id": "20260905T195034815Z-38720-1c7475940243",
+  "run_status": "inconclusive",
+  "errors": [
+    {
+      "stage": "baseline-read",
+      "target": "inv-admin-frontend/e2e/auth.setup.ts",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/e2e/global-setup.ts",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "tools/gen_app_icons.py",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/playwright.config.ts",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/src/App.test.tsx",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/e2e/auth.setup.ts",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/e2e/auth.spec.ts",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/e2e/helpers.ts",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/e2e/lang.spec.ts",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "inv-admin-frontend/e2e/pages.spec.ts",
+      "reason": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "supply-chain-check",
+      "target": ".",
+      "reason": "stop_budget_exhausted: focused supply-chain check was not run before the gate budget"
+    },
+    {
+      "stage": "agent-check",
+      "target": ".",
+      "reason": "stop_budget_exhausted: focused agent configuration check was not run before the gate budget"
+    }
+  ],
+  "coverage": {
+    "schema_version": "mimosa-hook-coverage/v1",
+    "status": "partial",
+    "scope": "hook_observed_diff",
+    "baseline": {
+      "complete": true,
+      "captured_files": 852,
+      "candidate_limit": 5000,
+      "truncated": false,
+      "enumeration_error_count": 0,
+      "snapshot_error_count": 0,
+      "compensated_target_count": 11
+    },
+    "change_tracking": {
+      "touched_observed": 5,
+      "touched_retained": 5,
+      "truncated": false,
+      "bash_mutation": true,
+      "bash_discovered": 12,
+      "bash_discovery_limit": 80,
+      "bash_discovery_truncated": false
+    },
+    "candidates": {
+      "eligible_files": 12,
+      "selected_files": 12,
+      "limit": 20,
+      "truncated": false
+    },
+    "scanning": {
+      "required_files": 9,
+      "scanned_files": 0,
+      "skipped_files": 0,
+      "failed_files": 9,
+      "project_checks_required": 2,
+      "project_checks_completed": 0
+    },
+    "notification": {
+      "eligible_findings": 0,
+      "detailed_findings": 0,
+      "detail_limit": 3,
+      "truncated": false
+    },
+    "reason_counts": {
+      "baseline_snapshot_unreadable": 1,
+      "scanner_failed": 9,
+      "stop_budget_exhausted": 2,
+      "project_check_failed": 12
+    },
+    "reasons": [
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "inv-admin-frontend/e2e/auth.setup.ts",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/e2e/global-setup.ts",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "tools/gen_app_icons.py",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/playwright.config.ts",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/App.test.tsx",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/e2e/auth.setup.ts",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/e2e/auth.spec.ts",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/e2e/helpers.ts",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/e2e/lang.spec.ts",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/e2e/pages.spec.ts",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "stop_budget_exhausted",
+        "stage": "supply-chain-check",
+        "target": ".",
+        "detail": "focused supply-chain check was not run before the gate budget",
+        "affects_completion": true
+      },
+      {
+        "code": "stop_budget_exhausted",
+        "stage": "agent-check",
+        "target": ".",
+        "detail": "focused agent configuration check was not run before the gate budget",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "inv-admin-frontend/e2e/auth.setup.ts",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/e2e/global-setup.ts",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "tools/gen_app_icons.py",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/playwright.config.ts",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/App.test.tsx",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/e2e/auth.setup.ts",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/e2e/auth.spec.ts",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/e2e/helpers.ts",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/e2e/lang.spec.ts",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/e2e/pages.spec.ts",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "supply-chain-check",
+        "target": ".",
+        "detail": "stop_budget_exhausted: focused supply-chain check was not run before the gate budget",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "agent-check",
+        "target": ".",
+        "detail": "stop_budget_exhausted: focused agent configuration check was not run before the gate budget",
+        "affects_completion": true
+      }
+    ],
+    "reasons_truncated": false
+  },
+  "generated_at": "2026-09-05T19:50:34.815Z",
+  "session_id": "sess_6023e950-763f-44a9-a65f-1fc8081897ef",
+  "target": ".",
+  "revision": "77319e020ccea1237b156d357fd4c74abbd1ce7c",
+  "rules_version": "unavailable",
+  "diff_hash": "a05d79713d31e4185566baf10f8a6a9df040ea0d18bb12d92e18ad6ac26b6677",
+  "diff": {
+    "algorithm": "sha256",
+    "changed_file_count": 12,
+    "changed_files": [
+      {
+        "file": ".github/workflows/api-docs-validation.yml",
+        "ranges": [
+          {
+            "start": 71,
+            "end": 72
+          },
+          {
+            "start": 80,
+            "end": 80
+          }
+        ],
+        "before_hash": "1a4cc50e7b0f6baa55d471c0b389fe04664436901dc5caf11333282664d1937a",
+        "after_hash": "26ba0b07548bf1b5fbf8ca02d2b4175e3288a8f32afa62a225bf593ed495bebb"
+      },
+      {
+        "file": ".github/workflows/cd.yml",
+        "ranges": [
+          {
+            "start": 259,
+            "end": 260
+          },
+          {
+            "start": 268,
+            "end": 277
+          },
+          {
+            "start": 280,
+            "end": 280
+          },
+          {
+            "start": 282,
+            "end": 282
+          }
+        ],
+        "before_hash": "a870d52193d973454ee379f8d1a10d0711022557f1f9b7c4c01f06e12ee9350b",
+        "after_hash": "03d5efaf2b7b16f8cb4972bccfc9a91c58ab105c8e1b2f4ec0e09c58b0a65632"
+      },
+      {
+        "file": ".github/workflows/ci.yml",
+        "ranges": [
+          {
+            "start": 10,
+            "end": 13
+          },
+          {
+            "start": 18,
+            "end": 18
+          },
+          {
+            "start": 26,
+            "end": 27
+          },
+          {
+            "start": 31,
+            "end": 32
+          },
+          {
+            "start": 42,
+            "end": 49
+          },
+          {
+            "start": 53,
+            "end": 53
+          },
+          {
+            "start": 59,
+            "end": 59
+          },
+          {
+            "start": 81,
+            "end": 81
+          },
+          {
+            "start": 83,
+            "end": 88
+          },
+          {
+            "start": 93,
+            "end": 93
+          },
+          {
+            "start": 123,
+            "end": 127
+          },
+          {
+            "start": 137,
+            "end": 137
+          },
+          {
+            "start": 163,
+            "end": 163
+          },
+          {
+            "start": 208,
+            "end": 215
+          },
+          {
+            "start": 221,
+            "end": 221
+          }
+        ],
+        "before_hash": "934a0e0875c45863fe4a243a7dec1d7b8a6c2e3776778a010840e014623b556b",
+        "after_hash": "906041b7f3dc34727b394f0c38769f4e25345518c1f53834262539508d2fca10"
+      },
+      {
+        "file": "inv-admin-frontend/e2e/auth.setup.ts",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 14
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "186d43a73b9313376fbd3d321ae73430dfd8f23396ea5a45433ac772c802810c"
+      },
+      {
+        "file": "inv-admin-frontend/e2e/auth.spec.ts",
+        "ranges": [
+          {
+            "start": 13,
+            "end": 14
+          },
+          {
+            "start": 16,
+            "end": 16
+          },
+          {
+            "start": 39,
+            "end": 40
+          }
+        ],
+        "before_hash": "f6e7e1b99c645f1af6501b0e55b56d48bec4b165be20b5f3236591e6c028e53f",
+        "after_hash": "a76eda8524d73381b24436eee82ca72a864a09468e84b2e7118f9c3170464573"
+      },
+      {
+        "file": "inv-admin-frontend/e2e/global-setup.ts",
+        "ranges": [
+          {
+            "start": 24,
+            "end": 25
+          },
+          {
+            "start": 106,
+            "end": 106
+          }
+        ],
+        "before_hash": "10f37d69b3b315d6c3b3c2a6fd0520541b0e2b1761c5b23eeed05d7bfabf77b6",
+        "after_hash": "f0313f91e0c0790af6d9e1423a58f0c56f69a5bc96ab1f543ab34b33eee40a1b"
+      },
+      {
+        "file": "inv-admin-frontend/e2e/helpers.ts",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 1
+          },
+          {
+            "start": 12,
+            "end": 14
+          },
+          {
+            "start": 16,
+            "end": 16
+          },
+          {
+            "start": 38,
+            "end": 40
+          }
+        ],
+        "before_hash": "5d55de7b23c4dab8abfe783204a09b0b782a162375e63c217e15f81e46749d76",
+        "after_hash": "589ad5b51c256c8a80f3fa37e3134a283501c6670ffdfb77a7c9af44112717ca"
+      },
+      {
+        "file": "inv-admin-frontend/e2e/lang.spec.ts",
+        "ranges": [
+          {
+            "start": 2,
+            "end": 2
+          },
+          {
+            "start": 6,
+            "end": 7
+          }
+        ],
+        "before_hash": "526b1af61e5db2145c5c6b4b70d1741f9508827ce81a4208d45b89ad5bc0531d",
+        "after_hash": "9b13c27679d3da8ca690c5ce9c2adb65398e0bc90788d87821961a6b325381e9"
+      },
+      {
+        "file": "inv-admin-frontend/e2e/pages.spec.ts",
+        "ranges": [
+          {
+            "start": 2,
+            "end": 2
+          },
+          {
+            "start": 5,
+            "end": 6
+          }
+        ],
+        "before_hash": "c66936924759ec4998e548eea70f147b5fd68a0b2ac65fe0c004e334001e214f",
+        "after_hash": "4f36e7811c48c5664ff850adfef16988735668165db82b9fcfca442dba56a953"
+      },
+      {
+        "file": "inv-admin-frontend/playwright.config.ts",
+        "ranges": [
+          {
+            "start": 12,
+            "end": 14
+          },
+          {
+            "start": 23,
+            "end": 23
+          },
+          {
+            "start": 37,
+            "end": 48
+          }
+        ],
+        "before_hash": "e0d2fa8aeb6a44531fddaa63dad40ebddc6fa668f8dff7a3ef03ae2d5acd2c1f",
+        "after_hash": "b2b2751405f7485cb4972a23ab1da55629eeaef2c648977b6610b4b8d5d91350"
+      },
+      {
+        "file": "inv-admin-frontend/src/App.test.tsx",
+        "ranges": [
+          {
+            "start": 71,
+            "end": 72
+          }
+        ],
+        "before_hash": "adf2665a5be47c1cf6310667df80f54ffadd90fca5ce0474723c3cc73f2c64b7",
+        "after_hash": "bd042a8aafdf4070ac52f8474b1eb865764d62a8cebc905cc3853ddd10dff249"
+      },
+      {
+        "file": "tools/gen_app_icons.py",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 123
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "f46000e990681c26c3c01276c4ae6d9e9080a6447651d2e8a7b59d92dfc71c84"
+      }
+    ]
+  },
+  "timing": {
+    "started_at": "2026-09-05T19:50:32.190Z",
+    "completed_at": "2026-09-05T19:50:34.815Z",
+    "duration_ms": 2625,
+    "measurement": "hook_wall_clock"
+  },
+  "tokens": {
+    "input": 0,
+    "output": 0,
+    "total": 0,
+    "model_calls": 0,
+    "measurement": "known-zero"
+  },
+  "telemetry": {
+    "schemaVersion": "mimosa-gate-telemetry/v1",
+    "profile": "gate",
+    "operation": "Stop",
+    "outcome": "partial/INCONCLUSIVE",
+    "latencyMs": 2625,
+    "peakMemoryBytes": 105234432,
+    "memoryMeasurement": "max-observed-process-rss",
+    "scannedFiles": 0,
+    "cache": {
+      "hits": 0,
+      "misses": 0,
+      "measurement": "not-applicable"
+    },
+    "denyCount": 0,
+    "tokens": {
+      "input": 0,
+      "output": 0,
+      "total": 0,
+      "modelCalls": 0,
+      "measurement": "known-zero"
+    }
+  },
+  "finding_count": 0,
+  "rewake_finding_count": 0,
+  "evidence_boundary": {
+    "scan": "candidate",
+    "static_fix_verification": "observed_static_only",
+    "runtime_verification": "not_performed"
+  },
+  "finding_events": [],
+  "findings": [],
+  "artifacts": {
+    "immutable_report": ".mimosa/reports/task-review-sess_6023e950-763f-44a9-a65f-1fc8081897ef-20260905T195034815Z-38720-1c7475940243.json",
+    "latest_report": ".mimosa/reports/task-review-sess_6023e950-763f-44a9-a65f-1fc8081897ef.json",
+    "history_summary": ".mimosa/history/run-20260905T195034815Z-38720-1c7475940243.json"
+  }
+}
