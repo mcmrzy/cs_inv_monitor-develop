@@ -82,7 +82,9 @@ func (h *StationHandler) Create(c *gin.Context) {
 		Latitude:    req.Latitude,
 		Longitude:   req.Longitude,
 		Timezone:    req.Timezone,
-		Status:      1,
+		// 新建电站初始为离线(0), 首台设备上线事件联动为正常(1):
+		// 与设备实况保持一致, 避免"设备从未上线却显示正常"
+		Status:      0,
 	}
 
 	// 验证时区, 默认使用 Asia/Shanghai

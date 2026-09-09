@@ -547,7 +547,7 @@ const StationsPage: React.FC = () => {
       dataIndex: 'status',
       width: 70,
       render: (_, record: StationItem) => (
-        <Tag color={record.status === 1 ? 'green' : 'red'}>{record.status === 1 ? t('station.normal') : t('station.stopped')}</Tag>
+        <Tag color={record.status === 1 ? 'green' : 'red'}>{record.status === 1 ? t('station.normal') : t('station.offline')}</Tag>
       ),
     },
     {
@@ -824,7 +824,7 @@ const StationsPage: React.FC = () => {
           <Descriptions.Item label={t('station.stationName')}>{station.name || '-'}</Descriptions.Item>
           <Descriptions.Item label={t('common.status')}>
             <Tag color={station.status === 1 ? 'green' : 'red'}>
-              {station.status === 1 ? t('station.normal') : t('station.stopped')}
+              {station.status === 1 ? t('station.normal') : t('station.offline')}
             </Tag>
           </Descriptions.Item>
           <Descriptions.Item label={t('station.province')}>{station.province || '-'}</Descriptions.Item>

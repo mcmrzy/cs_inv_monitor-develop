@@ -115,6 +115,10 @@ services:
       # schema.sql 基线未包含 096+ 迁移（squash 遗漏），启动时自动补齐；
       # 001-095 已在基线中标记 applied，不会重放
       MIGRATION_AUTO_RUN: "true"
+    # 直连端口仅供集成测试调用 /api/v1/internal/*：生产为 device-server 直连
+    # api-server 不经网关，而网关侧该路径要求管理员 JWT
+    ports:
+      - "127.0.0.1:18080:8080"
     networks:
       - inv-test-net
     healthcheck:

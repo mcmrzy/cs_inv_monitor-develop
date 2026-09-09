@@ -307,12 +307,19 @@ func (h *InternalHandler) DeviceStatus(c *gin.Context) {
 		return
 	}
 
+	// 电站状态按站内设备实况推导（有在线/故障设备为 1，否则为 0）：
+	// 设备上报离线时不能把电站强写为 1，否则全离线电站会永远卡在"正常"
 	if _, err := h.db.Exec(ctx, `
-		UPDATE stations SET status = 1, updated_at = NOW()
+		UPDATE stations SET
+			status = CASE WHEN EXISTS (
+				SELECT 1 FROM devices d
+				WHERE d.station_id = stations.id AND d.deleted_at IS NULL AND d.status IN (1, 2)
+			) THEN 1 ELSE 0 END,
+			updated_at = NOW()
 		WHERE deleted_at IS NULL
 		AND id IN (SELECT station_id FROM devices WHERE sn = $1 AND station_id IS NOT NULL)
 	`, req.SN); err != nil {
-		logger.Warn("DeviceStatus: failed to update station status", zap.String("sn", req.SN), zap.Error(err))
+		logger.Warn("DeviceStatus: failed to sync station status", zap.String("sn", req.SN), zap.Error(err))
 	}
 
 	// 设备状态变化时，插入通知记录（带 120 秒冷却期，防止状态抖动产生大量重复通知）
