@@ -136,6 +136,8 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 	publicGroup.POST("/api/v1/auth/context", p.Handler())
 	publicGroup.GET("/api/v1/timezones", p.Handler())
 	publicGroup.GET("/api/v1/geo/detect-region", p.Handler())
+	// APP 下载页需要匿名查询最新版本；业务层只返回公开版本元数据。
+	publicGroup.GET("/api/v1/ota/app/check", p.Handler())
 	publicGroup.Any("/api/v1/captcha/*action", p.Handler())
 	publicGroup.Any("/uploads/*action", p.Handler())
 	publicGroup.Any("/firmware/*action", p.Handler())
@@ -177,7 +179,11 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 	userGroup.Any("/api/v1/protocol-versions", p.Handler())
 	userGroup.Any("/api/v1/dashboard/*action", p.Handler())
 	userGroup.Any("/api/v1/dashboard", p.Handler())
-	userGroup.Any("/api/v1/ota/*action", p.Handler())
+	// Keep a public static route for the app update check. Split the remaining
+	// OTA catch-all into one- and two-level routes so Gin can register the
+	// static child without a wildcard conflict.
+	userGroup.Any("/api/v1/ota/:action", p.Handler())
+	userGroup.Any("/api/v1/ota/:action/*rest", p.Handler())
 	userGroup.Any("/api/v1/firmwares/*action", p.RewriteHandler("/api/v1/ota/firmware"))
 	userGroup.Any("/api/v1/firmwares", p.RewriteHandler("/api/v1/ota/firmware"))
 	userGroup.Any("/api/v1/work-orders/*action", p.Handler())
