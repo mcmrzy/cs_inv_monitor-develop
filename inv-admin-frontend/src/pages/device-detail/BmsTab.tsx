@@ -73,9 +73,15 @@ interface BmsData {
   balance: number
 }
 
-/** 从 realtime.bms 组提取 BMS 数据；组缺失返回 null（未接电池/旧固件） */
+/** 从 realtime.bms 组提取 BMS 数据；组缺失返回 null（未接电池/旧固件）
+ *  注意两种形态：设备端 Redis 原始写入为 {data: {...}, timestamp}，business-api
+ *  GetRealtimeData 会把 data 解包成展平字段（bms_soc / bms_cell_voltage_00 …）。
+ *  前端拿到的是展平形态，必须同时兼容，否则永远命中空态。 */
 function extractBms(rt: Record<string, any> | null | undefined): BmsData | null {
-  const g = rt?.bms?.data
+  const raw = rt?.bms
+  const g = (raw && typeof raw === 'object' && raw.data && typeof raw.data === 'object')
+    ? raw.data
+    : raw
   if (g == null || typeof g !== 'object') return null
   const num = (k: string): number | null => {
     const v = g[k]

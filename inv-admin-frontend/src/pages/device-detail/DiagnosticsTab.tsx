@@ -11,22 +11,42 @@ import { formatInTimezone } from '@/utils/timezone'
 import useTimezoneStore from '@/stores/timezoneStore'
 import useTranslation from '@/hooks/useTranslation'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
+import { toRtEnvelope } from './energyUtils'
 const { Text, Title: AntTitle } = Typography
 
 interface DiagnosticsTabProps {
   sn: string
 }
 
+/** GET /devices/by-sn/:sn/commands 行（business-api GetCommandHistory 的 JSON 字段）：
+ *  command_name/command_label、created_at、result_message/result；旧字段名保留兼容。 */
 interface CommandRecord {
-  id: string
-  command_code: string
+  id: string | number
+  command_name?: string
+  command_label?: string
+  command_code?: string
   status: string
-  sent_at: string
-  completed_at: string | null
-  response: string
-  error_message: string
-  sent_by: string
+  created_at?: string
+  sent_at?: string
+  completed_at?: string | null
+  result?: string
+  result_message?: string
+  response?: string
+  error_message?: string
+  sent_by?: string
 }
+
+/** 命令名（后端 command_label/command_name，兼容旧 command_code） */
+const commandName = (r: CommandRecord): string =>
+  r.command_label || r.command_name || r.command_code || '-'
+
+/** 发送时间（后端 created_at，兼容旧 sent_at） */
+const commandTime = (r: CommandRecord): string | undefined =>
+  r.sent_at || r.created_at || undefined
+
+/** 响应/错误摘要（后端 result_message/result，兼容旧 error_message/response） */
+const commandResponse = (r: CommandRecord): string =>
+  r.error_message || r.result_message || r.result || r.response || '-'
 
 const DiagnosticsTab: React.FC<DiagnosticsTabProps> = ({ sn }) => {
   const { t } = useTranslation()
@@ -39,13 +59,22 @@ const DiagnosticsTab: React.FC<DiagnosticsTabProps> = ({ sn }) => {
     queryFn: () => deviceApi.getControlState(sn).then((r) => r.data?.data ?? null),
   })
 
+  // 设备在线判定以实时心跳为准：sync_status='unknown' 只表示该设备尚未有过控制态记录
+  // （无 device_control_state 行），不代表离线，不能作为禁用自检/复位的依据。
+  const { data: envelope } = useQuery({
+    queryKey: queryKeys.devices.realtime(sn),
+    queryFn: () => deviceApi.getRealtime(sn).then((r) => toRtEnvelope(r.data?.data ?? r.data)),
+    refetchInterval: () => (document.visibilityState === 'visible' ? 10_000 : false),
+  })
+
   const { data: commandsRes, isLoading: cmdLoading, error: commandsError, refetch: refetchCommands } = useQuery({
     queryKey: queryKeys.devices.commands(sn, { page: 1, page_size: 20 }),
     queryFn: () => deviceApi.getCommands(sn, { page: 1, page_size: 20 }).then((r) => r.data?.data ?? r.data),
   })
 
   const commandRecords: CommandRecord[] = (commandsRes as any)?.items ?? (Array.isArray(commandsRes) ? commandsRes : [])
-  const isOnline = controlState?.sync_status === 'in_sync' || controlState?.sync_status === 'pending'
+  const isOnline = envelope?.online === true
+    || controlState?.sync_status === 'in_sync' || controlState?.sync_status === 'pending'
 
   const selfTestMutation = useMutation({
     mutationFn: () => deviceApi.sendCommand(sn, { command: 'self_test', params: {} }),
@@ -66,23 +95,31 @@ const DiagnosticsTab: React.FC<DiagnosticsTabProps> = ({ sn }) => {
   })
 
   const cmdColumns: ColumnsType<CommandRecord> = [
-    { title: t('deviceDetail.diagnostics.commandCode'), dataIndex: 'command_code', key: 'command_code', width: 160, render: (v: string) => <Text code>{v}</Text> },
     {
-      title: t('deviceDetail.diagnostics.status'), dataIndex: 'status', key: 'status', width: 120,
+      title: t('deviceDetail.diagnostics.commandCode'), key: 'command', width: 180,
+      render: (_, r) => <Text code>{commandName(r)}</Text>,
+    },
+    {
+      title: t('deviceDetail.diagnostics.status'), dataIndex: 'status', key: 'status', width: 110,
       render: (s: string) => {
         const colorMap: Record<string, string> = {
           pending: 'default', sent: 'processing', success: 'green', failed: 'red', timeout: 'orange',
         }
-        return <Tag color={colorMap[s] ?? 'default'}>{s}</Tag>
+        const key = `deviceDetail.diagnostics.status.${s}`
+        const translated = t(key)
+        return <Tag color={colorMap[s] ?? 'default'}>{translated !== key ? translated : s}</Tag>
       },
     },
     {
-      title: t('deviceDetail.diagnostics.sentAt'), dataIndex: 'sent_at', key: 'sent_at', width: 170,
-      render: (v: string) => formatInTimezone(v, timezone, 'YYYY-MM-DD HH:mm:ss'),
+      title: t('deviceDetail.diagnostics.sentAt'), key: 'sent_at', width: 180,
+      render: (_, r) => {
+        const ts = commandTime(r)
+        return ts ? formatInTimezone(ts, timezone, 'YYYY-MM-DD HH:mm:ss') : '-'
+      },
     },
     {
       title: t('deviceDetail.diagnostics.response'), key: 'response', ellipsis: true,
-      render: (_: unknown, r: CommandRecord) => r.error_message || r.response || '-',
+      render: (_, r) => commandResponse(r),
     },
   ]
 

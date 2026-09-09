@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Card, Form, InputNumber, Switch, Button, Row, Col, Spin, App, Space,
-  Table, Modal, Input, Select, Tag, Popconfirm, Empty, Typography,
+  Table, Modal, Input, Select, Tag, Popconfirm, Empty,
 } from 'antd'
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
@@ -12,8 +12,6 @@ import { formatInTimezone } from '@/utils/timezone'
 import useTimezoneStore from '@/stores/timezoneStore'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
 import useTranslation from '@/hooks/useTranslation'
-
-const { Text } = Typography
 
 interface StrategyTabProps {
   sn: string

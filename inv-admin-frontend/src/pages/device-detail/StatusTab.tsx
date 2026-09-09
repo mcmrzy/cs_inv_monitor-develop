@@ -123,19 +123,23 @@ const StatusTab: React.FC<StatusTabProps> = ({ sn }) => {
     queryFn: () => deviceApi.getDeviceBySn(sn).then((r) => r.data?.data ?? null),
   })
 
+  // 详情接口返回 { device, model_fields, ... }；兼容旧版直接返回设备对象
+  const device = deviceInfo?.device ?? deviceInfo
+
   // 按型号字段能力动态渲染全量参数（收进「全部参数」折叠区）
   const { data: fieldCaps } = useQuery({
-    queryKey: ['model-field-caps', deviceInfo?.model_id],
+    queryKey: ['model-field-caps', device?.model_id],
     queryFn: () =>
-      modelApi.getFieldCapabilities(deviceInfo.model_id).then((r) => {
+      modelApi.getFieldCapabilities(device.model_id).then((r) => {
         const d = (r as any).data?.data ?? (r as any).data
         return (Array.isArray(d) ? d : d?.items ?? []) as ModelFieldCapability[]
       }),
-    enabled: Boolean(deviceInfo?.model_id),
+    enabled: Boolean(device?.model_id),
     staleTime: 60_000,
   })
 
-  const isOnline = deviceInfo?.status === 'online' || envelope?.online === true
+  // devices.status：1=在线；兼容字符串 'online'
+  const isOnline = device?.status === 1 || device?.status === 'online' || envelope?.online === true
   const reported = controlState?.reported ?? {}
   // 展平字段在 envelope.realtime 内层；离线/数据过期时不展示陈旧缓存值
   const rtFresh = freshRealtime(envelope)
