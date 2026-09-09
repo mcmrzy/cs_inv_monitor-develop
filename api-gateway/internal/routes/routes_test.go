@@ -138,7 +138,8 @@ func TestRouteRegistration_UserResourceRoutes(t *testing.T) {
 		"/api/v1/field-catalog",
 		"/api/v1/protocol-versions",
 		"/api/v1/dashboard",
-		"/api/v1/ota/*action",
+		"/api/v1/ota/:action",
+		"/api/v1/ota/:action/*rest",
 		"/api/v1/firmwares",
 		"/api/v1/work-orders",
 	}
