@@ -106,11 +106,17 @@ const EnergyStatsTab: React.FC<EnergyStatsTabProps> = ({ sn }) => {
     staleTime: 5 * 60_000,
   })
 
-  // 累计 PV 发电：优先 DB 统计，回退遥测最新 total_pv_energy
+  // 累计 PV 发电：DB 统计 > 7 日遥测聚合 > 实时累计计数器（设备端终身计数器，历史缺失时的兜底）
   const totalPvKwh = useMemo(() => {
     const fromTelemetry = Math.max(...(daily7 ?? []).map((d) => d.totalPv), 0)
-    return Math.max(deviceStats?.totalEnergy ?? 0, fromTelemetry)
-  }, [deviceStats, daily7])
+    return Math.max(deviceStats?.totalEnergy ?? 0, fromTelemetry, m.totalPv ?? 0)
+  }, [deviceStats, daily7, m.totalPv])
+
+  // 7 日窗口全为 0（无历史/新装机）时不渲染空坐标轴，改由调用方展示空态
+  const trendHasData = useMemo(
+    () => (daily7 ?? []).some((d) => d.pv > 0 || d.charge > 0 || d.discharge > 0 || d.load > 0),
+    [daily7],
+  )
 
   // 7 日趋势 echarts 配置
   const trendOption = useMemo(() => {
@@ -201,7 +207,7 @@ const EnergyStatsTab: React.FC<EnergyStatsTabProps> = ({ sn }) => {
         size="small"
       >
         <Spin spinning={trendLoading}>
-          {trendOption ? (
+          {trendOption && trendHasData ? (
             <ReactECharts option={trendOption} style={{ height: 320 }} />
           ) : (
             <Empty description={t('deviceDetail.stats.noTrendData')} image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ padding: '32px 0' }} />

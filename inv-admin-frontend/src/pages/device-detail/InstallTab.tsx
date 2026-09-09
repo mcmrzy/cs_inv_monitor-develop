@@ -28,6 +28,12 @@ interface BatteryConfigPayload {
   installer_limits?: Record<string, unknown>
 }
 
+/** 设备尚未绑定电池模板时后端返回 404：属正常状态，按空配置渲染而非报错 */
+const isNotConfiguredError = (err: unknown): boolean => {
+  const e = err as { response?: { status?: number; data?: { code?: number } } }
+  return e?.response?.status === 404 || e?.response?.data?.code === 404
+}
+
 const InstallTab: React.FC<InstallTabProps> = ({ sn }) => {
   const { t } = useTranslation()
   const { message } = App.useApp()
@@ -60,6 +66,15 @@ const InstallTab: React.FC<InstallTabProps> = ({ sn }) => {
         max_output_voltage: limits.max_output_voltage ?? 230,
       })
       return d
+    }).catch((err: unknown) => {
+      if (isNotConfiguredError(err)) {
+        // 未绑定电池模板：填默认值后按空配置渲染
+        acForm.setFieldsValue({
+          ac_input_type: 'grid', grid_mode: 'off_grid', max_input_current: 32, max_output_voltage: 230,
+        })
+        return {}
+      }
+      throw err
     }),
   })
 
