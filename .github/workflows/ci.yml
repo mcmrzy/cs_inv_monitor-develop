@@ -142,6 +142,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26.6'
+          cache-dependency-path: tests/integration/go.sum
       - name: Start isolated integration environment
         run: docker compose -f deploy/docker-compose.test.yml up -d --build --wait --wait-timeout 300
       - name: Run integration tests
@@ -226,6 +227,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26.6'
+          cache-dependency-path: business-api/go.sum
       - name: Run security tests
         run: cd business-api && go test -v -count=1 ./tests/security/...
       - name: Install govulncheck

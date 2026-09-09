@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "mimosa-finding-ledger-batch/v1",
+  "batchId": "stop-20260908T230628356Z-111052-017ccf98b2b0",
+  "runId": "20260908T230628356Z-111052-017ccf98b2b0",
+  "runStatus": "inconclusive",
+  "coverage": {
+    "status": "partial",
+    "reasons": [
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/layouts/MainLayout.tsx",
+        "detail": "spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "inv-admin-frontend/src/layouts/MainLayout.tsx",
+        "detail": "scanner_failed: spawnSync C:\\Program Files\\nodejs\\node.exe ETIMEDOUT",
+        "affectsCompletion": true
+      }
+    ]
+  },
+  "source": {
+    "component": "zcode-hook",
+    "operationId": "Stop"
+  },
+  "revision": "1b0b01d5e0501b1fb944698058e04782ec342146",
+  "diffHash": "0467caa95997e5343a0e44e27ae12d697dfed1edf2c47e68ee1024be355e2797",
+  "rulesVersion": "unavailable",
+  "sessionHash": "6ea839a70df5336e9690d3ffa1350b6dd189dbb24fc84dec5961bf33eb481017",
+  "reportRef": ".mimosa/reports/task-review-sess_5f5b0dc3-51a8-427a-8bf0-db8474f7bdb2-20260908T230628356Z-111052-017ccf98b2b0.json",
+  "events": [],
+  "observedFindingIds": [],
+  "verifiedFiles": [],
+  "recordedAt": "2026-09-08T23:06:28.645Z"
+}
