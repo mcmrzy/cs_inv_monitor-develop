@@ -406,6 +406,7 @@ func TestIsPublicPath(t *testing.T) {
 		{"/metrics", true},
 		{"/api/v1/auth/login", true},
 		{"/api/v1/auth/register", true},
+		{"/api/v1/ota/app/check", true},
 		{"/api/v1/timezones", true},
 		{"/uploads/test.png", true},
 		{"/firmware/v1.bin", true},

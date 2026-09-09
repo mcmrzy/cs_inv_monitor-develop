@@ -2,6 +2,7 @@ package routes
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -83,6 +84,30 @@ func TestRouteRegistration_PublicAuthRoutes(t *testing.T) {
 	for _, path := range expectedPaths {
 		assertRouteExists(t, engine, path, "public auth route missing")
 	}
+}
+
+func TestAppUpdateCheckIsPublic(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/api/v1/ota/app/check", r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code":0,"message":"success","data":{"has_update":false}}`))
+	}))
+	defer backend.Close()
+
+	cfg := newTestConfig()
+	cfg.APIServer = backend.URL
+	engine := Setup(cfg)
+	gateway := httptest.NewServer(engine)
+	defer gateway.Close()
+
+	response, err := http.Get(gateway.URL + "/api/v1/ota/app/check?platform=android&version_code=0")
+	require.NoError(t, err)
+	defer response.Body.Close()
+	body, err := io.ReadAll(response.Body)
+	require.NoError(t, err)
+
+	assert.Equal(t, http.StatusOK, response.StatusCode)
+	assert.JSONEq(t, `{"code":0,"message":"success","data":{"has_update":false}}`, string(body))
 }
 
 func TestRouteRegistration_UserAuthRoutes(t *testing.T) {

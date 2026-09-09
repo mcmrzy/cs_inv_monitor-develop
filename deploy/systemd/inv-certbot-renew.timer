@@ -1,0 +1,11 @@
+[Unit]
+Description=Run CS Inv Monitor certificate renewal twice daily
+
+[Timer]
+OnCalendar=*-*-* 03,15:00:00
+RandomizedDelaySec=1h
+Persistent=true
+Unit=inv-certbot-renew.service
+
+[Install]
+WantedBy=timers.target
