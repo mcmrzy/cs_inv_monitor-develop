@@ -597,6 +597,91 @@ const NotificationsPanel: React.FC = () => {
   )
 }
 
+/** 域名配置面板：下载域 / Web 前端域，后端统一下发给 App 与下载页 */
+const DomainsPanel: React.FC = () => {
+  const { message } = App.useApp()
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const [form] = Form.useForm()
+
+  const { data, error, refetch } = useQuery({
+    queryKey: ['system-config', 'domains'],
+    queryFn: () => api.get('/admin/system-config').then((res) => {
+      const allConfigs = res.data?.data as Record<string, unknown>
+      return (allConfigs?.domains || {}) as { download_base_url?: string; frontend_base_url?: string }
+    }),
+  })
+
+  const saveMutation = useMutation({
+    mutationFn: (data: { download_base_url: string; frontend_base_url: string }) =>
+      api.patch('/admin/system-config', {
+        domains: {
+          download_base_url: data.download_base_url?.trim() || '',
+          frontend_base_url: data.frontend_base_url?.trim() || '',
+        },
+      }),
+    onSuccess: () => {
+      message.success(t('system.domainsSaveSuccess'))
+      queryClient.invalidateQueries({ queryKey: ['system-config'] })
+    },
+    onError: (err: Error) => {
+      message.error(`${t('system.domainsSaveFailed')}: ${err.message}`)
+    },
+  })
+
+  useEffect(() => {
+    if (data) {
+      form.setFieldsValue({
+        download_base_url: data.download_base_url || '',
+        frontend_base_url: data.frontend_base_url || '',
+      })
+    }
+  }, [data, form])
+
+  if (error) {
+    return <QueryErrorAlert error={error} onRetry={() => refetch()} />
+  }
+
+  const handleSave = async () => {
+    try {
+      const values = await form.validateFields()
+      saveMutation.mutate(values)
+    } catch {
+      // validation failed
+    }
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+        <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} loading={saveMutation.isPending}>
+          {t('common.save')}
+        </Button>
+      </div>
+
+      <Card title={t('system.domainsConfig')} bordered={false}>
+        <Alert type="info" showIcon message={t('system.domainsHint')} style={{ marginBottom: 16 }} />
+        <Form form={form} layout="vertical">
+          <Form.Item
+            name="download_base_url"
+            label={t('system.domainsDownload')}
+            rules={[{ pattern: /^https?:\/\//, message: t('system.domainsMustBeHttp') }]}
+          >
+            <Input placeholder={t('system.domainsDownloadPlaceholder')} allowClear />
+          </Form.Item>
+          <Form.Item
+            name="frontend_base_url"
+            label={t('system.domainsFrontend')}
+            rules={[{ pattern: /^https?:\/\//, message: t('system.domainsMustBeHttp') }]}
+          >
+            <Input placeholder={t('system.domainsFrontendPlaceholder')} allowClear />
+          </Form.Item>
+        </Form>
+      </Card>
+    </div>
+  )
+}
+
 const SystemConfigPage: React.FC = () => {
   const { t } = useTranslation()
 
@@ -611,6 +696,7 @@ const SystemConfigPage: React.FC = () => {
         defaultActiveKey="notifications"
         items={[
           { key: 'notifications', label: t('system.tabNotifications'), children: <NotificationsPanel /> },
+          { key: 'domains', label: t('system.tabDomains'), children: <DomainsPanel /> },
           { key: 'helpDocs', label: t('system.tabHelpDocs'), children: <HelpDocsPanel /> },
           { key: 'emailTemplates', label: t('system.tabEmailTemplates'), children: <EmailTemplatesPanel /> },
         ]}

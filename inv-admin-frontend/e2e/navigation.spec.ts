@@ -129,11 +129,12 @@ test.describe('主路由矩阵', () => {
     await expect(page.getByText('内存使用率')).toBeVisible()
   })
 
-  test('/system/system-config 通知与文档：标题与三个 Tab', async ({ page }) => {
+  test('/system/system-config 通知与文档：标题与四个 Tab', async ({ page }) => {
     await gotoAuthed(page, '/system/system-config')
     await expect(page.locator('.ant-pro-layout-content')).toBeVisible()
     await expect(content(page).getByText('通知与文档', { exact: true })).toBeVisible()
     await expect(page.locator('.ant-tabs-tab', { hasText: '通知' })).toBeVisible()
+    await expect(page.locator('.ant-tabs-tab', { hasText: '域名配置' })).toBeVisible()
     await expect(page.locator('.ant-tabs-tab', { hasText: '帮助文档' })).toBeVisible()
     await expect(page.locator('.ant-tabs-tab', { hasText: '邮件模板' })).toBeVisible()
   })
