@@ -75,6 +75,15 @@ android {
     }
 }
 
+// release 只发 64 位：x86_64（仅模拟器）与 armeabi-v7a（32 位）不进发布包
+// 合计约省 56 MB 包体；debug/profile 仍保留全部 ABI 以便模拟器与旧机型调试
+androidComponents {
+    onVariants(selector().withBuildType("release")) { variant ->
+        variant.packaging.jniLibs.excludes.add("lib/x86_64/**")
+        variant.packaging.jniLibs.excludes.add("lib/armeabi-v7a/**")
+    }
+}
+
 // AGP 9 内置 Kotlin：以 compilerOptions DSL 替代已废弃的 kotlinOptions 块
 kotlin {
     compilerOptions {
