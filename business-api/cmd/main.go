@@ -167,6 +167,8 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 
 	otaRepo := repository.NewOTARepository(db)
 	otaService := service.NewOTAService(otaRepo, rdb, cfg.Backends.DeviceServer, cfg.Backends.InternalKey, cfg.Backends.UploadDir, cfg.Backends.ServerURL, cfg.Backends.DownloadURL, db, jpushService)
+	// 下载域接入运行时域名配置：管理后台「域名配置」保存后立即生效
+	otaService.AttachConfigService(configService)
 
 	captchaHandler := handler.NewCaptchaHandler(rdb)
 	authHandler := handler.NewAuthHandler(userService, jwtService, smsService, emailService, rbacCache, captchaHandler, jverifyService)
@@ -1226,6 +1228,9 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		api.GET("/ota/app/check", deps.OTAHandler.CheckAppUpdate)
 		// 公开下载页展示最新已发布版本；同样不允许携带用户上下文。
 		api.GET("/ota/app/latest", deps.OTAHandler.GetLatestAppRelease)
+		// 公开站点配置：客户端/下载页启动时拉取域名等部署相关信息，
+		// 避免在构建期硬编码，便于迁移部署环境。
+		api.GET("/config/public", deps.ConfigHandler.GetPublicConfig)
 
 		otaGroup := api.Group("/ota").Use(middleware.Auth(deps.JWTService, deps.AuthorizationContextValidator))
 		{

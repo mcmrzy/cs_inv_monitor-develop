@@ -9,6 +9,7 @@ import 'package:home_widget/home_widget.dart';
 import 'package:inv_app/core/config/app_config.dart';
 import 'package:inv_app/core/services/ble/ble_direct_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
+import 'package:inv_app/core/services/domain_config_service.dart';
 import 'package:inv_app/core/services/locale_service.dart';
 import 'package:inv_app/core/services/theme_service.dart';
 import 'package:inv_app/core/services/widget_update_service.dart';
@@ -95,6 +96,9 @@ void main() {
   // 极光推送/认证 SDK 初始化改为首帧渲染后异步执行，
   // 不阻塞冷启动（一键登录的完整性由 SplashPage 的轮询兑底保证）
   unawaited(_initPushSdks());
+
+  // 站点域名配置：异步拉取后端下发的下载域/前端域（失败保留构建期默认值）
+  unawaited(getIt<DomainConfigService>().refresh());
 
   // BLE 直连恢复 + 离线日志同步（首帧渲染后异步执行，不阻塞冷启动）
   unawaited(_restoreBleServices());

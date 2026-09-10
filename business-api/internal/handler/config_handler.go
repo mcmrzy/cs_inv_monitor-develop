@@ -57,6 +57,12 @@ func defaultHelpCenterConfig() HelpCenterConfig {
 	}
 }
 
+// GetPublicConfig 公开站点配置：域名等部署相关信息（下载域 / Web 前端域）。
+// 客户端与下载页启动时拉取，避免在构建期硬编码域名；仅暴露非敏感字段。
+func (h *ConfigHandler) GetPublicConfig(c *gin.Context) {
+	response.Success(c, h.cfgSvc.ResolveDomainConfig(c.Request.Context()))
+}
+
 // GetHelpCenter 获取帮助中心配置（登录即可，公开只读）
 func (h *ConfigHandler) GetHelpCenter(c *gin.Context) {
 	defaultCfg := defaultHelpCenterConfig()
