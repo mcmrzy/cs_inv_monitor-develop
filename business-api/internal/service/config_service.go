@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
+	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"inv-api-server/internal/config"
@@ -179,5 +182,82 @@ func (s *ConfigService) GetSMSConfig(ctx context.Context) map[string]string {
 		"secret_key": get("sms_secret_key", ""),
 		"sign_name":  get("sms_sign_name", ""),
 		"template":   get("sms_template", ""),
+	}
+}
+
+// ---------- 域名配置 ----------
+
+// DomainConfig 站点域名配置：多服务器部署时由后端统一下发，客户端与下载页不硬编码域名。
+// 以 JSON 对象存于 system_configs（key=domains），由管理后台「域名配置」维护。
+type DomainConfig struct {
+	DownloadBaseURL string `json:"download_base_url"` // 资源下载域（固件/安装包等）
+	FrontendBaseURL string `json:"frontend_base_url"` // Web 管理后台域（邀请链接等）
+}
+
+// normalizeBaseURL 校验并规范基地址：仅接受 http/https，拒绝 localhost、环回、
+// 私有与保留地址主机；非法值返回空串，由调用方回退到环境变量默认值。
+func normalizeBaseURL(v string) string {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return ""
+	}
+	u, err := url.Parse(v)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return ""
+	}
+	host := strings.ToLower(strings.TrimSuffix(u.Hostname(), "."))
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") ||
+		strings.HasSuffix(host, ".local") || strings.HasSuffix(host, ".internal") {
+		return ""
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() {
+			return ""
+		}
+	}
+	return strings.TrimRight(v, "/")
+}
+
+// domainOverride 从数据库 domains 段读取字段，返回规范化后的值（未配置/非法返回空）
+func (s *ConfigService) domainOverride(ctx context.Context, field string) string {
+	raw := s.Get(ctx, "domains")
+	if raw == "" {
+		return ""
+	}
+	var d DomainConfig
+	if err := json.Unmarshal([]byte(raw), &d); err != nil {
+		return ""
+	}
+	switch field {
+	case "download_base_url":
+		return normalizeBaseURL(d.DownloadBaseURL)
+	case "frontend_base_url":
+		return normalizeBaseURL(d.FrontendBaseURL)
+	}
+	return ""
+}
+
+// ResolveDomainConfig 解析站点域名配置。
+// 优先级：管理后台 domains 段 > 环境变量（DOWNLOAD_URL / FRONTEND_URL）> SERVER_URL 回退。
+func (s *ConfigService) ResolveDomainConfig(ctx context.Context) DomainConfig {
+	download := s.domainOverride(ctx, "download_base_url")
+	if download == "" {
+		download = normalizeBaseURL(s.baseCfg.Backends.DownloadURL)
+	}
+	if download == "" {
+		download = normalizeBaseURL(s.baseCfg.Backends.ServerURL)
+	}
+
+	frontend := s.domainOverride(ctx, "frontend_base_url")
+	if frontend == "" {
+		frontend = normalizeBaseURL(s.baseCfg.Backends.FrontendURL)
+	}
+	if frontend == "" {
+		frontend = normalizeBaseURL(s.baseCfg.Backends.ServerURL)
+	}
+
+	return DomainConfig{
+		DownloadBaseURL: download,
+		FrontendBaseURL: frontend,
 	}
 }

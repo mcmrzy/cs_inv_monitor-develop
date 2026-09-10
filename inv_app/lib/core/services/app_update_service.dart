@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../config/app_config.dart';
+import 'domain_config_service.dart';
 
 /// 当下载URL返回的是网页而非直接安装包时抛出此异常
 class WebPageUrlException implements Exception {
@@ -64,7 +65,11 @@ class AppUpdateInfo {
 class AppUpdateService {
   final Dio _dio;
 
-  AppUpdateService(this._dio);
+  /// 站点域名配置：后端下发的下载域会合并进受信主机白名单；可空（单测直连）。
+  final DomainConfigService? _domainConfig;
+
+  AppUpdateService(this._dio, {DomainConfigService? domainConfig})
+      : _domainConfig = domainConfig;
 
   /// 分片并发下载的启用阈值（小于该体积不值得分片）
   static const int _chunkThresholdBytes = 4 << 20;
@@ -396,6 +401,8 @@ class AppUpdateService {
       Uri.tryParse(AppConfig.apiBaseUrl)?.host ?? '',
       Uri.tryParse(AppConfig.frontendBaseUrl)?.host ?? '',
       ...AppConfig.trustedDownloadHosts.split(',').map((h) => h.trim()),
+      // 后端「域名配置」下发的下载域（管理后台改域名后无需发新版）
+      ...?_domainConfig?.trustedDownloadHosts,
     }..remove('');
     if (trustedHosts.isNotEmpty && !trustedHosts.contains(uri.host)) {
       throw InsecureDownloadUrlException(url, 'host not in trusted list');
