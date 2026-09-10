@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:inv_app/core/config/app_config.dart';
 import 'package:inv_app/core/services/app_update_service.dart';
 import 'package:inv_app/core/services/realtime_data_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
@@ -270,7 +269,9 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     if (event.manual || state is! SystemNotificationsLoaded) {
       try {
         final updateService = getIt<AppUpdateService>();
-        final info = await updateService.checkUpdate(AppConfig.versionCode);
+        final info = await updateService.checkUpdate(
+          await updateService.resolveCurrentVersionCode(),
+        );
         if (info.hasUpdate) {
           final appUpdateNotif = SystemNotification(
             type: SystemNotificationType.appUpdate,

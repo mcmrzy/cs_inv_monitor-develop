@@ -3,7 +3,7 @@ description: 光伏逆变器监控APP
 
 publish_to: 'none'
 
-version: 1.0.0+3
+version: 1.0.1+10
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
@@ -61,6 +61,7 @@ dependencies:
 
   open_filex: ^4.5.0
   path_provider: ^2.1.2
+  package_info_plus: ^10.2.1  # 运行时读取安装包真实 versionCode（更新检查依赖）
   sqflite: ^2.4.2
   uuid: ^4.5.1
   home_widget: ^0.9.3

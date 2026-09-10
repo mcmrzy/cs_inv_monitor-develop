@@ -22,7 +22,9 @@ class AboutPage extends StatefulWidget {
 class _AboutPageState extends State<AboutPage> {
   bool _checkingUpdate = false;
   bool _downloading = false;
+  /// 下载进度：0.0~1.0；< 0 表示总大小未知（CDN 分块传输且服务端未给文件大小）
   double _downloadProgress = 0;
+  int _downloadedBytes = 0;
   CancelToken? _cancelToken;
 
   Future<void> _openUrl(String url) async {
@@ -120,7 +122,9 @@ class _AboutPageState extends State<AboutPage> {
 
     try {
       final updateService = getIt<AppUpdateService>();
-      final info = await updateService.checkUpdate(AppConfig.versionCode);
+      final info = await updateService.checkUpdate(
+        await updateService.resolveCurrentVersionCode(),
+      );
 
       if (!mounted) return;
 
@@ -239,10 +243,15 @@ class _AboutPageState extends State<AboutPage> {
                     ],
                     if (_downloading) ...[
                       SizedBox(height: 16.h),
-                      LinearProgressIndicator(value: _downloadProgress),
+                      if (_downloadProgress < 0)
+                        const LinearProgressIndicator()
+                      else
+                        LinearProgressIndicator(value: _downloadProgress),
                       SizedBox(height: 4.h),
                       Text(
-                        '${l10n.downloadProgress} ${(_downloadProgress * 100).toStringAsFixed(0)}%',
+                        _downloadProgress < 0
+                            ? '${l10n.downloadProgress} ${(_downloadedBytes / 1048576).toStringAsFixed(1)} MB'
+                            : '${l10n.downloadProgress} ${(_downloadProgress * 100).toStringAsFixed(0)}%',
                         style: TextStyle(
                           fontSize: 12.sp,
                           color: AppColor.textHint(context),
@@ -358,9 +367,13 @@ class _AboutPageState extends State<AboutPage> {
         fileName,
         expectedSha256: info.fileSha256,
         expectedMd5: info.fileMd5,
+        expectedSize: info.fileSize,
         cancelToken: _cancelToken,
-        onProgress: (progress) {
-          setState(() => _downloadProgress = progress);
+        onProgress: (progress, receivedBytes) {
+          setState(() {
+            _downloadProgress = progress;
+            _downloadedBytes = receivedBytes;
+          });
           setDialogState(() {});
         },
       );
@@ -383,6 +396,7 @@ class _AboutPageState extends State<AboutPage> {
         setState(() {
           _downloading = false;
           _downloadProgress = 0;
+          _downloadedBytes = 0;
         });
       }
     }

@@ -86,6 +86,8 @@ void main() {
     mockNotificationDataSource = MockNotificationRemoteDataSource();
     mockStorageService = MockStorageService();
     mockAppUpdateService = MockAppUpdateService();
+    when(() => mockAppUpdateService.resolveCurrentVersionCode())
+        .thenAnswer((_) async => 1);
 
     // Default RealtimeDataService stubs
     when(() => mockRealtimeDataService.realtimeDataStream)
