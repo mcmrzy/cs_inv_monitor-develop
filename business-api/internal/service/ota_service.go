@@ -42,7 +42,8 @@ type OTAService struct {
 	internalKey  string
 	uploadDir    string // 固件上传存储目录
 	serverURL    string // 外部访问地址，用于构造ESP32下载URL
-	downloadURL  string // 固件下载CDN域名（download子域），优先于 serverURL 用于构造下载URL
+	downloadURL  string // 固件下载域（环境变量默认值），可被运行时域名配置动态覆盖
+	cfgSvc       *ConfigService // 运行时配置服务（域名配置动态覆盖），可空
 	httpClient   *http.Client
 	concurrency  int
 	taskTimeout  time.Duration // 升级任务超时阈值，pending/running 任务超过该时长无更新自动置为 failed；<=0 表示禁用
@@ -1473,11 +1474,27 @@ func (s *OTAService) BuildDownloadURL(fileURL string) string {
 	return s.downloadURLFor(fileURL)
 }
 
-// downloadURLFor 构造固件下载 URL：优先使用 downloadURL（下载CDN域名），
+// AttachConfigService 注入运行时配置服务：下载域可被管理后台「域名配置」
+// （system_configs.domains.download_base_url）动态覆盖，无需重启或重新部署。
+func (s *OTAService) AttachConfigService(cfgSvc *ConfigService) {
+	s.cfgSvc = cfgSvc
+}
+
+// downloadBase 解析当前生效的下载基地址：管理后台配置 > 环境变量（构造时注入）。
+func (s *OTAService) downloadBase() string {
+	if s.cfgSvc != nil {
+		if v := s.cfgSvc.ResolveDomainConfig(context.Background()).DownloadBaseURL; v != "" {
+			return v
+		}
+	}
+	return s.downloadURL
+}
+
+// downloadURLFor 构造固件下载 URL：优先使用生效下载域（见 downloadBase），
 // 未配置时回退 serverURL；两者均未配置时返回原相对路径。
 func (s *OTAService) downloadURLFor(fileURL string) string {
-	if s.downloadURL != "" && strings.HasPrefix(fileURL, "/") {
-		return strings.TrimRight(s.downloadURL, "/") + fileURL
+	if base := s.downloadBase(); base != "" && strings.HasPrefix(fileURL, "/") {
+		return strings.TrimRight(base, "/") + fileURL
 	}
 	if s.serverURL != "" && strings.HasPrefix(fileURL, "/") {
 		return strings.TrimRight(s.serverURL, "/") + fileURL

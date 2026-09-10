@@ -156,16 +156,26 @@ test.describe('系统监控 /system/system-monitor', () => {
 })
 
 test.describe('通知与文档 /system/system-config', () => {
-  test('骨架：标题、三个 Tab 与默认系统公告面板', async ({ page }) => {
+  test('骨架：标题、四个 Tab 与默认系统公告面板', async ({ page }) => {
     await gotoAuthed(page, '/system/system-config')
     await expectRendered(page)
     await expect(content(page).getByText('通知与文档', { exact: true })).toBeVisible()
     await expect(page.locator('.ant-tabs-tab', { hasText: '通知' })).toBeVisible()
+    await expect(page.locator('.ant-tabs-tab', { hasText: '域名配置' })).toBeVisible()
     await expect(page.locator('.ant-tabs-tab', { hasText: '帮助文档' })).toBeVisible()
     await expect(page.locator('.ant-tabs-tab', { hasText: '邮件模板' })).toBeVisible()
     // 默认 Tab 为「通知」：系统公告推送面板
     await expect(page.getByText('系统公告推送', { exact: true })).toBeVisible()
     await expect(page.getByPlaceholder('请输入公告标题')).toBeVisible()
+  })
+
+  test('域名配置：表单回显与保存', async ({ page }) => {
+    await gotoAuthed(page, '/system/system-config')
+    await page.locator('.ant-tabs-tab', { hasText: '域名配置' }).click()
+    await expect(page.getByText('域名配置', { exact: true }).nth(1)).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByPlaceholder(/download\.jiuxiaoyw\.com/)).toBeVisible()
+    await expect(page.getByPlaceholder(/www\.jiuxiaoyw\.online/)).toBeVisible()
+    await expect(page.getByRole('button', { name: /保 存|保存/ })).toBeVisible()
   })
 
   test('系统公告推送：切换目标范围出现 ID 输入', async ({ page }) => {

@@ -139,6 +139,8 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 	// APP 下载页需要匿名查询最新版本；业务层只返回公开版本元数据。
 	publicGroup.GET("/api/v1/ota/app/check", p.Handler())
 	publicGroup.GET("/api/v1/ota/app/latest", p.Handler())
+	// 公开站点配置：域名等部署信息（下载域/Web 前端域），客户端与下载页启动时拉取。
+	publicGroup.GET("/api/v1/config/public", p.Handler())
 	publicGroup.Any("/api/v1/captcha/*action", p.Handler())
 	publicGroup.Any("/uploads/*action", p.Handler())
 	publicGroup.Any("/firmware/*action", p.Handler())
@@ -154,8 +156,9 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 	userGroup.Any("/api/v1/auth/change-email", p.Handler())
 	// 用户操作历史聚合（App 操作历史页，按当前用户维度，业务层过滤）
 	userGroup.Any("/api/v1/op-logs", p.Handler())
-	// 帮助中心配置（system_configs 表 help_center key，登录即可，只读配置）
-	userGroup.Any("/api/v1/config/*action", p.Handler())
+	// 站点配置：public 为公开路由（已在 publicGroup 注册）；帮助中心需登录。
+	// Gin 不允许静态段与 catch-all 同级共存，故此处逐条注册，不再使用 *action 通配。
+	userGroup.Any("/api/v1/config/help-center", p.Handler())
 	userGroup.Any("/api/v1/config", p.Handler())
 
 	userGroup.Any("/api/v1/stations/*action", p.Handler())
