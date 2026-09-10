@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { QRCode } from 'antd'
 import {
   AndroidOutlined,
   CloudSyncOutlined,
@@ -16,6 +17,7 @@ import useTranslation from '@/hooks/useTranslation'
  *
  * 版本信息来自公开接口 /ota/app/latest，不需要登录：上传新安装包后
  * 页面自动展示最新版本、体积与摘要，无需手工维护页面内容。
+ * 手机端第一屏即下载按钮；桌面端右侧展示机型预览与扫码下载卡片。
  */
 
 interface LatestRelease {
@@ -159,7 +161,7 @@ const DownloadPage: React.FC = () => {
 
   const features = [
     { icon: <LineChartOutlined />, title: t('dl.featureMonitor'), desc: t('dl.featureMonitorDesc'), tone: 'blue' },
-    { icon: <ThunderboltOutlined />, title: t('dl.featureAnalytics'), desc: t('dl.featureAnalyticsDesc'), tone: 'amber' },
+    { icon: <ThunderboltOutlined />, title: t('dl.featureAnalytics'), desc: t('dl.featureAnalyticsDesc'), tone: 'cyan' },
     { icon: <NotificationOutlined />, title: t('dl.featureAlerts'), desc: t('dl.featureAlertsDesc'), tone: 'rose' },
     { icon: <CloudSyncOutlined />, title: t('dl.featureOta'), desc: t('dl.featureOtaDesc'), tone: 'green' },
   ]
@@ -174,219 +176,253 @@ const DownloadPage: React.FC = () => {
     <div className="dlp">
       <style>{dlpStyles}</style>
 
-      {/* ---------- 主视觉 ---------- */}
-      <header className="dlp-hero">
-        <div className="dlp-backdrop" aria-hidden="true">
-          <span className="dlp-glow dlp-glow--a" />
-          <span className="dlp-glow dlp-glow--b" />
-          <span className="dlp-grid" />
-        </div>
+      <div className="dlp-bg" aria-hidden="true">
+        <span className="dlp-blob dlp-blob--a" />
+        <span className="dlp-blob dlp-blob--b" />
+        <span className="dlp-blob dlp-blob--c" />
+      </div>
 
-        <div className="dlp-shell dlp-hero-inner">
-          <div className="dlp-hero-copy">
-            <div className="dlp-badge">
-              <span className="dlp-badge-dot" />
-              {t('dl.badge')}
-              {release?.version_name ? <em>v{release.version_name}</em> : null}
-            </div>
+      {/* ---------- 主视觉：手机端第一屏即标题 + 下载按钮 ---------- */}
+      <header className="dlp-hero dlp-shell">
+        <div className="dlp-hero-copy">
+          <div className="dlp-badge">
+            <span className="dlp-badge-dot" />
+            {t('dl.badge')}
+            {release?.version_name ? <em>v{release.version_name}</em> : null}
+          </div>
 
-            <h1 className="dlp-title">{t('dl.appTitle')}</h1>
-            <p className="dlp-subtitle">{t('dl.subtitle')}</p>
+          <h1 className="dlp-title">{t('dl.appTitle')}</h1>
+          <span className="dlp-title-accent" aria-hidden="true" />
+          <p className="dlp-subtitle">{t('dl.subtitle')}</p>
 
-            <div className="dlp-actions">
-              {/* 文案固定为下载动作：版本未就绪时置灰并由下方提示说明原因，
-                  避免主按钮文字随加载状态变化导致入口不可预期。 */}
-              <button
-                type="button"
-                className="dlp-cta"
-                onClick={handleDownload}
-                disabled={!hasRelease || loading}
-              >
-                <DownloadOutlined />
-                {t('dl.downloadBtn')}
-              </button>
+          <div className="dlp-actions">
+            <button
+              type="button"
+              className="dlp-cta"
+              onClick={handleDownload}
+              disabled={!hasRelease || loading}
+            >
+              <DownloadOutlined />
+              {t('dl.downloadBtn')}
+            </button>
 
-              <a className="dlp-cta dlp-cta--ghost" href="#dlp-notes">
-                {t('dl.releaseNotes')}
-              </a>
-            </div>
+            <a className="dlp-cta dlp-cta--ghost" href="#dlp-notes">
+              {t('dl.releaseNotes')}
+            </a>
+          </div>
 
-            <div className="dlp-meta">
+          <div className="dlp-meta">
+            <span className="dlp-chip">
+              <AndroidOutlined /> {t('dl.androidOnly')}
+            </span>
+            {minAndroid ? <span className="dlp-chip">Android {minAndroid}+</span> : null}
+            {sizeText ? <span className="dlp-chip">{sizeText}</span> : null}
+            {release?.version_code ? (
               <span className="dlp-chip">
-                <AndroidOutlined /> {t('dl.androidOnly')}
+                {t('dl.versionCode')} {release.version_code}
               </span>
-              {minAndroid ? <span className="dlp-chip">Android {minAndroid}+</span> : null}
-              {sizeText ? <span className="dlp-chip">{sizeText}</span> : null}
-              {release?.version_code ? (
-                <span className="dlp-chip">
-                  {t('dl.versionCode')} {release.version_code}
-                </span>
-              ) : null}
-            </div>
-
-            <p className="dlp-security">
-              <SafetyCertificateOutlined /> {t('dl.securityTip')}
-            </p>
-
-            {release && !release.available && !loading ? (
-              <p className="dlp-empty">
-                <strong>{t('dl.noRelease')}</strong>
-                <span>{t('dl.noReleaseDesc')}</span>
-              </p>
             ) : null}
           </div>
 
-          {/* 手机预览：用 CSS/SVG 绘制，不依赖外部截图资源 */}
-          <div className="dlp-hero-visual" aria-hidden="true">
-            <div className="dlp-phone">
-              <div className="dlp-phone-notch" />
-              <div className="dlp-phone-screen">
-                <div className="dlp-app-bar">
-                  <span>{t('dl.previewSite')}</span>
-                  <span className="dlp-app-dot" />
-                </div>
-                <div className="dlp-app-power">
-                  <small>{t('dl.previewPower')}</small>
-                  <strong>12.64<em>kW</em></strong>
-                  <svg viewBox="0 0 160 36" className="dlp-spark" preserveAspectRatio="none">
-                    <polyline
-                      points="0,28 16,22 32,25 48,14 64,18 80,9 96,13 112,6 128,11 144,4 160,8"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </div>
-                <div className="dlp-app-list">
-                  {[
-                    { name: 'CS-INV-6K2', state: t('dl.previewOnline'), power: '6.32 kW', ok: true },
-                    { name: 'CS-INV-5K1', state: t('dl.previewOnline'), power: '4.18 kW', ok: true },
-                    { name: 'CS-INV-3K6', state: t('dl.previewWarning'), power: '2.14 kW', ok: false },
-                  ].map((row) => (
-                    <div className="dlp-app-row" key={row.name}>
-                      <span className={row.ok ? 'dlp-app-flag' : 'dlp-app-flag dlp-app-flag--warn'} />
-                      <div className="dlp-app-name">
-                        <b>{row.name}</b>
-                        <small>{row.state}</small>
-                      </div>
-                      <span className="dlp-app-power-value">{row.power}</span>
+          <p className="dlp-security">
+            <SafetyCertificateOutlined /> {t('dl.securityTip')}
+          </p>
+
+          {release && !release.available && !loading ? (
+            <p className="dlp-empty">
+              <strong>{t('dl.noRelease')}</strong>
+              <span>{t('dl.noReleaseDesc')}</span>
+            </p>
+          ) : null}
+        </div>
+
+        {/* 桌面端：机型预览 + 扫码下载卡片（手机端隐藏——用户本来就在手机上） */}
+        <div className="dlp-hero-visual">
+          <span className="dlp-phone-backdrop" aria-hidden="true" />
+          <div className="dlp-phone" aria-hidden="true">
+            <div className="dlp-phone-screen">
+              <div className="dlp-statusbar">
+                <span>9:41</span>
+                <span className="dlp-statusbar-pill" />
+                <span className="dlp-statusbar-icons">
+                  <i />
+                  <i />
+                </span>
+              </div>
+              <div className="dlp-app-bar">
+                <b>{t('dl.previewSite')}</b>
+                <span className="dlp-app-dot" />
+              </div>
+              <div className="dlp-app-power">
+                <small>{t('dl.previewPower')}</small>
+                <strong>
+                  12.64<em>kW</em>
+                </strong>
+                <svg viewBox="0 0 160 40" className="dlp-spark" preserveAspectRatio="none">
+                  <defs>
+                    <linearGradient id="dlpSparkFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="currentColor" stopOpacity="0.34" />
+                      <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+                    </linearGradient>
+                  </defs>
+                  <path
+                    d="M0 30 L16 24 L32 27 L48 16 L64 20 L80 11 L96 15 L112 8 L128 12 L144 5 L160 9 L160 40 L0 40 Z"
+                    fill="url(#dlpSparkFill)"
+                    stroke="none"
+                  />
+                  <polyline
+                    points="0,30 16,24 32,27 48,16 64,20 80,11 96,15 112,8 128,12 144,5 160,9"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </div>
+              <div className="dlp-app-list">
+                {[
+                  { name: 'CS-INV-6K2', state: t('dl.previewOnline'), power: '6.32 kW', ok: true },
+                  { name: 'CS-INV-5K1', state: t('dl.previewOnline'), power: '4.18 kW', ok: true },
+                  { name: 'CS-INV-3K6', state: t('dl.previewWarning'), power: '2.14 kW', ok: false },
+                ].map((row) => (
+                  <div className="dlp-app-row" key={row.name}>
+                    <span className={row.ok ? 'dlp-app-flag' : 'dlp-app-flag dlp-app-flag--warn'} />
+                    <div className="dlp-app-name">
+                      <b>{row.name}</b>
+                      <small>{row.state}</small>
                     </div>
-                  ))}
-                </div>
+                    <span className="dlp-app-power-value">{row.power}</span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
+
+          {hasRelease && release?.download_url ? (
+            <div className="dlp-qr-card">
+              <QRCode value={release.download_url} size={116} />
+              <span>{t('dl.qrCaption')}</span>
+            </div>
+          ) : null}
         </div>
       </header>
 
-      {/* ---------- 版本信息 / 完整性校验 ---------- */}
-      <section className="dlp-shell dlp-panel" id="dlp-release">
-        <div className="dlp-panel-grid">
-          <div>
-            <h2 className="dlp-h2">{t('dl.verifyTitle')}</h2>
-            <p className="dlp-muted">{t('dl.verifyDesc')}</p>
-            {releaseDate ? (
-              <p className="dlp-muted">
-                {t('dl.publishedAt')}: {releaseDate}
-              </p>
-            ) : null}
-          </div>
+      <main>
+        {/* ---------- 版本信息 / 完整性校验 ---------- */}
+        <section className="dlp-shell" id="dlp-release">
+          <div className="dlp-card dlp-spec-card">
+            <div className="dlp-spec-head">
+              <h2 className="dlp-h2">{t('dl.verifyTitle')}</h2>
+              <p className="dlp-muted">{t('dl.verifyDesc')}</p>
+              {releaseDate ? (
+                <p className="dlp-muted">
+                  {t('dl.publishedAt')}: {releaseDate}
+                </p>
+              ) : null}
+            </div>
 
-          <dl className="dlp-spec">
-            <div>
-              <dt>{t('dl.latestVersion')}</dt>
-              <dd>{release?.version_name ? `v${release.version_name}` : '—'}</dd>
-            </div>
-            <div>
-              <dt>{t('dl.fileSize')}</dt>
-              <dd>{sizeText || '—'}</dd>
-            </div>
-            <div>
-              <dt>{t('dl.pkgName')}</dt>
-              <dd className="dlp-mono">{release?.package_name || '—'}</dd>
-            </div>
-            <div className="dlp-spec-wide">
-              <dt>{t('dl.sha256')}</dt>
-              <dd className="dlp-mono dlp-hash">
-                <span>{release?.file_sha256 || '—'}</span>
-                {release?.file_sha256 ? (
-                  <button
-                    type="button"
-                    className="dlp-copy"
-                    onClick={() => void copyValue(release.file_sha256, 'sha256')}
-                  >
-                    {copiedField === 'sha256' ? t('dl.copiedShort') : t('dl.copy')}
-                  </button>
-                ) : null}
-              </dd>
-            </div>
-            {release?.download_url ? (
+            <dl className="dlp-spec">
+              <div>
+                <dt>{t('dl.latestVersion')}</dt>
+                <dd>{release?.version_name ? `v${release.version_name}` : '—'}</dd>
+              </div>
+              <div>
+                <dt>{t('dl.fileSize')}</dt>
+                <dd>{sizeText || '—'}</dd>
+              </div>
+              <div>
+                <dt>{t('dl.pkgName')}</dt>
+                <dd className="dlp-mono">{release?.package_name || '—'}</dd>
+              </div>
+              <div>
+                <dt>{t('dl.versionCode')}</dt>
+                <dd>{release?.version_code || '—'}</dd>
+              </div>
               <div className="dlp-spec-wide">
-                <dt>{t('dl.downloadUrl')}</dt>
+                <dt>{t('dl.sha256')}</dt>
                 <dd className="dlp-mono dlp-hash">
-                  <span>{release.download_url}</span>
-                  <button
-                    type="button"
-                    className="dlp-copy"
-                    onClick={() => void copyValue(release.download_url, 'url')}
-                  >
-                    {copiedField === 'url' ? t('dl.copiedShort') : t('dl.copy')}
-                  </button>
+                  <span>{release?.file_sha256 || '—'}</span>
+                  {release?.file_sha256 ? (
+                    <button
+                      type="button"
+                      className="dlp-copy"
+                      onClick={() => void copyValue(release.file_sha256, 'sha256')}
+                    >
+                      {copiedField === 'sha256' ? t('dl.copiedShort') : t('dl.copy')}
+                    </button>
+                  ) : null}
                 </dd>
               </div>
-            ) : null}
-          </dl>
-        </div>
-        {copied ? <div className="dlp-toast">{t('dl.copied')}</div> : null}
-      </section>
+              {release?.download_url ? (
+                <div className="dlp-spec-wide">
+                  <dt>{t('dl.downloadUrl')}</dt>
+                  <dd className="dlp-mono dlp-hash">
+                    <span>{release.download_url}</span>
+                    <button
+                      type="button"
+                      className="dlp-copy"
+                      onClick={() => void copyValue(release.download_url, 'url')}
+                    >
+                      {copiedField === 'url' ? t('dl.copiedShort') : t('dl.copy')}
+                    </button>
+                  </dd>
+                </div>
+              ) : null}
+            </dl>
+          </div>
+        </section>
 
-      {/* ---------- 功能特性 ---------- */}
-      <section className="dlp-shell dlp-section">
-        <h2 className="dlp-h2 dlp-h2--center">{t('dl.featuresTitle')}</h2>
-        <p className="dlp-muted dlp-muted--center">{t('dl.featuresSubtitle')}</p>
+        {/* ---------- 功能特性 ---------- */}
+        <section className="dlp-shell dlp-section">
+          <h2 className="dlp-h2 dlp-h2--center">{t('dl.featuresTitle')}</h2>
+          <p className="dlp-muted dlp-muted--center">{t('dl.featuresSubtitle')}</p>
 
-        <div className="dlp-features">
-          {features.map((feature) => (
-            <article className={`dlp-feature dlp-feature--${feature.tone}`} key={feature.title}>
-              <span className="dlp-feature-icon">{feature.icon}</span>
-              <h3>{feature.title}</h3>
-              <p>{feature.desc}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      {/* ---------- 安装步骤 ---------- */}
-      <section className="dlp-shell dlp-section">
-        <h2 className="dlp-h2 dlp-h2--center">{t('dl.installTitle')}</h2>
-        <ol className="dlp-steps">
-          {installSteps.map((step, index) => (
-            <li key={step.title}>
-              <span className="dlp-step-index">{index + 1}</span>
-              <div>
-                <b>{step.title}</b>
-                <p>{step.desc}</p>
-              </div>
-            </li>
-          ))}
-        </ol>
-      </section>
-
-      {/* ---------- 更新日志 ---------- */}
-      <section className="dlp-shell dlp-section" id="dlp-notes">
-        <h2 className="dlp-h2">{t('dl.changelog')}</h2>
-        {notes.length > 0 ? (
-          <ul className="dlp-notes">
-            {notes.map((line) => (
-              <li key={line}>{line}</li>
+          <div className="dlp-features">
+            {features.map((feature) => (
+              <article className={`dlp-feature dlp-feature--${feature.tone}`} key={feature.title}>
+                <span className="dlp-feature-icon">{feature.icon}</span>
+                <h3>{feature.title}</h3>
+                <p>{feature.desc}</p>
+              </article>
             ))}
-          </ul>
-        ) : (
-          <p className="dlp-muted">{t('dl.changelogEmpty')}</p>
-        )}
-      </section>
+          </div>
+        </section>
+
+        {/* ---------- 安装步骤 ---------- */}
+        <section className="dlp-shell dlp-section">
+          <h2 className="dlp-h2 dlp-h2--center">{t('dl.installTitle')}</h2>
+          <ol className="dlp-steps">
+            {installSteps.map((step, index) => (
+              <li key={step.title}>
+                <span className="dlp-step-index">{index + 1}</span>
+                <div>
+                  <b>{step.title}</b>
+                  <p>{step.desc}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        {/* ---------- 更新日志 ---------- */}
+        <section className="dlp-shell dlp-section" id="dlp-notes">
+          <div className="dlp-card dlp-notes-card">
+            <h2 className="dlp-h2">{t('dl.changelog')}</h2>
+            {notes.length > 0 ? (
+              <ul className="dlp-notes">
+                {notes.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="dlp-muted">{t('dl.changelogEmpty')}</p>
+            )}
+          </div>
+        </section>
+      </main>
+
+      {copied ? <div className="dlp-toast">{t('dl.copied')}</div> : null}
 
       <footer className="dlp-footer">
         <div className="dlp-shell dlp-footer-inner">
@@ -404,224 +440,256 @@ const DownloadPage: React.FC = () => {
 
 const dlpStyles = `
 .dlp {
-  --dlp-brand: #1a73e8;
-  --dlp-brand-deep: #0b3d91;
-  --dlp-ink: #0f172a;
-  --dlp-muted: #5b6b83;
-  --dlp-line: rgba(15, 23, 42, 0.08);
+  --brand: #2563eb;
+  --brand-2: #0891b2;
+  --ink: #101828;
+  --muted: #5d6b82;
+  --line: #e7ecf3;
+  --card: #ffffff;
   position: relative;
   min-height: 100vh;
-  background: #f6f8fc;
-  color: var(--dlp-ink);
+  background: #f8fafd;
+  color: var(--ink);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", Roboto, Arial, sans-serif;
   overflow-x: hidden;
 }
 .dlp * { box-sizing: border-box; }
-.dlp-shell { width: 100%; max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+.dlp-shell { width: 100%; max-width: 1080px; margin: 0 auto; padding: 0 24px; position: relative; }
 
-/* 深色主视觉：白色文案必须落在深色底上，否则整屏不可读 */
+.dlp-bg { position: absolute; inset: 0 0 auto 0; height: 760px; overflow: hidden; pointer-events: none; }
+.dlp-blob { position: absolute; border-radius: 50%; filter: blur(80px); }
+.dlp-blob--a { width: 620px; height: 620px; left: -180px; top: -260px; background: rgba(37, 99, 235, .16); }
+.dlp-blob--b { width: 520px; height: 520px; right: -160px; top: -220px; background: rgba(8, 145, 178, .12); }
+.dlp-blob--c { width: 380px; height: 380px; right: 22%; top: 180px; background: rgba(16, 185, 129, .08); }
+
+/* ---------- 主视觉 ---------- */
 .dlp-hero {
-  position: relative; overflow: hidden;
-  padding: 76px 0 108px;
-  background:
-    radial-gradient(720px 400px at 96% -8%, rgba(34, 197, 94, .16) 0%, transparent 58%),
-    radial-gradient(1000px 560px at 4% -20%, rgba(66, 133, 244, .42) 0%, transparent 62%),
-    linear-gradient(158deg, #08182f 0%, #10294f 46%, #061530 100%);
+  display: grid; grid-template-columns: 1.05fr .95fr; gap: 40px; align-items: center;
+  padding-top: 72px; padding-bottom: 40px;
 }
-.dlp-backdrop { position: absolute; inset: 0; overflow: hidden; }
-.dlp-glow { position: absolute; border-radius: 50%; filter: blur(90px); opacity: .5; }
-.dlp-glow--a { width: 560px; height: 560px; left: -160px; top: -240px; background: #2f7bf0; }
-.dlp-glow--b { width: 460px; height: 460px; right: -140px; top: -180px; background: #22c55e; opacity: .3; }
-.dlp-grid {
-  position: absolute; inset: 0;
-  background-image: linear-gradient(rgba(255,255,255,.06) 1px, transparent 1px),
-                    linear-gradient(90deg, rgba(255,255,255,.06) 1px, transparent 1px);
-  background-size: 44px 44px;
-  mask-image: linear-gradient(#000 35%, transparent 92%);
-  -webkit-mask-image: linear-gradient(#000 35%, transparent 92%);
-}
-
-.dlp-hero-inner {
-  position: relative; z-index: 1;
-  display: grid; grid-template-columns: 1.08fr .92fr; gap: 48px; align-items: center;
-}
-.dlp-hero-copy { color: #fff; }
-
 .dlp-badge {
   display: inline-flex; align-items: center; gap: 8px;
-  padding: 6px 14px; border-radius: 999px;
-  background: rgba(255,255,255,.14);
-  border: 1px solid rgba(255,255,255,.22);
-  color: #eaf2ff; font-size: 13px; letter-spacing: .3px;
-  backdrop-filter: blur(6px);
+  padding: 7px 15px; border-radius: 999px;
+  background: #eef4ff; border: 1px solid #dbe7ff;
+  color: #1d4ed8; font-size: 13px; font-weight: 600; letter-spacing: .3px;
 }
-.dlp-badge em { font-style: normal; font-weight: 700; color: #fff; }
-.dlp-badge-dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 4px rgba(34,197,94,.22); }
+.dlp-badge em { font-style: normal; font-weight: 800; color: var(--brand); }
+.dlp-badge-dot { width: 7px; height: 7px; border-radius: 50%; background: #10b981; box-shadow: 0 0 0 4px rgba(16,185,129,.15); }
 
 .dlp-title {
-  margin: 22px 0 12px; font-size: 54px; line-height: 1.08; font-weight: 800; letter-spacing: -1px;
-  background: linear-gradient(120deg, #ffffff 20%, #cfe3ff 90%);
-  -webkit-background-clip: text; background-clip: text; color: transparent;
+  margin: 20px 0 0; font-size: 52px; line-height: 1.1; font-weight: 800; letter-spacing: -.5px; color: var(--ink);
 }
-.dlp-subtitle { margin: 0 0 32px; font-size: 18px; color: rgba(255,255,255,.82); line-height: 1.7; max-width: 30em; }
+.dlp-title-accent {
+  display: block; width: 64px; height: 6px; border-radius: 999px; margin-top: 16px;
+  background: linear-gradient(90deg, var(--brand), #10b981);
+}
+.dlp-subtitle { margin: 18px 0 30px; font-size: 17px; color: var(--muted); line-height: 1.75; max-width: 28em; }
 
-.dlp-actions { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+.dlp-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 .dlp-cta {
-  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
-  height: 54px; padding: 0 30px; border-radius: 14px; border: 0;
+  display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+  height: 54px; padding: 0 32px; border-radius: 999px; border: 0;
   font-size: 16px; font-weight: 700; cursor: pointer; text-decoration: none;
-  background: linear-gradient(135deg, #ffffff 0%, #e6efff 100%);
-  color: var(--dlp-brand-deep);
-  box-shadow: 0 16px 34px rgba(4, 26, 70, .34);
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-2) 100%);
+  color: #fff;
+  box-shadow: 0 12px 26px rgba(37, 99, 235, .32);
   transition: transform .18s ease, box-shadow .18s ease, opacity .18s ease;
 }
-.dlp-cta:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 20px 40px rgba(4, 26, 70, .42); }
-.dlp-cta:disabled { opacity: .55; cursor: not-allowed; box-shadow: none; }
+.dlp-cta:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 16px 32px rgba(37, 99, 235, .4); }
+.dlp-cta:disabled { background: #c7d2e3; box-shadow: none; cursor: not-allowed; }
 .dlp-cta--ghost {
-  background: rgba(255,255,255,.08); color: #eaf2ff;
-  border: 1px solid rgba(255,255,255,.28); box-shadow: none;
+  background: #fff; color: var(--ink); border: 1px solid var(--line); box-shadow: 0 2px 8px rgba(16,24,40,.05);
 }
-.dlp-cta--ghost:hover { background: rgba(255,255,255,.16); }
+.dlp-cta--ghost:hover { border-color: #cfd9e6; }
 
-.dlp-meta { display: flex; flex-wrap: wrap; gap: 10px; margin: 26px 0 18px; }
+.dlp-meta { display: flex; flex-wrap: wrap; gap: 9px; margin: 24px 0 16px; }
 .dlp-chip {
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 6px 12px; border-radius: 10px; font-size: 13px;
-  background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.18); color: #e8f0ff;
+  padding: 6px 13px; border-radius: 999px; font-size: 13px;
+  background: #fff; border: 1px solid var(--line); color: #43506a;
 }
-.dlp-security { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 13px; color: rgba(255,255,255,.72); }
+.dlp-security { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 13px; color: var(--muted); }
+.dlp-security .anticon { color: #10b981; }
 .dlp-empty {
   display: flex; flex-direction: column; gap: 4px; margin: 18px 0 0;
-  padding: 14px 16px; border-radius: 12px; font-size: 13px; color: #eaf2ff;
-  background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2);
+  padding: 14px 16px; border-radius: 14px; font-size: 13px; color: #7a4d00;
+  background: #fff8e6; border: 1px solid #f3e3b3;
 }
+.dlp-empty strong { font-size: 14px; }
 
-.dlp-hero-visual { display: flex; justify-content: center; }
+/* ---------- 机型预览 + 扫码卡片 ---------- */
+.dlp-hero-visual { position: relative; display: flex; justify-content: center; padding: 12px 0 26px; }
+.dlp-phone-backdrop {
+  position: absolute; inset: 8% -4% 4% 8%;
+  background: linear-gradient(135deg, #dbeafe 0%, #d1fae5 100%);
+  border-radius: 36px; transform: rotate(5deg);
+}
 .dlp-phone {
-  position: relative; width: 272px; height: 552px; border-radius: 40px;
+  position: relative; width: 288px; border-radius: 42px;
   background: linear-gradient(160deg, #101a2e, #060c18);
-  padding: 12px; box-shadow: 0 40px 70px rgba(3, 14, 38, .55), inset 0 0 0 1px rgba(255,255,255,.08);
+  padding: 11px;
+  box-shadow: 0 34px 64px rgba(8, 20, 45, .32), inset 0 0 0 1px rgba(255,255,255,.09);
+  animation: dlpFloat 7s ease-in-out infinite;
 }
-.dlp-phone-notch { position: absolute; top: 22px; left: 50%; transform: translateX(-50%); width: 84px; height: 8px; border-radius: 999px; background: #0a1426; }
+@keyframes dlpFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dlp-phone { animation: none; }
+}
 .dlp-phone-screen {
-  height: 100%; border-radius: 30px; padding: 34px 16px 16px;
+  border-radius: 32px; padding: 12px 14px 16px; overflow: hidden;
   background: linear-gradient(180deg, #f8fbff 0%, #eef4fd 100%);
-  display: flex; flex-direction: column; gap: 14px; overflow: hidden;
+  display: flex; flex-direction: column; gap: 12px;
 }
-.dlp-app-bar { display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 700; color: #274063; }
-.dlp-app-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }
+.dlp-statusbar { display: flex; align-items: center; justify-content: space-between; padding: 2px 6px 0; }
+.dlp-statusbar span:first-child { font-size: 11px; font-weight: 700; color: #274063; }
+.dlp-statusbar-pill { width: 64px; height: 16px; border-radius: 999px; background: #0a1426; }
+.dlp-statusbar-icons { display: inline-flex; gap: 4px; }
+.dlp-statusbar-icons i { width: 14px; height: 8px; border-radius: 3px; background: #b9c6da; }
+.dlp-app-bar { display: flex; align-items: center; justify-content: space-between; padding: 4px 4px 0; }
+.dlp-app-bar b { font-size: 14px; color: #16233c; }
+.dlp-app-dot { width: 8px; height: 8px; border-radius: 50%; background: #10b981; }
 .dlp-app-power {
-  border-radius: 16px; padding: 14px; color: #fff;
-  background: linear-gradient(135deg, var(--dlp-brand) 0%, var(--dlp-brand-deep) 100%);
-  box-shadow: 0 12px 24px rgba(26,115,232,.28);
+  border-radius: 18px; padding: 14px; color: #fff;
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-2) 100%);
+  box-shadow: 0 12px 24px rgba(37, 99, 235, .3);
 }
-.dlp-app-power small { display: block; font-size: 11px; opacity: .8; }
-.dlp-app-power strong { display: block; font-size: 28px; font-weight: 800; letter-spacing: -.5px; }
-.dlp-app-power strong em { font-style: normal; font-size: 13px; font-weight: 600; margin-left: 4px; opacity: .85; }
-.dlp-spark { width: 100%; height: 34px; margin-top: 8px; color: rgba(255,255,255,.85); }
+.dlp-app-power small { display: block; font-size: 11px; opacity: .85; }
+.dlp-app-power strong { display: block; font-size: 28px; font-weight: 800; letter-spacing: -.5px; margin-top: 2px; }
+.dlp-app-power strong em { font-style: normal; font-size: 13px; font-weight: 600; margin-left: 4px; opacity: .9; }
+.dlp-spark { width: 100%; height: 36px; margin-top: 8px; color: rgba(255,255,255,.95); }
 .dlp-app-list { display: flex; flex-direction: column; gap: 8px; }
 .dlp-app-row {
   display: flex; align-items: center; gap: 10px; padding: 11px 12px;
-  border-radius: 12px; background: #fff; box-shadow: 0 4px 12px rgba(15,23,42,.06);
+  border-radius: 14px; background: #fff; box-shadow: 0 4px 12px rgba(15,23,42,.06);
 }
-.dlp-app-flag { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; flex-shrink: 0; }
+.dlp-app-flag { width: 8px; height: 8px; border-radius: 50%; background: #10b981; flex-shrink: 0; }
 .dlp-app-flag--warn { background: #f59e0b; }
 .dlp-app-name { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .dlp-app-name b { font-size: 12px; color: #16233c; }
 .dlp-app-name small { font-size: 10px; color: #7b8aa4; }
 .dlp-app-power-value { font-size: 12px; font-weight: 700; color: #16233c; }
 
-/* 规格卡片上浮压住主视觉底边，形成层次 */
-.dlp-panel {
-  position: relative; z-index: 2; margin-top: -64px;
-  padding-top: 28px; padding-bottom: 28px;
-  background: #fff; border-radius: 22px;
-  box-shadow: 0 24px 60px rgba(8, 24, 47, .16), 0 1px 0 rgba(15,23,42,.04);
+.dlp-qr-card {
+  position: absolute; right: 2%; bottom: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 14px 16px 12px; border-radius: 18px;
+  background: #fff; border: 1px solid var(--line);
+  box-shadow: 0 18px 40px rgba(16, 24, 40, .12);
 }
-.dlp-panel-grid { display: grid; grid-template-columns: .9fr 1.1fr; gap: 32px; align-items: start; }
-.dlp-h2 { margin: 0 0 10px; font-size: 24px; font-weight: 800; letter-spacing: -.3px; }
-.dlp-h2--center { text-align: center; }
-.dlp-muted { margin: 0 0 8px; color: var(--dlp-muted); font-size: 14px; line-height: 1.75; }
-.dlp-muted--center { text-align: center; max-width: 44em; margin: 0 auto 28px; }
+.dlp-qr-card .ant-qrcode { border: none; }
+.dlp-qr-card span { font-size: 12px; color: var(--muted); font-weight: 600; }
 
-.dlp-spec { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 14px 20px; }
+/* ---------- 通用区块 ---------- */
+.dlp-card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 22px;
+  box-shadow: 0 10px 30px rgba(16, 24, 40, .06);
+}
+.dlp-h2 { margin: 0 0 10px; font-size: 26px; font-weight: 800; letter-spacing: -.3px; color: var(--ink); }
+.dlp-h2--center { text-align: center; }
+.dlp-muted { margin: 0 0 8px; color: var(--muted); font-size: 14px; line-height: 1.75; }
+.dlp-muted--center { text-align: center; max-width: 44em; margin: 0 auto 30px; }
+
+.dlp-spec-card {
+  margin-top: 6px; padding: 30px 32px;
+  display: grid; grid-template-columns: .82fr 1.18fr; gap: 28px 36px; align-items: start;
+}
+.dlp-spec { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 16px 22px; align-content: start; }
 .dlp-spec > div { min-width: 0; }
 .dlp-spec-wide { grid-column: 1 / -1; }
-.dlp-spec dt { font-size: 12px; color: #8494ac; margin-bottom: 4px; }
-.dlp-spec dd { margin: 0; font-size: 14px; font-weight: 600; color: #16233c; word-break: break-all; }
+.dlp-spec dt { font-size: 12px; color: #8595ac; margin-bottom: 5px; letter-spacing: .3px; }
+.dlp-spec dd { margin: 0; font-size: 15px; font-weight: 700; color: var(--ink); word-break: break-all; }
 .dlp-mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; font-weight: 500; font-size: 12.5px; }
 .dlp-hash { display: flex; align-items: flex-start; gap: 10px; }
 .dlp-hash span { flex: 1; min-width: 0; }
 .dlp-copy {
-  flex-shrink: 0; padding: 3px 10px; border-radius: 8px; cursor: pointer;
-  font-size: 12px; color: var(--dlp-brand); background: #eef4ff; border: 1px solid #d9e6ff;
+  flex-shrink: 0; padding: 4px 12px; border-radius: 999px; cursor: pointer;
+  font-size: 12px; font-weight: 600; color: var(--brand); background: #eef4ff; border: 1px solid #dbe7ff;
 }
 .dlp-copy:hover { background: #e2ecff; }
+
 .dlp-toast {
   position: fixed; left: 50%; bottom: 40px; transform: translateX(-50%);
-  padding: 10px 20px; border-radius: 12px; font-size: 13px; color: #fff;
-  background: rgba(15,23,42,.9); box-shadow: 0 12px 30px rgba(15,23,42,.3); z-index: 20;
+  padding: 10px 20px; border-radius: 999px; font-size: 13px; color: #fff;
+  background: rgba(16, 24, 40, .92); box-shadow: 0 12px 30px rgba(16, 24, 40, .3); z-index: 20;
 }
 
-.dlp-section { padding-top: 68px; padding-bottom: 8px; }
-.dlp-features { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+.dlp-section { padding-top: 64px; padding-bottom: 8px; }
+.dlp-features { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
 .dlp-feature {
-  padding: 24px 20px; border-radius: 18px; background: #fff;
-  border: 1px solid var(--dlp-line); box-shadow: 0 10px 28px rgba(15,23,42,.05);
+  padding: 26px 22px; border-radius: 20px; background: #fff;
+  border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(16, 24, 40, .05);
   transition: transform .2s ease, box-shadow .2s ease;
 }
-.dlp-feature:hover { transform: translateY(-4px); box-shadow: 0 18px 38px rgba(15,23,42,.1); }
-.dlp-feature h3 { margin: 14px 0 6px; font-size: 16px; font-weight: 700; }
-.dlp-feature p { margin: 0; font-size: 13px; color: var(--dlp-muted); line-height: 1.7; }
+.dlp-feature:hover { transform: translateY(-4px); box-shadow: 0 18px 36px rgba(16, 24, 40, .1); }
+.dlp-feature h3 { margin: 16px 0 6px; font-size: 16px; font-weight: 700; color: var(--ink); }
+.dlp-feature p { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.7; }
 .dlp-feature-icon {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 46px; height: 46px; border-radius: 14px; font-size: 22px;
+  width: 48px; height: 48px; border-radius: 15px; font-size: 22px;
 }
-.dlp-feature--blue .dlp-feature-icon { background: #e8f0fe; color: #1a73e8; }
-.dlp-feature--amber .dlp-feature-icon { background: #fef3e2; color: #f59e0b; }
-.dlp-feature--rose .dlp-feature-icon { background: #fdeaea; color: #ef4444; }
-.dlp-feature--green .dlp-feature-icon { background: #e6f7ee; color: #22c55e; }
+.dlp-feature--blue .dlp-feature-icon { background: #e8f0fe; color: #2563eb; }
+.dlp-feature--cyan .dlp-feature-icon { background: #e0f7f8; color: #0891b2; }
+.dlp-feature--rose .dlp-feature-icon { background: #fdeaea; color: #e11d48; }
+.dlp-feature--green .dlp-feature-icon { background: #e6f7ee; color: #10b981; }
 
-.dlp-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.dlp-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .dlp-steps li {
-  display: flex; gap: 14px; padding: 22px; border-radius: 18px;
-  background: #fff; border: 1px solid var(--dlp-line);
+  display: flex; gap: 14px; padding: 24px 22px; border-radius: 20px;
+  background: #fff; border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(16, 24, 40, .05);
 }
-.dlp-steps b { font-size: 15px; }
-.dlp-steps p { margin: 6px 0 0; font-size: 13px; color: var(--dlp-muted); line-height: 1.7; }
+.dlp-steps b { font-size: 15px; color: var(--ink); }
+.dlp-steps p { margin: 6px 0 0; font-size: 13px; color: var(--muted); line-height: 1.7; }
 .dlp-step-index {
-  flex-shrink: 0; width: 30px; height: 30px; border-radius: 10px;
+  flex-shrink: 0; width: 32px; height: 32px; border-radius: 11px;
   display: inline-flex; align-items: center; justify-content: center;
   font-weight: 800; font-size: 14px; color: #fff;
-  background: linear-gradient(135deg, var(--dlp-brand) 0%, var(--dlp-brand-deep) 100%);
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-2) 100%);
+  box-shadow: 0 6px 14px rgba(37, 99, 235, .3);
 }
 
-.dlp-notes { margin: 0; padding: 0 0 0 18px; color: #33445f; font-size: 14px; line-height: 2; }
-.dlp-notes li::marker { color: var(--dlp-brand); }
+.dlp-notes-card { padding: 30px 32px; }
+.dlp-notes { margin: 4px 0 0; padding: 0; list-style: none; color: #33445f; font-size: 14px; }
+.dlp-notes li { position: relative; padding: 7px 0 7px 24px; line-height: 1.7; }
+.dlp-notes li::before {
+  content: ""; position: absolute; left: 4px; top: 16px;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--brand), var(--brand-2));
+}
 
-.dlp-footer { margin-top: 72px; padding: 26px 0 34px; border-top: 1px solid var(--dlp-line); }
-.dlp-footer-inner { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; font-size: 13px; color: var(--dlp-muted); }
-.dlp-footer a { color: var(--dlp-brand); text-decoration: none; }
+.dlp-footer { margin-top: 72px; padding: 26px 0 36px; border-top: 1px solid var(--line); }
+.dlp-footer-inner { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; font-size: 13px; color: var(--muted); }
+.dlp-footer a { color: var(--brand); text-decoration: none; }
 .dlp-footer a:hover { text-decoration: underline; }
 
+/* ---------- 响应式 ---------- */
 @media (max-width: 980px) {
-  .dlp-hero { padding: 48px 0 40px; }
-  .dlp-hero-inner { grid-template-columns: 1fr; gap: 40px; }
-  .dlp-hero-visual { order: -1; }
-  .dlp-phone { width: 236px; height: 480px; }
-  .dlp-title { font-size: 40px; }
+  .dlp-hero { grid-template-columns: 1fr; gap: 8px; padding-top: 44px; text-align: center; }
+  /* 用户已经在手机上：隐藏机型预览与扫码卡片，第一屏留给标题与下载按钮 */
+  .dlp-hero-visual { display: none; }
+  .dlp-title { font-size: 36px; }
+  .dlp-title-accent { margin-left: auto; margin-right: auto; }
+  .dlp-subtitle { margin-bottom: 24px; max-width: none; }
+  .dlp-actions { justify-content: center; }
+  .dlp-meta { justify-content: center; }
+  .dlp-security { justify-content: center; }
   .dlp-features { grid-template-columns: 1fr 1fr; }
   .dlp-steps { grid-template-columns: 1fr; }
-  .dlp-panel-grid { grid-template-columns: 1fr; gap: 22px; }
+  .dlp-spec-card { grid-template-columns: 1fr; gap: 20px; padding: 24px 22px; }
 }
 @media (max-width: 620px) {
   .dlp-shell { padding: 0 18px; }
-  .dlp-title { font-size: 32px; }
+  .dlp-hero { padding-top: 36px; }
+  .dlp-title { font-size: 31px; }
   .dlp-subtitle { font-size: 15px; }
   .dlp-cta { width: 100%; padding: 0 20px; }
   .dlp-features { grid-template-columns: 1fr; }
-  .dlp-spec { grid-template-columns: 1fr; }
-  .dlp-panel { border-radius: 18px; }
+  .dlp-spec { grid-template-columns: 1fr 1fr; }
+  .dlp-card { border-radius: 18px; }
+  .dlp-h2 { font-size: 22px; }
+  .dlp-section { padding-top: 48px; }
 }
 `
 
