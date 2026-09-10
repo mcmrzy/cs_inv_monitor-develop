@@ -103,11 +103,12 @@ test.describe('OTA 升级交互', () => {
     await expect(page.getByRole('button', { name: '上传固件' })).toBeVisible({ timeout: 15_000 })
   })
 
-  test('App版本管理 Tab 显示发布新版本入口', async ({ page }) => {
+  // 发布入口已从「手工填写元数据的发布新版本」改为「上传 APK 由服务端解析」，断言随之调整。
+  test('App版本管理 Tab 显示上传安装包入口', async ({ page }) => {
     await gotoAuthed(page, '/ota')
     await page.locator('.ant-tabs-tab', { hasText: 'App版本管理' }).click()
     await expect(page.locator('.ant-tabs-tab-active', { hasText: 'App版本管理' })).toBeVisible()
-    await expect(page.getByRole('button', { name: '发布新版本' })).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByRole('button', { name: '上传安装包' })).toBeVisible({ timeout: 15_000 })
   })
 
   test('创建升级任务向导弹窗可打开并关闭', async ({ page }) => {

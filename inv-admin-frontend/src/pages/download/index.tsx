@@ -194,6 +194,8 @@ const DownloadPage: React.FC = () => {
             <p className="dlp-subtitle">{t('dl.subtitle')}</p>
 
             <div className="dlp-actions">
+              {/* 文案固定为下载动作：版本未就绪时置灰并由下方提示说明原因，
+                  避免主按钮文字随加载状态变化导致入口不可预期。 */}
               <button
                 type="button"
                 className="dlp-cta"
@@ -201,7 +203,7 @@ const DownloadPage: React.FC = () => {
                 disabled={!hasRelease || loading}
               >
                 <DownloadOutlined />
-                {loading ? t('dl.loadingVersion') : hasRelease ? t('dl.downloadBtn') : t('dl.noRelease')}
+                {t('dl.downloadBtn')}
               </button>
 
               <a className="dlp-cta dlp-cta--ghost" href="#dlp-notes">
