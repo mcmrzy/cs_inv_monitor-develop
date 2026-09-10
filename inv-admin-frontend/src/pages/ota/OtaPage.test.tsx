@@ -101,5 +101,7 @@ describe('OtaPage', () => {
     for (const field of ['version_code', 'version_name', 'download_url', 'file_size', 'file_sha256', 'file_md5']) {
       expect(rawBody).not.toContain(`name="${field}"`)
     }
-  })
+    // 本用例渲染整页 OTA（ProTable + 多个 antd 组件）并跨 portal 操作弹窗，
+    // CI 带 v8 覆盖率运行时明显慢于本地，需显式放宽超时（默认 5s 会误判超时）。
+  }, 30_000)
 })
