@@ -73,7 +73,8 @@ describe('DownloadPage', () => {
     expect(screen.getByText('优化配网流程')).toBeInTheDocument()
   })
 
-  it('disables the download action when no release is published yet', async () => {
+  // 主按钮文案恒定为下载动作（e2e 与旧入口都依赖它），未就绪时置灰并提示原因。
+  it('keeps the download label but disables it when no release is published yet', async () => {
     server.use(
       http.get(LATEST_URL, () =>
         HttpResponse.json({ code: 0, message: 'success', data: { available: false } }),
@@ -82,8 +83,9 @@ describe('DownloadPage', () => {
 
     renderAsAdmin(<DownloadPage />)
 
-    const btn = await screen.findByRole('button', { name: /安装包准备中/ })
-    expect(btn).toBeDisabled()
+    const btn = await screen.findByRole('button', { name: /下载 Android 安装包/ })
+    await waitFor(() => expect(btn).toBeDisabled())
+    expect(screen.getByText('安装包准备中')).toBeInTheDocument()
     expect(screen.getByText('最新版本正在发布，请稍后刷新页面重试。')).toBeInTheDocument()
   })
 
@@ -95,8 +97,8 @@ describe('DownloadPage', () => {
     renderAsAdmin(<DownloadPage />)
 
     expect(screen.getByText('辰烁光伏逆变')).toBeInTheDocument()
-    const btn = await screen.findByRole('button', { name: /安装包准备中/ })
-    expect(btn).toBeDisabled()
+    const btn = await screen.findByRole('button', { name: /下载 Android 安装包/ })
+    await waitFor(() => expect(btn).toBeDisabled())
   })
 
   it('copies the SHA-256 checksum to the clipboard', async () => {
