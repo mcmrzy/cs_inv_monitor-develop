@@ -73,7 +73,11 @@ if "%~1"=="--analyze" (
 
 echo.
 echo [1/2] 开始编译: flutter build apk --release --build-number=%NEW_BUILD% ...
-call flutter build apk --release --build-number=%NEW_BUILD%
+rem 可选: 追加受信下载域名(逗号分隔, 不要空格), 例如对象存储/CDN 直链域名
+rem   set TRUSTED_DOWNLOAD_HOSTS=mybucket.oss-cn-beijing.aliyuncs.com
+set "EXTRA_DEFINES="
+if defined TRUSTED_DOWNLOAD_HOSTS set "EXTRA_DEFINES=--dart-define=TRUSTED_DOWNLOAD_HOSTS=%TRUSTED_DOWNLOAD_HOSTS%"
+call flutter build apk --release --build-number=%NEW_BUILD% --dart-define=APP_VERSION_CODE=%NEW_BUILD% --dart-define=APP_VERSION_NAME=%VER_BASE% %EXTRA_DEFINES%
 if errorlevel 1 (
     echo [错误] 编译失败, 已还原 pubspec.yaml, 请检查上方日志。
     copy /y "%TEMP%\pubspec.yaml.prebuild.bak" pubspec.yaml >nul

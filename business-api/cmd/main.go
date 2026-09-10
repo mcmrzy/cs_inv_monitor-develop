@@ -880,7 +880,9 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 	if err != nil {
 		panic("open firmware directory: " + err.Error())
 	}
-	router.GET("/firmware/*filepath", func(c *gin.Context) {
+	// Gin 不为 GET 路由自动注册 HEAD，只注册 GET 时 HEAD 会落到 Gin 默认 404，
+	// 使 curl -I / 客户端探测误判固件不存在；两者共用 handler（ServeContent 支持 HEAD）。
+	serveFirmwareFile := func(c *gin.Context) {
 		f, err := openFirmwareFile(firmwareRoot, c.Param("filepath"))
 		if err != nil {
 			c.Status(http.StatusNotFound)
@@ -897,7 +899,9 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		c.Header("X-Content-Type-Options", "nosniff")
 		c.Header("Accept-Ranges", "bytes")
 		http.ServeContent(c.Writer, c.Request, stat.Name(), stat.ModTime(), f)
-	})
+	}
+	router.GET("/firmware/*filepath", serveFirmwareFile)
+	router.HEAD("/firmware/*filepath", serveFirmwareFile)
 
 	api := router.Group("/api/v1")
 	// 动态 API 一律禁止缓存（浏览器/CDN），防止边缘缓存吐旧数据
