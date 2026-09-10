@@ -560,23 +560,43 @@ func (r *OTARepository) GetDeviceBySN(ctx context.Context, sn string) (*DeviceIn
 	return &d, nil
 }
 
-// CheckDeviceOwnership 检查设备是否属于指定用户
+// CheckDeviceOwnership 检查设备是否在指定用户的管理范围内。
+// 保留方法名以兼容现有调用方；管理范围包含系统管理员、组织层级下级用户、
+// 设备直属用户以及 user_device_rel 显式共享关系。
 func (r *OTARepository) CheckDeviceOwnership(ctx context.Context, sn string, userID int64) (bool, error) {
-	var deviceUserID int64
-	err := r.db.QueryRow(ctx, `SELECT COALESCE(user_id, 0) FROM devices WHERE sn = $1 AND deleted_at IS NULL`, sn).Scan(&deviceUserID)
-	if err != nil {
-		return false, err
-	}
-	if deviceUserID == userID {
-		return true, nil
-	}
-	// 同时检查 user_device_rel 关联表
-	var count int
-	err = r.db.QueryRow(ctx, `SELECT COUNT(*) FROM user_device_rel WHERE user_id = $1 AND device_sn = $2`, userID, sn).Scan(&count)
-	if err != nil {
-		return false, err
-	}
-	return count > 0, nil
+	var allowed bool
+	err := r.db.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM devices d
+			WHERE d.sn = $2
+			  AND d.deleted_at IS NULL
+			  AND (
+				d.user_id = $1
+				OR EXISTS (
+					SELECT 1
+					FROM users actor
+					WHERE actor.id = $1
+					  AND actor.is_system_admin = TRUE
+					  AND actor.status = 1
+					  AND actor.deleted_at IS NULL
+				)
+				OR EXISTS (
+					SELECT 1
+					FROM v_user_hierarchy hierarchy
+					WHERE hierarchy.ancestor_id = $1
+					  AND hierarchy.descendant_id = d.user_id
+				)
+				OR EXISTS (
+					SELECT 1
+					FROM user_device_rel relation
+					WHERE relation.user_id = $1
+					  AND relation.device_sn = d.sn
+				)
+			  )
+		)
+	`, userID, sn).Scan(&allowed)
+	return allowed, err
 }
 
 // GetLatestFirmware 获取指定型号的最新固件

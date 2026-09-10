@@ -28,12 +28,17 @@ import (
 )
 
 type OTAHandler struct {
-	otaService   *service.OTAService
-	db           *pgxpool.Pool
-	jpushService *service.JPushService
-	notifyPrefs  *repository.NotifyPrefsRepository
-	emailService *service.EmailService
-	userService  *service.UserService
+	otaService         *service.OTAService
+	deviceScopeChecker otaDeviceScopeChecker
+	db                 *pgxpool.Pool
+	jpushService       *service.JPushService
+	notifyPrefs        *repository.NotifyPrefsRepository
+	emailService       *service.EmailService
+	userService        *service.UserService
+}
+
+type otaDeviceScopeChecker interface {
+	CheckDeviceOwnership(ctx context.Context, sn string, userID int64) (bool, error)
 }
 
 // toUserVersion 将 main_version (V1.0.0.20260703) 转换为 user_version 格式 (V1.0.0)
@@ -47,7 +52,29 @@ func toUserVersion(mainVersion string) string {
 }
 
 func NewOTAHandler(otaService *service.OTAService, db *pgxpool.Pool, jpushService *service.JPushService, notifyPrefs *repository.NotifyPrefsRepository, emailService *service.EmailService, userService *service.UserService) *OTAHandler {
-	return &OTAHandler{otaService: otaService, db: db, jpushService: jpushService, notifyPrefs: notifyPrefs, emailService: emailService, userService: userService}
+	return &OTAHandler{
+		otaService: otaService, deviceScopeChecker: otaService, db: db,
+		jpushService: jpushService, notifyPrefs: notifyPrefs,
+		emailService: emailService, userService: userService,
+	}
+}
+
+// ensureDeviceManagementScope 统一校验 App OTA 的设备管理范围。
+// App 不重建用户/组织层级，系统管理员、上级组织和显式共享均由后端判定。
+func (h *OTAHandler) ensureDeviceManagementScope(c *gin.Context, sn string) bool {
+	userID := middleware.GetUserID(c)
+	allowed, err := h.deviceScopeChecker.CheckDeviceOwnership(c.Request.Context(), sn, userID)
+	if err != nil {
+		logger.Error("query OTA device management scope failed",
+			zap.String("device_sn", sn), zap.Int64("user_id", userID), zap.Error(err))
+		response.Error(c, 500, "查询设备信息失败")
+		return false
+	}
+	if !allowed {
+		response.Error(c, 403, "无权管理该设备")
+		return false
+	}
+	return true
 }
 
 // logOTAAudit 记录OTA相关审计日志的辅助函数
@@ -419,6 +446,9 @@ func (h *OTAHandler) CheckUpdate(c *gin.Context) {
 		response.Error(c, 400, "设备SN不能为空")
 		return
 	}
+	if !h.ensureDeviceManagementScope(c, sn) {
+		return
+	}
 
 	// 获取设备信息
 	device, err := h.otaService.GetDeviceBySN(c.Request.Context(), sn)
@@ -610,6 +640,9 @@ func (h *OTAHandler) TriggerOTA(c *gin.Context) {
 		response.Error(c, 400, "invalid request: "+err.Error())
 		return
 	}
+	if !h.ensureDeviceManagementScope(c, req.SN) {
+		return
+	}
 
 	userID := c.GetInt64("user_id")
 	taskID, err := h.otaService.TriggerUpgradeFromApp(c.Request.Context(), userID, req.SN, req.PackageID)
@@ -633,18 +666,12 @@ func (h *OTAHandler) ResendUpgradeCommand(c *gin.Context) {
 		return
 	}
 
-	userID := c.GetInt64("user_id")
-	owned, err := h.otaService.CheckDeviceOwnership(c.Request.Context(), sn, userID)
-	if err != nil {
-		response.Error(c, 500, "查询设备信息失败")
+	if !h.ensureDeviceManagementScope(c, sn) {
 		return
 	}
-	if !owned {
-		response.Error(c, 403, "设备不属于当前用户")
-		return
-	}
+	userID := middleware.GetUserID(c)
 
-	err = h.otaService.ResendPendingUpgradeCommand(c.Request.Context(), sn)
+	err := h.otaService.ResendPendingUpgradeCommand(c.Request.Context(), sn)
 	if err != nil {
 		// 没有待执行的升级任务，尝试获取可用升级包并创建新任务
 		packages, _ := h.otaService.GetAvailablePackagesForDevice(c.Request.Context(), sn, userID)
@@ -670,18 +697,8 @@ func (h *OTAHandler) ResendUpgradeCommand(c *gin.Context) {
 func (h *OTAHandler) GetDeviceOTAStatus(c *gin.Context) {
 	sn := c.Param("sn")
 	userID := middleware.GetUserID(c)
-	if !middleware.GetIsSystemAdmin(c) {
-		owned, ownershipErr := h.otaService.CheckDeviceOwnership(c.Request.Context(), sn, userID)
-		if ownershipErr != nil {
-			logger.Error("query OTA device ownership failed",
-				zap.String("device_sn", sn), zap.Int64("user_id", userID), zap.Error(ownershipErr))
-			response.Error(c, 500, "查询设备信息失败")
-			return
-		}
-		if !owned {
-			response.Error(c, 403, "设备不属于当前用户")
-			return
-		}
+	if !h.ensureDeviceManagementScope(c, sn) {
+		return
 	}
 
 	var (
@@ -718,6 +735,13 @@ func (h *OTAHandler) GetDeviceOTAStatus(c *gin.Context) {
 // GetDeviceOTAHistory 获取设备OTA历史
 func (h *OTAHandler) GetDeviceOTAHistory(c *gin.Context) {
 	sn := c.Param("sn")
+	if sn == "" {
+		response.Error(c, 400, "设备SN不能为空")
+		return
+	}
+	if !h.ensureDeviceManagementScope(c, sn) {
+		return
+	}
 	page := parseInt(c.DefaultQuery("page", "1"))
 	pageSize := getPageSize(c, 20)
 
@@ -1342,6 +1366,9 @@ func (h *OTAHandler) ReportLocalOTAResult(c *gin.Context) {
 		response.Error(c, 400, "设备SN不能为空")
 		return
 	}
+	if !h.ensureDeviceManagementScope(c, sn) {
+		return
+	}
 
 	var req struct {
 		Status      string `json:"status" binding:"required"`      // "success" or "failed"
@@ -1469,18 +1496,10 @@ func (h *OTAHandler) AppInstallPackage(c *gin.Context) {
 		return
 	}
 
+	if !h.ensureDeviceManagementScope(c, req.SN) {
+		return
+	}
 	userID := c.GetInt64("user_id")
-
-	// 安全校验：确认设备属于当前用户
-	owned, err := h.otaService.CheckDeviceOwnership(c.Request.Context(), req.SN, userID)
-	if err != nil {
-		response.Error(c, 500, "查询设备信息失败")
-		return
-	}
-	if !owned {
-		response.Error(c, 403, "设备不属于当前用户")
-		return
-	}
 
 	if err := h.otaService.PushPackageUpgrade(c.Request.Context(), &service.PushPackageUpgradeReq{
 		PackageID: req.PackageID,
@@ -1509,14 +1528,7 @@ func (h *OTAHandler) GetDevicePackageUpgradeInfo(c *gin.Context) {
 		return
 	}
 
-	userID := c.GetInt64("user_id")
-	owned, err := h.otaService.CheckDeviceOwnership(c.Request.Context(), sn, userID)
-	if err != nil {
-		response.Error(c, 500, "查询设备信息失败")
-		return
-	}
-	if !owned {
-		response.Error(c, 403, "设备不属于当前用户")
+	if !h.ensureDeviceManagementScope(c, sn) {
 		return
 	}
 
@@ -1536,14 +1548,7 @@ func (h *OTAHandler) ListDeviceUpgradePackages(c *gin.Context) {
 		return
 	}
 
-	userID := c.GetInt64("user_id")
-	owned, err := h.otaService.CheckDeviceOwnership(c.Request.Context(), sn, userID)
-	if err != nil {
-		response.Error(c, 500, "查询设备信息失败")
-		return
-	}
-	if !owned {
-		response.Error(c, 403, "设备不属于当前用户")
+	if !h.ensureDeviceManagementScope(c, sn) {
 		return
 	}
 
@@ -1661,6 +1666,9 @@ func (h *OTAHandler) GetAvailablePackages(c *gin.Context) {
 	sn := c.Param("sn")
 	if sn == "" {
 		response.Error(c, 400, "设备SN不能为空")
+		return
+	}
+	if !h.ensureDeviceManagementScope(c, sn) {
 		return
 	}
 
