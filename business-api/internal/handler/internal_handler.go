@@ -596,11 +596,16 @@ func (h *InternalHandler) reconcileOTAStatus(ctx context.Context, sn string, fwA
 
 		switch result {
 		case "success":
-			_, err := h.db.Exec(ctx, `
-				UPDATE device_upgrades SET
-					status = 'success', progress = 100, completed_at = NOW(), updated_at = NOW()
-				WHERE id = $1 AND status = 'upgrading'
-			`, rec.id)
+			var err error
+			if h.otaService != nil {
+				err = h.otaService.ReconcileDeviceUpgradeStatus(ctx, rec.id, "success", 100, "")
+			} else {
+				_, err = h.db.Exec(ctx, `
+					UPDATE device_upgrades SET
+						status = 'success', progress = 100, completed_at = NOW(), updated_at = NOW()
+					WHERE id = $1 AND status = 'upgrading'
+				`, rec.id)
+			}
 			if err != nil {
 				logger.Warn("reconcileOTAStatus: update to success failed",
 					zap.String("sn", sn), zap.Int64("id", rec.id), zap.Error(err))
@@ -622,11 +627,17 @@ func (h *InternalHandler) reconcileOTAStatus(ctx context.Context, sn string, fwA
 			}
 
 		case "failed":
-			_, err := h.db.Exec(ctx, `
-				UPDATE device_upgrades SET
-					status = 'failed', error_message = $2, updated_at = NOW()
-				WHERE id = $1 AND status = 'upgrading'
-			`, rec.id, "固件版本未更新，升级可能失败")
+			failureMessage := "固件版本未更新，升级可能失败"
+			var err error
+			if h.otaService != nil {
+				err = h.otaService.ReconcileDeviceUpgradeStatus(ctx, rec.id, "failed", 0, failureMessage)
+			} else {
+				_, err = h.db.Exec(ctx, `
+					UPDATE device_upgrades SET
+						status = 'failed', error_message = $2, updated_at = NOW()
+					WHERE id = $1 AND status = 'upgrading'
+				`, rec.id, failureMessage)
+			}
 			if err != nil {
 				logger.Warn("reconcileOTAStatus: update to failed failed",
 					zap.String("sn", sn), zap.Int64("id", rec.id), zap.Error(err))

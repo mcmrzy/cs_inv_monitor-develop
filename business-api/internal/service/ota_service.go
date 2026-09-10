@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -25,6 +26,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
+)
+
+var (
+	ErrDeviceAlreadyAtTarget    = errors.New("设备已是目标版本，无需重复升级")
+	ErrUpgradeAlreadyInProgress = errors.New("设备已有进行中的升级任务")
 )
 
 type OTAService struct {
@@ -413,26 +419,7 @@ func (s *OTAService) UpdateDeviceUpgradeStatus(ctx context.Context, deviceSN str
 
 				// 设备升级完成时，更新任务统计并检查任务是否全部完成
 				if status == "success" || status == "failed" {
-					s.repo.UpdateUpgradeTaskCounts(bgCtx, *du.TaskID)
-					devices, _ := s.repo.ListUpgradeDevicesByTaskID(bgCtx, *du.TaskID)
-					allDone := true
-					hasFailure := false
-					for _, d := range devices {
-						if d.Status == "pending" || d.Status == "downloading" || d.Status == "upgrading" {
-							allDone = false
-							break
-						}
-						if d.Status == "failed" {
-							hasFailure = true
-						}
-					}
-					if allDone {
-						if hasFailure {
-							s.repo.UpdateUpgradeTaskStatus(bgCtx, *du.TaskID, "partial_success")
-						} else {
-							s.repo.UpdateUpgradeTaskStatus(bgCtx, *du.TaskID, "completed")
-						}
-					}
+					s.syncUpgradeTaskStatus(bgCtx, *du.TaskID)
 				}
 			}
 		}()
@@ -451,6 +438,57 @@ func (s *OTAService) UpdateDeviceUpgradeStatus(ctx context.Context, deviceSN str
 	}
 
 	return rows, nil
+}
+
+// ReconcileDeviceUpgradeStatus closes an exact upgrade row after the device
+// reboots and reports its installed firmware, then synchronously closes the
+// parent task so the App cannot remain stuck in "running".
+func (s *OTAService) ReconcileDeviceUpgradeStatus(ctx context.Context, upgradeID int64, status string, progress int, message string) error {
+	taskID, err := s.repo.ReconcileUpgradeStatusByID(ctx, upgradeID, status, progress, message)
+	if err != nil {
+		return err
+	}
+	if taskID > 0 {
+		return s.syncUpgradeTaskStatus(ctx, taskID)
+	}
+	return nil
+}
+
+func (s *OTAService) syncUpgradeTaskStatus(ctx context.Context, taskID int64) error {
+	if err := s.repo.UpdateUpgradeTaskCounts(ctx, taskID); err != nil {
+		return err
+	}
+	devices, err := s.repo.ListUpgradeDevicesByTaskID(ctx, taskID)
+	if err != nil {
+		return err
+	}
+	if len(devices) == 0 {
+		return nil
+	}
+	terminalStatus := upgradeTaskTerminalStatus(devices)
+	if terminalStatus == "" {
+		return nil
+	}
+	return s.repo.UpdateUpgradeTaskStatus(ctx, taskID, terminalStatus)
+}
+
+func upgradeTaskTerminalStatus(devices []model.DeviceUpgrade) string {
+	if len(devices) == 0 {
+		return ""
+	}
+	hasFailure := false
+	for _, d := range devices {
+		if d.Status == "pending" || d.Status == "downloading" || d.Status == "upgrading" {
+			return ""
+		}
+		if d.Status == "failed" {
+			hasFailure = true
+		}
+	}
+	if hasFailure {
+		return "partial_success"
+	}
+	return "completed"
 }
 
 // RetryUpgrade 重试失败的升级
@@ -1905,6 +1943,18 @@ func (s *OTAService) TriggerUpgradeFromApp(ctx context.Context, userID int64, sn
 	}
 	if !pkg.IsPublished {
 		return 0, fmt.Errorf("升级包未发布")
+	}
+	if _, activeErr := s.repo.GetActiveUpgradeBySN(ctx, sn); activeErr == nil {
+		return 0, ErrUpgradeAlreadyInProgress
+	} else if !errors.Is(activeErr, pgx.ErrNoRows) {
+		return 0, fmt.Errorf("查询进行中的升级任务失败: %w", activeErr)
+	}
+	device, err := s.repo.GetDeviceBySN(ctx, sn)
+	if err != nil {
+		return 0, fmt.Errorf("查询设备版本失败: %w", err)
+	}
+	if strings.EqualFold(strings.TrimSpace(device.MainVersion), strings.TrimSpace(pkg.MainVersion)) {
+		return 0, ErrDeviceAlreadyAtTarget
 	}
 
 	// 3. 调用 repo.CreateTaskFromAppTrigger 创建任务与升级记录
