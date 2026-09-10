@@ -1224,6 +1224,8 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		// APP version checks must work before a user session exists. Keep this
 		// endpoint outside the authenticated OTA management group.
 		api.GET("/ota/app/check", deps.OTAHandler.CheckAppUpdate)
+		// 公开下载页展示最新已发布版本；同样不允许携带用户上下文。
+		api.GET("/ota/app/latest", deps.OTAHandler.GetLatestAppRelease)
 
 		otaGroup := api.Group("/ota").Use(middleware.Auth(deps.JWTService, deps.AuthorizationContextValidator))
 		{
@@ -1334,9 +1336,16 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 	return router
 }
 
+// firmwareStagingDir 是上传过程中的暂存目录（相对固件根目录）。
+// 其中的文件尚未通过校验，绝不可对外提供。
+const firmwareStagingDir = ".staging"
+
 func openFirmwareFile(root *os.Root, requestPath string) (*os.File, error) {
 	name := strings.TrimPrefix(strings.TrimSpace(requestPath), "/")
 	if name == "" {
+		return nil, os.ErrNotExist
+	}
+	if name == firmwareStagingDir || strings.HasPrefix(name, firmwareStagingDir+"/") {
 		return nil, os.ErrNotExist
 	}
 	return root.Open(name)
@@ -1345,14 +1354,18 @@ func openFirmwareFile(root *os.Root, requestPath string) (*os.File, error) {
 func requestBodyLimit() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		const (
-			defaultLimit         = int64(2 << 20)
-			firmwareUploadLimit  = int64(201 << 20)
-			workOrderUploadLimit = int64(51 << 20)
+			defaultLimit          = int64(2 << 20)
+			firmwareUploadLimit   = int64(201 << 20)
+			appPackageUploadLimit = int64(201 << 20)
+			workOrderUploadLimit  = int64(51 << 20)
 		)
 		limit := defaultLimit
 		path := c.Request.URL.Path
 		if c.Request.Method == http.MethodPost && path == "/api/v1/ota/firmware" {
 			limit = firmwareUploadLimit
+		} else if c.Request.Method == http.MethodPost && path == "/api/v1/ota/app/versions" {
+			// App 安装包上传：版本号与摘要由服务端解析，文件体积可达上百 MB。
+			limit = appPackageUploadLimit
 		} else if c.Request.Method == http.MethodPost && strings.HasPrefix(path, "/api/v1/work-orders/") && strings.HasSuffix(path, "/attachments") {
 			limit = workOrderUploadLimit
 		}
