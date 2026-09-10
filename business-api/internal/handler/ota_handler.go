@@ -337,12 +337,24 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 			response.Error(c, 400, err.Error())
 			return
 		}
-		if err := h.otaService.CreateFirmware(c.Request.Context(), fw); err != nil {
+		created, err := h.otaService.CreateFirmware(c.Request.Context(), fw)
+		if err != nil {
 			respondFirmwareCreateError(c, model, targetChip, version, err)
 			return
 		}
 		keepFile = true
-		response.SuccessWithMessage(c, "固件上传成功", nil)
+		// 回显服务端识别/计算的元数据（版本号、主版本号、大小、摘要），
+		// 管理端据此提示「自动识别出了什么」，无需再翻列表核对。
+		response.SuccessWithMessage(c, "固件上传成功", gin.H{
+			"id":           created.ID,
+			"model":        created.Model,
+			"target_chip":  created.TargetChip,
+			"version":      created.Version,
+			"main_version": created.MainVersion,
+			"file_url":     created.FileURL,
+			"file_size":    created.FileSize,
+			"file_sha256":  created.FileSHA256,
+		})
 		return
 	}
 
@@ -371,7 +383,8 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 		response.Error(c, 400, err.Error())
 		return
 	}
-	if err := h.otaService.CreateFirmware(c.Request.Context(), fw); err != nil {
+	created, err := h.otaService.CreateFirmware(c.Request.Context(), fw)
+	if err != nil {
 		respondFirmwareCreateError(c, req.Model, req.TargetChip, req.Version, err)
 		return
 	}
@@ -379,7 +392,10 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 	// 记录审计日志
 	h.logOTAAudit(c, "create", "", fmt.Sprintf(`{"model":"%s","version":"%s"}`, req.Model, req.Version))
 
-	response.SuccessWithMessage(c, "固件创建成功", nil)
+	response.SuccessWithMessage(c, "固件创建成功", gin.H{
+		"id":           created.ID,
+		"main_version": created.MainVersion,
+	})
 }
 
 func (h *OTAHandler) ListFirmware(c *gin.Context) {

@@ -89,14 +89,16 @@ type CreateFirmwareReq struct {
 	UploadedBy       int64
 }
 
-func (s *OTAService) CreateFirmware(ctx context.Context, req *CreateFirmwareReq) error {
+// CreateFirmware 落库固件并返回创建后的记录（含自动生成的主版本号与落库 ID），
+// 供 handler 向管理端回显服务端识别出的元数据。
+func (s *OTAService) CreateFirmware(ctx context.Context, req *CreateFirmwareReq) (*model.Firmware, error) {
 	if err := ValidateFirmwareRequest(req); err != nil {
-		return err
+		return nil, err
 	}
 	// 自动生成主版本号：查询当前芯片的最大主版本号，+1
 	latestVersion, err := s.repo.GetLatestMainVersion(ctx, req.TargetChip)
 	if err != nil {
-		return fmt.Errorf("查询主版本号失败: %w", err)
+		return nil, fmt.Errorf("查询主版本号失败: %w", err)
 	}
 
 	var nextMainVersion string
@@ -135,7 +137,10 @@ func (s *OTAService) CreateFirmware(ctx context.Context, req *CreateFirmwareReq)
 		IsForce:          req.IsForce,
 		UploadedBy:       req.UploadedBy,
 	}
-	return s.repo.CreateFirmware(ctx, fw)
+	if err := s.repo.CreateFirmware(ctx, fw); err != nil {
+		return nil, err
+	}
+	return fw, nil
 }
 
 var (
