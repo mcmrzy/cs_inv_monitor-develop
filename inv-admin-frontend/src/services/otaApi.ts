@@ -26,6 +26,11 @@ export const otaApi = {
 
   // App版本管理
   getAppVersions: (platform?: string) => api.get('/ota/app/versions', { params: platform ? { platform } : {}, expectedDataShape: 'array' }),
+  /** 上传 Android 安装包：版本号/包名/体积/SHA-256 由服务端从 APK 解析 */
+  uploadAppPackage: (formData: FormData) =>
+    api.post('/ota/app/versions', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
   createAppVersion: (data: any) => api.post('/ota/app/versions', data),
   deleteAppVersion: (id: number) => api.delete(`/ota/app/versions/${id}`),
   updateAppVersionRollout: (id: number, percentage: number) => api.put(`/ota/app/versions/${id}/rollout`, { percentage }),

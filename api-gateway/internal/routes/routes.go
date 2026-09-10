@@ -138,6 +138,7 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 	publicGroup.GET("/api/v1/geo/detect-region", p.Handler())
 	// APP 下载页需要匿名查询最新版本；业务层只返回公开版本元数据。
 	publicGroup.GET("/api/v1/ota/app/check", p.Handler())
+	publicGroup.GET("/api/v1/ota/app/latest", p.Handler())
 	publicGroup.Any("/api/v1/captcha/*action", p.Handler())
 	publicGroup.Any("/uploads/*action", p.Handler())
 	publicGroup.Any("/firmware/*action", p.Handler())
@@ -194,7 +195,7 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 	userGroup.Any("/api/v1/work-order-stats", p.Handler())
 	userGroup.Any("/api/v1/work-order-templates", p.Handler())
 	userGroup.Any("/api/v1/upload/*action", p.Handler())
-	
+
 	// System — 系统健康与管道监控（需登录）
 	userGroup.Any("/api/v1/system/*action", p.Handler())
 	userGroup.Any("/api/v1/system", p.Handler())
