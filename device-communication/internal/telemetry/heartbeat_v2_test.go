@@ -123,6 +123,25 @@ func TestParseHeartbeatV2Valid(t *testing.T) {
 	require.JSONEq(t, validHeartbeatV2, string(s.RawEnvelope))
 }
 
+// ARM 能量流界面直接按 V 显示交流输出电压、按 0.1Hz 显示频率。
+// ESP32 当前透传 ARM 的运行参数，因此服务端必须按 ARM 实际量纲还原，
+// 不能继续沿用 CollectorParamAddr.h 中过时的 0.1V/0.01Hz 注释。
+func TestParseHeartbeatV2UsesActualARMACOutputUnits(t *testing.T) {
+	payload := []byte(`{"v":2,"t":1783000000,"data":{
+	  "sys":[256,0,0,0,250,250,null,null,0,0,0],
+	  "pv":[0,0,0,0,0],
+	  "ac":[31,500,0,0,0,0,0,0,0,0,0],
+	  "chr":[0,0,0],
+	  "bat":[0,0,0,0,0],
+	  "eng":[0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+	}}`)
+
+	s, err := ParseHeartbeatV2("sn", payload, time.Unix(1783000005, 0))
+	require.NoError(t, err)
+	require.InDelta(t, 31.0, *s.AC.Voltage, 0.0001)
+	require.InDelta(t, 50.0, *s.AC.Frequency, 0.0001)
+}
+
 // 49 值旧固件（V2.0）不带 fan/diag/sock 组：六组正常解析，新组置空，QualityPartial。
 func TestParseHeartbeatV2Legacy49Values(t *testing.T) {
 	payload := []byte(`{"v":2,"t":1783000000,"data":{
