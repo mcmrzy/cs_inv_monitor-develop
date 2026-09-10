@@ -9,6 +9,7 @@ import {
   SafetyOutlined,
 } from '@ant-design/icons'
 import useTranslation from '@/hooks/useTranslation'
+import { API_BASE } from '@/utils/urls'
 
 interface SliderCaptchaModalProps {
   open: boolean
@@ -21,7 +22,8 @@ const SliderCaptchaModal: React.FC<SliderCaptchaModalProps> = ({
   open,
   onCancel,
   onSuccess,
-  apiUrl = '/api/v1',
+  // 与全局 axios 实例同源：默认取 API_BASE，保证验证码请求与其它 API 一样走配置的 API 域
+  apiUrl = API_BASE,
 }) => {
   const { message } = App.useApp()
   const { t } = useTranslation()

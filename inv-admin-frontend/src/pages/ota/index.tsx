@@ -899,12 +899,28 @@ const FirmwareTab: React.FC = () => {
 
   const uploadMutation = useMutation({
     mutationFn: (formData: FormData) => otaApi.uploadFirmware(formData),
-    onSuccess: () => {
-      message.success(t('ota.firmwareUploadSuccess'))
+    onSuccess: (res: any) => {
+      // 服务端回显识别/计算出的元数据：版本号、主版本号、体积与摘要
+      const created = res?.data?.data
+      if (created?.version) {
+        message.success(
+          t('ota.firmwareUploadDetail', {
+            chip: String(created.target_chip || '').toUpperCase(),
+            version: created.version,
+            mainVersion: created.main_version || '-',
+            size: formatFileSize(created.file_size || 0),
+            sha: String(created.file_sha256 || '').slice(0, 12),
+          }),
+        )
+      } else {
+        message.success(t('ota.firmwareUploadSuccess'))
+      }
       setUploadOpen(false); form.resetFields(); setFileList([])
       queryClient.invalidateQueries({ queryKey: queryKeys.ota.all })
     },
-    onError: () => message.error(t('ota.firmwareUploadFailed')),
+    onError: (err: any) => {
+      message.error(err?.response?.data?.message || err?.message || t('ota.firmwareUploadFailed'))
+    },
     onSettled: () => setUploading(false),
   })
 
@@ -936,11 +952,14 @@ const FirmwareTab: React.FC = () => {
     return [...new Set([...firmwareModels, ...deviceModelNames])].map((m) => ({ label: m, value: m }))
   }, [allFirmwareList, deviceModels])
 
-  // 体积与 SHA-256 由服务端从固件本体计算，前端只负责选择文件。
+  // 体积与 SHA-256 由服务端从固件本体计算；版本号默认从文件名提取
+  //（服务端还会对 ESP 读取镜像内嵌版本，此处仅是预填，可修改）。
   const uploadProps: UploadProps = {
     accept: '.bin', maxCount: 1, fileList,
     beforeUpload: (file) => {
       setFileList([{ uid: '-1', name: file.name, status: 'done', originFileObj: file }])
+      const m = file.name.match(/(\d+\.\d+(?:\.\d+)?)/)
+      if (m) form.setFieldsValue({ version: m[1] })
       return false
     },
     onRemove: () => { setFileList([]) },
@@ -966,8 +985,28 @@ const FirmwareTab: React.FC = () => {
         return <Tag color={chip.color}>{chip.label}</Tag>
       },
     },
-    { title: t('ota.subVersion'), dataIndex: 'version', key: 'version', width: 100 },
+    {
+      title: t('ota.subVersion'), dataIndex: 'version', key: 'version', width: 130,
+      render: (_, record: Firmware) => (
+        <Space size={6}>
+          <span>{record.version}</span>
+          {record.main_version ? (
+            <Tooltip title={`${t('ota.mainVersion')}: ${record.main_version}`}>
+              <Tag style={{ marginRight: 0 }} color="geekblue">{record.main_version}</Tag>
+            </Tooltip>
+          ) : null}
+        </Space>
+      ),
+    },
     { title: t('ota.fileSize'), dataIndex: 'file_size', key: 'file_size', width: 100, render: (_: any, record: Firmware) => formatFileSize(record.file_size) },
+    {
+      title: t('ota.sha256Label'), dataIndex: 'file_sha256', key: 'file_sha256', width: 140,
+      render: (_, record: Firmware) => record.file_sha256 ? (
+        <Tooltip title={record.file_sha256}>
+          <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{record.file_sha256.slice(0, 12)}…</span>
+        </Tooltip>
+      ) : <span style={{ color: '#bfbfbf' }}>-</span>,
+    },
     { title: t('ota.changelog'), dataIndex: 'changelog', key: 'changelog', ellipsis: true, render: (_, record: Firmware) => <Tooltip title={record.changelog}><span>{record.changelog || '-'}</span></Tooltip> },
     { title: t('ota.uploadTime'), dataIndex: 'created_at', key: 'created_at', width: 170, render: (_: any, record: Firmware) => formatInTimezone(record.created_at, timezone, 'YYYY-MM-DD HH:mm:ss') },
     {

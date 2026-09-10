@@ -164,6 +164,9 @@ func TestRouteRegistration_AdminRoutes(t *testing.T) {
 		"/api/v1/admin/system-config",
 		"/api/v1/admin/tenants",
 		"/api/v1/admin/metrics",
+		// 系统公告推送与全量权限码（business-api adminGroup）
+		"/api/v1/admin/push-announcement",
+		"/api/v1/admin/permission-codes",
 		// 系统邮件模板管理（business-api emailGroup，仅系统管理员）
 		"/api/v1/email/templates",
 		"/api/v1/email/templates/*action",
