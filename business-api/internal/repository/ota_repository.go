@@ -186,6 +186,25 @@ func (r *OTARepository) UpdateUpgradeStatus(ctx context.Context, deviceSN string
 	return tag.RowsAffected(), nil
 }
 
+// ReconcileUpgradeStatusByID updates the exact upgrade row selected by version
+// reconciliation and returns its parent task ID. Device-info reconciliation
+// must not use the device-wide updater because another task may have become the
+// latest row while the device was rebooting.
+func (r *OTARepository) ReconcileUpgradeStatusByID(ctx context.Context, id int64, status string, progress int, errMsg string) (int64, error) {
+	var taskID int64
+	err := r.db.QueryRow(ctx, `
+		UPDATE device_upgrades SET
+			status = $2,
+			progress = $3,
+			error_message = $4,
+			completed_at = CASE WHEN $2 IN ('success','failed') THEN NOW() ELSE completed_at END,
+			updated_at = NOW()
+		WHERE id = $1 AND status = 'upgrading'
+		RETURNING COALESCE(task_id, 0)
+	`, id, status, progress, errMsg).Scan(&taskID)
+	return taskID, err
+}
+
 // ListUpgradesByFirmware 按固件分组聚合查询（管理后台Dashboard）
 func (r *OTARepository) ListUpgradesByFirmware(ctx context.Context, page, pageSize int) ([]model.DeviceUpgrade, int, error) {
 	var total int

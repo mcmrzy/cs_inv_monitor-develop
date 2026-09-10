@@ -45,3 +45,25 @@ func TestAggregateDeviceTaskOTAStatusPropagatesFailure(t *testing.T) {
 	assert.Equal(t, "failed", status.Status)
 	assert.Equal(t, "checksum mismatch", status.ErrorMessage)
 }
+
+func TestUpgradeTaskTerminalStatus(t *testing.T) {
+	tests := []struct {
+		name    string
+		devices []model.DeviceUpgrade
+		want    string
+	}{
+		{name: "no details", want: ""},
+		{name: "still upgrading", devices: []model.DeviceUpgrade{{Status: "success"}, {Status: "upgrading"}}, want: ""},
+		{name: "all successful", devices: []model.DeviceUpgrade{{Status: "success"}}, want: "completed"},
+		{name: "terminal with failure", devices: []model.DeviceUpgrade{{Status: "success"}, {Status: "failed"}}, want: "partial_success"},
+		{name: "cancelled only", devices: []model.DeviceUpgrade{{Status: "cancelled"}}, want: "completed"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := upgradeTaskTerminalStatus(tt.devices); got != tt.want {
+				t.Fatalf("upgradeTaskTerminalStatus() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

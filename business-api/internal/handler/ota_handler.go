@@ -615,6 +615,10 @@ func (h *OTAHandler) TriggerOTA(c *gin.Context) {
 	taskID, err := h.otaService.TriggerUpgradeFromApp(c.Request.Context(), userID, req.SN, req.PackageID)
 	if err != nil {
 		log.Printf("[TriggerOTA] error: sn=%s, package_id=%d, err=%v", req.SN, req.PackageID, err)
+		if errors.Is(err, service.ErrDeviceAlreadyAtTarget) || errors.Is(err, service.ErrUpgradeAlreadyInProgress) {
+			response.Error(c, 409, err.Error())
+			return
+		}
 		response.Error(c, 500, "触发升级失败: "+err.Error())
 		return
 	}
