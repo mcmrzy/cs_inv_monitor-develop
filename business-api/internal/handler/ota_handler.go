@@ -5,14 +5,17 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"inv-api-server/internal/config"
 	"inv-api-server/internal/middleware"
 	"inv-api-server/internal/model"
 	"inv-api-server/internal/repository"
 	"inv-api-server/internal/service"
+	"inv-api-server/pkg/apkmeta"
 	"inv-api-server/pkg/logger"
 	"inv-api-server/pkg/response"
 	"io"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -100,15 +103,111 @@ type CreateFirmwareRequest struct {
 	IsForce          bool   `json:"is_force"`
 }
 
+// 上传物料的存储与命名约定。
+const (
+	// stagingDirName 是固件目录下的上传暂存目录。文件在校验通过后会被
+	// rename 到最终路径；该目录不对设备开放（见 cmd/main.go 的静态路由）。
+	stagingDirName = ".staging"
+
+	// appPackageSubdir 放置 Android 安装包，对外路径为 /firmware/apps/android/。
+	appPackageSubdir = "apps/android"
+
+	// maxFirmwareSize 限制固件上传体积，避免无界 multipart 请求。
+	maxFirmwareSize = 64 << 20 // 64 MiB
+
+	// maxAppPackageSize 限制安装包体积。当前 APK 约 100 MB，留出余量；
+	// 该上限与生产 nginx 的 client_max_body_size 200m 保持一致。
+	maxAppPackageSize = 200 << 20 // 200 MiB
+)
+
+// fileTokenPattern 用于校验写入磁盘的文件名片段与扩展名。
+var fileTokenPattern = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
+
+// firmwareUploadDir 返回固件存储根目录，与 /firmware/ 静态路由指向同一目录。
+func firmwareUploadDir() string {
+	dir := config.FirmwareDataDir()
+	_ = os.MkdirAll(dir, 0755)
+	return dir
+}
+
+// stageUploadedFile 先把上传内容落到暂存目录，使调用方能够在确定最终文件名
+// 之前读取文件本体（解析内嵌版本号、包名、摘要）。返回临时文件路径，
+// 调用方负责清理。
+func stageUploadedFile(c *gin.Context, file *multipart.FileHeader) (string, error) {
+	ext := filepath.Ext(file.Filename)
+	if ext != "" && !fileTokenPattern.MatchString(ext[1:]) {
+		return "", fmt.Errorf("文件扩展名包含非法字符")
+	}
+	dir := filepath.Join(firmwareUploadDir(), stagingDirName)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", err
+	}
+	tmpPath := filepath.Join(dir, fmt.Sprintf("upload_%d%s", time.Now().UnixNano(), ext))
+	if err := c.SaveUploadedFile(file, tmpPath); err != nil {
+		return "", err
+	}
+	return tmpPath, nil
+}
+
+// hashFileSHA256 计算文件 SHA-256 并返回其大小。
+// 摘要由服务端从文件本体计算，不接受客户端上报，保证与下载内容一致。
+func hashFileSHA256(f *os.File) (string, int64, error) {
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return "", 0, err
+	}
+	h := sha256.New()
+	size, err := io.Copy(h, f)
+	if err != nil {
+		return "", 0, err
+	}
+	return fmt.Sprintf("%x", h.Sum(nil)), size, nil
+}
+
+// sanitizeFileNamePart 把外部来源的文本收敛为可安全写入文件名的片段。
+func sanitizeFileNamePart(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '.', r == '-', r == '_':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('_')
+		}
+	}
+	out := strings.Trim(b.String(), "._-")
+	if out == "" {
+		return "unknown"
+	}
+	return out
+}
+
+// versionTokenPattern 从固件文件名中提取形如 1.2 / 1.2.3 的版本号片段。
+var versionTokenPattern = regexp.MustCompile(`(?:^|[^0-9])(\d+\.\d+(?:\.\d+)?)`)
+
+// detectFirmwareVersion 在操作员未填写版本号时，从固件本体或原文件名推断版本。
+// ESP-IDF 镜像优先以镜像内嵌的工程版本号为准；其他芯片没有统一的内嵌格式，
+// 回退到规范文件名（如 CSL10_6K2_arm_1.2.3.bin）。
+func detectFirmwareVersion(f *os.File, targetChip, originalName string) string {
+	if strings.EqualFold(targetChip, "esp") {
+		if v, err := service.ReadESPImageVersion(f); err == nil && v != "" {
+			return v
+		}
+	}
+	base := strings.TrimSuffix(filepath.Base(originalName), filepath.Ext(originalName))
+	if m := versionTokenPattern.FindStringSubmatch(base); len(m) == 2 {
+		return m[1]
+	}
+	return ""
+}
+
 func (h *OTAHandler) CreateFirmware(c *gin.Context) {
-	const maxFirmwareSize = 64 << 20 // 64 MiB; prevents unbounded multipart uploads.
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxFirmwareSize)
 	contentType := c.ContentType()
 
 	// 支持 multipart/form-data 文件上传
 	if contentType == "multipart/form-data" {
 		model := strings.TrimSpace(c.PostForm("model"))
-		targetChip := strings.TrimSpace(c.PostForm("target_chip"))
+		targetChip := strings.ToLower(strings.TrimSpace(c.PostForm("target_chip")))
 		version := strings.TrimSpace(c.PostForm("version"))
 		changelog := c.PostForm("changelog")
 		isForce := c.PostForm("is_force") == "true"
@@ -124,17 +223,15 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 		}
 		releaseSignature := strings.TrimSpace(c.PostForm("release_signature"))
 
-		if model == "" || targetChip == "" || version == "" {
-			response.Error(c, 400, "型号、目标芯片和版本号必填")
+		if model == "" || targetChip == "" {
+			response.Error(c, 400, "型号和目标芯片必填")
 			return
 		}
-
-		safePattern := regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
-		if !safePattern.MatchString(model) {
+		if !fileTokenPattern.MatchString(model) {
 			response.Error(c, 400, "型号包含非法字符")
 			return
 		}
-		if version != "" && !safePattern.MatchString(version) {
+		if version != "" && !fileTokenPattern.MatchString(version) {
 			response.Error(c, 400, "版本号包含非法字符")
 			return
 		}
@@ -149,19 +246,50 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 			return
 		}
 
-		// 保存文件到 /data/firmware/ 目录
-		uploadDir := "/data/firmware"
-		os.MkdirAll(uploadDir, 0755)
-
-		ext := filepath.Ext(file.Filename)
-		if ext != "" && !safePattern.MatchString(ext[1:]) {
-			response.Error(c, 400, "文件扩展名包含非法字符")
+		tmpPath, err := stageUploadedFile(c, file)
+		if err != nil {
+			response.Error(c, 500, "保存文件失败")
 			return
 		}
-		filename := fmt.Sprintf("%s_%s_%d%s", model, version, time.Now().UnixNano(), ext)
-		savePath := filepath.Join(uploadDir, filename)
+		// 成功路径会 rename 到最终路径，删除不再存在的暂存文件是无害的空操作。
+		defer func() { _ = os.Remove(tmpPath) }()
 
-		if err := c.SaveUploadedFile(file, savePath); err != nil {
+		f, err := os.Open(tmpPath)
+		if err != nil {
+			response.Error(c, 500, "读取文件失败")
+			return
+		}
+		defer f.Close()
+
+		// 版本号以固件本体为权威来源：ESP 读镜像内嵌版本，其余芯片回退文件名。
+		if version == "" {
+			version = detectFirmwareVersion(f, targetChip, file.Filename)
+			if version == "" {
+				response.Error(c, 400, "无法从固件识别版本号，请填写版本号")
+				return
+			}
+		}
+		if !fileTokenPattern.MatchString(version) {
+			response.Error(c, 400, "识别出的版本号包含非法字符，请手动填写")
+			return
+		}
+		if strings.EqualFold(targetChip, "esp") {
+			if err := service.ValidateESPImageVersion(f, version); err != nil {
+				response.Error(c, 400, err.Error())
+				return
+			}
+		}
+
+		// 计算文件 SHA-256（完整性校验，MD5 已下线）
+		sha256Hex, fileSize, err := hashFileSHA256(f)
+		if err != nil {
+			response.Error(c, 500, "计算文件哈希失败")
+			return
+		}
+
+		filename := fmt.Sprintf("%s_%s_%d%s", model, version, time.Now().UnixNano(), filepath.Ext(file.Filename))
+		savePath := filepath.Join(firmwareUploadDir(), filename)
+		if err := os.Rename(tmpPath, savePath); err != nil {
 			response.Error(c, 500, "保存文件失败")
 			return
 		}
@@ -172,26 +300,6 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 			}
 		}()
 
-		// 计算文件 SHA-256（完整性校验，MD5 已下线）
-		f, err := os.Open(savePath)
-		if err != nil {
-			response.Error(c, 500, "读取文件失败")
-			return
-		}
-		defer f.Close()
-
-		sha256Hash := sha256.New()
-		if _, err := io.Copy(sha256Hash, f); err != nil {
-			response.Error(c, 500, "计算文件哈希失败")
-			return
-		}
-		if strings.EqualFold(targetChip, "esp") {
-			if err := service.ValidateESPImageVersion(f, version); err != nil {
-				response.Error(c, 400, err.Error())
-				return
-			}
-		}
-
 		fileURL := fmt.Sprintf("/firmware/%s", filename)
 
 		fw := &service.CreateFirmwareReq{
@@ -199,8 +307,8 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 			TargetChip:       targetChip,
 			Version:          version,
 			FileURL:          fileURL,
-			FileSize:         file.Size,
-			FileSHA256:       fmt.Sprintf("%x", sha256Hash.Sum(nil)),
+			FileSize:         fileSize,
+			FileSHA256:       sha256Hex,
 			SecurityVersion:  uint32(securityVersion64),
 			ReleaseSignature: releaseSignature,
 			Changelog:        changelog,
@@ -805,9 +913,13 @@ func (h *OTAHandler) CheckAppUpdate(c *gin.Context) {
 		"has_update":            hasUpdate,
 		"latest_version_code":   latest.VersionCode,
 		"latest_version_name":   latest.VersionName,
-		"download_url":          latest.DownloadURL,
+		"download_url":          h.otaService.BuildDownloadURL(latest.DownloadURL),
 		"file_size":             latest.FileSize,
 		"file_md5":              latest.FileMD5,
+		"file_sha256":           latest.FileSHA256,
+		"package_name":          latest.PackageName,
+		"min_sdk":               latest.MinSDK,
+		"target_sdk":            latest.TargetSDK,
 		"changelog":             latest.Changelog,
 		"is_force":              latest.IsForce,
 		"min_supported_version": latest.MinSupportedVersion,
@@ -815,8 +927,53 @@ func (h *OTAHandler) CheckAppUpdate(c *gin.Context) {
 	})
 }
 
-// CreateAppVersion 创建App版本（管理员）
+// GetLatestAppRelease 公开下载页使用的外观接口：返回指定平台最新的已发布版本。
+// 与 CheckAppUpdate 的差别：不做灰度过滤（下载页面向所有访客，展示最新已发布版本），
+// 不涉及任何用户数据；meta 字段用于展示文件名、体积与摘要。
+func (h *OTAHandler) GetLatestAppRelease(c *gin.Context) {
+	platform := strings.ToLower(strings.TrimSpace(c.DefaultQuery("platform", "android")))
+	if platform != "android" && platform != "ios" {
+		response.Error(c, 400, "platform 必须是 android 或 ios")
+		return
+	}
+
+	latest, err := h.otaService.GetLatestAppVersion(c.Request.Context(), platform)
+	if err != nil || latest == nil {
+		// 尚未发布任何版本不是错误：下载页需要据此优雅降级。
+		response.Success(c, gin.H{"available": false})
+		return
+	}
+
+	response.Success(c, gin.H{
+		"available":    true,
+		"platform":     latest.Platform,
+		"version_code": latest.VersionCode,
+		"version_name": latest.VersionName,
+		"download_url": h.otaService.BuildDownloadURL(latest.DownloadURL),
+		"file_name":    latest.FileName,
+		"file_size":    latest.FileSize,
+		"file_sha256":  latest.FileSHA256,
+		"package_name": latest.PackageName,
+		"min_sdk":      latest.MinSDK,
+		"target_sdk":   latest.TargetSDK,
+		"changelog":    latest.Changelog,
+		"is_force":     latest.IsForce,
+		"published_at": latest.CreatedAt,
+	})
+}
+
+// CreateAppVersion 创建App版本（管理员）。
+//
+// 支持两种提交方式：
+//   - multipart/form-data：直接上传 Android 安装包，版本号、包名、体积与
+//     SHA-256 全部由服务端从 APK 本体解析，管理员只需填写发布业务参数；
+//   - application/json：旧的元数据直填方式，保留以兼容既有脚本与 iOS 渠道。
 func (h *OTAHandler) CreateAppVersion(c *gin.Context) {
+	if c.ContentType() == "multipart/form-data" {
+		h.createAppVersionFromPackage(c)
+		return
+	}
+
 	var req struct {
 		Platform            string `json:"platform" binding:"required"`
 		VersionCode         int    `json:"version_code" binding:"required"`
@@ -854,6 +1011,7 @@ func (h *OTAHandler) CreateAppVersion(c *gin.Context) {
 		IsForce:             req.IsForce,
 		MinSupportedVersion: req.MinSupportedVersion,
 		RolloutPercentage:   req.RolloutPercentage,
+		CreatedBy:           middleware.GetUserID(c),
 	}
 
 	if err := h.otaService.CreateAppVersion(c.Request.Context(), v); err != nil {
@@ -862,34 +1020,152 @@ func (h *OTAHandler) CreateAppVersion(c *gin.Context) {
 		return
 	}
 
-	// 推送APP新版本通知
-	if h.jpushService != nil {
-		content := fmt.Sprintf("v%s", req.VersionName)
-		if len(req.Changelog) > 100 {
-			content += ": " + req.Changelog[:100] + "..."
-		} else if req.Changelog != "" {
-			content += ": " + req.Changelog
-		}
+	h.notifyAppRelease(c, v, req.VersionName, req.Changelog, req.RolloutPercentage)
+	response.Success(c, v)
+}
 
-		if req.RolloutPercentage >= 100 {
-			h.jpushService.SendBroadcastAsync(c.Request.Context(), "APP新版本发布", content, map[string]string{
-				"notify_type": "app_update",
-			})
-			log.Printf("[CreateAppVersion] broadcast push sent: platform=%s, version=%s", req.Platform, req.VersionName)
-		} else {
-			// 灰度推送：查询所有用户，按比例选取
-			userIDs, err := h.otaService.GetAllUserIDs(c.Request.Context())
-			if err == nil && len(userIDs) > 0 {
-				userIDs = service.SelectByRollout(userIDs, v.ID, req.RolloutPercentage)
-				if len(userIDs) > 0 {
-					h.jpushService.SendNotificationAsync(c.Request.Context(), userIDs, "app_update", "", "APP新版本发布", content)
-					log.Printf("[CreateAppVersion] grayscale push sent: platform=%s, version=%s, percent=%d, users=%d", req.Platform, req.VersionName, req.RolloutPercentage, len(userIDs))
-				}
-			}
-		}
+// createAppVersionFromPackage 上传 APK 并落库：安装包元数据以文件本体为准。
+func (h *OTAHandler) createAppVersionFromPackage(c *gin.Context) {
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxAppPackageSize)
+
+	platform := strings.ToLower(strings.TrimSpace(c.PostForm("platform")))
+	if platform == "" {
+		platform = "android"
+	}
+	if platform != "android" {
+		response.Error(c, 400, "当前仅支持上传 Android 安装包（APK）")
+		return
 	}
 
+	file, err := c.FormFile("file")
+	if err != nil {
+		response.Error(c, 400, "请选择安装包文件")
+		return
+	}
+	if file.Size <= 0 || file.Size > maxAppPackageSize {
+		response.Error(c, 400, "安装包大小必须在 1 字节到 200 MiB 之间")
+		return
+	}
+
+	tmpPath, err := stageUploadedFile(c, file)
+	if err != nil {
+		response.Error(c, 500, "保存文件失败")
+		return
+	}
+	defer func() { _ = os.Remove(tmpPath) }()
+
+	f, err := os.Open(tmpPath)
+	if err != nil {
+		response.Error(c, 500, "读取文件失败")
+		return
+	}
+
+	meta, err := apkmeta.FromAPK(f, file.Size)
+	if err != nil {
+		_ = f.Close()
+		response.Error(c, 400, "安装包解析失败: "+err.Error())
+		return
+	}
+	if meta.VersionCode <= 0 || strings.TrimSpace(meta.VersionName) == "" {
+		_ = f.Close()
+		response.Error(c, 400, "安装包缺少 versionCode 或 versionName，请确认是否为正式签名的 APK")
+		return
+	}
+
+	sha256Hex, fileSize, err := hashFileSHA256(f)
+	_ = f.Close()
+	if err != nil {
+		response.Error(c, 500, "计算文件摘要失败")
+		return
+	}
+
+	filename := fmt.Sprintf("%s-%s-%d-%d.apk",
+		sanitizeFileNamePart(meta.PackageName),
+		sanitizeFileNamePart(meta.VersionName),
+		meta.VersionCode,
+		time.Now().UnixNano())
+
+	dstDir := filepath.Join(firmwareUploadDir(), filepath.FromSlash(appPackageSubdir))
+	if err := os.MkdirAll(dstDir, 0755); err != nil {
+		response.Error(c, 500, "创建安装包目录失败")
+		return
+	}
+	dstPath := filepath.Join(dstDir, filename)
+	if err := os.Rename(tmpPath, dstPath); err != nil {
+		response.Error(c, 500, "保存文件失败")
+		return
+	}
+	keepFile := false
+	defer func() {
+		if !keepFile {
+			_ = os.Remove(dstPath)
+		}
+	}()
+
+	v := &model.AppVersion{
+		Platform:            platform,
+		VersionCode:         int(meta.VersionCode),
+		VersionName:         meta.VersionName,
+		DownloadURL:         fmt.Sprintf("/firmware/%s/%s", appPackageSubdir, filename),
+		FileSize:            fileSize,
+		FileSHA256:          sha256Hex,
+		PackageName:         meta.PackageName,
+		FileName:            filename,
+		MinSDK:              meta.MinSDK,
+		TargetSDK:           meta.TargetSDK,
+		Changelog:           c.PostForm("changelog"),
+		IsForce:             c.PostForm("is_force") == "true",
+		MinSupportedVersion: parseInt(c.PostForm("min_supported_version")),
+		RolloutPercentage:   parseInt(c.PostForm("rollout_percentage")),
+		CreatedBy:           middleware.GetUserID(c),
+	}
+	if v.RolloutPercentage <= 0 || v.RolloutPercentage > 100 {
+		v.RolloutPercentage = 100
+	}
+
+	if err := h.otaService.CreateAppVersion(c.Request.Context(), v); err != nil {
+		log.Printf("[CreateAppVersion] error: %v", err)
+		response.Error(c, 500, "创建版本失败")
+		return
+	}
+	keepFile = true
+
+	h.notifyAppRelease(c, v, v.VersionName, v.Changelog, v.RolloutPercentage)
 	response.Success(c, v)
+}
+
+// notifyAppRelease 发布新版本后推送通知（全量广播或按灰度比例定向推送）。
+func (h *OTAHandler) notifyAppRelease(c *gin.Context, v *model.AppVersion, versionName, changelog string, rolloutPercentage int) {
+	if h.jpushService == nil {
+		return
+	}
+	content := fmt.Sprintf("v%s", versionName)
+	if len(changelog) > 100 {
+		content += ": " + changelog[:100] + "..."
+	} else if changelog != "" {
+		content += ": " + changelog
+	}
+
+	if rolloutPercentage >= 100 {
+		h.jpushService.SendBroadcastAsync(c.Request.Context(), "APP新版本发布", content, map[string]string{
+			"notify_type": "app_update",
+		})
+		log.Printf("[CreateAppVersion] broadcast push sent: platform=%s, version=%s", v.Platform, versionName)
+		return
+	}
+
+	// 灰度推送：查询所有用户，按比例选取
+	userIDs, err := h.otaService.GetAllUserIDs(c.Request.Context())
+	if err != nil || len(userIDs) == 0 {
+		return
+	}
+	selected := service.SelectByRollout(userIDs, v.ID, rolloutPercentage)
+	if len(selected) == 0 {
+		return
+	}
+	h.jpushService.SendNotificationAsync(c.Request.Context(), selected, "app_update", "", "APP新版本发布", content)
+	log.Printf("[CreateAppVersion] grayscale push sent: platform=%s, version=%s, percent=%d, users=%d",
+		v.Platform, versionName, rolloutPercentage, len(selected))
 }
 
 // ListAppVersions 列出App版本（管理员）
@@ -899,6 +1175,11 @@ func (h *OTAHandler) ListAppVersions(c *gin.Context) {
 	if err != nil {
 		response.Error(c, 500, "查询版本列表失败")
 		return
+	}
+	// download_url 在库内以相对路径保存，对外统一补全下载域名，
+	// 使更换下载域名后历史版本无需回填。
+	for i := range list {
+		list[i].DownloadURL = h.otaService.BuildDownloadURL(list[i].DownloadURL)
 	}
 	response.Success(c, list)
 }
@@ -1009,6 +1290,11 @@ func (h *OTAHandler) CreateUpgradePackage(c *gin.Context) {
 		CreatedBy:      userID,
 	}); err != nil {
 		log.Printf("[CreateUpgradePackage] error: %v", err)
+		// (model, main_version) 唯一键冲突: 通常是并发重复提交，新版本号已被占用
+		if strings.Contains(err.Error(), "uq_package_model_version") {
+			response.Error(c, 400, "该型号刚刚已创建过相同主版本号的升级包，请刷新升级包列表后使用")
+			return
+		}
 		response.Error(c, 500, "创建升级包失败: "+err.Error())
 		return
 	}
