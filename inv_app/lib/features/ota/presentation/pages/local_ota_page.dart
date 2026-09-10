@@ -20,6 +20,7 @@ import 'package:inv_app/features/ota/domain/repositories/local_communication_rep
 import 'package:inv_app/features/ota/domain/repositories/ota_repository.dart';
 import 'package:inv_app/features/ota/presentation/models/local_ota_presentation.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
+import 'package:inv_app/features/ota/presentation/models/firmware_module_presentation.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:wifi_iot/wifi_iot.dart';
 
@@ -1294,6 +1295,12 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
 
   Widget _buildDownloadedFirmwareTile(DownloadedFirmwareInfo item) {
     final selected = _selectedFilePath == item.filePath;
+    final l10n = AppLocalizations.of(context)!;
+    final module = FirmwareModulePresentation.fromTarget(item.targetChip);
+    final version = item.version?.trim() ?? '';
+    final displayName = version.isEmpty
+        ? module.displayLabel(l10n)
+        : '${module.displayLabel(l10n)} · $version';
     return Container(
       margin: EdgeInsets.only(bottom: 8.h),
       decoration: BoxDecoration(
@@ -1328,7 +1335,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      item.fileName,
+                      displayName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(

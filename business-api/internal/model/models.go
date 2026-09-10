@@ -448,6 +448,7 @@ type DeviceUpgrade struct {
 
 	// 升级包相关
 	PackageMainVersion string `json:"package_main_version,omitempty"`
+	Changelog         string `json:"changelog,omitempty"`
 }
 
 // UpgradeTask 升级任务 - 统一管理所有升级操作
