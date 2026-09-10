@@ -184,6 +184,24 @@ func sanitizeFileNamePart(s string) string {
 // versionTokenPattern 从固件文件名中提取形如 1.2 / 1.2.3 的版本号片段。
 var versionTokenPattern = regexp.MustCompile(`(?:^|[^0-9])(\d+\.\d+(?:\.\d+)?)`)
 
+// respondFirmwareCreateError 统一固件创建失败的响应。
+// 唯一键冲突是可修正的输入问题（版本号已被同型号同芯片的启用固件占用），返回 400
+// 并给出可操作提示；其余错误记录日志后返回 500 —— 此前该路径不落任何日志，
+// 「创建固件失败」在生产无从排查。
+func respondFirmwareCreateError(c *gin.Context, model, targetChip, version string, err error) {
+	logger.Error("create firmware failed",
+		zap.String("model", model),
+		zap.String("target_chip", targetChip),
+		zap.String("version", version),
+		zap.Error(err))
+	if strings.Contains(err.Error(), "uq_firmware_versions_model_chip_version") {
+		response.Error(c, 400, fmt.Sprintf("该型号的 %s 固件已有版本 %s，请更换版本号后重新上传",
+			strings.ToUpper(targetChip), version))
+		return
+	}
+	response.Error(c, 500, "创建固件失败")
+}
+
 // detectFirmwareVersion 在操作员未填写版本号时，从固件本体或原文件名推断版本。
 // ESP-IDF 镜像优先以镜像内嵌的工程版本号为准；其他芯片没有统一的内嵌格式，
 // 回退到规范文件名（如 CSL10_6K2_arm_1.2.3.bin）。
@@ -320,7 +338,7 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 			return
 		}
 		if err := h.otaService.CreateFirmware(c.Request.Context(), fw); err != nil {
-			response.Error(c, 500, "创建固件失败")
+			respondFirmwareCreateError(c, model, targetChip, version, err)
 			return
 		}
 		keepFile = true
@@ -354,7 +372,7 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 		return
 	}
 	if err := h.otaService.CreateFirmware(c.Request.Context(), fw); err != nil {
-		response.Error(c, 500, "创建固件失败")
+		respondFirmwareCreateError(c, req.Model, req.TargetChip, req.Version, err)
 		return
 	}
 

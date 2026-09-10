@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -193,6 +194,37 @@ func TestCreateFirmware_ESP内嵌版本与填写版本不一致时拒绝(t *test
 	assert.Equal(t, 400, code)
 	assert.Contains(t, msg, "1.5.1")
 	assert.Empty(t, stagingEntries(t, os.Getenv("FIRMWARE_DATA_DIR")))
+}
+
+// ===================== 固件创建失败的错误映射 =====================
+
+// 版本号撞唯一键（同型号同芯片已有该版本）是可修正的输入问题，
+// 必须给出 400 + 可操作提示，而不是让用户面对裸的 500。
+func TestRespondFirmwareCreateError_唯一键冲突返回可操作提示(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	respondFirmwareCreateError(c, "CS-L10-6K2", "arm", "1.0.0", errors.New(
+		`ERROR: duplicate key value violates unique constraint "uq_firmware_versions_model_chip_version" (SQLSTATE 23505)`))
+
+	code, msg := decodeCodeAndMessage(t, w)
+	assert.Equal(t, 400, code)
+	assert.Contains(t, msg, "1.0.0")
+	assert.Contains(t, msg, "ARM")
+}
+
+// 其他错误（连接失败、约束外异常）保持 500 语义，不被误报成用户输入问题。
+func TestRespondFirmwareCreateError_其他错误保持500(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	respondFirmwareCreateError(c, "CS-L10-6K2", "dsp", "1.0.0", errors.New("connection refused"))
+
+	code, msg := decodeCodeAndMessage(t, w)
+	assert.Equal(t, 500, code)
+	assert.Contains(t, msg, "创建固件失败")
 }
 
 // 非 Android 平台直接拒绝，不应进入文件解析流程。
