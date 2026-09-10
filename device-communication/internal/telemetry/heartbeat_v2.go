@@ -62,6 +62,30 @@ var v2Scales = map[string][]float64{
 		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
 }
 
+const (
+	// ARM/DSP 的交流输出频率以 0.1Hz 为单位；正常输出落在 45.0~65.0Hz。
+	// 该范围与文档格式的 0.01Hz 原值（通常 4500~6500）不重叠，可安全区分。
+	armACFrequencyRawMin = 450
+	armACFrequencyRawMax = 650
+)
+
+// normalizeActualARMACOutputUnits 兼容当前 ESP32 对 ARM 运行参数的直接透传。
+// ARM 能量流界面使用的实际量纲是电压 1V、频率 0.1Hz，而早期采集协议文档
+// 将这两个字段写成了 0.1V、0.01Hz。已按文档放大过的固件仍走 v2Scales。
+func normalizeActualARMACOutputUnits(raw, scaled []*float64) {
+	if len(raw) < 2 || len(scaled) < 2 || raw[0] == nil || raw[1] == nil {
+		return
+	}
+	if *raw[1] < armACFrequencyRawMin || *raw[1] > armACFrequencyRawMax {
+		return
+	}
+
+	voltage := *raw[0]
+	frequency := *raw[1] * 0.1
+	scaled[0] = &voltage
+	scaled[1] = &frequency
+}
+
 func ParseHeartbeatV2(deviceSN string, payload []byte, receivedAt time.Time) (*Sample, error) {
 	dec := json.NewDecoder(bytes.NewReader(payload))
 	dec.UseNumber()
@@ -199,6 +223,7 @@ func ParseHeartbeatV2(deviceSN string, payload []byte, receivedAt time.Time) (*S
 	sys := scaled("sys", rawSys)
 	pv := scaled("pv", rawPV)
 	ac := scaled("ac", rawAC)
+	normalizeActualARMACOutputUnits(rawAC, ac)
 	chr := scaled("chr", rawChr)
 	bat := scaled("bat", rawBat)
 	eng := scaled("eng", rawEng)
