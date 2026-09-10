@@ -839,6 +839,12 @@ func (s *OTAService) CheckAppUpdate(ctx context.Context, platform string, curren
 	return latest, true, nil
 }
 
+// GetLatestAppVersion 返回指定平台最新的已发布版本。
+// 与 CheckAppUpdate 的区别：不做灰度过滤，供公开下载页展示最新版本。
+func (s *OTAService) GetLatestAppVersion(ctx context.Context, platform string) (*model.AppVersion, error) {
+	return s.repo.GetLatestAppVersion(ctx, platform)
+}
+
 // CreateAppVersion 创建App版本
 func (s *OTAService) CreateAppVersion(ctx context.Context, v *model.AppVersion) error {
 	return s.repo.CreateAppVersion(ctx, v)

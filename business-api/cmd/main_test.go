@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -34,6 +35,26 @@ func TestOpenFirmwareFileRejectsTraversal(t *testing.T) {
 	}
 }
 
+// 上传暂存目录（.staging）中的文件尚未通过校验，不得对外提供下载。
+func TestOpenFirmwareFileRejectsStagingDir(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, firmwareStagingDir), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, firmwareStagingDir, "upload_1.bin"), []byte("x"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+
+	if _, err := openFirmwareFile(root, "/"+firmwareStagingDir+"/upload_1.bin"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected staging file to be hidden, got %v", err)
+	}
+}
+
 func TestRequestBodyLimitRejectsOversizedJSON(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
@@ -45,6 +66,41 @@ func TestRequestBodyLimitRejectsOversizedJSON(t *testing.T) {
 	router.ServeHTTP(recorder, req)
 	if recorder.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("expected 413, got %d", recorder.Code)
+	}
+}
+
+// 安装包上传体积可达上百 MB，默认的 2 MiB JSON 上限必须对它放行，
+// 同时仍然约束住其他路径（避免上传口被用来绕过全局限额）。
+func TestRequestBodyLimitAllowsAppPackageUpload(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	const (
+		oversized = 3 << 20 // 大于默认 2 MiB、小于上传上限
+	)
+	tests := []struct {
+		name       string
+		path       string
+		bodySize   int
+		wantStatus int
+	}{
+		{"固件上传放行", "/api/v1/ota/firmware", oversized, http.StatusNoContent},
+		{"安装包上传放行", "/api/v1/ota/app/versions", oversized, http.StatusNoContent},
+		{"普通接口仍受限", "/api/v1/ota/packages", oversized, http.StatusRequestEntityTooLarge},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			router := gin.New()
+			router.Use(requestBodyLimit())
+			router.POST(tc.path, func(c *gin.Context) { c.Status(http.StatusNoContent) })
+
+			req := httptest.NewRequest(http.MethodPost, tc.path, bytes.NewReader(make([]byte, tc.bodySize)))
+			recorder := httptest.NewRecorder()
+			router.ServeHTTP(recorder, req)
+			if recorder.Code != tc.wantStatus {
+				t.Fatalf("%s = %d, want %d", tc.path, recorder.Code, tc.wantStatus)
+			}
+		})
 	}
 }
 
