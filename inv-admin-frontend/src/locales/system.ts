@@ -74,10 +74,11 @@ export default {
     'system.successRate': '成功率',
 
     /* 通知与文档配置页面 */
-    'system.systemConfig': '通知与文档配置',
+    'system.systemConfig': '通知与文档',
     'system.helpCenterConfig': '帮助中心配置',
-    'system.tabHelpDocs': '帮助文档配置',
-    'system.tabEmailTemplates': '邮件模板配置',
+    'system.tabNotifications': '通知',
+    'system.tabHelpDocs': '帮助文档',
+    'system.tabEmailTemplates': '邮件模板',
     'system.phone': '客服电话',
     'system.phonePlaceholder': '请输入客服电话号码',
     'system.docs': '文档链接',
@@ -98,6 +99,26 @@ export default {
     'system.saveFailed': '配置保存失败',
     'system.loadFailed': '配置加载失败',
     'system.faqDeleteConfirm': '确定要删除这个问题吗？',
+
+    /* 系统公告推送 */
+    'system.announcementTitle': '系统公告推送',
+    'system.announcementHint': '公告将推送到目标用户的 App 通知（极光推送）并写入其通知中心；实际送达按每个用户的通知偏好过滤——只有开启「推送」总开关且勾选「系统公告」的用户才会收到。设备上下线、告警、OTA、每日报告通知由系统按事件自动触发，不在此操作。',
+    'system.announcementTarget': '目标范围',
+    'system.announcementTargetAll': '全部用户（仅超级管理员）',
+    'system.announcementTargetUser': '指定用户',
+    'system.announcementTargetStation': '指定电站（其下所有用户）',
+    'system.announcementTargetId': '目标 ID',
+    'system.announcementTargetIdRequired': '请输入目标 ID',
+    'system.announcementTargetIdNumeric': 'ID 必须为正整数',
+    'system.announcementTargetIdPlaceholder.user': '请输入用户 ID',
+    'system.announcementTargetIdPlaceholder.station': '请输入电站 ID',
+    'system.announcementTitleLabel': '公告标题',
+    'system.announcementTitlePlaceholder': '请输入公告标题',
+    'system.announcementContent': '公告内容',
+    'system.announcementContentPlaceholder': '请输入公告内容',
+    'system.announcementSend': '发送公告',
+    'system.announcementSendSuccess': '公告已发送',
+    'system.announcementSendFailed': '公告发送失败',
 
     /* 邮件模板配置 */
     'system.emailTemplateList': '邮件模板列表',
@@ -205,8 +226,9 @@ export default {
     'system.successRate': 'Success Rate',
 
     /* System Notifications & Docs page */
-    'system.systemConfig': 'System Notifications & Docs',
+    'system.systemConfig': 'Notifications & Docs',
     'system.helpCenterConfig': 'Help Center Configuration',
+    'system.tabNotifications': 'Notifications',
     'system.tabHelpDocs': 'Help Docs',
     'system.tabEmailTemplates': 'Email Templates',
     'system.phone': 'Customer Service Phone',
@@ -229,6 +251,26 @@ export default {
     'system.saveFailed': 'Failed to save configuration',
     'system.loadFailed': 'Failed to load configuration',
     'system.faqDeleteConfirm': 'Are you sure you want to delete this FAQ?',
+
+    /* System announcements */
+    'system.announcementTitle': 'Push System Announcement',
+    'system.announcementHint': 'The announcement is delivered to target users via App push (JPush) and saved to their notification center. Actual delivery is filtered by each user\'s notification preferences — only users with push enabled and the "system announcements" switch on will receive it. Device online/offline, alarm, OTA and daily report notifications are triggered automatically by events, not from this page.',
+    'system.announcementTarget': 'Target Scope',
+    'system.announcementTargetAll': 'All Users (super admin only)',
+    'system.announcementTargetUser': 'Specific User',
+    'system.announcementTargetStation': 'Specific Station (all its users)',
+    'system.announcementTargetId': 'Target ID',
+    'system.announcementTargetIdRequired': 'Please enter the target ID',
+    'system.announcementTargetIdNumeric': 'ID must be a positive integer',
+    'system.announcementTargetIdPlaceholder.user': 'Enter user ID',
+    'system.announcementTargetIdPlaceholder.station': 'Enter station ID',
+    'system.announcementTitleLabel': 'Title',
+    'system.announcementTitlePlaceholder': 'Enter announcement title',
+    'system.announcementContent': 'Content',
+    'system.announcementContentPlaceholder': 'Enter announcement content',
+    'system.announcementSend': 'Send Announcement',
+    'system.announcementSendSuccess': 'Announcement sent',
+    'system.announcementSendFailed': 'Failed to send announcement',
 
     /* Email template settings */
     'system.emailTemplateList': 'Email Template List',

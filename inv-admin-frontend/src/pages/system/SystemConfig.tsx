@@ -16,6 +16,7 @@ import {
   Drawer,
   Tag,
   Alert,
+  Select,
   Space,
 } from 'antd'
 import {
@@ -33,6 +34,7 @@ import api from '@/services/api'
 import { emailApi } from '@/services/emailApi'
 import type { EmailTemplate } from '@/services/emailApi'
 import useTranslation from '@/hooks/useTranslation'
+import useAuthStore from '@/stores/authStore'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
 
 const { Title, Text } = Typography
@@ -516,6 +518,85 @@ const EmailTemplatesPanel: React.FC = () => {
   )
 }
 
+/** 系统公告推送面板：向全部用户/指定用户/指定电站推送公告（走极光推送 + 通知中心） */
+const NotificationsPanel: React.FC = () => {
+  const { message } = App.useApp()
+  const { t } = useTranslation()
+  const [form] = Form.useForm()
+  const targetType = Form.useWatch('target_type', form)
+  const isSystemAdmin = useAuthStore((s) => s.user?.isSystemAdmin ?? false)
+
+  const sendMutation = useMutation({
+    mutationFn: (payload: { title: string; content: string; target: string }) =>
+      api.post('/admin/push-announcement', payload),
+    onSuccess: () => {
+      message.success(t('system.announcementSendSuccess'))
+      form.resetFields(['title', 'content', 'target_id'])
+    },
+    onError: (err: Error) => {
+      message.error(`${t('system.announcementSendFailed')}: ${err.message}`)
+    },
+  })
+
+  const handleSend = async () => {
+    try {
+      const values = await form.validateFields()
+      const target = values.target_type === 'all' ? 'all' : `${values.target_type}_${values.target_id}`
+      sendMutation.mutate({ title: values.title, content: values.content, target })
+    } catch {
+      // validation failed
+    }
+  }
+
+  return (
+    <div>
+      <Card title={t('system.announcementTitle')} bordered={false}>
+        <Alert type="info" showIcon message={t('system.announcementHint')} style={{ marginBottom: 16 }} />
+        <Form form={form} layout="vertical" initialValues={{ target_type: 'all' }}>
+          <Form.Item name="target_type" label={t('system.announcementTarget')} rules={[{ required: true }]}>
+            <Select
+              options={[
+                ...(isSystemAdmin ? [{ value: 'all', label: t('system.announcementTargetAll') }] : []),
+                { value: 'user', label: t('system.announcementTargetUser') },
+                { value: 'station', label: t('system.announcementTargetStation') },
+              ]}
+            />
+          </Form.Item>
+          {targetType && targetType !== 'all' && (
+            <Form.Item
+              name="target_id"
+              label={t('system.announcementTargetId')}
+              rules={[
+                { required: true, message: t('system.announcementTargetIdRequired') },
+                { pattern: /^[1-9]\d*$/, message: t('system.announcementTargetIdNumeric') },
+              ]}
+            >
+              <Input placeholder={t(`system.announcementTargetIdPlaceholder.${targetType}`)} />
+            </Form.Item>
+          )}
+          <Form.Item
+            name="title"
+            label={t('system.announcementTitleLabel')}
+            rules={[{ required: true, max: 200, whitespace: true }]}
+          >
+            <Input placeholder={t('system.announcementTitlePlaceholder')} maxLength={200} showCount />
+          </Form.Item>
+          <Form.Item
+            name="content"
+            label={t('system.announcementContent')}
+            rules={[{ required: true, max: 10000, whitespace: true }]}
+          >
+            <TextArea rows={6} maxLength={10000} showCount placeholder={t('system.announcementContentPlaceholder')} />
+          </Form.Item>
+          <Button type="primary" icon={<SendOutlined />} loading={sendMutation.isPending} onClick={handleSend}>
+            {t('system.announcementSend')}
+          </Button>
+        </Form>
+      </Card>
+    </div>
+  )
+}
+
 const SystemConfigPage: React.FC = () => {
   const { t } = useTranslation()
 
@@ -527,8 +608,9 @@ const SystemConfigPage: React.FC = () => {
       </Title>
 
       <Tabs
-        defaultActiveKey="helpDocs"
+        defaultActiveKey="notifications"
         items={[
+          { key: 'notifications', label: t('system.tabNotifications'), children: <NotificationsPanel /> },
           { key: 'helpDocs', label: t('system.tabHelpDocs'), children: <HelpDocsPanel /> },
           { key: 'emailTemplates', label: t('system.tabEmailTemplates'), children: <EmailTemplatesPanel /> },
         ]}
