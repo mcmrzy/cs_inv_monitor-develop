@@ -1,5 +1,6 @@
 import 'package:fpdart/fpdart.dart';
 import 'package:inv_app/core/errors/failures.dart';
+import 'package:inv_app/features/ota/domain/entities/device_firmware_history.dart';
 
 abstract class OtaRepository {
   Future<Either<Failure, Map<String, dynamic>>> checkUpdate(String sn);
@@ -35,4 +36,10 @@ abstract class OtaRepository {
   /// GET /ota/firmware-info/:id — 按固件 ID 获取本地 OTA 所需元数据
   /// （下载 URL/SHA-256/签名/安全版本等），路由无需再携带复杂 query 参数
   Future<Either<Failure, Map<String, dynamic>>> getFirmwareInfo(int firmwareId);
+
+  Future<Either<Failure, DeviceFirmwareHistoryPage>> getDeviceHistory(
+    String sn, {
+    int page = 1,
+    int pageSize = 20,
+  });
 }

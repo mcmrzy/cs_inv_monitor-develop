@@ -12,6 +12,7 @@ import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 import 'package:inv_app/features/ota/presentation/bloc/ota_bloc.dart';
 import 'package:inv_app/features/ota/presentation/pages/firmware_list_page.dart';
+import 'package:inv_app/features/ota/presentation/models/firmware_module_presentation.dart';
 import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
@@ -318,7 +319,10 @@ class _OTAPageState extends State<OTAPage> {
         .addPostFrameCallback((_) => _restoreDownloadState(firmwareId));
     final latestVersion = info['version'] as String? ?? l10n.unknown;
     final currentVersion = info['current_version'] as String? ?? '';
-    final targetChip = (info['target_chip'] as String? ?? '').toUpperCase();
+    final targetChip = info['target_chip'] as String? ?? '';
+    final targetLabel = targetChip.isEmpty
+        ? ''
+        : FirmwareModulePresentation.fromTarget(targetChip).displayLabel(l10n);
     final downloadUrl = info['download_url'] as String? ?? '';
     final fileName = info['file_name'] as String? ?? 'firmware_$firmwareId.bin';
     final fileSize = (info['file_size'] as num?)?.toInt();
@@ -420,7 +424,7 @@ class _OTAPageState extends State<OTAPage> {
                 Text(
                   '${l10n.str('latest_version_label', {
                         'version': latestVersion,
-                      })}${targetChip.isNotEmpty ? ' ($targetChip)' : ''}',
+                      })}${targetLabel.isNotEmpty ? ' ($targetLabel)' : ''}',
                   style: TextStyle(
                     fontSize: 13.sp,
                     color: AppColor.textSecondary(context),
@@ -430,7 +434,7 @@ class _OTAPageState extends State<OTAPage> {
                   Text(
                     '${l10n.str('current_version_label', {
                           'version': currentVersion,
-                        })}${targetChip.isNotEmpty ? ' ($targetChip)' : ''}',
+                          })}${targetLabel.isNotEmpty ? ' ($targetLabel)' : ''}',
                     style: TextStyle(
                       fontSize: 13.sp,
                       color: AppColor.textHint(context),
@@ -466,17 +470,17 @@ class _OTAPageState extends State<OTAPage> {
                     ),
                   ),
                   _buildChipVersionRow(
-                    'ESP',
+                    FirmwareModulePresentation.fromTarget('esp').displayLabel(l10n),
                     info['firmware_esp'] as String? ?? '',
                   ),
                   if ((info['firmware_dsp'] as String? ?? '').isNotEmpty)
                     _buildChipVersionRow(
-                      'DSP',
+                      FirmwareModulePresentation.fromTarget('dsp').displayLabel(l10n),
                       info['firmware_dsp'] as String? ?? '',
                     ),
                   if ((info['firmware_bms'] as String? ?? '').isNotEmpty)
                     _buildChipVersionRow(
-                      'BMS',
+                      FirmwareModulePresentation.fromTarget('bms').displayLabel(l10n),
                       info['firmware_bms'] as String? ?? '',
                     ),
                 ],
@@ -758,8 +762,9 @@ class _OTAPageState extends State<OTAPage> {
                   ),
                   SizedBox(height: 8.h),
                   ...chipsToUpgrade.map((chip) {
-                    final chipName =
-                        (chip['chip'] as String? ?? '').toUpperCase();
+                    final chipName = FirmwareModulePresentation.fromTarget(
+                      chip['chip'] as String?,
+                    ).displayLabel(l10n);
                     final current = chip['current'] as String? ?? '-';
                     final target = chip['target'] as String? ?? '-';
                     return Padding(
@@ -813,17 +818,17 @@ class _OTAPageState extends State<OTAPage> {
                     ),
                   ),
                   _buildChipVersionRow(
-                    'ESP',
+                    FirmwareModulePresentation.fromTarget('esp').displayLabel(l10n),
                     info['firmware_esp'] as String? ?? '',
                   ),
                   if ((info['firmware_dsp'] as String? ?? '').isNotEmpty)
                     _buildChipVersionRow(
-                      'DSP',
+                      FirmwareModulePresentation.fromTarget('dsp').displayLabel(l10n),
                       info['firmware_dsp'] as String? ?? '',
                     ),
                   if ((info['firmware_bms'] as String? ?? '').isNotEmpty)
                     _buildChipVersionRow(
-                      'BMS',
+                      FirmwareModulePresentation.fromTarget('bms').displayLabel(l10n),
                       info['firmware_bms'] as String? ?? '',
                     ),
                 ],
@@ -1281,17 +1286,17 @@ class _OTAPageState extends State<OTAPage> {
                     ),
                   ),
                   _buildChipVersionRow(
-                    'ESP',
+                    FirmwareModulePresentation.fromTarget('esp').displayLabel(l10n),
                     state.info['firmware_esp'] as String? ?? '',
                   ),
                   if ((state.info['firmware_dsp'] as String? ?? '').isNotEmpty)
                     _buildChipVersionRow(
-                      'DSP',
+                      FirmwareModulePresentation.fromTarget('dsp').displayLabel(l10n),
                       state.info['firmware_dsp'] as String? ?? '',
                     ),
                   if ((state.info['firmware_bms'] as String? ?? '').isNotEmpty)
                     _buildChipVersionRow(
-                      'BMS',
+                      FirmwareModulePresentation.fromTarget('bms').displayLabel(l10n),
                       state.info['firmware_bms'] as String? ?? '',
                     ),
                 ],

@@ -291,12 +291,14 @@ func (r *OTARepository) GetDeviceUpgradeHistory(ctx context.Context, deviceSN st
 	r.db.QueryRow(ctx, "SELECT COUNT(*) FROM device_upgrades WHERE device_sn = $1", deviceSN).Scan(&total)
 
 	rows, err := r.db.Query(ctx, `
-		SELECT id, device_sn, firmware_id, firmware_version, COALESCE(target_chip,''),
-		       COALESCE(old_version,''), status, COALESCE(progress,0), COALESCE(error_message,''),
-		       COALESCE(retry_count,0), pushed_by, started_at, completed_at, created_at, updated_at
-		FROM device_upgrades
-		WHERE device_sn = $1
-		ORDER BY updated_at DESC
+		SELECT du.id, du.device_sn, du.firmware_id, du.firmware_version, COALESCE(du.target_chip,''),
+		       COALESCE(du.old_version,''), du.status, COALESCE(du.progress,0), COALESCE(du.error_message,''),
+		       COALESCE(du.retry_count,0), du.pushed_by, du.started_at, du.completed_at,
+		       du.created_at, du.updated_at, COALESCE(f.changelog,'')
+		FROM device_upgrades du
+		LEFT JOIN firmware_versions f ON f.id = du.firmware_id
+		WHERE du.device_sn = $1
+		ORDER BY du.updated_at DESC
 		LIMIT $2 OFFSET $3
 	`, deviceSN, pageSize, (page-1)*pageSize)
 	if err != nil {
@@ -309,7 +311,8 @@ func (r *OTARepository) GetDeviceUpgradeHistory(ctx context.Context, deviceSN st
 		var du model.DeviceUpgrade
 		if err := rows.Scan(&du.ID, &du.DeviceSN, &du.FirmwareID, &du.FirmwareVersion, &du.TargetChip,
 			&du.OldVersion, &du.Status, &du.Progress, &du.ErrorMessage,
-			&du.RetryCount, &du.PushedBy, &du.StartedAt, &du.CompletedAt, &du.CreatedAt, &du.UpdatedAt); err != nil {
+			&du.RetryCount, &du.PushedBy, &du.StartedAt, &du.CompletedAt, &du.CreatedAt,
+			&du.UpdatedAt, &du.Changelog); err != nil {
 			continue
 		}
 		result = append(result, du)
