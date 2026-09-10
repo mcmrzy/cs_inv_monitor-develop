@@ -41,7 +41,10 @@ class _MainShellState extends State<MainShell> {
 
   bool _downloading = false;
 
+  /// 下载进度：0.0~1.0；< 0 表示总大小未知（CDN 分块传输且服务端未给文件大小）
   double _downloadProgress = 0;
+
+  int _downloadedBytes = 0;
 
   CancelToken? _cancelToken;
 
@@ -110,7 +113,9 @@ class _MainShellState extends State<MainShell> {
     try {
       final updateService = getIt<AppUpdateService>();
 
-      final info = await updateService.checkUpdate(AppConfig.versionCode);
+      final info = await updateService.checkUpdate(
+        await updateService.resolveCurrentVersionCode(),
+      );
 
       if (!mounted || !info.hasUpdate) return;
 
@@ -181,10 +186,15 @@ class _MainShellState extends State<MainShell> {
                     ],
                     if (_downloading) ...[
                       SizedBox(height: 16.h),
-                      LinearProgressIndicator(value: _downloadProgress),
+                      if (_downloadProgress < 0)
+                        const LinearProgressIndicator()
+                      else
+                        LinearProgressIndicator(value: _downloadProgress),
                       SizedBox(height: 4.h),
                       Text(
-                        '${l10n.downloadProgress} ${(_downloadProgress * 100).toStringAsFixed(0)}%',
+                        _downloadProgress < 0
+                            ? '${l10n.downloadProgress} ${(_downloadedBytes / 1048576).toStringAsFixed(1)} MB'
+                            : '${l10n.downloadProgress} ${(_downloadProgress * 100).toStringAsFixed(0)}%',
                         style: TextStyle(
                           fontSize: 12.sp,
                           color: AppColor.textHint(context),
@@ -211,11 +221,11 @@ class _MainShellState extends State<MainShell> {
                       ? null
                       : () => _handleUpdate(info, ctx, setDialogState),
                   child: Text(
-                    Platform.isIOS
-                        ? l10n.goToUpdate
-                        : (_downloading
+                    Platform.isAndroid
+                        ? (_downloading
                             ? l10n.downloadProgress
-                            : l10n.updateNow),
+                            : l10n.updateNow)
+                        : l10n.goToUpdate,
                   ),
                 ),
               ],
@@ -231,7 +241,8 @@ class _MainShellState extends State<MainShell> {
     BuildContext ctx,
     void Function(void Function()) setDialogState,
   ) async {
-    if (Platform.isIOS) {
+    // 仅 Android 能直接安装 APK；iOS 与桌面端交给系统浏览器打开下载地址
+    if (!Platform.isAndroid) {
       if (info.downloadUrl.isNotEmpty) {
         final uri = Uri.parse(info.downloadUrl);
 
@@ -261,9 +272,13 @@ class _MainShellState extends State<MainShell> {
         fileName,
         expectedSha256: info.fileSha256,
         expectedMd5: info.fileMd5,
+        expectedSize: info.fileSize,
         cancelToken: _cancelToken,
-        onProgress: (progress) {
-          setState(() => _downloadProgress = progress);
+        onProgress: (progress, receivedBytes) {
+          setState(() {
+            _downloadProgress = progress;
+            _downloadedBytes = receivedBytes;
+          });
 
           setDialogState(() {});
         },
@@ -291,6 +306,7 @@ class _MainShellState extends State<MainShell> {
           _downloading = false;
 
           _downloadProgress = 0;
+          _downloadedBytes = 0;
         });
       }
     }
