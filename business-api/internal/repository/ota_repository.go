@@ -658,7 +658,9 @@ func (r *OTARepository) GetLatestAppVersion(ctx context.Context, platform string
 		       COALESCE(download_url,''), COALESCE(file_size,0), COALESCE(file_md5,''),
 		       COALESCE(changelog,''), is_force, COALESCE(min_supported_version,0),
 		       COALESCE(rollout_percentage,100), COALESCE(is_rolled_back,FALSE), rolled_back_at,
-		       status, created_at
+		       status, created_at,
+		       COALESCE(file_sha256,''), COALESCE(package_name,''), COALESCE(file_name,''),
+		       COALESCE(min_sdk,0), COALESCE(target_sdk,0)
 		FROM app_versions
 		WHERE platform = $1 AND status = 1 AND COALESCE(is_rolled_back, FALSE) = FALSE
 		ORDER BY version_code DESC
@@ -667,7 +669,9 @@ func (r *OTARepository) GetLatestAppVersion(ctx context.Context, platform string
 		&v.DownloadURL, &v.FileSize, &v.FileMD5,
 		&v.Changelog, &v.IsForce, &v.MinSupportedVersion,
 		&v.RolloutPercentage, &v.IsRolledBack, &v.RolledBackAt,
-		&v.Status, &v.CreatedAt)
+		&v.Status, &v.CreatedAt,
+		&v.FileSHA256, &v.PackageName, &v.FileName,
+		&v.MinSDK, &v.TargetSDK)
 	if err != nil {
 		return nil, err
 	}
@@ -677,11 +681,14 @@ func (r *OTARepository) GetLatestAppVersion(ctx context.Context, platform string
 // CreateAppVersion 创建App版本
 func (r *OTARepository) CreateAppVersion(ctx context.Context, v *model.AppVersion) error {
 	return r.db.QueryRow(ctx, `
-		INSERT INTO app_versions (platform, version_code, version_name, download_url, file_size, file_md5, changelog, is_force, min_supported_version, rollout_percentage, status, created_by)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,1,$11)
+		INSERT INTO app_versions (platform, version_code, version_name, download_url, file_size, file_md5,
+		                          changelog, is_force, min_supported_version, rollout_percentage, status, created_by,
+		                          file_sha256, package_name, file_name, min_sdk, target_sdk)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,1,$11,$12,$13,$14,$15,$16)
 		RETURNING id, created_at
 	`, v.Platform, v.VersionCode, v.VersionName, v.DownloadURL, v.FileSize, v.FileMD5,
-		v.Changelog, v.IsForce, v.MinSupportedVersion, v.RolloutPercentage, v.CreatedBy).
+		v.Changelog, v.IsForce, v.MinSupportedVersion, v.RolloutPercentage, v.CreatedBy,
+		v.FileSHA256, v.PackageName, v.FileName, v.MinSDK, v.TargetSDK).
 		Scan(&v.ID, &v.CreatedAt)
 }
 
@@ -692,7 +699,9 @@ func (r *OTARepository) ListAppVersions(ctx context.Context, platform string) ([
 		       COALESCE(download_url,''), COALESCE(file_size,0), COALESCE(file_md5,''),
 		       COALESCE(changelog,''), is_force, COALESCE(min_supported_version,0),
 		       COALESCE(rollout_percentage,100), COALESCE(is_rolled_back,FALSE), rolled_back_at,
-		       status, created_at
+		       status, created_at,
+		       COALESCE(file_sha256,''), COALESCE(package_name,''), COALESCE(file_name,''),
+		       COALESCE(min_sdk,0), COALESCE(target_sdk,0)
 		FROM app_versions WHERE status = 1
 	`
 	args := []interface{}{}
@@ -715,7 +724,9 @@ func (r *OTARepository) ListAppVersions(ctx context.Context, platform string) ([
 			&v.DownloadURL, &v.FileSize, &v.FileMD5,
 			&v.Changelog, &v.IsForce, &v.MinSupportedVersion,
 			&v.RolloutPercentage, &v.IsRolledBack, &v.RolledBackAt,
-			&v.Status, &v.CreatedAt); err != nil {
+			&v.Status, &v.CreatedAt,
+			&v.FileSHA256, &v.PackageName, &v.FileName,
+			&v.MinSDK, &v.TargetSDK); err != nil {
 			continue
 		}
 		result = append(result, v)
@@ -1095,12 +1106,14 @@ func (r *OTARepository) RollbackToPackage(ctx context.Context, sn string, packag
 	return task.ID, nil
 }
 
-// GetLatestPackageVersion 获取指定型号的最新升级包主版本号
+// GetLatestPackageVersion 获取指定型号的最新升级包主版本号。
+// 不按 status 过滤：软删除(status=0)的行仍占用 (model, main_version) 唯一键，
+// 生成新版本号时必须越过它们，否则"删包后重建"会撞 uq_package_model_version。
 func (r *OTARepository) GetLatestPackageVersion(ctx context.Context, model string) (string, error) {
 	var mainVersion string
 	err := r.db.QueryRow(ctx, `
 		SELECT COALESCE(main_version, '') FROM upgrade_packages
-		WHERE model = $1 AND status = 1
+		WHERE model = $1
 		ORDER BY created_at DESC LIMIT 1
 	`, model).Scan(&mainVersion)
 	if err != nil {
