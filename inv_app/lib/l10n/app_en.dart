@@ -242,7 +242,7 @@ const Map<String, String> en = {
   'firmware_list': 'Firmware List',
   'already_latest': 'Already Latest',
   'changelog': 'Changelog',
-  'chips_to_upgrade_label': 'Chips to Upgrade',
+  'chips_to_upgrade_label': 'Modules to Update',
   'device_upgrading': 'Upgrading...',
 
   // Network / Local
@@ -306,7 +306,7 @@ const Map<String, String> en = {
   'available_offline_features': 'Available Offline Features',
   'wifi_provisioning': 'WiFi Provisioning',
   'wifi_provisioning_desc': 'Configure device WiFi network connection',
-  'local_ota': 'Local OTA Update',
+  'local_ota': 'Local Firmware Update',
   'local_ota_desc': 'Update firmware via direct WiFi connection to device',
   'usage_tips': 'Usage Tips',
   'offline_tip_1': 'Ensure phone is connected to device hotspot (CS-INV-xxxx)',
@@ -375,17 +375,17 @@ const Map<String, String> en = {
   'ota_device_offline_hint': 'Device offline, cannot upgrade online',
   'ota_wifi_unavailable': 'WiFi local upgrade not supported',
   'ota_ble_unavailable': 'BLE local upgrade not supported',
-  'ota_firmware_library': 'Firmware Library',
+  'ota_firmware_library': 'Firmware Resources',
   'ota_firmware_library_hint': 'Browse released versions by model, download locally',
   'ota_more_devices': '{count} devices total, search to narrow down',
   // OTA 四卡片 Hub（需求 16）
-  'ota_check_update': 'Check Update',
-  'ota_check_update_hint': 'Check updates for all devices, devices must be online',
-  'ota_local_upgrade': 'Local Upgrade',
-  'ota_local_upgrade_hint': 'Scan nearby devices, upgrade via BLE or WiFi hotspot',
+  'ota_check_update': 'Check All Updates',
+  'ota_check_update_hint': 'Check all online devices for new firmware',
+  'ota_local_upgrade': 'Nearby Device Update',
+  'ota_local_upgrade_hint': 'Update offline devices over Bluetooth or a WiFi hotspot',
   'ota_local_upgrade_unavailable': 'Local upgrade not supported for this model',
-  'ota_upgrade_history': 'Upgrade History',
-  'ota_upgrade_history_hint': 'View upgrade records of all devices and roll back firmware',
+  'ota_upgrade_history': 'All Update Records',
+  'ota_upgrade_history_hint': 'Review firmware update results across all devices',
   // OTA hub refactor: check updates for all devices
   'ota_check_all_progress': 'Checking {checked}/{total} devices…',
   'ota_check_all_done': 'Done: {total} devices checked, {updating} have updates',
@@ -434,7 +434,27 @@ const Map<String, String> en = {
   'china': 'China',
 
   // OTA additions
-  'ota_title': 'OTA Upgrade',
+  'ota_title': 'Device Firmware Update',
+  'firmware_my_devices': 'My Devices',
+  'firmware_my_devices_hint': 'Select a device to view firmware versions and update records',
+  'firmware_device_count': 'Devices',
+  'firmware_online_count': 'Online',
+  'firmware_overview': 'Firmware Overview',
+  'firmware_overview_hint': 'Choose a device to view firmware and update records',
+  'firmware_devices_load_failed': 'Failed to load devices',
+  'firmware_more_tools': 'More Update Options',
+  'firmware_device_detail': 'Device Firmware Details',
+  'firmware_device_information': 'Device Information',
+  'firmware_device_name': 'Device Name',
+  'firmware_device_sn': 'Serial Number',
+  'firmware_hardware_version': 'Hardware Version',
+  'firmware_details': 'Firmware Details',
+  'firmware_update_log': 'Firmware Update Log',
+  'firmware_check_update': 'Check for Firmware Updates',
+  'firmware_offline_check_hint':
+      'Device is offline. Connect it to check for firmware updates',
+  'firmware_device_load_failed': 'Failed to load device information',
+  'load_more': 'Load More',
   'ota_settings_hint': 'Manage firmware versions & upgrades',
   'pre_download_failed': 'Pre-download failed: {error}',
   'downloaded': 'Downloaded',
@@ -500,10 +520,10 @@ const Map<String, String> en = {
   'rescan_ble_device': 'Rescan',
   'package_upgrade_all': 'Upgrade full package',
   'package_upgrade_need_download':
-      'Some chip firmwares are not downloaded. Pre-download the package first',
+      'Some module firmware is not downloaded. Pre-download the package first',
   'package_upgrade_aborted':
-      'Package upgrade aborted: chip {chip} did not finish; remaining chips were not upgraded',
-  'package_upgrade_complete': 'All package chips upgraded in order',
+      'Update stopped: module {chip} did not finish; remaining modules were not updated',
+  'package_upgrade_complete': 'All functional modules updated in order',
   'idle': 'Idle',
   'uploading': 'Uploading',
   'firmware_download_hint':
@@ -579,7 +599,7 @@ const Map<String, String> en = {
   'control_target_soc_hint':
       'Charging stops when the battery reaches this value',
   'control_charge_speed': 'Charge Speed Preset',
-  'control_bms_limits': 'Live BMS Limits',
+  'control_bms_limits': 'Live Battery Management Limits',
   'control_schedule_list': 'Schedule',
   'control_temporary_override': 'Temporary Override',
   'control_no_override': 'No temporary override is active',
@@ -606,8 +626,8 @@ const Map<String, String> en = {
   'control_install_date': 'Installation Date',
   'control_station': 'Station',
   'control_firmware_versions': 'Firmware Versions',
-  'control_firmware_arm': 'ARM Firmware',
-  'control_firmware_esp': 'ESP Firmware',
+  'control_firmware_arm': 'System Control Version',
+  'control_firmware_esp': 'Communication & Data Version',
   'control_hardware_version': 'Hardware Version',
   'control_bootloader_version': 'Bootloader Version',
   'control_config_diff': 'Configuration Differences (desired / reported)',
@@ -787,7 +807,7 @@ const Map<String, String> en = {
   'stop_provision': 'Stop',
   'provision_started': 'Start Config',
   'no_push_channel': 'No push channels',
-  'ota_upgrade_notification': 'OTA Upgrade',
+  'ota_upgrade_notification': 'Device Firmware Update',
   'firmware_upgrade_notification': 'Firmware upgrade notifications',
 
   // Dashboard / Device Detail
@@ -795,7 +815,7 @@ const Map<String, String> en = {
   'load_rate': 'Load Rate',
   'frequency': 'Frequency',
   'ac_output': 'AC Output',
-  'battery_bms': 'Battery BMS',
+  'battery_bms': 'Battery Management',
   'pv_mppt': 'PV MPPT',
   'load_label': 'Load',
   'electric_meter': 'Meter',
@@ -1038,7 +1058,7 @@ const Map<String, String> en = {
   'alarm_warning': 'Warning',
   'alarm_level_info': 'Info',
   'alarm_cleared': 'Alarm Cleared',
-  'ota_notify': 'OTA Upgrade Reminders',
+  'ota_notify': 'Device Firmware Update Reminders',
   'daily_report_section': 'Daily Report',
   'daily_report': 'Daily Statistics Report',
   'daily_report_desc': 'Receive daily generation summary at scheduled time',
@@ -1078,7 +1098,7 @@ const Map<String, String> en = {
   'daily_charge_label': 'Daily Charge',
   'daily_discharge_label': 'Daily Discharge',
   'daily_generation_label': 'Daily Generation',
-  'arm_firmware_label': 'ARM Firmware',
+  'arm_firmware_label': 'System Control Firmware',
   'no_devices': 'No devices',
   'please_input_current_password': 'Please enter current password',
   'notification_type': 'Notification Type',
@@ -1207,7 +1227,7 @@ const Map<String, String> en = {
   'search_device_hint': 'Search device name/SN',
   'no_search_results': 'No matching devices',
   'page_not_found': 'Page not found',
-  'arm_firmware': 'ARM FW',
+  'arm_firmware': 'System Control Firmware',
   'search_stations_hint': 'Search station name',
   'search_alarms_hint': 'Search alarm device/SN',
 
@@ -1374,7 +1394,7 @@ const Map<String, String> en = {
   'protocol_telemetry_title': 'Protocol Telemetry',
   'protocol_telemetry_desc':
       'Alarm lifecycle, parallel state & three-phase 3min history',
-  'chip_firmware_version': 'Chip Firmware Version',
+  'chip_firmware_version': 'Module Firmware Version',
   'view_available_upgrades': 'View available upgrades',
   'current_firmware_version': 'Current Firmware Version',
   'alarm_label': 'Alarm',
@@ -1790,7 +1810,7 @@ const Map<String, String> en = {
   'storage_title': 'Storage',
   'storage_load_failed': 'Failed to load storage data',
   'storage_not_connected': 'No storage battery connected\n(or collector firmware outdated)',
-  'storage_bms_offline': 'BMS offline\nCheck battery switch and comms wiring',
+  'storage_bms_offline': 'Battery management offline\nCheck the battery switch and communication wiring',
   'storage_capacity': 'Capacity',
   'storage_remain_capacity': 'Remain',
   'storage_full_capacity': 'Full (FCC)',
@@ -1909,5 +1929,21 @@ const Map<String, String> en = {
   // Map location picker (nearby addresses)
   'location_search_nearby': 'Searching nearby addresses...',
   'location_nearby_addresses': 'Nearby Addresses',
-};
 
+  // Device firmware modules
+  'firmware_module_communication': 'Communication & Data',
+  'firmware_module_system_control': 'System Control',
+  'firmware_module_power_control': 'Power Control',
+  'firmware_module_battery_management': 'Battery Management',
+  'firmware_module_generic': 'Device Component',
+  'firmware_module_communication_description':
+      'Handles connectivity, data collection, and remote communication',
+  'firmware_module_system_control_description':
+      'Coordinates device operation and system control',
+  'firmware_module_power_control_description':
+      'Controls inverter operation and power regulation',
+  'firmware_module_battery_management_description':
+      'Monitors battery status and safety',
+  'firmware_module_generic_description': 'An internal device component',
+  'firmware_version_not_reported': 'Version not reported',
+};

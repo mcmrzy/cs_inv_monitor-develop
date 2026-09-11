@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:inv_app/core/errors/failures.dart';
 import 'package:inv_app/features/ota/data/datasources/ota_remote_data_source.dart';
 import 'package:inv_app/features/ota/domain/repositories/ota_repository.dart';
+import 'package:inv_app/features/ota/domain/entities/device_firmware_history.dart';
 
 class OtaRepositoryImpl implements OtaRepository {
   final OtaRemoteDataSource remoteDataSource;
@@ -102,6 +103,44 @@ class OtaRepositoryImpl implements OtaRepository {
     try {
       final response = await remoteDataSource.getFirmwareInfo(firmwareId);
       return _parseData(response);
+    } on DioException catch (e) {
+      return Left(_mapError(e));
+    } catch (e) {
+      return Left(UnknownFailure(e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, DeviceFirmwareHistoryPage>> getDeviceHistory(
+    String sn, {
+    int page = 1,
+    int pageSize = 20,
+  }) async {
+    try {
+      final response = await remoteDataSource.getDeviceHistory(
+        sn,
+        page: page,
+        pageSize: pageSize,
+      );
+      final parsed = _parseData(response);
+      return parsed.flatMap((data) {
+        final rawItems = data['items'];
+        if (rawItems is! List) {
+          return const Left(ServerFailure('Response format error'));
+        }
+        final items = rawItems
+            .whereType<Map>()
+            .map((item) => DeviceFirmwareHistory.fromJson(
+                  Map<String, dynamic>.from(item),
+                ))
+            .toList();
+        return Right(DeviceFirmwareHistoryPage(
+          items: items,
+          total: (data['total'] as num?)?.toInt() ?? items.length,
+          page: (data['page'] as num?)?.toInt() ?? page,
+          pageSize: (data['page_size'] as num?)?.toInt() ?? pageSize,
+        ));
+      });
     } on DioException catch (e) {
       return Left(_mapError(e));
     } catch (e) {
