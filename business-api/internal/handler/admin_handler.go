@@ -981,11 +981,16 @@ func (h *AdminHandler) ResetUserPassword(c *gin.Context) {
 		return
 	}
 
-	_, err = h.db.Exec(c.Request.Context(),
+	result, err := h.db.Exec(c.Request.Context(),
 		"UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2 AND deleted_at IS NULL",
 		string(hashedPassword), userID)
 	if err != nil {
 		response.Error(c, 500, "重置密码失败")
+		return
+	}
+	// 影响行数为 0 说明目标行在读取后被软删/移除，不能报告成功让管理员以为密码已生效
+	if result.RowsAffected() == 0 {
+		response.Error(c, 404, "用户不存在")
 		return
 	}
 
