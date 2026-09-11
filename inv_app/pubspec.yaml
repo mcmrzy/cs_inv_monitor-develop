@@ -3,7 +3,7 @@ description: 光伏逆变器监控APP
 
 publish_to: 'none'
 
-version: 1.0.1+10
+version: 1.0.1+11
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
