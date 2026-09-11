@@ -121,6 +121,17 @@ func (h *AuthHandler) generateLoginTokenPair(ctx context.Context, user *model.Us
 		return loginTokenResult{}, fmt.Errorf("authorization context resolver unavailable")
 	}
 
+	// 兜底：管理员直接建户、历史遗留等没有活跃组织身份的用户，登录时幂等补建到
+	// 共享「用户组织」。放在解析会话上下文之前，保证这类用户第一次登录就拿到正确
+	// 的根租户与顾客权限基线，而不是退化成"本人充当租户根"的孤岛。
+	// 补建失败不阻断登录，仍按兜底上下文签发令牌。
+	if h.userService != nil {
+		if err := h.userService.EnsureOrgIdentity(ctx, user.ID, user.Nickname); err != nil {
+			logger.Warn("ensure user org identity on login failed",
+				zap.Int64("user_id", user.ID), zap.Error(err))
+		}
+	}
+
 	// Try to resolve the user's first active organization membership.
 	resolved, err := h.contextResolver.ResolveDefaultSessionContext(ctx, user.ID)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
