@@ -947,7 +947,7 @@ func (h *OTAHandler) CheckAppUpdate(c *gin.Context) {
 		"has_update":            hasUpdate,
 		"latest_version_code":   latest.VersionCode,
 		"latest_version_name":   latest.VersionName,
-		"download_url":          h.otaService.BuildDownloadURL(latest.DownloadURL),
+		"download_url":          h.otaService.BuildAppDownloadURL(latest.DownloadURL),
 		"file_size":             latest.FileSize,
 		"file_md5":              latest.FileMD5,
 		"file_sha256":           latest.FileSHA256,
@@ -983,7 +983,7 @@ func (h *OTAHandler) GetLatestAppRelease(c *gin.Context) {
 		"platform":     latest.Platform,
 		"version_code": latest.VersionCode,
 		"version_name": latest.VersionName,
-		"download_url": h.otaService.BuildDownloadURL(latest.DownloadURL),
+		"download_url": h.otaService.BuildAppDownloadURL(latest.DownloadURL),
 		"file_name":    latest.FileName,
 		"file_size":    latest.FileSize,
 		"file_sha256":  latest.FileSHA256,
@@ -1211,9 +1211,9 @@ func (h *OTAHandler) ListAppVersions(c *gin.Context) {
 		return
 	}
 	// download_url 在库内以相对路径保存，对外统一补全下载域名，
-	// 使更换下载域名后历史版本无需回填。
+	// 使更换下载域名后历史版本无需回填。App 版本记录用 App 下载域。
 	for i := range list {
-		list[i].DownloadURL = h.otaService.BuildDownloadURL(list[i].DownloadURL)
+		list[i].DownloadURL = h.otaService.BuildAppDownloadURL(list[i].DownloadURL)
 	}
 	response.Success(c, list)
 }
