@@ -79,4 +79,33 @@ describe('OrganizationRoute', () => {
     })
     expect(screen.queryByText('Organization Management')).not.toBeInTheDocument()
   })
+
+  // 一次 5xx / 网络抖动不能被当成“无权限”，否则用户会被永久钉在 403 页面。
+  it('shows a retryable error instead of the unauthorized page when the lookup fails', async () => {
+    vi.spyOn(channelApi, 'getMyOrganizations').mockRejectedValue(
+      Object.assign(new Error('boom'), { response: { status: 500 } }),
+    )
+
+    renderRoute()
+
+    await waitFor(() => {
+      expect(screen.getByText('暂时无法确认您的组织权限')).toBeInTheDocument()
+    })
+    expect(screen.queryByText('Unauthorized Page')).not.toBeInTheDocument()
+    expect(screen.queryByText('Organization Management')).not.toBeInTheDocument()
+    // antd 会在两个中文字之间插空格，断言用正则匹配
+    expect(screen.getByRole('button', { name: /重\s*试/ })).toBeInTheDocument()
+  })
+
+  it('still redirects to the unauthorized page on a 403 verdict', async () => {
+    vi.spyOn(channelApi, 'getMyOrganizations').mockRejectedValue(
+      Object.assign(new Error('forbidden'), { response: { status: 403 } }),
+    )
+
+    renderRoute()
+
+    await waitFor(() => {
+      expect(screen.getByText('Unauthorized Page')).toBeInTheDocument()
+    })
+  })
 })
