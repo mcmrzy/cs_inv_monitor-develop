@@ -34,40 +34,42 @@ var (
 )
 
 type OTAService struct {
-	repo         *repository.OTARepository
-	rdb          *redis.Client
-	db           *pgxpool.Pool
-	jpushService *JPushService
-	deviceServer string
-	internalKey  string
-	uploadDir    string // 固件上传存储目录
-	serverURL    string // 外部访问地址，用于构造ESP32下载URL
-	downloadURL  string // 固件下载域（环境变量默认值），可被运行时域名配置动态覆盖
-	cfgSvc       *ConfigService // 运行时配置服务（域名配置动态覆盖），可空
-	httpClient   *http.Client
-	concurrency  int
-	taskTimeout  time.Duration // 升级任务超时阈值，pending/running 任务超过该时长无更新自动置为 failed；<=0 表示禁用
+	repo           *repository.OTARepository
+	rdb            *redis.Client
+	db             *pgxpool.Pool
+	jpushService   *JPushService
+	deviceServer   string
+	internalKey    string
+	uploadDir      string         // 固件上传存储目录
+	serverURL      string         // 外部访问地址，用于构造ESP32下载URL
+	downloadURL    string         // 固件下载域（环境变量默认值），可被运行时域名配置动态覆盖
+	appDownloadURL string         // App 安装包下载域（APP_DOWNLOAD_URL），仅用于手机端版本下载 URL；为空回退 downloadURL
+	cfgSvc         *ConfigService // 运行时配置服务（域名配置动态覆盖），可空
+	httpClient     *http.Client
+	concurrency    int
+	taskTimeout    time.Duration // 升级任务超时阈值，pending/running 任务超过该时长无更新自动置为 failed；<=0 表示禁用
 
 	dataPermission *DataPermission // 数据权限：普通用户按可见设备 SN 过滤
 }
 
-func NewOTAService(repo *repository.OTARepository, rdb *redis.Client, deviceServer string, internalKey string, uploadDir string, serverURL string, downloadURL string, db *pgxpool.Pool, jpushService *JPushService) *OTAService {
+func NewOTAService(repo *repository.OTARepository, rdb *redis.Client, deviceServer string, internalKey string, uploadDir string, serverURL string, downloadURL string, appDownloadURL string, db *pgxpool.Pool, jpushService *JPushService) *OTAService {
 	if uploadDir == "" {
 		uploadDir = "/data/firmware"
 	}
 	svc := &OTAService{
-		repo:         repo,
-		rdb:          rdb,
-		db:           db,
-		jpushService: jpushService,
-		deviceServer: deviceServer,
-		internalKey:  internalKey,
-		uploadDir:    uploadDir,
-		serverURL:    serverURL,
-		downloadURL:  downloadURL,
-		httpClient:   &http.Client{Timeout: 30 * time.Second},
-		concurrency:  10,
-		taskTimeout:  DefaultOTATaskTimeoutMinutes * time.Minute,
+		repo:           repo,
+		rdb:            rdb,
+		db:             db,
+		jpushService:   jpushService,
+		deviceServer:   deviceServer,
+		internalKey:    internalKey,
+		uploadDir:      uploadDir,
+		serverURL:      serverURL,
+		downloadURL:    downloadURL,
+		appDownloadURL: appDownloadURL,
+		httpClient:     &http.Client{Timeout: 30 * time.Second},
+		concurrency:    10,
+		taskTimeout:    DefaultOTATaskTimeoutMinutes * time.Minute,
 	}
 	if db != nil {
 		svc.dataPermission = NewDataPermission(db)
@@ -1472,6 +1474,24 @@ func (s *OTAService) generateMainVersion(ctx context.Context, model string) (str
 // BuildDownloadURL 构造固件下载URL（公开方法）
 func (s *OTAService) BuildDownloadURL(fileURL string) string {
 	return s.downloadURLFor(fileURL)
+}
+
+// BuildAppDownloadURL 构造 App 安装包下载 URL（公开方法）。
+// 仅用于手机端读取「App 版本下载地址」的场景（检查更新/下载页/版本列表）；
+// 设备 OTA 命令与固件 bin 一律走 BuildDownloadURL（设备对下载域的连通性
+// 未经验证，且历史上有 ESA 边缘导致设备下载失败的记录）。
+// APP_DOWNLOAD_URL 未配置时回退 BuildDownloadURL，行为与历史版本一致。
+func (s *OTAService) BuildAppDownloadURL(fileURL string) string {
+	if base := s.appDownloadBase(); base != "" && strings.HasPrefix(fileURL, "/") {
+		return strings.TrimRight(base, "/") + fileURL
+	}
+	return s.downloadURLFor(fileURL)
+}
+
+// appDownloadBase 解析 App 安装包下载域：环境变量 APP_DOWNLOAD_URL（构造时注入）。
+// 不读运行时域名配置——那个配置同时驱动设备 URL，不能混用。
+func (s *OTAService) appDownloadBase() string {
+	return s.appDownloadURL
 }
 
 // AttachConfigService 注入运行时配置服务：下载域可被管理后台「域名配置」
