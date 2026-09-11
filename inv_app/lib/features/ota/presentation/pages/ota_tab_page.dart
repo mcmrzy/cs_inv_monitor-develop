@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/features/device/domain/repositories/device_repository.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
@@ -19,7 +20,7 @@ class _OtaTabPageState extends State<OtaTabPage> {
   bool _loading = true;
   String? _error;
   int _page = 1;
-  int _total = 0;
+  int? _total;
 
   @override
   void initState() {
@@ -32,6 +33,7 @@ class _OtaTabPageState extends State<OtaTabPage> {
     setState(() {
       _loading = true;
       _error = null;
+      if (reset) _total = null;
     });
     final result = await _repository.getList(page: _page, pageSize: 20);
     if (!mounted) return;
@@ -48,7 +50,8 @@ class _OtaTabPageState extends State<OtaTabPage> {
             .map((item) => Map<String, dynamic>.from(item))
             .toList();
         _devices = reset ? items : [..._devices, ...items];
-        _total = (data['total'] as num?)?.toInt() ?? _devices.length;
+        final total = data['total'];
+        _total = total is num ? total.toInt() : null;
       }),
     );
   }
@@ -56,7 +59,7 @@ class _OtaTabPageState extends State<OtaTabPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final onlineCount = _devices.where(_isOnline).length;
+    final hasLargeText = MediaQuery.textScalerOf(context).scale(1) > 1.2;
     return Scaffold(
       backgroundColor: AppColor.surface(context),
       appBar: AppBar(title: Text(l10n.str('ota_title')), centerTitle: true),
@@ -67,7 +70,6 @@ class _OtaTabPageState extends State<OtaTabPage> {
           children: [
             _OverviewCard(
               total: _total,
-              online: onlineCount,
             ),
             const SizedBox(height: 24),
             Text(l10n.str('firmware_my_devices'),
@@ -104,7 +106,7 @@ class _OtaTabPageState extends State<OtaTabPage> {
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: AppColors.error),
               ),
-            if (_devices.length < _total)
+            if (_total != null && _devices.length < _total!)
               TextButton(
                 onPressed: _loading
                     ? null
@@ -133,7 +135,7 @@ class _OtaTabPageState extends State<OtaTabPage> {
               physics: const NeverScrollableScrollPhysics(),
               mainAxisSpacing: 12,
               crossAxisSpacing: 12,
-              childAspectRatio: 1.18,
+              childAspectRatio: hasLargeText ? .92 : 1.18,
               children: [
                 _ToolCard(
                     icon: Icons.cloud_sync_rounded,
@@ -166,98 +168,108 @@ class _OtaTabPageState extends State<OtaTabPage> {
       ),
     );
   }
-
-  static bool _isOnline(Map<String, dynamic> device) =>
-      device['online'] == true ||
-      device['status'] == 1 ||
-      device['status'] == 2;
 }
 
 class _OverviewCard extends StatelessWidget {
-  const _OverviewCard({required this.total, required this.online});
-  final int total;
-  final int online;
+  const _OverviewCard({required this.total});
+  final int? total;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Container(
-      padding: const EdgeInsets.all(20),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF0D47A1), Color(0xFF1976D2), Color(0xFF42A5F5)],
+        gradient: LinearGradient(
+          colors: [
+            AppColor.primaryContainer(context),
+            AppColor.surfaceContainer(context),
+          ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: .24),
-            blurRadius: 22,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(24),
       ),
-      child: Stack(children: [
-        Positioned(
-          right: -18,
-          top: -26,
-          child: Icon(Icons.system_update_alt_rounded,
-              size: 116, color: Colors.white.withValues(alpha: .10)),
-        ),
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: .16),
-              borderRadius: BorderRadius.circular(14),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 8, 16),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.str('firmware_overview'),
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: AppColor.textPrimary(context),
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+                const SizedBox(height: 7),
+                Text(
+                  l10n.str('firmware_overview_hint'),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    height: 1.45,
+                    color: AppColor.textSecondary(context),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: AppColor.surfaceContainer(context)
+                        .withValues(alpha: .86),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text.rich(
+                    TextSpan(children: [
+                      TextSpan(
+                        text: '${total ?? '—'}  ',
+                        style: TextStyle(
+                          color: AppColor.primary(context),
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      TextSpan(text: l10n.str('firmware_device_count')),
+                    ]),
+                    key: const Key('firmwareDeviceTotal'),
+                    maxLines: 2,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColor.textSecondary(context),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            child:
-                const Icon(Icons.developer_board_rounded, color: Colors.white),
           ),
-          const SizedBox(height: 18),
-          Text(l10n.str('firmware_overview'),
-              style: Theme.of(context)
-                  .textTheme
-                  .titleLarge
-                  ?.copyWith(color: Colors.white, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 5),
-          Text(l10n.str('firmware_my_devices_hint'),
-              style: TextStyle(color: Colors.white.withValues(alpha: .78))),
-          const SizedBox(height: 20),
-          Row(children: [
-            _OverviewStat(
-                value: '$total', label: l10n.str('firmware_device_count')),
-            Container(
-                width: 1,
-                height: 34,
-                margin: const EdgeInsets.symmetric(horizontal: 22),
-                color: Colors.white.withValues(alpha: .24)),
-            _OverviewStat(
-                value: '$online', label: l10n.str('firmware_online_count')),
-          ]),
+          const SizedBox(width: 4),
+          SizedBox(
+            width: 124,
+            child: AspectRatio(
+              aspectRatio: 1.05,
+              child: Image.asset(
+                CsergyAssets.xiaoshuoOtaGuide,
+                fit: BoxFit.contain,
+                alignment: Alignment.bottomCenter,
+                cacheWidth:
+                    (124 * MediaQuery.devicePixelRatioOf(context)).round(),
+                errorBuilder: (context, error, stackTrace) => Icon(
+                  Icons.system_update_alt_rounded,
+                  size: 64,
+                  color: AppColor.primary(context).withValues(alpha: .35),
+                ),
+              ),
+            ),
+          ),
         ]),
-      ]),
+      ),
     );
   }
-}
-
-class _OverviewStat extends StatelessWidget {
-  const _OverviewStat({required this.value, required this.label});
-  final String value;
-  final String label;
-  @override
-  Widget build(BuildContext context) => Row(children: [
-        Text(value,
-            style: const TextStyle(
-                color: Colors.white,
-                fontSize: 24,
-                fontWeight: FontWeight.w700)),
-        const SizedBox(width: 8),
-        Text(label,
-            style: TextStyle(color: Colors.white.withValues(alpha: .72))),
-      ]);
 }
 
 class _DeviceCard extends StatelessWidget {
@@ -276,17 +288,18 @@ class _DeviceCard extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     return Material(
       color: AppColor.surfaceContainer(context),
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(16),
+      shadowColor: AppColors.primary.withValues(alpha: .08),
+      elevation: 1,
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         onTap: sn.isEmpty
             ? null
             : () => context.push('/ota/device/${Uri.encodeComponent(sn)}'),
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: AppColor.border(context)),
+            borderRadius: BorderRadius.circular(16),
           ),
           child: Row(children: [
             Container(
@@ -385,15 +398,14 @@ class _ToolCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Material(
         color: AppColor.surfaceContainer(context),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(16),
           child: Container(
             padding: const EdgeInsets.all(15),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: AppColor.border(context)),
+              borderRadius: BorderRadius.circular(16),
             ),
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -408,7 +420,7 @@ class _ToolCard extends StatelessWidget {
               ),
               const Spacer(),
               Text(title,
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontWeight: FontWeight.w700)),
               const SizedBox(height: 3),
