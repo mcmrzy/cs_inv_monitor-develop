@@ -133,9 +133,12 @@ class DeviceFirmwareHistoryTile extends StatelessWidget {
                 Icon(Icons.schedule_rounded,
                     size: 14, color: AppColor.textHint(context)),
                 const SizedBox(width: 5),
-                Text(time,
-                    style: TextStyle(
-                        fontSize: 12, color: AppColor.textSecondary(context))),
+                Expanded(
+                  child: Text(time,
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: AppColor.textSecondary(context))),
+                ),
               ]),
               if (item.changelog.trim().isNotEmpty) ...[
                 const SizedBox(height: 12),

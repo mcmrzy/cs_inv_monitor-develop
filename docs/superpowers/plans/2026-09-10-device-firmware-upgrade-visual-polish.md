@@ -53,29 +53,27 @@ Expected: all page tests pass at 390×844 without overflow.
 ### Task 2: Add and validate the OTA illustration
 
 **Files:**
-- Create: `inv_app/assets/character/xiaoshuo/xiaoshuo_firmware_hub_1536x1024.png`
-- Modify: `inv_app/lib/core/theme/csergy_assets.dart`
 - Modify: `inv_app/test/features/ota/presentation/pages/device_firmware_pages_test.dart`
 
-- [ ] **Step 1: Generate a non-destructive image variant**
+- [x] **Step 1: Reject invalid generated variants**
 
-Use the existing `xiaoshuo_ota_1536x1024.png` as the character reference. Generate a 3:2 landscape transparent PNG showing the same character reviewing a compact inverter firmware update, with the subject weighted to the right for left-side copy. Require no text, watermark, frame, background rectangle, white fringe, or black halo.
+Two built-in generated candidates were checked and rejected because both were RGB files that painted a checkerboard instead of encoding alpha transparency. Neither candidate is copied into the project.
 
-- [ ] **Step 2: Validate transparency, dimensions, and composition**
+- [x] **Step 2: Select the existing release asset**
 
-Run a Pillow metadata check from the repository-provided Python runtime to assert size `(1536, 1024)`, an alpha-capable mode, and alpha value `0` at all four corners. The check must fail non-zero on any mismatch, for example by opening the file, converting to RGBA, and asserting `image.size == (1536, 1024)` plus `image.getpixel(point)[3] == 0` for `(0,0)`, `(1535,0)`, `(0,1023)`, and `(1535,1023)`. Then visually inspect the generated image for clean subject edges, no white/black fringe, and enough negative space for the hub copy.
+Reuse `CsergyAssets.xiaoshuoOtaGuide`, which already points to the 1536×1024 OTA illustration. Validate the hydrated Git LFS file contains PNG transparency information and visually inspect it on the light hero background. Keep `errorBuilder` so source-only/LFS-pointer test environments render a safe fallback icon.
 
-- [ ] **Step 3: Move the selected image into the project**
+- [x] **Step 3: Preserve asset boundaries**
 
-Copy the selected output to the new asset path without overwriting any existing character file.
+Do not add, copy, overwrite, or re-cut any character image in this task. The separate About-page cutout issue remains deferred.
 
-- [ ] **Step 4: Register the centralized asset**
+- [x] **Step 4: Use the centralized asset**
 
-Add `CsergyAssets.xiaoshuoFirmwareHub` and reference it from the OTA hub. Do not embed a raw path in the page.
+Reference `CsergyAssets.xiaoshuoOtaGuide` from the OTA hub. Do not embed a raw path in the page.
 
 - [ ] **Step 5: Extend the widget test**
 
-Assert the hub contains an `Image` using `CsergyAssets.xiaoshuoFirmwareHub` and retains all four secondary routes.
+Assert the hub contains an `Image` using `CsergyAssets.xiaoshuoOtaGuide` and retains all four secondary routes.
 
 ## Chunk 2: Visual implementation and verification
 
@@ -111,11 +109,10 @@ Run targeted `dart format`, then from `inv_app/` run `flutter analyze --no-pub -
 
 **Files:**
 - Modify outside Git worktree: `.codex/visualizations/2026/09/10/01a08a0c-919e-7ab3-bafa-a1660c1e9c6c/ota-final-flow.html`
-- Create outside Git worktree: `.codex/visualizations/2026/09/10/01a08a0c-919e-7ab3-bafa-a1660c1e9c6c/xiaoshuo_firmware_hub_1536x1024.png`
 
 - [ ] **Step 1: Update the HTML companion**
 
-Copy the selected illustration beside the preview HTML, mirror the light illustrated hero with a relative `<img>` reference, and place the detail action after the final timeline entry instead of using `position:absolute`.
+Mirror the light illustrated hero in the HTML companion without copying a new bitmap, and place the detail action after the final timeline entry instead of using `position:absolute`.
 
 - [ ] **Step 2: Verify the preview server**
 
