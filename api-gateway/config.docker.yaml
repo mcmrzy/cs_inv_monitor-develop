@@ -50,6 +50,8 @@ cors:
     - "http://localhost:5173"
     - "https://jiuxiaoyw.online"
     - "https://www.jiuxiaoyw.online"
+    # App 下载页托管在下载子域，页面需跨域读取公开版本接口
+    - "https://download.jiuxiaoyw.online"
     # 生产环境添加实际域名
     # - "https://your-domain.com"
 
