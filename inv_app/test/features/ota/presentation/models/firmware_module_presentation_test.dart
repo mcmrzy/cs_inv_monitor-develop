@@ -9,27 +9,35 @@ void main() {
     final zh = await AppLocalizations.delegate.load(const Locale('zh', 'CN'));
     final en = await AppLocalizations.delegate.load(const Locale('en'));
 
+    // 展示名统一为「中文模块名（芯片）」，见 e14f20575
     final cases = <String, String>{
-      'esp': '通信采集',
-      'ARM': '系统主控',
-      'dsp': '功率控制',
-      'bms': '电池管理',
+      'esp': '通信采集（ESP）',
+      'ARM': '系统中控（ARM）',
+      'dsp': '计算控制（DSP）',
+      'bms': '电池管理（BMS）',
       'vendor_x': '设备组件',
     };
 
     for (final entry in cases.entries) {
       final module = FirmwareModulePresentation.fromTarget(entry.key);
       expect(module.displayLabel(zh), entry.value);
-      expect(
-        module.displayLabel(zh).toUpperCase(),
-        isNot(anyOf(contains('ESP'), contains('ARM'), contains('DSP'),
-            contains('BMS'))),
-      );
-      expect(
-        module.displayLabel(en).toUpperCase(),
-        isNot(anyOf(contains('ESP'), contains('ARM'), contains('DSP'),
-            contains('BMS'))),
-      );
+    }
+  });
+
+  test('localizes module labels in English as well', () async {
+    final en = await AppLocalizations.delegate.load(const Locale('en'));
+
+    final cases = <String, String>{
+      'esp': 'Communication (ESP)',
+      'ARM': 'System Control (ARM)',
+      'dsp': 'Computation (DSP)',
+      'bms': 'Battery Management (BMS)',
+      'vendor_x': 'Device Component',
+    };
+
+    for (final entry in cases.entries) {
+      final module = FirmwareModulePresentation.fromTarget(entry.key);
+      expect(module.displayLabel(en), entry.value);
     }
   });
 
