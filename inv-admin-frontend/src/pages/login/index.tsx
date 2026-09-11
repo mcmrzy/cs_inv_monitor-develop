@@ -10,6 +10,7 @@ import { selectDefaultRoute } from '@/router/routeAccess'
 import countriesList from '../../utils/continentsData'
 import { toEnglishCountryName } from '../../utils/countryEnNames'
 import SliderCaptchaModal from '@/components/SliderCaptcha/SliderCaptchaModal'
+import { markProfileSetupPending } from '@/utils/onboarding'
 
 // Maps the backend user object (snake_case is_system_admin) to the frontend User type.
 function mapBackendUser(raw: Record<string, unknown>): User {
@@ -204,6 +205,8 @@ const LoginPage: React.FC = () => {
       permissions,
     )
     message.success(t.successRegister)
+    // 注册完成 → 进入主框架后弹一次可跳过的「完善资料」引导
+    markProfileSetupPending()
     navigateAfterAuth(mappedUser, permissions)
     return true
   }

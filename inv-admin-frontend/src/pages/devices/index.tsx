@@ -28,6 +28,7 @@ import useTranslation from '@/hooks/useTranslation'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
 import StatusBadge from '@/components/StatusBadge'
 import { formatInTimezone } from '@/utils/timezone'
+import { isDeviceNameSkipped, markDeviceNameSkipped } from '@/utils/onboarding'
 import useTimezoneStore from '@/stores/timezoneStore'
 import BulkDeviceOperationModal, { type BulkFailure } from './components/BulkDeviceOperationModal'
 
@@ -38,6 +39,8 @@ const { Dragger } = Upload
 interface DeviceRecord {
   id: string
   sn: string
+  /** 用户自定义的设备名称，未设置时为空 */
+  alias?: string
   model: string
   model_id?: number
   ratedPower: number
@@ -110,8 +113,14 @@ const DevicesPage: React.FC = () => {
 
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
+  // 绑定成功后的一次性「设置设备名称」引导（可跳过，跳过过的设备不再弹）
+  const [nameModalOpen, setNameModalOpen] = useState(false)
+  const [nameTargetSn, setNameTargetSn] = useState('')
+  // true = 绑定后的引导（可忽略并记住）；false = 列表里的手动改名入口
+  const [nameFromBind, setNameFromBind] = useState(false)
   const [addForm] = Form.useForm()
   const [editForm] = Form.useForm()
+  const [nameForm] = Form.useForm()
 
   // 批量解绑/删除进度弹窗（串行逐台执行，逐条上报进度）
   const [bulkOpen, setBulkOpen] = useState(false)
@@ -336,16 +345,61 @@ const DevicesPage: React.FC = () => {
   const bindDeviceMutation = useMutation({
     mutationFn: ({ sn, pin, stationId }: { sn: string; pin: string; stationId?: number }) =>
       deviceApi.bindDevice(sn, pin, stationId),
-    onSuccess: () => {
+    onSuccess: (_data: unknown, variables: { sn: string; pin: string; stationId?: number }) => {
       messageApi.success(t('dev.bindDeviceSuccess'))
       setDeviceBindModalOpen(false)
       bindDeviceForm.resetFields()
       queryClient.invalidateQueries({ queryKey: ['devices'] })
+      // 绑定完成后引导命名：整块可选，跳过过的设备不再打扰
+      const sn = variables?.sn?.trim()
+      if (sn && !isDeviceNameSkipped(sn)) {
+        setNameTargetSn(sn)
+        setNameFromBind(true)
+        nameForm.setFieldsValue({ alias: '' })
+        setNameModalOpen(true)
+      }
     },
     onError: (err: any) => {
       messageApi.error(err?.response?.data?.message || err?.message || t('common.error'))
     },
   })
+
+  // 绑定后的命名引导：只提交 alias，后端按 COALESCE 保留其余字段
+  const setNameMutation = useMutation({
+    mutationFn: ({ sn, alias }: { sn: string; alias: string }) =>
+      deviceApi.updateDevice(sn, { alias }).then((r) => r.data),
+    onSuccess: () => {
+      messageApi.success(t('dev.setNameSaved'))
+      setNameModalOpen(false)
+      setNameFromBind(false)
+      nameForm.resetFields()
+      queryClient.invalidateQueries({ queryKey: ['devices'] })
+    },
+    onError: () => messageApi.error(t('dev.updateFailed')),
+  })
+
+  const handleNameSubmit = async () => {
+    try {
+      const values = await nameForm.validateFields()
+      const alias = (values.alias || '').trim()
+      // 留空等同跳过：绑定引导会记住这台设备不再提示
+      if (!alias) {
+        closeNameModal()
+        return
+      }
+      setNameMutation.mutate({ sn: nameTargetSn, alias })
+    } catch {
+      // validation failed
+    }
+  }
+
+  const closeNameModal = () => {
+    // 绑定后的引导被忽略 → 记住这台设备，以后不再弹
+    if (nameFromBind && nameTargetSn) markDeviceNameSkipped(nameTargetSn)
+    setNameModalOpen(false)
+    setNameFromBind(false)
+    nameForm.resetFields()
+  }
 
   const handleBindDeviceSubmit = async () => {
     try {
@@ -406,9 +460,19 @@ const DevicesPage: React.FC = () => {
   const handleEdit = (record: any) => {
     editForm.setFieldsValue({
       sn: record.sn,
+      alias: record.alias || '',
       model: record.model,
     })
     setEditModalOpen(true)
+  }
+
+  // 无 devices:manage 的角色（如终端用户）看不到「编辑」按钮，
+  // 但仍持有 devices:edit，给他们一个只改名称的入口
+  const handleOpenSetName = (record: any) => {
+    setNameTargetSn(record.sn)
+    setNameFromBind(false)
+    nameForm.setFieldsValue({ alias: record.alias || '' })
+    setNameModalOpen(true)
   }
 
   const handleEditSubmit = async () => {
@@ -743,11 +807,20 @@ const DevicesPage: React.FC = () => {
       key: 'sn',
       width: 150,
       fixed: 'left',
-      render: (sn: string) => (
-        <a onClick={() => openDeviceDetail(sn)} style={{ fontWeight: 500 }}>
-          {sn}
-        </a>
-      ),
+      // 设置过名称时优先展示名称，SN 降为次行（否则用户改了名在列表里看不到）
+      render: (sn: string, record: DeviceRecord) =>
+        record.alias ? (
+          <Space direction="vertical" size={0}>
+            <Text strong>{record.alias}</Text>
+            <a onClick={() => openDeviceDetail(sn)} style={{ fontSize: 12 }}>
+              {sn}
+            </a>
+          </Space>
+        ) : (
+          <a onClick={() => openDeviceDetail(sn)} style={{ fontWeight: 500 }}>
+            {sn}
+          </a>
+        ),
     },
     {
       title: t('common.model'),
@@ -833,6 +906,15 @@ const DevicesPage: React.FC = () => {
           >
             {t('common.detail')}
           </Button>
+          {isEndUser && hasPermission('devices:edit') && (
+            <Button
+              type="link"
+              size="small"
+              onClick={() => handleOpenSetName(record)}
+            >
+              {t('dev.setName')}
+            </Button>
+          )}
           {!isEndUser && (
             <>
               <Button
@@ -1326,8 +1408,35 @@ const DevicesPage: React.FC = () => {
           <Form.Item name="sn" label={t('dev.deviceSN')}>
             <Input disabled />
           </Form.Item>
+          <Form.Item name="alias" label={t('dev.deviceName')}>
+            <Input maxLength={50} placeholder={t('dev.deviceNamePlaceholder')} />
+          </Form.Item>
           {renderModelFormItem(selectedEditModel)}
         </Form>
+      </Modal>
+
+      <Modal
+        title={t('dev.setName')}
+        open={nameModalOpen}
+        onCancel={closeNameModal}
+        onOk={handleNameSubmit}
+        confirmLoading={setNameMutation.isPending}
+        okText={t('modal.save')}
+        cancelText={nameFromBind ? t('dev.setNameSkip') : t('common.cancel')}
+        destroyOnHidden
+      >
+        <Alert message={t('dev.setNameDesc')} type="info" showIcon style={{ marginTop: 16 }} />
+        <Form form={nameForm} layout="vertical" style={{ marginTop: 16 }}>
+          <Form.Item label={t('dev.deviceSN')}>
+            <Input value={nameTargetSn} disabled />
+          </Form.Item>
+          <Form.Item name="alias" label={t('dev.deviceName')}>
+            <Input maxLength={50} placeholder={t('dev.deviceNamePlaceholder')} />
+          </Form.Item>
+        </Form>
+        {nameFromBind && (
+          <div style={{ color: 'rgba(0, 0, 0, 0.45)', fontSize: 12 }}>{t('dev.setNameHint')}</div>
+        )}
       </Modal>
 
       <Modal

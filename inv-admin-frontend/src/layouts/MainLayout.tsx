@@ -29,6 +29,13 @@ import { TIMEZONE_LIST, REGION_LABELS, getTimezoneLabel } from '@/utils/timezone
 import { resolveMediaUrl } from '@/utils/urls'
 import UploadAvatar from '@/components/UploadAvatar'
 import RegionPicker from '@/components/RegionPicker'
+import ProfileSetupModal, { type ProfileSetupResult } from '@/components/ProfileSetupModal'
+import {
+  clearProfileSetupPending,
+  isProfileSetupPending,
+  isProfileSetupSkipped,
+  markProfileSetupSkipped,
+} from '@/utils/onboarding'
 
 
 interface RouteMenuItem {
@@ -93,6 +100,7 @@ const MainLayout: React.FC = () => {
   const [passwordModalOpen, setPasswordModalOpen] = useState(false)
   const [passwordForm] = Form.useForm()
   const [profileModalOpen, setProfileModalOpen] = useState(false)
+  const [profileSetupOpen, setProfileSetupOpen] = useState(false)
   const [profileForm] = Form.useForm()
   const [profileAvatar, setProfileAvatar] = useState('')
   const [timezoneModalOpen, setTimezoneModalOpen] = useState(false)
@@ -117,6 +125,22 @@ const MainLayout: React.FC = () => {
   useEffect(() => {
     if (!screens.md) { setMobileCollapsed(true) } else { setMobileCollapsed(false) }
   }, [screens.md])
+
+  // 注册后的一次性「完善资料」引导：只在注册那一刻打了标记时弹一次，
+  // 用户跳过过、或资料已填齐，都不再出现。
+  useEffect(() => {
+    if (!user) return
+    if (!isProfileSetupPending()) return
+    clearProfileSetupPending()
+    if (isProfileSetupSkipped(user.id)) return
+    if (user.nickname && user.avatar) return
+    setProfileSetupOpen(true)
+  }, [user])
+
+  const handleProfileSetupDone = (result: ProfileSetupResult) => {
+    setProfileSetupOpen(false)
+    if (result === 'skipped' && user) markProfileSetupSkipped(user.id)
+  }
 
   const { status: organizationAccessStatus, isEndUser } = useOrganizationAccess()
   const canAccessOrgManagement = organizationAccessStatus === 'allowed'
@@ -335,6 +359,8 @@ const MainLayout: React.FC = () => {
       >
         <Outlet />
       </ProLayout>
+
+      <ProfileSetupModal open={profileSetupOpen} onDone={handleProfileSetupDone} />
 
       <ModalForm
         title={t('modal.changePassword')}

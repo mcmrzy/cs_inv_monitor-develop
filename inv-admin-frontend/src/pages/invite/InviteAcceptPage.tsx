@@ -7,6 +7,7 @@ import { selectDefaultRoute } from '@/router/routeAccess'
 import api from '@/services/api'
 import type { User } from '@/types'
 import useTranslation from '@/hooks/useTranslation'
+import { markProfileSetupPending } from '@/utils/onboarding'
 
 // Maps the backend user object (snake_case is_system_admin) to the frontend User type.
 function mapBackendUser(raw: Record<string, unknown>): User {
@@ -78,6 +79,8 @@ const InviteAcceptPage: React.FC = () => {
         permissions,
       )
       message.success(t('invite.accept.success'))
+      // 注册完成 → 进入主框架后弹一次可跳过的「完善资料」引导
+      markProfileSetupPending()
       navigate(selectDefaultRoute(isSystemAdmin, (...perms) => permissions.some((p) => perms.includes(p))), { replace: true })
     } catch (err: any) {
       const errData = err?.response?.data
