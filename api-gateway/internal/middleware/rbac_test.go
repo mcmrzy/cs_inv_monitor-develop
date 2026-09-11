@@ -156,6 +156,12 @@ func newTestRouter(rbac *RBACMiddleware) *gin.Engine {
 	router.POST("/api/v1/devices/by-sn/TEST001/request-transfer", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
+	router.GET("/api/v1/models", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+	router.GET("/api/v1/models/:id", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
 	router.GET("/api/v1/models/:id/field-capabilities", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
@@ -336,11 +342,18 @@ func TestIsModelDictionaryGET(t *testing.T) {
 		{"/api/v1/models/1/fields", http.MethodGet, true},
 		{"/api/v1/models/42/field-capabilities", http.MethodGet, true},
 		{"/api/v1/models/fields-by-code/CS6K2", http.MethodGet, true},
+		// 型号目录与单型号详情：business-api 未挂权限中间件，网关必须同契约，
+		// 否则没有 models:view 的终端用户拿不到型号，设备页型号下拉恒为空
+		{"/api/v1/models", http.MethodGet, true},
+		{"/api/v1/models/1", http.MethodGet, true},
+		{"/api/v1/models", http.MethodPost, false},
+		{"/api/v1/models/1", http.MethodPut, false},
+		{"/api/v1/models/abc", http.MethodGet, false},
 		{"/api/v1/models/1/fields", http.MethodPut, false},
 		{"/api/v1/models/1/field-capabilities", http.MethodPut, false},
 		{"/api/v1/models/1/fields-batch", http.MethodGet, false},
 		{"/api/v1/models/1/migration-report", http.MethodGet, false},
-		{"/api/v1/models/1", http.MethodGet, false},
+		{"/api/v1/models/1/commands-v2", http.MethodGet, false},
 		{"/api/v1/models/abc/fields", http.MethodGet, false},
 		{"/api/v1/models/1/fields/2", http.MethodGet, false},
 		{"/api/v1/models/fields-by-code/", http.MethodGet, false},
@@ -368,6 +381,9 @@ func TestRBACGuard_ModelDictionaryReads_Pass(t *testing.T) {
 		"/api/v1/models/1/field-capabilities",
 		"/api/v1/models/1/fields",
 		"/api/v1/models/fields-by-code/CS6K2",
+		// 型号目录/详情是设备页渲染与新增设备的参考数据，终端用户也必须能读
+		"/api/v1/models",
+		"/api/v1/models/1",
 	} {
 		w := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, p, nil)
