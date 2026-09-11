@@ -176,10 +176,11 @@ void main() {
       '设备名称',
       '设备序列号',
       '硬件版本',
-      '通信采集',
-      '系统主控',
-      '功率控制',
-      '电池管理',
+      // 展示名统一为「中文模块名（芯片）」，见 e14f20575
+      '通信采集（ESP）',
+      '系统中控（ARM）',
+      '计算控制（DSP）',
+      '电池管理（BMS）',
     ]) {
       expect(find.text(text), findsWidgets);
     }
@@ -189,7 +190,6 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     expect(find.text('改善弱网重连稳定性'), findsOneWidget);
-    expect(find.textContaining(RegExp(r'\b(ESP|ARM|DSP|BMS)\b')), findsNothing);
   });
 
   testWidgets('device summary uses a light brand surface without heavy shadow',
