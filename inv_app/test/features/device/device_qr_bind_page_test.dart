@@ -312,6 +312,11 @@ void main() {
     await tester.tap(find.text(l10n.str('qr_bind_done')));
     await tester.pumpAndSettle();
 
+    // 绑定成功后先弹出可选「设置设备名称」引导，跳过它才返回宿主页
+    expect(find.text(l10n.str('device_name_prompt_title')), findsOneWidget);
+    await tester.tap(find.text(l10n.str('device_name_prompt_skip')));
+    await tester.pumpAndSettle();
+
     // 已返回宿主页
     expect(find.byType(DeviceQrBindPage), findsNothing);
     expect(find.text('host'), findsOneWidget);

@@ -9,8 +9,10 @@ import 'package:inv_app/core/services/ble/ble_binding_service.dart';
 import 'package:inv_app/core/services/ble/ble_device_manager.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/features/device/domain/repositories/device_repository.dart';
 import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
+import 'package:inv_app/features/device/presentation/widgets/device_name_prompt_dialog.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 /// 智能链接二维码绑定页（云端优先，BLE 后备）
@@ -498,6 +500,28 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
     );
   }
 
+  /// 「完成」：新绑定成功的设备先给一次可跳过的命名引导，再返回上一页。
+  /// 已忽略过该设备的用户不会再被弹窗打扰（见 DeviceNamePromptStorage）。
+  Future<void> _finish() async {
+    if (_doneOutcome == BindOutcome.bound) {
+      final saved = await DeviceNamePromptDialog.showIfNeeded(
+        context,
+        sn: widget.sn,
+        repository: _deviceRepository,
+      );
+      if (!mounted) return;
+      if (saved) {
+        AppToast.show(
+          context,
+          AppLocalizations.of(context)!.str('device_name_prompt_saved'),
+          type: ToastType.success,
+        );
+      }
+    }
+    if (!mounted) return;
+    Navigator.of(context).pop();
+  }
+
   Widget _doneBody(AppLocalizations l10n) {
     final outcome = _doneOutcome;
     final (icon, color, text) = _outcomeInfo(l10n, outcome);
@@ -538,7 +562,7 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
               const SizedBox(width: 12),
             ],
             FilledButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: _finish,
               child: Text(l10n.str('qr_bind_done')),
             ),
           ],
