@@ -523,26 +523,32 @@ func (h *InternalHandler) DeviceInfo(c *gin.Context) {
 		return
 	}
 
-	// OTA 升级状态校验：设备上报新固件版本后，检查是否有进行中的升级
-	h.reconcileOTAStatus(ctx, req.SN, req.FirmwareARM, req.FirmwareESP, req.FirmwareDSP, req.FirmwareBMS)
+	// OTA 升级状态校验：设备上报新固件版本后，检查是否有进行中的升级。
+	// 旧版本必须在上面 upsert 之前读取：upsert 后再查，devices 里已是新值，
+	// reconcile 的"版本是否变化"判定会全部失效。
+	oldARM, oldESP, oldDSP, oldBMS := h.deviceFirmwareVersions(ctx, req.SN)
+	h.reconcileOTAStatus(ctx, req.SN, req.FirmwareARM, req.FirmwareESP, req.FirmwareDSP, req.FirmwareBMS, oldARM, oldESP, oldDSP, oldBMS)
 
 	response.Success(c, gin.H{"status": "ok"})
 }
 
-// reconcileOTAStatus 设备上线时自动校验 OTA 升级状态（best-effort，不阻塞正常响应）
-func (h *InternalHandler) reconcileOTAStatus(ctx context.Context, sn string, fwARM, fwESP, fwDSP, fwBMS string) {
-	// 先读取 devices 表中更新前的旧版本，用于判断版本是否发生变化
-	var oldARM, oldESP, oldDSP, oldBMS string
+// deviceFirmwareVersions 读取 devices 表当前记录的各芯片固件版本（升级前的基线）。
+// 设备首次上报（该 SN 尚无记录）时返回空串：基线未知按空处理。
+func (h *InternalHandler) deviceFirmwareVersions(ctx context.Context, sn string) (armV, espV, dspV, bmsV string) {
 	err := h.db.QueryRow(ctx,
 		`SELECT COALESCE(firmware_arm,''), COALESCE(firmware_esp,''), COALESCE(firmware_dsp,''), COALESCE(firmware_bms,'')
 		FROM devices WHERE sn = $1`, sn,
-	).Scan(&oldARM, &oldESP, &oldDSP, &oldBMS)
-	if err != nil {
-		logger.Warn("reconcileOTAStatus: failed to query old firmware versions",
+	).Scan(&armV, &espV, &dspV, &bmsV)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		logger.Warn("reconcileOTAStatus: failed to read old firmware versions",
 			zap.String("sn", sn), zap.Error(err))
-		return
 	}
+	return armV, espV, dspV, bmsV
+}
 
+// reconcileOTAStatus 设备上线时自动校验 OTA 升级状态（best-effort，不阻塞正常响应）。
+// oldXxx 为 upsert 前读取的各芯片版本基线，由调用方传入（见 InternalDeviceInfo）。
+func (h *InternalHandler) reconcileOTAStatus(ctx context.Context, sn string, fwARM, fwESP, fwDSP, fwBMS, oldARM, oldESP, oldDSP, oldBMS string) {
 	// 查询该设备所有 status='upgrading' 的升级记录
 	rows, err := h.db.Query(ctx, `
 		SELECT du.id, du.target_chip, COALESCE(fw.version, ''), du.started_at, COALESCE(du.upgrade_package_id, 0)
@@ -946,8 +952,8 @@ type internalDeviceCmdResultRequest struct {
 	Message          string          `json:"message"`
 	Data             json.RawMessage `json:"data"`
 	Timestamp        int64           `json:"timestamp"`
-	ResultCode       *int            `json:"result_code"`     // V2.1：拒绝码数值（err），见协议 11.4
-	AppliedArgs      json.RawMessage `json:"applied_args"`    // V2.1：ARM 实际采纳的参数值
+	ResultCode       *int            `json:"result_code"`       // V2.1：拒绝码数值（err），见协议 11.4
+	AppliedArgs      json.RawMessage `json:"applied_args"`      // V2.1：ARM 实际采纳的参数值
 	ReportedRevision *uint64         `json:"reported_revision"` // V2.1：命令生效后最新 CtrlParamAlterTime
 }
 
@@ -1166,6 +1172,30 @@ func (h *InternalHandler) OTACmdAck(c *gin.Context) {
 	response.Success(c, gin.H{"status": "ok"})
 }
 
+// mapDeviceOTAStatus 把设备上报的 OTA 状态词映射为 device_upgrades.status。
+//
+// 设备端词表（固件 ota_state_name()）：idle / accepted / downloading / receiving /
+// verifying / installing / cancelling / cancelled / rebooting / succeeded /
+// failed / rolled_back。这里曾只认 done/completed，导致设备上报的 "succeeded"
+// 落入 default 被静默忽略：设备升级已完成，后台却一直停在「升级中」。
+// 第二个返回值为 false 表示无法识别，调用方应跳过更新，避免覆盖 pending 等有效状态。
+func mapDeviceOTAStatus(status string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "accepted", "preparing", "downloading", "receiving", "transferring",
+		"writing", "verifying", "installing", "upgrading", "rebooting":
+		return "upgrading", true
+	case "done", "completed", "succeeded", "success":
+		return "success", true
+	case "failed", "rolled_back":
+		// rolled_back = 新镜像未生效被回滚，对本次升级同样算失败
+		return "failed", true
+	case "cancelling", "cancelled", "canceled":
+		return "cancelled", true
+	default:
+		return "", false
+	}
+}
+
 func (h *InternalHandler) OTAStatus(c *gin.Context) {
 	var req internalOTAStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -1185,15 +1215,8 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 	defer cancel()
 
 	// 将设备上报的状态映射为数据库状态
-	dbStatus := req.Status
-	switch req.Status {
-	case "preparing", "downloading", "transferring", "writing", "verifying", "upgrading", "rebooting":
-		dbStatus = "upgrading"
-	case "done", "completed":
-		dbStatus = "success"
-	case "failed":
-		dbStatus = "failed"
-	default:
+	dbStatus, known := mapDeviceOTAStatus(req.Status)
+	if !known {
 		// 无法识别的状态，不更新数据库，避免覆盖 pending 等有效状态
 		logger.Warn("Unknown OTA status from device, skipping update",
 			zap.String("sn", req.DeviceSN), zap.String("status", req.Status))
@@ -1210,7 +1233,7 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 			progress = $3,
 			error_message = CASE WHEN $2::varchar = 'failed' THEN $4 ELSE error_message END,
 			started_at = CASE WHEN started_at IS NULL AND $2::varchar IN ('downloading','upgrading') THEN NOW() ELSE started_at END,
-			completed_at = CASE WHEN $2::varchar IN ('success', 'failed') THEN NOW() ELSE completed_at END,
+			completed_at = CASE WHEN $2::varchar IN ('success', 'failed', 'cancelled') THEN NOW() ELSE completed_at END,
 			updated_at = NOW()
 		WHERE id = COALESCE(
 			(SELECT id FROM device_upgrades
