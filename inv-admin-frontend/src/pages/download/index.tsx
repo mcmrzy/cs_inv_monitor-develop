@@ -108,18 +108,31 @@ const DownloadPage: React.FC = () => {
   useEffect(() => {
     let alive = true
     const load = async () => {
-      try {
-        // 走下载域专用的别名路径：/api/v1/ota/app/latest 曾被 ESA 边缘缓存了
-        // 一个坏对象（忽略 no-store、查询参数不参与缓存键），换路径立即恢复。
-        const res = await fetch('/app-release-info?platform=android')
-        if (!res.ok) throw new Error(String(res.status))
-        const payload = (await res.json()) as { code?: number; data?: LatestRelease }
-        if (alive && payload?.data) setRelease(payload.data)
-      } catch {
-        // 接口不可用时页面仍需完整渲染，下载按钮退化为提示态。
-        if (alive) setRelease(null)
-      } finally {
-        if (alive) setLoading(false)
+      // 优先走下载域同源别名路径；失败时回退 API 域（网关 CORS 已放行
+      // download 来源）。两者都绕开 ESA 曾缓存过的 /api/v1/ota/app/latest。
+      const endpoints = [
+        '/app-release-info?platform=android',
+        'https://api.jiuxiaoyw.online/api/v1/ota/app/latest?platform=android',
+      ]
+      for (const endpoint of endpoints) {
+        try {
+          const res = await fetch(endpoint)
+          if (!res.ok) continue
+          const payload = (await res.json()) as { code?: number; data?: LatestRelease }
+          if (payload?.data?.available !== undefined) {
+            if (alive) {
+              setRelease(payload.data)
+              setLoading(false)
+            }
+            return
+          }
+        } catch {
+          // 尝试下一个端点
+        }
+      }
+      if (alive) {
+        setRelease(null)
+        setLoading(false)
       }
     }
     void load()
