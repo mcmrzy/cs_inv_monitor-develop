@@ -9,7 +9,6 @@ import {
   SafetyCertificateOutlined,
   ThunderboltOutlined,
 } from '@ant-design/icons'
-import api from '@/services/api'
 import useTranslation from '@/hooks/useTranslation'
 
 /**
@@ -110,12 +109,12 @@ const DownloadPage: React.FC = () => {
     let alive = true
     const load = async () => {
       try {
-        const res = await api.get('/ota/app/latest', {
-          params: { platform: 'android' },
-          expectedDataShape: 'object',
-        })
-        const payload = (res.data as { data?: LatestRelease } | undefined)?.data
-        if (alive && payload) setRelease(payload)
+        // 走下载域专用的别名路径：/api/v1/ota/app/latest 曾被 ESA 边缘缓存了
+        // 一个坏对象（忽略 no-store、查询参数不参与缓存键），换路径立即恢复。
+        const res = await fetch('/app-release-info?platform=android')
+        if (!res.ok) throw new Error(String(res.status))
+        const payload = (await res.json()) as { code?: number; data?: LatestRelease }
+        if (alive && payload?.data) setRelease(payload.data)
       } catch {
         // 接口不可用时页面仍需完整渲染，下载按钮退化为提示态。
         if (alive) setRelease(null)

@@ -30,9 +30,10 @@ test('protected pages redirect anonymous visitors to login', async ({ page }) =>
 })
 
 test('public download page can query the latest app version anonymously', async ({ page }) => {
-  // 下载页改为读取公开的「最新已发布版本」接口（不做灰度过滤）。
+  // 下载页改为读取公开的「最新已发布版本」接口的别名路径（/api/v1/ota/app/latest
+  // 曾被 ESA 边缘缓存了坏对象，页面换用 /app-release-info）。
   const checkResponse = page.waitForResponse((response) => (
-    response.url().includes('/api/v1/ota/app/latest')
+    response.url().includes('/app-release-info')
   ))
 
   const navigation = await page.goto('/download', { waitUntil: 'domcontentloaded' })
