@@ -197,6 +197,44 @@ func TestSharedUsersOrgKeepsCustomersIsolated(t *testing.T) {
 	assert.False(t, leaked, "sharing the parent org must not leak stations between customers")
 }
 
+// 生产上见过这样的形态：库里存在 manufacturer 组织，但 tenant_roots 里没有对应
+// 行。此时若不 JOIN tenant_roots，就会选中一个"未注册"的根租户，建子组织时被
+// trg_organizations_insert_relations 以 "root tenant N is not registered" (23503)
+// 拒绝——迁移 115 首次上生产就是这么炸的。
+func TestSharedUsersOrgSkipsUnregisteredRootTenant(t *testing.T) {
+	pool, cleanup := setupIdentityTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// 造一个 root_tenant_id 更低、但没有 tenant_roots 行的 manufacturer 组织。
+	// INSERT 触发器会自动登记 tenant_roots + 自闭包，这里按
+	// closure → tenant_roots 顺序清掉（closure 受 guard，需走逃生舱）。
+	_, err := pool.Exec(ctx, `
+		INSERT INTO organizations (id, root_tenant_id, parent_id, org_type, name, status)
+		VALUES (9001, 9001, NULL, 'manufacturer', 'Unregistered Root', 'active')
+	`)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		SET app.allow_closure_write = 'true';
+		DELETE FROM organization_closure WHERE root_tenant_id = 9001;
+		RESET app.allow_closure_write;
+	`)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `DELETE FROM tenant_roots WHERE root_tenant_id = 9001`)
+	require.NoError(t, err)
+
+	// 前置确认：它确实没有 tenant_roots 行，且 id 比已注册的 9100 更低
+	var registered bool
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM tenant_roots WHERE root_tenant_id = 9001)`).Scan(&registered))
+	require.False(t, registered, "test precondition: 9001 must be unregistered")
+
+	repo := NewUserRepository(pool, nil)
+	rootTenantID, _, err := repo.EnsureSharedUsersOrg(ctx)
+	require.NoError(t, err, "must not pick an unregistered root tenant")
+	assert.Equal(t, int64(9100), rootTenantID, "must pick the registered manufacturer root")
+}
+
 func orgParent(t *testing.T, pool *pgxpool.Pool, orgID int64) int64 {
 	t.Helper()
 	var parentID int64
@@ -311,6 +349,22 @@ func TestMigration115BackfillsOrphansIntoSharedUsersOrg(t *testing.T) {
 		INSERT INTO organization_memberships (root_tenant_id, organization_id, user_id, status)
 		VALUES (9100, 9410, 9403, 'active')
 	`)
+	require.NoError(t, err)
+
+	// 生产形态：存在一个 root_tenant_id 更低、但没有 tenant_roots 行的
+	// manufacturer 组织。迁移必须跳过它，否则建子组织会被触发器以 23503 拒绝。
+	_, err = pool.Exec(ctx, `
+		INSERT INTO organizations (id, root_tenant_id, parent_id, org_type, name, status)
+		VALUES (9001, 9001, NULL, 'manufacturer', 'Unregistered Root', 'active')
+	`)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		SET app.allow_closure_write = 'true';
+		DELETE FROM organization_closure WHERE root_tenant_id = 9001;
+		RESET app.allow_closure_write;
+	`)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `DELETE FROM tenant_roots WHERE root_tenant_id = 9001`)
 	require.NoError(t, err)
 
 	// 115 自带的授权清单已含 devices:control，无需再跑 108
