@@ -17,6 +17,10 @@
 --
 -- 只处理 code 前缀 default-users 的链，以及挂在链末 installer 之下的
 -- personal-* 组织；不触碰其它租户下的存量个人组织。
+--
+-- 注意：迁移是只增不改的（AGENTS.md），115 的文件会永远留在 migrations 目录里；
+-- 本迁移绝不能删 115 的 schema_migrations 记录——删了之后下次重启 115 会被当作
+-- 未应用而重跑，把刚撤销的共享链原样建回来。
 
 DO $$
 DECLARE
@@ -89,8 +93,8 @@ BEGIN
     -- 链本体：自下而上（installer → distributor → agent）
     DELETE FROM organizations WHERE LOWER(code) LIKE 'default-users%' AND deleted_at IS NULL;
 
-    -- 迁移 115 的记录一并移除：其文件已删除，留着会让历史与实际不一致
-    DELETE FROM schema_migrations WHERE version = 115;
+    -- 不删 115 的 schema_migrations 记录：文件仍留在目录里，删记录会导致 115
+    -- 在下次启动时重跑、重建共享链（见文件头注释）。
 
     RAISE NOTICE 'Migration 116: reverted shared users org chain, removed % personal org memberships',
         v_removed;
