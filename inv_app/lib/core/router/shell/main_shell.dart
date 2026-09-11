@@ -15,6 +15,7 @@ import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:inv_app/features/profile/data/profile_setup_storage.dart';
 import 'package:inv_app/features/profile/presentation/widgets/profile_setup_dialog.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
@@ -106,6 +107,13 @@ class _MainShellState extends State<MainShell> {
     final nickname = authState.nickname?.trim() ?? '';
     if (nickname.isNotEmpty) return;
     _hasShownProfilePrompt = true;
+    unawaited(_showProfileSetupIfNotDismissed(authState.userId));
+  }
+
+  /// 用户此前跳过过、或保存过资料，就不再弹（标记按用户 id 持久化）
+  Future<void> _showProfileSetupIfNotDismissed(int userId) async {
+    if (await ProfileSetupStorage().isDone(userId)) return;
+    if (!mounted) return;
     ProfileSetupDialog.show(context);
   }
 

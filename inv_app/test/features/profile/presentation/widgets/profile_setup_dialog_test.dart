@@ -5,11 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inv_app/core/network/api_client.dart';
 import 'package:inv_app/core/services/service_locator.dart';
+import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:inv_app/features/profile/presentation/widgets/profile_setup_dialog.dart';
 import 'package:mocktail/mocktail.dart';
 
 import '../../../../helpers/drain_real_loop.dart';
+import '../../../../helpers/mock_providers.dart';
 import '../../../../helpers/pump_app.dart';
 
 class _MockDio extends Mock implements Dio {}
@@ -682,5 +684,39 @@ void main() {
 
     expect(find.byType(ProfileSetupDialog), findsNothing);
     await states.close();
+  });
+  testWidgets('弹窗内告知跳过以后去哪里完善资料', (tester) async {
+    final authBloc = _MockAuthBloc();
+    when(() => authBloc.state).thenReturn(AuthInitial());
+    when(() => authBloc.stream).thenAnswer((_) => const Stream.empty());
+
+    await _open(tester, authBloc);
+
+    expect(
+      find.text('跳过也没关系，以后可以在「我的 → 点击头像」中完善。'),
+      findsOneWidget,
+    );
+    expect(find.text('跳过'), findsOneWidget);
+    _expectNoException(tester);
+  });
+
+  testWidgets('点「跳过」写入按用户区分的完成标记并关闭弹窗', (tester) async {
+    final authBloc = _MockAuthBloc();
+    final storage = MockStorageService();
+    when(
+      () => authBloc.state,
+    ).thenReturn(const AuthAuthenticated(userId: 7, phone: '13800138000'));
+    when(() => authBloc.stream).thenAnswer((_) => const Stream.empty());
+    when(() => storage.saveString(any(), any())).thenAnswer((_) async {});
+    getIt.registerSingleton<StorageService>(storage);
+
+    await _open(tester, authBloc);
+    await tester.tap(find.text('跳过'));
+    await tester.pumpAndSettle();
+
+    // 标记按用户 id 记：同机换账号不会互相压制引导
+    verify(() => storage.saveString('profile_setup_done_7', '1')).called(1);
+    expect(find.byType(ProfileSetupDialog), findsNothing);
+    _expectNoException(tester);
   });
 }

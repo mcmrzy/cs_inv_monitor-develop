@@ -13,6 +13,7 @@ import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:inv_app/features/profile/data/avatar_upload_service.dart';
+import 'package:inv_app/features/profile/data/profile_setup_storage.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 /// 完善个人信息弹窗
@@ -254,6 +255,8 @@ class _ProfileSetupDialogState extends State<ProfileSetupDialog> {
       final state = await completer.future;
       if (!mounted) return;
       if (state is AuthProfileUpdateSuccess) {
+        await _markDismissed();
+        if (!mounted) return;
         Navigator.of(context).pop(true);
         _showSnack(l10n.profileSaved);
       } else if (state is AuthProfileUpdateError) {
@@ -358,6 +361,8 @@ class _ProfileSetupDialogState extends State<ProfileSetupDialog> {
         return;
       }
 
+      await _markDismissed();
+      if (!mounted) return;
       Navigator.of(context).pop(true);
       _showSnack(l10n.profileSaved);
     } on TimeoutException {
@@ -392,8 +397,18 @@ class _ProfileSetupDialogState extends State<ProfileSetupDialog> {
     }
   }
 
-  void _skip() {
+  /// 记录「引导已结束」，此后不再弹出（跳过与保存成功同样置位）
+  Future<void> _markDismissed() async {
+    final state = context.read<AuthBloc>().state;
+    if (state is AuthAuthenticated) {
+      await ProfileSetupStorage().markDone(state.userId);
+    }
+  }
+
+  Future<void> _skip() async {
     if (_isSaving || _isUploadingAvatar) return;
+    await _markDismissed();
+    if (!mounted) return;
     Navigator.of(context).pop(false);
   }
 
@@ -414,6 +429,15 @@ class _ProfileSetupDialogState extends State<ProfileSetupDialog> {
                 style: TextStyle(
                   fontSize: 13.sp,
                   color: AppColor.textSecondary(context),
+                  height: 1.5,
+                ),
+              ),
+              SizedBox(height: 8.h),
+              Text(
+                l10n.str('complete_profile_later_hint'),
+                style: TextStyle(
+                  fontSize: 12.sp,
+                  color: AppColor.textHint(context),
                   height: 1.5,
                 ),
               ),
