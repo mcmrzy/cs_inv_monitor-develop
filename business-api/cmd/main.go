@@ -166,7 +166,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	}
 
 	otaRepo := repository.NewOTARepository(db)
-	otaService := service.NewOTAService(otaRepo, rdb, cfg.Backends.DeviceServer, cfg.Backends.InternalKey, cfg.Backends.UploadDir, cfg.Backends.ServerURL, cfg.Backends.DownloadURL, db, jpushService)
+	otaService := service.NewOTAService(otaRepo, rdb, cfg.Backends.DeviceServer, cfg.Backends.InternalKey, cfg.Backends.UploadDir, cfg.Backends.ServerURL, cfg.Backends.DownloadURL, cfg.Backends.AppDownloadURL, db, jpushService)
 	// 下载域接入运行时域名配置：管理后台「域名配置」保存后立即生效
 	otaService.AttachConfigService(configService)
 

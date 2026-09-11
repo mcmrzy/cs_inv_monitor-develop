@@ -82,13 +82,54 @@ func TestBuildDownloadURL_仅DownloadURL配置时使用DownloadURL(t *testing.T)
 	assert.Equal(t, "https://download.example.com/firmware/v2.0.0.bin", result)
 }
 
+// ==================== BuildAppDownloadURL ====================
+// App 安装包下载域独立于设备固件下载域：手机端版本 URL 可指向
+// APP_DOWNLOAD_URL，设备 OTA 命令仍走 DOWNLOAD_URL，互不影响。
+
+func TestBuildAppDownloadURL_配置了App域时优先使用(t *testing.T) {
+	s := &OTAService{
+		downloadURL:    "https://jiuxiaoyw.online",
+		appDownloadURL: "https://download.example.com",
+	}
+
+	assert.Equal(t, "https://download.example.com/firmware/apps/android/app.apk",
+		s.BuildAppDownloadURL("/firmware/apps/android/app.apk"))
+	// 设备侧 URL 不受 App 域影响
+	assert.Equal(t, "https://jiuxiaoyw.online/firmware/esp_1.5.2.bin",
+		s.BuildDownloadURL("/firmware/esp_1.5.2.bin"))
+}
+
+func TestBuildAppDownloadURL_未配置App域时回退下载域(t *testing.T) {
+	s := &OTAService{downloadURL: "https://jiuxiaoyw.online"}
+
+	assert.Equal(t, "https://jiuxiaoyw.online/firmware/apps/android/app.apk",
+		s.BuildAppDownloadURL("/firmware/apps/android/app.apk"))
+}
+
+func TestBuildAppDownloadURL_全部未配置时回退ServerURL(t *testing.T) {
+	s := &OTAService{serverURL: "https://api.example.com"}
+
+	assert.Equal(t, "https://api.example.com/firmware/apps/android/app.apk",
+		s.BuildAppDownloadURL("/firmware/apps/android/app.apk"))
+}
+
+func TestBuildAppDownloadURL_绝对地址原样返回(t *testing.T) {
+	s := &OTAService{
+		downloadURL:    "https://jiuxiaoyw.online",
+		appDownloadURL: "https://download.example.com",
+	}
+
+	const absolute = "https://www.example.com/firmware/app.apk"
+	assert.Equal(t, absolute, s.BuildAppDownloadURL(absolute))
+}
+
 func TestValidateFirmwareRequest(t *testing.T) {
 	valid := func() *CreateFirmwareReq {
 		req := &CreateFirmwareReq{
 			Model: "CS-48V", TargetChip: "dsp", Version: "V1.2.3",
 			FileURL: "/firmware/fw.bin", FileSize: 1024,
-			FileMD5:         "0123456789abcdef0123456789abcdef",
-			FileSHA256:      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+			FileMD5:    "0123456789abcdef0123456789abcdef",
+			FileSHA256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 		}
 		return req
 	}
