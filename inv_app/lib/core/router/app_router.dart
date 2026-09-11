@@ -86,6 +86,8 @@ import 'package:inv_app/features/ota/presentation/pages/firmware_list_page.dart'
 import 'package:inv_app/features/ota/presentation/pages/ota_check_all_page.dart';
 
 import 'package:inv_app/features/ota/presentation/pages/firmware_library_page.dart';
+import 'package:inv_app/features/ota/presentation/pages/device_firmware_detail_page.dart';
+import 'package:inv_app/features/ota/presentation/pages/device_firmware_history_page.dart';
 
 import 'package:inv_app/features/ota/presentation/bloc/ota_bloc.dart';
 
@@ -454,6 +456,22 @@ class AppRouter {
         name: 'otaCheckAll',
         pageBuilder: (context, state) =>
             _slidePage(state, const OtaCheckAllPage()),
+      ),
+      GoRoute(
+        path: '/ota/device/:sn',
+        name: 'deviceFirmwareDetail',
+        pageBuilder: (context, state) => _slidePage(
+          state,
+          DeviceFirmwareDetailPage(deviceSN: state.pathParameters['sn']!),
+        ),
+      ),
+      GoRoute(
+        path: '/ota/device/:sn/history',
+        name: 'deviceFirmwareHistory',
+        pageBuilder: (context, state) => _slidePage(
+          state,
+          DeviceFirmwareHistoryPage(deviceSN: state.pathParameters['sn']!),
+        ),
       ),
       GoRoute(
         path: '/ota/:sn',

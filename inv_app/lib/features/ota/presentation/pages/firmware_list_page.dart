@@ -10,6 +10,7 @@ import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/ota/presentation/bloc/ota_bloc.dart';
 import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
+import 'package:inv_app/features/ota/presentation/models/firmware_module_presentation.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 
 class FirmwareListPage extends StatefulWidget {
@@ -696,10 +697,9 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
               spacing: 8.w,
               runSpacing: 6.h,
               children: items.map((item) {
-                final chip = ((item is Map)
-                        ? (item['target_chip'] as String? ?? '')
-                        : '')
-                    .toUpperCase();
+                final chip = FirmwareModulePresentation.fromTarget(
+                  item is Map ? item['target_chip'] as String? : null,
+                ).displayLabel(l10n);
                 final fwVer = (item is Map)
                     ? (item['firmware_version'] as String? ?? '-')
                     : '-';
@@ -958,8 +958,9 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
     for (var i = 0; i < chips.length; i++) {
       if (!mounted) return;
       final chip = chips[i] as Map;
-      final chipName =
-          ((chip['target_chip'] as String?) ?? '').toUpperCase();
+      final chipName = FirmwareModulePresentation.fromTarget(
+        chip['target_chip'] as String?,
+      ).displayLabel(l10n);
       // 链式推进：LocalOTAPage 成功时 pop(true)，
       // 失败/用户退出返回非 true → 整体中止
       final ok = await context.push<bool>(_localOtaRoute(chip));
@@ -999,8 +1000,9 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
             mainAxisSize: MainAxisSize.min,
             children: validChips.map((chip) {
               final chipMap = chip as Map;
-              final chipName =
-                  (chipMap['target_chip'] as String? ?? '').toUpperCase();
+              final chipName = FirmwareModulePresentation.fromTarget(
+                chipMap['target_chip'] as String?,
+              ).displayLabel(l10n);
               final fwVer = chipMap['firmware_version'] as String? ?? '-';
               return ListTile(
                 leading: Container(

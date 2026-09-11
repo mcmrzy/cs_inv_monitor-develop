@@ -14,6 +14,7 @@ import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
 import 'package:inv_app/features/ota/domain/repositories/ota_repository.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
+import 'package:inv_app/features/ota/presentation/models/firmware_module_presentation.dart';
 
 /// 固件库（OTA 升级中心四入口之一）
 ///
@@ -495,7 +496,7 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
               children: [
                 for (final chip in chips)
                   _badge(
-                    '${chip['target_chip'] ?? ''} '
+                    '${FirmwareModulePresentation.fromTarget(chip['target_chip']?.toString()).displayLabel(l10n)} '
                     '${chip['firmware_version'] ?? ''}',
                     AppColors.blue,
                   ),
