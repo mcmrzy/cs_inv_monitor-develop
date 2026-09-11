@@ -425,17 +425,27 @@ func isBasicUserGET(path, method string) bool {
 	return false
 }
 
-// isModelDictionaryGET reports whether the request is a read of the model field
-// dictionaries (GET /models/{id}/fields, /models/fields-by-code/{code},
-// /models/{id}/field-capabilities). These are pure rendering metadata for
-// device data pages (history/realtime/status tabs) consumed by every role,
-// including end users; business-api serves them without org-level grants while
-// model governance reads and every mutation stay RBAC protected. They are
-// matched explicitly here because the generic prefix map would otherwise route
-// them to the admin-gated "models" resource.
+// isModelDictionaryGET reports whether the request is a read of the model
+// reference data: the catalog itself (GET /models), a single model
+// (GET /models/{id}) and the field dictionaries (/models/{id}/fields,
+// /models/fields-by-code/{code}, /models/{id}/field-capabilities).
+//
+// business-api deliberately serves these reads to every authenticated user —
+// cmd/model_routes.go registers them with no permission middleware, with the
+// comment "reference reads remain available to every authenticated user because
+// both the mobile app and device detail pages need them to render telemetry;
+// governance reads and every mutation are RBAC protected". The gateway must
+// keep the same contract: the generic prefix map would otherwise route them to
+// the admin-gated "models" resource, so an end-user role (e.g. customer, which
+// has no models:view) got a 403 and the devices page's model dropdown stayed
+// empty — which in turn blocked add/edit device behind its isKnownModel guard.
+// Model governance reads and every mutation stay RBAC protected on both layers.
 func isModelDictionaryGET(path, method string) bool {
 	if method != http.MethodGet {
 		return false
+	}
+	if path == "/api/v1/models" {
+		return true
 	}
 	rest := strings.TrimPrefix(path, "/api/v1/models/")
 	if rest == path { // prefix mismatch
@@ -443,6 +453,9 @@ func isModelDictionaryGET(path, method string) bool {
 	}
 	segs := strings.Split(rest, "/")
 	switch {
+	case len(segs) == 1:
+		_, err := strconv.ParseInt(segs[0], 10, 64)
+		return err == nil
 	case len(segs) == 2 && (segs[1] == "fields" || segs[1] == "field-capabilities"):
 		_, err := strconv.ParseInt(segs[0], 10, 64)
 		return err == nil
