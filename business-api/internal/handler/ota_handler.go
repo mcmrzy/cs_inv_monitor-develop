@@ -343,17 +343,41 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 			return
 		}
 		keepFile = true
-		// 回显服务端识别/计算的元数据（版本号、主版本号、大小、摘要），
+
+		// 上传即自动组装单固件升级包（草稿）：App 端按包触发升级，管理员
+		// 无需手工挑选固件组装；但**发布仍由管理员手动进行**——未发布的包
+		// 不会出现在 App 端升级列表里。
+		autoPkgID := int64(0)
+		pkg, pkgErr := h.otaService.CreateUpgradePackage(c.Request.Context(), &service.CreatePackageReq{
+			Model:         created.Model,
+			FirmwareIDs:   []int64{created.ID},
+			Changelog:     changelog,
+			UserVersion:   created.Version,
+			UserChangelog: changelog,
+			IsPublished:   false,
+			CreatedBy:     c.GetInt64("user_id"),
+		})
+		if pkgErr != nil {
+			logger.Warn("auto package creation failed after firmware upload",
+				zap.String("model", created.Model),
+				zap.String("target_chip", created.TargetChip),
+				zap.Int64("firmware_id", created.ID),
+				zap.Error(pkgErr))
+		} else {
+			autoPkgID = pkg.ID
+		}
+
+		// 回显服务端识别/计算的元数据（版本号、大小、摘要），
 		// 管理端据此提示「自动识别出了什么」，无需再翻列表核对。
 		response.SuccessWithMessage(c, "固件上传成功", gin.H{
-			"id":           created.ID,
-			"model":        created.Model,
-			"target_chip":  created.TargetChip,
-			"version":      created.Version,
-			"main_version": created.MainVersion,
-			"file_url":     created.FileURL,
-			"file_size":    created.FileSize,
-			"file_sha256":  created.FileSHA256,
+			"id":          created.ID,
+			"model":       created.Model,
+			"target_chip": created.TargetChip,
+			"version":     created.Version,
+			"file_url":    created.FileURL,
+			"file_size":   created.FileSize,
+			"file_sha256": created.FileSHA256,
+			"package_id":  autoPkgID,
 		})
 		return
 	}
@@ -1311,7 +1335,7 @@ func (h *OTAHandler) CreateUpgradePackage(c *gin.Context) {
 	}
 
 	userID := c.GetInt64("user_id")
-	if err := h.otaService.CreateUpgradePackage(c.Request.Context(), &service.CreatePackageReq{
+	createdPkg, err := h.otaService.CreateUpgradePackage(c.Request.Context(), &service.CreatePackageReq{
 		Model:          req.Model,
 		FirmwareIDs:    req.FirmwareIDs,
 		Changelog:      req.Changelog,
@@ -1322,7 +1346,8 @@ func (h *OTAHandler) CreateUpgradePackage(c *gin.Context) {
 		RolloutTargets: req.RolloutTargets,
 		IsPublished:    req.IsPublished,
 		CreatedBy:      userID,
-	}); err != nil {
+	})
+	if err != nil {
 		log.Printf("[CreateUpgradePackage] error: %v", err)
 		// (model, main_version) 唯一键冲突: 通常是并发重复提交，新版本号已被占用
 		if strings.Contains(err.Error(), "uq_package_model_version") {
@@ -1332,7 +1357,7 @@ func (h *OTAHandler) CreateUpgradePackage(c *gin.Context) {
 		response.Error(c, 500, "创建升级包失败: "+err.Error())
 		return
 	}
-	response.SuccessWithMessage(c, "升级包创建成功", nil)
+	response.SuccessWithMessage(c, "升级包创建成功", createdPkg)
 }
 
 // ListUpgradePackages 升级包列表

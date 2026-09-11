@@ -1931,10 +1931,10 @@ const Map<String, String> en = {
   'location_nearby_addresses': 'Nearby Addresses',
 
   // Device firmware modules
-  'firmware_module_communication': 'Communication & Data',
-  'firmware_module_system_control': 'System Control',
-  'firmware_module_power_control': 'Power Control',
-  'firmware_module_battery_management': 'Battery Management',
+  'firmware_module_communication': 'Communication (ESP)',
+  'firmware_module_system_control': 'System Control (ARM)',
+  'firmware_module_power_control': 'Computation (DSP)',
+  'firmware_module_battery_management': 'Battery Management (BMS)',
   'firmware_module_generic': 'Device Component',
   'firmware_module_communication_description':
       'Handles connectivity, data collection, and remote communication',
