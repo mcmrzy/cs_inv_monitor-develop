@@ -7,7 +7,6 @@ import 'package:inv_app/l10n/app_localizations.dart';
 void main() {
   test('maps internal firmware targets to functional module names', () async {
     final zh = await AppLocalizations.delegate.load(const Locale('zh', 'CN'));
-    final en = await AppLocalizations.delegate.load(const Locale('en'));
 
     // 展示名统一为「中文模块名（芯片）」，见 e14f20575
     final cases = <String, String>{
