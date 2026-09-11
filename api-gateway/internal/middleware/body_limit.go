@@ -13,14 +13,18 @@ import (
 func BodyLimit() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		const (
-			defaultLimit         = int64(2 << 20)
-			firmwareUploadLimit  = int64(201 << 20)
-			workOrderUploadLimit = int64(51 << 20)
+			defaultLimit          = int64(2 << 20)
+			firmwareUploadLimit   = int64(201 << 20)
+			appPackageUploadLimit = int64(201 << 20)
+			workOrderUploadLimit  = int64(51 << 20)
 		)
 		limit := defaultLimit
 		path := c.Request.URL.Path
 		if c.Request.Method == http.MethodPost && (path == "/api/v1/ota/firmware" || path == "/api/v1/firmwares") {
 			limit = firmwareUploadLimit
+		} else if c.Request.Method == http.MethodPost && path == "/api/v1/ota/app/versions" {
+			// App 安装包上传（multipart），体积可达上百 MB。
+			limit = appPackageUploadLimit
 		} else if c.Request.Method == http.MethodPost && strings.HasPrefix(path, "/api/v1/work-orders/") && strings.HasSuffix(path, "/attachments") {
 			limit = workOrderUploadLimit
 		}

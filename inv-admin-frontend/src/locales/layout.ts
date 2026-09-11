@@ -21,7 +21,7 @@ export default {
     'menu.alertRules': '告警规则',
     'menu.workOrders': '工单管理',
     'menu.system': '系统管理',
-    'menu.systemConfig': '通知与文档配置',
+    'menu.systemConfig': '通知与文档',
     'menu.orgManagement': '组织架构',
     'menu.userManage': '用户管理',
     'menu.operationLogs': '操作记录',

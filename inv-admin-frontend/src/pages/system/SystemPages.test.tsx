@@ -9,19 +9,85 @@ import SystemMonitorPage from './SystemMonitor'
 // 注意：不要 mock @/utils/timezone —— 页面依赖其模块级 dayjs.extend(utc)
 
 describe('SystemConfigPage', () => {
-  it('renders title with two tabs and help center form', async () => {
+  it('renders title with four tabs and announcement form by default', async () => {
     renderAsAdmin(<SystemConfigPage />)
 
-    expect(screen.getByText('通知与文档配置')).toBeInTheDocument()
+    expect(screen.getByText('通知与文档')).toBeInTheDocument()
     await waitFor(() => {
-      expect(document.querySelectorAll('.ant-tabs-tab').length).toBe(2)
+      expect(document.querySelectorAll('.ant-tabs-tab').length).toBe(4)
     })
-    expect(screen.getByText('帮助文档配置')).toBeInTheDocument()
-    expect(screen.getByText('邮件模板配置')).toBeInTheDocument()
-    // 帮助中心配置表单
-    expect(screen.getByText('帮助中心配置')).toBeInTheDocument()
-    expect(screen.getByText('客服电话')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('请输入客服电话号码')).toBeInTheDocument()
+    expect(screen.getByText('通知')).toBeInTheDocument()
+    expect(screen.getByText('域名配置')).toBeInTheDocument()
+    expect(screen.getByText('帮助文档')).toBeInTheDocument()
+    expect(screen.getByText('邮件模板')).toBeInTheDocument()
+    // 默认面板：系统公告推送
+    expect(screen.getByText('系统公告推送')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('请输入公告标题')).toBeInTheDocument()
+    expect(screen.getByText('全部用户（仅超级管理员）')).toBeInTheDocument()
+  })
+
+  it('loads domain config into form and saves via system-config API', async () => {
+    const patches: Array<Record<string, unknown>> = []
+    server.use(
+      http.get('/api/v1/admin/system-config', () =>
+        HttpResponse.json({
+          code: 0,
+          message: 'success',
+          data: {
+            domains: {
+              download_base_url: 'https://download.jiuxiaoyw.com',
+              frontend_base_url: '',
+            },
+          },
+        }),
+      ),
+      http.patch('/api/v1/admin/system-config', async ({ request }) => {
+        patches.push((await request.json()) as Record<string, unknown>)
+        return HttpResponse.json({ code: 0, message: 'success', data: null })
+      }),
+    )
+
+    renderAsAdmin(<SystemConfigPage />)
+    fireEvent.click(screen.getByText('域名配置'))
+
+    const downloadInput = await screen.findByPlaceholderText(/download\.jiuxiaoyw\.com/)
+    await waitFor(() => {
+      expect(downloadInput).toHaveValue('https://download.jiuxiaoyw.com')
+    })
+
+    fireEvent.change(screen.getByPlaceholderText(/www\.jiuxiaoyw\.online/), {
+      target: { value: 'https://www.example.com' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /保 存|保存/ }))
+
+    await waitFor(() => {
+      expect(patches[0]).toEqual({
+        domains: {
+          download_base_url: 'https://download.jiuxiaoyw.com',
+          frontend_base_url: 'https://www.example.com',
+        },
+      })
+    })
+  })
+
+  it('sends system announcement to admin push-announcement API', async () => {
+    const calls: Array<{ title: string; content: string; target: string }> = []
+    server.use(
+      http.post('/api/v1/admin/push-announcement', async ({ request }) => {
+        calls.push((await request.json()) as { title: string; content: string; target: string })
+        return HttpResponse.json({ code: 0, message: 'success', data: null })
+      }),
+    )
+
+    renderAsAdmin(<SystemConfigPage />)
+
+    fireEvent.change(screen.getByPlaceholderText('请输入公告标题'), { target: { value: '维护通知' } })
+    fireEvent.change(screen.getByPlaceholderText('请输入公告内容'), { target: { value: '今晚 02:00 例行维护' } })
+    fireEvent.click(screen.getByRole('button', { name: /发送公告/ }))
+
+    await waitFor(() => {
+      expect(calls[0]).toEqual({ title: '维护通知', content: '今晚 02:00 例行维护', target: 'all' })
+    })
   })
 
   it('loads help center config from system-config API into form and FAQ list', async () => {
@@ -42,6 +108,7 @@ describe('SystemConfigPage', () => {
     )
 
     renderAsAdmin(<SystemConfigPage />)
+    fireEvent.click(screen.getByText('帮助文档'))
 
     await waitFor(() => {
       expect(screen.getByPlaceholderText('请输入客服电话号码')).toHaveValue('400-800-8888')
@@ -71,8 +138,8 @@ describe('SystemConfigPage', () => {
 
     renderAsAdmin(<SystemConfigPage />)
 
-    await screen.findByText('帮助文档配置')
-    fireEvent.click(screen.getByText('邮件模板配置'))
+    await screen.findByText('帮助文档')
+    fireEvent.click(screen.getByText('邮件模板'))
 
     // 模板列表渲染
     expect(await screen.findByText('邀请加入 CSERGY')).toBeInTheDocument()

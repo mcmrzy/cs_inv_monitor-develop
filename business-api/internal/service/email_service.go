@@ -43,6 +43,17 @@ func (s *EmailService) effectiveEmailConfig(ctx context.Context) config.EmailCon
 	return s.cfg
 }
 
+// frontendBase 解析 Web 前端基地址（用于邀请/通知邮件里的链接）：
+// 优先运行时「域名配置」，回退构造时注入的环境变量值。
+func (s *EmailService) frontendBase(ctx context.Context) string {
+	if s.cfgSvc != nil {
+		if v := s.cfgSvc.ResolveDomainConfig(ctx).FrontendBaseURL; v != "" {
+			return v
+		}
+	}
+	return strings.TrimRight(s.frontendURL, "/")
+}
+
 // isDevEmailConfig 未配置 SMTP 时视为开发模式（只记日志不实际发信）。
 func isDevEmailConfig(cfg config.EmailConfig) bool {
 	return cfg.Host == "" || cfg.Host == "smtp.example.com"
@@ -241,7 +252,7 @@ func maskEmail(email string) string {
 // SendInvitationEmail sends invitation emails to new users
 func (s *EmailService) SendInvitationEmail(toEmail, tokenHint, roleName, organizationName string, expiresHours int, senderName, invitePath string) error {
 	ctx := context.Background()
-	inviteURL := strings.TrimRight(s.frontendURL, "/") + invitePath
+	inviteURL := s.frontendBase(ctx) + invitePath
 	// Content 使用 template.HTML 类型以保留 HTML 标签（如 <br>）不被转义
 	contentHTML := template.HTML(fmt.Sprintf("分配角色：%s<br>邀请有效期：%d 小时<br>点击下方按钮即可接受邀请，注册或登录后自动加入该组织。", roleName, expiresHours))
 	vars := map[string]interface{}{
@@ -266,7 +277,7 @@ func (s *EmailService) SendInvitationEmail(toEmail, tokenHint, roleName, organiz
 // SendTransferNotification sends device transfer notification emails
 func (s *EmailService) SendTransferNotification(requesterEmail, deviceSN, fromOrg, toOrg, reason string, senderName string) error {
 	ctx := context.Background()
-	actionURL := strings.TrimRight(s.frontendURL, "/") + "/organizations"
+	actionURL := s.frontendBase(ctx) + "/organizations"
 	// Content 使用 template.HTML 类型以保留 HTML 标签（如 <br>）不被转义
 	contentHTML := template.HTML(fmt.Sprintf("设备 SN：%s<br>转出组织：%s<br>转入组织：%s<br>转移原因：%s", deviceSN, fromOrg, toOrg, reason))
 	vars := map[string]interface{}{
@@ -289,7 +300,7 @@ func (s *EmailService) SendTransferNotification(requesterEmail, deviceSN, fromOr
 // SendWelcomeEmail sends welcome emails to new users
 func (s *EmailService) SendWelcomeEmail(toEmail, username string, senderName string) error {
 	ctx := context.Background()
-	homeURL := strings.TrimRight(s.frontendURL, "/")
+	homeURL := s.frontendBase(ctx)
 	vars := map[string]interface{}{
 		"ToEmail":    toEmail,
 		"Username":   username,
@@ -364,7 +375,7 @@ func (s *EmailService) SendTestEmail(ctx context.Context, to string) error {
 	}
 
 	vars := testEmailSampleVars()
-	vars["ButtonURL"] = strings.TrimRight(s.frontendURL, "/")
+	vars["ButtonURL"] = s.frontendBase(ctx)
 	vars["ButtonText"] = "访问管理后台"
 
 	subject, html, err := s.RenderEmail(ctx, EmailTemplateKeyTest, vars)

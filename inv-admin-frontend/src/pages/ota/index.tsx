@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import {
@@ -72,7 +72,7 @@ import PublishModal from './components/PublishModal'
 
 const { TextArea } = Input
 const { Dragger } = Upload
-const { Title } = Typography
+const { Title, Text } = Typography
 
 function formatFileSize(bytes: number): string {
   if (bytes === 0) return '0 B'
@@ -80,13 +80,6 @@ function formatFileSize(bytes: number): string {
   const sizes = ['B', 'KB', 'MB', 'GB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-}
-
-async function computeSha256(file: File): Promise<string> {
-  const buffer = await file.arrayBuffer()
-  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer)
-  const hashArray = Array.from(new Uint8Array(hashBuffer))
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
 interface FirmwareFormValues {
@@ -850,7 +843,6 @@ const FirmwareTab: React.FC = () => {
   const [uploadOpen, setUploadOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [fileList, setFileList] = useState<any[]>([])
-  const [, setComputingHash] = useState(false)
   const [form] = Form.useForm<FirmwareFormValues>()
 
   // 查看使用该固件的设备 Modal 状态
@@ -907,12 +899,28 @@ const FirmwareTab: React.FC = () => {
 
   const uploadMutation = useMutation({
     mutationFn: (formData: FormData) => otaApi.uploadFirmware(formData),
-    onSuccess: () => {
-      message.success(t('ota.firmwareUploadSuccess'))
+    onSuccess: (res: any) => {
+      // 服务端回显识别/计算出的元数据：版本号、主版本号、体积与摘要
+      const created = res?.data?.data
+      if (created?.version) {
+        message.success(
+          t('ota.firmwareUploadDetail', {
+            chip: String(created.target_chip || '').toUpperCase(),
+            version: created.version,
+            mainVersion: created.main_version || '-',
+            size: formatFileSize(created.file_size || 0),
+            sha: String(created.file_sha256 || '').slice(0, 12),
+          }),
+        )
+      } else {
+        message.success(t('ota.firmwareUploadSuccess'))
+      }
       setUploadOpen(false); form.resetFields(); setFileList([])
       queryClient.invalidateQueries({ queryKey: queryKeys.ota.all })
     },
-    onError: () => message.error(t('ota.firmwareUploadFailed')),
+    onError: (err: any) => {
+      message.error(err?.response?.data?.message || err?.message || t('ota.firmwareUploadFailed'))
+    },
     onSettled: () => setUploading(false),
   })
 
@@ -938,29 +946,20 @@ const FirmwareTab: React.FC = () => {
     } catch { setUploading(false) }
   }
 
-  const computeNextVersion = useCallback((model: string, chip: string) => {
-    const matched = allFirmwareList.filter((fw) => fw.model === model && fw.target_chip === chip)
-    if (matched.length === 0) return '1.0.0'
-    const versions = matched.map((fw) => fw.version).filter(Boolean).map((v) => {
-      const parts = v.split('.').map(Number); return { major: parts[0] || 0, minor: parts[1] || 0, patch: parts[2] || 0 }
-    }).sort((a, b) => { if (a.major !== b.major) return b.major - a.major; if (a.minor !== b.minor) return b.minor - a.minor; return b.patch - a.patch })
-    if (versions.length === 0) return '1.0.0'
-    const latest = versions[0]; return `${latest.major}.${latest.minor}.${latest.patch + 1}`
-  }, [allFirmwareList])
-
   const modelOptions = useMemo(() => {
     const firmwareModels = allFirmwareList.map((fw) => fw.model).filter(Boolean)
     const deviceModelNames = deviceModels.map((m: any) => m.model_code || m.model_name).filter(Boolean)
     return [...new Set([...firmwareModels, ...deviceModelNames])].map((m) => ({ label: m, value: m }))
   }, [allFirmwareList, deviceModels])
 
+  // 体积与 SHA-256 由服务端从固件本体计算；版本号默认从文件名提取
+  //（服务端还会对 ESP 读取镜像内嵌版本，此处仅是预填，可修改）。
   const uploadProps: UploadProps = {
     accept: '.bin', maxCount: 1, fileList,
-    beforeUpload: async (file) => {
-      setComputingHash(true)
-      try { await computeSha256(file) } catch { /* ignore */ }
-      finally { setComputingHash(false) }
+    beforeUpload: (file) => {
       setFileList([{ uid: '-1', name: file.name, status: 'done', originFileObj: file }])
+      const m = file.name.match(/(\d+\.\d+(?:\.\d+)?)/)
+      if (m) form.setFieldsValue({ version: m[1] })
       return false
     },
     onRemove: () => { setFileList([]) },
@@ -986,8 +985,28 @@ const FirmwareTab: React.FC = () => {
         return <Tag color={chip.color}>{chip.label}</Tag>
       },
     },
-    { title: t('ota.subVersion'), dataIndex: 'version', key: 'version', width: 100 },
+    {
+      title: t('ota.subVersion'), dataIndex: 'version', key: 'version', width: 130,
+      render: (_, record: Firmware) => (
+        <Space size={6}>
+          <span>{record.version}</span>
+          {record.main_version ? (
+            <Tooltip title={`${t('ota.mainVersion')}: ${record.main_version}`}>
+              <Tag style={{ marginRight: 0 }} color="geekblue">{record.main_version}</Tag>
+            </Tooltip>
+          ) : null}
+        </Space>
+      ),
+    },
     { title: t('ota.fileSize'), dataIndex: 'file_size', key: 'file_size', width: 100, render: (_: any, record: Firmware) => formatFileSize(record.file_size) },
+    {
+      title: t('ota.sha256Label'), dataIndex: 'file_sha256', key: 'file_sha256', width: 140,
+      render: (_, record: Firmware) => record.file_sha256 ? (
+        <Tooltip title={record.file_sha256}>
+          <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{record.file_sha256.slice(0, 12)}…</span>
+        </Tooltip>
+      ) : <span style={{ color: '#bfbfbf' }}>-</span>,
+    },
     { title: t('ota.changelog'), dataIndex: 'changelog', key: 'changelog', ellipsis: true, render: (_, record: Firmware) => <Tooltip title={record.changelog}><span>{record.changelog || '-'}</span></Tooltip> },
     { title: t('ota.uploadTime'), dataIndex: 'created_at', key: 'created_at', width: 170, render: (_: any, record: Firmware) => formatInTimezone(record.created_at, timezone, 'YYYY-MM-DD HH:mm:ss') },
     {
@@ -1034,14 +1053,7 @@ const FirmwareTab: React.FC = () => {
       <Modal title={t('ota.uploadFirmwareTitle')} open={uploadOpen}
         onCancel={() => { setUploadOpen(false); form.resetFields(); setFileList([]) }}
         onOk={handleUpload} confirmLoading={uploading} destroyOnClose width={560}>
-        <Form form={form} layout="vertical"
-          onValuesChange={(changedValues, allValues) => {
-            if (changedValues.model || changedValues.targetChip) {
-              const model = Array.isArray(allValues.model) ? allValues.model[0] : allValues.model
-              const { targetChip } = allValues
-              if (model && targetChip) form.setFieldsValue({ version: computeNextVersion(model, targetChip) })
-            }
-          }}>
+        <Form form={form} layout="vertical">
           <Form.Item name="model" label={t('ota.model')} rules={[{ required: true, message: t('ota.pleaseSelectOrInputModel') }]}>
             <Select showSearch allowClear mode="tags" maxCount={1} placeholder={t('ota.selectOrInputModel')} options={modelOptions}
               filterOption={(input, option) => (option?.label as string)?.toLowerCase().includes(input.toLowerCase())} />
@@ -1054,7 +1066,7 @@ const FirmwareTab: React.FC = () => {
               <Select.Option value="bms">{t('ota.bmsChip')}</Select.Option>
             </Select>
           </Form.Item>
-          <Form.Item name="version" label={t('ota.subVersion')} rules={[{ required: true, message: t('ota.inputSubVersion') }]}>
+          <Form.Item name="version" label={t('ota.firmwareVersionOptional')} extra={t('ota.firmwareVersionAutoHint')}>
             <Input placeholder={t('ota.autoFillVersion')} />
           </Form.Item>
           <Form.Item name="changelog" label={t('ota.changelog')}><TextArea rows={3} placeholder={t('ota.inputChangelog')} /></Form.Item>
@@ -1498,6 +1510,8 @@ const AppVersionTab: React.FC = () => {
   const { timezone } = useTimezoneStore()
   const [platformFilter, setPlatformFilter] = useState<string>()
   const [createOpen, setCreateOpen] = useState(false)
+  const [apkList, setApkList] = useState<any[]>([])
+  const [uploading, setUploading] = useState(false)
   const [rolloutModalOpen, setRolloutModalOpen] = useState(false)
   const [rolloutTarget, setRolloutTarget] = useState<any>(null)
   const [rolloutPercent, setRolloutPercent] = useState<number>(100)
@@ -1513,10 +1527,26 @@ const AppVersionTab: React.FC = () => {
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.ota.appVersions() })
 
+  const resetCreateForm = () => {
+    setCreateOpen(false); form.resetFields(); setApkList([]); setUploading(false)
+  }
+
+  // 上传 APK：版本号/包名/体积/SHA-256 全部由服务端解析，前端不提交这些字段。
   const createMutation = useMutation({
-    mutationFn: (data: any) => otaApi.createAppVersion(data),
-    onSuccess: () => { message.success(t('ota.versionPublishSuccess')); setCreateOpen(false); form.resetFields(); invalidate() },
-    onError: () => message.error(t('ota.versionPublishFailed')),
+    mutationFn: (formData: FormData) => otaApi.uploadAppPackage(formData),
+    onSuccess: (res: any) => {
+      const created = res?.data?.data
+      message.success(
+        created
+          ? t('ota.appVersionUploadSuccess', { version: created.version_name, version_code: created.version_code })
+          : t('ota.versionPublishSuccess'),
+      )
+      resetCreateForm(); invalidate()
+    },
+    onError: (err: any) => {
+      message.error(err?.response?.data?.message || err?.message || t('ota.versionPublishFailed'))
+    },
+    onSettled: () => setUploading(false),
   })
 
   const deleteMutation = useMutation({
@@ -1546,13 +1576,26 @@ const AppVersionTab: React.FC = () => {
   const handleCreate = async () => {
     try {
       const values = await form.validateFields()
-      createMutation.mutate({
-        platform: values.platform, version_code: values.versionCode, version_name: values.versionName,
-        download_url: values.downloadUrl, file_size: values.fileSize || 0, file_md5: values.fileMd5 || '',
-        changelog: values.changelog || '', is_force: values.isForce || false,
-        min_supported_version: values.minSupportedVersion || 0, rollout_percentage: values.rolloutPercentage || 100,
-      })
-    } catch { /* validation */ }
+      if (apkList.length === 0) { message.warning(t('ota.apkRequired')); return }
+      setUploading(true)
+      const formData = new FormData()
+      formData.append('file', apkList[0].originFileObj)
+      formData.append('platform', values.platform || 'android')
+      formData.append('changelog', values.changelog || '')
+      formData.append('is_force', values.isForce ? 'true' : 'false')
+      formData.append('min_supported_version', String(values.minSupportedVersion || 0))
+      formData.append('rollout_percentage', String(values.rolloutPercentage ?? 100))
+      createMutation.mutate(formData)
+    } catch { setUploading(false) }
+  }
+
+  const apkUploadProps: UploadProps = {
+    accept: '.apk', maxCount: 1, fileList: apkList,
+    beforeUpload: (file) => {
+      setApkList([{ uid: '-1', name: file.name, status: 'done', originFileObj: file }])
+      return false
+    },
+    onRemove: () => { setApkList([]) },
   }
 
   const openRolloutModal = (record: any) => {
@@ -1571,8 +1614,33 @@ const AppVersionTab: React.FC = () => {
       title: t('ota.platform'), dataIndex: 'platform', key: 'platform', width: 90,
       render: (_, record: any) => <Tag icon={record.platform === 'ios' ? <AppleOutlined /> : <AndroidOutlined />} color={record.platform === 'ios' ? '#000' : '#52c41a'}>{record.platform === 'ios' ? 'iOS' : 'Android'}</Tag>,
     },
-    { title: t('ota.versionCode'), dataIndex: 'version_code', key: 'version_code', width: 80, render: (_, record: any) => <Tag color="blue">{record.version_code}</Tag> },
-    { title: t('ota.versionName'), dataIndex: 'version_name', key: 'version_name', width: 100 },
+    {
+      title: t('ota.versionName'), dataIndex: 'version_name', key: 'version_name', width: 130,
+      render: (_, record: any) => (
+        <Space size={6}>
+          <Tag color="blue">v{record.version_name}</Tag>
+          <span style={{ fontSize: 12, color: '#8c8c8c' }}>#{record.version_code}</span>
+        </Space>
+      ),
+    },
+    {
+      title: t('ota.packageName'), dataIndex: 'package_name', key: 'package_name', width: 170, ellipsis: true,
+      render: (_, record: any) => record.package_name
+        ? <Tooltip title={record.package_name}><span style={{ fontFamily: 'monospace', fontSize: 12 }}>{record.package_name}</span></Tooltip>
+        : <span style={{ color: '#bfbfbf' }}>-</span>,
+    },
+    {
+      title: t('ota.fileSize'), dataIndex: 'file_size', key: 'file_size', width: 100,
+      render: (_, record: any) => (record.file_size ? formatFileSize(record.file_size) : '-'),
+    },
+    {
+      title: t('ota.sha256Label'), dataIndex: 'file_sha256', key: 'file_sha256', width: 150,
+      render: (_, record: any) => record.file_sha256 ? (
+        <Tooltip title={record.file_sha256}>
+          <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{record.file_sha256.slice(0, 12)}…</span>
+        </Tooltip>
+      ) : <span style={{ color: '#bfbfbf' }}>-</span>,
+    },
     { title: t('ota.downloadUrl'), dataIndex: 'download_url', key: 'download_url', ellipsis: true, render: (_, record: any) => <Tooltip title={record.download_url}><span style={{ fontFamily: 'monospace', fontSize: 12 }}>{record.download_url || '-'}</span></Tooltip> },
     { title: t('ota.forceUpdate'), dataIndex: 'is_force', key: 'is_force', width: 80, render: (_, record: any) => record.is_force ? <Tag color="red">{t('ota.force')}</Tag> : <Tag>{t('common.no')}</Tag> },
     {
@@ -1614,7 +1682,7 @@ const AppVersionTab: React.FC = () => {
       {error && <QueryErrorAlert error={error} onRetry={() => { void refetch() }} style={{ marginBottom: 16 }} />}
       <ProCard style={{ marginBottom: 16, borderRadius: 12 }}>
         <Row gutter={16} align="middle">
-          <Col><Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>{t('ota.publishVersion')}</Button></Col>
+          <Col><Button type="primary" icon={<CloudUploadOutlined />} onClick={() => setCreateOpen(true)}>{t('ota.uploadApk')}</Button></Col>
           <Col>
             <Select allowClear placeholder={t('ota.filterByPlatform')} style={{ width: 140 }} value={platformFilter}
               onChange={(val) => setPlatformFilter(val)} options={[{ label: 'Android', value: 'android' }, { label: 'iOS', value: 'ios' }]} />
@@ -1627,26 +1695,35 @@ const AppVersionTab: React.FC = () => {
         options={{ density: true, reload: () => refetch(), setting: true }}
         pagination={false} />
 
-      <Modal title={t('ota.publishAppVersion')} open={createOpen} onCancel={() => { setCreateOpen(false); form.resetFields() }}
-        onOk={handleCreate} confirmLoading={createMutation.isPending} destroyOnClose width={560}>
+      <Modal title={t('ota.uploadApkTitle')} open={createOpen} onCancel={resetCreateForm}
+        onOk={handleCreate} okText={t('ota.uploadAndPublish')}
+        confirmLoading={uploading || createMutation.isPending} destroyOnClose width={600}>
         <Form form={form} layout="vertical">
-          <Form.Item name="platform" label={t('ota.platform')} rules={[{ required: true, message: t('ota.pleaseSelectPlatform') }]}>
-            <Select placeholder={t('ota.pleaseSelectPlatform')}>
+          <Alert type="info" showIcon style={{ marginBottom: 16 }} message={t('ota.apkAutoParseHint')} />
+          <Form.Item name="platform" label={t('ota.platform')} initialValue="android">
+            <Select>
               <Select.Option value="android"><AndroidOutlined style={{ color: '#52c41a', marginRight: 4 }} /> Android</Select.Option>
-              <Select.Option value="ios"><AppleOutlined style={{ marginRight: 4 }} /> iOS</Select.Option>
             </Select>
           </Form.Item>
-          <Form.Item name="versionCode" label={t('ota.versionCode')} rules={[{ required: true, message: t('ota.pleaseInputVersionCode') }]}>
-            <InputNumber min={1} style={{ width: '100%' }} placeholder={t('ota.versionCodePlaceholder')} />
+          <Form.Item label={t('ota.uploadApk')} required>
+            <Dragger {...apkUploadProps}>
+              <p className="ant-upload-drag-icon"><InboxOutlined /></p>
+              <p className="ant-upload-text">{t('ota.dragApk')}</p>
+              <p className="ant-upload-hint">{t('ota.apkFormatHint')}</p>
+            </Dragger>
           </Form.Item>
-          <Form.Item name="versionName" label={t('ota.versionName')} rules={[{ required: true, message: t('ota.pleaseInputVersionName') }]}>
-            <Input placeholder={t('ota.versionNamePlaceholder')} />
-          </Form.Item>
-          <Form.Item name="downloadUrl" label={t('ota.downloadUrl')} rules={[{ required: true, message: t('ota.pleaseInputDownloadUrl') }]}>
-            <Input placeholder={t('ota.downloadUrlPlaceholder')} />
-          </Form.Item>
-          <Form.Item name="fileSize" label={t('ota.fileSizeBytes')}><InputNumber min={0} style={{ width: '100%' }} placeholder={t('ota.fileSizePlaceholder')} /></Form.Item>
-          <Form.Item name="fileMd5" label={t('ota.fileMD5')}><Input placeholder={t('ota.fileMd5Placeholder')} /></Form.Item>
+          {apkList.length > 0 && (
+            <Form.Item label={t('ota.detectedMeta')}>
+              <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {formatFileSize(apkList[0]?.originFileObj?.size || 0)}
+                </Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {t('ota.versionName')} / {t('ota.packageName')} / {t('ota.sha256Label')}：{t('ota.pendingParse')}
+                </Text>
+              </Space>
+            </Form.Item>
+          )}
           <Form.Item name="changelog" label={t('ota.changelog')}><Input.TextArea rows={3} placeholder={t('ota.inputChangelog')} /></Form.Item>
           <Form.Item name="isForce" label={t('ota.forceUpdate')} valuePropName="checked"><Switch /></Form.Item>
           <Form.Item name="minSupportedVersion" label={t('ota.minVersion')}><InputNumber min={0} style={{ width: '100%' }} placeholder={t('ota.minVersionPlaceholder')} /></Form.Item>
