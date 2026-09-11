@@ -110,6 +110,32 @@ func TestAppUpdateCheckIsPublic(t *testing.T) {
 	assert.JSONEq(t, `{"code":0,"message":"success","data":{"has_update":false}}`, string(body))
 }
 
+// TestPublicConfigRouteIsPublic 公开站点配置（/api/v1/config/public）无需登录即可访问，
+// 且不被 userGroup 的 /api/v1/config/help-center 遮蔽成需登录路由。
+func TestPublicConfigRouteIsPublic(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/api/v1/config/public", r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code":0,"message":"success","data":{"download_base_url":"https://download.example.com","frontend_base_url":"https://www.example.com"}}`))
+	}))
+	defer backend.Close()
+
+	cfg := newTestConfig()
+	cfg.APIServer = backend.URL
+	engine := Setup(cfg)
+	gateway := httptest.NewServer(engine)
+	defer gateway.Close()
+
+	response, err := http.Get(gateway.URL + "/api/v1/config/public")
+	require.NoError(t, err)
+	defer response.Body.Close()
+	body, err := io.ReadAll(response.Body)
+	require.NoError(t, err)
+
+	assert.Equal(t, http.StatusOK, response.StatusCode)
+	assert.JSONEq(t, `{"code":0,"message":"success","data":{"download_base_url":"https://download.example.com","frontend_base_url":"https://www.example.com"}}`, string(body))
+}
+
 func TestRouteRegistration_UserAuthRoutes(t *testing.T) {
 	engine := Setup(newTestConfig())
 
@@ -164,6 +190,9 @@ func TestRouteRegistration_AdminRoutes(t *testing.T) {
 		"/api/v1/admin/system-config",
 		"/api/v1/admin/tenants",
 		"/api/v1/admin/metrics",
+		// 系统公告推送与全量权限码（business-api adminGroup）
+		"/api/v1/admin/push-announcement",
+		"/api/v1/admin/permission-codes",
 		// 系统邮件模板管理（business-api emailGroup，仅系统管理员）
 		"/api/v1/email/templates",
 		"/api/v1/email/templates/*action",

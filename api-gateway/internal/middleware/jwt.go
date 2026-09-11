@@ -59,6 +59,7 @@ var publicPaths = map[string]bool{
 	"/api/v1/auth/jverify-login":   true,
 	"/api/v1/auth/refresh":         true,
 	"/api/v1/ota/app/check":        true,
+	"/api/v1/ota/app/latest":       true,
 	"/api/v1/timezones":            true,
 	"/api/v1/invite/accept":        true,
 }
@@ -78,7 +79,7 @@ var exactUntrustedIdentityHeaders = map[string]struct{}{
 	"x-session-version":       {},
 	"x-session-id":            {},
 	"x-authorization-version": {},
-	"x-is-system-admin":          {},
+	"x-is-system-admin":       {},
 	"x-token-jti":             {},
 	"x-token-issued-at":       {},
 }

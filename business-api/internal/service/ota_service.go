@@ -42,7 +42,8 @@ type OTAService struct {
 	internalKey  string
 	uploadDir    string // 固件上传存储目录
 	serverURL    string // 外部访问地址，用于构造ESP32下载URL
-	downloadURL  string // 固件下载CDN域名（download子域），优先于 serverURL 用于构造下载URL
+	downloadURL  string // 固件下载域（环境变量默认值），可被运行时域名配置动态覆盖
+	cfgSvc       *ConfigService // 运行时配置服务（域名配置动态覆盖），可空
 	httpClient   *http.Client
 	concurrency  int
 	taskTimeout  time.Duration // 升级任务超时阈值，pending/running 任务超过该时长无更新自动置为 failed；<=0 表示禁用
@@ -89,14 +90,16 @@ type CreateFirmwareReq struct {
 	UploadedBy       int64
 }
 
-func (s *OTAService) CreateFirmware(ctx context.Context, req *CreateFirmwareReq) error {
+// CreateFirmware 落库固件并返回创建后的记录（含自动生成的主版本号与落库 ID），
+// 供 handler 向管理端回显服务端识别出的元数据。
+func (s *OTAService) CreateFirmware(ctx context.Context, req *CreateFirmwareReq) (*model.Firmware, error) {
 	if err := ValidateFirmwareRequest(req); err != nil {
-		return err
+		return nil, err
 	}
 	// 自动生成主版本号：查询当前芯片的最大主版本号，+1
 	latestVersion, err := s.repo.GetLatestMainVersion(ctx, req.TargetChip)
 	if err != nil {
-		return fmt.Errorf("查询主版本号失败: %w", err)
+		return nil, fmt.Errorf("查询主版本号失败: %w", err)
 	}
 
 	var nextMainVersion string
@@ -135,7 +138,10 @@ func (s *OTAService) CreateFirmware(ctx context.Context, req *CreateFirmwareReq)
 		IsForce:          req.IsForce,
 		UploadedBy:       req.UploadedBy,
 	}
-	return s.repo.CreateFirmware(ctx, fw)
+	if err := s.repo.CreateFirmware(ctx, fw); err != nil {
+		return nil, err
+	}
+	return fw, nil
 }
 
 var (
@@ -839,6 +845,12 @@ func (s *OTAService) CheckAppUpdate(ctx context.Context, platform string, curren
 	return latest, true, nil
 }
 
+// GetLatestAppVersion 返回指定平台最新的已发布版本。
+// 与 CheckAppUpdate 的区别：不做灰度过滤，供公开下载页展示最新版本。
+func (s *OTAService) GetLatestAppVersion(ctx context.Context, platform string) (*model.AppVersion, error) {
+	return s.repo.GetLatestAppVersion(ctx, platform)
+}
+
 // CreateAppVersion 创建App版本
 func (s *OTAService) CreateAppVersion(ctx context.Context, v *model.AppVersion) error {
 	return s.repo.CreateAppVersion(ctx, v)
@@ -1462,11 +1474,27 @@ func (s *OTAService) BuildDownloadURL(fileURL string) string {
 	return s.downloadURLFor(fileURL)
 }
 
-// downloadURLFor 构造固件下载 URL：优先使用 downloadURL（下载CDN域名），
+// AttachConfigService 注入运行时配置服务：下载域可被管理后台「域名配置」
+// （system_configs.domains.download_base_url）动态覆盖，无需重启或重新部署。
+func (s *OTAService) AttachConfigService(cfgSvc *ConfigService) {
+	s.cfgSvc = cfgSvc
+}
+
+// downloadBase 解析当前生效的下载基地址：管理后台配置 > 环境变量（构造时注入）。
+func (s *OTAService) downloadBase() string {
+	if s.cfgSvc != nil {
+		if v := s.cfgSvc.ResolveDomainConfig(context.Background()).DownloadBaseURL; v != "" {
+			return v
+		}
+	}
+	return s.downloadURL
+}
+
+// downloadURLFor 构造固件下载 URL：优先使用生效下载域（见 downloadBase），
 // 未配置时回退 serverURL；两者均未配置时返回原相对路径。
 func (s *OTAService) downloadURLFor(fileURL string) string {
-	if s.downloadURL != "" && strings.HasPrefix(fileURL, "/") {
-		return strings.TrimRight(s.downloadURL, "/") + fileURL
+	if base := s.downloadBase(); base != "" && strings.HasPrefix(fileURL, "/") {
+		return strings.TrimRight(base, "/") + fileURL
 	}
 	if s.serverURL != "" && strings.HasPrefix(fileURL, "/") {
 		return strings.TrimRight(s.serverURL, "/") + fileURL

@@ -6,25 +6,25 @@ import (
 )
 
 type User struct {
-	ID           int64      `json:"id"`
-	Phone        string     `json:"phone"`
-	Email        string     `json:"email"`
-	PasswordHash string     `json:"-"`
+	ID           int64  `json:"id"`
+	Phone        string `json:"phone"`
+	Email        string `json:"email"`
+	PasswordHash string `json:"-"`
 	// HasPassword 表示账号是否已设置密码（无密码账号可通过修改密码接口直接设置）
-	HasPassword bool       `json:"has_password"`
-	Nickname     string     `json:"nickname"`
-	Avatar       string     `json:"avatar"`
-	IsSystemAdmin  bool       `json:"is_system_admin"`
-	RegionID       *int64     `json:"region_id"`
-	Status       int        `json:"status"`
-	Timezone     string     `json:"timezone"`
-	Country      string     `json:"country"`
-	RegionName   string     `json:"region_name"`
-	Bio          string     `json:"bio"`
-	LastLoginAt  *time.Time `json:"last_login_at"`
-	LastLoginIP  string     `json:"last_login_ip"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at"`
+	HasPassword   bool       `json:"has_password"`
+	Nickname      string     `json:"nickname"`
+	Avatar        string     `json:"avatar"`
+	IsSystemAdmin bool       `json:"is_system_admin"`
+	RegionID      *int64     `json:"region_id"`
+	Status        int        `json:"status"`
+	Timezone      string     `json:"timezone"`
+	Country       string     `json:"country"`
+	RegionName    string     `json:"region_name"`
+	Bio           string     `json:"bio"`
+	LastLoginAt   *time.Time `json:"last_login_at"`
+	LastLoginIP   string     `json:"last_login_ip"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
 }
 
 type Station struct {
@@ -51,43 +51,43 @@ type Station struct {
 }
 
 type Device struct {
-	ID             int64      `json:"id"`
-	SN             string     `json:"sn"`
-	Model          string     `json:"model"`
-	ModelID        int64      `json:"model_id"`
-	ModelCategory  string     `json:"model_category"`
-	Manufacturer   string     `json:"manufacturer"`
-	FirmwareArm    string     `json:"firmware_arm"`
-	FirmwareEsp    string     `json:"firmware_esp"`
-	FirmwareDSP    string     `json:"firmware_dsp"`
-	FirmwareBMS    string     `json:"firmware_bms"`
-	MainVersion    string     `json:"main_version"`
-	DeviceType     string     `json:"device_type"`
-	RatedPower     float64    `json:"rated_power"`
-	RatedPowerW    int        `json:"rated_power_w"` // V2.1：协议原值 W（rated_power 为派生 kW）
-	RatedVoltage   float64    `json:"rated_voltage"`
-	RatedFreq      float64    `json:"rated_freq"`
-	BatteryVoltage float64    `json:"battery_voltage"`
-	BatteryType    string     `json:"battery_type"`
-	CellCount      int        `json:"cell_count"`
+	ID             int64   `json:"id"`
+	SN             string  `json:"sn"`
+	Model          string  `json:"model"`
+	ModelID        int64   `json:"model_id"`
+	ModelCategory  string  `json:"model_category"`
+	Manufacturer   string  `json:"manufacturer"`
+	FirmwareArm    string  `json:"firmware_arm"`
+	FirmwareEsp    string  `json:"firmware_esp"`
+	FirmwareDSP    string  `json:"firmware_dsp"`
+	FirmwareBMS    string  `json:"firmware_bms"`
+	MainVersion    string  `json:"main_version"`
+	DeviceType     string  `json:"device_type"`
+	RatedPower     float64 `json:"rated_power"`
+	RatedPowerW    int     `json:"rated_power_w"` // V2.1：协议原值 W（rated_power 为派生 kW）
+	RatedVoltage   float64 `json:"rated_voltage"`
+	RatedFreq      float64 `json:"rated_freq"`
+	BatteryVoltage float64 `json:"battery_voltage"`
+	BatteryType    string  `json:"battery_type"`
+	CellCount      int     `json:"cell_count"`
 	// V2.1 只读信息扩展（096 迁移列）
 	Phase             string     `json:"phase"`
 	InverterModule    string     `json:"inverter_module"`
 	HardwareVersion   string     `json:"hardware_version"`
 	BootloaderVersion string     `json:"bootloader_version"`
 	InfoReportedAt    *time.Time `json:"info_reported_at"`
-	StationID      *int64     `json:"station_id"`
-	StationName    string     `json:"station_name"`
-	Alias          string     `json:"alias"`
-	Remark         string     `json:"remark"`
-	UserID         int64      `json:"user_id"`
-	Timezone       string     `json:"timezone"`
-	Status         int        `json:"status"`
-	CurrentPower   float64    `json:"current_power"`
-	DailyEnergy    float64    `json:"daily_energy"`
-	LastOnlineAt   *time.Time `json:"last_online_at"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	StationID         *int64     `json:"station_id"`
+	StationName       string     `json:"station_name"`
+	Alias             string     `json:"alias"`
+	Remark            string     `json:"remark"`
+	UserID            int64      `json:"user_id"`
+	Timezone          string     `json:"timezone"`
+	Status            int        `json:"status"`
+	CurrentPower      float64    `json:"current_power"`
+	DailyEnergy       float64    `json:"daily_energy"`
+	LastOnlineAt      *time.Time `json:"last_online_at"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
 }
 
 // OfflineOpLog represents one local operation log uploaded by the App
@@ -448,7 +448,7 @@ type DeviceUpgrade struct {
 
 	// 升级包相关
 	PackageMainVersion string `json:"package_main_version,omitempty"`
-	Changelog         string `json:"changelog,omitempty"`
+	Changelog          string `json:"changelog,omitempty"`
 }
 
 // UpgradeTask 升级任务 - 统一管理所有升级操作
@@ -559,6 +559,11 @@ type AppVersion struct {
 	DownloadURL         string     `json:"download_url"`
 	FileSize            int64      `json:"file_size"`
 	FileMD5             string     `json:"file_md5"`
+	FileSHA256          string     `json:"file_sha256"`
+	PackageName         string     `json:"package_name"`
+	FileName            string     `json:"file_name"`
+	MinSDK              int        `json:"min_sdk"`
+	TargetSDK           int        `json:"target_sdk"`
 	Changelog           string     `json:"changelog"`
 	IsForce             bool       `json:"is_force"`
 	MinSupportedVersion int        `json:"min_supported_version"`
@@ -580,7 +585,7 @@ type Invitation struct {
 	InvitedBy        int64      `json:"invited_by"`
 	Recipient        string     `json:"recipient"`
 	TokenKeyID       string     `json:"-"`
-	TokenDigest      []byte     `json:"-"` // SHA-256 raw bytes (BYTEA), never expose
+	TokenDigest      []byte     `json:"-"`                // SHA-256 raw bytes (BYTEA), never expose
 	RoleAssignments  string     `json:"role_assignments"` // JSONB array: [{"organization_id":3,"role_code":"agent"}] or legacy [{"role_id":3}]
 	ExpiresAt        time.Time  `json:"expires_at"`
 	AcceptedAt       *time.Time `json:"accepted_at,omitempty"`

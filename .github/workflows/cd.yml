@@ -104,8 +104,10 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/inv-admin-frontend:${{ env.DEPLOY_SHA }}
             ghcr.io/${{ github.repository_owner }}/inv-admin-frontend:latest
           build-args: |
-            VITE_API_BASE=${{ vars.VITE_API_BASE }}
-            VITE_WS_BASE=${{ vars.VITE_WS_BASE }}
+            # 未配置仓库变量时兜底到生产 API 子域：所有 API 请求必须走 api.jiuxiaoyw.online，
+            # 避免同源 www 域上的 /api 命中 CDN 缓存规则
+            VITE_API_BASE=${{ vars.VITE_API_BASE || 'https://api.jiuxiaoyw.online/api/v1' }}
+            VITE_WS_BASE=${{ vars.VITE_WS_BASE || 'wss://api.jiuxiaoyw.online/ws' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

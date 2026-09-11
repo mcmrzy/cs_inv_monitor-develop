@@ -3,8 +3,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/auth/permission_codes.dart';
 import 'package:inv_app/core/components/permission_gate.dart';
-import 'package:inv_app/core/config/app_config.dart';
 import 'package:inv_app/core/entities/organization.dart';
+import 'package:inv_app/core/services/domain_config_service.dart';
+import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/stores/organization_context_store.dart';
 import 'package:inv_app/core/services/api_service.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
@@ -305,9 +306,10 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
     }
 
     if (inviteLink != null) {
-      // 邀请链接指向管理后台（Web），使用 frontendBaseUrl（www 域）
+      // 邀请链接指向管理后台（Web）：优先后端下发的域名配置，回退构建期默认
+      final frontendBase = getIt<DomainConfigService>().frontendBaseUrl;
       _showInviteLinkDialog(
-        '${AppConfig.frontendBaseUrl}$inviteLink',
+        '$frontendBase$inviteLink',
         dialogResult.email,
       );
     } else {

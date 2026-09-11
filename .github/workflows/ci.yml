@@ -161,7 +161,10 @@ jobs:
     name: E2E Tests (Playwright)
     needs: [go-check]
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # 2026-09-10 夜间 runner 明显变慢（其余作业时长正常，E2E 在 30m 处被
+    # 硬超时取消两次：#334/#336），放宽到 45m 容忍共享 runner 的波动；
+    # 真正挂死的测试仍会被这一上限拦住。
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
