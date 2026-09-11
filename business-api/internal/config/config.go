@@ -10,22 +10,22 @@ import (
 )
 
 type Config struct {
-	Server      ServerConfig      `mapstructure:"server"`
-	Database    DatabaseConfig    `mapstructure:"database"`
-	Redis       RedisConfig       `mapstructure:"redis"`
-	JWT         JWTConfig         `mapstructure:"jwt"`
-	SMS         SMSConfig         `mapstructure:"sms"`
-	Email       EmailConfig       `mapstructure:"email"`
-	CORS        CORSConfig        `mapstructure:"cors"`
-	Log         LogConfig         `mapstructure:"log"`
-	Timezone    string            `mapstructure:"timezone"`
-	Backends    BackendsConfig    `mapstructure:"backends"`
-	Migration   MigrationConfig   `mapstructure:"migration"`
-	JPush       JPushConfig       `mapstructure:"jpush"`
-	JVerify     JVerifyConfig     `mapstructure:"jverify"`
-	RBAC        RBACConfig        `mapstructure:"rbac"`
-	EmailQueue  EmailQueueConfig  `mapstructure:"email_queue"`
-	OTA         OTAConfig         `mapstructure:"ota"`
+	Server     ServerConfig     `mapstructure:"server"`
+	Database   DatabaseConfig   `mapstructure:"database"`
+	Redis      RedisConfig      `mapstructure:"redis"`
+	JWT        JWTConfig        `mapstructure:"jwt"`
+	SMS        SMSConfig        `mapstructure:"sms"`
+	Email      EmailConfig      `mapstructure:"email"`
+	CORS       CORSConfig       `mapstructure:"cors"`
+	Log        LogConfig        `mapstructure:"log"`
+	Timezone   string           `mapstructure:"timezone"`
+	Backends   BackendsConfig   `mapstructure:"backends"`
+	Migration  MigrationConfig  `mapstructure:"migration"`
+	JPush      JPushConfig      `mapstructure:"jpush"`
+	JVerify    JVerifyConfig    `mapstructure:"jverify"`
+	RBAC       RBACConfig       `mapstructure:"rbac"`
+	EmailQueue EmailQueueConfig `mapstructure:"email_queue"`
+	OTA        OTAConfig        `mapstructure:"ota"`
 }
 
 type CORSConfig struct {
@@ -33,15 +33,16 @@ type CORSConfig struct {
 }
 
 type BackendsConfig struct {
-	DeviceServer  string `mapstructure:"device_server"`
-	InternalKey   string `mapstructure:"internal_key"`
-	ServerURL     string `mapstructure:"server_url"`     // 外部访问地址，用于ESP32下载固件
-	DownloadURL   string `mapstructure:"download_url"`   // 固件下载CDN域名（download子域），用于构造下载URL；为空时回退 server_url
-	FrontendURL   string `mapstructure:"frontend_url"`   // 管理后台外部访问地址，用于邀请邮件等通知链接
-	WeatherAPI    string `mapstructure:"weather_api"`    // 天气API地址
-	AmapAPIKey    string `mapstructure:"amap_api_key"`   // 高德地图API Key
-	UploadDir     string `mapstructure:"upload_dir"`     // 固件上传存储目录
-	WeatherSource string `mapstructure:"weather_source"` // 天气数据源: open-meteo 或 amap
+	DeviceServer   string `mapstructure:"device_server"`
+	InternalKey    string `mapstructure:"internal_key"`
+	ServerURL      string `mapstructure:"server_url"`       // 外部访问地址，用于ESP32下载固件
+	DownloadURL    string `mapstructure:"download_url"`     // 固件下载CDN域名（download子域），用于构造下载URL；为空时回退 server_url
+	AppDownloadURL string `mapstructure:"app_download_url"` // App安装包下载域，仅作用于手机端版本下载URL；为空时回退 download_url
+	FrontendURL    string `mapstructure:"frontend_url"`     // 管理后台外部访问地址，用于邀请邮件等通知链接
+	WeatherAPI     string `mapstructure:"weather_api"`      // 天气API地址
+	AmapAPIKey     string `mapstructure:"amap_api_key"`     // 高德地图API Key
+	UploadDir      string `mapstructure:"upload_dir"`       // 固件上传存储目录
+	WeatherSource  string `mapstructure:"weather_source"`   // 天气数据源: open-meteo 或 amap
 }
 
 // MigrationConfig 控制启动时的自动数据库迁移行为
@@ -141,8 +142,8 @@ type JPushConfig struct {
 
 // RBACConfig RBAC 缓存配置
 type RBACConfig struct {
-	Enabled      bool          `mapstructure:"enabled"`       // 是否启用 RBAC 缓存
-	TTLDuration  time.Duration `mapstructure:"ttl_duration"`  // 缓存过期时间，默认 5 分钟
+	Enabled      bool          `mapstructure:"enabled"`        // 是否启用 RBAC 缓存
+	TTLDuration  time.Duration `mapstructure:"ttl_duration"`   // 缓存过期时间，默认 5 分钟
 	MaxIdleConns int           `mapstructure:"max_idle_conns"` // Redis 最大空闲连接数
 }
 
@@ -297,6 +298,7 @@ func Load(configPath string) (*Config, error) {
 	viper.BindEnv("backends.internal_key", "INTERNAL_KEY")
 	viper.BindEnv("backends.server_url", "SERVER_URL")
 	viper.BindEnv("backends.download_url", "DOWNLOAD_URL")
+	viper.BindEnv("backends.app_download_url", "APP_DOWNLOAD_URL")
 	viper.BindEnv("backends.frontend_url", "FRONTEND_URL")
 	viper.BindEnv("backends.weather_api", "WEATHER_API_URL")
 	viper.BindEnv("backends.amap_api_key", "AMAP_API_KEY")
