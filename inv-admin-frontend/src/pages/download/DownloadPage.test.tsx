@@ -5,7 +5,7 @@ import { server } from '@/test/mocks/server'
 import { renderAsAdmin } from '@/test/test-utils'
 import DownloadPage from './index'
 
-const LATEST_URL = '/api/v1/ota/app/latest'
+const LATEST_URL = '/app-release-info'
 
 const releasePayload = (overrides: Record<string, unknown> = {}) => ({
   code: 0,
