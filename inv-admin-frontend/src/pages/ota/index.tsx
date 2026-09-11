@@ -900,14 +900,13 @@ const FirmwareTab: React.FC = () => {
   const uploadMutation = useMutation({
     mutationFn: (formData: FormData) => otaApi.uploadFirmware(formData),
     onSuccess: (res: any) => {
-      // 服务端回显识别/计算出的元数据：版本号、主版本号、体积与摘要
+      // 服务端回显识别/计算出的元数据：版本号、体积与摘要
       const created = res?.data?.data
       if (created?.version) {
         message.success(
           t('ota.firmwareUploadDetail', {
             chip: String(created.target_chip || '').toUpperCase(),
             version: created.version,
-            mainVersion: created.main_version || '-',
             size: formatFileSize(created.file_size || 0),
             sha: String(created.file_sha256 || '').slice(0, 12),
           }),
@@ -978,11 +977,11 @@ const FirmwareTab: React.FC = () => {
   const columns: ProColumns<Firmware>[] = [
     { title: t('ota.model'), dataIndex: 'model', key: 'model', width: 120 },
     {
-      title: t('ota.targetChip'), dataIndex: 'target_chip', key: 'target_chip', width: 90,
+      title: t('ota.targetChip'), dataIndex: 'target_chip', key: 'target_chip', width: 150,
       render: (_, record: Firmware) => {
-        const chipMap: Record<string, { label: string; color: string }> = { esp: { label: 'ESP', color: 'green' }, arm: { label: 'ARM', color: 'blue' }, dsp: { label: 'DSP', color: 'orange' }, bms: { label: 'BMS', color: 'purple' } }
-        const chip = chipMap[record.target_chip] || { label: record.target_chip || '-', color: 'default' }
-        return <Tag color={chip.color}>{chip.label}</Tag>
+        const chipColors: Record<string, string> = { esp: 'green', arm: 'blue', dsp: 'orange', bms: 'purple' }
+        const label = t(`ota.${(record.target_chip || '').toLowerCase()}Chip`)
+        return <Tag color={chipColors[record.target_chip] || 'default'}>{label === `ota.${(record.target_chip || '').toLowerCase()}Chip` ? (record.target_chip || '-') : label}</Tag>
       },
     },
     {
@@ -990,11 +989,6 @@ const FirmwareTab: React.FC = () => {
       render: (_, record: Firmware) => (
         <Space size={6}>
           <span>{record.version}</span>
-          {record.main_version ? (
-            <Tooltip title={`${t('ota.mainVersion')}: ${record.main_version}`}>
-              <Tag style={{ marginRight: 0 }} color="geekblue">{record.main_version}</Tag>
-            </Tooltip>
-          ) : null}
         </Space>
       ),
     },
@@ -1128,14 +1122,12 @@ const FirmwareTab: React.FC = () => {
   )
 }
 
-// =================== 升级包组合 (固件库子Tab，去掉推送按钮) ===================
+// =================== 升级包 (固件库子Tab：上传固件时自动组装，管理员只做发布) ===================
 const PackagesTab: React.FC = () => {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
   const { timezone } = useTimezoneStore()
-  const [createOpen, setCreateOpen] = useState(false)
-  const [createForm] = Form.useForm()
   const [modelFilter, setModelFilter] = useState<string>()
 
   // 发布升级包 Modal 状态
@@ -1178,12 +1170,6 @@ const PackagesTab: React.FC = () => {
   })
   const packages = (Array.isArray(packagesRes) ? packagesRes : []) as UpgradePackage[]
 
-  const { data: firmwareRes, error: firmwareError, refetch: refetchFirmware } = useQuery({
-    queryKey: queryKeys.ota.firmwares(),
-    queryFn: () => otaApi.getAllFirmware().then((r) => r.data?.data ?? r.data ?? []),
-  })
-  const firmwareList = (Array.isArray(firmwareRes) ? firmwareRes : []) as Firmware[]
-
   const { data: modelsRes, error: modelsError, refetch: refetchModels } = useQuery({
     queryKey: queryKeys.models.list(),
     queryFn: () => modelApi.listModels().then((r) => r.data?.data ?? r.data ?? []),
@@ -1191,24 +1177,9 @@ const PackagesTab: React.FC = () => {
   const modelList = (Array.isArray(modelsRes) ? modelsRes : (modelsRes as any)?.items ?? []) as any[]
   const queryFailure = packagesError
     ? { error: packagesError, retry: refetchPackages }
-    : firmwareError
-      ? { error: firmwareError, retry: refetchFirmware }
-      : modelsError
-        ? { error: modelsError, retry: refetchModels }
-        : null
-
-  const createMutation = useMutation({
-    mutationFn: (data: any) => otaApi.createPackage(data),
-    onSuccess: () => { message.success(t('ota.packageCreated')); setCreateOpen(false); createForm.resetFields(); invalidate() },
-    onError: (err: any) => {
-          const msg = err?.response?.data?.message || err?.message || ''
-          if (msg.includes('duplicate key') || msg.includes('uq_package_model_version')) {
-            message.error(t('ota.duplicatePackageVersion'))
-          } else {
-            message.error(`${t('ota.taskCreateFailed')}: ${msg || t('common.unknownError')}`)
-          }
-        },
-  })
+    : modelsError
+      ? { error: modelsError, retry: refetchModels }
+      : null
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => otaApi.deletePackage(id),
@@ -1244,26 +1215,6 @@ const PackagesTab: React.FC = () => {
       })
     } catch { /* validation error */ }
   }
-
-  const handleCreate = async () => {
-    try {
-      const values = await createForm.validateFields()
-      const firmwareIds: number[] = []
-      if (values.firmware_arm) firmwareIds.push(Number(values.firmware_arm))
-      if (values.firmware_esp) firmwareIds.push(Number(values.firmware_esp))
-      if (values.firmware_dsp) firmwareIds.push(Number(values.firmware_dsp))
-      if (values.firmware_bms) firmwareIds.push(Number(values.firmware_bms))
-      if (firmwareIds.length === 0) { message.warning(t('ota.selectAtLeastOneFirmware')); return }
-      
-      createMutation.mutate({
-        model: values.model,
-        firmware_ids: firmwareIds,
-      })
-    } catch { /* validation error */ }
-  }
-
-  const selectedModel = Form.useWatch('model', createForm)
-  const filteredFirmware = selectedModel ? firmwareList.filter((f: Firmware) => f.model === selectedModel) : firmwareList
 
   const columns: ProColumns<UpgradePackage>[] = [
     { title: t('ota.packageVersion'), dataIndex: 'main_version', key: 'main_version', width: 140, render: (_, record: UpgradePackage) => <Tag color="blue">{record.main_version}</Tag> },
@@ -1349,8 +1300,8 @@ const PackagesTab: React.FC = () => {
       <ProCard style={{ marginBottom: 16 }} bodyStyle={{ padding: '12px 16px' }}>
         <Row justify="space-between" align="middle">
           <Col><Space>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>{t('ota.createPackage')}</Button>
             <Button icon={<ReloadOutlined />} onClick={invalidate} />
+            <span style={{ color: '#999', fontSize: 12 }}>{t('ota.packageAutoAssembledHint')}</span>
           </Space></Col>
           <Col>
             <Select allowClear placeholder={t('ota.filterByModel')} style={{ width: 160 }} value={modelFilter} onChange={setModelFilter}
@@ -1362,37 +1313,6 @@ const PackagesTab: React.FC = () => {
         search={false}
         options={{ density: true, reload: () => invalidate(), setting: true }}
         pagination={{ pageSize: 20 }} locale={{ emptyText: <Empty description={t('ota.noPackages')} /> }} />
-
-      <Modal title={t('ota.createPackage')} open={createOpen} onOk={handleCreate}
-        onCancel={() => { setCreateOpen(false); createForm.resetFields() }}
-        confirmLoading={createMutation.isPending} width={560}>
-        <Form form={createForm} layout="vertical">
-          <Form.Item name="model" label={t('ota.model')} rules={[{ required: true, message: t('ota.selectModel') }]}>
-            <Select placeholder={t('ota.selectModel')} options={modelList.map((m: any) => ({ label: m.model_name || m.model_code, value: m.model_code }))} />
-          </Form.Item>
-          
-          <Divider orientation="left" style={{ margin: '16px 0 12px' }}>{t('ota.selectFirmwareDivider')}</Divider>
-          
-          <Form.Item name="firmware_arm" label={t('ota.chipFirmwareLabel', { chip: 'ARM' })}>
-            <Select allowClear placeholder={t('ota.selectChipFirmware', { chip: 'ARM' })}
-              options={filteredFirmware.filter((f: Firmware) => f.target_chip === 'arm').map((f: Firmware) => ({ label: f.version, value: Number(f.id) }))} />
-          </Form.Item>
-          <Form.Item name="firmware_esp" label={t('ota.chipFirmwareLabel', { chip: 'ESP' })}>
-            <Select allowClear placeholder={t('ota.selectChipFirmware', { chip: 'ESP' })}
-              options={filteredFirmware.filter((f: Firmware) => f.target_chip === 'esp').map((f: Firmware) => ({ label: f.version, value: Number(f.id) }))} />
-          </Form.Item>
-          <Form.Item name="firmware_dsp" label={t('ota.chipFirmwareLabel', { chip: 'DSP' })}>
-            <Select allowClear placeholder={t('ota.selectOptionalChipFirmware', { chip: 'DSP' })}
-              options={filteredFirmware.filter((f: Firmware) => f.target_chip === 'dsp').map((f: Firmware) => ({ label: f.version, value: Number(f.id) }))} />
-          </Form.Item>
-          <Form.Item name="firmware_bms" label={t('ota.chipFirmwareLabel', { chip: 'BMS' })}>
-            <Select allowClear placeholder={t('ota.selectOptionalChipFirmware', { chip: 'BMS' })}
-              options={filteredFirmware.filter((f: Firmware) => f.target_chip === 'bms').map((f: Firmware) => ({ label: f.version, value: Number(f.id) }))} />
-          </Form.Item>
-          
-          <div style={{ color: '#999', fontSize: 12 }}>{t('ota.packageCreateHint')}</div>
-        </Form>
-      </Modal>
 
       {/* 查看已安装该升级包的设备 Modal */}
       <Modal

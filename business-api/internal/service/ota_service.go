@@ -898,10 +898,10 @@ type CreatePackageReq struct {
 	CreatedBy      int64
 }
 
-// CreateUpgradePackage 创建升级包
-func (s *OTAService) CreateUpgradePackage(ctx context.Context, req *CreatePackageReq) error {
+// CreateUpgradePackage 创建升级包，返回创建后的包（含自动生成的主版本号与落库 ID）。
+func (s *OTAService) CreateUpgradePackage(ctx context.Context, req *CreatePackageReq) (*model.UpgradePackage, error) {
 	if len(req.FirmwareIDs) == 0 {
-		return fmt.Errorf("请至少选择一个固件")
+		return nil, fmt.Errorf("请至少选择一个固件")
 	}
 
 	// 查询所有固件并校验
@@ -910,10 +910,10 @@ func (s *OTAService) CreateUpgradePackage(ctx context.Context, req *CreatePackag
 	for _, fwID := range req.FirmwareIDs {
 		fw, err := s.repo.GetFirmware(ctx, fwID)
 		if err != nil || fw == nil {
-			return fmt.Errorf("固件 %d 不存在", fwID)
+			return nil, fmt.Errorf("固件 %d 不存在", fwID)
 		}
 		if chipSeen[fw.TargetChip] {
-			return fmt.Errorf("同一芯片 %s 不能选择多个固件", fw.TargetChip)
+			return nil, fmt.Errorf("同一芯片 %s 不能选择多个固件", fw.TargetChip)
 		}
 		chipSeen[fw.TargetChip] = true
 		items = append(items, model.UpgradePackageItem{
@@ -926,7 +926,7 @@ func (s *OTAService) CreateUpgradePackage(ctx context.Context, req *CreatePackag
 	// 生成主版本号
 	mainVersion, err := s.generateMainVersion(ctx, req.Model)
 	if err != nil {
-		return fmt.Errorf("生成主版本号失败: %w", err)
+		return nil, fmt.Errorf("生成主版本号失败: %w", err)
 	}
 
 	// 自动生成 user_version: 从 mainVersion (如 V1.0.0.20260703) 提取 (如 V1.0.0)
@@ -973,7 +973,10 @@ func (s *OTAService) CreateUpgradePackage(ctx context.Context, req *CreatePackag
 		CreatedBy:      req.CreatedBy,
 		Items:          items,
 	}
-	return s.repo.CreateUpgradePackage(ctx, pkg)
+	if err := s.repo.CreateUpgradePackage(ctx, pkg); err != nil {
+		return nil, err
+	}
+	return pkg, nil
 }
 
 // ListUpgradePackages 升级包列表
