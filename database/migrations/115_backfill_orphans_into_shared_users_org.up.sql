@@ -43,11 +43,14 @@ DECLARE
     v_assignment_id BIGINT;
     v_created INTEGER := 0;
 BEGIN
-    -- 1. 系统制造商根组织（多租户时取最低 root_tenant_id）
+    -- 1. 系统制造商根组织（多租户时取最低 root_tenant_id）。
+    --    必须 JOIN tenant_roots：库里可能存在没有 tenant_roots 行的 manufacturer
+    --    组织（历史遗留/直接插入），而 trg_organizations_insert_relations 在建子
+    --    组织时会校验 root tenant 已注册，选中这类组织会直接 23503 失败。
     SELECT o.root_tenant_id, o.id INTO v_root_tenant, v_manufacturer_org
     FROM organizations o
+    JOIN tenant_roots tr ON tr.root_tenant_id = o.root_tenant_id
     WHERE o.org_type = 'manufacturer'
-      AND o.parent_id IS NULL
       AND o.deleted_at IS NULL
       AND o.status = 'active'
     ORDER BY o.root_tenant_id

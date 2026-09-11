@@ -41,16 +41,20 @@ var errSharedUsersOrgRootMissing = errors.New("no active manufacturer root organ
 
 // resolveSystemManufacturerRoot 返回共享「用户组织」应挂靠的 (根租户, 制造商组织)
 // id：系统制造商根组织，取最低 root_tenant_id，与迁移 075/107 的口径一致。
+//
+// 必须 JOIN tenant_roots：库里可能存在没有 tenant_roots 行的 manufacturer 组织
+// （历史遗留/直接插入），而 maintain_organization_insert_relations 触发器在建子
+// 组织时会校验 root tenant 已注册，选中这类组织会直接 23503 失败。
 func (r *UserRepository) resolveSystemManufacturerRoot(ctx context.Context) (int64, int64, error) {
 	var rootTenantID, manufacturerOrgID int64
 	err := r.db.QueryRow(ctx, `
-		SELECT root_tenant_id, id
-		FROM organizations
-		WHERE org_type = $1
-		  AND parent_id IS NULL
-		  AND deleted_at IS NULL
-		  AND status = $2
-		ORDER BY root_tenant_id
+		SELECT o.root_tenant_id, o.id
+		FROM organizations o
+		JOIN tenant_roots tr ON tr.root_tenant_id = o.root_tenant_id
+		WHERE o.org_type = $1
+		  AND o.deleted_at IS NULL
+		  AND o.status = $2
+		ORDER BY o.root_tenant_id
 		LIMIT 1
 	`, "manufacturer", "active").Scan(&rootTenantID, &manufacturerOrgID)
 	if errors.Is(err, pgx.ErrNoRows) {
