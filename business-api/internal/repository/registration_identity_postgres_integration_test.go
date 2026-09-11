@@ -70,10 +70,10 @@ func execMigrationFile(t *testing.T, pool *pgxpool.Pool, name string) {
 // assertCustomerIdentity 断言用户拥有完整的个人 customer 组织身份：
 // customer 组织（code 标记）+ 活跃 membership + customer 角色分配 +
 // RoleDefaultPermissions["customer"] 全量授权。
-// expectedParent：个人组织应当挂靠的父组织 id——现行注册路径是共享「用户组织」，
-// 迁移 107 回填路径是 manufacturer 根组织。
-// expectedRootTenant：个人组织与父组织所属的根租户。
-func assertCustomerIdentity(t *testing.T, pool *pgxpool.Pool, userID, expectedParent, expectedRootTenant int64) {
+// expectedParent：现行注册路径（CreateUserWithOrgIdentity）传 userID——
+// 每用户自建 tenant-root（ensure_tenant_root(user_id)）后个人组织挂其下；
+// 迁移 107 回填路径传被回填时代实际挂载的 manufacturer 根组织 id。
+func assertCustomerIdentity(t *testing.T, pool *pgxpool.Pool, userID, expectedParent int64) {
 	t.Helper()
 	ctx := context.Background()
 
@@ -87,13 +87,12 @@ func assertCustomerIdentity(t *testing.T, pool *pgxpool.Pool, userID, expectedPa
 	`, userID).Scan(&orgID, &membershipID), "user %d must have an active customer org membership", userID)
 
 	var orgCode string
-	var parentID, rootTenantID int64
+	var parentID int64
 	require.NoError(t, pool.QueryRow(ctx, `
-		SELECT code, parent_id, root_tenant_id FROM organizations WHERE id = $1
-	`, orgID).Scan(&orgCode, &parentID, &rootTenantID))
+		SELECT code, parent_id FROM organizations WHERE id = $1
+	`, orgID).Scan(&orgCode, &parentID))
 	assert.Equal(t, fmt.Sprintf("personal-%d", userID), orgCode, "personal org must be tagged with code")
-	assert.Equal(t, expectedParent, parentID, "personal org parent must match the expected anchor")
-	assert.Equal(t, expectedRootTenant, rootTenantID, "personal org must live in the shared root tenant")
+	assert.Equal(t, expectedParent, parentID, "personal org parent must match the expected tenant anchor")
 
 	var roleCode, roleStatus string
 	require.NoError(t, pool.QueryRow(ctx, `
@@ -116,21 +115,9 @@ func assertCustomerIdentity(t *testing.T, pool *pgxpool.Pool, userID, expectedPa
 	var closureDepth int
 	require.NoError(t, pool.QueryRow(ctx, `
 		SELECT depth FROM organization_closure
-		WHERE root_tenant_id = $1 AND ancestor_id = $2 AND descendant_id = $3
-	`, expectedRootTenant, expectedParent, orgID).Scan(&closureDepth))
-	assert.Equal(t, 1, closureDepth, "personal org must be a direct child of its parent org")
-}
-
-// sharedUsersOrgID 返回共享「用户组织」的 id，不存在时 fail。
-func sharedUsersOrgID(t *testing.T, pool *pgxpool.Pool) int64 {
-	t.Helper()
-	var orgID int64
-	require.NoError(t, pool.QueryRow(context.Background(), `
-		SELECT id FROM organizations
-		WHERE LOWER(code) = 'default-users' AND deleted_at IS NULL
-		ORDER BY id LIMIT 1
-	`).Scan(&orgID), "shared users org must exist")
-	return orgID
+		WHERE root_tenant_id = $1 AND ancestor_id = $1 AND descendant_id = $2
+	`, expectedParent, orgID).Scan(&closureDepth))
+	assert.Equal(t, 1, closureDepth, "personal org must be a direct child of the tenant anchor")
 }
 
 func TestCreateUserWithOrgIdentityGrantsCustomerBaseline(t *testing.T) {
@@ -146,101 +133,12 @@ func TestCreateUserWithOrgIdentityGrantsCustomerBaseline(t *testing.T) {
 	}
 	require.NoError(t, repo.CreateUserWithOrgIdentity(context.Background(), user))
 	assert.NotZero(t, user.ID)
-	// 个人组织挂在共享「用户组织」之下，根租户是系统制造商根组织
-	assertCustomerIdentity(t, pool, user.ID, sharedUsersOrgID(t, pool), 9100)
+	assertCustomerIdentity(t, pool, user.ID, user.ID)
 
 	// 权限码与登录链路（GetUserPermissionCodes）一致
 	codes, err := repo.GetUserPermissionCodes(context.Background(), user.ID)
 	require.NoError(t, err)
 	assert.ElementsMatch(t, RoleDefaultPermissions["customer"], codes)
-}
-
-// 共享父组织不等于共享数据可见范围：两个自助注册用户的组织必须互为兄弟，
-// 组织闭包不能让他们互相看到对方的电站。
-func TestSharedUsersOrgKeepsCustomersIsolated(t *testing.T) {
-	pool, cleanup := setupIdentityTestDB(t)
-	defer cleanup()
-	ctx := context.Background()
-
-	repo := NewUserRepository(pool, nil)
-	first := &model.User{Email: "first@example.com", PasswordHash: "hash", Nickname: "First", Status: 1}
-	second := &model.User{Email: "second@example.com", PasswordHash: "hash", Nickname: "Second", Status: 1}
-	require.NoError(t, repo.CreateUserWithOrgIdentity(ctx, first))
-	require.NoError(t, repo.CreateUserWithOrgIdentity(ctx, second))
-
-	var firstOrg, secondOrg int64
-	require.NoError(t, pool.QueryRow(ctx, `
-		SELECT organization_id FROM organization_memberships WHERE user_id = $1 AND status = 'active'
-	`, first.ID).Scan(&firstOrg))
-	require.NoError(t, pool.QueryRow(ctx, `
-		SELECT organization_id FROM organization_memberships WHERE user_id = $1 AND status = 'active'
-	`, second.ID).Scan(&secondOrg))
-	require.NotEqual(t, firstOrg, secondOrg, "each customer must keep its own org")
-	assert.Equal(t, sharedUsersOrgID(t, pool), orgParent(t, pool, firstOrg))
-	assert.Equal(t, sharedUsersOrgID(t, pool), orgParent(t, pool, secondOrg))
-
-	// first 拥有一个电站，second 不能通过组织闭包访问到
-	_, err := pool.Exec(ctx, `
-		INSERT INTO stations (user_id, name, province, city, address, capacity)
-		VALUES ($1, 'First Station', '湖南省', '长沙市', '麓谷', 10.0)
-	`, first.ID)
-	require.NoError(t, err)
-
-	var leaked bool
-	require.NoError(t, pool.QueryRow(ctx, `
-		SELECT EXISTS(
-			SELECT 1 FROM v_user_station_access v
-			JOIN stations s ON s.id = v.station_id
-			WHERE v.user_id = $1 AND s.user_id = $2
-		)
-	`, second.ID, first.ID).Scan(&leaked))
-	assert.False(t, leaked, "sharing the parent org must not leak stations between customers")
-}
-
-// 生产上见过这样的形态：库里存在 manufacturer 组织，但 tenant_roots 里没有对应
-// 行。此时若不 JOIN tenant_roots，就会选中一个"未注册"的根租户，建子组织时被
-// trg_organizations_insert_relations 以 "root tenant N is not registered" (23503)
-// 拒绝——迁移 115 首次上生产就是这么炸的。
-func TestSharedUsersOrgSkipsUnregisteredRootTenant(t *testing.T) {
-	pool, cleanup := setupIdentityTestDB(t)
-	defer cleanup()
-	ctx := context.Background()
-
-	// 造一个 root_tenant_id 更低、但没有 tenant_roots 行的 manufacturer 组织。
-	// INSERT 触发器会自动登记 tenant_roots + 自闭包，这里按
-	// closure → tenant_roots 顺序清掉（closure 受 guard，需走逃生舱）。
-	_, err := pool.Exec(ctx, `
-		INSERT INTO organizations (id, root_tenant_id, parent_id, org_type, name, status)
-		VALUES (9001, 9001, NULL, 'manufacturer', 'Unregistered Root', 'active')
-	`)
-	require.NoError(t, err)
-	_, err = pool.Exec(ctx, `
-		SET app.allow_closure_write = 'true';
-		DELETE FROM organization_closure WHERE root_tenant_id = 9001;
-		RESET app.allow_closure_write;
-	`)
-	require.NoError(t, err)
-	_, err = pool.Exec(ctx, `DELETE FROM tenant_roots WHERE root_tenant_id = 9001`)
-	require.NoError(t, err)
-
-	// 前置确认：它确实没有 tenant_roots 行，且 id 比已注册的 9100 更低
-	var registered bool
-	require.NoError(t, pool.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM tenant_roots WHERE root_tenant_id = 9001)`).Scan(&registered))
-	require.False(t, registered, "test precondition: 9001 must be unregistered")
-
-	repo := NewUserRepository(pool, nil)
-	rootTenantID, _, err := repo.EnsureSharedUsersOrg(ctx)
-	require.NoError(t, err, "must not pick an unregistered root tenant")
-	assert.Equal(t, int64(9100), rootTenantID, "must pick the registered manufacturer root")
-}
-
-func orgParent(t *testing.T, pool *pgxpool.Pool, orgID int64) int64 {
-	t.Helper()
-	var parentID int64
-	require.NoError(t, pool.QueryRow(context.Background(),
-		`SELECT parent_id FROM organizations WHERE id = $1`, orgID).Scan(&parentID))
-	return parentID
 }
 
 func TestEnsureUserOrgIdentityIdempotent(t *testing.T) {
@@ -299,8 +197,8 @@ func TestMigration107BackfillsOrphanUsers(t *testing.T) {
 	execMigrationFile(t, pool, "107_backfill_personal_orgs_for_users.up.sql")
 	execMigrationFile(t, pool, "108_grant_customer_devices_control.up.sql")
 
-	assertCustomerIdentity(t, pool, 9201, 9100, 9100)
-	assertCustomerIdentity(t, pool, 9202, 9100, 9100) // 空昵称用户兜底为 User_<id>
+	assertCustomerIdentity(t, pool, 9201, 9100)
+	assertCustomerIdentity(t, pool, 9202, 9100) // 空昵称用户兜底为 User_<id>
 
 	// 已有身份的用户保持原组织，不被 backfill 改写
 	var existingOrgID int64
@@ -319,108 +217,6 @@ func TestMigration107BackfillsOrphanUsers(t *testing.T) {
 		WHERE user_id IN (9201, 9202, 9203)
 	`).Scan(&totalMemberships))
 	assert.Equal(t, 3, totalMemberships)
-}
-
-// 迁移 115：没有活跃组织身份的存量用户被补建到共享「用户组织」之下，
-// 已有组织身份的用户保持原样；重复执行不产生重复身份。
-func TestMigration115BackfillsOrphansIntoSharedUsersOrg(t *testing.T) {
-	pool, cleanup := setupIdentityTestDB(t)
-	defer cleanup()
-	ctx := context.Background()
-
-	// 两个孤儿用户（例如管理后台直接建户）+ 一个已有组织身份的用户
-	_, err := pool.Exec(ctx, `
-		INSERT INTO users (id, phone, email, password_hash, nickname, status) VALUES
-			(9401, '13800009401', 'orphan-a@example.com', 'hash', 'Orphan A', 1),
-			(9402, NULL, 'orphan-b@example.com', 'hash', '', 1)
-	`)
-	require.NoError(t, err)
-	_, err = pool.Exec(ctx, `
-		INSERT INTO organizations (id, root_tenant_id, parent_id, org_type, name, status)
-		VALUES (9410, 9100, 9100, 'customer', 'Existing Org', 'active')
-	`)
-	require.NoError(t, err)
-	_, err = pool.Exec(ctx, `
-		INSERT INTO users (id, phone, password_hash, nickname, status)
-		VALUES (9403, '13800009403', 'hash', 'Existing Member', 1)
-	`)
-	require.NoError(t, err)
-	_, err = pool.Exec(ctx, `
-		INSERT INTO organization_memberships (root_tenant_id, organization_id, user_id, status)
-		VALUES (9100, 9410, 9403, 'active')
-	`)
-	require.NoError(t, err)
-
-	// 生产形态：存在一个 root_tenant_id 更低、但没有 tenant_roots 行的
-	// manufacturer 组织。迁移必须跳过它，否则建子组织会被触发器以 23503 拒绝。
-	_, err = pool.Exec(ctx, `
-		INSERT INTO organizations (id, root_tenant_id, parent_id, org_type, name, status)
-		VALUES (9001, 9001, NULL, 'manufacturer', 'Unregistered Root', 'active')
-	`)
-	require.NoError(t, err)
-	_, err = pool.Exec(ctx, `
-		SET app.allow_closure_write = 'true';
-		DELETE FROM organization_closure WHERE root_tenant_id = 9001;
-		RESET app.allow_closure_write;
-	`)
-	require.NoError(t, err)
-	_, err = pool.Exec(ctx, `DELETE FROM tenant_roots WHERE root_tenant_id = 9001`)
-	require.NoError(t, err)
-
-	// 115 自带的授权清单已含 devices:control，无需再跑 108
-	execMigrationFile(t, pool, "115_backfill_orphans_into_shared_users_org.up.sql")
-
-	usersOrg := sharedUsersOrgID(t, pool)
-	assertCustomerIdentity(t, pool, 9401, usersOrg, 9100)
-	assertCustomerIdentity(t, pool, 9402, usersOrg, 9100) // 空昵称用户兜底为 User_<id>
-
-	// 已有身份的用户保持原组织，不被 backfill 改写
-	var existingOrgID int64
-	require.NoError(t, pool.QueryRow(ctx, `
-		SELECT organization_id FROM organization_memberships
-		WHERE user_id = 9403 AND status = 'active'
-	`).Scan(&existingOrgID))
-	assert.Equal(t, int64(9410), existingOrgID)
-
-	// 共享「用户组织」是一条 agent → distributor → installer 的链，每一级只有一份，
-	// 且链首挂在制造商根组织下（validate_org_hierarchy 只允许 customer 挂在
-	// installer / manufacturer 之下，所以链不能省）。
-	var agentID, distributorID, installerID int64
-	require.NoError(t, pool.QueryRow(ctx,
-		`SELECT id FROM organizations WHERE code = 'default-users-agent' AND deleted_at IS NULL`,
-	).Scan(&agentID))
-	require.NoError(t, pool.QueryRow(ctx,
-		`SELECT id FROM organizations WHERE code = 'default-users-distributor' AND deleted_at IS NULL`,
-	).Scan(&distributorID))
-	require.NoError(t, pool.QueryRow(ctx,
-		`SELECT id FROM organizations WHERE code = 'default-users' AND deleted_at IS NULL`,
-	).Scan(&installerID))
-
-	assert.Equal(t, int64(9100), orgParent(t, pool, agentID), "chain must hang under the manufacturer root")
-	assert.Equal(t, agentID, orgParent(t, pool, distributorID))
-	assert.Equal(t, distributorID, orgParent(t, pool, installerID))
-
-	var chainCount int64
-	require.NoError(t, pool.QueryRow(ctx, `
-		SELECT COUNT(*) FROM organizations
-		WHERE LOWER(code) LIKE 'default-users%' AND deleted_at IS NULL
-	`).Scan(&chainCount))
-	assert.Equal(t, int64(3), chainCount, "shared users org chain must be a singleton")
-
-	// 幂等重放不产生重复身份与重复授权
-	execMigrationFile(t, pool, "115_backfill_orphans_into_shared_users_org.up.sql")
-	var totalMemberships, totalGrants int
-	require.NoError(t, pool.QueryRow(ctx, `
-		SELECT COUNT(*) FROM organization_memberships WHERE user_id IN (9401, 9402, 9403)
-	`).Scan(&totalMemberships))
-	require.NoError(t, pool.QueryRow(ctx, `
-		SELECT COUNT(*) FROM role_permission_grants g
-		JOIN membership_role_assignments ra ON ra.id = g.role_assignment_id
-		JOIN organization_memberships m ON m.id = ra.membership_id
-		WHERE m.user_id IN (9401, 9402)
-	`).Scan(&totalGrants))
-	assert.Equal(t, 3, totalMemberships, "replay must not duplicate memberships")
-	assert.Equal(t, 2*len(RoleDefaultPermissions["customer"]), totalGrants, "replay must not duplicate grants")
 }
 
 func TestMigration106OwnerBranchGrantsStationAccess(t *testing.T) {
@@ -486,9 +282,8 @@ func TestResolveSessionContextHandlesNullPhone(t *testing.T) {
 	resolved, err := authRepo.ResolveDefaultSessionContext(ctx, user.ID)
 	require.NoError(t, err, "default session context must resolve for NULL-phone users")
 	assert.True(t, resolved.Valid())
-	// 注册用户挂在共享「用户组织」下，根租户是系统制造商根组织（9100），
-	// 不再是"每个用户自建租户根"的孤岛
-	assert.Equal(t, int64(9100), resolved.Actor.RootTenantID)
+	// 每用户自建根租户：根租户 id 即 user.ID
+	assert.Equal(t, user.ID, resolved.Actor.RootTenantID)
 
 	explicit, err := authRepo.ResolveAuthorizationSessionContext(ctx, user.ID, resolved.Actor.OrganizationID)
 	require.NoError(t, err, "explicit session context must resolve for NULL-phone users")
