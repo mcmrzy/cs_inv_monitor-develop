@@ -108,11 +108,11 @@ const DownloadPage: React.FC = () => {
   useEffect(() => {
     let alive = true
     const load = async () => {
-      // 优先走下载域同源别名路径；失败时回退 API 域（网关 CORS 已放行
-      // download 来源）。两者都绕开 ESA 曾缓存过的 /api/v1/ota/app/latest。
+      // API 域是版本元数据的权威来源；下载域同源别名只作容灾回退。
+      // ESA 曾长期缓存同源别名，因此不能让“旧但格式合法”的响应遮蔽最新版本。
       const endpoints = [
-        '/app-release-info?platform=android',
         'https://api.jiuxiaoyw.online/api/v1/ota/app/latest?platform=android',
+        '/app-release-info?platform=android',
       ]
       for (const endpoint of endpoints) {
         try {

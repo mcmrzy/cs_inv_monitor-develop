@@ -141,6 +141,12 @@ func TestDetectFirmwareVersion_非ESP回退文件名(t *testing.T) {
 	assert.Equal(t, "1.2.3", detectFirmwareVersion(f, "arm", "CSL10_6K2_arm_1.2.3.bin"))
 }
 
+func TestDetectFirmwareVersion_非ESP取文件名最后一个版本片段(t *testing.T) {
+	f := writeAndOpen(t, t.TempDir(), "CSL10_6.2K_arm_1.2.3.bin", []byte("arm-image"))
+
+	assert.Equal(t, "1.2.3", detectFirmwareVersion(f, "arm", "CSL10_6.2K_arm_1.2.3.bin"))
+}
+
 func TestDetectFirmwareVersion_ESP镜像损坏时回退文件名(t *testing.T) {
 	f := writeAndOpen(t, t.TempDir(), "esp_fw_2.0.0.bin", []byte("not-an-esp-image"))
 
