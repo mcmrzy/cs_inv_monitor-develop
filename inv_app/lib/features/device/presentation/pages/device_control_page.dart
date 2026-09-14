@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/services/service_locator.dart';
@@ -14,14 +15,14 @@ import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 
 import 'package:inv_app/l10n/app_localizations.dart';
-import 'package:inv_app/features/ota/presentation/pages/local_ota_channel_select_page.dart';
 
 part 'device_control_sections.dart';
 
 /// 从嵌套或扁平的 realtime 数据中提取值
 /// V2 数据嵌套在分组下（ac.output_power, bat.battery_soc 等），
 /// V1 数据是扁平的（ac_power, battery_soc 等）
-dynamic _rtPick(Map<String, dynamic> rt, String flatKey, String group, String nestedKey) {
+dynamic _rtPick(
+    Map<String, dynamic> rt, String flatKey, String group, String nestedKey) {
   // 先尝试嵌套路径：rt[group][nestedKey]
   final groupData = rt[group];
   if (groupData is Map<String, dynamic>) {
@@ -32,8 +33,11 @@ dynamic _rtPick(Map<String, dynamic> rt, String flatKey, String group, String ne
   return rt[flatKey];
 }
 
-double _rtPickNum(Map<String, dynamic> rt, String flatKey, String group, String nestedKey, [double fallback = 0]) {
-  return (_rtPick(rt, flatKey, group, nestedKey) as num?)?.toDouble() ?? fallback;
+double _rtPickNum(
+    Map<String, dynamic> rt, String flatKey, String group, String nestedKey,
+    [double fallback = 0]) {
+  return (_rtPick(rt, flatKey, group, nestedKey) as num?)?.toDouble() ??
+      fallback;
 }
 
 class DeviceControlPage extends StatefulWidget {
@@ -208,7 +212,8 @@ class _DeviceControlPageState extends State<DeviceControlPage>
         setState(() {
           _realtimeData = data;
           // Infer AC output state from realtime data (V2: ac.output_power, V1: output_power)
-          final outputPower = _rtPickNum(data, 'output_power', 'ac', 'output_power');
+          final outputPower =
+              _rtPickNum(data, 'output_power', 'ac', 'output_power');
           _acOutputOn = data['ac_output_on'] == true ||
               data['ac_on'] == true ||
               outputPower > 0;
@@ -887,15 +892,21 @@ class _DeviceControlPageState extends State<DeviceControlPage>
   Widget _buildEnergyFlowCard() {
     final l10n = AppLocalizations.of(context)!;
     // V2: pv.pv_total_power, V1: pv_power
-    final pvPower = _rtPickNum(_realtimeData, 'pv_power', 'pv', 'pv_total_power');
+    final pvPower =
+        _rtPickNum(_realtimeData, 'pv_power', 'pv', 'pv_total_power');
     // V2: bat.battery_charge_power - bat.battery_discharge_power, V1: battery_power
-    final chgW = (_rtPick(_realtimeData, 'battery_charge_power', 'bat', 'battery_charge_power') as num?)?.toDouble();
-    final disW = (_rtPick(_realtimeData, 'battery_discharge_power', 'bat', 'battery_discharge_power') as num?)?.toDouble();
+    final chgW = (_rtPick(_realtimeData, 'battery_charge_power', 'bat',
+            'battery_charge_power') as num?)
+        ?.toDouble();
+    final disW = (_rtPick(_realtimeData, 'battery_discharge_power', 'bat',
+            'battery_discharge_power') as num?)
+        ?.toDouble();
     final battPower = (chgW != null || disW != null)
         ? (chgW ?? 0) - (disW ?? 0)
         : _rtPickNum(_realtimeData, 'battery_power', 'bat', 'power');
     // V2: ac.output_power, V1: load_power
-    final loadPower = _rtPickNum(_realtimeData, 'load_power', 'ac', 'output_power');
+    final loadPower =
+        _rtPickNum(_realtimeData, 'load_power', 'ac', 'output_power');
 
     return Container(
       decoration: AppColor.card(context),
@@ -983,7 +994,8 @@ class _DeviceControlPageState extends State<DeviceControlPage>
         SizedBox(height: 4.h),
         Text(
           label,
-          style: TextStyle(fontSize: 11.sp, color: AppColor.textSecondary(context)),
+          style: TextStyle(
+              fontSize: 11.sp, color: AppColor.textSecondary(context)),
         ),
         SizedBox(height: 2.h),
         Text(
@@ -1009,14 +1021,17 @@ class _DeviceControlPageState extends State<DeviceControlPage>
             width: 36.w,
             height: 36.w,
             decoration: BoxDecoration(
-              color: (_muteEnabled ? AppColors.warning : AppColor.textHint(context))
+              color: (_muteEnabled
+                      ? AppColors.warning
+                      : AppColor.textHint(context))
                   .withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8.r),
             ),
             child: Icon(
               _muteEnabled ? Icons.volume_off : Icons.volume_up,
               size: 18.sp,
-              color: _muteEnabled ? AppColors.warning : AppColor.textHint(context),
+              color:
+                  _muteEnabled ? AppColors.warning : AppColor.textHint(context),
             ),
           ),
           SizedBox(width: 12.w),
@@ -1061,5 +1076,4 @@ class _DeviceControlPageState extends State<DeviceControlPage>
   // ─────────────────────────────────────────────────────────────────────
   //  Tab 2 — 电池保护
   // ─────────────────────────────────────────────────────────────────────
-
 }

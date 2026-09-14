@@ -18,6 +18,17 @@ class LocalFirmwareException implements Exception {
   String toString() => message;
 }
 
+/// 固件目标型号与当前近场连接设备无法确认一致。
+///
+/// 该异常在上传任何字节前产生；固件/设备型号缺失或不匹配均按 fail-closed
+/// 处理，避免把错误固件发送给设备。
+class LocalOtaDeviceModelException implements Exception {
+  final String message;
+  LocalOtaDeviceModelException(this.message);
+  @override
+  String toString() => message;
+}
+
 /// 设备拒绝固件上传（HTTP 非 2xx / 设备端返回错误）
 class OtaUploadRejectedException implements Exception {
   final String message;
@@ -64,10 +75,12 @@ class OtaErrorMapper {
     if (error is OtaUploadRejectedException) return 'ota_err_upload_rejected';
     if (error is OtaVerificationException) return 'ota_err_verify';
     if (error is LocalFirmwareException) return 'ota_err_firmware';
+    if (error is LocalOtaDeviceModelException) return 'ota_err_device_model';
     if (error is OtaProtocolException) return 'ota_err_protocol';
     return 'ota_err_unknown';
   }
 
   /// 是否需要携带原始错误信息作为 {error} 参数
-  static bool carriesDetail(Object error) => l10nKeyOf(error) == 'ota_err_unknown';
+  static bool carriesDetail(Object error) =>
+      l10nKeyOf(error) == 'ota_err_unknown';
 }

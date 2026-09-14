@@ -10,49 +10,49 @@ extension _DeviceControlTabSections on _DeviceControlPageState {
     return StyledRefreshIndicator(
       onRefresh: () => _fetchAllData(showLoading: false),
       child: ListView(
-      padding: EdgeInsets.all(16.w),
-      children: [
-        _buildOfflineWarning(),
+        padding: EdgeInsets.all(16.w),
+        children: [
+          _buildOfflineWarning(),
 
-        // 备电保留 SOC
-        _buildSliderCard(
-          title: l10n.str('control_reserve_soc'),
-          subtitle: l10n.str('control_reserve_soc_hint'),
-          value: _reserveSoc,
-          min: 0,
-          max: 80,
-          unit: '%',
-          icon: Icons.battery_saver,
-          color: AppColors.warning,
-          onChanged: (v) => setState(() => _reserveSoc = v),
-          onCommit: () => _sendSocWindow(),
-        ),
+          // 备电保留 SOC
+          _buildSliderCard(
+            title: l10n.str('control_reserve_soc'),
+            subtitle: l10n.str('control_reserve_soc_hint'),
+            value: _reserveSoc,
+            min: 0,
+            max: 80,
+            unit: '%',
+            icon: Icons.battery_saver,
+            color: AppColors.warning,
+            onChanged: (v) => setState(() => _reserveSoc = v),
+            onCommit: () => _sendSocWindow(),
+          ),
 
-        SizedBox(height: 12.h),
+          SizedBox(height: 12.h),
 
-        // 充电目标 SOC
-        _buildSliderCard(
-          title: l10n.str('control_target_soc'),
-          subtitle: l10n.str('control_target_soc_hint'),
-          value: _chargeTargetSoc,
-          min: 20,
-          max: 100,
-          unit: '%',
-          icon: Icons.battery_charging_full,
-          color: AppColors.success,
-          onChanged: (v) => setState(() => _chargeTargetSoc = v),
-          onCommit: () => _sendSocWindow(),
-        ),
+          // 充电目标 SOC
+          _buildSliderCard(
+            title: l10n.str('control_target_soc'),
+            subtitle: l10n.str('control_target_soc_hint'),
+            value: _chargeTargetSoc,
+            min: 20,
+            max: 100,
+            unit: '%',
+            icon: Icons.battery_charging_full,
+            color: AppColors.success,
+            onChanged: (v) => setState(() => _chargeTargetSoc = v),
+            onCommit: () => _sendSocWindow(),
+          ),
 
-        SizedBox(height: 12.h),
+          SizedBox(height: 12.h),
 
-        // 充电速度预设
-        _buildChargeSpeedCard(),
+          // 充电速度预设
+          _buildChargeSpeedCard(),
 
-        SizedBox(height: 12.h),
+          SizedBox(height: 12.h),
 
-        // BMS 实时限制
-        _buildBmsLimitsCard(),
+          // BMS 实时限制
+          _buildBmsLimitsCard(),
         ],
       ),
     );
@@ -237,7 +237,8 @@ extension _DeviceControlTabSections on _DeviceControlPageState {
                           Icon(
                             p['icon'] as IconData,
                             size: 22.sp,
-                            color: isSelected ? color : AppColor.textHint(context),
+                            color:
+                                isSelected ? color : AppColor.textHint(context),
                           ),
                           SizedBox(height: 4.h),
                           Text(
@@ -247,8 +248,9 @@ extension _DeviceControlTabSections on _DeviceControlPageState {
                               fontWeight: isSelected
                                   ? FontWeight.w600
                                   : FontWeight.normal,
-                              color:
-                                  isSelected ? color : AppColor.textSecondary(context),
+                              color: isSelected
+                                  ? color
+                                  : AppColor.textSecondary(context),
                             ),
                           ),
                         ],
@@ -338,134 +340,134 @@ extension _DeviceControlTabSections on _DeviceControlPageState {
     return StyledRefreshIndicator(
       onRefresh: () => _fetchAllData(showLoading: false),
       child: ListView(
-      padding: EdgeInsets.all(16.w),
-      children: [
-        _buildOfflineWarning(),
+        padding: EdgeInsets.all(16.w),
+        children: [
+          _buildOfflineWarning(),
 
-        // 时间段列表
-        Container(
-          decoration: AppColor.card(context),
-          padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
-          child: Row(
-            children: [
-              Icon(
-                Icons.schedule_rounded,
-                size: 20.sp,
-                color: AppColors.primary,
-              ),
-              SizedBox(width: 8.w),
-              Expanded(
-                child: Text(
-                  l10n.str('control_schedule_list'),
-                  style: TextStyle(
-                    fontSize: 14.sp,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              IconButton(
-                onPressed:
-                    _isOnline ? () => _showEnergyScheduleEditor(null) : null,
-                icon: Icon(
-                  Icons.add_circle_outline,
-                  size: 22.sp,
-                  color: AppColors.primary,
-                ),
-              ),
-            ],
-          ),
-        ),
-        SizedBox(height: 8.h),
-
-        if (_energySchedule.isEmpty)
+          // 时间段列表
           Container(
             decoration: AppColor.card(context),
-            padding: EdgeInsets.all(24.w),
-            child: Column(
+            padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+            child: Row(
               children: [
                 Icon(
-                  Icons.event_available,
-                  size: 36.sp,
-                  color: AppColor.textHint(context),
+                  Icons.schedule_rounded,
+                  size: 20.sp,
+                  color: AppColors.primary,
                 ),
-                SizedBox(height: 8.h),
-                Text(
-                  l10n.noData,
-                  style: TextStyle(
-                    fontSize: 13.sp,
-                    color: AppColor.textHint(context),
-                  ),
-                ),
-              ],
-            ),
-          )
-        else
-          ..._energySchedule.map(_buildEnergyScheduleItem),
-
-        SizedBox(height: 12.h),
-
-        // 临时覆盖显示
-        Container(
-          decoration: AppColor.card(context),
-          padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 16.h),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.edit_calendar,
-                    size: 20.sp,
-                    color: AppColors.warning,
-                  ),
-                  SizedBox(width: 8.w),
-                  Text(
-                    l10n.str('control_temporary_override'),
+                SizedBox(width: 8.w),
+                Expanded(
+                  child: Text(
+                    l10n.str('control_schedule_list'),
                     style: TextStyle(
                       fontSize: 14.sp,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                ],
-              ),
-              SizedBox(height: 8.h),
-              if (_controlOverrides.isEmpty)
-                Text(
-                  l10n.str('control_no_override'),
-                  style: TextStyle(
-                    fontSize: 12.sp,
+                ),
+                IconButton(
+                  onPressed:
+                      _isOnline ? () => _showEnergyScheduleEditor(null) : null,
+                  icon: Icon(
+                    Icons.add_circle_outline,
+                    size: 22.sp,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(height: 8.h),
+
+          if (_energySchedule.isEmpty)
+            Container(
+              decoration: AppColor.card(context),
+              padding: EdgeInsets.all(24.w),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.event_available,
+                    size: 36.sp,
                     color: AppColor.textHint(context),
                   ),
-                )
-              else
-                ..._controlOverrides.map((o) {
-                  final m = o as Map<String, dynamic>;
-                  return Padding(
-                    padding: EdgeInsets.symmetric(vertical: 4.h),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          '${m['command'] ?? '—'}',
-                          style: TextStyle(
-                            fontSize: 13.sp,
-                            color: AppColor.textSecondary(context),
-                          ),
-                        ),
-                        Text(
-                          '${m['params'] ?? ''}',
-                          style: TextStyle(
-                            fontSize: 12.sp,
-                            color: AppColor.textHint(context),
-                          ),
-                        ),
-                      ],
+                  SizedBox(height: 8.h),
+                  Text(
+                    l10n.noData,
+                    style: TextStyle(
+                      fontSize: 13.sp,
+                      color: AppColor.textHint(context),
                     ),
-                  );
-                }),
-            ],
+                  ),
+                ],
+              ),
+            )
+          else
+            ..._energySchedule.map(_buildEnergyScheduleItem),
+
+          SizedBox(height: 12.h),
+
+          // 临时覆盖显示
+          Container(
+            decoration: AppColor.card(context),
+            padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 16.h),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.edit_calendar,
+                      size: 20.sp,
+                      color: AppColors.warning,
+                    ),
+                    SizedBox(width: 8.w),
+                    Text(
+                      l10n.str('control_temporary_override'),
+                      style: TextStyle(
+                        fontSize: 14.sp,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 8.h),
+                if (_controlOverrides.isEmpty)
+                  Text(
+                    l10n.str('control_no_override'),
+                    style: TextStyle(
+                      fontSize: 12.sp,
+                      color: AppColor.textHint(context),
+                    ),
+                  )
+                else
+                  ..._controlOverrides.map((o) {
+                    final m = o as Map<String, dynamic>;
+                    return Padding(
+                      padding: EdgeInsets.symmetric(vertical: 4.h),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            '${m['command'] ?? '—'}',
+                            style: TextStyle(
+                              fontSize: 13.sp,
+                              color: AppColor.textSecondary(context),
+                            ),
+                          ),
+                          Text(
+                            '${m['params'] ?? ''}',
+                            style: TextStyle(
+                              fontSize: 12.sp,
+                              color: AppColor.textHint(context),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+              ],
+            ),
           ),
-        ),
         ],
       ),
     );
@@ -699,34 +701,34 @@ extension _DeviceControlTabSections on _DeviceControlPageState {
     return StyledRefreshIndicator(
       onRefresh: () => _fetchAllData(showLoading: false),
       child: ListView(
-      padding: EdgeInsets.all(16.w),
-      children: [
-        // 安装配置只读展示
-        _buildInfoSection(
-          l10n.str('control_installation'),
-          Icons.build_outlined,
-          _extractDeviceInfoFields(),
-        ),
+        padding: EdgeInsets.all(16.w),
+        children: [
+          // 安装配置只读展示
+          _buildInfoSection(
+            l10n.str('control_installation'),
+            Icons.build_outlined,
+            _extractDeviceInfoFields(),
+          ),
 
-        SizedBox(height: 12.h),
+          SizedBox(height: 12.h),
 
-        // 固件版本
-        _buildFirmwareCard(),
+          // 固件版本
+          _buildFirmwareCard(),
 
-        SizedBox(height: 12.h),
+          SizedBox(height: 12.h),
 
-        // OTA升级按钮
-        _buildOtaButtonsCard(),
+          // OTA升级按钮
+          _buildOtaButtonsCard(),
 
-        SizedBox(height: 12.h),
+          SizedBox(height: 12.h),
 
-        // desired/reported 配置差异
-        _buildConfigDiffCard(),
+          // desired/reported 配置差异
+          _buildConfigDiffCard(),
 
-        SizedBox(height: 12.h),
+          SizedBox(height: 12.h),
 
-        // 命令记录
-        _buildCommandHistoryCard(),
+          // 命令记录
+          _buildCommandHistoryCard(),
         ],
       ),
     );
@@ -746,8 +748,7 @@ extension _DeviceControlTabSections on _DeviceControlPageState {
       if (ratedPowerW != null && ratedPowerW > 0)
         l10n.str('control_rated_power'):
             '${ratedPowerW.toDouble().toStringAsFixed(0)} W',
-      if (phase != null && phase.isNotEmpty)
-        l10n.str('control_phase'): phase,
+      if (phase != null && phase.isNotEmpty) l10n.str('control_phase'): phase,
       l10n.str('control_install_date'):
           device['install_date'] ?? device['created_at'] ?? '—',
       l10n.str('control_station'):
@@ -846,12 +847,12 @@ extension _DeviceControlTabSections on _DeviceControlPageState {
             ],
           ),
           SizedBox(height: 8.h),
-          _buildInfoRow(l10n.str('control_firmware_arm'),
-              fwVersionLabel(fwArm)),
-          _buildInfoRow(l10n.str('control_firmware_esp'),
-              fwVersionLabel(fwEsp)),
-          _buildInfoRow(l10n.str('control_hardware_version'),
-              fwVersionLabel(hwVersion)),
+          _buildInfoRow(
+              l10n.str('control_firmware_arm'), fwVersionLabel(fwArm)),
+          _buildInfoRow(
+              l10n.str('control_firmware_esp'), fwVersionLabel(fwEsp)),
+          _buildInfoRow(
+              l10n.str('control_hardware_version'), fwVersionLabel(hwVersion)),
           if (bootloaderVersion != null && bootloaderVersion.isNotEmpty)
             _buildInfoRow(
                 l10n.str('control_bootloader_version'), bootloaderVersion),
@@ -861,8 +862,7 @@ extension _DeviceControlTabSections on _DeviceControlPageState {
   }
 
   /// 空版本号统一展示为占位符
-  static String fwVersionLabel(String? v) =>
-      (v == null || v.isEmpty) ? '—' : v;
+  static String fwVersionLabel(String? v) => (v == null || v.isEmpty) ? '—' : v;
 
   Widget _buildInfoRow(String label, String value) {
     return Padding(
@@ -893,8 +893,7 @@ extension _DeviceControlTabSections on _DeviceControlPageState {
     final l10n = AppLocalizations.of(context)!;
     final device =
         _deviceInfo['device'] as Map<String, dynamic>? ?? _deviceInfo;
-    final deviceModel =
-        device['model'] ?? device['model_name'] ?? '';
+    final deviceModel = device['model'] ?? device['model_name'] ?? '';
     // 设备当前 ARM 主控固件版本（devices.firmware_arm）
     final firmwareVersion = device['firmware_arm'] as String? ?? '';
 
@@ -928,15 +927,15 @@ extension _DeviceControlTabSections on _DeviceControlPageState {
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => LocalOTAChannelSelectPage(
-                          deviceSN: widget.deviceSN,
-                          deviceModel: deviceModel,
-                          currentFirmwareVersion: firmwareVersion,
-                        ),
-                      ),
+                    context.push(
+                      Uri(
+                        path: '/local-upgrade',
+                        queryParameters: {
+                          'sn': widget.deviceSN,
+                          'model': deviceModel.toString(),
+                          'version': firmwareVersion,
+                        },
+                      ).toString(),
                     );
                   },
                   icon: const Icon(Icons.phone_android),
@@ -1350,8 +1349,7 @@ class _DeviceScheduleDialogState extends State<DeviceScheduleDialog> {
         ),
         actions: [
           TextButton(
-            onPressed:
-                _isSubmitting ? null : () => Navigator.pop(context),
+            onPressed: _isSubmitting ? null : () => Navigator.pop(context),
             child: Text(widget.cancelLabel),
           ),
           FilledButton(
