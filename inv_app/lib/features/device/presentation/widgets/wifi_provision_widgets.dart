@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/theme/csergy_assets.dart';
 
 enum WifiProvisionMode { softAp, ble }
 
@@ -45,6 +46,29 @@ class WifiProvisionModeSwitch extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class ProvisioningCompanionFooter extends StatelessWidget {
+  const ProvisioningCompanionFooter({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(top: 28.h, bottom: 8.h),
+      child: Semantics(
+        label: 'Device provisioning guide',
+        image: true,
+        child: ExcludeSemantics(
+          child: Image.asset(
+            CsergyAssets.provisioningCompanionBottom,
+            key: const Key('provisioning-companion-bottom'),
+            width: 220.w.clamp(176.0, 240.0),
+            fit: BoxFit.contain,
+          ),
+        ),
       ),
     );
   }

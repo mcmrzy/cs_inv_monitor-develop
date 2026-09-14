@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:inv_app/core/errors/ota_error_types.dart';
 import 'package:inv_app/core/services/local_communication_service.dart';
 import 'package:inv_app/features/ota/domain/entities/local_channel.dart';
 import 'package:inv_app/features/ota/domain/repositories/local_communication_repository.dart';
@@ -13,6 +14,7 @@ class _MockOtaRepository extends Mock implements OtaRepository {}
 class _FakeLocalCommunication implements LocalCommunicationRepository {
   final List<String> calls = [];
   Object? triggerError;
+  Map<String, dynamic> deviceInfo = const {'device_model': 'INV-10K'};
 
   @override
   Future<void> uploadFirmware({
@@ -46,13 +48,17 @@ class _FakeLocalCommunication implements LocalCommunicationRepository {
     required String deviceSN,
     required String deviceIP,
     String? password,
-  }) async => true;
+  }) async =>
+      true;
 
   @override
   Future<void> disconnect() async {}
 
   @override
-  Future<Map<String, dynamic>> getDeviceInfo(String deviceIP) async => const {};
+  Future<Map<String, dynamic>> getDeviceInfo(String deviceIP) async {
+    calls.add('info');
+    return deviceInfo;
+  }
 
   @override
   Future<bool> isConnectedToDeviceAP() async => true;
@@ -68,14 +74,16 @@ class _FakeLocalCommunication implements LocalCommunicationRepository {
     String deviceIP,
     String paramName,
     String value,
-  ) async => true;
+  ) async =>
+      true;
 
   @override
   Future<Map<String, dynamic>> controlDevice(
     String deviceIP,
     String command, {
     Map<String, dynamic>? params,
-  }) async => const {};
+  }) async =>
+      const {};
 }
 
 void main() {
@@ -111,12 +119,13 @@ void main() {
         filePath: '/tmp/firmware.bin',
         manifest: manifest,
         fallbackVersion: manifest.version,
+        firmwareModel: 'INV-10K',
       );
 
   test('uploads, triggers, then polls in strict order', () async {
     await execute();
 
-    expect(communication.calls, ['upload', 'trigger', 'progress']);
+    expect(communication.calls, ['info', 'upload', 'trigger', 'progress']);
   });
 
   test(
@@ -127,7 +136,7 @@ void main() {
 
       await execute();
 
-      expect(communication.calls, ['upload', 'trigger']);
+      expect(communication.calls, ['info', 'upload', 'trigger']);
       expect(controller.state.phase, LocalOTAPhase.failed);
       expect(controller.state.error, same(error));
       expect(terminateCount, 1);
@@ -142,10 +151,41 @@ void main() {
 
       await execute();
 
-      expect(communication.calls, ['upload', 'trigger']);
+      expect(communication.calls, ['info', 'upload', 'trigger']);
       expect(controller.state.phase, LocalOTAPhase.failed);
       expect(controller.state.error, same(error));
       expect(terminateCount, 1);
     },
   );
+
+  test('BLE model mismatch fails closed before upload', () async {
+    communication.deviceInfo = const {'device_model': 'INV-20K'};
+
+    await execute();
+
+    expect(communication.calls, ['info']);
+    expect(controller.state.phase, LocalOTAPhase.failed);
+    expect(controller.state.error, isA<LocalOtaDeviceModelException>());
+    expect(terminateCount, 1);
+  });
+
+  test('WiFi missing device model fails closed before upload', () async {
+    controller.dispose();
+    communication.deviceInfo = const {};
+    controller = LocalOTAController(
+      communication: communication,
+      repository: _MockOtaRepository(),
+      channel: LocalCommunicationChannel.wifiAp,
+      deviceSN: 'SN001',
+      deviceIP: '192.168.4.1',
+      onTerminateConnection: () => terminateCount++,
+    );
+
+    await execute();
+
+    expect(communication.calls, ['info']);
+    expect(controller.state.phase, LocalOTAPhase.failed);
+    expect(controller.state.error, isA<LocalOtaDeviceModelException>());
+    expect(terminateCount, 1);
+  });
 }

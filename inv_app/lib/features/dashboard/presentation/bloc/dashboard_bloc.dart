@@ -72,6 +72,7 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
         emit(
           const DashboardError(
             message: 'Failed to load, please check network',
+            kind: DashboardErrorKind.networkUnavailable,
           ),
         );
       }

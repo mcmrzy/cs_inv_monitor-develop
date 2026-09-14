@@ -13,7 +13,6 @@ import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/widgets/wifi_switch_dialog.dart';
 import 'package:inv_app/core/widgets/wifi_enable_dialog.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
-import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/features/device/presentation/services/soft_ap_provision_runner.dart';
 import 'package:inv_app/features/device/presentation/widgets/wifi_provision_widgets.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
@@ -953,6 +952,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             _buildSoftApSection()
           else
             _buildBleSection(),
+          const ProvisioningCompanionFooter(),
         ],
       ),
     );

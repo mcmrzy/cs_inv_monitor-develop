@@ -6,6 +6,7 @@ import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
+import 'package:inv_app/core/widgets/network_failure_panel.dart';
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 import 'package:inv_app/features/dashboard/presentation/bloc/dashboard_bloc.dart';
 import 'package:inv_app/features/dashboard/presentation/widgets/hero_energy_card.dart';
@@ -62,7 +63,7 @@ class _DashboardOverviewPageState extends State<DashboardOverviewPage> {
           }
 
           if (state is DashboardError) {
-            return _buildError(context, state.message);
+            return _buildError(context, state);
           }
 
           if (state is DashboardLoaded) {
@@ -222,21 +223,33 @@ class _DashboardOverviewPageState extends State<DashboardOverviewPage> {
     );
   }
 
-  Widget _buildError(BuildContext context, String message) {
+  Widget _buildError(BuildContext context, DashboardError state) {
     final l10n = AppLocalizations.of(context)!;
-    // 小烁离线动作插画：加载失败/断网态（美术路由 C4/offline）
-    return XiaoshuoStatePanel(
-      asset: CsergyAssets.xiaoshuoOffline,
-      title: l10n.translateError(message),
-      message: l10n.loadFailed,
-      size: 176,
-      action: OutlinedButton(
-        onPressed: () {
-          context
-              .read<DashboardBloc>()
-              .add(const DashboardLoadRequested());
-        },
-        child: Text(l10n.retry),
+    if (state.kind == DashboardErrorKind.networkUnavailable) {
+      return NetworkFailurePanel(
+        title: l10n.connectionFailed,
+        message: l10n.loadFailedNetwork,
+        retryLabel: l10n.retry,
+        onRetry: () =>
+            context.read<DashboardBloc>().add(const DashboardLoadRequested()),
+      );
+    }
+
+    return KeyedSubtree(
+      key: const Key('dashboard-generic-error'),
+      child: SingleChildScrollView(
+        child: XiaoshuoStatePanel(
+          asset: CsergyAssets.xiaoshuoOffline,
+          title: l10n.translateError(state.message),
+          message: l10n.loadFailed,
+          size: 176,
+          action: OutlinedButton(
+            onPressed: () {
+              context.read<DashboardBloc>().add(const DashboardLoadRequested());
+            },
+            child: Text(l10n.retry),
+          ),
+        ),
       ),
     );
   }

@@ -1,32 +1,30 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/features/onboarding/data/onboarding_storage.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
-/// 单页引导数据：主题插画 + 标题 + 副文案
-///
-/// 精简结构：每页只保留吉祥物插画、大标题和一句话描述，
-/// 移除图标圆底和功能图标组合，视觉焦点更集中。
 class _OnboardingPageData {
   final String asset;
-  final IconData icon;
   final String title;
-  final String desc;
+  final String description;
+  final String semanticLabel;
 
   const _OnboardingPageData({
     required this.asset,
-    required this.icon,
     required this.title,
-    required this.desc,
+    required this.description,
+    required this.semanticLabel,
   });
 }
 
-/// 引导页（首次安装 / 版本升级后展示）：
-/// 串联式插画（复用品牌吉祥物小烁资源）+ 渐变背景 + 图标组合，
-/// 右上角「跳过」、底部圆点指示器、最后一页「立即体验」按钮。
+/// 首次引导页。
+///
+/// 内容区可以独立滚动，底部进度和主操作始终占据相同空间，避免翻到
+/// 最后一页时布局跳动，也兼容小屏、横屏和较大的系统字体。
 class OnboardingPage extends StatefulWidget {
   const OnboardingPage({super.key});
 
@@ -35,10 +33,13 @@ class OnboardingPage extends StatefulWidget {
 }
 
 class _OnboardingPageState extends State<OnboardingPage> {
+  static const _pageCount = 3;
+  static const _accent = Color(0xFF087E8B);
+  static const _accentDark = Color(0xFF67D6D4);
+
   final PageController _pageController = PageController();
   int _currentPage = 0;
-
-  static const int _pageCount = 3;
+  bool _finishing = false;
 
   @override
   void dispose() {
@@ -46,241 +47,293 @@ class _OnboardingPageState extends State<OnboardingPage> {
     super.dispose();
   }
 
-  /// 完成 / 跳过引导：记录已看版本后，回到登录分流目标页
   Future<void> _finish() async {
+    if (_finishing) return;
+    _finishing = true;
     await OnboardingStorage().markSeen();
     if (!mounted) return;
-    // 启动分流时通过 extra 传入登录分流目标（/home、/login、/jverify-login 等）
-    final target =
-        GoRouterState.of(context).extra as String? ?? '/login';
+
+    final target = GoRouterState.of(context).extra as String? ?? '/login';
     context.go(target);
+  }
+
+  Future<void> _handlePrimaryAction() async {
+    if (_currentPage < _pageCount - 1) {
+      await _pageController.nextPage(
+        duration: const Duration(milliseconds: 320),
+        curve: Curves.easeOutCubic,
+      );
+      return;
+    }
+    await _finish();
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final pages = _buildPages(l10n);
+    final pages = _buildPages(context);
+    final isLastPage = _currentPage == _pageCount - 1;
 
     return Scaffold(
-      backgroundColor: AppColors.primaryDark,
-      body: Container(
-        decoration: BoxDecoration(
-          // 径向渐变：中心亮（42A5F5）→ 过渡层（1565C0）→ 边缘深（0D47A1）
-          gradient: LinearGradient(
-            colors: [
-              Color(0xFF42A5F5),
-              Color(0xFF1565C0),
-              Color(0xFF0D47A1),
-            ],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // 顶部：右上角「跳过」按钮
-              Align(
-                alignment: Alignment.topRight,
+      backgroundColor: AppColor.background(context),
+      body: SafeArea(
+        child: Column(
+          children: [
+            SizedBox(
+              height: 56,
+              child: Align(
+                alignment: Alignment.centerRight,
                 child: Padding(
-                  padding: EdgeInsets.fromLTRB(0, 8.h, 20.w, 0),
-                  child: _buildSkipButton(l10n),
+                  padding: const EdgeInsets.only(right: 16),
+                  child: TextButton(
+                    key: const Key('onboarding-skip'),
+                    onPressed: _finishing ? null : _finish,
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColor.textSecondary(context),
+                      minimumSize: const Size(48, 48),
+                    ),
+                    child: Text(l10n.skip),
+                  ),
                 ),
               ),
-              // 中部：可滑动引导内容
-              Expanded(
-                child: PageView.builder(
-                  controller: _pageController,
-                  itemCount: _pageCount,
-                  onPageChanged: (index) =>
-                      setState(() => _currentPage = index),
-                  itemBuilder: (context, index) {
-                    final page = pages[index];
-                    return _SlideFadeContent(
-                      key: ValueKey('$index-${page.title}'),
-                      child: _buildPageContent(page),
-                    );
-                  },
+            ),
+            Expanded(
+              child: PageView.builder(
+                controller: _pageController,
+                itemCount: pages.length,
+                onPageChanged: (index) {
+                  setState(() => _currentPage = index);
+                },
+                itemBuilder: (context, index) => _OnboardingSlide(
+                  key: index == _currentPage
+                      ? const Key('onboarding-page-content')
+                      : ValueKey('onboarding-page-$index'),
+                  page: pages[index],
+                  accent: _accentFor(context),
                 ),
               ),
-              // 底部：圆点指示器；最后一页为单一 CTA 按钮
-              Padding(
-                padding: EdgeInsets.all(32.w),
-                child: _currentPage == _pageCount - 1
-                    ? _buildStartButton(l10n)
-                    : _buildDotsIndicator(),
+            ),
+            SizedBox(
+              key: const Key('onboarding-footer'),
+              height: 112,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+                child: Column(
+                  children: [
+                    _ProgressIndicator(currentPage: _currentPage),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          key: const Key('onboarding-primary-action'),
+                          onPressed: _finishing ? null : _handlePrimaryAction,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: _accentFor(context),
+                            foregroundColor:
+                                Theme.of(context).brightness == Brightness.dark
+                                    ? const Color(0xFF09262A)
+                                    : Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          child: Text(
+                            isLastPage
+                                ? _startLabel(context)
+                                : _continueLabel(context),
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  List<_OnboardingPageData> _buildPages(AppLocalizations l10n) {
+  Color _accentFor(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark ? _accentDark : _accent;
+
+  bool _isChinese(BuildContext context) =>
+      Localizations.localeOf(context).languageCode == 'zh';
+
+  String _continueLabel(BuildContext context) =>
+      AppLocalizations.of(context)!.onboardingContinue;
+
+  String _startLabel(BuildContext context) =>
+      AppLocalizations.of(context)!.onboardingStart;
+
+  List<_OnboardingPageData> _buildPages(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    if (_isChinese(context)) {
+      return [
+        _OnboardingPageData(
+          asset: CsergyAssets.onboardingEnergyOverview,
+          title: l10n.onboardingPage1Title,
+          description: l10n.onboardingPage1Desc,
+          semanticLabel: '看见能源',
+        ),
+        _OnboardingPageData(
+          asset: CsergyAssets.onboardingStatusAlerts,
+          title: l10n.onboardingPage2Title,
+          description: l10n.onboardingPage2Desc,
+          semanticLabel: '及时掌握状态',
+        ),
+        _OnboardingPageData(
+          asset: CsergyAssets.onboardingLocalService,
+          title: l10n.onboardingPage3Title,
+          description: l10n.onboardingPage3Desc,
+          semanticLabel: '随时近场维护',
+        ),
+      ];
+    }
+
     return [
-      // 第 1 页：智能监控 -> "每一度电，尽在掌握"
       _OnboardingPageData(
-        asset: CsergyAssets.xiaoshuoStation,
-        icon: Icons.solar_power,
+        asset: CsergyAssets.onboardingEnergyOverview,
         title: l10n.onboardingPage1Title,
-        desc: l10n.onboardingPage1Desc,
+        description: l10n.onboardingPage1Desc,
+        semanticLabel: 'Energy overview',
       ),
-      // 第 2 页：极速告警 -> "第一时间预警，安心无忧"
       _OnboardingPageData(
-        asset: CsergyAssets.xiaoshuoWarning,
-        icon: Icons.notifications_active,
+        asset: CsergyAssets.onboardingStatusAlerts,
         title: l10n.onboardingPage2Title,
-        desc: l10n.onboardingPage2Desc,
+        description: l10n.onboardingPage2Desc,
+        semanticLabel: 'Status and alerts',
       ),
-      // 第 3 页：本地升级 -> "断网也不怕，固件随心换"
       _OnboardingPageData(
-        asset: CsergyAssets.xiaoshuoOtaGuide,
-        icon: Icons.system_update,
+        asset: CsergyAssets.onboardingLocalService,
         title: l10n.onboardingPage3Title,
-        desc: l10n.onboardingPage3Desc,
+        description: l10n.onboardingPage3Desc,
+        semanticLabel: 'Local device service',
       ),
     ];
   }
+}
 
-  Widget _buildSkipButton(AppLocalizations l10n) {
-    return Material(
-      color: Colors.white.withValues(alpha: 0.18),
-      borderRadius: BorderRadius.circular(20.r),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20.r),
-        onTap: _finish,
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 7.h),
-          child: Text(
-            l10n.skip,
-            style: TextStyle(
-              fontSize: 13.sp,
-              color: Colors.white,
-              fontWeight: FontWeight.w500,
+class _OnboardingSlide extends StatelessWidget {
+  final _OnboardingPageData page;
+  final Color accent;
+
+  const _OnboardingSlide({
+    super.key,
+    required this.page,
+    required this.accent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final landscape = constraints.maxWidth > constraints.maxHeight;
+        final contentWidth = math.min(constraints.maxWidth - 40, 560.0);
+        final illustrationHeight = math.min(
+          landscape ? 132.0 : 280.0,
+          math.max(104.0, constraints.maxHeight * (landscape ? 0.5 : 0.52)),
+        );
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+          child: Center(
+            child: SizedBox(
+              width: contentWidth,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: double.infinity,
+                    height: illustrationHeight,
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          accent.withValues(alpha: 0.16),
+                          const Color(0xFFF0A047).withValues(alpha: 0.12),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(28),
+                    ),
+                    child: Semantics(
+                      image: true,
+                      label: page.semanticLabel,
+                      child: Image.asset(
+                        page.asset,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => Icon(
+                          Icons.solar_power_outlined,
+                          color: accent,
+                          size: 72,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    page.title,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          color: AppColor.textPrimary(context),
+                          fontWeight: FontWeight.w700,
+                          height: 1.2,
+                        ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    page.description,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: AppColor.textSecondary(context),
+                          height: 1.5,
+                        ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
+}
 
-  Widget _buildStartButton(AppLocalizations l10n) {
-    return SizedBox(
-      width: double.infinity,
-      height: 48.h,
-      child: FilledButton(
-        style: FilledButton.styleFrom(
-          backgroundColor: Colors.white,
-          foregroundColor: AppColors.primaryDark,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12.r),
-          ),
-        ),
-        onPressed: _finish,
-        child: Text(
-          l10n.onboardingStart,
-          style: TextStyle(
-            fontSize: 16.sp,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-    );
-  }
+class _ProgressIndicator extends StatelessWidget {
+  final int currentPage;
 
-  Widget _buildDotsIndicator() {
+  const _ProgressIndicator({required this.currentPage});
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = Theme.of(context).brightness == Brightness.dark
+        ? _OnboardingPageState._accentDark
+        : _OnboardingPageState._accent;
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(_pageCount, (index) {
-        final active = index == _currentPage;
+      children: List.generate(_OnboardingPageState._pageCount, (index) {
+        final active = index == currentPage;
         return AnimatedContainer(
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOutCubic,
-          width: active ? 22.w : 8.w,
-          height: 8.h,
-          margin: EdgeInsets.symmetric(horizontal: 4.w),
+          key: active ? Key('onboarding-progress-$index') : null,
+          duration: const Duration(milliseconds: 220),
+          width: active ? 24 : 8,
+          height: 8,
+          margin: const EdgeInsets.symmetric(horizontal: 4),
           decoration: BoxDecoration(
-            color: active ? Colors.white : Colors.white.withValues(alpha: 0.4),
-            borderRadius: BorderRadius.circular(4.r),
+            color: active ? accent : AppColor.border(context),
+            borderRadius: BorderRadius.circular(4),
           ),
         );
       }),
-    );
-  }
-
-  Widget _buildPageContent(_OnboardingPageData page) {
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 40.w),
-      child: Column(
-        children: [
-          // 小烁吉祥物插画（统一尺寸，视觉焦点）
-          Image.asset(
-            page.asset,
-            width: 280.w,
-            height: 260.h,
-            fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) => Icon(
-              page.icon,
-              size: 120.w,
-              color: Colors.white.withValues(alpha: 0.7),
-            ),
-          ),
-          SizedBox(height: 36.h),
-          // 标题：大标题，情感化场景文案
-          Text(
-            page.title,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 26.sp,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-              letterSpacing: 0.5,
-            ),
-          ),
-          SizedBox(height: 12.h),
-          // 副文案
-          Text(
-            page.desc,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 15.sp,
-              color: Colors.white.withValues(alpha: 0.92),
-              height: 1.5,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// 页面内容入场动画容器：淡入 + 轻微上移，提升页面切换质感。
-///
-/// 每次页面索引变化时重建（依赖 PageView itemBuilder 的 key 变化），
-/// 内容从下方 40 逻辑像素处淡入上移至目标位置。
-class _SlideFadeContent extends StatefulWidget {
-  final Widget child;
-
-  const _SlideFadeContent({super.key, required this.child});
-
-  @override
-  State<_SlideFadeContent> createState() => _SlideFadeContentState();
-}
-
-class _SlideFadeContentState extends State<_SlideFadeContent> {
-  @override
-  Widget build(BuildContext context) {
-    return TweenAnimationBuilder<double>(
-      duration: const Duration(milliseconds: 500),
-      curve: Curves.easeOutCubic,
-      tween: Tween(begin: 0.0, end: 1.0),
-      builder: (context, value, child) => Transform.translate(
-        offset: Offset(0, 40 * (1 - value)),
-        child: Opacity(opacity: value, child: child),
-      ),
-      child: widget.child,
     );
   }
 }

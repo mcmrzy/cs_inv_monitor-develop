@@ -1,9 +1,12 @@
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   test('packaged raster assets contain real image bytes', () {
     final roots = <Directory>[
       Directory('assets'),
@@ -47,6 +50,31 @@ void main() {
       isEmpty,
       reason: 'CsergyAssets must not reference missing packaged files.',
     );
+  });
+
+  test('quiet-energy page illustrations are packaged', () async {
+    const illustrationAssets = <String>[
+      CsergyAssets.onboardingEnergyOverview,
+      CsergyAssets.onboardingStatusAlerts,
+      CsergyAssets.onboardingLocalService,
+      CsergyAssets.networkConnectionFailed,
+      CsergyAssets.localUpgradeConnection,
+      CsergyAssets.provisioningCompanionBottom,
+    ];
+
+    final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
+    expect(
+      illustrationAssets.where((path) => manifest.getAssetVariants(path) == null),
+      isEmpty,
+      reason: 'Quiet-energy illustrations must be registered in pubspec.yaml.',
+    );
+
+    for (final path in illustrationAssets) {
+      final bytes = await rootBundle.load(path);
+      expect(bytes.lengthInBytes, greaterThan(1024), reason: path);
+      expect(_hasKnownRasterSignature(bytes.buffer.asUint8List()), isTrue,
+          reason: path);
+    }
   });
 }
 

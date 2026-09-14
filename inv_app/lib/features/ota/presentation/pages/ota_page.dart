@@ -153,6 +153,7 @@ class _OTAPageState extends State<OTAPage> {
     String? firmwareVersion,
     String? releaseSignature,
     int? securityVersion,
+    String? deviceModel,
   }) async {
     setState(() {
       _downloadingIds.add(firmwareId);
@@ -166,6 +167,7 @@ class _OTAPageState extends State<OTAPage> {
         firmwareId: firmwareId,
         expectedSize: expectedSize,
         expectedSha256: expectedSha256,
+        deviceModel: deviceModel,
         // 持久化离线升级元数据，支持无网时从已下载列表直接本地升级
         targetChip: targetChip,
         version: firmwareVersion,
@@ -184,7 +186,8 @@ class _OTAPageState extends State<OTAPage> {
           _downloadingIds.remove(firmwareId);
         });
         final l10n = AppLocalizations.of(context)!;
-        AppToast.show(context, l10n.str('pre_download_failed', {'error': '$e'}), type: ToastType.error);
+        AppToast.show(context, l10n.str('pre_download_failed', {'error': '$e'}),
+            type: ToastType.error);
       }
     }
   }
@@ -434,7 +437,7 @@ class _OTAPageState extends State<OTAPage> {
                   Text(
                     '${l10n.str('current_version_label', {
                           'version': currentVersion,
-                          })}${targetLabel.isNotEmpty ? ' ($targetLabel)' : ''}',
+                        })}${targetLabel.isNotEmpty ? ' ($targetLabel)' : ''}',
                     style: TextStyle(
                       fontSize: 13.sp,
                       color: AppColor.textHint(context),
@@ -470,17 +473,20 @@ class _OTAPageState extends State<OTAPage> {
                     ),
                   ),
                   _buildChipVersionRow(
-                    FirmwareModulePresentation.fromTarget('esp').displayLabel(l10n),
+                    FirmwareModulePresentation.fromTarget('esp')
+                        .displayLabel(l10n),
                     info['firmware_esp'] as String? ?? '',
                   ),
                   if ((info['firmware_dsp'] as String? ?? '').isNotEmpty)
                     _buildChipVersionRow(
-                      FirmwareModulePresentation.fromTarget('dsp').displayLabel(l10n),
+                      FirmwareModulePresentation.fromTarget('dsp')
+                          .displayLabel(l10n),
                       info['firmware_dsp'] as String? ?? '',
                     ),
                   if ((info['firmware_bms'] as String? ?? '').isNotEmpty)
                     _buildChipVersionRow(
-                      FirmwareModulePresentation.fromTarget('bms').displayLabel(l10n),
+                      FirmwareModulePresentation.fromTarget('bms')
+                          .displayLabel(l10n),
                       info['firmware_bms'] as String? ?? '',
                     ),
                 ],
@@ -495,18 +501,19 @@ class _OTAPageState extends State<OTAPage> {
               onPressed: _triggering
                   ? null
                   : () => _confirmStartUpgrade(() {
-                      setState(() => _triggering = true);
-                      // 使用 package_id 触发升级（后端已改为 package_id）
-                      context.read<OtaBloc>().add(
-                            OTATriggerRequested(
-                              sn: widget.deviceSN,
-                              packageId: firmwareId,
-                            ),
-                          );
-                    }),
+                        setState(() => _triggering = true);
+                        // 使用 package_id 触发升级（后端已改为 package_id）
+                        context.read<OtaBloc>().add(
+                              OTATriggerRequested(
+                                sn: widget.deviceSN,
+                                packageId: firmwareId,
+                              ),
+                            );
+                      }),
               style: ElevatedButton.styleFrom(
-                backgroundColor:
-                    _triggering ? AppColor.textHint(context) : AppColors.primary,
+                backgroundColor: _triggering
+                    ? AppColor.textHint(context)
+                    : AppColors.primary,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12.r),
@@ -542,6 +549,7 @@ class _OTAPageState extends State<OTAPage> {
             latestVersion,
             securityVersion,
             releaseSignature,
+            info['device_model'] as String? ?? '',
           ),
           // 查看可用升级包入口
           Padding(
@@ -818,17 +826,20 @@ class _OTAPageState extends State<OTAPage> {
                     ),
                   ),
                   _buildChipVersionRow(
-                    FirmwareModulePresentation.fromTarget('esp').displayLabel(l10n),
+                    FirmwareModulePresentation.fromTarget('esp')
+                        .displayLabel(l10n),
                     info['firmware_esp'] as String? ?? '',
                   ),
                   if ((info['firmware_dsp'] as String? ?? '').isNotEmpty)
                     _buildChipVersionRow(
-                      FirmwareModulePresentation.fromTarget('dsp').displayLabel(l10n),
+                      FirmwareModulePresentation.fromTarget('dsp')
+                          .displayLabel(l10n),
                       info['firmware_dsp'] as String? ?? '',
                     ),
                   if ((info['firmware_bms'] as String? ?? '').isNotEmpty)
                     _buildChipVersionRow(
-                      FirmwareModulePresentation.fromTarget('bms').displayLabel(l10n),
+                      FirmwareModulePresentation.fromTarget('bms')
+                          .displayLabel(l10n),
                       info['firmware_bms'] as String? ?? '',
                     ),
                 ],
@@ -877,14 +888,14 @@ class _OTAPageState extends State<OTAPage> {
               onPressed: _triggering
                   ? null
                   : () => _confirmStartUpgrade(() {
-                      setState(() => _triggering = true);
-                      context
-                          .read<OtaBloc>()
-                          .add(OTAPackageTriggerRequested(sn: widget.deviceSN));
-                    }),
+                        setState(() => _triggering = true);
+                        context.read<OtaBloc>().add(
+                            OTAPackageTriggerRequested(sn: widget.deviceSN));
+                      }),
               style: ElevatedButton.styleFrom(
-                backgroundColor:
-                    _triggering ? AppColor.textHint(context) : AppColors.primary,
+                backgroundColor: _triggering
+                    ? AppColor.textHint(context)
+                    : AppColors.primary,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12.r),
@@ -920,6 +931,7 @@ class _OTAPageState extends State<OTAPage> {
             firmwareVersion,
             securityVersion,
             releaseSignature,
+            info['device_model'] as String? ?? '',
           ),
           // 查看可用升级包入口
           Padding(
@@ -1015,6 +1027,7 @@ class _OTAPageState extends State<OTAPage> {
     String firmwareVersion,
     int? securityVersion,
     String? releaseSignature,
+    String deviceModel,
   ) {
     final l10n = AppLocalizations.of(context)!;
     final isDownloaded = _downloadedCache[firmwareId] ?? false;
@@ -1055,9 +1068,10 @@ class _OTAPageState extends State<OTAPage> {
                     // 路由仅携带 firmware_id，升级元数据由页面按 ID 拉取，
                     // 避免在 URL query 中传递签名等复杂参数
                     final route = Uri(
-                      path: '/ota/${widget.deviceSN}/local',
+                      path: '/local-upgrade',
                       queryParameters: {
-                        'ip': '192.168.4.1',
+                        'sn': widget.deviceSN,
+                        'model': deviceModel,
                         'firmware_id': '$firmwareId',
                       },
                     ).toString();
@@ -1129,6 +1143,7 @@ class _OTAPageState extends State<OTAPage> {
                   firmwareVersion: firmwareVersion,
                   releaseSignature: releaseSignature,
                   securityVersion: securityVersion,
+                  deviceModel: deviceModel,
                 )
             : null,
         style: OutlinedButton.styleFrom(
@@ -1169,7 +1184,8 @@ class _OTAPageState extends State<OTAPage> {
           SizedBox(width: 8.w),
           Text(
             version,
-            style: TextStyle(fontSize: 12.sp, color: AppColor.textSecondary(context)),
+            style: TextStyle(
+                fontSize: 12.sp, color: AppColor.textSecondary(context)),
           ),
         ],
       ),
@@ -1254,8 +1270,8 @@ class _OTAPageState extends State<OTAPage> {
               ),
               child: Text(
                 l10n.str('current_version_label', {'version': currentVersion}),
-                style:
-                    TextStyle(fontSize: 13.sp, color: AppColor.textSecondary(context)),
+                style: TextStyle(
+                    fontSize: 13.sp, color: AppColor.textSecondary(context)),
               ),
             ),
           ],
@@ -1286,17 +1302,20 @@ class _OTAPageState extends State<OTAPage> {
                     ),
                   ),
                   _buildChipVersionRow(
-                    FirmwareModulePresentation.fromTarget('esp').displayLabel(l10n),
+                    FirmwareModulePresentation.fromTarget('esp')
+                        .displayLabel(l10n),
                     state.info['firmware_esp'] as String? ?? '',
                   ),
                   if ((state.info['firmware_dsp'] as String? ?? '').isNotEmpty)
                     _buildChipVersionRow(
-                      FirmwareModulePresentation.fromTarget('dsp').displayLabel(l10n),
+                      FirmwareModulePresentation.fromTarget('dsp')
+                          .displayLabel(l10n),
                       state.info['firmware_dsp'] as String? ?? '',
                     ),
                   if ((state.info['firmware_bms'] as String? ?? '').isNotEmpty)
                     _buildChipVersionRow(
-                      FirmwareModulePresentation.fromTarget('bms').displayLabel(l10n),
+                      FirmwareModulePresentation.fromTarget('bms')
+                          .displayLabel(l10n),
                       state.info['firmware_bms'] as String? ?? '',
                     ),
                 ],
@@ -1400,7 +1419,8 @@ class _OTAPageState extends State<OTAPage> {
           SizedBox(height: 16.h),
           Text(
             l10n.sendingUpgradeCommand,
-            style: TextStyle(fontSize: 14.sp, color: AppColor.textSecondary(context)),
+            style: TextStyle(
+                fontSize: 14.sp, color: AppColor.textSecondary(context)),
           ),
         ],
       ),
@@ -1463,7 +1483,8 @@ class _OTAPageState extends State<OTAPage> {
           SizedBox(height: 8.h),
           Text(
             '${l10n.str('status_prefix')}: ${_localizedStatus(state.status, l10n)}',
-            style: TextStyle(fontSize: 13.sp, color: AppColor.textHint(context)),
+            style:
+                TextStyle(fontSize: 13.sp, color: AppColor.textHint(context)),
           ),
           SizedBox(height: 24.h),
           ClipRRect(
@@ -1525,9 +1546,7 @@ class _OTAPageState extends State<OTAPage> {
       size: 184,
       action: ElevatedButton(
         onPressed: () {
-          context
-              .read<OtaBloc>()
-              .add(OTACheckRequested(sn: widget.deviceSN));
+          context.read<OtaBloc>().add(OTACheckRequested(sn: widget.deviceSN));
         },
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,

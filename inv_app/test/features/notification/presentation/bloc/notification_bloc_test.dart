@@ -7,33 +7,19 @@ import 'package:mocktail/mocktail.dart';
 
 import 'package:inv_app/features/notification/presentation/bloc/notification_bloc.dart';
 import 'package:inv_app/core/entities/inverter_data.dart';
-import 'package:inv_app/core/services/app_update_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 
 import '../../../../helpers/mock_providers.dart';
 
-/// Mock for AppUpdateService since it's not in mock_providers.
-class MockAppUpdateService extends Mock implements AppUpdateService {}
-
 void main() {
   group('SystemNotification serialization', () {
-    test('preserves semantic app update version', () {
-      final notification = SystemNotification(
-        type: SystemNotificationType.appUpdate,
-        title: '',
-        subtitle: '',
-        timestamp: DateTime.utc(2026, 7, 16),
-        version: '2.3.0',
-      );
-
-      final restored = SystemNotification.fromJson(notification.toJson());
-
-      expect(restored.version, '2.3.0');
-      expect(restored.type, SystemNotificationType.appUpdate);
+    test('keeps the legacy app update storage slot at index 5', () {
+      expect(SystemNotificationType.legacyAppUpdate.index, 5);
     });
 
-    test('falls back to deviceOnline when cached type index is out of range', () {
+    test('falls back to deviceOnline when cached type index is out of range',
+        () {
       // P2：历史版本可能写入已被删除的枚举 index，越界不得崩溃
       final restored = SystemNotification.fromJson({
         'type': 999,
@@ -55,17 +41,6 @@ void main() {
       expect(restored.title, '');
       expect(restored.subtitle, '');
     });
-
-    test('extracts version from legacy localized title', () {
-      final restored = SystemNotification.fromJson({
-        'type': SystemNotificationType.appUpdate.index,
-        'title': '发现新版本 v1.8.2',
-        'subtitle': '点击查看详情并更新',
-        'timestamp': DateTime.utc(2026, 7, 16).toIso8601String(),
-      });
-
-      expect(restored.version, '1.8.2');
-    });
   });
 
   late NotificationBloc notificationBloc;
@@ -73,7 +48,6 @@ void main() {
   late MockRealtimeDataService mockRealtimeDataService;
   late MockNotificationRemoteDataSource mockNotificationDataSource;
   late MockStorageService mockStorageService;
-  late MockAppUpdateService mockAppUpdateService;
 
   setUpAll(() {
     // Register fallback values for mocktail
@@ -85,9 +59,6 @@ void main() {
     mockRealtimeDataService = MockRealtimeDataService();
     mockNotificationDataSource = MockNotificationRemoteDataSource();
     mockStorageService = MockStorageService();
-    mockAppUpdateService = MockAppUpdateService();
-    when(() => mockAppUpdateService.resolveCurrentVersionCode())
-        .thenAnswer((_) async => 1);
 
     // Default RealtimeDataService stubs
     when(() => mockRealtimeDataService.realtimeDataStream)
@@ -97,7 +68,6 @@ void main() {
 
     // Register getIt dependencies used by NotificationBloc
     getIt.registerFactory<StorageService>(() => mockStorageService);
-    getIt.registerFactory<AppUpdateService>(() => mockAppUpdateService);
 
     notificationBloc = NotificationBloc(
       deviceRepository: mockDeviceRepository,
@@ -119,6 +89,68 @@ void main() {
   // SystemNotificationsRequested
   // ---------------------------------------------------------------------------
   group('SystemNotificationsRequested', () {
+    blocTest<NotificationBloc, NotificationState>(
+      'filters legacy app update notifications from local storage',
+      build: () {
+        when(
+          () => mockNotificationDataSource.getList(
+            page: any(named: 'page'),
+            pageSize: any(named: 'pageSize'),
+          ),
+        ).thenThrow(Exception('Network error'));
+        when(() => mockStorageService.getString(any())).thenAnswer(
+          (_) async =>
+              '[{"type":5,"title":"发现新版本 v2.0.0","subtitle":"旧版缓存","timestamp":"2024-01-01T00:00:00.000"}]',
+        );
+        return notificationBloc;
+      },
+      act: (bloc) => bloc.add(const SystemNotificationsRequested()),
+      expect: () => [
+        isA<SystemNotificationsLoaded>().having(
+          (s) => s.notifications,
+          'notifications',
+          isEmpty,
+        ),
+      ],
+    );
+
+    blocTest<NotificationBloc, NotificationState>(
+      'ignores backend app_update notifications',
+      build: () {
+        when(
+          () => mockNotificationDataSource.getList(
+            page: any(named: 'page'),
+            pageSize: any(named: 'pageSize'),
+          ),
+        ).thenAnswer(
+          (_) async => _fakeResponse({
+            'data': {
+              'items': [
+                {
+                  'id': 9,
+                  'notify_type': 'app_update',
+                  'title': '发现新版本',
+                  'content': '请升级 App',
+                  'created_at': DateTime(2024, 1, 1).toIso8601String(),
+                }
+              ],
+            },
+          }),
+        );
+        when(() => mockStorageService.getString(any()))
+            .thenAnswer((_) async => null);
+        return notificationBloc;
+      },
+      act: (bloc) => bloc.add(const SystemNotificationsRequested()),
+      expect: () => [
+        isA<SystemNotificationsLoaded>().having(
+          (s) => s.notifications,
+          'notifications',
+          isEmpty,
+        ),
+      ],
+    );
+
     blocTest<NotificationBloc, NotificationState>(
       'emits [SystemNotificationsLoaded] with backend notifications',
       build: () {
@@ -147,9 +179,6 @@ void main() {
         // Mock local storage
         when(() => mockStorageService.getString(any()))
             .thenAnswer((_) async => null);
-        // Mock app update check
-        when(() => mockAppUpdateService.checkUpdate(any()))
-            .thenAnswer((_) async => AppUpdateInfo(hasUpdate: false));
         return notificationBloc;
       },
       act: (bloc) => bloc.add(const SystemNotificationsRequested()),
@@ -173,8 +202,6 @@ void main() {
         ).thenThrow(Exception('Network error'));
         when(() => mockStorageService.getString(any()))
             .thenAnswer((_) async => null);
-        when(() => mockAppUpdateService.checkUpdate(any()))
-            .thenAnswer((_) async => AppUpdateInfo(hasUpdate: false));
         return notificationBloc;
       },
       act: (bloc) => bloc.add(const SystemNotificationsRequested()),
@@ -200,8 +227,6 @@ void main() {
           (_) async =>
               '[{"type":4,"title":"设备固件更新","subtitle":"TEST_SN_1 有新固件可用","timestamp":"2024-01-01T00:00:00.000"}]',
         );
-        when(() => mockAppUpdateService.checkUpdate(any()))
-            .thenAnswer((_) async => AppUpdateInfo(hasUpdate: false));
         return notificationBloc;
       },
       act: (bloc) => bloc.add(const SystemNotificationsRequested()),
@@ -229,8 +254,6 @@ void main() {
           (_) async =>
               '["bad-entry",{"type":4,"title":"设备固件更新","subtitle":"TEST_SN_1 有新固件可用","timestamp":"2024-01-01T00:00:00.000"}]',
         );
-        when(() => mockAppUpdateService.checkUpdate(any()))
-            .thenAnswer((_) async => AppUpdateInfo(hasUpdate: false));
         return notificationBloc;
       },
       act: (bloc) => bloc.add(const SystemNotificationsRequested()),
@@ -244,7 +267,7 @@ void main() {
     );
 
     blocTest<NotificationBloc, NotificationState>(
-      'checks app update again on manual refresh after first load',
+      'reloads backend notifications on manual refresh',
       build: () {
         // 两次加载返回不同内容，避免 bloc 跳过相等的连续状态
         // （否则第二次 emit 的 SystemNotificationsLoaded([]) 与第一次相等被忽略）
@@ -278,14 +301,10 @@ void main() {
         });
         when(() => mockStorageService.getString(any()))
             .thenAnswer((_) async => null);
-        when(() => mockAppUpdateService.checkUpdate(any()))
-            .thenAnswer((_) async => AppUpdateInfo(hasUpdate: false));
         return notificationBloc;
       },
       act: (bloc) {
-        // 首载：state 尚未 loaded，检查更新
         bloc.add(const SystemNotificationsRequested());
-        // P2：手动刷新（manual=true）在已加载后仍需检查 App 更新
         bloc.add(const SystemNotificationsRequested(manual: true));
       },
       // 等 bloc 串行处理完两个事件（mock 链路多次 await，zero-delay 不够）
@@ -295,7 +314,12 @@ void main() {
         isA<SystemNotificationsLoaded>(),
       ],
       verify: (_) {
-        verify(() => mockAppUpdateService.checkUpdate(any())).called(2);
+        verify(
+          () => mockNotificationDataSource.getList(
+            page: any(named: 'page'),
+            pageSize: any(named: 'pageSize'),
+          ),
+        ).called(2);
       },
     );
   });
@@ -330,8 +354,6 @@ void main() {
         );
         when(() => mockStorageService.getString(any()))
             .thenAnswer((_) async => null);
-        when(() => mockAppUpdateService.checkUpdate(any()))
-            .thenAnswer((_) async => AppUpdateInfo(hasUpdate: false));
         return notificationBloc;
       },
       act: (bloc) => bloc.add(const SystemNotificationsRequested()),
@@ -385,8 +407,6 @@ void main() {
         });
         when(() => mockStorageService.getString(any()))
             .thenAnswer((_) async => null);
-        when(() => mockAppUpdateService.checkUpdate(any()))
-            .thenAnswer((_) async => AppUpdateInfo(hasUpdate: false));
         return notificationBloc;
       },
       act: (bloc) async {
@@ -404,10 +424,10 @@ void main() {
             // total=2 全部加载完 → 没有更多
             .having((s) => s.hasMore, 'hasMore', false)
             .having(
-              (s) => s.notifications.map((n) => n.id).toList(),
-              'notification ids',
-              [1, 2],
-            ),
+          (s) => s.notifications.map((n) => n.id).toList(),
+          'notification ids',
+          [1, 2],
+        ),
       ],
       verify: (_) {
         verify(
@@ -446,8 +466,6 @@ void main() {
         );
         when(() => mockStorageService.getString(any()))
             .thenAnswer((_) async => null);
-        when(() => mockAppUpdateService.checkUpdate(any()))
-            .thenAnswer((_) async => AppUpdateInfo(hasUpdate: false));
         return notificationBloc;
       },
       act: (bloc) async {

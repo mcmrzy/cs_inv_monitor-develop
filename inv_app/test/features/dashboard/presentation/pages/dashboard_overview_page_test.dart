@@ -83,4 +83,50 @@ void main() {
       semantics.dispose();
     },
   );
+
+  testWidgets('network-unavailable error uses the dedicated retry panel',
+      (tester) async {
+    whenListen(
+      dashboardBloc,
+      const Stream<DashboardState>.empty(),
+      initialState: const DashboardError(
+        message: 'Failed to load, please check network',
+        kind: DashboardErrorKind.networkUnavailable,
+      ),
+    );
+
+    await pumpApp(
+      tester,
+      const DashboardOverviewPage(),
+      dashboardBloc: dashboardBloc,
+      locale: const Locale('zh', 'CN'),
+    );
+
+    expect(find.byKey(const Key('network-failure-panel')), findsOneWidget);
+    expect(
+      find.byKey(const Key('network-connection-failed-illustration')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('dashboard-generic-error')), findsNothing);
+  });
+
+  testWidgets('online request failure remains a generic error', (tester) async {
+    whenListen(
+      dashboardBloc,
+      const Stream<DashboardState>.empty(),
+      initialState: const DashboardError(
+        message: 'Failed to load',
+        kind: DashboardErrorKind.requestFailed,
+      ),
+    );
+
+    await pumpApp(
+      tester,
+      const DashboardOverviewPage(),
+      dashboardBloc: dashboardBloc,
+    );
+
+    expect(find.byKey(const Key('dashboard-generic-error')), findsOneWidget);
+    expect(find.byKey(const Key('network-failure-panel')), findsNothing);
+  });
 }
