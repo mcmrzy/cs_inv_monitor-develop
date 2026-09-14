@@ -4,13 +4,11 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/config/app_config.dart';
-import 'package:inv_app/core/services/app_update_service.dart';
-import 'package:inv_app/core/widgets/app_update_flow.dart';
-import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/core/widgets/settings_widgets.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
@@ -23,7 +21,6 @@ class _AboutPageState extends State<AboutPage> {
   /// 展示用版本名：来自安装包元数据（pubspec 注入），
   /// 与编译产物始终一致；读取失败回退编译期常量。
   String _displayVersion = AppConfig.version;
-  bool _checkingUpdate = false;
 
   @override
   void initState() {
@@ -32,20 +29,10 @@ class _AboutPageState extends State<AboutPage> {
   }
 
   Future<void> _loadDisplayVersion() async {
-    final updateService = getIt<AppUpdateService>();
-    final version = await updateService.resolveCurrentVersionName();
+    final packageInfo = await PackageInfo.fromPlatform();
+    final version = packageInfo.version;
     if (mounted && version != _displayVersion) {
       setState(() => _displayVersion = version);
-    }
-  }
-
-  Future<void> _checkForUpdates() async {
-    setState(() => _checkingUpdate = true);
-    try {
-      // 检查与更新弹窗统一走共享流程（与启动静默检查同一实现）
-      await AppUpdateFlow.checkAndPrompt(context);
-    } finally {
-      if (mounted) setState(() => _checkingUpdate = false);
     }
   }
 
@@ -100,28 +87,6 @@ class _AboutPageState extends State<AboutPage> {
         children: [
           SizedBox(height: 8.h),
           _AboutEnergyHero(l10n: l10n, version: _displayVersion),
-          SizedBox(height: 24.h),
-          SettingsSectionTitle(
-            icon: Icons.system_update_rounded,
-            title: l10n.str('check_update'),
-            accent: AppColors.blue,
-          ),
-          SettingsCard([
-            SettingsValueRow(
-              icon: Icons.system_update_rounded,
-              accent: AppColors.blue,
-              title: l10n.str('check_update'),
-              subtitle: '${l10n.str('current_version')}: V$_displayVersion',
-              trailing: _checkingUpdate
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.chevron_right_rounded),
-              onTap: _checkingUpdate ? null : _checkForUpdates,
-            ),
-          ]),
           SizedBox(height: 24.h),
           SettingsSectionTitle(
             icon: Icons.verified_user_outlined,

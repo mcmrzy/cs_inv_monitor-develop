@@ -30,7 +30,7 @@ class NetworkFailurePanel extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Image.asset(
-                CsergyAssets.networkConnectionFailed,
+                CsergyAssets.xiaoshuoOffline,
                 key: const Key('network-connection-failed-illustration'),
                 width: 220.w.clamp(168.0, 240.0).toDouble(),
                 fit: BoxFit.contain,

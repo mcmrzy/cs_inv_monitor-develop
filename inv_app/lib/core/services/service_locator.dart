@@ -32,7 +32,6 @@ import 'package:inv_app/core/services/locale_service.dart';
 import 'package:inv_app/core/services/theme_service.dart';
 import 'package:inv_app/core/services/data_cache_service.dart';
 import 'package:inv_app/core/services/domain_config_service.dart';
-import 'package:inv_app/core/services/app_update_service.dart';
 import 'package:inv_app/core/services/jpush_service.dart';
 import 'package:inv_app/core/services/jverify_service.dart';
 import 'package:inv_app/features/auth/data/datasources/auth_remote_data_source.dart';
@@ -417,10 +416,6 @@ class ServiceLocator {
 
     getIt.registerLazySingleton<DomainConfigService>(
       () => DomainConfigService(getIt()),
-    );
-
-    getIt.registerLazySingleton<AppUpdateService>(
-      () => AppUpdateService(getIt<Dio>()),
     );
 
     getIt.registerLazySingleton<JPushService>(

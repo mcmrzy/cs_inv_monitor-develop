@@ -52,28 +52,56 @@ void main() {
     );
   });
 
-  test('quiet-energy page illustrations are packaged', () async {
+  test('reused Xiaoshuo page illustrations are packaged', () async {
     const illustrationAssets = <String>[
-      CsergyAssets.onboardingEnergyOverview,
-      CsergyAssets.onboardingStatusAlerts,
-      CsergyAssets.onboardingLocalService,
-      CsergyAssets.networkConnectionFailed,
-      CsergyAssets.localUpgradeConnection,
-      CsergyAssets.provisioningCompanionBottom,
+      CsergyAssets.xiaoshuoStation,
+      CsergyAssets.xiaoshuoReminder,
+      CsergyAssets.xiaoshuoWifiGuide,
+      CsergyAssets.xiaoshuoOffline,
+      CsergyAssets.xiaoshuoOtaGuide,
     ];
 
     final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
     expect(
-      illustrationAssets.where((path) => manifest.getAssetVariants(path) == null),
+      illustrationAssets
+          .where((path) => manifest.getAssetVariants(path) == null),
       isEmpty,
-      reason: 'Quiet-energy illustrations must be registered in pubspec.yaml.',
+      reason: 'Reused Xiaoshuo assets must be registered in pubspec.yaml.',
     );
 
     for (final path in illustrationAssets) {
       final bytes = await rootBundle.load(path);
       expect(bytes.lengthInBytes, greaterThan(1024), reason: path);
-      expect(_hasKnownRasterSignature(bytes.buffer.asUint8List()), isTrue,
-          reason: path);
+      expect(
+        _hasKnownRasterSignature(bytes.buffer.asUint8List()),
+        isTrue,
+        reason: path,
+      );
+    }
+  });
+
+  test('off-brand page illustrations are removed from the app bundle', () {
+    const removedAssets = <String>[
+      'assets/images/onboarding/onboarding_energy_overview.png',
+      'assets/images/onboarding/onboarding_status_alerts.png',
+      'assets/images/onboarding/onboarding_local_service.png',
+      'assets/images/states/network_connection_failed.png',
+      'assets/images/states/local_upgrade_connection.png',
+      'assets/images/provisioning/provisioning_companion_bottom.png',
+    ];
+    final pubspec = File('pubspec.yaml').readAsStringSync();
+
+    expect(
+      removedAssets.where((path) => File(path).existsSync()),
+      isEmpty,
+      reason: 'Superseded page illustrations must be deleted.',
+    );
+    for (final directory in const <String>[
+      'assets/images/onboarding/',
+      'assets/images/states/',
+      'assets/images/provisioning/',
+    ]) {
+      expect(pubspec, isNot(contains('- $directory')), reason: directory);
     }
   });
 }

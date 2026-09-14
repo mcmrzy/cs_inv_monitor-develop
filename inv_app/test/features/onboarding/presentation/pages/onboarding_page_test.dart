@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/storage_service.dart';
+import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/features/onboarding/data/onboarding_storage.dart';
 import 'package:inv_app/features/onboarding/presentation/pages/onboarding_page.dart';
@@ -96,28 +97,59 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('三页使用专用插画并更新固定底部进度', (tester) async {
+  testWidgets('三页使用统一小烁资产并更新固定底部进度', (tester) async {
     await pumpOnboarding(tester);
 
     expect(
       assetName(currentIllustration(tester)),
-      CsergyAssets.onboardingEnergyOverview,
+      CsergyAssets.xiaoshuoStation,
     );
     expect(find.byKey(const Key('onboarding-progress-0')), findsOneWidget);
 
     await nextPage(tester);
     expect(
       assetName(currentIllustration(tester)),
-      CsergyAssets.onboardingStatusAlerts,
+      CsergyAssets.xiaoshuoReminder,
     );
     expect(find.byKey(const Key('onboarding-progress-1')), findsOneWidget);
 
     await nextPage(tester);
     expect(
       assetName(currentIllustration(tester)),
-      CsergyAssets.onboardingLocalService,
+      CsergyAssets.xiaoshuoWifiGuide,
     );
     expect(find.byKey(const Key('onboarding-progress-2')), findsOneWidget);
+  });
+
+  testWidgets('引导页使用 App 蓝色语义 token', (tester) async {
+    await pumpOnboarding(tester);
+
+    final button = tester.widget<FilledButton>(
+      find.byKey(const Key('onboarding-primary-action')),
+    );
+    final buttonContext = tester.element(
+      find.byKey(const Key('onboarding-primary-action')),
+    );
+    expect(
+      button.style?.backgroundColor?.resolve(<WidgetState>{}),
+      AppColor.primary(buttonContext),
+    );
+
+    final illustration = currentIllustration(tester);
+    final illustrationContainer = tester.widget<Container>(
+      find
+          .ancestor(
+            of: find.byWidget(illustration),
+            matching: find.byType(Container),
+          )
+          .first,
+    );
+    final decoration = illustrationContainer.decoration! as BoxDecoration;
+    final gradient = decoration.gradient! as LinearGradient;
+    expect(gradient.colors, <Color>[
+      AppColor.primary(buttonContext).withValues(alpha: 0.16),
+      AppColor.primarySoft(buttonContext),
+    ]);
   });
 
   testWidgets('底部操作区在翻页时位置和高度保持稳定', (tester) async {

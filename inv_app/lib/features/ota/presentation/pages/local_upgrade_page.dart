@@ -218,7 +218,7 @@ class _ScanEmptyState extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           XiaoshuoStatePanel(
-            asset: CsergyAssets.localUpgradeConnection,
+            asset: CsergyAssets.xiaoshuoOtaGuide,
             title: title,
             message: message,
             size: 176,
