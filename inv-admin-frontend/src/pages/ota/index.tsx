@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
+import { buildFirmwareUploadFormData } from './firmwareUpload'
 import {
   Tabs,
   Button,
@@ -108,6 +109,21 @@ const UPGRADE_STATUS_MAP: Record<string, { i18nKey: string; color: string }> = {
   success: { i18nKey: 'ota.success', color: '#52c41a' },
   failed: { i18nKey: 'ota.failed', color: '#ff4d4f' },
   cancelled: { i18nKey: 'ota.cancelled', color: '#d9d9d9' },
+}
+
+// 设备上报的原始阶段(device_upgrades.stage)。status 只有笼统的「升级中」，
+// stage 才能说明此刻在下载 / 校验 / 写入 / 重启 —— 用于分阶段展示进度。
+const UPGRADE_STAGE_MAP: Record<string, string> = {
+  accepted: 'ota.stageAccepted',
+  downloading: 'ota.stageDownloading',
+  receiving: 'ota.stageDownloading',
+  verifying: 'ota.stageVerifying',
+  installing: 'ota.stageInstalling',
+  rebooting: 'ota.stageRebooting',
+  succeeded: 'ota.stageSucceeded',
+  failed: 'ota.stageFailed',
+  cancelled: 'ota.stageCancelled',
+  rolled_back: 'ota.stageRolledBack',
 }
 
 // =================== 主页面 ===================
@@ -502,7 +518,18 @@ const UpgradeTasksTab: React.FC = () => {
     },
     {
       title: t('ota.progress'), dataIndex: 'progress', key: 'progress', width: 150,
-      render: (_: any, record: DeviceUpgrade) => <Progress percent={record.progress} size="small" />,
+      render: (_: any, record: DeviceUpgrade) => {
+        // 阶段优先取设备上报的 stage；旧数据 stage 为空时回退到 status 文案
+        const stageKey = UPGRADE_STAGE_MAP[record.stage]
+        const statusCfg = UPGRADE_STATUS_MAP[record.status]
+        const label = stageKey ? t(stageKey) : statusCfg ? t(statusCfg.i18nKey) : record.status
+        return (
+          <Space direction="vertical" size={0} style={{ width: '100%' }}>
+            <span style={{ fontSize: 12, color: '#8c8c8c' }}>{label}</span>
+            <Progress percent={record.progress} size="small" />
+          </Space>
+        )
+      },
     },
     {
       title: t('ota.errorInfo'), dataIndex: 'error_message', key: 'error_message', ellipsis: true,
@@ -934,13 +961,13 @@ const FirmwareTab: React.FC = () => {
       const values = await form.validateFields()
       if (fileList.length === 0) { message.warning(t('ota.pleaseSelectFirmware')); return }
       setUploading(true)
-      const formData = new FormData()
       const modelValue = Array.isArray(values.model) ? values.model[0] : values.model
-      formData.append('file', fileList[0].originFileObj)
-      formData.append('model', modelValue)
-      formData.append('target_chip', values.targetChip)
-      formData.append('version', values.version)
-      formData.append('changelog', values.changelog || '')
+      const formData = buildFirmwareUploadFormData({
+        file: fileList[0].originFileObj,
+        model: modelValue,
+        targetChip: values.targetChip,
+        changelog: values.changelog,
+      })
       uploadMutation.mutate(formData)
     } catch { setUploading(false) }
   }
@@ -951,14 +978,11 @@ const FirmwareTab: React.FC = () => {
     return [...new Set([...firmwareModels, ...deviceModelNames])].map((m) => ({ label: m, value: m }))
   }, [allFirmwareList, deviceModels])
 
-  // 体积与 SHA-256 由服务端从固件本体计算；版本号默认从文件名提取
-  //（服务端还会对 ESP 读取镜像内嵌版本，此处仅是预填，可修改）。
+  // 版本、体积与 SHA-256 均由服务端从固件本体或规范文件名识别。
   const uploadProps: UploadProps = {
     accept: '.bin', maxCount: 1, fileList,
     beforeUpload: (file) => {
       setFileList([{ uid: '-1', name: file.name, status: 'done', originFileObj: file }])
-      const m = file.name.match(/(\d+\.\d+(?:\.\d+)?)/)
-      if (m) form.setFieldsValue({ version: m[1] })
       return false
     },
     onRemove: () => { setFileList([]) },
@@ -1059,9 +1083,6 @@ const FirmwareTab: React.FC = () => {
               <Select.Option value="dsp">{t('ota.dspChip')}</Select.Option>
               <Select.Option value="bms">{t('ota.bmsChip')}</Select.Option>
             </Select>
-          </Form.Item>
-          <Form.Item name="version" label={t('ota.firmwareVersionOptional')} extra={t('ota.firmwareVersionAutoHint')}>
-            <Input placeholder={t('ota.autoFillVersion')} />
           </Form.Item>
           <Form.Item name="changelog" label={t('ota.changelog')}><TextArea rows={3} placeholder={t('ota.inputChangelog')} /></Form.Item>
           <Form.Item label={t('ota.firmwareFile')}>
@@ -1445,7 +1466,7 @@ const AppVersionTab: React.FC = () => {
     }),
   })
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.ota.appVersions() })
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.ota.appVersionsAll() })
 
   const resetCreateForm = () => {
     setCreateOpen(false); form.resetFields(); setApkList([]); setUploading(false)

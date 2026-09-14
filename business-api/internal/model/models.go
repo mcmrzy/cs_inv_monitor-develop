@@ -421,6 +421,7 @@ type DeviceUpgrade struct {
 	TargetChip       string     `json:"target_chip"`
 	OldVersion       string     `json:"old_version"`
 	Status           string     `json:"status"` // pending/downloading/upgrading/success/failed/cancelled
+	Stage            string     `json:"stage"`  // 设备上报的原始阶段(比 status 细, 供前端分阶段展示)
 	Progress         int        `json:"progress"`
 	ErrorMessage     string     `json:"error_message"`
 	RetryCount       int        `json:"retry_count"`
