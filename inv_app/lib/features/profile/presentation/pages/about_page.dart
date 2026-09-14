@@ -1,17 +1,16 @@
 import 'dart:io';
 import 'dart:math' as math;
 
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/config/app_config.dart';
 import 'package:inv_app/core/services/app_update_service.dart';
+import 'package:inv_app/core/widgets/app_update_flow.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/core/widgets/settings_widgets.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
@@ -25,11 +24,6 @@ class _AboutPageState extends State<AboutPage> {
   /// 与编译产物始终一致；读取失败回退编译期常量。
   String _displayVersion = AppConfig.version;
   bool _checkingUpdate = false;
-  bool _downloading = false;
-  /// 下载进度：0.0~1.0；< 0 表示总大小未知（CDN 分块传输且服务端未给文件大小）
-  double _downloadProgress = 0;
-  int _downloadedBytes = 0;
-  CancelToken? _cancelToken;
 
   @override
   void initState() {
@@ -45,258 +39,13 @@ class _AboutPageState extends State<AboutPage> {
     }
   }
 
-  Future<void> _openUrl(String url) async {
-    final uri = Uri.tryParse(url);
-    if (uri != null && await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
-  }
-
   Future<void> _checkForUpdates() async {
     setState(() => _checkingUpdate = true);
-
     try {
-      final updateService = getIt<AppUpdateService>();
-      final info = await updateService.checkUpdate(
-        await updateService.resolveCurrentVersionCode(),
-      );
-
-      if (!mounted) return;
-
-      if (info.hasUpdate) {
-        _showUpdateDialog(info);
-      } else {
-        _showNoUpdateDialog();
-      }
-    } catch (e) {
-      if (mounted) {
-        final l10n = AppLocalizations.of(context)!;
-        AppToast.show(context, l10n.str('check_update_failed'), type: ToastType.error);
-      }
+      // 检查与更新弹窗统一走共享流程（与启动静默检查同一实现）
+      await AppUpdateFlow.checkAndPrompt(context);
     } finally {
       if (mounted) setState(() => _checkingUpdate = false);
-    }
-  }
-
-  void _showNoUpdateDialog() {
-    final l10n = AppLocalizations.of(context)!;
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(l10n.str('version_check')),
-        content: Text(l10n.str('already_latest')),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: Text(l10n.confirm),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showUpdateDialog(AppUpdateInfo info) {
-    showDialog(
-      context: context,
-      barrierDismissible: !info.shouldForceUpdate,
-      builder: (dialogContext) {
-        final l10n = AppLocalizations.of(dialogContext)!;
-        return PopScope(
-          canPop: !info.shouldForceUpdate,
-          child: StatefulBuilder(
-            builder: (dialogContext, setDialogState) => AlertDialog(
-              title: Row(
-                children: [
-                  const Icon(Icons.system_update_rounded, color: AppColors.blue),
-                  SizedBox(width: 8.w),
-                  Expanded(child: Text(l10n.str('new_version_found'))),
-                ],
-              ),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      l10n.str('latest_version_label', {'version': info.latestVersionName}),
-                      style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600),
-                    ),
-                    SizedBox(height: 4.h),
-                    Text(
-                      l10n.str('current_version_label', {'version': _displayVersion}),
-                      style: TextStyle(fontSize: 13.sp, color: AppColor.textHint(context)),
-                    ),
-                    if (info.changelog.isNotEmpty) ...[
-                      SizedBox(height: 12.h),
-                      Text(
-                        l10n.str('update_content'),
-                        style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600),
-                      ),
-                      SizedBox(height: 4.h),
-                      Text(
-                        info.changelog,
-                        style: TextStyle(
-                          fontSize: 12.sp,
-                          height: 1.5,
-                          color: AppColor.textSecondary(context),
-                        ),
-                      ),
-                    ],
-                    if (_downloading) ...[
-                      SizedBox(height: 16.h),
-                      if (_downloadProgress < 0)
-                        const LinearProgressIndicator()
-                      else
-                        LinearProgressIndicator(value: _downloadProgress.clamp(0.0, 1.0)),
-                      SizedBox(height: 4.h),
-                      Text(
-                        _downloadProgress < 0
-                            ? '${l10n.str('download_progress')} ${(_downloadedBytes / 1048576).toStringAsFixed(1)} MB'
-                            : '${l10n.str('download_progress')} ${(_downloadProgress * 100).clamp(0, 100).toStringAsFixed(0)}%',
-                        style: TextStyle(
-                          fontSize: 12.sp,
-                          color: AppColor.textHint(context),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              actions: [
-                if (!info.shouldForceUpdate)
-                  TextButton(
-                    onPressed: _downloading
-                        ? null
-                        : () {
-                            _cancelToken?.cancel();
-                            Navigator.pop(dialogContext);
-                          },
-                    child: Text(l10n.str('update_later')),
-                  ),
-                FilledButton(
-                  onPressed: _downloading
-                      ? null
-                      : () => _handleUpdate(info, dialogContext, setDialogState),
-                  child: Text(
-                    Platform.isIOS
-                        ? l10n.str('go_to_update')
-                        : (_downloading
-                            ? l10n.str('download_progress')
-                            : l10n.str('update_now')),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _showBrowserDownloadDialog(AppUpdateInfo info) {
-    final l10n = AppLocalizations.of(context)!;
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(l10n.str('browser_download_title')),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              l10n.str('browser_download_desc', {'version': info.latestVersionName}),
-              style: TextStyle(fontSize: 14.sp, height: 1.5),
-            ),
-            SizedBox(height: 8.h),
-            Text(
-              info.downloadUrl,
-              style: TextStyle(fontSize: 11.sp, color: AppColor.textHint(context)),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: Text(l10n.cancel),
-          ),
-          FilledButton(
-            onPressed: () {
-              Navigator.pop(dialogContext);
-              _openUrl(info.downloadUrl);
-            },
-            child: Text(l10n.str('open_in_browser')),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _handleUpdate(
-    AppUpdateInfo info,
-    BuildContext dialogContext,
-    void Function(void Function()) setDialogState,
-  ) async {
-    if (Platform.isIOS) {
-      // iOS: 跳转到 App Store / 分发链接
-      if (info.downloadUrl.isNotEmpty) {
-        await _openUrl(info.downloadUrl);
-      }
-      return;
-    }
-
-    // Android: 下载APK并安装
-    setState(() => _downloading = true);
-    setDialogState(() {});
-    _cancelToken = CancelToken();
-
-    try {
-      final updateService = getIt<AppUpdateService>();
-      final fileName = 'app-${info.latestVersionName}_b${info.latestVersionCode}.apk';
-
-      await updateService.downloadAndInstall(
-        info.downloadUrl,
-        fileName,
-        expectedSha256: info.fileSha256,
-        expectedMd5: info.fileMd5,
-        expectedSize: info.fileSize,
-        cancelToken: _cancelToken,
-        onProgress: (progress, receivedBytes) {
-          setState(() {
-            _downloadProgress = progress;
-            _downloadedBytes = receivedBytes;
-          });
-          setDialogState(() {});
-        },
-      );
-
-      if (dialogContext.mounted) {
-        Navigator.pop(dialogContext);
-      }
-    } catch (e) {
-      if (mounted) {
-        if (e is WebPageUrlException) {
-          // 下载链接是网页而非直接APK，关闭更新弹窗，提示用户用浏览器打开
-          if (dialogContext.mounted) Navigator.pop(dialogContext);
-          _showBrowserDownloadDialog(info);
-        } else if (e is! DioException) {
-          final l10n = AppLocalizations.of(context)!;
-          AppToast.show(
-            context,
-            l10n.str('download_failed', {'error': e.toString()}),
-            type: ToastType.error,
-          );
-        }
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _downloading = false;
-          _downloadProgress = 0;
-          _downloadedBytes = 0;
-        });
-      }
     }
   }
 
