@@ -78,20 +78,6 @@ abstract final class CsergyAssets {
   static const String bgJverify =
       'assets/images/backgrounds/bg_jverify_abstract.webp';
 
-  // ============ 静谧能源页面插画（透明底 PNG） ============
-  static const String onboardingEnergyOverview =
-      'assets/images/onboarding/onboarding_energy_overview.png';
-  static const String onboardingStatusAlerts =
-      'assets/images/onboarding/onboarding_status_alerts.png';
-  static const String onboardingLocalService =
-      'assets/images/onboarding/onboarding_local_service.png';
-  static const String networkConnectionFailed =
-      'assets/images/states/network_connection_failed.png';
-  static const String localUpgradeConnection =
-      'assets/images/states/local_upgrade_connection.png';
-  static const String provisioningCompanionBottom =
-      'assets/images/provisioning/provisioning_companion_bottom.png';
-
   // ============ 品牌与头像 ============
   static const String avatarDefault = 'assets/images/avatar_default.png';
 

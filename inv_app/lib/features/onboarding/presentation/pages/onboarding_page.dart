@@ -34,8 +34,6 @@ class OnboardingPage extends StatefulWidget {
 
 class _OnboardingPageState extends State<OnboardingPage> {
   static const _pageCount = 3;
-  static const _accent = Color(0xFF087E8B);
-  static const _accentDark = Color(0xFF67D6D4);
 
   final PageController _pageController = PageController();
   int _currentPage = 0;
@@ -109,7 +107,6 @@ class _OnboardingPageState extends State<OnboardingPage> {
                       ? const Key('onboarding-page-content')
                       : ValueKey('onboarding-page-$index'),
                   page: pages[index],
-                  accent: _accentFor(context),
                 ),
               ),
             ),
@@ -129,13 +126,10 @@ class _OnboardingPageState extends State<OnboardingPage> {
                           key: const Key('onboarding-primary-action'),
                           onPressed: _finishing ? null : _handlePrimaryAction,
                           style: FilledButton.styleFrom(
-                            backgroundColor: _accentFor(context),
-                            foregroundColor:
-                                Theme.of(context).brightness == Brightness.dark
-                                    ? const Color(0xFF09262A)
-                                    : Colors.white,
+                            backgroundColor: AppColor.primary(context),
+                            foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
+                              borderRadius: BorderRadius.circular(12),
                             ),
                           ),
                           child: Text(
@@ -160,9 +154,6 @@ class _OnboardingPageState extends State<OnboardingPage> {
     );
   }
 
-  Color _accentFor(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.dark ? _accentDark : _accent;
-
   bool _isChinese(BuildContext context) =>
       Localizations.localeOf(context).languageCode == 'zh';
 
@@ -177,19 +168,19 @@ class _OnboardingPageState extends State<OnboardingPage> {
     if (_isChinese(context)) {
       return [
         _OnboardingPageData(
-          asset: CsergyAssets.onboardingEnergyOverview,
+          asset: CsergyAssets.xiaoshuoStation,
           title: l10n.onboardingPage1Title,
           description: l10n.onboardingPage1Desc,
           semanticLabel: '看见能源',
         ),
         _OnboardingPageData(
-          asset: CsergyAssets.onboardingStatusAlerts,
+          asset: CsergyAssets.xiaoshuoReminder,
           title: l10n.onboardingPage2Title,
           description: l10n.onboardingPage2Desc,
           semanticLabel: '及时掌握状态',
         ),
         _OnboardingPageData(
-          asset: CsergyAssets.onboardingLocalService,
+          asset: CsergyAssets.xiaoshuoWifiGuide,
           title: l10n.onboardingPage3Title,
           description: l10n.onboardingPage3Desc,
           semanticLabel: '随时近场维护',
@@ -199,19 +190,19 @@ class _OnboardingPageState extends State<OnboardingPage> {
 
     return [
       _OnboardingPageData(
-        asset: CsergyAssets.onboardingEnergyOverview,
+        asset: CsergyAssets.xiaoshuoStation,
         title: l10n.onboardingPage1Title,
         description: l10n.onboardingPage1Desc,
         semanticLabel: 'Energy overview',
       ),
       _OnboardingPageData(
-        asset: CsergyAssets.onboardingStatusAlerts,
+        asset: CsergyAssets.xiaoshuoReminder,
         title: l10n.onboardingPage2Title,
         description: l10n.onboardingPage2Desc,
         semanticLabel: 'Status and alerts',
       ),
       _OnboardingPageData(
-        asset: CsergyAssets.onboardingLocalService,
+        asset: CsergyAssets.xiaoshuoWifiGuide,
         title: l10n.onboardingPage3Title,
         description: l10n.onboardingPage3Desc,
         semanticLabel: 'Local device service',
@@ -222,12 +213,10 @@ class _OnboardingPageState extends State<OnboardingPage> {
 
 class _OnboardingSlide extends StatelessWidget {
   final _OnboardingPageData page;
-  final Color accent;
 
   const _OnboardingSlide({
     super.key,
     required this.page,
-    required this.accent,
   });
 
   @override
@@ -256,13 +245,13 @@ class _OnboardingSlide extends StatelessWidget {
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
-                          accent.withValues(alpha: 0.16),
-                          const Color(0xFFF0A047).withValues(alpha: 0.12),
+                          AppColor.primary(context).withValues(alpha: 0.16),
+                          AppColor.primarySoft(context),
                         ],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
-                      borderRadius: BorderRadius.circular(28),
+                      borderRadius: BorderRadius.circular(20),
                     ),
                     child: Semantics(
                       image: true,
@@ -272,7 +261,7 @@ class _OnboardingSlide extends StatelessWidget {
                         fit: BoxFit.contain,
                         errorBuilder: (_, __, ___) => Icon(
                           Icons.solar_power_outlined,
-                          color: accent,
+                          color: AppColor.primary(context),
                           size: 72,
                         ),
                       ),
@@ -314,10 +303,6 @@ class _ProgressIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = Theme.of(context).brightness == Brightness.dark
-        ? _OnboardingPageState._accentDark
-        : _OnboardingPageState._accent;
-
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(_OnboardingPageState._pageCount, (index) {
@@ -329,7 +314,8 @@ class _ProgressIndicator extends StatelessWidget {
           height: 8,
           margin: const EdgeInsets.symmetric(horizontal: 4),
           decoration: BoxDecoration(
-            color: active ? accent : AppColor.border(context),
+            color:
+                active ? AppColor.primary(context) : AppColor.border(context),
             borderRadius: BorderRadius.circular(4),
           ),
         );

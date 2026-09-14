@@ -63,7 +63,7 @@ class ProvisioningCompanionFooter extends StatelessWidget {
         image: true,
         child: ExcludeSemantics(
           child: Image.asset(
-            CsergyAssets.provisioningCompanionBottom,
+            CsergyAssets.xiaoshuoWifiGuide,
             key: const Key('provisioning-companion-bottom'),
             width: 220.w.clamp(176.0, 240.0),
             fit: BoxFit.contain,
