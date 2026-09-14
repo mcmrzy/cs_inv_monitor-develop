@@ -1,7 +1,63 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:inv_app/core/services/firmware_download_service.dart';
 import 'package:inv_app/core/services/local_communication_service.dart';
 
 void main() {
+  group('DownloadedFirmwareInfo', () {
+    const complete = DownloadedFirmwareInfo(
+      firmwareId: 7,
+      filePath: '/tmp/fw.bin',
+      fileName: 'fw.bin',
+      fileSize: 1024,
+      deviceModel: 'CS-L10-6K2',
+      targetChip: 'arm',
+      version: '1.2.3',
+      sha256:
+          'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      signature: 'signature',
+      securityVersion: 1,
+    );
+
+    test('complete offline metadata includes model and file size', () {
+      expect(complete.hasUpgradeMetadata, isTrue);
+    });
+
+    test('missing firmware model is not upgrade-ready', () {
+      expect(
+        DownloadedFirmwareInfo(
+          firmwareId: complete.firmwareId,
+          filePath: complete.filePath,
+          fileName: complete.fileName,
+          fileSize: complete.fileSize,
+          targetChip: complete.targetChip,
+          version: complete.version,
+          sha256: complete.sha256,
+          signature: complete.signature,
+          securityVersion: complete.securityVersion,
+        ).hasUpgradeMetadata,
+        isFalse,
+      );
+    });
+
+    test('non-positive file size is not upgrade-ready', () {
+      expect(
+        DownloadedFirmwareInfo(
+          firmwareId: complete.firmwareId,
+          filePath: complete.filePath,
+          fileName: complete.fileName,
+          fileSize: 0,
+          deviceModel: complete.deviceModel,
+          targetChip: complete.targetChip,
+          version: complete.version,
+          sha256: complete.sha256,
+          signature: complete.signature,
+          securityVersion: complete.securityVersion,
+        ).hasUpgradeMetadata,
+        isFalse,
+      );
+    });
+  });
+
   LocalOtaManifest manifest({
     String target = 'esp',
     String sha256 =

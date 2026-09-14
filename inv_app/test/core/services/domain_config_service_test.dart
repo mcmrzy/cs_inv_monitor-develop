@@ -48,7 +48,7 @@ class _ThrowingAdapter implements HttpClientAdapter {
 
 void main() {
   group('DomainConfigService.refresh', () {
-    test('合法配置覆盖前端域并合并下载信任主机', () async {
+    test('合法配置覆盖前端域；下载域不再收集为信任主机', () async {
       final dio = Dio()
         ..options.baseUrl = 'https://api.example.com'
         ..httpClientAdapter = _StubAdapter(
@@ -61,13 +61,9 @@ void main() {
       await service.refresh();
 
       expect(service.frontendBaseUrl, 'https://www.example-online.com');
-      expect(
-        service.trustedDownloadHosts,
-        containsAll(<String>['download.example.com', 'download.jiuxiaoyw.online']),
-      );
     });
 
-    test('localhost/私网/非 http(s) 配置被拒绝，保留构建期默认值', () async {
+    test('localhost/私网/非 http(s) 前端域配置被拒绝，保留构建期默认值', () async {
       final dio = Dio()
         ..options.baseUrl = 'https://api.example.com'
         ..httpClientAdapter = _StubAdapter(
@@ -80,15 +76,6 @@ void main() {
       await service.refresh();
 
       expect(service.frontendBaseUrl, AppConfig.frontendBaseUrl);
-      expect(
-        service.trustedDownloadHosts,
-        equals(
-          AppConfig.trustedDownloadHosts
-              .split(',')
-              .map((h) => h.trim().toLowerCase())
-              .toList(),
-        ),
-      );
     });
 
     test('code 非 0 时保留默认值', () async {
