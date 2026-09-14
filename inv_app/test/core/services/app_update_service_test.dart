@@ -62,6 +62,32 @@ void main() {
     });
   });
 
+  group('resolveCurrentVersionName', () {
+    test('读取安装包真实版本名而非编译期常量', () async {
+      PackageInfo.setMockInitialValues(
+        appName: '辰烁光伏',
+        packageName: 'com.csergy.app1',
+        version: '1.0.2',
+        buildNumber: '12',
+        buildSignature: '',
+      );
+
+      expect(await service.resolveCurrentVersionName(), '1.0.2');
+    });
+
+    test('版本名为空时回退到编译期常量', () async {
+      PackageInfo.setMockInitialValues(
+        appName: '辰烁光伏',
+        packageName: 'com.csergy.app1',
+        version: '',
+        buildNumber: '12',
+        buildSignature: '',
+      );
+
+      expect(await service.resolveCurrentVersionName(), AppConfig.version);
+    });
+  });
+
   group('chunkRanges', () {
     test('整除时均分且末片对齐 total-1', () {
       expect(AppUpdateService.chunkRanges(100, 4), [
