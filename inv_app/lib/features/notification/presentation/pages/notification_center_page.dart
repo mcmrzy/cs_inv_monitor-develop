@@ -245,7 +245,8 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
                               return _LoadMoreTile(
                                 onLoadMore: () => context
                                     .read<NotificationBloc>()
-                                    .add(const SystemNotificationsLoadMoreRequested()),
+                                    .add(
+                                        const SystemNotificationsLoadMoreRequested()),
                               );
                             }
                             return _buildItemCard(
@@ -474,7 +475,8 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
     bool isAlarm = false,
   }) {
     // 图标按通知类型选：告警→warning(error色)；系统→notifications(primary色)
-    final iconData = isAlarm ? Icons.warning_amber_rounded : Icons.notifications_rounded;
+    final iconData =
+        isAlarm ? Icons.warning_amber_rounded : Icons.notifications_rounded;
     final iconColor = isAlarm ? AppColors.error : AppColors.primary;
     // 上行显示文本：优先 SN，无 SN 回退 title（不拼设备前缀）
     final hasSn = deviceSn != null && deviceSn.isNotEmpty;
@@ -550,36 +552,36 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
         ),
         tileBuilders: [
           (_) => _buildMenuTile(
-            icon: Icons.delete_outline,
-            color: AppColors.error,
-            title: l10n.str('notif_delete'),
-            subtitle: l10n.str('notif_delete_hint'),
-            onTap: () {
-              Navigator.pop(ctx);
-              _confirmDeleteNotification(notification);
-            },
-          ),
+                icon: Icons.delete_outline,
+                color: AppColors.error,
+                title: l10n.str('notif_delete'),
+                subtitle: l10n.str('notif_delete_hint'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _confirmDeleteNotification(notification);
+                },
+              ),
           (_) => _buildMenuTile(
-            icon: Icons.delete_sweep_outlined,
-            color: AppColors.error,
-            title: l10n.str('notif_clear_all'),
-            subtitle: l10n.str('notif_clear_all_hint'),
-            onTap: () {
-              Navigator.pop(ctx);
-              _confirmClearAll();
-            },
-          ),
+                icon: Icons.delete_sweep_outlined,
+                color: AppColors.error,
+                title: l10n.str('notif_clear_all'),
+                subtitle: l10n.str('notif_clear_all_hint'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _confirmClearAll();
+                },
+              ),
           (_) => _buildMenuTile(
-            // 批量管理是模式入口而非删除操作：主题色 + 多选图标（与设备弹窗语义色一致）
-            icon: Icons.checklist_rounded,
-            color: AppColors.primary,
-            title: l10n.str('notif_batch_manage'),
-            subtitle: l10n.str('notif_batch_manage_hint'),
-            onTap: () {
-              Navigator.pop(ctx);
-              _enterBatchMode();
-            },
-          ),
+                // 批量管理是模式入口而非删除操作：主题色 + 多选图标（与设备弹窗语义色一致）
+                icon: Icons.checklist_rounded,
+                color: AppColors.primary,
+                title: l10n.str('notif_batch_manage'),
+                subtitle: l10n.str('notif_batch_manage_hint'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _enterBatchMode();
+                },
+              ),
         ],
       ),
     );
@@ -604,27 +606,27 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
         ),
         tileBuilders: [
           (_) => _buildMenuTile(
-            icon: Icons.done_all,
-            color: AppColors.success,
-            title: l10n.str('notif_mark_handled'),
-            subtitle: l10n.str('notif_mark_handled_hint'),
-            onTap: () {
-              Navigator.pop(ctx);
-              context.read<AlarmBloc>().add(
-                    AlarmMarkReadRequested(alarmIds: [alarmId]),
-                  );
-            },
-          ),
+                icon: Icons.done_all,
+                color: AppColors.success,
+                title: l10n.str('notif_mark_handled'),
+                subtitle: l10n.str('notif_mark_handled_hint'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  context.read<AlarmBloc>().add(
+                        AlarmMarkReadRequested(alarmIds: [alarmId]),
+                      );
+                },
+              ),
           (_) => _buildMenuTile(
-            icon: Icons.delete_outline,
-            color: AppColors.error,
-            title: l10n.str('notif_delete'),
-            subtitle: l10n.str('notif_delete_hint'),
-            onTap: () {
-              Navigator.pop(ctx);
-              _confirmDeleteAlarm(alarmId);
-            },
-          ),
+                icon: Icons.delete_outline,
+                color: AppColors.error,
+                title: l10n.str('notif_delete'),
+                subtitle: l10n.str('notif_delete_hint'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _confirmDeleteAlarm(alarmId);
+                },
+              ),
         ],
       ),
     );
@@ -1007,7 +1009,8 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
                 ],
               ),
             ),
-            Icon(Icons.chevron_right, color: AppColor.textHint(context), size: 20.sp),
+            Icon(Icons.chevron_right,
+                color: AppColor.textHint(context), size: 20.sp),
           ],
         ),
       ),
@@ -1044,9 +1047,9 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
         icon = Icons.system_update;
         iconColor = AppColors.primary;
         break;
-      case SystemNotificationType.appUpdate:
-        icon = Icons.download;
-        iconColor = AppColors.purple;
+      case SystemNotificationType.legacyAppUpdate:
+        icon = Icons.info_outline;
+        iconColor = AppColor.textHint(context);
         break;
     }
 
@@ -1136,14 +1139,6 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
     if (notification.type == SystemNotificationType.otaAvailable) {
       return l10n.firmwareUpgrade;
     }
-    if (notification.type == SystemNotificationType.appUpdate) {
-      final version = notification.version ??
-          RegExp(r'v([^\s]+)').firstMatch(notification.title)?.group(1) ??
-          '';
-      return version.isEmpty
-          ? l10n.newVersionFound
-          : l10n.notifyAppUpdate(version);
-    }
     return notification.title;
   }
 
@@ -1153,10 +1148,6 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
   ) {
     if (notification.type == SystemNotificationType.otaAvailable) {
       return l10n.notifyOtaAvailable(notification.deviceSn ?? l10n.device);
-    }
-    if (notification.type == SystemNotificationType.appUpdate &&
-        notification.subtitle.isEmpty) {
-      return l10n.updateDetailsHint;
     }
     return notification.subtitle;
   }
@@ -1242,13 +1233,13 @@ class _LongPressFeedbackCard extends StatefulWidget {
   final VoidCallback? onLongPress;
   final Color? baseColor;
   final EdgeInsetsGeometry? margin;
+
   /// 批量选中态：整卡主色背景 + 描边高亮（优先于按压高亮）
   final bool selected;
   final BorderRadiusGeometry borderRadius;
 
   @override
-  State<_LongPressFeedbackCard> createState() =>
-      _LongPressFeedbackCardState();
+  State<_LongPressFeedbackCard> createState() => _LongPressFeedbackCardState();
 }
 
 class _LongPressFeedbackCardState extends State<_LongPressFeedbackCard> {

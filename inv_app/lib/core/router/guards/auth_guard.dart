@@ -25,7 +25,7 @@ class AuthGuard {
     '/profile',
     '/wifi-config',
     '/local-mode',
-    '/local-ota',
+    '/local-upgrade',
     // 设备绑定深链入口（csinv://bind）；实际绑定仍需登录态，
     // 未登录时由页面引导登录
     '/device/qr-bind',
@@ -40,6 +40,13 @@ class AuthGuard {
   /// 后端仍会拒绝，豁免仅保障本地直连与离线展示。
   static final RegExp _offlineDeviceRoutePattern = RegExp(
     r'^/device/[^/]+(/(control|protocol|history|settings|edit))?$',
+  );
+
+  /// Only the local execution leaf under `/ota/:sn` is offline-capable. Do not
+  /// whitelist the whole `/ota/` prefix because remote history/control routes
+  /// still require authentication.
+  static final RegExp _offlineLocalOtaRoutePattern = RegExp(
+    r'^/ota/[^/]+/local$',
   );
 
   static Future<String?> redirect(
@@ -62,6 +69,10 @@ class AuthGuard {
 
     // 设备详情子路由白名单放行（逐路由显式枚举，见上方复核结论）
     if (_offlineDeviceRoutePattern.hasMatch(currentPath)) {
+      return null;
+    }
+
+    if (_offlineLocalOtaRoutePattern.hasMatch(currentPath)) {
       return null;
     }
 

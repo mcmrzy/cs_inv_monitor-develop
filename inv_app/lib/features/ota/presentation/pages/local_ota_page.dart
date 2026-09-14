@@ -40,6 +40,8 @@ class LocalOTAPage extends StatefulWidget {
   final int? firmwareId;
   final String? firmwareUrl;
   final String? firmwareFileName;
+  final String? deviceModel;
+  final int? fileSize;
   final String? targetChip;
   final String? firmwareVersion;
   final String? fileSha256;
@@ -58,6 +60,8 @@ class LocalOTAPage extends StatefulWidget {
     this.firmwareId,
     this.firmwareUrl,
     this.firmwareFileName,
+    this.deviceModel,
+    this.fileSize,
     this.targetChip,
     this.firmwareVersion,
     this.fileSha256,
@@ -118,16 +122,24 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       widget.firmwareUrl ?? (_firmwareMeta?['download_url'] as String?);
   String? get _metaFileName =>
       widget.firmwareFileName ?? (_firmwareMeta?['file_name'] as String?);
+  String? get _metaDeviceModel =>
+      widget.deviceModel ??
+      (_firmwareMeta?['device_model'] as String?) ??
+      (_firmwareMeta?['model'] as String?);
+  int? get _metaFileSize =>
+      widget.fileSize ?? (_firmwareMeta?['file_size'] as num?)?.toInt();
   String? get _metaTargetChip =>
       widget.targetChip ?? (_firmwareMeta?['target_chip'] as String?);
-  String? get _metaFirmwareVersion => widget.firmwareVersion ??
-      (_firmwareMeta?['firmware_version'] as String?);
+  String? get _metaFirmwareVersion =>
+      widget.firmwareVersion ?? (_firmwareMeta?['firmware_version'] as String?);
   String? get _metaFileSha256 =>
       widget.fileSha256 ?? (_firmwareMeta?['file_sha256'] as String?);
-  int? get _metaSecurityVersion => widget.securityVersion ??
+  int? get _metaSecurityVersion =>
+      widget.securityVersion ??
       (_firmwareMeta?['security_version'] as num?)?.toInt();
   String? get _metaReleaseSignature =>
-      widget.releaseSignature ?? (_firmwareMeta?['release_signature'] as String?);
+      widget.releaseSignature ??
+      (_firmwareMeta?['release_signature'] as String?);
 
   @override
   void initState() {
@@ -147,11 +159,11 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         break;
     }
 
-    _downloadProgressSub =
-        _downloadService.progressStream.listen((event) {
+    _downloadProgressSub = _downloadService.progressStream.listen((event) {
       // 只关注本页固件任务的进度（进度流已按 firmwareId 分流）
       if (mounted &&
-          (widget.firmwareId == null || event.firmwareId == widget.firmwareId)) {
+          (widget.firmwareId == null ||
+              event.firmwareId == widget.firmwareId)) {
         setState(() {
           _downloadProgress = _normalizeProgress(
             event.progress,
@@ -175,8 +187,6 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         if (path != null && mounted) {
           setState(() {
             _selectedFilePath = path;
-            // 走路由参数元数据链路
-            _selectedDownloaded = null;
           });
         }
       }
@@ -215,6 +225,16 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     if (!mounted) return;
     setState(() {
       _downloadedFirmwares = items;
+      for (final item in items) {
+        final matchesRoute =
+            widget.firmwareId != null && item.firmwareId == widget.firmwareId;
+        final matchesSelection = _selectedFilePath == item.filePath;
+        if (matchesRoute || matchesSelection) {
+          _selectedFilePath = item.filePath;
+          _selectedDownloaded = item;
+          break;
+        }
+      }
       _firmwareListLoading = false;
     });
   }
@@ -419,7 +439,10 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   /// 自动扫描BLE设备并连接
   Future<void> _autoScanAndConnectBle() async {
     // 已在处理中或已连接成功，不重复触发
-    if (_scanningWifi || _autoConnecting || _isProcessing || _selectedAp != null) {
+    if (_scanningWifi ||
+        _autoConnecting ||
+        _isProcessing ||
+        _selectedAp != null) {
       return;
     }
 
@@ -452,7 +475,8 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         final l10n = AppLocalizations.of(context)!;
         setState(() {
           _scanningWifi = false;
-          _errorMessage = l10n.str('ble_connection_failed', {'sn': widget.deviceSN});
+          _errorMessage =
+              l10n.str('ble_connection_failed', {'sn': widget.deviceSN});
         });
         return;
       }
@@ -494,7 +518,9 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         fileName: _metaFileName!,
         firmwareId: widget.firmwareId!,
         // 持久化离线升级元数据，下次无网时也可从已下载列表选择升级
+        expectedSize: _metaFileSize,
         expectedSha256: _metaFileSha256,
+        deviceModel: _metaDeviceModel,
         targetChip: _metaTargetChip,
         version: _metaFirmwareVersion,
         signature: _metaReleaseSignature,
@@ -649,10 +675,9 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     // 缺失时回退路由参数（双 Tab 入口不传固件参数时，
     // 仅靠路由参数会导致校验必败，故必须支持离线元数据）
     final offline = _selectedDownloaded;
-    final target =
-        ((offline?.targetChip ?? _metaTargetChip) ?? 'esp')
-            .trim()
-            .toLowerCase();
+    final target = ((offline?.targetChip ?? _metaTargetChip) ?? 'esp')
+        .trim()
+        .toLowerCase();
     final version = (offline?.version ?? _metaFirmwareVersion)?.trim() ?? '';
     final sha256 =
         (offline?.sha256 ?? _metaFileSha256)?.trim().toLowerCase() ?? '';
@@ -660,8 +685,13 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         (offline?.signature ?? _metaReleaseSignature)?.trim() ?? '';
     final securityVersion =
         offline?.securityVersion ?? _metaSecurityVersion ?? 0;
+    final firmwareModel =
+        (offline?.deviceModel ?? _metaDeviceModel)?.trim() ?? '';
+    final fileSize = offline?.fileSize ?? _metaFileSize ?? 0;
 
     if ((target != 'esp' && target != 'arm') ||
+        fileSize <= 0 ||
+        firmwareModel.isEmpty ||
         version.isEmpty ||
         sha256.isEmpty ||
         signature.isEmpty ||
@@ -693,10 +723,9 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       channel: widget.channel,
       deviceSN: widget.deviceSN,
       deviceIP: widget.deviceIP,
-      isHotspotConnected:
-          widget.channel == LocalCommunicationChannel.wifiAp
-              ? _isDeviceHotspotConnected
-              : null,
+      isHotspotConnected: widget.channel == LocalCommunicationChannel.wifiAp
+          ? _isDeviceHotspotConnected
+          : null,
       reconnectHotspot: widget.channel == LocalCommunicationChannel.wifiAp
           ? _reconnectDeviceHotspot
           : null,
@@ -712,6 +741,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       filePath: _selectedFilePath!,
       manifest: manifest,
       fallbackVersion: _metaFirmwareVersion ?? '',
+      firmwareModel: firmwareModel,
     );
   }
 
@@ -760,14 +790,14 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
           final err = s.error;
           _resultMessage = err != null
               ? (OtaErrorMapper.carriesDetail(err)
-                    ? l10n.str(
-                        OtaErrorMapper.l10nKeyOf(err),
-                        {'error': '$err'},
-                      )
-                    : l10n.str(OtaErrorMapper.l10nKeyOf(err)))
+                  ? l10n.str(
+                      OtaErrorMapper.l10nKeyOf(err),
+                      {'error': '$err'},
+                    )
+                  : l10n.str(OtaErrorMapper.l10nKeyOf(err)))
               : (s.deviceMessage.isNotEmpty
-                    ? s.deviceMessage
-                    : l10n.upgradeFailed);
+                  ? s.deviceMessage
+                  : l10n.upgradeFailed);
           _currentStep = LocalOTAStep.result;
         case LocalOTAPhase.timedOut:
           _isProcessing = false;
@@ -922,27 +952,29 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
             // 显示当前使用的通道类型
             Padding(
               padding: EdgeInsets.only(right: 16.w),
-            child: Chip(
-              label: Text(
-                widget.channel == LocalCommunicationChannel.ble ? 'BLE' : 'WiFi',
-                style: TextStyle(
-                  fontSize: 12.sp,
-                  fontWeight: FontWeight.w600,
-                  color: widget.channel == LocalCommunicationChannel.ble
-                      ? Colors.blue
-                      : Colors.orange,
+              child: Chip(
+                label: Text(
+                  widget.channel == LocalCommunicationChannel.ble
+                      ? 'BLE'
+                      : 'WiFi',
+                  style: TextStyle(
+                    fontSize: 12.sp,
+                    fontWeight: FontWeight.w600,
+                    color: widget.channel == LocalCommunicationChannel.ble
+                        ? Colors.blue
+                        : Colors.orange,
+                  ),
                 ),
+                backgroundColor: widget.channel == LocalCommunicationChannel.ble
+                    ? Colors.blue.withValues(alpha: 0.1)
+                    : Colors.orange.withValues(alpha: 0.1),
+                side: BorderSide.none,
+                padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 2.h),
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
-              backgroundColor: widget.channel == LocalCommunicationChannel.ble
-                  ? Colors.blue.withValues(alpha: 0.1)
-                  : Colors.orange.withValues(alpha: 0.1),
-              side: BorderSide.none,
-              padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 2.h),
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
         body: body,
       ),
     );
@@ -1106,7 +1138,8 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
               else
                 Text(
                   l10n.firmwareDownloadHint,
-                  style: TextStyle(fontSize: 13.sp, color: AppColor.textHint(context)),
+                  style: TextStyle(
+                      fontSize: 13.sp, color: AppColor.textHint(context)),
                 ),
               if (_errorMessage != null) ...[
                 SizedBox(height: 8.h),
@@ -1327,7 +1360,8 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
               Icon(
                 Icons.memory_rounded,
                 size: 18.sp,
-                color: selected ? AppColors.primary : AppColor.textHint(context),
+                color:
+                    selected ? AppColors.primary : AppColor.textHint(context),
               ),
               SizedBox(width: 8.w),
               Expanded(
@@ -1428,7 +1462,8 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                         ? l10n.checkConnection
                         : _selectedAp != null
                             ? (widget.channel == LocalCommunicationChannel.ble
-                                ? l10n.str('connecting_ble_device', {'sn': widget.deviceSN})
+                                ? l10n.str('connecting_ble_device',
+                                    {'sn': widget.deviceSN})
                                 : l10n.str(
                                     'connecting_to',
                                     {'ssid': _selectedAp?.ssid ?? ''},
@@ -1980,7 +2015,8 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                 SizedBox(height: 2.h),
                 Text(
                   widget.deviceSN,
-                  style: TextStyle(fontSize: 12.sp, color: AppColor.textHint(context)),
+                  style: TextStyle(
+                      fontSize: 12.sp, color: AppColor.textHint(context)),
                 ),
               ],
             ),

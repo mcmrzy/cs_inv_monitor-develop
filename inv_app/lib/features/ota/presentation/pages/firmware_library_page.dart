@@ -102,10 +102,10 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
     setState(() {
       _models = models;
       _loadingModels = false;
-      _selectedModel ??= widget.initialModel != null &&
-              models.contains(widget.initialModel)
-          ? widget.initialModel
-          : models.firstOrNull;
+      _selectedModel ??=
+          widget.initialModel != null && models.contains(widget.initialModel)
+              ? widget.initialModel
+              : models.firstOrNull;
     });
     if (_selectedModel != null && _packages.isEmpty && _error == null) {
       _loadPackages(_selectedModel!);
@@ -117,7 +117,8 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
       _loadingPackages = true;
       _error = null;
     });
-    final result = await getIt<OtaRepository>().listUpgradePackages(model: model);
+    final result =
+        await getIt<OtaRepository>().listUpgradePackages(model: model);
     if (!mounted) return;
     result.fold(
       (failure) => setState(() {
@@ -170,7 +171,10 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
   List<Map<String, dynamic>> _chipsOf(Map<String, dynamic> pkg) {
     final chips = pkg['items'];
     if (chips is List) {
-      return chips.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+      return chips
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
     }
     return const [];
   }
@@ -225,12 +229,12 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
         if (!await _downloadService.isFirmwareDownloaded(firmwareId)) {
           await _downloadService.downloadFirmware(
             url: url,
-            fileName:
-                (chip['file_name'] ?? '').toString().isEmpty
-                    ? '${chip['target_chip']}_${chip['firmware_version']}.bin'
-                    : (chip['file_name'] ?? '').toString(),
+            fileName: (chip['file_name'] ?? '').toString().isEmpty
+                ? '${chip['target_chip']}_${chip['firmware_version']}.bin'
+                : (chip['file_name'] ?? '').toString(),
             firmwareId: firmwareId,
             expectedSize: (chip['file_size'] as num?)?.toInt(),
+            deviceModel: _selectedModel,
             expectedSha256: (chip['file_sha256'] ?? '').toString().isEmpty
                 ? null
                 : (chip['file_sha256'] ?? '').toString(),
@@ -278,31 +282,14 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
     }
   }
 
-  /// 已下载 → 本地升级：优先选择同型号的绑定设备
-  void _goLocalUpgrade(Map<String, dynamic> pkg) {
-    final l10n = AppLocalizations.of(context)!;
-    final state = context.read<DeviceBloc>().state;
-    final devices = state is DeviceListLoaded ? state.devices : const [];
+  /// 已下载 → 本地升级：进入统一 BLE/AP 扫描页。
+  ///
+  /// 扫描结果不依赖云端绑定设备；真正上传前由共用控制器读取设备型号，
+  /// 并与所选固件的持久化型号严格比对。
+  void _goLocalUpgrade(Map<String, dynamic> _) {
     final model = _selectedModel ?? '';
-    dynamic matched;
-    for (final d in devices) {
-      if (_str(d, ['model', 'device_model']) == model) {
-        matched = d;
-        break;
-      }
-    }
-    if (matched == null) {
-      AppToast.show(
-        context,
-        l10n.str('ota_firmware_library_no_device'),
-        type: ToastType.info,
-      );
-      return;
-    }
-    final sn = _str(matched, ['sn', 'device_sn']);
     context.push(
-      '/local-upgrade?sn=${Uri.encodeComponent(sn)}'
-      '&model=${Uri.encodeComponent(model)}',
+      '/local-upgrade?model=${Uri.encodeComponent(model)}',
     );
   }
 
@@ -549,9 +536,7 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
                   style: FilledButton.styleFrom(
                     minimumSize: Size(0, 36.h),
                   ),
-                  onPressed: downloading
-                      ? null
-                      : () => _downloadPackage(pkg),
+                  onPressed: downloading ? null : () => _downloadPackage(pkg),
                   icon: Icon(
                     downloading
                         ? Icons.downloading_rounded

@@ -94,4 +94,28 @@ void main() {
       semantics.dispose();
     });
   });
+
+  testWidgets('provisioning companion is a responsive bottom illustration',
+      (tester) async {
+    await tester.pumpWidget(
+      _testApp(
+        const SingleChildScrollView(
+          child: Column(
+            children: [
+              Text('business content'),
+              ProvisioningCompanionFooter(),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('business content'), findsOneWidget);
+    expect(find.byKey(const Key('provisioning-companion-bottom')), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.byKey(const Key('provisioning-companion-bottom'))).dy,
+      greaterThan(tester.getBottomLeft(find.text('business content')).dy),
+    );
+    expect(tester.takeException(), isNull);
+  });
 }

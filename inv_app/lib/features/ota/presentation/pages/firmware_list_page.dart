@@ -169,6 +169,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                   firmwareId: firmwareId,
                   expectedSize: (chip['file_size'] as num?)?.toInt(),
                   expectedSha256: chip['file_sha256'] as String?,
+                  deviceModel: widget.deviceModel,
                   // 持久化离线升级元数据，支持无网时从已下载列表直接本地升级
                   targetChip: chip['target_chip'] as String?,
                   version: chip['firmware_version'] as String?,
@@ -229,7 +230,8 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
         });
 
         final l10n = AppLocalizations.of(context)!;
-        AppToast.show(context, l10n.str('pre_download_failed', {'error': '$e'}), type: ToastType.error);
+        AppToast.show(context, l10n.str('pre_download_failed', {'error': '$e'}),
+            type: ToastType.error);
       }
     }
   }
@@ -762,7 +764,8 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
               SizedBox(width: 4.w),
               Text(
                 dateStr,
-                style: TextStyle(fontSize: 12.sp, color: AppColor.textHint(context)),
+                style: TextStyle(
+                    fontSize: 12.sp, color: AppColor.textHint(context)),
               ),
               const Spacer(),
               if (!isCurrent) ...[
@@ -925,9 +928,10 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
   String _localOtaRoute(Map chip) {
     final firmwareId = chip['firmware_id'] as int? ?? 0;
     return Uri(
-      path: '/ota/${widget.sn}/local',
+      path: '/local-upgrade',
       queryParameters: {
-        'ip': '192.168.4.1',
+        'sn': widget.sn,
+        'model': widget.deviceModel,
         'firmware_id': '$firmwareId',
       },
     ).toString();

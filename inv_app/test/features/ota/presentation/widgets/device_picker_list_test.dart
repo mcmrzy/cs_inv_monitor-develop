@@ -103,8 +103,7 @@ void main() {
     expect(devices[100].readCount, 0);
     final verticalScrollable = find.byWidgetPredicate(
       (widget) =>
-          widget is Scrollable &&
-          widget.axisDirection == AxisDirection.down,
+          widget is Scrollable && widget.axisDirection == AxisDirection.down,
     );
 
     await tester.scrollUntilVisible(
@@ -136,8 +135,7 @@ void main() {
       },
     ];
     Map<String, dynamic>? selected;
-    final l10n =
-        await AppLocalizations.delegate.load(const Locale('zh', 'CN'));
+    final l10n = await AppLocalizations.delegate.load(const Locale('zh', 'CN'));
 
     await pumpPicker(
       tester,
@@ -148,7 +146,7 @@ void main() {
     );
 
     expect(find.text('Choose one device'), findsOneWidget);
-    expect(find.text('BLE'), findsOneWidget);
+    expect(find.text('BLE'), findsNWidgets(2));
     expect(find.text('WiFi'), findsNWidgets(2));
     expect(
       tester.getTopLeft(find.text('First inverter')).dy,

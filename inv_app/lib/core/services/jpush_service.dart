@@ -204,6 +204,7 @@ class JPushService {
   /// - device_alarm / alarm_cleared / device_offline / device_online → 通知中心页面（/alarms）
   ///   （上下线/告警等通知统一进通知中心，用户可在列表中查看具体告警并进入详情）
   /// - system_announcement → 通知中心页面（/alarms）
+  /// - app_update → 已下线，显式忽略
   /// - 未知类型 → 兜底打开通知中心，避免点击无响应
   void _handleNavigation(JPushNotification notification) {
     final notifyType = notification.notifyType;
@@ -220,7 +221,7 @@ class JPushService {
         AppRouter.router.go('/ota');
         break;
       case 'app_update':
-        AppRouter.router.go('/settings');
+        debugPrint('[JPushService] Ignoring retired app_update notification');
         break;
       case 'daily_report':
         AppRouter.router.go('/statistics');

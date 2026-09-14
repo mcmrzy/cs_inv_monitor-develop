@@ -34,19 +34,6 @@ extension _WifiConfigProvisionSections on _WifiConfigPageState {
         ),
         SizedBox(height: 24.h),
         if (isStep0) ...[
-          // 小烁配网引导插画：连接设备热点前的流程引导（美术路由 C7/guide-wifi）
-          ClipRRect(
-            borderRadius: BorderRadius.circular(14.r),
-            // 图片为 1536x1024 横图：等比容器完整显示，避免 cover 裁剪人物头部
-            child: AspectRatio(
-              aspectRatio: 3 / 2,
-              child: Image.asset(
-                CsergyAssets.xiaoshuoWifiGuide,
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
-          SizedBox(height: 16.h),
           SizedBox(
             width: double.infinity,
             height: 46.h,
@@ -504,22 +491,6 @@ extension _WifiConfigProvisionSections on _WifiConfigPageState {
           ],
         ),
         SizedBox(height: 24.h),
-
-        // 小烁配网引导插画：BLE 扫描阶段流程引导（美术路由 C7/guide-wifi）
-        if (showScanPhase) ...[
-          ClipRRect(
-            borderRadius: BorderRadius.circular(14.r),
-            // 图片为 1536x1024 横图：等比容器完整显示，避免 cover 裁剪人物头部
-            child: AspectRatio(
-              aspectRatio: 3 / 2,
-              child: Image.asset(
-                CsergyAssets.xiaoshuoWifiGuide,
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
-          SizedBox(height: 16.h),
-        ],
 
         // 配网成功显示
         if (showSuccessPhase) ...[

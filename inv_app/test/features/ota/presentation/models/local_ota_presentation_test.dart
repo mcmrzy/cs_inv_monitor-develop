@@ -2,6 +2,70 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:inv_app/features/ota/presentation/models/local_ota_presentation.dart';
 
 void main() {
+  group('local OTA device model compatibility', () {
+    test('accepts the same normalized firmware and connected-device model', () {
+      expect(
+        checkLocalOtaDeviceCompatibility(
+          firmwareModel: ' cs-l10-6k2 ',
+          deviceInfo: const {'model': 'CS-L10-6K2'},
+        ),
+        LocalOtaDeviceCompatibility.compatible,
+      );
+    });
+
+    test('reads model from nested device info payload', () {
+      expect(
+        checkLocalOtaDeviceCompatibility(
+          firmwareModel: 'CS-L10-6K2',
+          deviceInfo: const {
+            'device': {'device_model': 'cs-l10-6k2'},
+          },
+        ),
+        LocalOtaDeviceCompatibility.compatible,
+      );
+    });
+
+    test('fails closed when firmware model is missing', () {
+      expect(
+        checkLocalOtaDeviceCompatibility(
+          firmwareModel: null,
+          deviceInfo: const {'model': 'CS-L10-6K2'},
+        ),
+        LocalOtaDeviceCompatibility.missingFirmwareModel,
+      );
+    });
+
+    test('fails closed when connected device model is missing', () {
+      expect(
+        checkLocalOtaDeviceCompatibility(
+          firmwareModel: 'CS-L10-6K2',
+          deviceInfo: const {'sn': 'TEST001'},
+        ),
+        LocalOtaDeviceCompatibility.missingDeviceModel,
+      );
+    });
+
+    test('treats device placeholder model as missing', () {
+      expect(
+        checkLocalOtaDeviceCompatibility(
+          firmwareModel: 'CS-L10-6K2',
+          deviceInfo: const {'model': 'unknown'},
+        ),
+        LocalOtaDeviceCompatibility.missingDeviceModel,
+      );
+    });
+
+    test('rejects a firmware built for another device model', () {
+      expect(
+        checkLocalOtaDeviceCompatibility(
+          firmwareModel: 'CS-L10-6K2',
+          deviceInfo: const {'model_name': 'CS-L10-8K'},
+        ),
+        LocalOtaDeviceCompatibility.mismatch,
+      );
+    });
+  });
+
   group('normalizeLocalOtaProgress', () {
     test('keeps valid progress unchanged', () {
       expect(normalizeLocalOtaProgress(0), 0);

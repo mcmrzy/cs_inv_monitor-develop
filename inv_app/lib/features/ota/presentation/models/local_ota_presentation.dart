@@ -14,6 +14,57 @@ enum LocalOtaStatusKind {
   unknown,
 }
 
+/// Result of comparing cached firmware metadata with the device reached over
+/// the selected local transport. Missing metadata is deliberately distinct
+/// from a mismatch so the UI can explain why the upgrade was blocked.
+enum LocalOtaDeviceCompatibility {
+  compatible,
+  missingFirmwareModel,
+  missingDeviceModel,
+  mismatch,
+}
+
+String? _readDeviceModel(Map<String, dynamic> info) {
+  String? read(Map<dynamic, dynamic> source) {
+    for (final key in const ['model', 'device_model', 'model_name']) {
+      final value = source[key]?.toString().trim() ?? '';
+      if (value.isNotEmpty) return value;
+    }
+    return null;
+  }
+
+  final direct = read(info);
+  if (direct != null) return direct;
+  final nested = info['device'];
+  return nested is Map ? read(nested) : null;
+}
+
+String _normalizeDeviceModel(String? value) {
+  final normalized = value?.trim().toUpperCase() ?? '';
+  if (const {'', 'UNKNOWN', 'N/A', 'NULL', '--', '—'}.contains(normalized)) {
+    return '';
+  }
+  return normalized;
+}
+
+/// Fail-closed model validation used immediately before a local OTA upload.
+LocalOtaDeviceCompatibility checkLocalOtaDeviceCompatibility({
+  required String? firmwareModel,
+  required Map<String, dynamic> deviceInfo,
+}) {
+  final expected = _normalizeDeviceModel(firmwareModel);
+  if (expected.isEmpty) {
+    return LocalOtaDeviceCompatibility.missingFirmwareModel;
+  }
+  final actual = _normalizeDeviceModel(_readDeviceModel(deviceInfo));
+  if (actual.isEmpty) {
+    return LocalOtaDeviceCompatibility.missingDeviceModel;
+  }
+  return actual == expected
+      ? LocalOtaDeviceCompatibility.compatible
+      : LocalOtaDeviceCompatibility.mismatch;
+}
+
 /// Converts an arbitrary progress value to the range accepted by Flutter's
 /// progress indicators.
 double normalizeLocalOtaProgress(

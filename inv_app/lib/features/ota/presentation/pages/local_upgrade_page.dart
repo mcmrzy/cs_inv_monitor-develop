@@ -31,10 +31,15 @@ class LocalUpgradePage extends StatefulWidget {
   /// 设备型号（路由兼容保留，不再做型号能力过滤）
   final String deviceModel;
 
+  /// Optional cached firmware selected by the caller. Kept across transport
+  /// selection so package upgrades can still advance one item at a time.
+  final int? firmwareId;
+
   const LocalUpgradePage({
     super.key,
     required this.deviceSN,
     required this.deviceModel,
+    this.firmwareId,
   });
 
   @override
@@ -97,9 +102,9 @@ class _LocalUpgradePageState extends State<LocalUpgradePage>
       // 子页内另启用 AutomaticKeepAliveClientMixin 双重保险。
       body: TabBarView(
         controller: _tabController,
-        children: const [
-          _BleUpgradeTab(),
-          _ApUpgradeTab(),
+        children: [
+          _BleUpgradeTab(firmwareId: widget.firmwareId),
+          _ApUpgradeTab(firmwareId: widget.firmwareId),
         ],
       ),
     );
@@ -116,19 +121,21 @@ String _parseSn(String raw) {
 }
 
 /// 跳转本地升级执行页（[LocalOTAPage] 对应路由 /ota/:sn/local）
-void _pushLocalOta(
+Future<bool?> _pushLocalOta(
   BuildContext context, {
   required String sn,
   required String channel,
+  int? firmwareId,
 }) {
   final uri = Uri(
     path: '/ota/$sn/local',
     queryParameters: {
       'ip': '192.168.4.1',
       'channel': channel,
+      if (firmwareId != null) 'firmware_id': '$firmwareId',
     },
   );
-  context.push(uri.toString());
+  return context.push<bool>(uri.toString());
 }
 
 /// 「开始扫描」主按钮（两个 Tab 共用样式，参考 local_mode_page）
@@ -211,7 +218,7 @@ class _ScanEmptyState extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           XiaoshuoStatePanel(
-            asset: CsergyAssets.xiaoshuoReminder,
+            asset: CsergyAssets.localUpgradeConnection,
             title: title,
             message: message,
             size: 176,
@@ -256,7 +263,9 @@ class _ScannedBleDevice {
 
 /// BLE 升级 Tab：实时扫描 CSIV-CT 广播 → 连接读 SN → 进入升级执行页
 class _BleUpgradeTab extends StatefulWidget {
-  const _BleUpgradeTab();
+  final int? firmwareId;
+
+  const _BleUpgradeTab({this.firmwareId});
 
   @override
   State<_BleUpgradeTab> createState() => _BleUpgradeTabState();
@@ -311,23 +320,21 @@ class _BleUpgradeTabState extends State<_BleUpgradeTab>
     });
 
     await _scanSub?.cancel();
-    _scanSub = _adapter
-        .scan(
-          serviceUuids: const [BleCtProtocol.serviceUuid],
-          timeout: const Duration(seconds: 15),
-        )
-        .listen(
-          _onScanResult,
-          onError: (Object e) {
-            if (!mounted) return;
-            AppToast.show(
-              context,
-              l10n.str('ble_scan_failed'),
-              type: ToastType.error,
-            );
-            _finishScan();
-          },
+    _scanSub = _adapter.scan(
+      serviceUuids: const [BleCtProtocol.serviceUuid],
+      timeout: const Duration(seconds: 15),
+    ).listen(
+      _onScanResult,
+      onError: (Object e) {
+        if (!mounted) return;
+        AppToast.show(
+          context,
+          l10n.str('ble_scan_failed'),
+          type: ToastType.error,
         );
+        _finishScan();
+      },
+    );
 
     // 底层扫描到 15s 自动停止但流不关闭，此处定时收尾
     _scanStopTimer?.cancel();
@@ -386,7 +393,13 @@ class _BleUpgradeTabState extends State<_BleUpgradeTab>
         );
         return;
       }
-      _pushLocalOta(context, sn: sn, channel: 'ble');
+      final upgraded = await _pushLocalOta(
+        context,
+        sn: sn,
+        channel: 'ble',
+        firmwareId: widget.firmwareId,
+      );
+      if (upgraded == true && mounted) context.pop(true);
     } catch (_) {
       // 连接失败：清理会话并 Toast 提示
       await manager.disconnectDevice(device.macAddress);
@@ -508,7 +521,9 @@ class _BleUpgradeTabState extends State<_BleUpgradeTab>
 
 /// AP 升级 Tab：扫描 CS_INV_/CS-INV- 热点 → 连接 → 进入升级执行页
 class _ApUpgradeTab extends StatefulWidget {
-  const _ApUpgradeTab();
+  final int? firmwareId;
+
+  const _ApUpgradeTab({this.firmwareId});
 
   @override
   State<_ApUpgradeTab> createState() => _ApUpgradeTabState();
@@ -570,7 +585,13 @@ class _ApUpgradeTabState extends State<_ApUpgradeTab>
       if (!mounted) return;
       if (success) {
         // 设备热点固定 IP：192.168.4.1；SN 从 SSID 去前缀解析
-        _pushLocalOta(context, sn: _parseSn(device.ssid), channel: 'wifi');
+        final upgraded = await _pushLocalOta(
+          context,
+          sn: _parseSn(device.ssid),
+          channel: 'wifi',
+          firmwareId: widget.firmwareId,
+        );
+        if (upgraded == true && mounted) context.pop(true);
       } else {
         AppToast.show(context, l10n.connectionFailed, type: ToastType.error);
       }

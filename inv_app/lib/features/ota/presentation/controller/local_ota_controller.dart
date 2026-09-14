@@ -8,6 +8,7 @@ import 'package:inv_app/features/ota/data/datasources/local_ota_result_sync_queu
 import 'package:inv_app/features/ota/domain/entities/local_channel.dart';
 import 'package:inv_app/features/ota/domain/repositories/local_communication_repository.dart';
 import 'package:inv_app/features/ota/domain/repositories/ota_repository.dart';
+import 'package:inv_app/features/ota/presentation/models/local_ota_presentation.dart';
 
 /// 本地 OTA 执行阶段
 enum LocalOTAPhase {
@@ -71,8 +72,9 @@ class LocalOTAControllerState {
       phase: phase ?? this.phase,
       uploadProgress: uploadProgress ?? this.uploadProgress,
       upgradeProgress: upgradeProgress ?? this.upgradeProgress,
-      statusOverrideKey:
-          statusOverrideKey != null ? statusOverrideKey() : this.statusOverrideKey,
+      statusOverrideKey: statusOverrideKey != null
+          ? statusOverrideKey()
+          : this.statusOverrideKey,
       statusOverrideParams: statusOverrideParams ?? this.statusOverrideParams,
       deviceStatus: deviceStatus ?? this.deviceStatus,
       deviceMessage: deviceMessage ?? this.deviceMessage,
@@ -139,8 +141,36 @@ class LocalOTAController extends ChangeNotifier {
     required String filePath,
     required LocalOtaManifest manifest,
     required String fallbackVersion,
+    required String firmwareModel,
   }) async {
     final isEsp = manifest.target.toLowerCase() == 'esp';
+
+    // Both transports must prove that the reached device matches the cached
+    // firmware before any upload bytes leave the App. Missing/unknown payloads
+    // are rejected just like explicit mismatches.
+    try {
+      final deviceInfo = await _communication.getDeviceInfo(_deviceIP);
+      final compatibility = checkLocalOtaDeviceCompatibility(
+        firmwareModel: firmwareModel,
+        deviceInfo: deviceInfo,
+      );
+      if (compatibility != LocalOtaDeviceCompatibility.compatible) {
+        throw LocalOtaDeviceModelException(
+          'local OTA device model validation failed: ${compatibility.name}',
+        );
+      }
+    } catch (e) {
+      _emit(_state.copyWith(
+        phase: LocalOTAPhase.failed,
+        error: () => e is LocalOtaDeviceModelException
+            ? e
+            : LocalOtaDeviceModelException(
+                'local OTA device model unavailable: $e',
+              ),
+      ));
+      _onTerminateConnection?.call();
+      return;
+    }
 
     // ---- 1. 上传固件 ----
     _emit(_state.copyWith(
@@ -186,8 +216,7 @@ class LocalOTAController extends ChangeNotifier {
     _emit(_state.copyWith(
       phase: LocalOTAPhase.upgrading,
       uploadProgress: 1.0,
-      statusOverrideKey: () =>
-          isEsp ? 'push_complete_wait_reboot' : null,
+      statusOverrideKey: () => isEsp ? 'push_complete_wait_reboot' : null,
     ));
     if (isEsp) {
       // ESP 自升级：传完固件 → 写 Flash → 立即重启（~500ms）
@@ -314,8 +343,7 @@ class LocalOTAController extends ChangeNotifier {
           if (newVersion != null) {
             await _reportResult(
               targetChip: targetChip,
-              chipNewVersion:
-                  chipNewVersion.isNotEmpty ? chipNewVersion : '',
+              chipNewVersion: chipNewVersion.isNotEmpty ? chipNewVersion : '',
               mainVersion: mainVer.isNotEmpty ? mainVer : null,
             );
           }

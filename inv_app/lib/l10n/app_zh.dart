@@ -1212,7 +1212,6 @@ const Map<String, String> zh = {
   'notify_device_online': '{device} 上线',
   'notify_device_offline': '{device} 离线',
   'notify_ota_available': '{device} 有新固件可升级',
-  'notify_app_update': '发现新版本 v{version}',
   'update_details_hint': '点击查看详情并更新',
   // 通知长按操作
   'notif_delete': '删除此通知',
@@ -1467,13 +1466,14 @@ const Map<String, String> zh = {
   'qr_bind_try_ble': '尝试BLE扫描',
 
   // === 引导页（首次安装 / 版本升级）===
-  'onboarding_page1_title': '每一度电，尽在掌握',
-  'onboarding_page1_desc': '实时发电数据可视，远程监控更省心',
-  'onboarding_page2_title': '第一时间预警，安心无忧',
-  'onboarding_page2_desc': '设备故障即时通知，防患于未然',
-  'onboarding_page3_title': '断网也不怕，固件随心换',
-  'onboarding_page3_desc': '无需联网，手机直连即可完成升级',
-  'onboarding_start': '立即体验',
+  'onboarding_page1_title': '从今天开始，掌握每一度电',
+  'onboarding_page1_desc': '实时查看发电、收益与设备状态，让每一度清洁电力都看得见。',
+  'onboarding_page2_title': '重要变化，及时掌握',
+  'onboarding_page2_desc': '设备告警与离线状态及时提醒，帮你更从容地安排处理。',
+  'onboarding_page3_title': '无需联网，也能安心维护',
+  'onboarding_page3_desc': '通过 BLE 或设备热点进行近场连接，随时完成可靠维护。',
+  'onboarding_start': '开始探索 CSERGY',
+  'onboarding_continue': '继续',
 
   // === 首启快速开始 / 设置向导 ===
   'quick_start': '快速开始',

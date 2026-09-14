@@ -1253,7 +1253,6 @@ const Map<String, String> en = {
   'notify_device_online': '{device} is online',
   'notify_device_offline': '{device} is offline',
   'notify_ota_available': '{device} has new firmware available',
-  'notify_app_update': 'New version v{version} available',
   'update_details_hint': 'Tap to view details and update',
   // Notification long-press actions
   'notif_delete': 'Delete this notification',
@@ -1521,13 +1520,14 @@ const Map<String, String> en = {
   'qr_bind_try_ble': 'Try Bluetooth',
 
   // === Onboarding (first install / version upgrade) ===
-  'onboarding_page1_title': 'Every Watt, Under Your Control',
-  'onboarding_page1_desc': 'Real-time generation data visible, remote monitoring made simple',
-  'onboarding_page2_title': 'First Alert, Peace of Mind',
-  'onboarding_page2_desc': 'Instant device fault notifications, prevent issues before they happen',
-  'onboarding_page3_title': 'No Internet? No Problem',
-  'onboarding_page3_desc': 'Complete upgrades via direct phone connection without network',
-  'onboarding_start': 'Get Started',
+  'onboarding_page1_title': 'See every watt from day one',
+  'onboarding_page1_desc': 'Follow generation, savings, and device health in one calm view.',
+  'onboarding_page2_title': 'Know when something changes',
+  'onboarding_page2_desc': 'Timely alarm and offline notifications help you respond with confidence.',
+  'onboarding_page3_title': 'Maintain devices nearby, even offline',
+  'onboarding_page3_desc': 'Connect over BLE or a device hotspot for reliable local service.',
+  'onboarding_start': 'Explore CSERGY',
+  'onboarding_continue': 'Continue',
 
   // === Quick start / Setup guide ===
   'quick_start': 'Quick Start',
