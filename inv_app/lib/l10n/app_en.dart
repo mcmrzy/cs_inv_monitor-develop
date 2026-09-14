@@ -430,6 +430,16 @@ const Map<String, String> en = {
   'upgrade_history_status_success': 'Success',
   'upgrade_history_status_failed': 'Failed',
   'upgrade_history_status_cancelled': 'Cancelled',
+  // Raw stage reported by the device: splits "Upgrading" into
+  // download → verify → install → reboot.
+  'upgrade_stage_accepted': 'Accepted',
+  'upgrade_stage_downloading': 'Downloading',
+  'upgrade_stage_verifying': 'Verifying',
+  'upgrade_stage_installing': 'Installing',
+  'upgrade_stage_rebooting': 'Rebooting',
+  'upgrade_stage_succeeded': 'Completed',
+  'upgrade_stage_failed': 'Failed',
+  'upgrade_stage_rolled_back': 'Rolled Back',
   'upgrade_history_old_version': 'Previous version',
   'tree_count': '{count} trees',
   'china': 'China',

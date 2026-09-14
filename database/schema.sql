@@ -804,6 +804,7 @@ CREATE TABLE IF NOT EXISTS device_upgrades (
     target_chip         VARCHAR(50) NOT NULL DEFAULT '',
     old_version         VARCHAR(50) NOT NULL DEFAULT '',
     status              VARCHAR(20) NOT NULL DEFAULT 'pending', -- pending/downloading/upgrading/success/failed/cancelled
+    stage               VARCHAR(20) NOT NULL DEFAULT '',       -- (migration 117) 设备上报的原始阶段
     progress            INTEGER NOT NULL DEFAULT 0,
     error_message       TEXT NOT NULL DEFAULT '',
     retry_count         INTEGER NOT NULL DEFAULT 0,
@@ -1529,6 +1530,7 @@ CREATE TABLE IF NOT EXISTS device_upgrades (
     old_version     VARCHAR(50) NOT NULL DEFAULT '',
     status          VARCHAR(20) NOT NULL DEFAULT 'pending',
     -- pending / downloading / upgrading / success / failed / cancelled
+    stage           VARCHAR(20) NOT NULL DEFAULT '',   -- (migration 117) 设备上报的原始阶段
     progress        INTEGER NOT NULL DEFAULT 0,
     error_message   TEXT NOT NULL DEFAULT '',
     retry_count     INTEGER NOT NULL DEFAULT 0,

@@ -77,6 +77,7 @@ export interface DeviceUpgrade {
   target_chip: string
   old_version: string
   status: string // pending/downloading/upgrading/success/failed/cancelled
+  stage: string // 设备上报的原始阶段(accepted/downloading/verifying/installing/rebooting/succeeded/failed)，空=旧数据
   progress: number
   error_message: string
   retry_count: number
