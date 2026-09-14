@@ -212,8 +212,9 @@ func detectFirmwareVersion(f *os.File, targetChip, originalName string) string {
 		}
 	}
 	base := strings.TrimSuffix(filepath.Base(originalName), filepath.Ext(originalName))
-	if m := versionTokenPattern.FindStringSubmatch(base); len(m) == 2 {
-		return m[1]
+	matches := versionTokenPattern.FindAllStringSubmatch(base, -1)
+	if len(matches) > 0 {
+		return matches[len(matches)-1][1]
 	}
 	return ""
 }
@@ -283,12 +284,12 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 		if version == "" {
 			version = detectFirmwareVersion(f, targetChip, file.Filename)
 			if version == "" {
-				response.Error(c, 400, "无法从固件识别版本号，请填写版本号")
+				response.Error(c, 400, "无法从固件识别版本号，请按“型号_芯片_版本号.bin”规范命名后重新上传")
 				return
 			}
 		}
 		if !fileTokenPattern.MatchString(version) {
-			response.Error(c, 400, "识别出的版本号包含非法字符，请手动填写")
+			response.Error(c, 400, "识别出的版本号包含非法字符，请按规范重命名固件后重新上传")
 			return
 		}
 		if strings.EqualFold(targetChip, "esp") {

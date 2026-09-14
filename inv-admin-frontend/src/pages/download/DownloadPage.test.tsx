@@ -5,7 +5,8 @@ import { server } from '@/test/mocks/server'
 import { renderAsAdmin } from '@/test/test-utils'
 import DownloadPage from './index'
 
-const LATEST_URL = '/app-release-info'
+const CANONICAL_LATEST_URL = 'https://api.jiuxiaoyw.online/api/v1/ota/app/latest'
+const FALLBACK_LATEST_URL = '/app-release-info'
 
 const releasePayload = (overrides: Record<string, unknown> = {}) => ({
   code: 0,
@@ -31,7 +32,7 @@ const releasePayload = (overrides: Record<string, unknown> = {}) => ({
 
 describe('DownloadPage', () => {
   it('renders app title, subtitle and feature list', async () => {
-    server.use(http.get(LATEST_URL, () => HttpResponse.json(releasePayload())))
+    server.use(http.get(CANONICAL_LATEST_URL, () => HttpResponse.json(releasePayload())))
 
     renderAsAdmin(<DownloadPage />)
 
@@ -44,12 +45,12 @@ describe('DownloadPage', () => {
   })
 
   it('renders download button, platform chips and security tip', async () => {
-    server.use(http.get(LATEST_URL, () => HttpResponse.json(releasePayload())))
+    server.use(http.get(CANONICAL_LATEST_URL, () => HttpResponse.json(releasePayload())))
 
     renderAsAdmin(<DownloadPage />)
 
     const btn = await screen.findByRole('button', { name: /下载 Android 安装包/ })
-    expect(btn).toBeEnabled()
+    await waitFor(() => expect(btn).toBeEnabled())
     expect(screen.getByText('Android 专用')).toBeInTheDocument()
     expect(screen.getByText(/官方正版/)).toBeInTheDocument()
   })
@@ -57,7 +58,7 @@ describe('DownloadPage', () => {
   // 旧实现读错了响应层级（把 AxiosResponse 当 data 用），版本信息永远不显示；
   // 本用例锁定「公开接口 → 页面展示版本元数据」这条真实链路。
   it('shows the released version metadata returned by the public release API', async () => {
-    server.use(http.get(LATEST_URL, () => HttpResponse.json(releasePayload())))
+    server.use(http.get(CANONICAL_LATEST_URL, () => HttpResponse.json(releasePayload())))
 
     renderAsAdmin(<DownloadPage />)
 
@@ -76,7 +77,7 @@ describe('DownloadPage', () => {
   // 主按钮文案恒定为下载动作（e2e 与旧入口都依赖它），未就绪时置灰并提示原因。
   it('keeps the download label but disables it when no release is published yet', async () => {
     server.use(
-      http.get(LATEST_URL, () =>
+      http.get(CANONICAL_LATEST_URL, () =>
         HttpResponse.json({ code: 0, message: 'success', data: { available: false } }),
       ),
     )
@@ -91,7 +92,8 @@ describe('DownloadPage', () => {
 
   it('still renders the full page when the release API fails', async () => {
     server.use(
-      http.get(LATEST_URL, () => HttpResponse.json({ code: 500, message: 'boom' }, { status: 500 })),
+      http.get(CANONICAL_LATEST_URL, () => HttpResponse.json({ code: 500, message: 'boom' }, { status: 500 })),
+      http.get(FALLBACK_LATEST_URL, () => HttpResponse.json({ code: 500, message: 'boom' }, { status: 500 })),
     )
 
     renderAsAdmin(<DownloadPage />)
@@ -104,7 +106,7 @@ describe('DownloadPage', () => {
   it('copies the SHA-256 checksum to the clipboard', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.assign(navigator, { clipboard: { writeText } })
-    server.use(http.get(LATEST_URL, () => HttpResponse.json(releasePayload())))
+    server.use(http.get(CANONICAL_LATEST_URL, () => HttpResponse.json(releasePayload())))
 
     renderAsAdmin(<DownloadPage />)
 
@@ -115,5 +117,21 @@ describe('DownloadPage', () => {
       expect(writeText).toHaveBeenCalledWith('a'.repeat(64))
     })
     expect(await screen.findByText('已复制')).toBeInTheDocument()
+  })
+
+  it('prefers the canonical API over a stale download-domain cache entry', async () => {
+    server.use(
+      http.get(CANONICAL_LATEST_URL, () =>
+        HttpResponse.json(releasePayload({ version_code: 13, version_name: '1.0.3' })),
+      ),
+      http.get(FALLBACK_LATEST_URL, () =>
+        HttpResponse.json(releasePayload({ version_code: 11, version_name: '1.0.1' })),
+      ),
+    )
+
+    renderAsAdmin(<DownloadPage />)
+
+    expect((await screen.findAllByText('v1.0.3')).length).toBeGreaterThan(0)
+    expect(screen.queryByText('v1.0.1')).not.toBeInTheDocument()
   })
 })

@@ -53,6 +53,7 @@ export const queryKeys = {
     firmwares: (params?: Record<string, any>) => ['ota', 'firmwares', params] as const,
     upgrades: (params?: Record<string, any>) => ['ota', 'upgrades', params] as const,
     upgradeDetails: (firmwareId: number) => ['ota', 'upgrade-details', firmwareId] as const,
+    appVersionsAll: () => ['ota', 'app-versions'] as const,
     appVersions: (params?: Record<string, any>) => ['ota', 'app-versions', params] as const,
     packages: (params?: Record<string, any>) => ['ota', 'packages', params] as const,
     packageDetails: (packageId: number) => ['ota', 'package-details', packageId] as const,

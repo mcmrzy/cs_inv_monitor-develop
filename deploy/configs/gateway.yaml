@@ -61,3 +61,5 @@ cors:
     - "https://jiuxiaoyw.online"
     - "https://www.jiuxiaoyw.online"
     - "http://www.jiuxiaoyw.online"
+    # App 下载页需要跨域读取 API 域的最新发布元数据
+    - "https://download.jiuxiaoyw.online"
