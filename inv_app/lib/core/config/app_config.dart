@@ -13,12 +13,18 @@ class AppConfig {
     defaultValue: '1.0.0',
   );
 
-  /// 版本号兜底值：更新检查优先读取安装包真实 versionCode（见
-  /// AppUpdateService.resolveCurrentVersionCode），仅在读取失败时使用本值。
+  /// Android 构建版本号：由发版脚本从 pubspec 注入。
   /// 发版脚本 build_release.bat 会注入 `--dart-define=APP_VERSION_CODE=<build number>`。
   static const int versionCode = int.fromEnvironment(
     'APP_VERSION_CODE',
     defaultValue: 1,
+  );
+
+  /// 受信下载域名白名单（逗号分隔）：App 自更新只允许从这些域下载安装包。
+  /// 可通过 `--dart-define=TRUSTED_DOWNLOAD_HOSTS=a,b` 覆盖（如对象存储/CDN 直链域）。
+  static const String trustedDownloadHosts = String.fromEnvironment(
+    'TRUSTED_DOWNLOAD_HOSTS',
+    defaultValue: 'download.jiuxiaoyw.online,jiuxiaoyw.online',
   );
 
   // 默认值必须是生产 https 地址：避免构建时漏注入 --dart-define
@@ -35,12 +41,6 @@ class AppConfig {
     defaultValue: 'https://www.jiuxiaoyw.online',
   );
 
-  /// 安装包/固件下载受信域名（逗号分隔）：更新包下载走 CDN 域，与 API/前端同属受信来源。
-  /// 生产构建可经 `--dart-define=TRUSTED_DOWNLOAD_HOSTS=a.example.com,b.example.com` 覆盖。
-  static const String trustedDownloadHosts = String.fromEnvironment(
-    'TRUSTED_DOWNLOAD_HOSTS',
-    defaultValue: 'download.jiuxiaoyw.online,jiuxiaoyw.online',
-  );
   static const int connectTimeout = 30000;
   static const int receiveTimeout = 30000;
   static const int sendTimeout = 30000;
