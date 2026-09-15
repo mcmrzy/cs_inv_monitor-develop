@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Form, Input, Button, Checkbox, App, Space, Alert, Dropdown, Segmented, Select } from 'antd'
+import type { InputRef } from 'antd'
 import { UserOutlined, LockOutlined, MailOutlined, PhoneOutlined, SafetyOutlined, CloudOutlined, LineChartOutlined, GlobalOutlined, ApiOutlined } from '@ant-design/icons'
 import useAuthStore from '@/stores/authStore'
 import useLocaleStore from '@/stores/localeStore'
@@ -146,14 +147,59 @@ const LoginPage: React.FC = () => {
   const [countryCode, setCountryCode] = useState<'cn' | 'overseas'>('cn')
   const [phoneRegisterForm] = Form.useForm()
   const [selectedCountryCode, setSelectedCountryCode] = useState<'CN' | string>('CN') // 默认中国
+  // 直接持有可见 input 节点：发送验证码时以 DOM 实时值为准，避免 store/自动填充不同步
+  const liveInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
+
+  const bindLiveInput = (field: string) => (node: InputRef | null) => {
+    liveInputRefs.current[field] = node?.input ?? null
+  }
+
+  const applyRememberedAccount = () => {
+    const savedAccount = localStorage.getItem('remembered_account')
+    if (!savedAccount) return
+    loginForm.setFieldsValue({ account: savedAccount, remember: true })
+  }
 
   // 从 localStorage 读取记住的账号并自动填充（仅记住账号，绝不持久化密码）
   useEffect(() => {
-    const savedAccount = localStorage.getItem('remembered_account')
-    if (savedAccount) {
-      loginForm.setFieldsValue({ account: savedAccount, remember: true })
-    }
+    applyRememberedAccount()
   }, [loginForm])
+
+  // 切到对应视图/通道时再补一次，确保 Form.Item 挂载后能拿到记住的账号
+  useEffect(() => {
+    const saved = localStorage.getItem('remembered_account')
+    if (!saved) return
+    if (activeTab === 'loginByCode' && codeChannel === 'email' && saved.includes('@')) {
+      if (!emailCodeForm.getFieldValue('email')) {
+        emailCodeForm.setFieldsValue({ email: saved })
+      }
+    }
+    if (activeTab === 'loginByCode' && codeChannel === 'phone' && !saved.includes('@')) {
+      if (!phoneCodeForm.getFieldValue('phone')) {
+        phoneCodeForm.setFieldsValue({ phone: saved })
+      }
+    }
+    if (activeTab === 'reset' && resetChannel === 'email' && saved.includes('@')) {
+      if (!resetForm.getFieldValue('email')) {
+        resetForm.setFieldsValue({ email: saved })
+      }
+    }
+    if (activeTab === 'reset' && resetChannel === 'phone' && !saved.includes('@')) {
+      if (!phoneResetForm.getFieldValue('phone')) {
+        phoneResetForm.setFieldsValue({ phone: saved })
+      }
+    }
+    if (activeTab === 'register' && selectedCountryCode !== 'CN' && saved.includes('@')) {
+      if (!registerForm.getFieldValue('email')) {
+        registerForm.setFieldsValue({ email: saved })
+      }
+    }
+    if (activeTab === 'register' && selectedCountryCode === 'CN' && !saved.includes('@')) {
+      if (!phoneRegisterForm.getFieldValue('phone')) {
+        phoneRegisterForm.setFieldsValue({ phone: saved })
+      }
+    }
+  }, [activeTab, codeChannel, resetChannel, selectedCountryCode, emailCodeForm, phoneCodeForm, resetForm, phoneResetForm, registerForm, phoneRegisterForm])
 
   // 登录/注册成功后按角色与权限选择默认落地页（而非硬编码 /dashboard）
   const navigateAfterAuth = (user: User, permissions: string[]) => {
@@ -450,11 +496,39 @@ const LoginPage: React.FC = () => {
 
   const inputStyle = { borderRadius: 10, height: 56, fontSize: 17 }
 
+  // 读取发送验证码目标：DOM 实时值（手动输入/自动填充）优先，其次表单 store
+  const resolveCodeTarget = (form: any, field: string, channel: 'email' | 'phone') => {
+    const pick = (raw: unknown) => {
+      if (raw == null) return ''
+      const val = String(raw).trim()
+      if (!val) return ''
+      if (channel === 'email') return val.includes('@') ? val : ''
+      return val
+    }
+
+    const fromDom = pick(liveInputRefs.current[field]?.value)
+    if (fromDom) {
+      form.setFieldsValue({ [field]: fromDom })
+      return fromDom
+    }
+
+    const fromNamedDom = pick(
+      document.querySelector<HTMLInputElement>(`input[name="${field}"]`)?.value,
+    )
+    if (fromNamedDom) {
+      form.setFieldsValue({ [field]: fromNamedDom })
+      return fromNamedDom
+    }
+
+    return pick(form.getFieldValue(field))
+  }
+
   const CodeButton = ({ field, type, form, channel }: { field: string; type: 'register' | 'reset' | 'login'; form: any; channel: 'email' | 'phone' }) => (
     <Button disabled={countdown > 0}
       onClick={() => {
-        const val = form.getFieldValue(field)
+        const val = resolveCodeTarget(form, field, channel)
         if (!val) { showError(channel === 'email' ? t.errEmailFirst : t.errPhoneFirst); return }
+        form.setFieldsValue({ [field]: val })
         if (channel === 'email') sendEmailCode(val, type)
         else sendSmsCode(val, type)
       }}
@@ -615,7 +689,7 @@ const LoginPage: React.FC = () => {
                   {codeChannel === 'phone' ? (
                     <Form form={phoneCodeForm} name="phoneCodeLogin" onFinish={onPhoneCodeLogin} size="large">
                       <Form.Item name="phone" rules={[{ required: true, message: lang === 'zh' ? '请输入手机号' : 'Phone required' }, { pattern: /^1[3-9]\d{9}$/, message: t.errPhoneFormat }]}>
-                        <Input prefix={<PhoneOutlined style={{ color: '#94a3b8' }} />} placeholder={t.phone} style={inputStyle} />
+                        <Input ref={bindLiveInput('phone')} name="phone" autoComplete="tel" prefix={<PhoneOutlined style={{ color: '#94a3b8' }} />} placeholder={t.phone} style={inputStyle} />
                       </Form.Item>
                       <Form.Item>
                         <Space.Compact style={{ width: '100%' }}>
@@ -632,7 +706,7 @@ const LoginPage: React.FC = () => {
                   ) : (
                     <Form form={emailCodeForm} name="emailCodeLogin" onFinish={onEmailCodeLogin} size="large">
                       <Form.Item name="email" rules={[{ required: true, message: lang === 'zh' ? '请输入邮箱' : 'Email required' }, { type: 'email', message: t.errEmailFormat }]}>
-                        <Input prefix={<MailOutlined style={{ color: '#94a3b8' }} />} placeholder={t.email} style={inputStyle} />
+                        <Input ref={bindLiveInput('email')} name="email" autoComplete="email" prefix={<MailOutlined style={{ color: '#94a3b8' }} />} placeholder={t.email} style={inputStyle} />
                       </Form.Item>
                       <Form.Item>
                         <Space.Compact style={{ width: '100%' }}>
@@ -688,7 +762,7 @@ const LoginPage: React.FC = () => {
                         { required: true, message: lang === 'zh' ? '请输入手机号' : 'Phone required' },
                         { pattern: /^1[3-9]\d{9}$/, message: t.errPhoneFormat }
                       ]}>
-                        <Input prefix={<PhoneOutlined style={{ color: '#94a3b8' }} />} placeholder={t.phone} style={inputStyle} />
+                        <Input ref={bindLiveInput('phone')} name="phone" autoComplete="tel" prefix={<PhoneOutlined style={{ color: '#94a3b8' }} />} placeholder={t.phone} style={inputStyle} />
                       </Form.Item>
                       <Form.Item>
                         <Space.Compact style={{ width: '100%' }}>
@@ -732,7 +806,7 @@ const LoginPage: React.FC = () => {
                         { required: true, message: lang === 'zh' ? '请输入邮箱' : 'Email required' },
                         { type: 'email', message: t.errEmailFormat }
                       ]}>
-                        <Input prefix={<MailOutlined style={{ color: '#94a3b8' }} />} placeholder={t.email} style={inputStyle} />
+                        <Input ref={bindLiveInput('email')} name="email" autoComplete="email" prefix={<MailOutlined style={{ color: '#94a3b8' }} />} placeholder={t.email} style={inputStyle} />
                       </Form.Item>
                       <Form.Item>
                         <Space.Compact style={{ width: '100%' }}>
@@ -792,7 +866,7 @@ const LoginPage: React.FC = () => {
                   {resetChannel === 'email' ? (
                     <Form form={resetForm} name="reset" onFinish={onResetPassword} size="large">
                       <Form.Item name="email" rules={[{ required: true, message: lang === 'zh' ? '请输入邮箱' : 'Email required' }, { type: 'email', message: t.errEmailFormat }]}>
-                        <Input prefix={<MailOutlined style={{ color: '#94a3b8' }} />} placeholder={t.emailPlaceholder} style={inputStyle} />
+                        <Input ref={bindLiveInput('email')} name="email" autoComplete="email" prefix={<MailOutlined style={{ color: '#94a3b8' }} />} placeholder={t.emailPlaceholder} style={inputStyle} />
                       </Form.Item>
                       <Form.Item>
                         <Space.Compact style={{ width: '100%' }}>
@@ -819,7 +893,7 @@ const LoginPage: React.FC = () => {
                   ) : (
                     <Form form={phoneResetForm} name="phoneReset" onFinish={onPhoneResetPassword} size="large">
                       <Form.Item name="phone" rules={[{ required: true, message: lang === 'zh' ? '请输入手机号' : 'Phone required' }, { pattern: /^1[3-9]\d{9}$/, message: t.errPhoneFormat }]}>
-                        <Input prefix={<PhoneOutlined style={{ color: '#94a3b8' }} />} placeholder={t.phone} style={inputStyle} />
+                        <Input ref={bindLiveInput('phone')} name="phone" autoComplete="tel" prefix={<PhoneOutlined style={{ color: '#94a3b8' }} />} placeholder={t.phone} style={inputStyle} />
                       </Form.Item>
                       <Form.Item>
                         <Space.Compact style={{ width: '100%' }}>
