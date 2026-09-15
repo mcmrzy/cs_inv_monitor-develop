@@ -12,6 +12,7 @@ import (
 
 	"inv-api-server/internal/model"
 	"inv-api-server/internal/repository"
+	"inv-api-server/internal/service"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -61,6 +62,76 @@ func TestSaveOfflineLogsIdempotent(t *testing.T) {
 	}
 	if accepted != 0 || duplicates != 1 {
 		t.Fatalf("second upload: accepted=%d duplicates=%d, want 0/1", accepted, duplicates)
+	}
+}
+
+// TestOfflineLogBatchRejectsUnauthorizedDeviceAndKeepsAuthorizedOutcomes
+// verifies the first-wave v2 response semantics against PostgreSQL: current
+// device scope is checked per entry, a rejected entry does not roll back an
+// authorized entry, and replay returns a per-id duplicate outcome.
+func TestOfflineLogBatchRejectsUnauthorizedDeviceAndKeepsAuthorizedOutcomes(t *testing.T) {
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("DATABASE_URL not set; skipping integration test")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, dbURL)
+	if err != nil {
+		t.Fatalf("connect db: %v", err)
+	}
+	defer pool.Close()
+
+	suffix := time.Now().UTC().Format("20060102150405.000000000")
+	userID := int64(990001)
+	allowedSN := "OFFLOG-ALLOW-" + suffix
+	deniedSN := "OFFLOG-DENY-" + suffix
+	acceptedID := "offline-accepted-" + suffix
+	rejectedID := "offline-rejected-" + suffix
+	defer func() {
+		_, _ = pool.Exec(ctx, `DELETE FROM device_offline_op_logs WHERE log_id = ANY($1)`, []string{acceptedID, rejectedID})
+		_, _ = pool.Exec(ctx, `DELETE FROM devices WHERE sn = ANY($1)`, []string{allowedSN, deniedSN})
+	}()
+
+	_, err = pool.Exec(ctx, `
+		INSERT INTO devices(sn, model, user_id) VALUES
+			($1, 'CS-INV-TEST', $3),
+			($2, 'CS-INV-TEST', $4)`, allowedSN, deniedSN, userID, userID+1)
+	if err != nil {
+		t.Fatalf("seed devices: %v", err)
+	}
+
+	repo := repository.NewDeviceRepository(pool, nil)
+	svc := service.NewDeviceService(repo, nil, repository.NewModelRepository(pool, nil), nil, "", "", pool)
+	actor := model.ActorContext{UserID: userID}
+	logs := []model.OfflineOpLog{
+		{LogID: acceptedID, DeviceSN: allowedSN, Action: "control", Params: map[string]interface{}{}, Result: "unknown", Channel: "ble", OpTime: time.Now().UTC()},
+		{LogID: rejectedID, DeviceSN: deniedSN, Action: "control", Params: map[string]interface{}{}, Result: "unknown", Channel: "ble", OpTime: time.Now().UTC()},
+	}
+
+	result, err := svc.SaveOfflineLogs(ctx, actor, logs)
+	if err != nil {
+		t.Fatalf("first batch: %v", err)
+	}
+	if result.Accepted != 1 || result.Duplicates != 0 || result.Rejected != 1 {
+		t.Fatalf("first batch counts = %+v, want accepted=1 duplicates=0 rejected=1", result)
+	}
+	outcomes := make(map[string]model.OfflineLogResult, len(result.Results))
+	for _, item := range result.Results {
+		outcomes[item.LogID] = item
+	}
+	if outcomes[acceptedID].Status != model.OfflineLogAccepted {
+		t.Fatalf("authorized log outcome = %+v, want accepted", outcomes[acceptedID])
+	}
+	if outcomes[rejectedID].Status != model.OfflineLogRejected || outcomes[rejectedID].Reason != "device_access_denied" {
+		t.Fatalf("unauthorized log outcome = %+v, want rejected/device_access_denied", outcomes[rejectedID])
+	}
+
+	retry, err := svc.SaveOfflineLogs(ctx, actor, logs[:1])
+	if err != nil {
+		t.Fatalf("replay batch: %v", err)
+	}
+	if retry.Accepted != 0 || retry.Duplicates != 1 || retry.Rejected != 0 || len(retry.Results) != 1 || retry.Results[0].Status != model.OfflineLogDuplicate {
+		t.Fatalf("replay outcome = %+v, want one duplicate", retry)
 	}
 }
 
