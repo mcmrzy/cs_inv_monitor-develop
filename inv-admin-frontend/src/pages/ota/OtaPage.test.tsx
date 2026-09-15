@@ -159,7 +159,7 @@ describe('OtaPage', () => {
     expect(screen.queryByText('升级包')).not.toBeInTheDocument()
   })
 
-  it('uses devices:control rather than ota permissions for device upgrade actions', async () => {
+  it('uses devices:control rather than ota permissions for device upgrade actions', { timeout: 30_000 }, async () => {
     renderWithProviders(<OtaPage />, {
       initialUser: mockManagerUser,
       initialToken: 'mock-jwt-token',

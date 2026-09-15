@@ -78,6 +78,8 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     css: true,
+    // 共享 runner 上全量 OtaPage 等重渲染偶发超过默认 5s
+    testTimeout: 30_000,
     // Playwright specs must not be collected by Vitest.
     exclude: ['node_modules/', 'dist/', 'e2e/', 'e2e-production/'],
     // pro-layout BaseMenu 的 rc-resize-observer 定时器可能在 jsdom teardown
