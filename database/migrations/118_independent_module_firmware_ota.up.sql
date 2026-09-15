@@ -19,6 +19,32 @@ SET release_status = CASE WHEN status = 1 THEN 'published' ELSE 'disabled' END,
     published_at   = CASE WHEN status = 1 THEN created_at ELSE NULL END
 WHERE release_status = 'draft' AND status IN (0, 1);
 
+-- 清理历史脏数据，保证 (model, target_chip, version) 唯一索引可建立。
+-- 生产曾出现 version 字面量 'undefined'（前端上传未带版本）导致同芯片重复行；
+-- 此处仅作数据修复，不挑选业务「赢家」之外的语义：每组保留 id 最大一行，
+-- 其余软删并改写 version，历史文件与 device_upgrades 外键引用不受影响。
+UPDATE firmware_versions
+SET version = format('legacy-%s', id)
+WHERE version IS NULL
+   OR btrim(version) = ''
+   OR lower(btrim(version)) IN ('undefined', 'null');
+
+WITH ranked AS (
+    SELECT id,
+           ROW_NUMBER() OVER (
+               PARTITION BY model, COALESCE(target_chip, ''), version
+               ORDER BY id DESC
+           ) AS rn
+    FROM firmware_versions
+)
+UPDATE firmware_versions fw
+SET status          = 0,
+    release_status  = 'disabled',
+    version         = format('%s-retired-%s', fw.version, fw.id)
+FROM ranked r
+WHERE fw.id = r.id
+  AND r.rn > 1;
+
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -30,7 +56,7 @@ BEGIN
 END $$;
 
 -- 唯一性：同 model + target_chip + version 不得重复（含软删行）。
--- 若存在历史重复组则显式失败，禁止自动挑选赢家或删除历史。
+-- 上方已对历史重复组做「保留最新 + 其余 retired」修复；若仍有冲突则显式失败。
 DO $$
 DECLARE
     dup_text text;
