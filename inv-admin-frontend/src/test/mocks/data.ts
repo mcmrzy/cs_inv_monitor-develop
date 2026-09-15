@@ -143,6 +143,8 @@ export const mockArmFirmware: Firmware = {
   changelog: '修复了通信模块的稳定性问题',
   is_force: false,
   created_at: '2026-01-01T00:00:00Z',
+  release_status: 'published',
+  published_at: '2026-01-01T00:00:00Z',
 }
 
 /** ESP 固件 */
@@ -161,6 +163,8 @@ export const mockEspFirmware: Firmware = {
   changelog: '新增 Wi-Fi 配网功能',
   is_force: false,
   created_at: '2026-01-02T00:00:00Z',
+  release_status: 'published',
+  published_at: '2026-01-02T00:00:00Z',
 }
 
 /** 固件列表 */

@@ -1,35 +1,38 @@
 import { describe, it, expect } from 'vitest'
-import { screen, waitFor } from '@testing-library/react'
-import { fireEvent } from '@testing-library/react'
+import { screen, waitFor, fireEvent } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { server } from '@/test/mocks/server'
-import { renderAsAdmin } from '@/test/test-utils'
+import { renderAsAdmin, renderWithProviders } from '@/test/test-utils'
+import { mockManagerUser } from '@/test/mocks/data'
 import { API_BASE } from '@/utils/urls'
 import OtaPage from './index'
 
 describe('OtaPage', () => {
-  it('renders upgrade tasks and firmware library tabs', async () => {
+  it('renders five tabs for an admin', async () => {
     renderAsAdmin(<OtaPage />)
 
-    expect(await screen.findByText('升级任务')).toBeInTheDocument()
-    expect(screen.getByText('固件库')).toBeInTheDocument()
-    expect(document.querySelectorAll('.ant-tabs-tab').length).toBeGreaterThanOrEqual(2)
+    expect(await screen.findByText('设备固件升级')).toBeInTheDocument()
+    expect(screen.getByText('设备固件管理')).toBeInTheDocument()
+    expect(screen.getByText('升级任务')).toBeInTheDocument()
+    expect(screen.getByText('更新记录')).toBeInTheDocument()
+    expect(screen.getByText('App版本管理')).toBeInTheDocument()
+    expect(document.querySelectorAll('.ant-tabs-tab').length).toBeGreaterThanOrEqual(5)
   })
 
-  it('shows upgrade task statistics cards', async () => {
+  it('does not expose package management UI', async () => {
     renderAsAdmin(<OtaPage />)
 
-    await waitFor(() => {
-      // 任务统计（总数/进行中/成功/失败等）
-      const stats = document.querySelectorAll('.ant-statistic, .ant-pro-card')
-      expect(stats.length).toBeGreaterThan(0)
-    })
+    await screen.findByText('设备固件升级')
+    expect(screen.queryByText('升级包管理')).not.toBeInTheDocument()
+    expect(screen.queryByText('创建升级包')).not.toBeInTheDocument()
+    expect(screen.queryByText('升级包（上传自动组装）')).not.toBeInTheDocument()
   })
 
-  it('lists upgrade tasks from the OTA tasks API', async () => {
+  it('shows device firmware overview on the default device tab', async () => {
     renderAsAdmin(<OtaPage />)
 
-    // ota/tasks handler 返回 mockUpgradeTasks；表格出现分页或数据行
+    expect(await screen.findByText('设备固件升级')).toBeInTheDocument()
+    // 设备列表来自 devices API
     await waitFor(() => {
       const hasTable = document.querySelector('.ant-table')
       const hasEmpty = document.querySelector('.ant-empty')
@@ -37,14 +40,54 @@ describe('OtaPage', () => {
     })
   })
 
-  it('switches to the firmware library tab and lists firmwares', async () => {
+  it('switches to firmware management and lists firmwares with release status', async () => {
     renderAsAdmin(<OtaPage />)
 
-    fireEvent.click(await screen.findByText('固件库'))
-    // ota/firmware handler 返回 mockFirmwares（ARM/ESP 固件）
+    fireEvent.click(await screen.findByText('设备固件管理'))
     await waitFor(() => {
       const hasTable = document.querySelector('.ant-table')
       expect(hasTable).toBeTruthy()
+    })
+    // 发布生命周期标签
+    expect(await screen.findAllByText('已发布')).not.toHaveLength(0)
+  })
+
+  it('switches to upgrade tasks and lists tasks', async () => {
+    renderAsAdmin(<OtaPage />)
+
+    fireEvent.click(await screen.findByText('升级任务'))
+    await waitFor(() => {
+      const hasTable = document.querySelector('.ant-table')
+      const hasEmpty = document.querySelector('.ant-empty')
+      expect(hasTable || hasEmpty).toBeTruthy()
+    })
+  })
+
+  it('switches to aggregated update history tab', async () => {
+    renderAsAdmin(<OtaPage />)
+
+    fireEvent.click(await screen.findByText('更新记录'))
+    await waitFor(() => {
+      const hasTable = document.querySelector('.ant-table')
+      const hasEmpty = document.querySelector('.ant-empty')
+      expect(hasTable || hasEmpty).toBeTruthy()
+    })
+  })
+
+  it('falls back to device tab when a non-admin lacks ota:view deep link', async () => {
+    renderWithProviders(<OtaPage />, {
+      initialUser: mockManagerUser,
+      initialToken: 'mock-jwt-token',
+      initialPermissions: ['devices:view'],
+      routerProps: { initialEntries: ['/ota?tab=firmware'] },
+    })
+
+    // 无权打开管理 Tab 时应停留在设备固件升级
+    expect(await screen.findByText('设备固件升级')).toBeInTheDocument()
+    // 管理 Tab 不渲染
+    await waitFor(() => {
+      expect(screen.queryByText('设备固件管理')).not.toBeInTheDocument()
+      expect(screen.queryByText('升级任务')).not.toBeInTheDocument()
     })
   })
 

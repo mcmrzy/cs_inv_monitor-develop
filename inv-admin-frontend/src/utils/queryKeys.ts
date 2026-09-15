@@ -61,6 +61,12 @@ export const queryKeys = {
     taskDetail: (id: number | string) => ['ota', 'task-detail', id] as const,
     taskDevices: (id: number | string, params?: Record<string, any>) => ['ota', 'task-devices', id, params] as const,
     taskStats: () => ['ota', 'task-stats'] as const,
+    firmwareOverview: (sn: string) => ['ota', 'firmware-overview', sn] as const,
+    firmwareResources: (sn: string, targetChip?: string) =>
+      ['ota', 'firmware-resources', sn, targetChip] as const,
+    deviceHistory: (sn: string, params?: Record<string, any>) =>
+      ['ota', 'device-history', sn, params] as const,
+    history: (params?: Record<string, any>) => ['ota', 'history', params] as const,
   },
   parallel: {
     all: ['parallel'] as const,

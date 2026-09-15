@@ -46,6 +46,8 @@ function mockTaskDevices(items: Record<string, unknown>[]) {
 
 async function openTaskDeviceDrawer() {
   renderAsAdmin(<OtaPage />)
+  // 五 Tab 布局默认在「设备固件升级」，任务明细在「升级任务」Tab
+  fireEvent.click(await screen.findByText('升级任务'))
   // mockUpgradeTask id='1'，明细入口是操作列的「详情」链接
   const detailLinks = await screen.findAllByText('详情')
   fireEvent.click(detailLinks[0])
