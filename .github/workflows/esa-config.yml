@@ -24,14 +24,11 @@ jobs:
           envs: ALIYUN_ACCESS_KEY_ID,ALIYUN_ACCESS_KEY_SECRET,ESA_SITE_ID
           script: |
             set -e
-            # 只认生产目录，避开 backup 子目录
-            ENV_FILE=/opt/inv-mqtt/.env.prod
+            # 与 CD 一致：生产部署目录固定为 /opt/inv-mqtt/deploy
+            ENV_FILE=/opt/inv-mqtt/deploy/.env.prod
             if [ ! -f "$ENV_FILE" ]; then
-              ENV_FILE=$(find /opt/inv-mqtt -maxdepth 2 -name .env.prod ! -path '*backup*' ! -path '*Backup*' 2>/dev/null | head -1)
-            fi
-            if [ -z "$ENV_FILE" ] || [ ! -f "$ENV_FILE" ]; then
-              echo "❌ 找不到生产 .env.prod"
-              find /opt -name .env.prod 2>/dev/null | head
+              echo "❌ 找不到 $ENV_FILE"
+              ls -la /opt/inv-mqtt/deploy/ 2>/dev/null | head
               exit 1
             fi
             echo "ENV_FILE=$ENV_FILE"
@@ -62,10 +59,9 @@ jobs:
             echo "=== ESA keys present ==="
             grep -E '^(ALIYUN_ACCESS_KEY_ID|ESA_)' "$ENV_FILE"
 
-            DEPLOY_DIR=$(dirname "$ENV_FILE")
-            cd "$DEPLOY_DIR"
-            docker compose -f docker-compose.prod.yml --env-file "$ENV_FILE" up -d --force-recreate business-api
+            cd /opt/inv-mqtt/deploy
+            docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --force-recreate business-api
             sleep 12
             echo "=== business-api ESA logs ==="
-            docker logs --tail 120 business-api 2>&1 | grep -iE 'ESA|cache refresh|error|fatal' || true
+            docker logs --tail 120 business-api 2>&1 | grep -iE 'ESA|cache|error|fatal' || true
             docker inspect -f 'business-api state={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' business-api
