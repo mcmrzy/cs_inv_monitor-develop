@@ -225,6 +225,10 @@ services:
     container_name: business-api
     expose:
       - "8080"
+    # ESA OpenAPI（esa.aliyuncs.com）需公网 DNS；默认 Docker DNS 可能解析失败
+    dns:
+      - 223.5.5.5
+      - 8.8.8.8
     env_file:
       - .env.prod
     environment:
