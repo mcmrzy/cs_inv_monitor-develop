@@ -60,9 +60,16 @@ jobs:
             grep -E '^(ALIYUN_ACCESS_KEY_ID|ESA_)' "$ENV_FILE"
 
             cd /opt/inv-mqtt/deploy
+            # 容器默认 Docker DNS 解析不了 esa.aliyuncs.com，补公共 DNS
+            if ! grep -A5 'container_name: business-api' docker-compose.prod.yml | grep -q '223.5.5.5'; then
+              sed -i '/container_name: business-api/a\    dns:\n      - 223.5.5.5\n      - 8.8.8.8' docker-compose.prod.yml
+              echo "已为 business-api 注入公共 DNS"
+            fi
+            grep -A8 'container_name: business-api' docker-compose.prod.yml | head -12
+
             # compose 服务名是 inv-api-server，container_name 才是 business-api
             docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --force-recreate inv-api-server
-            sleep 12
+            sleep 15
             echo "=== business-api ESA logs ==="
-            docker logs --tail 120 business-api 2>&1 | grep -iE 'ESA|cache|error|fatal' || true
+            docker logs --tail 150 business-api 2>&1 | grep -iE 'ESA|cache|error|fatal' || true
             docker inspect -f 'business-api state={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' business-api
