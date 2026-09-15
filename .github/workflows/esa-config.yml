@@ -10,6 +10,16 @@ jobs:
   configure:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+      - name: Upload ESA refresh script
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          source: "deploy/scripts/esa-refresh.py"
+          target: /opt/inv-mqtt/deploy/scripts/
       - name: Configure ESA cache credentials and restart business-api
         uses: appleboy/ssh-action@v1
         env:
@@ -60,12 +70,16 @@ jobs:
             grep -E '^(ALIYUN_ACCESS_KEY_ID|ESA_)' "$ENV_FILE"
 
             cd /opt/inv-mqtt/deploy
-            # 容器默认 Docker DNS 解析不了 esa.aliyuncs.com，补公共 DNS
-            if ! grep -A5 'container_name: business-api' docker-compose.prod.yml | grep -q '223.5.5.5'; then
-              sed -i '/container_name: business-api/a\    dns:\n      - 223.5.5.5\n      - 8.8.8.8' docker-compose.prod.yml
-              echo "已为 business-api 注入公共 DNS"
+            # 容器内 Docker DNS 解析 esa.aliyuncs.com 常失败：优先用 extra_hosts 固定
+            ESA_IP=$(getent hosts esa.aliyuncs.com | awk '{print $1}' | head -1 || true)
+            echo "host resolved esa.aliyuncs.com=${ESA_IP:-none}"
+            if [ -n "$ESA_IP" ]; then
+              if ! grep -A12 'container_name: business-api' docker-compose.prod.yml | grep -q "esa.aliyuncs.com"; then
+                sed -i "/container_name: business-api/a\\    extra_hosts:\\n      - \"esa.aliyuncs.com:${ESA_IP}\"" docker-compose.prod.yml
+                echo "已注入 extra_hosts esa.aliyuncs.com=${ESA_IP}"
+              fi
             fi
-            grep -A8 'container_name: business-api' docker-compose.prod.yml | head -12
+            grep -A16 'container_name: business-api' docker-compose.prod.yml | head -20
 
             # compose 服务名是 inv-api-server，container_name 才是 business-api
             docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --force-recreate inv-api-server
@@ -73,3 +87,10 @@ jobs:
             echo "=== business-api ESA logs ==="
             docker logs --tail 150 business-api 2>&1 | grep -iE 'ESA|cache|error|fatal' || true
             docker inspect -f 'business-api state={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' business-api
+
+            # 宿主机侧立刻强制刷新（不依赖容器 DNS）
+            echo "=== host-side ESA refresh ==="
+            export ALIYUN_ACCESS_KEY_ID ALIYUN_ACCESS_KEY_SECRET ESA_SITE_ID
+            export ESA_REFRESH_HOST=download.jiuxiaoyw.online
+            python3 /opt/inv-mqtt/deploy/scripts/esa-refresh.py || true
+
