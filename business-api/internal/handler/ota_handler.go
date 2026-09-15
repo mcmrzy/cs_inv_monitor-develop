@@ -113,10 +113,20 @@ func (h *OTAHandler) ensureDeviceControlScope(c *gin.Context, sn string) bool {
 
 // logOTAAudit 记录OTA相关审计日志的辅助函数
 func (h *OTAHandler) logOTAAudit(c *gin.Context, action, resourceID, detail string) {
+	h.logOTAAuditTyped(c, action, "firmware", resourceID, detail)
+}
+
+// logOTAAuditTyped 带资源类型的审计日志
+func (h *OTAHandler) logOTAAuditTyped(c *gin.Context, action, resourceType, resourceID, detail string) {
+	if h.userService == nil {
+		return
+	}
 	userID := middleware.GetUserID(c)
 	phone := middleware.GetPhone(c)
+	ip := c.ClientIP()
 	go func() {
-		h.userService.LogAudit(c.Request.Context(), userID, phone, action, "firmware", resourceID, detail, c.ClientIP())
+		// 请求结束后 Context 已取消，必须用 Background 写审计
+		h.userService.LogAudit(context.Background(), userID, phone, action, resourceType, resourceID, detail, ip)
 	}()
 }
 
@@ -376,6 +386,11 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 		}
 		keepFile = true
 
+		h.logOTAAuditTyped(c, "firmware_upload", "firmware",
+			fmt.Sprintf("%d", created.ID),
+			fmt.Sprintf(`{"model":%q,"version":%q,"target_chip":%q,"file_size":%d}`,
+				model, version, targetChip, fileSize))
+
 		// 回显服务端识别/计算的元数据（版本号、大小、摘要），
 		// 管理端据此提示「自动识别出了什么」，无需再翻列表核对。
 		response.SuccessWithMessage(c, "固件上传成功", gin.H{
@@ -422,7 +437,9 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 	}
 
 	// 记录审计日志
-	h.logOTAAudit(c, "create", "", fmt.Sprintf(`{"model":"%s","version":"%s"}`, req.Model, req.Version))
+	h.logOTAAuditTyped(c, "firmware_upload", "firmware",
+		fmt.Sprintf("%d", created.ID),
+		fmt.Sprintf(`{"model":%q,"version":%q,"target_chip":%q,"file_size":%d}`, req.Model, req.Version, req.TargetChip, req.FileSize))
 
 	response.SuccessWithMessage(c, "固件创建成功", gin.H{
 		"id":           created.ID,
@@ -496,7 +513,7 @@ func (h *OTAHandler) DeleteFirmware(c *gin.Context) {
 	}
 
 	// 记录审计日志
-	h.logOTAAudit(c, "delete", fmt.Sprintf("%d", id), fmt.Sprintf(`{"firmware_id":%d}`, id))
+	h.logOTAAudit(c, "firmware_delete", fmt.Sprintf("%d", id), fmt.Sprintf(`{"firmware_id":%d}`, id))
 
 	response.SuccessWithMessage(c, "固件已删除", nil)
 }
@@ -530,7 +547,8 @@ func (h *OTAHandler) PushUpgrade(c *gin.Context) {
 	h.notifyDevicesUpgrade(c.Request.Context(), req.DeviceSNs)
 
 	// 记录审计日志
-	h.logOTAAudit(c, "command", fmt.Sprintf("%d", req.FirmwareID), fmt.Sprintf(`{"firmware_id":%d,"device_count":%d}`, req.FirmwareID, len(req.DeviceSNs)))
+	h.logOTAAuditTyped(c, "upgrade_push", "device_upgrade", fmt.Sprintf("%d", req.FirmwareID),
+		fmt.Sprintf(`{"firmware_id":%d,"device_count":%d}`, req.FirmwareID, len(req.DeviceSNs)))
 
 	response.SuccessWithMessage(c, "升级已推送", nil)
 }
@@ -1073,6 +1091,10 @@ func (h *OTAHandler) CreateAppVersion(c *gin.Context) {
 		return
 	}
 
+	h.logOTAAuditTyped(c, "app_version_create", "app_version",
+		fmt.Sprintf("%d", v.ID),
+		fmt.Sprintf(`{"platform":%q,"version_name":%q,"version_code":%d,"rollout_percentage":%d}`,
+			req.Platform, req.VersionName, req.VersionCode, req.RolloutPercentage))
 	h.notifyAppRelease(c, v, req.VersionName, req.Changelog, req.RolloutPercentage)
 	h.refreshAppReleaseCache()
 	response.Success(c, v)
@@ -1184,6 +1206,10 @@ func (h *OTAHandler) createAppVersionFromPackage(c *gin.Context) {
 	}
 	keepFile = true
 
+	h.logOTAAuditTyped(c, "app_version_upload", "app_version",
+		fmt.Sprintf("%d", v.ID),
+		fmt.Sprintf(`{"platform":%q,"version_name":%q,"version_code":%d,"file_size":%d,"rollout_percentage":%d}`,
+			v.Platform, v.VersionName, v.VersionCode, v.FileSize, v.RolloutPercentage))
 	h.notifyAppRelease(c, v, v.VersionName, v.Changelog, v.RolloutPercentage)
 	h.refreshAppReleaseCache()
 	response.Success(c, v)
@@ -1250,6 +1276,7 @@ func (h *OTAHandler) DeleteAppVersion(c *gin.Context) {
 		response.Error(c, 500, "删除失败")
 		return
 	}
+	h.logOTAAuditTyped(c, "app_version_delete", "app_version", fmt.Sprintf("%d", id), "delete app version")
 	h.refreshAppReleaseCache()
 	response.SuccessWithMessage(c, "删除成功", nil)
 }
@@ -1272,6 +1299,8 @@ func (h *OTAHandler) UpdateAppVersionRollout(c *gin.Context) {
 		response.Error(c, 500, "更新失败")
 		return
 	}
+	h.logOTAAuditTyped(c, "app_version_rollout", "app_version", fmt.Sprintf("%d", id),
+		fmt.Sprintf(`{"percentage":%d}`, req.Percentage))
 	response.SuccessWithMessage(c, "灰度比例已更新", nil)
 }
 
@@ -1286,6 +1315,7 @@ func (h *OTAHandler) RollbackAppVersion(c *gin.Context) {
 		response.Error(c, 500, "回滚失败")
 		return
 	}
+	h.logOTAAuditTyped(c, "app_version_rollback", "app_version", fmt.Sprintf("%d", id), "rollback app version")
 	h.refreshAppReleaseCache()
 	response.SuccessWithMessage(c, "版本已回滚", nil)
 }
@@ -1307,6 +1337,8 @@ func (h *OTAHandler) RestoreAppVersion(c *gin.Context) {
 		response.Error(c, 500, "恢复失败")
 		return
 	}
+	h.logOTAAuditTyped(c, "app_version_restore", "app_version", fmt.Sprintf("%d", id),
+		fmt.Sprintf(`{"percentage":%d}`, req.Percentage))
 	h.refreshAppReleaseCache()
 	response.SuccessWithMessage(c, "版本已恢复", nil)
 }
@@ -1590,6 +1622,13 @@ func (h *OTAHandler) CreateUpgradeTask(c *gin.Context) {
 		response.Error(c, 500, "创建升级任务失败: "+err.Error())
 		return
 	}
+	taskID := ""
+	if task != nil {
+		taskID = fmt.Sprintf("%d", task.ID)
+	}
+	h.logOTAAuditTyped(c, "upgrade_task_create", "upgrade_task", taskID,
+		fmt.Sprintf(`{"name":%q,"device_count":%d,"execute_mode":%q,"rollout_percent":%d,"firmware_id":%v}`,
+			req.Name, len(req.DeviceSNs), req.ExecuteMode, req.RolloutPercent, req.FirmwareID))
 	response.Success(c, task)
 }
 
@@ -1650,6 +1689,7 @@ func (h *OTAHandler) ExecuteUpgradeTask(c *gin.Context) {
 		response.Error(c, 500, "执行任务失败: "+err.Error())
 		return
 	}
+	h.logOTAAuditTyped(c, "upgrade_task_execute", "upgrade_task", fmt.Sprintf("%d", id), "execute upgrade task")
 	response.SuccessWithMessage(c, "任务已执行", nil)
 }
 
@@ -1664,6 +1704,7 @@ func (h *OTAHandler) CancelUpgradeTask(c *gin.Context) {
 		response.Error(c, 500, "取消任务失败: "+err.Error())
 		return
 	}
+	h.logOTAAuditTyped(c, "upgrade_task_cancel", "upgrade_task", fmt.Sprintf("%d", id), "cancel upgrade task")
 	response.SuccessWithMessage(c, "任务已取消", nil)
 }
 
@@ -1678,6 +1719,7 @@ func (h *OTAHandler) RetryUpgradeTask(c *gin.Context) {
 		response.Error(c, 500, "重试失败: "+err.Error())
 		return
 	}
+	h.logOTAAuditTyped(c, "upgrade_task_retry", "upgrade_task", fmt.Sprintf("%d", id), "retry failed devices")
 	response.SuccessWithMessage(c, "已重试", nil)
 }
 
@@ -1692,6 +1734,7 @@ func (h *OTAHandler) DeleteUpgradeTask(c *gin.Context) {
 		response.Error(c, 500, "删除失败: "+err.Error())
 		return
 	}
+	h.logOTAAuditTyped(c, "upgrade_task_delete", "upgrade_task", fmt.Sprintf("%d", id), "delete upgrade task")
 	response.SuccessWithMessage(c, "任务已删除", nil)
 }
 

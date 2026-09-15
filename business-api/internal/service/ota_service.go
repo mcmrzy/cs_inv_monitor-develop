@@ -671,7 +671,12 @@ func (s *OTAService) GetDevicePackageUpgradeInfo(ctx context.Context, sn string,
 
 // GetLatestFirmware 获取指定型号的最新固件
 func (s *OTAService) GetLatestFirmware(ctx context.Context, deviceModel string, targetChip string) (*model.Firmware, error) {
-	return s.repo.GetLatestFirmware(ctx, deviceModel, targetChip)
+	return s.repo.GetLatestFirmware(ctx, "", deviceModel, targetChip)
+}
+
+// GetLatestFirmwareForDevice 获取设备在发布范围内的最新固件
+func (s *OTAService) GetLatestFirmwareForDevice(ctx context.Context, sn, deviceModel, targetChip string) (*model.Firmware, error) {
+	return s.repo.GetLatestFirmware(ctx, sn, deviceModel, targetChip)
 }
 
 // GetLatestTaskDevice 兼容旧接口

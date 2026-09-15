@@ -43,3 +43,17 @@ func TestValidOfflineLog(t *testing.T) {
 		})
 	}
 }
+
+func TestNormalizeOfflineLogDefaultsResultToUnknown(t *testing.T) {
+	log := model.OfflineOpLog{}
+	normalizeOfflineLog(&log)
+	if log.Result != "unknown" {
+		t.Fatalf("empty result normalized to %q, want unknown", log.Result)
+	}
+	if log.Channel != "ble" {
+		t.Fatalf("empty channel normalized to %q, want ble", log.Channel)
+	}
+	if log.Params == nil {
+		t.Fatal("nil params were not normalized")
+	}
+}

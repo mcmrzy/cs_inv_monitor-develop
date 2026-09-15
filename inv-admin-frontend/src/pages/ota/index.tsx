@@ -60,7 +60,7 @@ import { otaApi, createOtaIdempotencyKey } from '@/services/otaApi'
 import { deviceApi } from '@/services/deviceApi'
 import { modelApi } from '@/services/modelApi'
 import { queryKeys } from '@/utils/queryKeys'
-import type { Firmware, DeviceUpgrade, Device, UpgradeTask } from '@/types'
+import type { Firmware, FirmwarePublishRequest, DeviceUpgrade, Device, UpgradeTask } from '@/types'
 import useAuthStore from '@/stores/authStore'
 import useTranslation from '@/hooks/useTranslation'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
@@ -75,10 +75,11 @@ import {
 import { firmwareModuleLabel, sanitizeLegacyFirmwareLabel } from './firmwarePresentation'
 import DeviceFirmwareUpgradeTab from './DeviceFirmwareUpgradeTab'
 import UpgradeHistoryTab from './UpgradeHistoryTab'
+import FirmwarePublishModal from './components/FirmwarePublishModal'
 
 const { TextArea } = Input
 const { Dragger } = Upload
-const { Title } = Typography
+const { Title, Text } = Typography
 
 function formatFileSize(bytes: number): string {
   if (bytes === 0) return '0 B'
@@ -214,6 +215,7 @@ const UpgradeTasksTab: React.FC = () => {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
+  const { timezone } = useTimezoneStore()
   const isSystemAdmin = useAuthStore((s) => s.user?.isSystemAdmin === true)
   const hasAnyPermission = useAuthStore((s) => s.hasAnyPermission)
   const canCreate = canMutateOta('create', isSystemAdmin, hasAnyPermission)
@@ -439,7 +441,7 @@ const UpgradeTasksTab: React.FC = () => {
 
   const columns: ProColumns<UpgradeTask>[] = [
     {
-      title: t('ota.taskName'), dataIndex: 'name', key: 'name', width: 160, ellipsis: true,
+      title: t('ota.taskName'), dataIndex: 'name', key: 'name', width: 140, ellipsis: true,
       render: (_, record: UpgradeTask) => record.name || `#${record.id}`,
     },
     {
@@ -496,6 +498,38 @@ const UpgradeTasksTab: React.FC = () => {
         const cfg = sourceMap[r.source || ''] || { label: r.source || '-', color: 'default' }
         return <Tag color={cfg.color}>{cfg.label}</Tag>
       },
+    },
+    {
+      title: t('common.createdAt'),
+      dataIndex: 'created_at',
+      key: 'created_at',
+      width: 150,
+      render: (_: any, r: UpgradeTask) =>
+        r.created_at ? formatInTimezone(r.created_at, timezone, 'YYYY-MM-DD HH:mm:ss') : '-',
+    },
+    {
+      title: t('ota.scheduledTime'),
+      dataIndex: 'scheduled_at',
+      key: 'scheduled_at',
+      width: 150,
+      render: (_: any, r: UpgradeTask) =>
+        r.scheduled_at ? formatInTimezone(r.scheduled_at, timezone, 'YYYY-MM-DD HH:mm:ss') : '-',
+    },
+    {
+      title: t('ota.executeTime'),
+      dataIndex: 'executed_at',
+      key: 'executed_at',
+      width: 150,
+      render: (_: any, r: UpgradeTask) =>
+        r.executed_at ? formatInTimezone(r.executed_at, timezone, 'YYYY-MM-DD HH:mm:ss') : '-',
+    },
+    {
+      title: t('ota.completeTime'),
+      dataIndex: 'completed_at',
+      key: 'completed_at',
+      width: 150,
+      render: (_: any, r: UpgradeTask) =>
+        r.completed_at ? formatInTimezone(r.completed_at, timezone, 'YYYY-MM-DD HH:mm:ss') : '-',
     },
     {
       title: t('common.operation'), key: 'action', width: 280, fixed: 'right',
@@ -675,7 +709,7 @@ const UpgradeTasksTab: React.FC = () => {
         size="small"
         search={false}
         options={{ density: true, reload: () => refetch(), setting: true }}
-        scroll={{ x: 1200 }}
+        scroll={{ x: 1600 }}
         pagination={{
           current: page, pageSize, total: tasksTotal, showSizeChanger: true,
           showTotal: (total) => t('common.total', { total }),
@@ -902,6 +936,8 @@ const FirmwareTab: React.FC = () => {
   const [uploading, setUploading] = useState(false)
   const [fileList, setFileList] = useState<any[]>([])
   const [form] = Form.useForm<FirmwareFormValues>()
+  const [publishOpen, setPublishOpen] = useState(false)
+  const [publishTarget, setPublishTarget] = useState<Firmware | null>(null)
 
   const [fwDevicesOpen, setFwDevicesOpen] = useState(false)
   const [fwDevicesTarget, setFwDevicesTarget] = useState<Firmware | null>(null)
@@ -986,9 +1022,28 @@ const FirmwareTab: React.FC = () => {
   })
 
   const publishMutation = useMutation({
-    mutationFn: (id: string | number) => otaApi.publishFirmware(id),
-    onSuccess: () => { message.success(t('ota.firmwarePublishSuccess')); queryClient.invalidateQueries({ queryKey: queryKeys.ota.all }) },
+    mutationFn: ({ id, data }: { id: string | number; data?: FirmwarePublishRequest }) =>
+      otaApi.publishFirmware(id, data),
+    onSuccess: () => {
+      message.success(t('ota.firmwarePublishSuccess'))
+      setPublishOpen(false)
+      setPublishTarget(null)
+      queryClient.invalidateQueries({ queryKey: queryKeys.ota.all })
+    },
     onError: (err: any) => message.error(err?.response?.data?.message || err?.message || t('ota.firmwarePublishFailed')),
+  })
+
+  const rolloutMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string | number; data: FirmwarePublishRequest }) =>
+      otaApi.updateFirmwareRollout(id, data),
+    onSuccess: () => {
+      message.success(t('ota.firmwareRolloutUpdateSuccess'))
+      setPublishOpen(false)
+      setPublishTarget(null)
+      queryClient.invalidateQueries({ queryKey: queryKeys.ota.all })
+    },
+    onError: (err: any) =>
+      message.error(err?.response?.data?.message || err?.message || t('ota.firmwareRolloutUpdateFailed')),
   })
 
   const disableMutation = useMutation({
@@ -1072,9 +1127,32 @@ const FirmwareTab: React.FC = () => {
       ) : <span style={{ color: '#bfbfbf' }}>-</span>,
     },
     { title: t('ota.changelog'), dataIndex: 'changelog', key: 'changelog', ellipsis: true, render: (_, record: Firmware) => <Tooltip title={record.changelog}><span>{record.changelog || '-'}</span></Tooltip> },
-    { title: t('ota.uploadTime'), dataIndex: 'created_at', key: 'created_at', width: 170, render: (_: any, record: Firmware) => formatInTimezone(record.created_at, timezone, 'YYYY-MM-DD HH:mm:ss') },
     {
-      title: t('common.operation'), key: 'action', width: 220,
+      title: t('ota.uploadTime'), dataIndex: 'created_at', key: 'created_at', width: 160,
+      render: (_: any, record: Firmware) => record.created_at ? formatInTimezone(record.created_at, timezone, 'YYYY-MM-DD HH:mm:ss') : '-',
+    },
+    {
+      title: t('ota.publishedAt'), dataIndex: 'published_at', key: 'published_at', width: 160,
+      render: (_: any, record: Firmware) =>
+        record.published_at ? formatInTimezone(record.published_at, timezone, 'YYYY-MM-DD HH:mm:ss') : '-',
+    },
+    {
+      title: t('ota.rolloutPercentLabel'), key: 'rollout', width: 130,
+      render: (_: any, record: Firmware) => {
+        const st = record.release_status || 'published'
+        if (st !== 'published') return <span style={{ color: '#bfbfbf' }}>-</span>
+        const pct = record.rollout_percent ?? 100
+        const scope = record.rollout_type === 'device' ? t('ota.rolloutByDevice') : t('ota.rolloutAll')
+        return (
+          <Space direction="vertical" size={0}>
+            <Tag color={pct < 100 ? 'orange' : 'blue'}>{pct}%</Tag>
+            <Text type="secondary" style={{ fontSize: 12 }}>{scope}</Text>
+          </Space>
+        )
+      },
+    },
+    {
+      title: t('common.operation'), key: 'action', width: 240,
       render: (_: any, record: Firmware) => {
         const st = record.release_status || 'published'
         return (
@@ -1085,9 +1163,28 @@ const FirmwareTab: React.FC = () => {
               </Button>
             </Tooltip>
             {canControl && st !== 'published' && (
-              <Popconfirm title={t('ota.confirmPublishFirmware')} onConfirm={() => publishMutation.mutate(record.id)}>
-                <Button type="link" size="small">{t('ota.publishFirmware')}</Button>
-              </Popconfirm>
+              <Button
+                type="link"
+                size="small"
+                onClick={() => {
+                  setPublishTarget(record)
+                  setPublishOpen(true)
+                }}
+              >
+                {t('ota.publishFirmware')}
+              </Button>
+            )}
+            {canControl && st === 'published' && (
+              <Button
+                type="link"
+                size="small"
+                onClick={() => {
+                  setPublishTarget(record)
+                  setPublishOpen(true)
+                }}
+              >
+                {t('ota.adjustFirmwareRollout')}
+              </Button>
             )}
             {canControl && st === 'published' && (
               <Popconfirm title={t('ota.confirmDisableFirmware')} onConfirm={() => disableMutation.mutate(record.id)}>
@@ -1140,6 +1237,22 @@ const FirmwareTab: React.FC = () => {
         search={false}
         options={{ density: true, reload: () => refetch(), setting: true }}
         pagination={{ current: page, pageSize, total: firmwareTotal, showSizeChanger: true, showTotal: (total) => t('common.total', { total }), onChange: (p, ps) => { setPage(p); setPageSize(ps) } }} />
+
+      <FirmwarePublishModal
+        open={publishOpen}
+        firmware={publishTarget}
+        publishedPeers={allFirmwareList as Firmware[]}
+        confirmLoading={publishMutation.isPending || rolloutMutation.isPending}
+        onCancel={() => { setPublishOpen(false); setPublishTarget(null) }}
+        onOk={(values) => {
+          if (!publishTarget) return
+          if ((publishTarget.release_status || 'draft') === 'published') {
+            rolloutMutation.mutate({ id: publishTarget.id, data: values })
+          } else {
+            publishMutation.mutate({ id: publishTarget.id, data: values })
+          }
+        }}
+      />
 
       <Modal title={t('ota.uploadFirmwareTitle')} open={uploadOpen}
         onCancel={() => { setUploadOpen(false); form.resetFields(); setFileList([]) }}

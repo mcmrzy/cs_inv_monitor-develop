@@ -862,6 +862,46 @@ func (r *DeviceRepository) HasDataPermission(ctx context.Context, userID int64, 
 	return count > 0
 }
 
+// HasOfflineLogDeviceAccess checks the authenticated uploader's current
+// management scope for one device. It intentionally derives identity from the
+// JWT user id supplied by the service, not any client-provided log field.
+//
+// This keeps the pre-v2 audit table compatible with the established device
+// hierarchy and explicit sharing semantics. Fine-grained organization grant
+// pairing is introduced with the v2 audit migration/API.
+func (r *DeviceRepository) HasOfflineLogDeviceAccess(ctx context.Context, userID int64, sn string) (bool, error) {
+	var allowed bool
+	err := r.db.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM devices d
+			WHERE d.sn = $2
+			  AND d.deleted_at IS NULL
+			  AND (
+				d.user_id = $1
+				OR EXISTS (
+					SELECT 1 FROM users actor
+					WHERE actor.id = $1
+					  AND actor.is_system_admin = TRUE
+					  AND actor.status = 1
+					  AND actor.deleted_at IS NULL
+				)
+				OR EXISTS (
+					SELECT 1 FROM v_user_hierarchy hierarchy
+					WHERE hierarchy.ancestor_id = $1
+					  AND hierarchy.descendant_id = d.user_id
+				)
+				OR EXISTS (
+					SELECT 1 FROM user_device_rel relation
+					WHERE relation.user_id = $1
+					  AND relation.device_sn = d.sn
+				)
+			  )
+		)
+	`, userID, sn).Scan(&allowed)
+	return allowed, err
+}
+
 func (r *DeviceRepository) GetAllowedDeviceSNs(ctx context.Context, userID int64) ([]string, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT DISTINCT sn FROM (
@@ -1843,15 +1883,15 @@ func (r *DeviceRepository) Unbind(ctx context.Context, sn string) error {
 	return err
 }
 
-// SaveOfflineLogs batch-inserts offline operation logs uploaded by the App.
-// Idempotency: (user_id, log_id) unique constraint; duplicates are skipped.
-// Returns (accepted, duplicates, err).
-func (r *DeviceRepository) SaveOfflineLogs(ctx context.Context, userID int64, logs []model.OfflineOpLog) (int, int, error) {
-	accepted := 0
+// SaveOfflineLogsDetailed batch-inserts already-authorized offline logs.
+// Idempotency is the existing (user_id, log_id) constraint. Every input log
+// receives exactly one accepted or duplicate outcome in input order.
+func (r *DeviceRepository) SaveOfflineLogsDetailed(ctx context.Context, userID int64, logs []model.OfflineOpLog) (model.OfflineLogBatchResult, error) {
+	result := model.OfflineLogBatchResult{Results: make([]model.OfflineLogResult, 0, len(logs))}
 	for _, log := range logs {
 		params, err := json.Marshal(log.Params)
 		if err != nil {
-			return accepted, 0, fmt.Errorf("marshal params: %w", err)
+			return result, fmt.Errorf("marshal params: %w", err)
 		}
 		tag, err := r.db.Exec(ctx, `
 			INSERT INTO device_offline_op_logs (log_id, user_id, device_sn, action, params, result, channel, op_time)
@@ -1859,11 +1899,24 @@ func (r *DeviceRepository) SaveOfflineLogs(ctx context.Context, userID int64, lo
 			ON CONFLICT (user_id, log_id) DO NOTHING`,
 			log.LogID, userID, log.DeviceSN, log.Action, params, log.Result, log.Channel, log.OpTime)
 		if err != nil {
-			return accepted, 0, err
+			return result, err
 		}
-		accepted += int(tag.RowsAffected())
+		if tag.RowsAffected() == 1 {
+			result.Accepted++
+			result.Results = append(result.Results, model.OfflineLogResult{LogID: log.LogID, Status: model.OfflineLogAccepted})
+			continue
+		}
+		result.Duplicates++
+		result.Results = append(result.Results, model.OfflineLogResult{LogID: log.LogID, Status: model.OfflineLogDuplicate})
 	}
-	return accepted, len(logs) - accepted, nil
+	return result, nil
+}
+
+// SaveOfflineLogs is retained for existing callers that only understand the
+// legacy count response. New request paths use SaveOfflineLogsDetailed.
+func (r *DeviceRepository) SaveOfflineLogs(ctx context.Context, userID int64, logs []model.OfflineOpLog) (int, int, error) {
+	result, err := r.SaveOfflineLogsDetailed(ctx, userID, logs)
+	return result.Accepted, result.Duplicates, err
 }
 
 func (r *DeviceRepository) AddToStation(ctx context.Context, sn string, stationID int64) error {
