@@ -8,12 +8,12 @@ void main() {
   test('maps internal firmware targets to functional module names', () async {
     final zh = await AppLocalizations.delegate.load(const Locale('zh', 'CN'));
 
-    // 展示名固定为功能名，不带芯片后缀
+    // 中文展示名带芯片后缀（与 app_zh.dart 对齐）；英文不带
     final cases = <String, String>{
-      'esp': '通信采集',
-      'ARM': '系统主控',
-      'dsp': '功率控制',
-      'bms': '电池管理',
+      'esp': '通信采集（ESP）',
+      'ARM': '系统中控（ARM）',
+      'dsp': '计算控制（DSP）',
+      'bms': '电池管理（BMS）',
       'vendor_x': '设备组件',
     };
 
@@ -122,7 +122,7 @@ void main() {
         'ARM 升级完成，ESP 等待重启，vendor_x 保持不变',
         zh,
       ),
-      '系统主控 升级完成，通信采集 等待重启，vendor_x 保持不变',
+      '系统中控（ARM） 升级完成，通信采集（ESP） 等待重启，vendor_x 保持不变',
     );
   });
 
