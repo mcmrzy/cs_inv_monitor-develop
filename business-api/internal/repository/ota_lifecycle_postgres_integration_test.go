@@ -140,8 +140,8 @@ func TestOTAUpgradeLifecycleFailedRepushIncrementsRetry(t *testing.T) {
 func seedOTALifecycleFirmware(t *testing.T, pool *pgxpool.Pool, id int64, version, chip string) {
 	t.Helper()
 	_, err := pool.Exec(context.Background(), `
-		INSERT INTO firmware_versions (id, model, version, file_url, target_chip, main_version)
-		VALUES ($1, 'CS-INV-TEST', $2, $3, $4, $5)
+		INSERT INTO firmware_versions (id, model, version, file_url, target_chip, main_version, release_status, published_at)
+		VALUES ($1, 'CS-INV-TEST', $2, $3, $4, $5, 'published', NOW())
 	`, id, version, "/firmware/"+version+".bin", chip, "V"+version)
 	require.NoError(t, err)
 }
