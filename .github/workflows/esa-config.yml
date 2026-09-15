@@ -12,6 +12,10 @@ jobs:
     steps:
       - name: Configure ESA cache credentials and restart business-api
         uses: appleboy/ssh-action@v1
+        env:
+          ALIYUN_ACCESS_KEY_ID: ${{ secrets.ALIYUN_ACCESS_KEY_ID }}
+          ALIYUN_ACCESS_KEY_SECRET: ${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}
+          ESA_SITE_ID: ${{ secrets.ESA_SITE_ID }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USERNAME }}
@@ -20,15 +24,24 @@ jobs:
           envs: ALIYUN_ACCESS_KEY_ID,ALIYUN_ACCESS_KEY_SECRET,ESA_SITE_ID
           script: |
             set -e
+            # 只认生产目录，避开 backup 子目录
             ENV_FILE=/opt/inv-mqtt/.env.prod
             if [ ! -f "$ENV_FILE" ]; then
-              ENV_FILE=$(find /opt -name .env.prod 2>/dev/null | head -1)
+              ENV_FILE=$(find /opt/inv-mqtt -maxdepth 2 -name .env.prod ! -path '*backup*' ! -path '*Backup*' 2>/dev/null | head -1)
             fi
             if [ -z "$ENV_FILE" ] || [ ! -f "$ENV_FILE" ]; then
-              echo "❌ 找不到 .env.prod"
+              echo "❌ 找不到生产 .env.prod"
+              find /opt -name .env.prod 2>/dev/null | head
               exit 1
             fi
             echo "ENV_FILE=$ENV_FILE"
+            echo "ALIYUN_ACCESS_KEY_ID length=${#ALIYUN_ACCESS_KEY_ID}"
+            echo "ALIYUN_ACCESS_KEY_SECRET length=${#ALIYUN_ACCESS_KEY_SECRET}"
+            echo "ESA_SITE_ID=$ESA_SITE_ID"
+            if [ -z "$ALIYUN_ACCESS_KEY_ID" ] || [ -z "$ALIYUN_ACCESS_KEY_SECRET" ] || [ -z "$ESA_SITE_ID" ]; then
+              echo "❌ Secrets 未注入到 SSH 会话"
+              exit 1
+            fi
 
             sed -i \
               -e '/^ALIYUN_ACCESS_KEY_ID=/d' \
@@ -52,7 +65,7 @@ jobs:
             DEPLOY_DIR=$(dirname "$ENV_FILE")
             cd "$DEPLOY_DIR"
             docker compose -f docker-compose.prod.yml --env-file "$ENV_FILE" up -d --force-recreate business-api
-            sleep 10
+            sleep 12
             echo "=== business-api ESA logs ==="
-            docker logs --tail 100 business-api 2>&1 | grep -iE 'ESA|cache|error|fatal' || true
+            docker logs --tail 120 business-api 2>&1 | grep -iE 'ESA|cache refresh|error|fatal' || true
             docker inspect -f 'business-api state={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' business-api
