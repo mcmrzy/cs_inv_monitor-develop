@@ -102,6 +102,34 @@ type OfflineOpLog struct {
 	OpTime   time.Time              `json:"op_time"`
 }
 
+// OfflineLogStatus is the terminal outcome of one uploaded offline log.
+// The status describes server-side audit ingestion only; it never asserts that
+// a device command or OTA operation completed successfully.
+type OfflineLogStatus string
+
+const (
+	OfflineLogAccepted  OfflineLogStatus = "accepted"
+	OfflineLogDuplicate OfflineLogStatus = "duplicate"
+	OfflineLogRejected  OfflineLogStatus = "rejected"
+)
+
+// OfflineLogResult preserves the client-generated id so a partial batch can
+// be retried safely without inferring outcomes from item order.
+type OfflineLogResult struct {
+	LogID  string           `json:"log_id"`
+	Status OfflineLogStatus `json:"status"`
+	Reason string           `json:"reason,omitempty"`
+}
+
+// OfflineLogBatchResult retains accepted/duplicates for legacy clients and
+// adds deterministic per-log outcomes for v2-capable clients.
+type OfflineLogBatchResult struct {
+	Accepted   int                `json:"accepted"`
+	Duplicates int                `json:"duplicates"`
+	Rejected   int                `json:"rejected"`
+	Results    []OfflineLogResult `json:"results"`
+}
+
 type DeviceRealtimeData struct {
 	DeviceSN              string    `json:"device_sn"`
 	DataTime              time.Time `json:"data_time"`
@@ -394,42 +422,56 @@ type RolePermission struct {
 }
 
 type Firmware struct {
-	ID                int64      `json:"id"`
-	Model             string     `json:"model"`
-	Version           string     `json:"version"`
-	FileURL           string     `json:"file_url"`
-	FileSize          int64      `json:"file_size"`
-	FileMD5           string     `json:"file_md5"`
-	FileSHA256        string     `json:"file_sha256"`
-	SecurityVersion   uint32     `json:"security_version"`
-	ReleaseSignature  string     `json:"release_signature"`
-	Changelog         string     `json:"changelog"`
-	IsForce           bool       `json:"is_force"`
-	UploadedBy        int64      `json:"uploaded_by"`
-	Status            int        `json:"status"`
-	CreatedAt         time.Time  `json:"created_at"`
-	UpdatedAt         time.Time  `json:"updated_at"`
-	TargetChip        string     `json:"target_chip"`
-	MainVersion       string     `json:"main_version"`
-	ReleaseStatus     string     `json:"release_status"` // draft/published/disabled
-	PublishedAt       *time.Time `json:"published_at,omitempty"`
-	SupportedChannels []string   `json:"supported_channels,omitempty"`
+	ID                  int64      `json:"id"`
+	Model               string     `json:"model"`
+	Version             string     `json:"version"`
+	FileURL             string     `json:"file_url"`
+	FileSize            int64      `json:"file_size"`
+	FileMD5             string     `json:"file_md5"`
+	FileSHA256          string     `json:"file_sha256"`
+	SecurityVersion     uint32     `json:"security_version"`
+	ReleaseSignature    string     `json:"release_signature"`
+	Changelog           string     `json:"changelog"`
+	IsForce             bool       `json:"is_force"`
+	UploadedBy          int64      `json:"uploaded_by"`
+	Status              int        `json:"status"`
+	CreatedAt           time.Time  `json:"created_at"`
+	UpdatedAt           time.Time  `json:"updated_at"`
+	TargetChip          string     `json:"target_chip"`
+	MainVersion         string     `json:"main_version"`
+	ReleaseStatus       string     `json:"release_status"` // draft/published/disabled
+	PublishedAt         *time.Time `json:"published_at,omitempty"`
+	RolloutPercent      int        `json:"rollout_percent"`
+	RolloutType         string     `json:"rollout_type"` // all | device
+	RolloutTargets      string     `json:"rollout_targets"`
+	RollbackToFirmwareID *int64   `json:"rollback_to_firmware_id,omitempty"`
+	SupportedChannels   []string   `json:"supported_channels,omitempty"`
 }
 
 // FirmwareModuleOverview 设备单模块固件概览（用户侧）
 type FirmwareModuleOverview struct {
-	Target            string     `json:"target"`
-	CurrentVersion    string     `json:"current_version"`
-	LatestFirmwareID  int64      `json:"latest_firmware_id"`
-	LatestVersion     string     `json:"latest_version"`
-	VersionState      string     `json:"version_state"` // unreported/current/outdated
-	UpdateAvailable   bool       `json:"update_available"`
-	Supported         bool       `json:"supported"`
-	Connected         bool       `json:"connected"`
-	Eligible          bool       `json:"eligible"`
-	SupportedChannels []string   `json:"supported_channels"`
-	Changelog         string     `json:"changelog"`
-	PublishedAt       *time.Time `json:"published_at,omitempty"`
+	Target             string     `json:"target"`
+	CurrentVersion     string     `json:"current_version"`
+	LatestFirmwareID   int64      `json:"latest_firmware_id"`
+	LatestVersion      string     `json:"latest_version"`
+	VersionState       string     `json:"version_state"` // unreported/current/outdated
+	UpdateAvailable    bool       `json:"update_available"`
+	Supported          bool       `json:"supported"`
+	Connected          bool       `json:"connected"`
+	Eligible           bool       `json:"eligible"`
+	SupportedChannels  []string   `json:"supported_channels"`
+	Changelog          string     `json:"changelog"`
+	PublishedAt        *time.Time `json:"published_at,omitempty"`
+	RolloutPercent     int        `json:"rollout_percent"`
+	RolloutType        string     `json:"rollout_type"`
+}
+
+// FirmwarePublishOptions 发布策略（范围/灰度/回退目标）
+type FirmwarePublishOptions struct {
+	RolloutPercent       int    `json:"rollout_percent"`
+	RolloutType          string `json:"rollout_type"` // all | device
+	RolloutTargets       string `json:"rollout_targets"`
+	RollbackToFirmwareID *int64 `json:"rollback_to_firmware_id"`
 }
 
 // DeviceFirmwareOverview 设备固件总览

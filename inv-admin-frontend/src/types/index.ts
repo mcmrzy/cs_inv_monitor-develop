@@ -75,6 +75,19 @@ export interface Firmware {
   /** 发布生命周期：draft/published/disabled */
   release_status?: 'draft' | 'published' | 'disabled' | string
   published_at?: string | null
+  /** 发布策略 */
+  rollout_percent?: number
+  rollout_type?: 'all' | 'device' | string
+  rollout_targets?: string
+  rollback_to_firmware_id?: number | null
+}
+
+/** 固件发布请求（范围/灰度/回退目标） */
+export interface FirmwarePublishRequest {
+  rollout_percent?: number
+  rollout_type?: 'all' | 'device'
+  rollout_targets?: string
+  rollback_to_firmware_id?: number | null
 }
 
 /** 设备单模块固件概览（独立模块 OTA） */

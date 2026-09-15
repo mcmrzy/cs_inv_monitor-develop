@@ -662,9 +662,34 @@ func computeDevicePIN(secret, sn string) string {
 	return fmt.Sprintf("%06d", pin%1000000)
 }
 
-// SaveOfflineLogs persists offline operation logs uploaded by the App.
-func (s *DeviceService) SaveOfflineLogs(ctx context.Context, userID int64, logs []model.OfflineOpLog) (int, int, error) {
-	return s.repo.SaveOfflineLogs(ctx, userID, logs)
+// SaveOfflineLogs authorizes each device independently so one revoked or
+// unrelated device cannot prevent permitted events in the same retry batch.
+func (s *DeviceService) SaveOfflineLogs(ctx context.Context, actor model.ActorContext, logs []model.OfflineOpLog) (model.OfflineLogBatchResult, error) {
+	result := model.OfflineLogBatchResult{Results: make([]model.OfflineLogResult, 0, len(logs))}
+	authorized := make([]model.OfflineOpLog, 0, len(logs))
+	for _, log := range logs {
+		allowed, err := s.repo.HasOfflineLogDeviceAccess(ctx, actor.UserID, log.DeviceSN)
+		if err != nil {
+			return result, fmt.Errorf("check offline log device access for %s: %w", log.DeviceSN, err)
+		}
+		if !allowed {
+			result.Rejected++
+			result.Results = append(result.Results, model.OfflineLogResult{
+				LogID: log.LogID, Status: model.OfflineLogRejected, Reason: "device_access_denied",
+			})
+			continue
+		}
+		authorized = append(authorized, log)
+	}
+
+	persisted, err := s.repo.SaveOfflineLogsDetailed(ctx, actor.UserID, authorized)
+	if err != nil {
+		return result, fmt.Errorf("save authorized offline logs: %w", err)
+	}
+	result.Accepted += persisted.Accepted
+	result.Duplicates += persisted.Duplicates
+	result.Results = append(result.Results, persisted.Results...)
+	return result, nil
 }
 
 // validDeviceKey reports whether raw is a base64-encoded 32-byte key

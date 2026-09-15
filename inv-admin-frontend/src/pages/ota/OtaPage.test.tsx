@@ -91,7 +91,7 @@ describe('OtaPage', () => {
     })
   })
 
-  it('shows scoped aggregate history inside the ordinary device firmware area', async () => {
+  it('does not nest aggregate history under the device firmware tab', async () => {
     let aggregateHistoryRequests = 0
     server.use(
       http.get(`${API_BASE}/ota/history`, () => {
@@ -107,8 +107,9 @@ describe('OtaPage', () => {
       routerProps: { initialEntries: ['/ota?tab=deviceFirmware'] },
     })
 
-    expect(await screen.findByText('全部更新记录')).toBeInTheDocument()
-    await waitFor(() => expect(aggregateHistoryRequests).toBeGreaterThan(0))
+    // 设备固件升级页不再内嵌「全部更新记录」，聚合历史由独立 Tab 提供
+    expect(await screen.findByText('选择设备')).toBeInTheDocument()
+    expect(screen.queryByText('全部更新记录')).not.toBeInTheDocument()
   })
 
   it('keeps the tasks tab selected after consuming batch-create query parameters', async () => {

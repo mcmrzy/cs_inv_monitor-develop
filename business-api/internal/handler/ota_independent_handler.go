@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -178,19 +179,83 @@ func parseHistoryFilter(c *gin.Context, defaultSN string) (model.UpgradeHistoryF
 }
 
 // PublishFirmware POST /ota/firmware/:id/publish
+// Body 可选：rollout_percent / rollout_type / rollout_targets / rollback_to_firmware_id
 func (h *OTAHandler) PublishFirmware(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil || id <= 0 {
 		response.Error(c, 400, "固件 ID 无效")
 		return
 	}
+	var req model.FirmwarePublishOptions
+	// body 可为空
+	_ = c.ShouldBindJSON(&req)
+	if req.RolloutPercent < 0 || req.RolloutPercent > 100 {
+		req.RolloutPercent = 100
+	}
+	if req.RolloutType != "device" {
+		req.RolloutType = "all"
+		req.RolloutTargets = strings.TrimSpace(req.RolloutTargets)
+	} else {
+		req.RolloutTargets = strings.TrimSpace(req.RolloutTargets)
+		if req.RolloutTargets == "" {
+			response.Error(c, 400, "按设备发布时必须提供 rollout_targets")
+			return
+		}
+	}
+	if req.RollbackToFirmwareID != nil && *req.RollbackToFirmwareID <= 0 {
+		req.RollbackToFirmwareID = nil
+	}
 	actorID := middleware.GetUserID(c)
-	if err := h.otaService.PublishFirmware(c.Request.Context(), id, actorID); err != nil {
+	if err := h.otaService.PublishFirmware(c.Request.Context(), id, actorID, req); err != nil {
 		response.Error(c, 500, "发布失败: "+err.Error())
 		return
 	}
-	h.logOTAAudit(c, "firmware_publish", strconv.FormatInt(id, 10), "publish firmware")
-	response.Success(c, gin.H{"id": id, "release_status": "published"})
+	detail := fmt.Sprintf(`{"rollout_percent":%d,"rollout_type":%q,"rollout_targets":%q}`,
+		req.RolloutPercent, req.RolloutType, req.RolloutTargets)
+	if req.RollbackToFirmwareID != nil {
+		detail = detail[:len(detail)-1] + fmt.Sprintf(`,"rollback_to_firmware_id":%d}`, *req.RollbackToFirmwareID)
+	}
+	h.logOTAAudit(c, "firmware_publish", strconv.FormatInt(id, 10), detail)
+	response.Success(c, gin.H{
+		"id":                 id,
+		"release_status":     "published",
+		"rollout_percent":    req.RolloutPercent,
+		"rollout_type":       req.RolloutType,
+		"rollout_targets":    req.RolloutTargets,
+		"rollback_to_firmware_id": req.RollbackToFirmwareID,
+	})
+}
+
+// UpdateFirmwareRollout PUT /ota/firmware/:id/rollout 发布后调整灰度
+func (h *OTAHandler) UpdateFirmwareRollout(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		response.Error(c, 400, "固件 ID 无效")
+		return
+	}
+	var req model.FirmwarePublishOptions
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, 400, "invalid request: "+err.Error())
+		return
+	}
+	if req.RolloutPercent < 0 || req.RolloutPercent > 100 {
+		response.Error(c, 400, "灰度比例需在 0-100 之间")
+		return
+	}
+	if req.RolloutType != "device" {
+		req.RolloutType = "all"
+		req.RolloutTargets = ""
+	}
+	if req.RollbackToFirmwareID != nil && *req.RollbackToFirmwareID <= 0 {
+		req.RollbackToFirmwareID = nil
+	}
+	if err := h.otaService.UpdateFirmwareRollout(c.Request.Context(), id, req); err != nil {
+		response.Error(c, 500, "更新灰度失败: "+err.Error())
+		return
+	}
+	h.logOTAAudit(c, "firmware_rollout_update", strconv.FormatInt(id, 10),
+		fmt.Sprintf(`{"rollout_percent":%d,"rollout_type":%q}`, req.RolloutPercent, req.RolloutType))
+	response.Success(c, gin.H{"id": id, "rollout_percent": req.RolloutPercent, "rollout_type": req.RolloutType})
 }
 
 // DisableFirmware POST /ota/firmware/:id/disable
@@ -205,7 +270,7 @@ func (h *OTAHandler) DisableFirmware(c *gin.Context) {
 		response.Error(c, 500, "停用失败: "+err.Error())
 		return
 	}
-	h.logOTAAudit(c, "firmware_disable", strconv.FormatInt(id, 10), "disable firmware")
+	h.logOTAAudit(c, "firmware_disable", strconv.FormatInt(id, 10), "disable/stop distributing firmware")
 	response.Success(c, gin.H{"id": id, "release_status": "disabled"})
 }
 
@@ -256,7 +321,8 @@ func (h *OTAHandler) TriggerIndependentOTA(c *gin.Context) {
 		response.Error(c, 500, "触发升级失败: "+err.Error())
 		return
 	}
-	h.logOTAAudit(c, "firmware_trigger", req.DeviceSN, "independent trigger")
+	h.logOTAAuditTyped(c, "firmware_trigger", "device_upgrade", req.DeviceSN,
+		fmt.Sprintf(`{"firmware_ids":%v,"force":%t}`, req.FirmwareIDs, req.ForceReason != ""))
 	response.Success(c, gin.H{"tasks": refs})
 }
 
@@ -290,10 +356,10 @@ func (h *OTAHandler) RollbackIndependentFirmware(c *gin.Context) {
 		response.Error(c, 500, "回滚失败: "+err.Error())
 		return
 	}
-	detail := "rollback firmware"
+	detail := fmt.Sprintf(`{"firmware_id":%d}`, req.FirmwareID)
 	if req.ForceReason != "" {
-		detail = "force rollback: " + req.ForceReason
+		detail = fmt.Sprintf(`{"firmware_id":%d,"force_reason":%q}`, req.FirmwareID, req.ForceReason)
 	}
-	h.logOTAAudit(c, "firmware_rollback", req.DeviceSN, detail)
+	h.logOTAAuditTyped(c, "firmware_rollback", "device_upgrade", req.DeviceSN, detail)
 	response.Success(c, ref)
 }
