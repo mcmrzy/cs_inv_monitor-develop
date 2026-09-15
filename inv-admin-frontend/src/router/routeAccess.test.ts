@@ -6,6 +6,7 @@ import {
   canAccessOtaTab,
   resolveOtaTab,
   canMutateOta,
+  canControlDeviceFirmware,
   OTA_TABS,
   OTA_TAB_PERMISSIONS,
   OTA_MUTATION_PERMISSIONS,
@@ -166,5 +167,14 @@ describe('OTA mutation permissions', () => {
     expect(canMutateOta('create', false, has)).toBe(false)
     expect(canMutateOta('delete', false, has)).toBe(false)
     expect(canMutateOta('create', true, () => false)).toBe(true)
+  })
+
+  it('uses devices:control for device-scoped upgrade and rollback', () => {
+    const hasDeviceControl = (...perms: string[]) => perms.includes('devices:control')
+    const hasOnlyOtaControl = (...perms: string[]) => perms.includes('ota:control')
+
+    expect(canControlDeviceFirmware(false, hasDeviceControl)).toBe(true)
+    expect(canControlDeviceFirmware(false, hasOnlyOtaControl)).toBe(false)
+    expect(canControlDeviceFirmware(true, () => false)).toBe(true)
   })
 })

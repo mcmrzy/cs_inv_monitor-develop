@@ -7,6 +7,7 @@ void main() {
       'id': 9,
       'device_sn': 'INV-001',
       'firmware_id': 42,
+      'rollback_firmware_id': 21,
       'target_chip': 'arm',
       'old_version': '1.0.0',
       'firmware_version': '1.1.0',
@@ -18,6 +19,7 @@ void main() {
 
     expect(item.changelog, isEmpty);
     expect(item.firmwareId, 42);
+    expect(item.rollbackFirmwareId, 21);
     expect(item.target, 'arm');
     expect(item.firmwareVersion, '1.1.0');
     expect(item.newVersion, '1.1.0');
@@ -25,7 +27,7 @@ void main() {
     expect(item.createdAt, DateTime.utc(2026, 9, 10, 8));
   });
 
-  test('history without firmware_id cannot rollback', () {
+  test('history without rollback_firmware_id cannot rollback', () {
     final item = DeviceFirmwareHistory.fromJson({
       'id': 1,
       'device_sn': 'INV-001',
@@ -38,11 +40,25 @@ void main() {
     expect(item.canRollback, isFalse);
   });
 
-  test('failed history cannot rollback even with firmware_id', () {
+  test('completed firmware id is not reused as a rollback target', () {
     final item = DeviceFirmwareHistory.fromJson({
       'id': 2,
       'device_sn': 'INV-001',
       'firmware_id': 10,
+      'target_chip': 'esp',
+      'old_version': '1.0.0',
+      'firmware_version': '1.1.0',
+      'status': 'success',
+    });
+    expect(item.canRollback, isFalse);
+  });
+
+  test('failed history cannot rollback even with rollback target', () {
+    final item = DeviceFirmwareHistory.fromJson({
+      'id': 2,
+      'device_sn': 'INV-001',
+      'firmware_id': 10,
+      'rollback_firmware_id': 9,
       'target_chip': 'esp',
       'old_version': '1.0.0',
       'firmware_version': '1.1.0',

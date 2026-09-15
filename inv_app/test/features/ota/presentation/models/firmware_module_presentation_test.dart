@@ -11,8 +11,8 @@ void main() {
     // 展示名固定为功能名，不带芯片后缀
     final cases = <String, String>{
       'esp': '通信采集',
-      'ARM': '主控',
-      'dsp': '数字信号',
+      'ARM': '系统主控',
+      'dsp': '功率控制',
       'bms': '电池管理',
       'vendor_x': '设备组件',
     };
@@ -28,8 +28,8 @@ void main() {
 
     final cases = <String, String>{
       'esp': 'Communication',
-      'ARM': 'Main Control',
-      'dsp': 'Digital Signal',
+      'ARM': 'System Control',
+      'dsp': 'Power Control',
       'bms': 'Battery Management',
       'vendor_x': 'Device Component',
     };
@@ -112,5 +112,38 @@ void main() {
         'Main Control',
       );
     });
+  });
+
+  test('customer copy replaces internal chip abbreviations everywhere', () async {
+    final zh = await AppLocalizations.delegate.load(const Locale('zh', 'CN'));
+
+    expect(
+      FirmwareModulePresentation.sanitizeCustomerCopy(
+        'ARM 升级完成，ESP 等待重启，vendor_x 保持不变',
+        zh,
+      ),
+      '系统主控 升级完成，通信采集 等待重启，vendor_x 保持不变',
+    );
+  });
+
+  test('only communication and system-control modules support local OTA', () {
+    expect(FirmwareModulePresentation.fromTarget('esp').supportsLocalUpgrade,
+        isTrue);
+    expect(FirmwareModulePresentation.fromTarget('arm').supportsLocalUpgrade,
+        isTrue);
+    expect(FirmwareModulePresentation.fromTarget('dsp').supportsLocalUpgrade,
+        isFalse);
+    expect(FirmwareModulePresentation.fromTarget('bms').supportsLocalUpgrade,
+        isFalse);
+    expect(
+        FirmwareModulePresentation.fromTarget('vendor_x').supportsLocalUpgrade,
+        isFalse);
+  });
+
+  test('device firmware routes always target the independent flow', () {
+    expect(
+      FirmwareModulePresentation.deviceRoute('INV / 001'),
+      '/ota/device/INV%20%2F%20001',
+    );
   });
 }

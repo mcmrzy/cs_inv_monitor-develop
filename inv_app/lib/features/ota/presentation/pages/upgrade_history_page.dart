@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 
@@ -7,13 +6,13 @@ import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/core/widgets/pagination_bar.dart';
-import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:inv_app/features/ota/domain/entities/device_firmware_history.dart';
 import 'package:inv_app/features/ota/domain/entities/device_firmware_overview.dart';
 import 'package:inv_app/features/ota/domain/repositories/ota_repository.dart';
 import 'package:inv_app/features/ota/presentation/models/firmware_module_presentation.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
+import 'package:inv_app/core/components/permission_gate.dart';
 
 /// 全设备升级历史页（OTA 四卡片 Hub 的「升级历史」入口）
 ///
@@ -66,9 +65,7 @@ class _UpgradeHistoryPageState extends State<UpgradeHistoryPage> {
   int get _totalPages => (_total / _pageSize).ceil();
 
   bool get _canRollback {
-    final state = context.read<AuthBloc>().state;
-    if (state is! AuthAuthenticated) return false;
-    return state.isSystemAdmin || state.permissions.contains('ota:control');
+    return context.canControlDevices();
   }
 
   @override
@@ -159,7 +156,7 @@ class _UpgradeHistoryPageState extends State<UpgradeHistoryPage> {
       );
       return;
     }
-    if (item.firmwareId <= 0) return;
+    if (item.rollbackFirmwareId <= 0) return;
     final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
@@ -188,10 +185,10 @@ class _UpgradeHistoryPageState extends State<UpgradeHistoryPage> {
 
     setState(() => _rollbackSubmitting = true);
     final key =
-        'rollback-${item.deviceSn}-${item.firmwareId}-${DateTime.now().millisecondsSinceEpoch}';
+        'rollback-${item.deviceSn}-${item.rollbackFirmwareId}-${DateTime.now().millisecondsSinceEpoch}';
     final result = await _repository.rollbackFirmware(
       item.deviceSn,
-      item.firmwareId,
+      item.rollbackFirmwareId,
       idempotencyKey: key,
     );
     if (!mounted) return;
@@ -580,7 +577,10 @@ class _UpgradeTile extends StatelessWidget {
           if (item.errorMessage.isNotEmpty) ...[
             SizedBox(height: 2.h),
             Text(
-              item.errorMessage,
+              FirmwareModulePresentation.sanitizeCustomerCopy(
+                item.errorMessage,
+                l10n,
+              ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(fontSize: 11.sp, color: AppColors.error),

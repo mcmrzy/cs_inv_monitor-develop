@@ -79,8 +79,8 @@ func TestVersionState(t *testing.T) {
 	assert.True(t, upd)
 
 	state, upd = VersionState("2.0.0", "1.2.0")
-	assert.Equal(t, "current", state)
-	assert.False(t, upd)
+	assert.Equal(t, "different", state)
+	assert.True(t, upd)
 
 	state, upd = VersionState("1.0.0", "")
 	assert.Equal(t, "current", state)
@@ -89,11 +89,36 @@ func TestVersionState(t *testing.T) {
 
 func TestFirmwareModuleOverview(t *testing.T) {
 	fw := &model.Firmware{ID: 9, Version: "1.1.0", Changelog: "fix"}
-	ov := FirmwareModuleOverview("ARM", "1.0.0", fw)
+	ov := FirmwareModuleOverview("ARM", "1.0.0", true, fw)
 	assert.Equal(t, "arm", ov.Target)
 	assert.Equal(t, "1.0.0", ov.CurrentVersion)
 	assert.Equal(t, int64(9), ov.LatestFirmwareID)
 	assert.Equal(t, "outdated", ov.VersionState)
 	assert.True(t, ov.UpdateAvailable)
+	assert.True(t, ov.Supported)
+	assert.True(t, ov.Connected)
+	assert.True(t, ov.Eligible)
+	assert.Equal(t, []string{"remote", "ble", "wifi_ap"}, ov.SupportedChannels)
 	assert.Equal(t, "fix", ov.Changelog)
+}
+
+func TestFirmwareModuleOverviewFailsClosedWhenOfflineOrUnreported(t *testing.T) {
+	fw := &model.Firmware{ID: 9, Version: "1.1.0"}
+	offline := FirmwareModuleOverview("arm", "1.0.0", false, fw)
+	assert.True(t, offline.Supported)
+	assert.True(t, offline.Connected)
+	assert.False(t, offline.Eligible)
+
+	unreported := FirmwareModuleOverview("bms", "", true, fw)
+	assert.True(t, unreported.Supported)
+	assert.False(t, unreported.Connected)
+	assert.False(t, unreported.Eligible)
+}
+
+func TestFirmwareSupportedChannels(t *testing.T) {
+	assert.Equal(t, []string{"remote", "ble", "wifi_ap"}, FirmwareSupportedChannels("arm"))
+	assert.Equal(t, []string{"remote", "ble", "wifi_ap"}, FirmwareSupportedChannels("esp"))
+	assert.Equal(t, []string{"remote"}, FirmwareSupportedChannels("dsp"))
+	assert.Equal(t, []string{"remote"}, FirmwareSupportedChannels("bms"))
+	assert.Empty(t, FirmwareSupportedChannels("unknown"))
 }

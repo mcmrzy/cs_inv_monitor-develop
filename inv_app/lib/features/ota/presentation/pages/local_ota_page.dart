@@ -137,6 +137,11 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   int? get _metaSecurityVersion =>
       widget.securityVersion ??
       (_firmwareMeta?['security_version'] as num?)?.toInt();
+  List<String>? get _metaSupportedChannels {
+    final value = _firmwareMeta?['supported_channels'];
+    if (value is! List) return null;
+    return value.map((entry) => entry.toString()).toList(growable: false);
+  }
   String? get _metaReleaseSignature =>
       widget.releaseSignature ??
       (_firmwareMeta?['release_signature'] as String?);
@@ -223,9 +228,15 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   Future<void> _loadDownloadedFirmwares() async {
     final items = await _downloadService.listDownloadedFirmwares();
     if (!mounted) return;
+    final channel = widget.channel == LocalCommunicationChannel.ble
+        ? 'ble'
+        : 'wifi_ap';
+    final eligibleItems = items
+        .where((item) => item.supportsLocalChannel(channel))
+        .toList(growable: false);
     setState(() {
-      _downloadedFirmwares = items;
-      for (final item in items) {
+      _downloadedFirmwares = eligibleItems;
+      for (final item in eligibleItems) {
         final matchesRoute =
             widget.firmwareId != null && item.firmwareId == widget.firmwareId;
         final matchesSelection = _selectedFilePath == item.filePath;
@@ -689,7 +700,18 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         (offline?.deviceModel ?? _metaDeviceModel)?.trim() ?? '';
     final fileSize = offline?.fileSize ?? _metaFileSize ?? 0;
 
+    final supportedChannels =
+        offline?.supportedChannels ?? _metaSupportedChannels;
+    final selectedChannel = widget.channel == LocalCommunicationChannel.ble
+        ? 'ble'
+        : 'wifi_ap';
+    final supportsSelectedChannel = supportedChannels == null ||
+        supportedChannels.any(
+          (channel) => channel.trim().toLowerCase() == selectedChannel,
+        );
+
     if ((target != 'esp' && target != 'arm') ||
+        !supportsSelectedChannel ||
         fileSize <= 0 ||
         firmwareModel.isEmpty ||
         version.isEmpty ||
@@ -765,7 +787,10 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       if (s.statusOverrideKey != null) {
         _upgradeStatus = l10n.str(s.statusOverrideKey!, s.statusOverrideParams);
       } else if (s.deviceMessage.isNotEmpty) {
-        _upgradeStatus = s.deviceMessage;
+        _upgradeStatus = FirmwareModulePresentation.sanitizeCustomerCopy(
+          s.deviceMessage,
+          l10n,
+        );
       } else if (s.deviceStatus.isNotEmpty) {
         _upgradeStatus = _mapStatus(s.deviceStatus);
       }
@@ -796,7 +821,10 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                     )
                   : l10n.str(OtaErrorMapper.l10nKeyOf(err)))
               : (s.deviceMessage.isNotEmpty
-                  ? s.deviceMessage
+                  ? FirmwareModulePresentation.sanitizeCustomerCopy(
+                      s.deviceMessage,
+                      l10n,
+                    )
                   : l10n.upgradeFailed);
           _currentStep = LocalOTAStep.result;
         case LocalOTAPhase.timedOut:

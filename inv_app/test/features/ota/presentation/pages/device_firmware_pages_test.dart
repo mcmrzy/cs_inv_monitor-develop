@@ -179,8 +179,8 @@ void main() {
       '硬件版本',
       // 展示名固定为功能名，不带芯片后缀
       '通信采集',
-      '主控',
-      '数字信号',
+      '系统主控',
+      '功率控制',
       '电池管理',
     ]) {
       expect(find.text(text), findsWidgets);
@@ -289,7 +289,7 @@ void main() {
           ),
         ),
         GoRoute(
-          path: '/ota/:sn',
+          path: '/ota/device/:sn',
           builder: (context, state) =>
               Text('update:${state.pathParameters['sn']}'),
         ),

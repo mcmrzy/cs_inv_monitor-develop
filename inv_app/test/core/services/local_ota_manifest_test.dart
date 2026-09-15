@@ -56,6 +56,38 @@ void main() {
         isFalse,
       );
     });
+
+    test('local channel support is fail-closed for unsupported modules', () {
+      const bleOnly = DownloadedFirmwareInfo(
+        firmwareId: 8,
+        filePath: '/tmp/fw.bin',
+        fileName: 'fw.bin',
+        fileSize: 1024,
+        targetChip: 'arm',
+        supportedChannels: ['ble'],
+      );
+      const remoteOnly = DownloadedFirmwareInfo(
+        firmwareId: 9,
+        filePath: '/tmp/fw.bin',
+        fileName: 'fw.bin',
+        fileSize: 1024,
+        targetChip: 'arm',
+        supportedChannels: ['remote'],
+      );
+      const unsupportedModule = DownloadedFirmwareInfo(
+        firmwareId: 10,
+        filePath: '/tmp/fw.bin',
+        fileName: 'fw.bin',
+        fileSize: 1024,
+        targetChip: 'dsp',
+        supportedChannels: ['ble'],
+      );
+
+      expect(bleOnly.supportsLocalChannel('ble'), isTrue);
+      expect(bleOnly.supportsLocalChannel('wifi_ap'), isFalse);
+      expect(remoteOnly.supportsLocalChannel('ble'), isFalse);
+      expect(unsupportedModule.supportsLocalChannel('ble'), isFalse);
+    });
   });
 
   LocalOtaManifest manifest({

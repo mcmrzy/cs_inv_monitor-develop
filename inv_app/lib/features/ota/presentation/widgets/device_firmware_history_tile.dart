@@ -166,7 +166,9 @@ class DeviceFirmwareHistoryTile extends StatelessWidget {
                     color: AppColor.surfaceHover(context),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Text(item.changelog,
+                  child: Text(
+                      FirmwareModulePresentation.sanitizeCustomerCopy(
+                          item.changelog, l10n),
                       style: TextStyle(
                           height: 1.4,
                           fontSize: 13,
@@ -175,7 +177,8 @@ class DeviceFirmwareHistoryTile extends StatelessWidget {
               ],
               if (item.errorMessage.trim().isNotEmpty) ...[
                 const SizedBox(height: 8),
-                Text(item.errorMessage,
+                Text(FirmwareModulePresentation.sanitizeCustomerCopy(
+                    item.errorMessage, l10n),
                     style: const TextStyle(color: AppColors.errorLight)),
               ],
             ]),

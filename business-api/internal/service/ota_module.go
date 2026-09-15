@@ -119,18 +119,35 @@ func VersionState(currentVersion, latestVersion string) (state string, updateAva
 	if CompareModuleVersion(current, latest) < 0 {
 		return "outdated", true
 	}
+	if CompareModuleVersion(current, latest) > 0 {
+		return "different", true
+	}
 	return "current", false
 }
 
 // FirmwareModuleOverview 组装单模块概览
-func FirmwareModuleOverview(target, currentVersion string, latestFirmware *model.Firmware) model.FirmwareModuleOverview {
+func FirmwareSupportedChannels(target string) []string {
+	t, err := NormalizeFirmwareTarget(target)
+	if err != nil {
+		return []string{}
+	}
+	if t == model.TargetChipARM || t == model.TargetChipESP {
+		return []string{"remote", "ble", "wifi_ap"}
+	}
+	return []string{"remote"}
+}
+
+func FirmwareModuleOverview(target, currentVersion string, deviceOnline bool, latestFirmware *model.Firmware) model.FirmwareModuleOverview {
 	t, err := NormalizeFirmwareTarget(target)
 	if err != nil {
 		t = strings.ToLower(strings.TrimSpace(target))
 	}
 	ov := model.FirmwareModuleOverview{
-		Target:         t,
-		CurrentVersion: strings.TrimSpace(currentVersion),
+		Target:            t,
+		CurrentVersion:    strings.TrimSpace(currentVersion),
+		Supported:         latestFirmware != nil || strings.TrimSpace(currentVersion) != "",
+		Connected:         strings.TrimSpace(currentVersion) != "",
+		SupportedChannels: FirmwareSupportedChannels(t),
 	}
 	if latestFirmware != nil {
 		ov.LatestFirmwareID = latestFirmware.ID
@@ -139,5 +156,6 @@ func FirmwareModuleOverview(target, currentVersion string, latestFirmware *model
 		ov.PublishedAt = latestFirmware.PublishedAt
 	}
 	ov.VersionState, ov.UpdateAvailable = VersionState(ov.CurrentVersion, ov.LatestVersion)
+	ov.Eligible = deviceOnline && ov.Supported && ov.Connected
 	return ov
 }

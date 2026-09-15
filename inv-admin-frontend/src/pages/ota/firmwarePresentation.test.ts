@@ -4,7 +4,9 @@ import {
   sanitizeLegacyFirmwareLabel,
   displayFirmwareModuleLabel,
   normalizeFirmwareTarget,
+  canRemoteUpgradeFirmwareModule,
 } from './firmwarePresentation'
+import otaLocales from '@/locales/ota'
 
 const t = (key: string) => key
 
@@ -17,10 +19,18 @@ describe('firmwarePresentation', () => {
       expect(firmwareModuleLabel('BMS', t)).toBe('ota.moduleBms')
     })
 
-    it('falls back to uppercase raw target for unknown values', () => {
-      expect(firmwareModuleLabel('wifi', t)).toBe('WIFI')
-      expect(firmwareModuleLabel('', t)).toBe('-')
-      expect(firmwareModuleLabel(null, t)).toBe('-')
+    it('uses a generic customer-facing label for unknown values', () => {
+      expect(firmwareModuleLabel('wifi', t)).toBe('ota.moduleUnknown')
+      expect(firmwareModuleLabel('', t)).toBe('ota.moduleUnknown')
+      expect(firmwareModuleLabel(null, t)).toBe('ota.moduleUnknown')
+    })
+
+    it('uses the approved functional responsibility names in both locales', () => {
+      expect(otaLocales.zh['ota.moduleArm']).toBe('系统主控')
+      expect(otaLocales.zh['ota.moduleDsp']).toBe('功率控制')
+      expect(otaLocales.zh['ota.moduleUnknown']).toBe('设备组件')
+      expect(otaLocales.en['ota.moduleDsp']).toBe('Power Control')
+      expect(otaLocales.en['ota.moduleUnknown']).toBe('Device Component')
     })
   })
 
@@ -70,6 +80,27 @@ describe('firmwarePresentation', () => {
     it('lowercases and trims', () => {
       expect(normalizeFirmwareTarget(' ARM ')).toBe('arm')
       expect(normalizeFirmwareTarget(undefined)).toBe('')
+    })
+  })
+
+  describe('canRemoteUpgradeFirmwareModule', () => {
+    const eligible = {
+      supported: true,
+      connected: true,
+      eligible: true,
+      supported_channels: ['remote', 'ble', 'wifi_ap'],
+    }
+
+    it('allows only eligible connected modules with the remote channel', () => {
+      expect(canRemoteUpgradeFirmwareModule(eligible)).toBe(true)
+      expect(canRemoteUpgradeFirmwareModule({ ...eligible, eligible: false })).toBe(false)
+      expect(canRemoteUpgradeFirmwareModule({ ...eligible, connected: false })).toBe(false)
+      expect(canRemoteUpgradeFirmwareModule({ ...eligible, supported: false })).toBe(false)
+      expect(canRemoteUpgradeFirmwareModule({ ...eligible, supported_channels: ['ble'] })).toBe(false)
+    })
+
+    it('fails closed when canonical eligibility fields are missing', () => {
+      expect(canRemoteUpgradeFirmwareModule({})).toBe(false)
     })
   })
 })

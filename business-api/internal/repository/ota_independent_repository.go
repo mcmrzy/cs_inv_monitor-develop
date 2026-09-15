@@ -24,6 +24,8 @@ var ErrFirmwareNotPublished = errors.New("firmware not published")
 
 // ErrDuplicateTarget 同一模块指定了多个固件
 var ErrDuplicateTarget = errors.New("duplicate firmware target")
+var ErrDeviceOffline = errors.New("device offline")
+var ErrCurrentVersionUnknown = errors.New("current module version unreported")
 
 // UpdateDeviceFirmwareVersion 更新设备单模块固件版本（不写 main_version）
 func (r *OTARepository) UpdateDeviceFirmwareVersion(ctx context.Context, sn, target, version string) error {
@@ -63,6 +65,83 @@ func (r *OTARepository) GetDeviceInfoForOTA(ctx context.Context, sn string) (*De
 	return &d, nil
 }
 
+// CheckDevicePermission evaluates one devices:view/devices:control grant in
+// the actor's selected organization context together with that same grant's
+// data_scope. This prevents a broad grant from one membership being combined
+// with device access derived from another membership.
+func (r *OTARepository) CheckDevicePermission(ctx context.Context, actor model.ActorContext, permissionCode, sn string) (bool, error) {
+	var allowed bool
+	err := r.db.QueryRow(ctx, otaDevicePermissionExistsSQL, actor.RootTenantID, actor.UserID,
+		actor.OrganizationID, actor.MembershipID, actor.MembershipVersion, permissionCode, sn).Scan(&allowed)
+	return allowed, err
+}
+
+func (r *OTARepository) ListDeviceSNsByPermission(ctx context.Context, actor model.ActorContext, permissionCode string) ([]string, error) {
+	rows, err := r.db.Query(ctx, otaDevicePermissionListSQL, actor.RootTenantID, actor.UserID,
+		actor.OrganizationID, actor.MembershipID, actor.MembershipVersion, permissionCode)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := make([]string, 0)
+	for rows.Next() {
+		var sn string
+		if err := rows.Scan(&sn); err != nil {
+			return nil, err
+		}
+		result = append(result, sn)
+	}
+	return result, rows.Err()
+}
+
+const otaDevicePermissionBaseSQL = `
+	FROM devices d
+	JOIN organization_memberships actor_m
+	  ON actor_m.root_tenant_id=$1 AND actor_m.user_id=$2
+	 AND actor_m.organization_id=$3 AND actor_m.id=$4 AND actor_m.version=$5
+	JOIN organizations actor_o
+	  ON actor_o.root_tenant_id=actor_m.root_tenant_id AND actor_o.id=actor_m.organization_id
+	JOIN membership_role_assignments ra
+	  ON ra.root_tenant_id=actor_m.root_tenant_id AND ra.organization_id=actor_m.organization_id
+	 AND ra.membership_id=actor_m.id AND ra.status='active'
+	JOIN role_permission_grants pg
+	  ON pg.root_tenant_id=ra.root_tenant_id AND pg.organization_id=ra.organization_id
+	 AND pg.role_assignment_id=ra.id AND pg.permission_code=$6
+	WHERE d.deleted_at IS NULL
+	  AND actor_m.status='active' AND (actor_m.expires_at IS NULL OR actor_m.expires_at>NOW())
+	  AND actor_o.status='active' AND actor_o.deleted_at IS NULL
+	  AND CASE pg.data_scope
+	    WHEN 'self' THEN d.user_id=$2
+	    WHEN 'organization' THEN EXISTS (
+	      SELECT 1 FROM organization_memberships owner_m
+	      WHERE owner_m.root_tenant_id=$1 AND owner_m.organization_id=$3
+	        AND owner_m.user_id=d.user_id AND owner_m.status='active'
+	        AND (owner_m.expires_at IS NULL OR owner_m.expires_at>NOW()))
+	    WHEN 'organization_and_descendants' THEN EXISTS (
+	      SELECT 1 FROM organization_memberships owner_m
+	      JOIN organization_closure oc
+	        ON oc.root_tenant_id=owner_m.root_tenant_id
+	       AND oc.ancestor_id=$3 AND oc.descendant_id=owner_m.organization_id
+	      WHERE owner_m.root_tenant_id=$1 AND owner_m.user_id=d.user_id
+	        AND owner_m.status='active' AND (owner_m.expires_at IS NULL OR owner_m.expires_at>NOW()))
+	    WHEN 'assigned_resources', 'explicit_resources' THEN EXISTS (
+	      SELECT 1 FROM user_device_rel udr WHERE udr.user_id=$2 AND udr.device_sn=d.sn)
+	    ELSE FALSE
+	  END
+	  AND CASE
+	    WHEN NOT (pg.scope_definition ? 'organization_ids') THEN TRUE
+	    WHEN jsonb_typeof(pg.scope_definition->'organization_ids') <> 'array' THEN FALSE
+	    ELSE EXISTS (
+	      SELECT 1
+	      FROM organization_memberships owner_m,
+	           jsonb_array_elements_text(pg.scope_definition->'organization_ids') scoped(value)
+	      WHERE owner_m.root_tenant_id=$1 AND owner_m.user_id=d.user_id
+	        AND owner_m.status='active' AND scoped.value=owner_m.organization_id::text)
+	  END`
+
+const otaDevicePermissionExistsSQL = `SELECT EXISTS (SELECT 1 ` + otaDevicePermissionBaseSQL + ` AND d.sn=$7)`
+const otaDevicePermissionListSQL = `SELECT DISTINCT d.sn ` + otaDevicePermissionBaseSQL + ` ORDER BY d.sn`
+
 // PayloadHashForFirmwareTrigger 计算触发请求指纹
 func PayloadHashForFirmwareTrigger(deviceSN string, firmwareIDs []int64, forceReason string) string {
 	h := sha256.New()
@@ -94,9 +173,9 @@ func (r *OTARepository) CreateIndependentFirmwareTasks(ctx context.Context, user
 	err = tx.QueryRow(ctx, `
 		SELECT payload_hash, operation, task_ids
 		FROM ota_idempotency_requests
-		WHERE user_id = $1 AND device_sn = $2 AND operation = $3 AND idempotency_key = $4
+		WHERE user_id = $1 AND device_sn = $2 AND idempotency_key = $3
 		FOR UPDATE
-	`, userID, deviceSN, operation, idempotencyKey).Scan(&existingPayload, &existingOp, &existingTaskIDs)
+	`, userID, deviceSN, idempotencyKey).Scan(&existingPayload, &existingOp, &existingTaskIDs)
 	if err == nil {
 		if existingPayload != payloadHash || existingOp != operation {
 			return nil, ErrIdempotencyConflict
@@ -112,11 +191,14 @@ func (r *OTARepository) CreateIndependentFirmwareTasks(ctx context.Context, user
 	var device DeviceInfo
 	err = tx.QueryRow(ctx, `
 		SELECT sn, COALESCE(model,''), COALESCE(firmware_arm,''), COALESCE(firmware_esp,''),
-		       COALESCE(firmware_dsp,''), COALESCE(firmware_bms,'')
+		       COALESCE(firmware_dsp,''), COALESCE(firmware_bms,''), COALESCE(status,0)=1
 		FROM devices WHERE sn = $1 AND deleted_at IS NULL FOR UPDATE
-	`, deviceSN).Scan(&device.SN, &device.Model, &device.FirmwareArm, &device.FirmwareEsp, &device.FirmwareDSP, &device.FirmwareBMS)
+	`, deviceSN).Scan(&device.SN, &device.Model, &device.FirmwareArm, &device.FirmwareEsp, &device.FirmwareDSP, &device.FirmwareBMS, &device.IsOnline)
 	if err != nil {
 		return nil, ErrDeviceNotFound
+	}
+	if !device.IsOnline {
+		return nil, ErrDeviceOffline
 	}
 
 	// 固件元数据
@@ -159,6 +241,9 @@ func (r *OTARepository) CreateIndependentFirmwareTasks(ctx context.Context, user
 			old = device.FirmwareDSP
 		case "bms":
 			old = device.FirmwareBMS
+		}
+		if old == "" && strings.TrimSpace(forceReason) == "" {
+			return nil, ErrCurrentVersionUnknown
 		}
 		infos = append(infos, fwInfo{id: f.ID, model: f.Model, version: f.Version, target: target, oldVer: old})
 	}
@@ -233,12 +318,30 @@ func (r *OTARepository) CreateIndependentFirmwareTasks(ctx context.Context, user
 	if err != nil {
 		return nil, err
 	}
-	_, err = tx.Exec(ctx, `
+	result, err := tx.Exec(ctx, `
 		INSERT INTO ota_idempotency_requests (user_id, device_sn, idempotency_key, operation, payload_hash, task_ids, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6, NOW())
+		ON CONFLICT (user_id, device_sn, idempotency_key) DO NOTHING
 	`, userID, deviceSN, idempotencyKey, operation, payloadHash, taskIDsJSON)
 	if err != nil {
 		return nil, fmt.Errorf("insert idempotency: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		var ids json.RawMessage
+		if err := tx.QueryRow(ctx, `SELECT payload_hash, operation, task_ids FROM ota_idempotency_requests WHERE user_id=$1 AND device_sn=$2 AND idempotency_key=$3 FOR UPDATE`, userID, deviceSN, idempotencyKey).Scan(&existingPayload, &existingOp, &ids); err != nil {
+			return nil, fmt.Errorf("load idempotency conflict: %w", err)
+		}
+		if existingPayload != payloadHash || existingOp != operation {
+			return nil, ErrIdempotencyConflict
+		}
+		var existingIDs []int64
+		if err := json.Unmarshal(ids, &existingIDs); err != nil {
+			return nil, err
+		}
+		if err := tx.Rollback(ctx); err != nil {
+			return nil, err
+		}
+		return r.loadTaskRefsByIDs(ctx, existingIDs)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -284,6 +387,11 @@ func (r *OTARepository) ListUpgradeHistoryFiltered(ctx context.Context, f model.
 		args = append(args, f.DeviceSN)
 		argN++
 	}
+	if len(f.DeviceSNs) > 0 {
+		where = append(where, fmt.Sprintf("du.device_sn = ANY($%d)", argN))
+		args = append(args, f.DeviceSNs)
+		argN++
+	}
 	if f.TargetChip != "" {
 		where = append(where, fmt.Sprintf("du.target_chip = $%d", argN))
 		args = append(args, f.TargetChip)
@@ -321,8 +429,14 @@ func (r *OTARepository) ListUpgradeHistoryFiltered(ctx context.Context, f model.
 		       COALESCE(du.old_version,''), du.status, COALESCE(du.stage,''), COALESCE(du.progress,0),
 		       COALESCE(du.error_message,''), COALESCE(du.retry_count,0), du.pushed_by,
 		       du.started_at, du.completed_at, du.created_at, du.updated_at,
-		       COALESCE(du.task_id,0)
+		       COALESCE(du.task_id,0), COALESCE(f.changelog,''),
+		       COALESCE((SELECT f2.id FROM firmware_versions f2
+		          WHERE f2.model=d.model AND f2.target_chip=du.target_chip
+		            AND f2.version=du.old_version AND f2.release_status='published'
+		          ORDER BY f2.id DESC LIMIT 1),0)
 		FROM device_upgrades du
+		LEFT JOIN firmware_versions f ON f.id=du.firmware_id
+		LEFT JOIN devices d ON d.sn=du.device_sn
 		WHERE %s
 		ORDER BY du.created_at DESC
 		LIMIT $%d OFFSET $%d
@@ -337,11 +451,14 @@ func (r *OTARepository) ListUpgradeHistoryFiltered(ctx context.Context, f model.
 	for rows.Next() {
 		var du model.DeviceUpgrade
 		var taskID int64
+		var rollbackID int64
 		if err := rows.Scan(&du.ID, &du.DeviceSN, &du.FirmwareID, &du.FirmwareVersion, &du.TargetChip,
 			&du.OldVersion, &du.Status, &du.Stage, &du.Progress, &du.ErrorMessage, &du.RetryCount,
-			&du.PushedBy, &du.StartedAt, &du.CompletedAt, &du.CreatedAt, &du.UpdatedAt, &taskID); err != nil {
+			&du.PushedBy, &du.StartedAt, &du.CompletedAt, &du.CreatedAt, &du.UpdatedAt, &taskID,
+			&du.Changelog, &rollbackID); err != nil {
 			continue
 		}
+		du.RollbackFirmwareID = rollbackID
 		if taskID > 0 {
 			du.TaskID = &taskID
 		}

@@ -81,7 +81,6 @@ import 'package:inv_app/features/ota/presentation/pages/local_upgrade_page.dart'
 
 import 'package:inv_app/features/ota/presentation/pages/upgrade_history_page.dart';
 
-import 'package:inv_app/features/ota/presentation/pages/firmware_list_page.dart';
 
 import 'package:inv_app/features/ota/presentation/pages/ota_check_all_page.dart';
 
@@ -466,13 +465,7 @@ class AppRouter {
         pageBuilder: (context, state) {
           final sn = state.pathParameters['sn']!;
 
-          return _slidePage(
-            state,
-            BlocProvider(
-              create: (_) => getIt<OtaBloc>(),
-              child: OTAPage(deviceSN: sn),
-            ),
-          );
+          return _slidePage(state, OTAPage(deviceSN: sn));
         },
       ),
       GoRoute(
@@ -602,19 +595,7 @@ class AppRouter {
         name: 'firmwareList',
         pageBuilder: (context, state) {
           final sn = state.uri.queryParameters['sn'] ?? '';
-          final model = state.uri.queryParameters['model'] ?? '';
-          final version = state.uri.queryParameters['version'] ?? '';
-          return _slidePage(
-            state,
-            BlocProvider(
-              create: (_) => getIt<OtaBloc>(),
-              child: FirmwareListPage(
-                sn: sn,
-                deviceModel: model,
-                currentMainVersion: version,
-              ),
-            ),
-          );
+          return _slidePage(state, FirmwareLibraryPage(initialSn: sn));
         },
       ),
       // 固件库（先选设备再按模块浏览已发布固件，可预下载到本地）

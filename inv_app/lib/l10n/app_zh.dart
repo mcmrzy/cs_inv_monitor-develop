@@ -1890,8 +1890,8 @@ const Map<String, String> zh = {
 
   // 设备固件模块
   'firmware_module_communication': '通信采集',
-  'firmware_module_system_control': '主控',
-  'firmware_module_power_control': '数字信号',
+  'firmware_module_system_control': '系统主控',
+  'firmware_module_power_control': '功率控制',
   'firmware_module_battery_management': '电池管理',
   'firmware_module_generic': '设备组件',
   'firmware_module_communication_description': '负责设备联网、数据采集与远程通信',

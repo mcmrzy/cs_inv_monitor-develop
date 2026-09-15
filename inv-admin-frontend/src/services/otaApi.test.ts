@@ -114,17 +114,25 @@ describe('otaApi', () => {
       expect(data.modules[0].update_available).toBe(true)
     })
 
-    it('getFirmwareResources serializes target_chip query', async () => {
+    it('getFirmwareResources accepts the backend array envelope and serializes target_chip', async () => {
       let requestedChip: string | null = null
       server.use(
         http.get('/api/v1/ota/devices/INV20250001/firmware-resources', ({ request }) => {
           requestedChip = new URL(request.url).searchParams.get('target_chip')
-          return HttpResponse.json({ code: 0, data: { items: [] } })
+          return HttpResponse.json({
+            code: 0,
+            data: [
+              { id: 301, model: 'SG-5K-D', target_chip: 'arm', version: '1.1.0' },
+            ],
+          })
         }),
       )
 
-      await otaApi.getFirmwareResources('INV20250001', 'arm')
+      const res = await otaApi.getFirmwareResources('INV20250001', 'arm')
       expect(requestedChip).toBe('arm')
+      expect(res.data.data).toEqual([
+        { id: 301, model: 'SG-5K-D', target_chip: 'arm', version: '1.1.0' },
+      ])
     })
 
     it('triggerFirmwareUpgrade posts device_sn + firmware_ids + idempotency_key', async () => {

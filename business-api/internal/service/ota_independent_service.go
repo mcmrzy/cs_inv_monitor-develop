@@ -30,7 +30,7 @@ func (s *OTAService) GetDeviceFirmwareOverview(ctx context.Context, sn string) (
 	for _, target := range targets {
 		current, _ := CurrentModuleVersion(device.Model, device.FirmwareArm, device.FirmwareEsp, device.FirmwareDSP, device.FirmwareBMS, target)
 		latest, _ := s.repo.GetLatestFirmware(ctx, device.Model, target)
-		modules = append(modules, FirmwareModuleOverview(target, current, latest))
+		modules = append(modules, FirmwareModuleOverview(target, current, device.IsOnline, latest))
 	}
 	return &model.DeviceFirmwareOverview{
 		DeviceSN:    device.SN,
@@ -42,7 +42,14 @@ func (s *OTAService) GetDeviceFirmwareOverview(ctx context.Context, sn string) (
 
 // GetPublishedFirmwareResources 设备可安装已发布固件
 func (s *OTAService) GetPublishedFirmwareResources(ctx context.Context, sn, target string) ([]model.Firmware, error) {
-	return s.repo.ListPublishedFirmwareForDevice(ctx, sn, target)
+	resources, err := s.repo.ListPublishedFirmwareForDevice(ctx, sn, target)
+	if err != nil {
+		return nil, err
+	}
+	for i := range resources {
+		resources[i].SupportedChannels = FirmwareSupportedChannels(resources[i].TargetChip)
+	}
+	return resources, nil
 }
 
 // PublishFirmware 发布固件
@@ -80,6 +87,12 @@ func (s *OTAService) TriggerIndependentFirmware(ctx context.Context, userID int6
 	}
 	refs, err := s.repo.CreateIndependentFirmwareTasks(ctx, userID, req.DeviceSN, req.FirmwareIDs, req.IdempotencyKey, "trigger", req.ForceReason)
 	if err != nil {
+		if errors.Is(err, repository.ErrDeviceOffline) {
+			return nil, repository.ErrDeviceOffline
+		}
+		if errors.Is(err, repository.ErrCurrentVersionUnknown) {
+			return nil, ErrCurrentVersionUnknown
+		}
 		return nil, err
 	}
 	// 同设备串行：立即尝试下发队首 pending
@@ -94,6 +107,9 @@ func (s *OTAService) RollbackIndependentFirmware(ctx context.Context, userID int
 	device, err := s.repo.GetDeviceInfoForOTA(ctx, sn)
 	if err != nil {
 		return nil, err
+	}
+	if !device.IsOnline {
+		return nil, repository.ErrDeviceOffline
 	}
 	fw, err := s.repo.GetFirmware(ctx, firmwareID)
 	if err != nil {
@@ -126,11 +142,15 @@ func (s *OTAService) GetFilteredUpgradeHistory(ctx context.Context, f model.Upgr
 	return s.repo.ListUpgradeHistoryFiltered(ctx, f)
 }
 
+func (s *OTAService) ListAuthorizedDeviceSNs(ctx context.Context, actor model.ActorContext, permissionCode string) ([]string, error) {
+	return s.repo.ListDeviceSNsByPermission(ctx, actor, permissionCode)
+}
+
 // dispatchHeadPending 仅下发同设备队首 pending 升级
 func (s *OTAService) dispatchHeadPending(ctx context.Context, sn string) {
 	du, fw, err := s.repo.GetPendingUpgradeForDevice(ctx, sn)
 	if err != nil || du == nil || fw == nil {
 		return
 	}
-	s.SendUpgradeCommand(ctx, du, fw, s.downloadURL)
+	s.SendUpgradeCommand(ctx, du, fw, s.BuildDownloadURL(fw.FileURL))
 }

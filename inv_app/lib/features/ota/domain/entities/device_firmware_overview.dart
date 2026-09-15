@@ -42,6 +42,10 @@ class FirmwareModuleOverview {
     required this.latestVersion,
     required this.versionState,
     required this.updateAvailable,
+    this.isSupported,
+    this.isConnected,
+    this.isEligible,
+    this.supportedChannels,
     this.changelog = '',
     this.publishedAt,
   });
@@ -57,12 +61,37 @@ class FirmwareModuleOverview {
   /// unreported|current|outdated
   final String versionState;
   final bool updateAvailable;
+  final bool? isSupported;
+  final bool? isConnected;
+  final bool? isEligible;
+  final List<String>? supportedChannels;
   final String changelog;
   final DateTime? publishedAt;
 
   bool get isUnreported => versionState == 'unreported';
   bool get isCurrent => versionState == 'current';
   bool get isOutdated => versionState == 'outdated';
+
+  bool get canRemoteUpgrade {
+    if (!updateAvailable || latestFirmwareId <= 0 || isUnreported) return false;
+    if (isSupported == false || isConnected == false || isEligible == false) {
+      return false;
+    }
+    final channels = supportedChannels;
+    if (channels != null &&
+        !channels.any((channel) => const {'remote', 'cloud'}
+            .contains(channel.trim().toLowerCase()))) {
+      return false;
+    }
+    final normalizedTarget = target.trim().toLowerCase();
+    if (normalizedTarget == 'bms' ||
+        !const {'esp', 'arm', 'dsp', 'bms'}.contains(normalizedTarget)) {
+      return isSupported == true &&
+          isConnected == true &&
+          isEligible == true;
+    }
+    return true;
+  }
 
   factory FirmwareModuleOverview.fromJson(Map<String, dynamic> json) {
     return FirmwareModuleOverview(
@@ -72,6 +101,13 @@ class FirmwareModuleOverview {
       latestVersion: json['latest_version']?.toString() ?? '',
       versionState: json['version_state']?.toString() ?? '',
       updateAvailable: json['update_available'] == true,
+      isSupported: _readOptionalBool(json, const ['supported', 'is_supported']),
+      isConnected: _readOptionalBool(json, const ['connected', 'is_connected']),
+      isEligible: _readOptionalBool(json, const ['eligible', 'is_eligible']),
+      supportedChannels: _readOptionalStringList(
+        json,
+        const ['supported_channels', 'channels'],
+      ),
       changelog: json['changelog']?.toString() ?? '',
       publishedAt:
           DateTime.tryParse(json['published_at']?.toString() ?? ''),
@@ -95,6 +131,7 @@ class FirmwareResource {
     this.fileSha256 = '',
     this.securityVersion,
     this.releaseSignature = '',
+    this.supportedChannels,
   });
 
   final int id;
@@ -110,6 +147,16 @@ class FirmwareResource {
   final String fileSha256;
   final int? securityVersion;
   final String releaseSignature;
+  final List<String>? supportedChannels;
+
+  bool get canLocalUpgrade {
+    final target = targetChip.trim().toLowerCase();
+    if (target != 'esp' && target != 'arm') return false;
+    final channels = supportedChannels;
+    if (channels == null) return true;
+    return channels.any((channel) => const {'local', 'ble', 'wifi', 'wifi_ap'}
+        .contains(channel.trim().toLowerCase()));
+  }
 
   factory FirmwareResource.fromJson(Map<String, dynamic> json) {
     return FirmwareResource(
@@ -127,8 +174,47 @@ class FirmwareResource {
       fileSha256: json['file_sha256']?.toString() ?? '',
       securityVersion: (json['security_version'] as num?)?.toInt(),
       releaseSignature: json['release_signature']?.toString() ?? '',
+      supportedChannels: _readOptionalStringList(
+        json,
+        const ['supported_channels', 'channels'],
+      ),
     );
   }
+}
+
+bool? _readOptionalBool(Map<String, dynamic> json, List<String> keys) {
+  for (final key in keys) {
+    if (!json.containsKey(key)) continue;
+    final value = json[key];
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    final normalized = value?.toString().trim().toLowerCase();
+    if (normalized == 'true' || normalized == '1') return true;
+    if (normalized == 'false' || normalized == '0') return false;
+  }
+  return null;
+}
+
+List<String>? _readOptionalStringList(
+  Map<String, dynamic> json,
+  List<String> keys,
+) {
+  for (final key in keys) {
+    if (!json.containsKey(key)) continue;
+    final value = json[key];
+    if (value is List) {
+      return value.map((entry) => entry.toString()).toList(growable: false);
+    }
+    if (value is String && value.trim().isNotEmpty) {
+      return value
+          .split(',')
+          .map((entry) => entry.trim())
+          .where((entry) => entry.isNotEmpty)
+          .toList(growable: false);
+    }
+    return const <String>[];
+  }
+  return null;
 }
 
 /// POST /ota/trigger 返回的单任务

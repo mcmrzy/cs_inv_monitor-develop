@@ -133,3 +133,12 @@ export function canMutateOta(
   if (isSystemAdmin) return true
   return hasAnyPermission(...OTA_MUTATION_PERMISSIONS[action])
 }
+
+/** 设备级固件升级/回退遵循设备控制权限与后端数据范围。 */
+export function canControlDeviceFirmware(
+  isSystemAdmin: boolean,
+  hasAnyPermission: HasAnyPermission,
+): boolean {
+  if (isSystemAdmin) return true
+  return hasAnyPermission('devices:control')
+}

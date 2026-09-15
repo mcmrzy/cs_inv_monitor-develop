@@ -400,6 +400,9 @@ func (s *OTAService) UpdateDeviceUpgradeStatus(ctx context.Context, deviceSN str
 				// 设备升级完成时，更新任务统计并检查任务是否全部完成
 				if status == "success" || status == "failed" {
 					s.syncUpgradeTaskStatus(bgCtx, *du.TaskID)
+					if du.UpgradePackageID == nil || *du.UpgradePackageID == 0 {
+						s.dispatchHeadPending(bgCtx, deviceSN)
+					}
 				}
 			}
 		}()
@@ -529,6 +532,13 @@ func (s *OTAService) GetDeviceBySN(ctx context.Context, sn string) (*repository.
 // CheckDeviceOwnership 检查设备是否属于指定用户
 func (s *OTAService) CheckDeviceOwnership(ctx context.Context, sn string, userID int64) (bool, error) {
 	return s.repo.CheckDeviceOwnership(ctx, sn, userID)
+}
+
+func (s *OTAService) CheckDevicePermission(ctx context.Context, actor model.ActorContext, permissionCode, sn string) (bool, error) {
+	if !actor.Valid() {
+		return false, nil
+	}
+	return s.repo.CheckDevicePermission(ctx, actor, permissionCode, sn)
 }
 
 // DevicePackageUpgradeInfo 设备在某升级包下的各芯片升级详情
@@ -1371,28 +1381,10 @@ func (s *OTAService) OnChipUpgradeComplete(ctx context.Context, deviceSN string,
 		}
 	}
 
-	if nextDU != nil {
-		// 发送下一个芯片的升级命令
-		fw, err := s.repo.GetFirmware(ctx, nextDU.FirmwareID)
-		if err == nil && fw != nil {
-			s.SendUpgradeCommand(ctx, nextDU, fw, s.BuildDownloadURL(fw.FileURL))
-		}
-		return
-	}
-
-	if allDone {
-		// 全部芯片升级完成，更新设备主版本号
-		pkg, err := s.repo.GetUpgradePackage(ctx, packageID)
-		if err == nil && pkg != nil {
-			if err := s.repo.UpdateDeviceMainVersion(ctx, deviceSN, pkg.MainVersion); err != nil {
-				logger.Error("OnChipUpgradeComplete: update main_version failed",
-					zap.String("sn", deviceSN), zap.Error(err))
-			} else {
-				logger.Info("All chips upgraded, main_version updated",
-					zap.String("sn", deviceSN), zap.String("main_version", pkg.MainVersion))
-			}
-		}
-	}
+	// Legacy package tasks are read-only compatibility history. Never chain
+	// another module and never synthesize/write a device main_version.
+	_ = nextDU
+	_ = allDone
 }
 
 // CheckPendingPackageUpgrade 设备CheckUpdate时检查升级包模式
@@ -1514,6 +1506,7 @@ func (s *OTAService) ResendPendingUpgradeCommand(ctx context.Context, sn string)
 			continue
 		}
 		go s.SendUpgradeCommand(context.Background(), &du, fw, s.BuildDownloadURL(fw.FileURL))
+		break
 	}
 	logger.Info("Pending upgrade commands resent",
 		zap.String("sn", sn), zap.Int("count", len(upgrades)))

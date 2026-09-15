@@ -1248,11 +1248,11 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			otaGroup.POST("/firmware/:id/disable", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.DisableFirmware)
 			// 鍗囩骇绠＄悊锛堟浛浠ｆ棫 /tasks锛?
 			otaGroup.GET("/upgrades/dashboard", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetUpgradeDashboard)
-			otaGroup.POST("/upgrades/push", middleware.RequirePermission(deps.PermChecker, "ota", "create"), deps.OTAHandler.PushUpgrade)
+			otaGroup.POST("/upgrades/push", deps.OTAHandler.LegacyPackageRetired)
 			otaGroup.GET("/upgrades/firmware/:firmwareId", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetFirmwareUpgradeDetails)
 			otaGroup.POST("/upgrades/retry", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.RetryUpgrade)
 			otaGroup.POST("/upgrades/cancel", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.CancelUpgrade)
-			otaGroup.DELETE("/upgrades/firmware/:firmwareId", middleware.RequirePermission(deps.PermChecker, "ota", "delete"), deps.OTAHandler.DeleteUpgradesByFirmware)
+			otaGroup.DELETE("/upgrades/firmware/:firmwareId", deps.OTAHandler.LegacyPackageRetired)
 
 			// 鍗囩骇鍖呯鐞?
 			otaGroup.GET("/packages", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.ListUpgradePackages)
@@ -1277,7 +1277,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			otaGroup.POST("/tasks/:id/execute", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.ExecuteUpgradeTask)
 			otaGroup.POST("/tasks/:id/cancel", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.CancelUpgradeTask)
 			otaGroup.POST("/tasks/:id/retry", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.RetryUpgradeTask)
-			otaGroup.DELETE("/tasks/:id", middleware.RequirePermission(deps.PermChecker, "ota", "delete"), deps.OTAHandler.DeleteUpgradeTask)
+			otaGroup.DELETE("/tasks/:id", deps.OTAHandler.LegacyPackageRetired)
 			otaGroup.GET("/tasks/:id/devices", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetUpgradeTaskDevices)
 
 			// NOTE: /firmware/:id wildcard conflicts with static sub-routes,
@@ -1290,14 +1290,14 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			// APP端本地 OTA 固件元数据（路由仅传 firmware_id，页面按 ID 拉取）
 			otaGroup.GET("/firmware-info/:id", deps.OTAHandler.GetFirmwareInfoForApp)
 			// 独立模块固件升级
-			otaGroup.GET("/devices/:sn/firmware-overview", deps.OTAHandler.GetDeviceFirmwareOverview)
-			otaGroup.GET("/devices/:sn/firmware-resources", deps.OTAHandler.GetPublishedFirmwareResources)
-			otaGroup.POST("/trigger", deps.OTAHandler.TriggerIndependentOTA)
-			otaGroup.POST("/firmware/rollback", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.RollbackIndependentFirmware)
+			otaGroup.GET("/devices/:sn/firmware-overview", middleware.RequirePermission(deps.PermChecker, "devices", "view"), deps.OTAHandler.GetDeviceFirmwareOverview)
+			otaGroup.GET("/devices/:sn/firmware-resources", middleware.RequirePermission(deps.PermChecker, "devices", "view"), deps.OTAHandler.GetPublishedFirmwareResources)
+			otaGroup.POST("/trigger", middleware.RequirePermission(deps.PermChecker, "devices", "control"), deps.OTAHandler.TriggerIndependentOTA)
+			otaGroup.POST("/firmware/rollback", middleware.RequirePermission(deps.PermChecker, "devices", "control"), deps.OTAHandler.RollbackIndependentFirmware)
 			otaGroup.POST("/resend/:sn", deps.OTAHandler.ResendUpgradeCommand)
 			otaGroup.GET("/devices/:sn/status", deps.OTAHandler.GetDeviceOTAStatus)
-			otaGroup.GET("/history", deps.OTAHandler.GetAuthorizedUpgradeHistory)
-			otaGroup.GET("/devices/:sn/history", deps.OTAHandler.GetDeviceFirmwareHistory)
+			otaGroup.GET("/history", middleware.RequirePermission(deps.PermChecker, "devices", "view"), deps.OTAHandler.GetAuthorizedUpgradeHistory)
+			otaGroup.GET("/devices/:sn/history", middleware.RequirePermission(deps.PermChecker, "devices", "view"), deps.OTAHandler.GetDeviceFirmwareHistory)
 			otaGroup.POST("/devices/:sn/local-ota-result", deps.OTAHandler.ReportLocalOTAResult)
 			otaGroup.GET("/app/packages", deps.OTAHandler.AppListUpgradePackages)
 			otaGroup.POST("/app/packages/install", deps.OTAHandler.LegacyPackageRetired)
@@ -1305,7 +1305,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			otaGroup.GET("/devices/:sn/upgrade-packages", deps.OTAHandler.ListDeviceUpgradePackages)
 			otaGroup.GET("/available-packages/:sn", deps.OTAHandler.GetAvailablePackages)
 			otaGroup.POST("/rollback", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.LegacyPackageRetired)
-			otaGroup.POST("/rollback-to-published", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.RollbackToPublishedVersion)
+			otaGroup.POST("/rollback-to-published", deps.OTAHandler.LegacyPackageRetired)
 
 			// App鐗堟湰绠＄悊
 			otaGroup.GET("/app/versions", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.ListAppVersions)

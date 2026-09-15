@@ -39,7 +39,11 @@ export interface User {
 export interface Device {
   id: string
   sn: string
+  alias?: string
+  name?: string
   model: string
+  hardware_version?: string
+  hardwareVersion?: string
   ratedPower: number
   firmwareVersion: string
   firmware_arm?: string
@@ -56,7 +60,8 @@ export interface Firmware {
   id: string
   model: string
   version: string
-  main_version: string
+  /** @deprecated Read-only compatibility with historical API records. */
+  main_version?: string
   target_chip: string
   file_url: string
   file_size: number
@@ -82,6 +87,10 @@ export interface FirmwareModuleOverview {
   update_available: boolean
   changelog: string
   published_at?: string | null
+  supported?: boolean
+  connected?: boolean
+  eligible?: boolean
+  supported_channels?: string[]
 }
 
 /** 设备固件总览 */

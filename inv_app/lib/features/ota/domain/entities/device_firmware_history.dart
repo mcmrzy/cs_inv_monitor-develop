@@ -3,6 +3,7 @@ class DeviceFirmwareHistory {
     required this.id,
     required this.deviceSn,
     required this.firmwareId,
+    this.rollbackFirmwareId = 0,
     required this.target,
     required this.oldVersion,
     required this.firmwareVersion,
@@ -19,8 +20,12 @@ class DeviceFirmwareHistory {
   final int id;
   final String deviceSn;
 
-  /// 关联固件 ID（回滚时使用），无关联时为 0
+  /// 本次升级安装的固件 ID，无关联时为 0。
   final int firmwareId;
+
+  /// 回退目标固件 ID。它指向 [oldVersion] 对应的固件资源，不能用本次
+  /// 已安装的 [firmwareId] 代替。
+  final int rollbackFirmwareId;
   final String target;
   final String oldVersion;
 
@@ -41,15 +46,17 @@ class DeviceFirmwareHistory {
   /// 兼容旧命名：升级目标版本
   String get newVersion => firmwareVersion;
 
-  /// 成功且带固件 ID 的记录才可回退
+  /// 成功且服务端明确给出旧版本固件 ID 的记录才可回退。
   bool get canRollback =>
-      status == 'success' && firmwareId > 0;
+      status == 'success' && rollbackFirmwareId > 0;
 
   factory DeviceFirmwareHistory.fromJson(Map<String, dynamic> json) {
     return DeviceFirmwareHistory(
       id: (json['id'] as num?)?.toInt() ?? 0,
       deviceSn: json['device_sn']?.toString() ?? '',
       firmwareId: (json['firmware_id'] as num?)?.toInt() ?? 0,
+      rollbackFirmwareId:
+          (json['rollback_firmware_id'] as num?)?.toInt() ?? 0,
       target: json['target_chip']?.toString() ?? '',
       oldVersion: json['old_version']?.toString() ?? '',
       firmwareVersion: json['firmware_version']?.toString() ?? '',
