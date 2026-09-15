@@ -60,7 +60,8 @@ jobs:
             grep -E '^(ALIYUN_ACCESS_KEY_ID|ESA_)' "$ENV_FILE"
 
             cd /opt/inv-mqtt/deploy
-            docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --force-recreate business-api
+            # compose 服务名是 inv-api-server，container_name 才是 business-api
+            docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --force-recreate inv-api-server
             sleep 12
             echo "=== business-api ESA logs ==="
             docker logs --tail 120 business-api 2>&1 | grep -iE 'ESA|cache|error|fatal' || true
