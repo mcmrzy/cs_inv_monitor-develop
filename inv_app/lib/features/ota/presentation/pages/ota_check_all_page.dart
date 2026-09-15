@@ -10,26 +10,59 @@ import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
+import 'package:inv_app/features/ota/domain/entities/device_firmware_overview.dart';
 import 'package:inv_app/features/ota/domain/repositories/ota_repository.dart';
+import 'package:inv_app/features/ota/presentation/models/firmware_module_presentation.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
-enum _CheckResult { pending, checking, updating, upToDate, failed, offline }
+enum _CheckResult {
+  pending,
+  checking,
+  updating,
+  upToDate,
+  failed,
+  offline,
+  unreported,
+}
 
 class _CheckEntry {
   final String sn;
   final String name;
   _CheckResult result;
-  Map<String, dynamic> info;
+  DeviceFirmwareOverview? overview;
+
+  /// 按模块拆分的独立任务行（success/failed/blocked/skipped 语义）
+  final List<_ModuleTaskRow> moduleRows;
 
   _CheckEntry({
     required this.sn,
     required this.name,
     this.result = _CheckResult.pending,
-  }) : info = const {};
+  }) : moduleRows = [];
 }
 
-/// 检查更新（全部设备）：对在线设备并发调用 GET /ota/check/:sn
-/// （并发上限 5），结果分组展示「有更新 / 已是最新 / 离线或失败」。
+/// 单模块任务行：服务端 tasks 的独立展示单元
+class _ModuleTaskRow {
+  final String target;
+  final String currentVersion;
+  final String latestVersion;
+  final int latestFirmwareId;
+
+  /// success=已最新 / failed=检查失败 / blocked=离线 / skipped=未上报
+  /// updating=有更新可升级
+  final String taskStatus;
+
+  _ModuleTaskRow({
+    required this.target,
+    required this.currentVersion,
+    required this.latestVersion,
+    required this.latestFirmwareId,
+    required this.taskStatus,
+  });
+}
+
+/// 检查更新（全部设备）：对在线设备并发调用 firmware-overview
+/// （并发上限 5），每模块独立任务行展示结果。
 class OtaCheckAllPage extends StatefulWidget {
   const OtaCheckAllPage({super.key});
 
@@ -59,7 +92,6 @@ class _OtaCheckAllPageState extends State<OtaCheckAllPage> {
     return '';
   }
 
-  /// 根据设备列表构建检查条目并启动检查
   void _startChecks(List<dynamic> devices) {
     if (_running) return;
     final entries = <_CheckEntry>[];
@@ -74,6 +106,18 @@ class _OtaCheckAllPageState extends State<OtaCheckAllPage> {
         name: name.isEmpty ? sn : name,
         result: online ? _CheckResult.pending : _CheckResult.offline,
       ));
+      if (!online) {
+        // 离线设备：所有模块标记为 blocked
+        for (final target in const ['arm', 'dsp', 'bms', 'esp']) {
+          entries.last.moduleRows.add(_ModuleTaskRow(
+            target: target,
+            currentVersion: '',
+            latestVersion: '',
+            latestFirmwareId: 0,
+            taskStatus: 'blocked',
+          ));
+        }
+      }
     }
     setState(() {
       _entries = entries;
@@ -95,13 +139,40 @@ class _OtaCheckAllPageState extends State<OtaCheckAllPage> {
         if (i >= targets.length || !mounted) return;
         final entry = targets[i];
         _mark(entry, _CheckResult.checking);
-        final result = await repo.checkUpdate(entry.sn);
+        final result = await repo.getFirmwareOverview(entry.sn);
         if (!mounted) return;
         result.fold(
-          (failure) => _mark(entry, _CheckResult.failed),
-          (data) {
-            final hasUpdate = data['has_update'] == true;
-            entry.info = data;
+          (failure) {
+            entry.moduleRows
+              ..clear()
+              ..addAll(const ['arm', 'dsp', 'bms', 'esp'].map(
+                (t) => _ModuleTaskRow(
+                  target: t,
+                  currentVersion: '',
+                  latestVersion: '',
+                  latestFirmwareId: 0,
+                  taskStatus: 'failed',
+                ),
+              ));
+            _mark(entry, _CheckResult.failed);
+          },
+          (overview) {
+            entry.overview = overview;
+            entry.moduleRows
+              ..clear()
+              ..addAll(overview.modules.map((m) => _ModuleTaskRow(
+                    target: m.target,
+                    currentVersion: m.currentVersion,
+                    latestVersion: m.latestVersion,
+                    latestFirmwareId: m.latestFirmwareId,
+                    taskStatus: m.isUnreported
+                        ? 'skipped'
+                        : m.updateAvailable
+                            ? 'updating'
+                            : 'success',
+                  )));
+            final hasUpdate =
+                overview.modules.any((m) => m.updateAvailable);
             _mark(
               entry,
               hasUpdate ? _CheckResult.updating : _CheckResult.upToDate,
@@ -139,22 +210,6 @@ class _OtaCheckAllPageState extends State<OtaCheckAllPage> {
           e.result == _CheckResult.failed ||
           e.result == _CheckResult.offline)
       .length;
-
-  /// 目标版本摘要：升级包取 main_version，单固件取 version
-  String _targetSummary(_CheckEntry entry) {
-    final info = entry.info;
-    final mode = (info['upgrade_mode'] ?? '').toString();
-    if (mode == 'package') {
-      final current = (info['current_main_version'] ?? '').toString();
-      final target = (info['main_version'] ?? '').toString();
-      if (current.isNotEmpty && target.isNotEmpty) return '$current → $target';
-      return target;
-    }
-    final current = (info['current_version'] ?? '').toString();
-    final target = (info['version'] ?? '').toString();
-    if (current.isNotEmpty && target.isNotEmpty) return '$current → $target';
-    return target;
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -229,7 +284,9 @@ class _OtaCheckAllPageState extends State<OtaCheckAllPage> {
                   AppColors.success,
                   _upToDate.length,
                 ),
-                for (final e in _upToDate) _simpleRow(e, Icons.check_circle_rounded, AppColors.success),
+                for (final e in _upToDate)
+                  _deviceCard(e, Icons.check_circle_rounded, AppColors.success,
+                      l10n),
               ],
               if (_unavailable.isNotEmpty) ...[
                 _groupTitle(
@@ -238,12 +295,13 @@ class _OtaCheckAllPageState extends State<OtaCheckAllPage> {
                   _unavailable.length,
                 ),
                 for (final e in _unavailable)
-                  _simpleRow(
+                  _deviceCard(
                     e,
                     e.result == _CheckResult.offline
                         ? Icons.cloud_off_rounded
                         : Icons.error_outline_rounded,
                     AppColor.textHint(context),
+                    l10n,
                   ),
               ],
             ],
@@ -342,9 +400,10 @@ class _OtaCheckAllPageState extends State<OtaCheckAllPage> {
     );
   }
 
-  /// 有更新卡片：设备名 + SN + 目标版本 + 去升级
+  /// 有更新卡片：设备名 + 模块独立任务行 + 去升级
   Widget _updateCard(_CheckEntry entry, AppLocalizations l10n) {
-    final summary = _targetSummary(entry);
+    final updatingRows =
+        entry.moduleRows.where((r) => r.taskStatus == 'updating').toList();
     return Container(
       margin: EdgeInsets.only(bottom: 8.h),
       padding: EdgeInsets.all(14.w),
@@ -353,77 +412,119 @@ class _OtaCheckAllPageState extends State<OtaCheckAllPage> {
         borderRadius: BorderRadius.circular(14.r),
         border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 40.w,
-            height: 40.w,
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.system_update_rounded,
-              size: 20.sp,
-              color: AppColors.primary,
-            ),
+          Row(
+            children: [
+              Container(
+                width: 40.w,
+                height: 40.w,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.system_update_rounded,
+                  size: 20.sp,
+                  color: AppColors.primary,
+                ),
+              ),
+              SizedBox(width: 12.w),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      entry.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 14.sp,
+                        fontWeight: FontWeight.w600,
+                        color: AppColor.textPrimary(context),
+                      ),
+                    ),
+                    SizedBox(height: 2.h),
+                    Text(
+                      entry.sn,
+                      style: TextStyle(
+                        fontSize: 11.sp,
+                        color: AppColor.textHint(context),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(width: 8.w),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  padding: EdgeInsets.symmetric(horizontal: 14.w),
+                  minimumSize: Size(0, 34.h),
+                ),
+                onPressed: () => context.push('/ota/${entry.sn}'),
+                child: Text(
+                  l10n.str('ota_check_all_go_upgrade'),
+                  style: TextStyle(fontSize: 13.sp),
+                ),
+              ),
+            ],
           ),
-          SizedBox(width: 12.w),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  entry.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 14.sp,
-                    fontWeight: FontWeight.w600,
-                    color: AppColor.textPrimary(context),
-                  ),
-                ),
-                SizedBox(height: 2.h),
-                Text(
-                  entry.sn,
-                  style: TextStyle(
-                    fontSize: 11.sp,
-                    color: AppColor.textHint(context),
-                  ),
-                ),
-                if (summary.isNotEmpty) ...[
-                  SizedBox(height: 4.h),
-                  Text(
-                    summary,
-                    style: TextStyle(
-                      fontSize: 12.sp,
-                      fontWeight: FontWeight.w600,
+          // 模块独立任务行
+          if (updatingRows.isNotEmpty) ...[
+            SizedBox(height: 10.h),
+            for (final row in updatingRows)
+              Padding(
+                padding: EdgeInsets.only(bottom: 4.h),
+                child: Row(
+                  children: [
+                    Icon(
+                      FirmwareModulePresentation.fromTarget(row.target).icon,
+                      size: 14.sp,
                       color: AppColors.primary,
                     ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          SizedBox(width: 8.w),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              padding: EdgeInsets.symmetric(horizontal: 14.w),
-              minimumSize: Size(0, 34.h),
-            ),
-            onPressed: () => context.push('/ota/${entry.sn}'),
-            child: Text(
-              l10n.str('ota_check_all_go_upgrade'),
-              style: TextStyle(fontSize: 13.sp),
-            ),
-          ),
+                    SizedBox(width: 6.w),
+                    Text(
+                      FirmwareModulePresentation.fromTarget(row.target)
+                          .displayLabel(l10n),
+                      style: TextStyle(
+                        fontSize: 12.sp,
+                        fontWeight: FontWeight.w500,
+                        color: AppColor.textPrimary(context),
+                      ),
+                    ),
+                    SizedBox(width: 8.w),
+                    Expanded(
+                      child: Text(
+                        row.currentVersion.isEmpty
+                            ? row.latestVersion
+                            : '${row.currentVersion} → ${row.latestVersion}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11.sp,
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    _taskStatusChip(row.taskStatus, l10n),
+                  ],
+                ),
+              ),
+          ],
         ],
       ),
     );
   }
 
-  /// 普通结果行（最新 / 离线 / 失败）
-  Widget _simpleRow(_CheckEntry entry, IconData icon, Color color) {
+  /// 普通设备卡片（含独立模块任务行：success/failed/blocked/skipped）
+  Widget _deviceCard(
+    _CheckEntry entry,
+    IconData icon,
+    Color color,
+    AppLocalizations l10n,
+  ) {
     return Container(
       margin: EdgeInsets.only(bottom: 6.h),
       padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
@@ -431,30 +532,108 @@ class _OtaCheckAllPageState extends State<OtaCheckAllPage> {
         color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.circular(10.r),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 16.sp, color: color),
-          SizedBox(width: 10.w),
-          Expanded(
-            child: Text(
-              entry.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 13.sp,
-                color: AppColor.textPrimary(context),
+          Row(
+            children: [
+              Icon(icon, size: 16.sp, color: color),
+              SizedBox(width: 10.w),
+              Expanded(
+                child: Text(
+                  entry.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13.sp,
+                    color: AppColor.textPrimary(context),
+                  ),
+                ),
               ),
-            ),
+              Text(
+                entry.sn,
+                style: TextStyle(
+                  fontSize: 11.sp,
+                  color: AppColor.textHint(context),
+                ),
+              ),
+            ],
           ),
-          Text(
-            entry.sn,
-            style: TextStyle(
-              fontSize: 11.sp,
-              color: AppColor.textHint(context),
+          if (entry.moduleRows.isNotEmpty) ...[
+            SizedBox(height: 6.h),
+            Wrap(
+              spacing: 6.w,
+              runSpacing: 4.h,
+              children: [
+                for (final row in entry.moduleRows)
+                  _moduleTaskBadge(row, l10n),
+              ],
             ),
-          ),
+          ],
         ],
       ),
     );
+  }
+
+  Widget _moduleTaskBadge(_ModuleTaskRow row, AppLocalizations l10n) {
+    final module = FirmwareModulePresentation.fromTarget(row.target);
+    final color = switch (row.taskStatus) {
+      'success' => AppColors.success,
+      'updating' => AppColors.primary,
+      'failed' => AppColors.error,
+      'blocked' => AppColor.textHint(context),
+      'skipped' => AppColors.warning,
+      _ => AppColor.textHint(context),
+    };
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6.r),
+      ),
+      child: Text(
+        '${module.displayLabel(l10n)} · ${_taskStatusLabel(row.taskStatus, l10n)}',
+        style: TextStyle(
+          fontSize: 10.sp,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
+      ),
+    );
+  }
+
+  Widget _taskStatusChip(String status, AppLocalizations l10n) {
+    final color = switch (status) {
+      'updating' => AppColors.primary,
+      'success' => AppColors.success,
+      _ => AppColor.textHint(context),
+    };
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6.r),
+      ),
+      child: Text(
+        _taskStatusLabel(status, l10n),
+        style: TextStyle(
+          fontSize: 10.sp,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
+      ),
+    );
+  }
+
+  String _taskStatusLabel(String status, AppLocalizations l10n) {
+    return switch (status) {
+      'success' => l10n.str('ota_task_status_success'),
+      'failed' => l10n.str('ota_task_status_failed'),
+      'blocked' => l10n.str('ota_task_status_blocked'),
+      'skipped' => l10n.str('ota_task_status_skipped'),
+      'updating' => l10n.str('ota_task_status_running'),
+      'pending' => l10n.str('ota_task_status_pending'),
+      _ => status,
+    };
   }
 }

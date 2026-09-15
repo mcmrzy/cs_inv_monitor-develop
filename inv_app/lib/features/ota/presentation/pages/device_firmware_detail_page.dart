@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/features/device/domain/repositories/device_repository.dart';
 import 'package:inv_app/features/ota/domain/entities/device_firmware_history.dart';
+import 'package:inv_app/features/ota/domain/entities/device_firmware_overview.dart';
 import 'package:inv_app/features/ota/domain/repositories/ota_repository.dart';
 import 'package:inv_app/features/ota/presentation/models/firmware_module_presentation.dart';
 import 'package:inv_app/features/ota/presentation/widgets/device_firmware_history_tile.dart';
@@ -29,12 +31,16 @@ class _DeviceFirmwareDetailPageState extends State<DeviceFirmwareDetailPage> {
   late final OtaRepository _ota =
       widget.otaRepository ?? getIt<OtaRepository>();
   Map<String, dynamic>? _device;
+  DeviceFirmwareOverview? _overview;
   List<DeviceFirmwareHistory> _history = const [];
   bool _loadingDevice = true;
+  bool _loadingOverview = true;
   bool _loadingHistory = true;
   bool? _realtimeOnline;
   String? _deviceError;
+  String? _overviewError;
   String? _historyError;
+  bool _triggering = false;
 
   @override
   void initState() {
@@ -43,7 +49,11 @@ class _DeviceFirmwareDetailPageState extends State<DeviceFirmwareDetailPage> {
   }
 
   Future<void> _load() async {
-    await Future.wait([_loadDevice(), _loadHistory()]);
+    await Future.wait([
+      _loadDevice(),
+      _loadOverview(),
+      _loadHistory(),
+    ]);
   }
 
   Future<void> _loadDevice() async {
@@ -68,6 +78,25 @@ class _DeviceFirmwareDetailPageState extends State<DeviceFirmwareDetailPage> {
                 onlineStatus['online'] is bool
             ? onlineStatus['online'] as bool
             : null;
+      }),
+    );
+  }
+
+  Future<void> _loadOverview() async {
+    setState(() {
+      _loadingOverview = true;
+      _overviewError = null;
+    });
+    final result = await _ota.getFirmwareOverview(widget.deviceSN);
+    if (!mounted) return;
+    result.match(
+      (failure) => setState(() {
+        _loadingOverview = false;
+        _overviewError = failure.message;
+      }),
+      (overview) => setState(() {
+        _loadingOverview = false;
+        _overview = overview;
       }),
     );
   }
@@ -104,6 +133,120 @@ class _DeviceFirmwareDetailPageState extends State<DeviceFirmwareDetailPage> {
     return fallback;
   }
 
+  bool get _online =>
+      _realtimeOnline ??
+      (_device?['online'] == true ||
+          _device?['status'] == 1 ||
+          _device?['status'] == 2);
+
+  bool get _canUpgrade =>
+      !_loadingDevice &&
+      _deviceError == null &&
+      _device != null &&
+      _online &&
+      !_triggering;
+
+  List<FirmwareModuleOverview> get _updatableModules =>
+      _overview?.modules.where((m) => m.updateAvailable).toList() ??
+      const [];
+
+  Future<void> _triggerSingle(FirmwareModuleOverview module) async {
+    final l10n = AppLocalizations.of(context)!;
+    if (!_canUpgrade || module.latestFirmwareId <= 0) return;
+    final moduleLabel =
+        FirmwareModulePresentation.fromTarget(module.target).displayLabel(l10n);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l10n.str('firmware_upgrade_this_module')),
+        content: Text(l10n.str('firmware_upgrade_confirm_single', {
+          'module': moduleLabel,
+          'version': module.latestVersion,
+        })),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(l10n.confirm),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await _doTrigger([module.latestFirmwareId]);
+  }
+
+  Future<void> _triggerAll() async {
+    final l10n = AppLocalizations.of(context)!;
+    final modules = _updatableModules;
+    if (!_canUpgrade || modules.isEmpty) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l10n.str('firmware_upgrade_all_modules')),
+        content: Text(
+          l10n.str('firmware_upgrade_confirm_all', {'count': '${modules.length}'}),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(l10n.confirm),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final ids = modules
+        .where((m) => m.latestFirmwareId > 0)
+        .map((m) => m.latestFirmwareId)
+        .toList();
+    await _doTrigger(ids);
+  }
+
+  Future<void> _doTrigger(List<int> firmwareIds) async {
+    final l10n = AppLocalizations.of(context)!;
+    if (firmwareIds.isEmpty) return;
+    setState(() => _triggering = true);
+    final key =
+        'app-${widget.deviceSN}-${DateTime.now().millisecondsSinceEpoch}';
+    final result = await _ota.triggerFirmware(
+      widget.deviceSN,
+      firmwareIds,
+      idempotencyKey: key,
+    );
+    if (!mounted) return;
+    setState(() => _triggering = false);
+    result.match(
+      (failure) => AppToast.show(
+        context,
+        l10n.str('firmware_upgrade_failed', {'error': failure.message}),
+        type: ToastType.error,
+      ),
+      (tasks) {
+        AppToast.show(
+          context,
+          l10n.str('firmware_upgrade_started'),
+          type: ToastType.success,
+        );
+        final firstTaskId = tasks.isNotEmpty ? tasks.first.taskId : 0;
+        if (firstTaskId > 0) {
+          final route = Uri(
+            path: '/ota/${widget.deviceSN}/detail',
+            queryParameters: {'task_id': '$firstTaskId'},
+          );
+          context.push(route.toString());
+        }
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -112,12 +255,8 @@ class _DeviceFirmwareDetailPageState extends State<DeviceFirmwareDetailPage> {
       widget.deviceSN,
     );
     final model = _firstValue(['model', 'device_model']);
-    final online = _realtimeOnline ??
-        (_device?['online'] == true ||
-            _device?['status'] == 1 ||
-            _device?['status'] == 2);
-    final canCheckUpdate =
-        !_loadingDevice && _deviceError == null && _device != null && online;
+    final online = _online;
+    final canCheckUpdate = _canUpgrade;
     final textScale = MediaQuery.textScalerOf(context).scale(14) / 14;
     return Scaffold(
       backgroundColor: AppColor.surface(context),
@@ -175,32 +314,17 @@ class _DeviceFirmwareDetailPageState extends State<DeviceFirmwareDetailPage> {
                 ),
                 const SizedBox(height: 20),
                 _SectionTitle(l10n.str('firmware_details')),
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: 4,
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                    mainAxisExtent: 160 + (textScale - 1) * 200,
-                  ),
-                  itemBuilder: (context, index) {
-                    final entry = const [
-                      ('firmware_esp', 'esp'),
-                      ('firmware_arm', 'arm'),
-                      ('firmware_dsp', 'dsp'),
-                      ('firmware_bms', 'bms'),
-                    ][index];
-                    return _FirmwareCard(
-                      module: FirmwareModulePresentation.fromTarget(entry.$2),
-                      version: _value(
-                        entry.$1,
-                        l10n.str('firmware_version_not_reported'),
-                      ),
-                    );
-                  },
-                ),
+                if (_loadingOverview)
+                  const Center(
+                      child: Padding(
+                          padding: EdgeInsets.all(24),
+                          child: CircularProgressIndicator()))
+                else if (_overviewError != null)
+                  _ErrorCard(
+                      text: l10n.str('firmware_device_load_failed'),
+                      onRetry: _loadOverview)
+                else
+                  _buildModuleCards(l10n, textScale, online),
               ],
               const SizedBox(height: 20),
               Row(key: const Key('firmwareUpdateLogHeader'), children: [
@@ -252,6 +376,25 @@ class _DeviceFirmwareDetailPageState extends State<DeviceFirmwareDetailPage> {
                 ),
                 const SizedBox(height: 12),
               ],
+              // 全部升级：仅当存在多个可更新模块时显示
+              if (_updatableModules.length > 1) ...[
+                SizedBox(
+                  key: const Key('firmwareUpgradeAllAction'),
+                  width: double.infinity,
+                  child: FilledButton.tonalIcon(
+                    onPressed: canCheckUpdate ? _triggerAll : null,
+                    icon: const Icon(Icons.upgrade_rounded),
+                    label: Text(
+                      '${l10n.str('firmware_upgrade_all_modules')} '
+                      '(${_updatableModules.length})',
+                      maxLines: 2,
+                      textAlign: TextAlign.center,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
               SizedBox(
                 key: const Key('firmwareUpdateAction'),
                 width: double.infinity,
@@ -261,11 +404,84 @@ class _DeviceFirmwareDetailPageState extends State<DeviceFirmwareDetailPage> {
                           .push('/ota/${Uri.encodeComponent(widget.deviceSN)}')
                       : null,
                   icon: const Icon(Icons.refresh_rounded),
-                  label: Text(l10n.str('firmware_check_update')),
+                  label: Text(
+                    l10n.str('firmware_check_update'),
+                    maxLines: 2,
+                    textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ),
             ]),
       ),
+    );
+  }
+
+  Widget _buildModuleCards(
+    AppLocalizations l10n,
+    double textScale,
+    bool online,
+  ) {
+    final overview = _overview;
+    final modules = overview?.modules ?? const <FirmwareModuleOverview>[];
+    if (modules.isEmpty) {
+      // 回退：从设备字段展示四模块当前版本
+      return GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: 4,
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          mainAxisExtent: 160 + (textScale - 1) * 200,
+        ),
+        itemBuilder: (context, index) {
+          final entry = const [
+            ('firmware_esp', 'esp'),
+            ('firmware_arm', 'arm'),
+            ('firmware_dsp', 'dsp'),
+            ('firmware_bms', 'bms'),
+          ][index];
+          return _FirmwareCard(
+            module: FirmwareModulePresentation.fromTarget(entry.$2),
+            currentVersion: _value(
+              entry.$1,
+              l10n.str('firmware_version_not_reported'),
+            ),
+          );
+        },
+      );
+    }
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: modules.length,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        mainAxisExtent: 200 + (textScale - 1) * 220,
+      ),
+      itemBuilder: (context, index) {
+        final m = modules[index];
+        return _FirmwareCard(
+          module: FirmwareModulePresentation.fromTarget(m.target),
+          currentVersion: m.isUnreported
+              ? l10n.str('firmware_version_not_reported')
+              : (m.currentVersion.isEmpty
+                  ? l10n.str('firmware_version_not_reported')
+                  : m.currentVersion),
+          latestVersion: m.latestVersion,
+          changelog: m.changelog,
+          updateAvailable: m.updateAvailable,
+          canUpgrade: online &&
+              m.updateAvailable &&
+              m.latestFirmwareId > 0 &&
+              !m.isUnreported,
+          onUpgrade: () => _triggerSingle(m),
+        );
+      },
     );
   }
 }
@@ -326,6 +542,8 @@ class _DeviceHero extends StatelessWidget {
                     fontWeight: FontWeight.w700)),
             const SizedBox(height: 5),
             Text(model,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(color: AppColor.textSecondary(context))),
             const SizedBox(height: 3),
             Text(serialNumber,
@@ -335,33 +553,39 @@ class _DeviceHero extends StatelessWidget {
                     color: AppColor.textHint(context), fontSize: 12)),
           ]),
         ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: online
-                ? AppColors.successLight.withValues(alpha: .12)
-                : AppColor.surfaceHover(context),
-            borderRadius: BorderRadius.circular(20),
+        Flexible(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: online
+                  ? AppColors.successLight.withValues(alpha: .12)
+                  : AppColor.surfaceHover(context),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: online
+                          ? AppColors.successLight
+                          : AppColors.offline)),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(l10n.str(online ? 'online' : 'offline'),
+                    key: const Key('deviceFirmwareStatusLabel'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        color: online
+                            ? onlineTextColor
+                            : AppColor.textSecondary(context),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600)),
+              ),
+            ]),
           ),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Container(
-                width: 7,
-                height: 7,
-                decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: online
-                        ? AppColors.successLight
-                        : AppColors.offline)),
-            const SizedBox(width: 6),
-            Text(l10n.str(online ? 'online' : 'offline'),
-                key: const Key('deviceFirmwareStatusLabel'),
-                style: TextStyle(
-                    color: online
-                        ? onlineTextColor
-                        : AppColor.textSecondary(context),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600)),
-          ]),
         ),
       ]),
     );
@@ -407,9 +631,23 @@ class _InfoCell extends StatelessWidget {
 }
 
 class _FirmwareCard extends StatelessWidget {
-  const _FirmwareCard({required this.module, required this.version});
+  const _FirmwareCard({
+    required this.module,
+    required this.currentVersion,
+    this.latestVersion,
+    this.changelog,
+    this.updateAvailable = false,
+    this.canUpgrade = false,
+    this.onUpgrade,
+  });
   final FirmwareModulePresentation module;
-  final String version;
+  final String currentVersion;
+  final String? latestVersion;
+  final String? changelog;
+  final bool updateAvailable;
+  final bool canUpgrade;
+  final VoidCallback? onUpgrade;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -421,48 +659,104 @@ class _FirmwareCard extends StatelessWidget {
       FirmwareModuleKind.generic => AppColors.purple,
     };
     return Container(
-      padding: const EdgeInsets.all(15),
+      padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
         color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColor.border(context)),
+        border: Border.all(
+          color: updateAvailable
+              ? color.withValues(alpha: .45)
+              : AppColor.border(context),
+        ),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      child:
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Container(
-            width: 40,
-            height: 40,
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
               color: color.withValues(alpha: .11),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(11),
             ),
-            child: Icon(module.icon, color: color, size: 22),
+            child: Icon(module.icon, color: color, size: 20),
           ),
           const Spacer(),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: AppColor.surfaceHover(context),
-              borderRadius: BorderRadius.circular(8),
+          if (updateAvailable)
+            Flexible(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: .12),
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: Text(
+                  l10n.str('firmware_latest_version'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: color),
+                ),
+              ),
             ),
-            child: Text(version,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style:
-                    const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
-          ),
         ]),
-        const Spacer(),
+        const SizedBox(height: 8),
         Text(module.displayLabel(l10n),
-            style: const TextStyle(fontWeight: FontWeight.w700)),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
         const SizedBox(height: 4),
-        Text(l10n.str(module.descriptionKey),
-            maxLines: 2,
+        Text(
+          '${l10n.str('firmware_current_version')}: $currentVersion',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+              fontSize: 11, color: AppColor.textSecondary(context)),
+        ),
+        if (latestVersion != null && latestVersion!.isNotEmpty) ...[
+          const SizedBox(height: 2),
+          Text(
+            '${l10n.str('firmware_latest_version')}: $latestVersion',
+            maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-                height: 1.3,
-                fontSize: 12,
-                color: AppColor.textSecondary(context))),
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: updateAvailable ? color : AppColor.textSecondary(context),
+            ),
+          ),
+        ],
+        if (changelog != null && changelog!.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Expanded(
+            child: Text(
+              changelog!,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  height: 1.3,
+                  fontSize: 11,
+                  color: AppColor.textSecondary(context)),
+            ),
+          ),
+        ] else
+          const Spacer(),
+        if (canUpgrade && onUpgrade != null)
+          SizedBox(
+            width: double.infinity,
+            height: 30,
+            child: FilledButton(
+              style: FilledButton.styleFrom(
+                padding: EdgeInsets.zero,
+                textStyle: const TextStyle(
+                    fontSize: 11, fontWeight: FontWeight.w600),
+              ),
+              onPressed: onUpgrade,
+              child: Text(l10n.str('firmware_upgrade_this_module')),
+            ),
+          ),
       ]),
     );
   }

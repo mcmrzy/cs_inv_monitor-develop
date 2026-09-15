@@ -617,15 +617,15 @@ class AppRouter {
           );
         },
       ),
-      // 固件库（按型号浏览发布版本，可预下载到本地）
+      // 固件库（先选设备再按模块浏览已发布固件，可预下载到本地）
       GoRoute(
         path: '/firmware-library',
         name: 'firmwareLibrary',
         pageBuilder: (context, state) {
-          final model = state.uri.queryParameters['model'];
+          final sn = state.uri.queryParameters['sn'];
           return _slidePage(
             state,
-            FirmwareLibraryPage(initialModel: model),
+            FirmwareLibraryPage(initialSn: sn),
           );
         },
       ),
