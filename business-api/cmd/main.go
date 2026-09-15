@@ -187,6 +187,25 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	energyScheduleHandler := handler.NewEnergyScheduleHandler(energyScheduleService)
 	adminHandler := handler.NewAdminHandler(userRepo, modelRepo, permChecker, db, rdb, configService, userService)
 	otaHandler := handler.NewOTAHandler(otaService, db, jpushService, notifyPrefsRepo, emailService, userService)
+	var esaPurger service.CachePurger = service.NoopCachePurger{}
+	if cfg.ESA.Enabled {
+		esaPurger = service.NewESACachePurgerFromConfig(
+			cfg.ESA.AccessKey, cfg.ESA.SecretKey, cfg.ESA.SiteID, cfg.Backends.AppDownloadURL,
+		)
+		otaHandler.SetCachePurger(esaPurger)
+		if esaPurger.Enabled() {
+			logger.Info("ESA cache integration enabled",
+				zap.String("site_id", cfg.ESA.SiteID),
+				zap.String("host", cfg.Backends.AppDownloadURL),
+				zap.Bool("auto_rules", cfg.ESA.AutoRules),
+			)
+			if cfg.ESA.AutoRules {
+				esaPurger.EnsureCacheRulesAsync()
+			}
+		} else {
+			logger.Info("ESA cache integration skipped (set ALIYUN_ACCESS_KEY_ID, ALIYUN_ACCESS_KEY_SECRET, ESA_SITE_ID)")
+		}
+	}
 	dashboardHandler := handler.NewDashboardHandler(db, rdb)
 	alertRuleHandler := handler.NewAlertRuleHandler(db)
 	workOrderHandler := handler.NewWorkOrderHandler(db)
