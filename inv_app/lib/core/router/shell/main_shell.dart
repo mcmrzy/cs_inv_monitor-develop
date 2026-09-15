@@ -5,12 +5,13 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:inv_app/core/router/shell/bottom_nav_bar.dart';
+import 'package:inv_app/core/widgets/app_update_flow.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:inv_app/features/profile/data/profile_setup_storage.dart';
 import 'package:inv_app/features/profile/presentation/widgets/profile_setup_dialog.dart';
 
 /// 主框架 Shell：承载底部导航 + 页面切换动画，
-/// 并负责进入主页后的一次性副作用（完善资料提示）。
+/// 并负责进入主页后的一次性副作用（完善资料提示、App 更新静默检查）。
 /// 自 app_router.dart 拆分而来，路由文件仅保留路由表。
 class MainShell extends StatefulWidget {
   final Widget child;
@@ -40,6 +41,11 @@ class _MainShellState extends State<MainShell> {
       });
     }
 
+    // 进入主框架后静默检查一次 App 更新，发现新版本弹更新弹窗
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(AppUpdateFlow.autoCheck(context));
+    });
   }
 
   @override
