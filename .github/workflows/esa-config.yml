@@ -1,6 +1,5 @@
-# 一次性运维：把 ESA 缓存刷新凭据写入生产 .env.prod 并重启 business-api。
-# 依赖仓库 Secrets：ALIYUN_ACCESS_KEY_ID / ALIYUN_ACCESS_KEY_SECRET / ESA_SITE_ID
-# 手动触发：gh workflow run esa-config.yml
+# 一次性运维：写入 ESA 凭据、重启 business-api、宿主机强制刷新边缘缓存。
+# Secrets：ALIYUN_ACCESS_KEY_ID / ALIYUN_ACCESS_KEY_SECRET / ESA_SITE_ID
 name: ESA Config
 
 on:
@@ -11,44 +10,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Upload ESA refresh script
-        uses: appleboy/scp-action@v1
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USERNAME }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          source: "deploy/scripts/esa-refresh.py"
-          target: /opt/inv-mqtt/deploy/scripts/
-      - name: Configure ESA cache credentials and restart business-api
+      - name: Prepare refresh script payload
+        run: |
+          mkdir -p /tmp/esa
+          cp deploy/scripts/esa-refresh.py /tmp/esa/esa-refresh.py
+          echo "ESA_SCRIPT_B64=$(base64 -w0 /tmp/esa/esa-refresh.py)" >> "$GITHUB_ENV"
+      - name: Configure ESA credentials and refresh CDN
         uses: appleboy/ssh-action@v1
         env:
           ALIYUN_ACCESS_KEY_ID: ${{ secrets.ALIYUN_ACCESS_KEY_ID }}
           ALIYUN_ACCESS_KEY_SECRET: ${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}
           ESA_SITE_ID: ${{ secrets.ESA_SITE_ID }}
+          ESA_SCRIPT_B64: ${{ env.ESA_SCRIPT_B64 }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
-          envs: ALIYUN_ACCESS_KEY_ID,ALIYUN_ACCESS_KEY_SECRET,ESA_SITE_ID
+          envs: ALIYUN_ACCESS_KEY_ID,ALIYUN_ACCESS_KEY_SECRET,ESA_SITE_ID,ESA_SCRIPT_B64
           script: |
             set -e
-            # 与 CD 一致：生产部署目录固定为 /opt/inv-mqtt/deploy
             ENV_FILE=/opt/inv-mqtt/deploy/.env.prod
-            if [ ! -f "$ENV_FILE" ]; then
-              echo "❌ 找不到 $ENV_FILE"
-              ls -la /opt/inv-mqtt/deploy/ 2>/dev/null | head
-              exit 1
-            fi
-            echo "ENV_FILE=$ENV_FILE"
-            echo "ALIYUN_ACCESS_KEY_ID length=${#ALIYUN_ACCESS_KEY_ID}"
-            echo "ALIYUN_ACCESS_KEY_SECRET length=${#ALIYUN_ACCESS_KEY_SECRET}"
-            echo "ESA_SITE_ID=$ESA_SITE_ID"
-            if [ -z "$ALIYUN_ACCESS_KEY_ID" ] || [ -z "$ALIYUN_ACCESS_KEY_SECRET" ] || [ -z "$ESA_SITE_ID" ]; then
-              echo "❌ Secrets 未注入到 SSH 会话"
-              exit 1
-            fi
+            test -f "$ENV_FILE" || { echo "❌ 找不到 $ENV_FILE"; exit 1; }
+            echo "AK_len=${#ALIYUN_ACCESS_KEY_ID} SK_len=${#ALIYUN_ACCESS_KEY_SECRET} SITE=$ESA_SITE_ID"
+            test -n "$ALIYUN_ACCESS_KEY_ID" && test -n "$ALIYUN_ACCESS_KEY_SECRET" && test -n "$ESA_SITE_ID"
 
             sed -i \
               -e '/^ALIYUN_ACCESS_KEY_ID=/d' \
@@ -57,7 +42,6 @@ jobs:
               -e '/^ESA_CACHE_REFRESH_ENABLED=/d' \
               -e '/^ESA_AUTO_CACHE_RULES=/d' \
               "$ENV_FILE"
-
             {
               echo "ESA_CACHE_REFRESH_ENABLED=true"
               echo "ESA_AUTO_CACHE_RULES=true"
@@ -66,31 +50,13 @@ jobs:
               echo "ESA_SITE_ID=${ESA_SITE_ID}"
             } >> "$ENV_FILE"
 
-            echo "=== ESA keys present ==="
-            grep -E '^(ALIYUN_ACCESS_KEY_ID|ESA_)' "$ENV_FILE"
+            mkdir -p /opt/inv-mqtt/deploy/scripts
+            echo "$ESA_SCRIPT_B64" | base64 -d > /opt/inv-mqtt/deploy/scripts/esa-refresh.py
+            echo "=== host-side ESA refresh ==="
+            python3 /opt/inv-mqtt/deploy/scripts/esa-refresh.py
 
             cd /opt/inv-mqtt/deploy
-            # 容器内 Docker DNS 解析 esa.aliyuncs.com 常失败：优先用 extra_hosts 固定
-            ESA_IP=$(getent hosts esa.aliyuncs.com | awk '{print $1}' | head -1 || true)
-            echo "host resolved esa.aliyuncs.com=${ESA_IP:-none}"
-            if [ -n "$ESA_IP" ]; then
-              if ! grep -A12 'container_name: business-api' docker-compose.prod.yml | grep -q "esa.aliyuncs.com"; then
-                sed -i "/container_name: business-api/a\\    extra_hosts:\\n      - \"esa.aliyuncs.com:${ESA_IP}\"" docker-compose.prod.yml
-                echo "已注入 extra_hosts esa.aliyuncs.com=${ESA_IP}"
-              fi
-            fi
-            grep -A16 'container_name: business-api' docker-compose.prod.yml | head -20
-
-            # compose 服务名是 inv-api-server，container_name 才是 business-api
             docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --force-recreate inv-api-server
-            sleep 15
-            echo "=== business-api ESA logs ==="
-            docker logs --tail 150 business-api 2>&1 | grep -iE 'ESA|cache|error|fatal' || true
+            sleep 12
+            docker logs --tail 80 business-api 2>&1 | grep -iE 'ESA|error|fatal' || true
             docker inspect -f 'business-api state={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' business-api
-
-            # 宿主机侧立刻强制刷新（不依赖容器 DNS）
-            echo "=== host-side ESA refresh ==="
-            export ALIYUN_ACCESS_KEY_ID ALIYUN_ACCESS_KEY_SECRET ESA_SITE_ID
-            export ESA_REFRESH_HOST=download.jiuxiaoyw.online
-            python3 /opt/inv-mqtt/deploy/scripts/esa-refresh.py || true
-
