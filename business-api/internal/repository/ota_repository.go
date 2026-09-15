@@ -21,20 +21,92 @@ func NewOTARepository(db *pgxpool.Pool) *OTARepository {
 }
 
 func (r *OTARepository) CreateFirmware(ctx context.Context, f *model.Firmware) error {
+	// 上传默认 draft，不生成 main_version；需显式 publish 后用户侧才可见
 	return r.db.QueryRow(ctx, `
-		INSERT INTO firmware_versions (model, target_chip, main_version, version, file_url, file_size, file_md5, file_sha256, security_version, release_signature, changelog, is_force, uploaded_by, status, created_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,1,NOW())
-		RETURNING id, created_at
-	`, f.Model, f.TargetChip, f.MainVersion, f.Version, f.FileURL, f.FileSize, f.FileMD5, f.FileSHA256, f.SecurityVersion, f.ReleaseSignature, f.Changelog, f.IsForce, f.UploadedBy).
-		Scan(&f.ID, &f.CreatedAt)
+		INSERT INTO firmware_versions (model, target_chip, version, file_url, file_size, file_md5, file_sha256, security_version, release_signature, changelog, is_force, uploaded_by, status, release_status, created_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,0,'draft',NOW())
+		RETURNING id, created_at, release_status
+	`, f.Model, f.TargetChip, f.Version, f.FileURL, f.FileSize, f.FileMD5, f.FileSHA256, f.SecurityVersion, f.ReleaseSignature, f.Changelog, f.IsForce, f.UploadedBy).
+		Scan(&f.ID, &f.CreatedAt, &f.ReleaseStatus)
+}
+
+// PublishFirmware 将固件置为 published。已 published 时幂等不刷新 published_at；
+// 从 draft/disabled 重新发布时刷新 published_at=NOW()。
+func (r *OTARepository) PublishFirmware(ctx context.Context, id int64, actorID int64) error {
+	_, err := r.db.Exec(ctx, `
+		UPDATE firmware_versions
+		SET release_status = 'published',
+		    status = 1,
+		    published_at = CASE
+		        WHEN release_status = 'published' AND published_at IS NOT NULL THEN published_at
+		        ELSE NOW()
+		    END,
+		    updated_at = NOW()
+		WHERE id = $1
+	`, id)
+	_ = actorID
+	return err
+}
+
+// DisableFirmware 将固件置为 disabled（保留历史，用户侧不可见）
+func (r *OTARepository) DisableFirmware(ctx context.Context, id int64, actorID int64) error {
+	_, err := r.db.Exec(ctx, `
+		UPDATE firmware_versions
+		SET release_status = 'disabled',
+		    status = 0,
+		    updated_at = NOW()
+		WHERE id = $1
+	`, id)
+	_ = actorID
+	return err
+}
+
+// ListPublishedFirmwareForDevice 返回设备型号下、指定芯片（可选）的已发布固件
+func (r *OTARepository) ListPublishedFirmwareForDevice(ctx context.Context, sn, target string) ([]model.Firmware, error) {
+	query := `
+		SELECT f.id, f.model, f.version, f.file_url, COALESCE(f.file_size,0), COALESCE(f.file_md5,''),
+		       COALESCE(f.file_sha256,''), COALESCE(f.security_version,0), COALESCE(f.release_signature,''),
+		       COALESCE(f.changelog,''), f.is_force, COALESCE(f.uploaded_by,0), f.status, f.created_at,
+		       COALESCE(f.updated_at, f.created_at), COALESCE(f.target_chip,''), COALESCE(f.main_version,''),
+		       f.release_status, f.published_at
+		FROM firmware_versions f
+		JOIN devices d ON d.model = f.model
+		WHERE d.sn = $1 AND f.release_status = 'published'
+	`
+	args := []interface{}{sn}
+	if target != "" {
+		query += " AND f.target_chip = $2"
+		args = append(args, target)
+	}
+	query += " ORDER BY f.published_at DESC NULLS LAST, f.id DESC"
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make([]model.Firmware, 0)
+	for rows.Next() {
+		var f model.Firmware
+		if err := rows.Scan(&f.ID, &f.Model, &f.Version, &f.FileURL, &f.FileSize,
+			&f.FileMD5, &f.FileSHA256, &f.SecurityVersion, &f.ReleaseSignature, &f.Changelog,
+			&f.IsForce, &f.UploadedBy, &f.Status, &f.CreatedAt, &f.UpdatedAt, &f.TargetChip,
+			&f.MainVersion, &f.ReleaseStatus, &f.PublishedAt); err != nil {
+			continue
+		}
+		result = append(result, f)
+	}
+	return result, nil
 }
 
 func (r *OTARepository) ListFirmware(ctx context.Context, modelFilter string) ([]model.Firmware, error) {
+	// 管理端列表返回全部发布生命周期状态（draft/published/disabled）
 	query := `
 		SELECT id, model, version, file_url, COALESCE(file_size,0), COALESCE(file_md5,''),
 		       COALESCE(file_sha256,''), COALESCE(security_version,0), COALESCE(release_signature,''), COALESCE(changelog,''), is_force, COALESCE(uploaded_by,0), status, created_at,
-		       COALESCE(updated_at, created_at), COALESCE(target_chip,''), COALESCE(main_version,'')
-		FROM firmware_versions WHERE status = 1
+		       COALESCE(updated_at, created_at), COALESCE(target_chip,''), COALESCE(main_version,''), release_status, published_at
+		FROM firmware_versions WHERE TRUE
 	`
 	args := []interface{}{}
 	if modelFilter != "" {
@@ -54,7 +126,7 @@ func (r *OTARepository) ListFirmware(ctx context.Context, modelFilter string) ([
 		var f model.Firmware
 		if err := rows.Scan(&f.ID, &f.Model, &f.Version, &f.FileURL, &f.FileSize,
 			&f.FileMD5, &f.FileSHA256, &f.SecurityVersion, &f.ReleaseSignature, &f.Changelog, &f.IsForce, &f.UploadedBy,
-			&f.Status, &f.CreatedAt, &f.UpdatedAt, &f.TargetChip, &f.MainVersion); err != nil {
+			&f.Status, &f.CreatedAt, &f.UpdatedAt, &f.TargetChip, &f.MainVersion, &f.ReleaseStatus, &f.PublishedAt); err != nil {
 			continue
 		}
 		result = append(result, f)
@@ -67,11 +139,11 @@ func (r *OTARepository) GetFirmware(ctx context.Context, id int64) (*model.Firmw
 	err := r.db.QueryRow(ctx, `
 		SELECT id, model, version, file_url, COALESCE(file_size,0), COALESCE(file_md5,''),
 		       COALESCE(file_sha256,''), COALESCE(security_version,0), COALESCE(release_signature,''), COALESCE(changelog,''), is_force, COALESCE(uploaded_by,0), status, created_at,
-		       COALESCE(updated_at, created_at), COALESCE(target_chip,''), COALESCE(main_version,'')
+		       COALESCE(updated_at, created_at), COALESCE(target_chip,''), COALESCE(main_version,''), release_status, published_at
 		FROM firmware_versions WHERE id = $1
 	`, id).Scan(&f.ID, &f.Model, &f.Version, &f.FileURL, &f.FileSize,
 		&f.FileMD5, &f.FileSHA256, &f.SecurityVersion, &f.ReleaseSignature, &f.Changelog, &f.IsForce, &f.UploadedBy,
-		&f.Status, &f.CreatedAt, &f.UpdatedAt, &f.TargetChip, &f.MainVersion)
+		&f.Status, &f.CreatedAt, &f.UpdatedAt, &f.TargetChip, &f.MainVersion, &f.ReleaseStatus, &f.PublishedAt)
 	return &f, err
 }
 
@@ -508,6 +580,7 @@ type DeviceInfo struct {
 	FirmwareDSP string `json:"firmware_dsp"`
 	FirmwareBMS string `json:"firmware_bms"`
 	MainVersion string `json:"main_version"`
+	IsOnline    bool   `json:"is_online"`
 }
 
 // VersionSummary 生成合并主版本号，如 "V1.2.3.20240510-V1.2.0.20260629"
@@ -610,26 +683,26 @@ func (r *OTARepository) GetLatestFirmware(ctx context.Context, deviceModel strin
 		err = r.db.QueryRow(ctx, `
 			SELECT id, model, version, file_url, COALESCE(file_size,0), COALESCE(file_md5,''),
 			       COALESCE(file_sha256,''), COALESCE(security_version,0), COALESCE(release_signature,''), COALESCE(changelog,''), is_force, COALESCE(uploaded_by,0), status, created_at,
-			       COALESCE(target_chip,''), COALESCE(main_version,'')
+			       COALESCE(target_chip,''), COALESCE(main_version,''), release_status, published_at
 			FROM firmware_versions
-			WHERE target_chip = $1 AND model = $2 AND status = 1
-			ORDER BY created_at DESC
+			WHERE target_chip = $1 AND model = $2 AND release_status = 'published'
+			ORDER BY published_at DESC NULLS LAST, id DESC
 			LIMIT 1
 		`, targetChip, deviceModel).Scan(&f.ID, &f.Model, &f.Version, &f.FileURL, &f.FileSize,
 			&f.FileMD5, &f.FileSHA256, &f.SecurityVersion, &f.ReleaseSignature, &f.Changelog, &f.IsForce, &f.UploadedBy,
-			&f.Status, &f.CreatedAt, &f.TargetChip, &f.MainVersion)
+			&f.Status, &f.CreatedAt, &f.TargetChip, &f.MainVersion, &f.ReleaseStatus, &f.PublishedAt)
 	} else {
 		err = r.db.QueryRow(ctx, `
 			SELECT id, model, version, file_url, COALESCE(file_size,0), COALESCE(file_md5,''),
 			       COALESCE(file_sha256,''), COALESCE(security_version,0), COALESCE(release_signature,''), COALESCE(changelog,''), is_force, COALESCE(uploaded_by,0), status, created_at,
-			       COALESCE(target_chip,''), COALESCE(main_version,'')
+			       COALESCE(target_chip,''), COALESCE(main_version,''), release_status, published_at
 			FROM firmware_versions
-			WHERE model = $1 AND status = 1
-			ORDER BY created_at DESC
+			WHERE model = $1 AND release_status = 'published'
+			ORDER BY published_at DESC NULLS LAST, id DESC
 			LIMIT 1
 		`, deviceModel).Scan(&f.ID, &f.Model, &f.Version, &f.FileURL, &f.FileSize,
 			&f.FileMD5, &f.FileSHA256, &f.SecurityVersion, &f.ReleaseSignature, &f.Changelog, &f.IsForce, &f.UploadedBy,
-			&f.Status, &f.CreatedAt, &f.TargetChip, &f.MainVersion)
+			&f.Status, &f.CreatedAt, &f.TargetChip, &f.MainVersion, &f.ReleaseStatus, &f.PublishedAt)
 	}
 	if err != nil {
 		return nil, err
