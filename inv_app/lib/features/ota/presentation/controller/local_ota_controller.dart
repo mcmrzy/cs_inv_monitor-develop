@@ -8,6 +8,7 @@ import 'package:inv_app/features/ota/data/datasources/local_ota_result_sync_queu
 import 'package:inv_app/features/ota/domain/entities/local_channel.dart';
 import 'package:inv_app/features/ota/domain/repositories/local_communication_repository.dart';
 import 'package:inv_app/features/ota/domain/repositories/ota_repository.dart';
+import 'package:inv_app/features/ota/presentation/models/local_ota_presentation.dart';
 
 /// 本地 OTA 执行阶段
 enum LocalOTAPhase {
@@ -71,8 +72,9 @@ class LocalOTAControllerState {
       phase: phase ?? this.phase,
       uploadProgress: uploadProgress ?? this.uploadProgress,
       upgradeProgress: upgradeProgress ?? this.upgradeProgress,
-      statusOverrideKey:
-          statusOverrideKey != null ? statusOverrideKey() : this.statusOverrideKey,
+      statusOverrideKey: statusOverrideKey != null
+          ? statusOverrideKey()
+          : this.statusOverrideKey,
       statusOverrideParams: statusOverrideParams ?? this.statusOverrideParams,
       deviceStatus: deviceStatus ?? this.deviceStatus,
       deviceMessage: deviceMessage ?? this.deviceMessage,
@@ -139,8 +141,36 @@ class LocalOTAController extends ChangeNotifier {
     required String filePath,
     required LocalOtaManifest manifest,
     required String fallbackVersion,
+    required String firmwareModel,
   }) async {
     final isEsp = manifest.target.toLowerCase() == 'esp';
+
+    // Both transports must prove that the reached device matches the cached
+    // firmware before any upload bytes leave the App. Missing/unknown payloads
+    // are rejected just like explicit mismatches.
+    try {
+      final deviceInfo = await _communication.getDeviceInfo(_deviceIP);
+      final compatibility = checkLocalOtaDeviceCompatibility(
+        firmwareModel: firmwareModel,
+        deviceInfo: deviceInfo,
+      );
+      if (compatibility != LocalOtaDeviceCompatibility.compatible) {
+        throw LocalOtaDeviceModelException(
+          'local OTA device model validation failed: ${compatibility.name}',
+        );
+      }
+    } catch (e) {
+      _emit(_state.copyWith(
+        phase: LocalOTAPhase.failed,
+        error: () => e is LocalOtaDeviceModelException
+            ? e
+            : LocalOtaDeviceModelException(
+                'local OTA device model unavailable: $e',
+              ),
+      ));
+      _onTerminateConnection?.call();
+      return;
+    }
 
     // ---- 1. 上传固件 ----
     _emit(_state.copyWith(
@@ -186,8 +216,7 @@ class LocalOTAController extends ChangeNotifier {
     _emit(_state.copyWith(
       phase: LocalOTAPhase.upgrading,
       uploadProgress: 1.0,
-      statusOverrideKey: () =>
-          isEsp ? 'push_complete_wait_reboot' : null,
+      statusOverrideKey: () => isEsp ? 'push_complete_wait_reboot' : null,
     ));
     if (isEsp) {
       // ESP 自升级：传完固件 → 写 Flash → 立即重启（~500ms）
@@ -262,14 +291,12 @@ class LocalOTAController extends ChangeNotifier {
             .toLowerCase();
         final percent = (progress['progress'] as num?)?.toDouble() ?? 0.0;
         final message = progress['message'] as String? ?? '';
-        // 版本获取优先级：main_version > version > 芯片专属字段
-        final mainVer = progress['main_version'] as String? ?? '';
+        // 仅使用独立功能模块版本；main_version 已退出写入契约。
         final chipVer = (progress['version'] as String? ?? '').isNotEmpty
             ? (progress['version'] as String)
             : (progress[versionKey] as String? ?? '');
-        final displayVersion = mainVer.isNotEmpty
-            ? mainVer
-            : (chipVer.isNotEmpty ? chipVer : fallbackVersion);
+        final displayVersion =
+            chipVer.isNotEmpty ? chipVer : fallbackVersion;
 
         _emit(_state.copyWith(
           upgradeProgress: percent / 100.0,
@@ -281,7 +308,7 @@ class LocalOTAController extends ChangeNotifier {
         if (status == 'done' || status == 'succeeded') {
           String? newVersion =
               displayVersion.isNotEmpty ? displayVersion : null;
-          final chipNewVersion =
+          var chipNewVersion =
               (progress[firmwareKey] as String? ?? '').isNotEmpty
                   ? (progress[firmwareKey] as String)
                   : chipVer.isNotEmpty
@@ -290,16 +317,14 @@ class LocalOTAController extends ChangeNotifier {
           if (newVersion == null) {
             try {
               final info = await _communication.getDeviceInfo(_deviceIP);
-              final infoMainVer = info['main_version'] as String? ?? '';
               final infoChipVer =
                   (info[firmwareKey] as String? ?? '').isNotEmpty
                       ? (info[firmwareKey] as String)
                       : (info[versionKey] as String? ?? '').isNotEmpty
                           ? (info[versionKey] as String)
                           : (info['version'] as String? ?? '');
-              newVersion = infoMainVer.isNotEmpty
-                  ? infoMainVer
-                  : (infoChipVer.isNotEmpty ? infoChipVer : null);
+              newVersion = infoChipVer.isNotEmpty ? infoChipVer : null;
+              if (infoChipVer.isNotEmpty) chipNewVersion = infoChipVer;
             } catch (e) {
               debugPrint('[LocalOTA] get device info failed: $e');
             }
@@ -311,12 +336,11 @@ class LocalOTAController extends ChangeNotifier {
           ));
           _onTerminateConnection?.call();
           // 成功后经 Repository 上报（不再由页面直连 Dio 绕过分层）
-          if (newVersion != null) {
+          // 本地 OTA 完成只上报 target/new_version，不再产生 main_version
+          if (chipNewVersion.isNotEmpty) {
             await _reportResult(
               targetChip: targetChip,
-              chipNewVersion:
-                  chipNewVersion.isNotEmpty ? chipNewVersion : '',
-              mainVersion: mainVer.isNotEmpty ? mainVer : null,
+              chipNewVersion: chipNewVersion,
             );
           }
           return;
@@ -355,7 +379,6 @@ class LocalOTAController extends ChangeNotifier {
   Future<void> _reportResult({
     required String targetChip,
     required String chipNewVersion,
-    String? mainVersion,
   }) async {
     // 等待网络恢复（断开热点后需要几秒切回移动网络/普通 WiFi）
     await Future.delayed(const Duration(seconds: 3));
@@ -369,7 +392,6 @@ class LocalOTAController extends ChangeNotifier {
         sn: _deviceSN,
         targetChip: targetChip,
         newVersion: chipNewVersion,
-        mainVersion: mainVersion,
       );
       return;
     }
@@ -379,7 +401,6 @@ class LocalOTAController extends ChangeNotifier {
         sn: _deviceSN,
         targetChip: targetChip,
         newVersion: chipNewVersion,
-        mainVersion: mainVersion,
       );
     } catch (e) {
       debugPrint('[LocalOTA] report result failed: $e');

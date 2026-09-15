@@ -81,7 +81,6 @@ import 'package:inv_app/features/ota/presentation/pages/local_upgrade_page.dart'
 
 import 'package:inv_app/features/ota/presentation/pages/upgrade_history_page.dart';
 
-import 'package:inv_app/features/ota/presentation/pages/firmware_list_page.dart';
 
 import 'package:inv_app/features/ota/presentation/pages/ota_check_all_page.dart';
 
@@ -341,9 +340,8 @@ class AppRouter {
           final sn = state.pathParameters['sn']!;
           // extra 传设备快照与电站上下文；深链接无 extra 时回退最小快照
           final extra = state.extra as Map<String, dynamic>?;
-          final device =
-              (extra?['device'] as Map?)?.cast<String, dynamic>() ??
-                  <String, dynamic>{'sn': sn};
+          final device = (extra?['device'] as Map?)?.cast<String, dynamic>() ??
+              <String, dynamic>{'sn': sn};
           final stationId = extra?['stationId'] as int?;
           final onEnterSortMode = extra?['onEnterSortMode'] as void Function()?;
 
@@ -369,18 +367,6 @@ class AppRouter {
         name: 'localMode',
         pageBuilder: (context, state) =>
             _slidePage(state, const LocalModePage()),
-      ),
-      GoRoute(
-        path: '/local-ota',
-        name: 'localOta',
-        pageBuilder: (context, state) {
-          final sn = state.uri.queryParameters['sn'] ?? '';
-          final ip = state.uri.queryParameters['ip'] ?? '';
-          return _slidePage(
-            state,
-            LocalOTAPage(deviceSN: sn, deviceIP: ip),
-          );
-        },
       ),
       GoRoute(
         path: '/add-device',
@@ -479,13 +465,7 @@ class AppRouter {
         pageBuilder: (context, state) {
           final sn = state.pathParameters['sn']!;
 
-          return _slidePage(
-            state,
-            BlocProvider(
-              create: (_) => getIt<OtaBloc>(),
-              child: OTAPage(deviceSN: sn),
-            ),
-          );
+          return _slidePage(state, OTAPage(deviceSN: sn));
         },
       ),
       GoRoute(
@@ -527,6 +507,9 @@ class AppRouter {
 
           final firmwareFileName =
               state.uri.queryParameters['firmware_file_name'];
+          final deviceModel = state.uri.queryParameters['device_model'];
+          final fileSize =
+              int.tryParse(state.uri.queryParameters['file_size'] ?? '');
 
           final targetChip = state.uri.queryParameters['target_chip'];
           final firmwareVersion = state.uri.queryParameters['firmware_version'];
@@ -536,8 +519,22 @@ class AppRouter {
           final releaseSignature =
               state.uri.queryParameters['release_signature'];
 
-          // 通信通道：channel=ble 走蓝牙，缺省 WiFi 热点（本地升级双 Tab 页传入）
-          final channel = state.uri.queryParameters['channel'] == 'ble'
+          // 旧深链没有 channel 时先进入双通道选择页，不能静默降级为 WiFi。
+          final channelParam = state.uri.queryParameters['channel'];
+          if (channelParam == null ||
+              (channelParam != 'ble' &&
+                  channelParam != 'wifi' &&
+                  channelParam != 'wifi_ap')) {
+            return _slidePage(
+              state,
+              LocalUpgradePage(
+                deviceSN: sn,
+                deviceModel: deviceModel ?? '',
+                firmwareId: firmwareId,
+              ),
+            );
+          }
+          final channel = channelParam == 'ble'
               ? LocalCommunicationChannel.ble
               : LocalCommunicationChannel.wifiAp;
 
@@ -550,6 +547,8 @@ class AppRouter {
               firmwareId: firmwareId,
               firmwareUrl: firmwareUrl,
               firmwareFileName: firmwareFileName,
+              deviceModel: deviceModel,
+              fileSize: fileSize,
               targetChip: targetChip,
               firmwareVersion: firmwareVersion,
               fileSha256: fileSha256,
@@ -566,9 +565,15 @@ class AppRouter {
         pageBuilder: (context, state) {
           final sn = state.uri.queryParameters['sn'] ?? '';
           final model = state.uri.queryParameters['model'] ?? '';
+          final firmwareId =
+              int.tryParse(state.uri.queryParameters['firmware_id'] ?? '');
           return _slidePage(
             state,
-            LocalUpgradePage(deviceSN: sn, deviceModel: model),
+            LocalUpgradePage(
+              deviceSN: sn,
+              deviceModel: model,
+              firmwareId: firmwareId,
+            ),
           );
         },
       ),
@@ -590,30 +595,18 @@ class AppRouter {
         name: 'firmwareList',
         pageBuilder: (context, state) {
           final sn = state.uri.queryParameters['sn'] ?? '';
-          final model = state.uri.queryParameters['model'] ?? '';
-          final version = state.uri.queryParameters['version'] ?? '';
-          return _slidePage(
-            state,
-            BlocProvider(
-              create: (_) => getIt<OtaBloc>(),
-              child: FirmwareListPage(
-                sn: sn,
-                deviceModel: model,
-                currentMainVersion: version,
-              ),
-            ),
-          );
+          return _slidePage(state, FirmwareLibraryPage(initialSn: sn));
         },
       ),
-      // 固件库（按型号浏览发布版本，可预下载到本地）
+      // 固件库（先选设备再按模块浏览已发布固件，可预下载到本地）
       GoRoute(
         path: '/firmware-library',
         name: 'firmwareLibrary',
         pageBuilder: (context, state) {
-          final model = state.uri.queryParameters['model'];
+          final sn = state.uri.queryParameters['sn'];
           return _slidePage(
             state,
-            FirmwareLibraryPage(initialModel: model),
+            FirmwareLibraryPage(initialSn: sn),
           );
         },
       ),

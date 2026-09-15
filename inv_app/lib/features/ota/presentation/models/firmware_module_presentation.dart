@@ -47,6 +47,48 @@ final class FirmwareModulePresentation {
 
   String displayLabel(AppLocalizations l10n) => l10n.str(labelKey);
 
+  bool get supportsLocalUpgrade =>
+      kind == FirmwareModuleKind.communication ||
+      kind == FirmwareModuleKind.systemControl;
+
+  static String deviceRoute(String deviceSN) =>
+      '/ota/device/${Uri.encodeComponent(deviceSN)}';
+
+  static String sanitizeCustomerCopy(
+    String text,
+    AppLocalizations l10n,
+  ) {
+    var result = text;
+    for (final target in const ['esp', 'arm', 'dsp', 'bms']) {
+      final replacement = fromTarget(target).displayLabel(l10n);
+      result = result.replaceAll(
+        RegExp('(?<![A-Za-z0-9_])$target(?![A-Za-z0-9_])',
+            caseSensitive: false),
+        replacement,
+      );
+    }
+    return result;
+  }
+
+  /// 清理遗留展示名尾部的芯片后缀（ESP/ARM/DSP/BMS 的各种大小写与括号形态）。
+  static String sanitizeLegacyLabel(String label) {
+    var result = label.trim();
+    // 去掉尾部全角/半角括号芯片后缀：（ESP）/(esp)/（Arm）等
+    result = result.replaceAll(
+      RegExp(
+        r'[\s]*[\(（]\s*(esp|arm|dsp|bms)\s*[\)）]\s*$',
+        caseSensitive: false,
+      ),
+      '',
+    );
+    // 去掉尾部裸芯片词：… ESP / … eSp / …ARM
+    result = result.replaceAll(
+      RegExp(r'\s+(esp|arm|dsp|bms)\s*$', caseSensitive: false),
+      '',
+    );
+    return result.trim();
+  }
+
   static FirmwareModulePresentation fromTarget(String? value) {
     final raw = value?.trim() ?? '';
     final kind = switch (raw.toLowerCase()) {

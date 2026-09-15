@@ -27,7 +27,11 @@ class OnboardingStorage {
 
   /// 引导页看完/跳过成功后，记录当前版本，下次启动不再展示
   Future<void> markSeen() async {
-    final storage = getIt<StorageService>();
-    await storage.saveString(keyLastSeenVersion, AppConfig.version);
+    try {
+      final storage = getIt<StorageService>();
+      await storage.saveString(keyLastSeenVersion, AppConfig.version);
+    } catch (_) {
+      // 存储失败不能阻止用户离开引导页；下次启动时可以再次尝试。
+    }
   }
 }

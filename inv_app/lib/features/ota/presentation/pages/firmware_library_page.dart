@@ -1,7 +1,4 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 
@@ -11,74 +8,49 @@ import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
-import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
+import 'package:inv_app/features/device/domain/repositories/device_repository.dart';
+import 'package:inv_app/features/ota/domain/entities/device_firmware_overview.dart';
 import 'package:inv_app/features/ota/domain/repositories/ota_repository.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 import 'package:inv_app/features/ota/presentation/models/firmware_module_presentation.dart';
 
 /// 固件库（OTA 升级中心四入口之一）
 ///
-/// 按设备型号浏览已发布的全部升级包版本，支持整包预下载到本地；
-/// 已下载的包显示标记，可直接进入本地升级。
-/// 数据源：GET /ota/app/packages?model=（items 含完整下载元数据）。
+/// 先选择设备，再按模块浏览该设备已发布的固件；支持预下载到本地。
+/// 数据源：GET /ota/devices/{sn}/firmware-resources
 class FirmwareLibraryPage extends StatefulWidget {
-  /// 预选型号（可空，为空时取设备列表聚合出的第一个型号）
-  final String? initialModel;
+  /// 预选设备 SN（可空）
+  final String? initialSn;
 
-  const FirmwareLibraryPage({super.key, this.initialModel});
+  const FirmwareLibraryPage({super.key, this.initialSn});
 
   @override
   State<FirmwareLibraryPage> createState() => _FirmwareLibraryPageState();
 }
 
 class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
-  // 应用级单例：并发守卫与进度流跨页面共享，页面退出不再 dispose
   final FirmwareDownloadService _downloadService =
       getIt<FirmwareDownloadService>();
+  final DeviceRepository _deviceRepo = getIt<DeviceRepository>();
+  final OtaRepository _otaRepo = getIt<OtaRepository>();
 
-  List<String> _models = const [];
+  List<Map<String, dynamic>> _devices = const [];
+  String? _selectedSn;
   String? _selectedModel;
-  List<Map<String, dynamic>> _packages = const [];
-  bool _loadingModels = true;
-  bool _loadingPackages = false;
-  String? _error;
+  List<FirmwareResource> _resources = const [];
+  bool _loadingDevices = true;
+  bool _loadingResources = false;
+  String? _deviceError;
+  String? _resourceError;
 
-  /// 下载状态：包 ID → 是否全部已下载 / 下载中进度
   final Map<int, bool> _downloadedCache = {};
   final Map<int, double> _downloadingProgress = {};
   final Set<int> _downloadingIds = {};
-  final Set<int> _checkedDownloadIds = {};
-
-  StreamSubscription<DownloadProgressEvent>? _progressSub;
 
   @override
   void initState() {
     super.initState();
-    _progressSub = _downloadService.progressStream.listen((event) {
-      if (!mounted) return;
-      // 仅用于保持下载中卡片的活跃渲染
-      if (_downloadingIds.isEmpty) return;
-      setState(() {});
-    });
-    context.read<DeviceBloc>().add(const DeviceListRequested(pageSize: 200));
-    // BlocListener 只对后续新状态触发；若进入页面时 bloc 已是
-    // 加载完成/失败的缓存态，首帧后在此兼容处理（不能在 build 中 setState）
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_loadingModels) return;
-      final state = context.read<DeviceBloc>().state;
-      if (state is DeviceListLoaded) {
-        _collectModels(state);
-      } else if (state is DeviceError) {
-        setState(() => _loadingModels = false);
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _progressSub?.cancel();
-    // 下载服务是应用级单例，不随页面 dispose
-    super.dispose();
+    _loadDevices();
   }
 
   String _str(dynamic map, List<String> keys) {
@@ -89,221 +61,173 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
     return '';
   }
 
-  /// 从设备列表聚合型号（去重保序）
-  void _collectModels(DeviceListLoaded state) {
-    final models = <String>[];
-    for (final d in state.devices) {
-      final model = _str(d, ['model', 'device_model']);
-      if (model.isNotEmpty && !models.contains(model)) {
-        models.add(model);
-      }
-    }
-    if (!mounted) return;
+  Future<void> _loadDevices() async {
     setState(() {
-      _models = models;
-      _loadingModels = false;
-      _selectedModel ??= widget.initialModel != null &&
-              models.contains(widget.initialModel)
-          ? widget.initialModel
-          : models.firstOrNull;
+      _loadingDevices = true;
+      _deviceError = null;
     });
-    if (_selectedModel != null && _packages.isEmpty && _error == null) {
-      _loadPackages(_selectedModel!);
-    }
-  }
-
-  Future<void> _loadPackages(String model) async {
-    setState(() {
-      _loadingPackages = true;
-      _error = null;
-    });
-    final result = await getIt<OtaRepository>().listUpgradePackages(model: model);
+    final result = await _deviceRepo.getList(page: 1, pageSize: 200);
     if (!mounted) return;
-    result.fold(
+    result.match(
       (failure) => setState(() {
-        _loadingPackages = false;
-        _error = failure.message;
+        _loadingDevices = false;
+        _deviceError = failure.message;
       }),
-      (list) {
-        final packages = list
+      (data) {
+        final items = (data['items'] as List? ?? const [])
             .whereType<Map>()
             .map((e) => Map<String, dynamic>.from(e))
-            .toList()
-          ..sort((a, b) {
-            // 版本倒序：新版本在前（字符串逐段数字比较）
-            return _compareVersions(
-              _str(b, ['user_version', 'main_version']),
-              _str(a, ['user_version', 'main_version']),
-            );
-          });
+            .toList();
         setState(() {
-          _packages = packages;
-          _loadingPackages = false;
+          _devices = items;
+          _loadingDevices = false;
+          if (_selectedSn == null && items.isNotEmpty) {
+            final preferred = widget.initialSn;
+            final match = preferred == null
+                ? null
+                : items.where((d) => _str(d, ['sn', 'device_sn']) == preferred);
+            if (match != null && match.isNotEmpty) {
+              _selectDevice(match.first, loadResources: false);
+            } else {
+              _selectDevice(items.first, loadResources: false);
+            }
+          }
         });
-        for (final pkg in packages) {
-          _restorePackageDownloadState(pkg);
+        if (_selectedSn != null) {
+          _loadResources();
         }
       },
     );
   }
 
-  /// 版本比较：逐段数字比较，非数字段按字符串比较
-  int _compareVersions(String a, String b) {
-    final pa = a.replaceAll(RegExp(r'^[Vv]'), '').split('.');
-    final pb = b.replaceAll(RegExp(r'^[Vv]'), '').split('.');
-    final n = pa.length > pb.length ? pa.length : pb.length;
-    for (var i = 0; i < n; i++) {
-      final sa = i < pa.length ? pa[i] : '0';
-      final sb = i < pb.length ? pb[i] : '0';
-      final na = int.tryParse(sa);
-      final nb = int.tryParse(sb);
-      if (na != null && nb != null) {
-        if (na != nb) return na.compareTo(nb);
-      } else {
-        final c = sa.compareTo(sb);
-        if (c != 0) return c;
-      }
-    }
-    return 0;
-  }
-
-  List<Map<String, dynamic>> _chipsOf(Map<String, dynamic> pkg) {
-    final chips = pkg['items'];
-    if (chips is List) {
-      return chips.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
-    }
-    return const [];
-  }
-
-  /// 恢复包的下载状态（逐芯片校验本地文件）
-  Future<void> _restorePackageDownloadState(Map<String, dynamic> pkg) async {
-    final packageId = (pkg['id'] as num?)?.toInt() ?? 0;
-    if (packageId == 0 || _checkedDownloadIds.contains(packageId)) return;
-    _checkedDownloadIds.add(packageId);
-
-    final chips = _chipsOf(pkg);
-    if (chips.isEmpty) return;
-
-    for (final chip in chips) {
-      final firmwareId = (chip['firmware_id'] as num?)?.toInt() ?? 0;
-      if (firmwareId == 0) continue;
-      if (!await _downloadService.isFirmwareDownloaded(firmwareId)) {
-        return; // 存在未下载芯片
-      }
-    }
-    if (mounted) {
-      setState(() => _downloadedCache[packageId] = true);
+  void _selectDevice(
+    Map<String, dynamic> device, {
+    bool loadResources = true,
+  }) {
+    final sn = _str(device, ['sn', 'device_sn']);
+    final model = _str(device, ['model', 'device_model']);
+    setState(() {
+      _selectedSn = sn;
+      _selectedModel = model;
+      _resources = const [];
+      _downloadedCache.clear();
+      _downloadingIds.clear();
+      _downloadingProgress.clear();
+    });
+    if (loadResources && sn.isNotEmpty) {
+      _loadResources();
     }
   }
 
-  /// 整包预下载：逐芯片顺序下载（下载服务自带并发守卫）
-  Future<void> _downloadPackage(Map<String, dynamic> pkg) async {
+  Future<void> _loadResources() async {
+    final sn = _selectedSn;
+    if (sn == null || sn.isEmpty) return;
+    setState(() {
+      _loadingResources = true;
+      _resourceError = null;
+    });
+    final result = await _otaRepo.getFirmwareResources(sn);
+    if (!mounted) return;
+    result.match(
+      (failure) => setState(() {
+        _loadingResources = false;
+        _resourceError = failure.message;
+      }),
+      (resources) {
+        setState(() {
+          _resources = resources;
+          _loadingResources = false;
+        });
+        for (final r in resources) {
+          _restoreDownloadState(r);
+        }
+      },
+    );
+  }
+
+  Future<void> _restoreDownloadState(FirmwareResource r) async {
+    if (_downloadedCache.containsKey(r.id)) return;
+    final downloaded = await _downloadService.isFirmwareDownloaded(r.id);
+    if (mounted && downloaded) {
+      setState(() => _downloadedCache[r.id] = true);
+    }
+  }
+
+  Future<void> _download(FirmwareResource r) async {
     final l10n = AppLocalizations.of(context)!;
-    final packageId = (pkg['id'] as num?)?.toInt() ?? 0;
-    final chips = _chipsOf(pkg);
-    if (chips.isEmpty) {
-      AppToast.show(
-        context,
-        l10n.str('ota_firmware_library_no_items'),
-        type: ToastType.info,
-      );
+    if (r.fileUrl.isEmpty) {
+      AppToast.show(context, l10n.str('ota_firmware_library_download_failed'),
+          type: ToastType.info);
       return;
     }
-
     setState(() {
-      _downloadingIds.add(packageId);
-      _downloadingProgress[packageId] = 0.0;
+      _downloadingIds.add(r.id);
+      _downloadingProgress[r.id] = 0.0;
     });
-
     try {
-      var done = 0;
-      for (final chip in chips) {
-        final firmwareId = (chip['firmware_id'] as num?)?.toInt() ?? 0;
-        final url = (chip['download_url'] ?? '').toString();
-        if (firmwareId == 0 || url.isEmpty) continue;
-
-        if (!await _downloadService.isFirmwareDownloaded(firmwareId)) {
-          await _downloadService.downloadFirmware(
-            url: url,
-            fileName:
-                (chip['file_name'] ?? '').toString().isEmpty
-                    ? '${chip['target_chip']}_${chip['firmware_version']}.bin'
-                    : (chip['file_name'] ?? '').toString(),
-            firmwareId: firmwareId,
-            expectedSize: (chip['file_size'] as num?)?.toInt(),
-            expectedSha256: (chip['file_sha256'] ?? '').toString().isEmpty
-                ? null
-                : (chip['file_sha256'] ?? '').toString(),
-            targetChip: (chip['target_chip'] ?? '').toString(),
-            version: (chip['firmware_version'] ?? '').toString(),
-            signature: (chip['release_signature'] ?? '').toString(),
-            securityVersion: (chip['security_version'] as num?)?.toInt(),
-          );
-        }
-        done++;
-        if (!mounted) return;
-        setState(() {
-          _downloadingProgress[packageId] = done / chips.length;
-        });
+      if (!await _downloadService.isFirmwareDownloaded(r.id)) {
+        await _downloadService.downloadFirmware(
+          url: r.fileUrl,
+          fileName: r.fileName.isEmpty
+              ? '${r.targetChip}_${r.version}.bin'
+              : r.fileName,
+          firmwareId: r.id,
+          expectedSize: r.fileSize,
+          deviceModel: _selectedModel,
+          expectedSha256: r.fileSha256.isEmpty ? null : r.fileSha256,
+          targetChip: r.targetChip,
+          version: r.version,
+          signature: r.releaseSignature,
+          securityVersion: r.securityVersion,
+          supportedChannels: r.supportedChannels,
+        );
       }
       if (!mounted) return;
-      setState(() => _downloadedCache[packageId] = true);
-      AppToast.show(
-        context,
-        l10n.str('ota_firmware_library_download_done'),
-        type: ToastType.success,
-      );
-    } on StateError {
-      if (!mounted) return;
-      AppToast.show(
-        context,
-        l10n.str('ota_firmware_library_download_busy'),
-        type: ToastType.info,
-      );
+      setState(() {
+        _downloadedCache[r.id] = true;
+        _downloadingProgress.remove(r.id);
+      });
+      AppToast.show(context, l10n.str('ota_firmware_library_download_done'),
+          type: ToastType.success);
     } catch (e) {
       debugPrint('[FirmwareLibrary] download failed: $e');
       if (!mounted) return;
-      AppToast.show(
-        context,
-        l10n.str('ota_firmware_library_download_failed'),
-        type: ToastType.error,
-      );
+      AppToast.show(context, l10n.str('ota_firmware_library_download_failed'),
+          type: ToastType.error);
     } finally {
       if (mounted) {
         setState(() {
-          _downloadingIds.remove(packageId);
-          _downloadingProgress.remove(packageId);
+          _downloadingIds.remove(r.id);
+          _downloadingProgress.remove(r.id);
         });
       }
     }
   }
 
-  /// 已下载 → 本地升级：优先选择同型号的绑定设备
-  void _goLocalUpgrade(Map<String, dynamic> pkg) {
-    final l10n = AppLocalizations.of(context)!;
-    final state = context.read<DeviceBloc>().state;
-    final devices = state is DeviceListLoaded ? state.devices : const [];
+  void _goLocalUpgrade(FirmwareResource r) {
     final model = _selectedModel ?? '';
-    dynamic matched;
-    for (final d in devices) {
-      if (_str(d, ['model', 'device_model']) == model) {
-        matched = d;
-        break;
-      }
-    }
-    if (matched == null) {
-      AppToast.show(
-        context,
-        l10n.str('ota_firmware_library_no_device'),
-        type: ToastType.info,
-      );
-      return;
-    }
-    final sn = _str(matched, ['sn', 'device_sn']);
+    final sn = _selectedSn ?? '';
     context.push(
-      '/local-upgrade?sn=${Uri.encodeComponent(sn)}'
-      '&model=${Uri.encodeComponent(model)}',
+      '/local-upgrade?model=${Uri.encodeComponent(model)}'
+      '&sn=${Uri.encodeComponent(sn)}'
+      '&firmware_id=${r.id}',
     );
+  }
+
+  /// 按模块分组
+  Map<String, List<FirmwareResource>> get _grouped {
+    final map = <String, List<FirmwareResource>>{};
+    for (final r in _resources) {
+      map.putIfAbsent(r.targetChip, () => []).add(r);
+    }
+    // ESP 模块排最后
+    final keys = map.keys.toList()
+      ..sort((a, b) {
+        if (a == 'esp') return 1;
+        if (b == 'esp') return -1;
+        return a.compareTo(b);
+      });
+    return {for (final k in keys) k: map[k]!};
   }
 
   @override
@@ -322,101 +246,80 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
         backgroundColor: AppColor.surfaceContainer(context),
         foregroundColor: AppColor.textPrimary(context),
       ),
-      body: BlocConsumer<DeviceBloc, DeviceState>(
-        listenWhen: (previous, current) =>
-            current is DeviceListLoaded || current is DeviceError,
-        listener: (context, state) {
-          if (state is DeviceListLoaded) {
-            _collectModels(state);
-          } else if (state is DeviceError && _loadingModels) {
-            // 加载失败：停止等待，UI 展示重试入口
-            setState(() => _loadingModels = false);
-          }
-        },
-        builder: (context, state) {
-          if (_loadingModels) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (state is DeviceError && _models.isEmpty) {
-            return XiaoshuoStatePanel(
-              asset: CsergyAssets.xiaoshuoOffline,
-              title: l10n.loadFailed,
-              message: state.message,
-              size: 160,
-              action: OutlinedButton(
-                onPressed: () {
-                  setState(() => _loadingModels = true);
-                  context
-                      .read<DeviceBloc>()
-                      .add(const DeviceListRequested(pageSize: 200));
-                },
-                child: Text(l10n.retry),
-              ),
-            );
-          }
-          if (_models.isEmpty) {
-            return XiaoshuoStatePanel(
-              asset: CsergyAssets.emptyDevice,
-              title: l10n.str('ota_firmware_library_no_model'),
-              message: l10n.str('ota_firmware_library_no_model_hint'),
-              size: 160,
-            );
-          }
-          return Column(
-            children: [
-              // 型号选择器
-              SizedBox(
-                height: 44.h,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  padding: EdgeInsets.symmetric(horizontal: 16.w),
-                  itemCount: _models.length,
-                  separatorBuilder: (_, __) => SizedBox(width: 8.w),
-                  itemBuilder: (_, i) {
-                    final model = _models[i];
-                    final selected = model == _selectedModel;
-                    return ChoiceChip(
-                      label: Text(model),
-                      selected: selected,
-                      onSelected: (_) {
-                        if (selected) return;
-                        setState(() {
-                          _selectedModel = model;
-                          _packages = const [];
-                          _checkedDownloadIds.clear();
-                        });
-                        _loadPackages(model);
-                      },
-                    );
-                  },
-                ),
-              ),
-              SizedBox(height: 8.h),
-              Expanded(child: _buildPackageList(l10n)),
-            ],
-          );
-        },
-      ),
+      body: _loadingDevices
+          ? const Center(child: CircularProgressIndicator())
+          : _deviceError != null
+              ? XiaoshuoStatePanel(
+                  asset: CsergyAssets.xiaoshuoOffline,
+                  title: l10n.loadFailed,
+                  message: _deviceError!,
+                  size: 160,
+                  action: OutlinedButton(
+                    onPressed: _loadDevices,
+                    child: Text(l10n.retry),
+                  ),
+                )
+              : _devices.isEmpty
+                  ? XiaoshuoStatePanel(
+                      asset: CsergyAssets.emptyDevice,
+                      title: l10n.str('ota_firmware_library_no_device'),
+                      message:
+                          l10n.str('ota_firmware_library_select_device_hint'),
+                      size: 160,
+                    )
+                  : Column(
+                      children: [
+                        SizedBox(
+                          height: 44.h,
+                          child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            padding: EdgeInsets.symmetric(horizontal: 16.w),
+                            itemCount: _devices.length,
+                            separatorBuilder: (_, __) => SizedBox(width: 8.w),
+                            itemBuilder: (_, i) {
+                              final device = _devices[i];
+                              final sn = _str(device, ['sn', 'device_sn']);
+                              final name = _str(device, [
+                                'alias',
+                                'name',
+                                'device_name',
+                              ]);
+                              final selected = sn == _selectedSn;
+                              return ChoiceChip(
+                                label: Text(name.isEmpty ? sn : name),
+                                selected: selected,
+                                onSelected: (_) {
+                                  if (selected) return;
+                                  _selectDevice(device);
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                        SizedBox(height: 8.h),
+                        Expanded(child: _buildBody(l10n)),
+                      ],
+                    ),
     );
   }
 
-  Widget _buildPackageList(AppLocalizations l10n) {
-    if (_loadingPackages) {
+  Widget _buildBody(AppLocalizations l10n) {
+    if (_loadingResources) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (_error != null) {
+    if (_resourceError != null) {
       return XiaoshuoStatePanel(
         asset: CsergyAssets.xiaoshuoOffline,
         title: l10n.loadFailed,
-        message: _error,
+        message: _resourceError,
         size: 160,
         action: OutlinedButton(
-          onPressed: () => _loadPackages(_selectedModel ?? ''),
+          onPressed: _loadResources,
           child: Text(l10n.retry),
         ),
       );
     }
-    if (_packages.isEmpty) {
+    if (_resources.isEmpty) {
       return XiaoshuoStatePanel(
         asset: CsergyAssets.emptyDevice,
         title: l10n.str('ota_firmware_library_empty'),
@@ -424,23 +327,61 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
         size: 160,
       );
     }
-    return ListView.builder(
+    final grouped = _grouped;
+    return ListView(
       physics: const BouncingScrollPhysics(),
       padding: EdgeInsets.fromLTRB(16.w, 4.h, 16.w, 32.h),
-      itemCount: _packages.length,
-      itemBuilder: (_, i) => _buildPackageCard(_packages[i], l10n),
+      children: [
+        Padding(
+          padding: EdgeInsets.only(bottom: 8.h, left: 4.w),
+          child: Text(
+            l10n.str('ota_firmware_library_module_group'),
+            style: TextStyle(
+              fontSize: 13.sp,
+              fontWeight: FontWeight.w600,
+              color: AppColor.textSecondary(context),
+            ),
+          ),
+        ),
+        for (final entry in grouped.entries) ...[
+          _moduleHeader(entry.key, entry.value.length, l10n),
+          for (final r in entry.value) _buildResourceCard(r, l10n),
+        ],
+      ],
     );
   }
 
-  Widget _buildPackageCard(Map<String, dynamic> pkg, AppLocalizations l10n) {
-    final packageId = (pkg['id'] as num?)?.toInt() ?? 0;
-    final version = _str(pkg, ['user_version', 'main_version']);
-    final changelog = _str(pkg, ['user_changelog', 'changelog']);
-    final isForce = pkg['is_force'] == true;
-    final chips = _chipsOf(pkg);
-    final downloaded = _downloadedCache[packageId] == true;
-    final downloading = _downloadingIds.contains(packageId);
-    final progress = _downloadingProgress[packageId] ?? 0.0;
+  Widget _moduleHeader(String target, int count, AppLocalizations l10n) {
+    final module = FirmwareModulePresentation.fromTarget(target);
+    return Padding(
+      padding: EdgeInsets.fromLTRB(4.w, 12.h, 4.w, 8.h),
+      child: Row(
+        children: [
+          Icon(module.icon, size: 16.sp, color: AppColors.primary),
+          SizedBox(width: 6.w),
+          Text(
+            '${module.displayLabel(l10n)} ($count)',
+            style: TextStyle(
+              fontSize: 13.sp,
+              fontWeight: FontWeight.w600,
+              color: AppColor.textPrimary(context),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildResourceCard(FirmwareResource r, AppLocalizations l10n) {
+    final downloaded = _downloadedCache[r.id] == true;
+    final downloading = _downloadingIds.contains(r.id);
+    final progress = _downloadingProgress[r.id] ?? 0.0;
+    final published = r.publishedAt?.toLocal();
+    final dateStr = published == null
+        ? ''
+        : '${published.year.toString().padLeft(4, '0')}-'
+            '${published.month.toString().padLeft(2, '0')}-'
+            '${published.day.toString().padLeft(2, '0')}';
 
     return Container(
       margin: EdgeInsets.only(bottom: 10.h),
@@ -460,27 +401,22 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
           Row(
             children: [
               Text(
-                version,
+                r.version,
                 style: TextStyle(
                   fontSize: 15.sp,
                   fontWeight: FontWeight.w700,
                   color: AppColor.textPrimary(context),
                 ),
               ),
-              SizedBox(width: 8.w),
-              if (isForce)
-                _badge(l10n.str('ota_firmware_library_force'), AppColors.error),
-              if (downloaded)
-                _badge(
-                  l10n.str('ota_firmware_library_downloaded'),
-                  AppColors.success,
-                ),
+              if (downloaded) ...[
+                SizedBox(width: 8.w),
+                _badge(l10n.str('ota_firmware_library_downloaded'),
+                    AppColors.success),
+              ],
               const Spacer(),
-              if (!downloaded)
+              if (dateStr.isNotEmpty)
                 Text(
-                  ((pkg['created_at'] ?? '').toString()).length >= 10
-                      ? (pkg['created_at'] ?? '').toString().substring(0, 10)
-                      : (pkg['created_at'] ?? '').toString(),
+                  dateStr,
                   style: TextStyle(
                     fontSize: 11.sp,
                     color: AppColor.textHint(context),
@@ -488,25 +424,13 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
                 ),
             ],
           ),
-          if (chips.isNotEmpty) ...[
-            SizedBox(height: 8.h),
-            Wrap(
-              spacing: 6.w,
-              runSpacing: 4.h,
-              children: [
-                for (final chip in chips)
-                  _badge(
-                    '${FirmwareModulePresentation.fromTarget(chip['target_chip']?.toString()).displayLabel(l10n)} '
-                    '${chip['firmware_version'] ?? ''}',
-                    AppColors.blue,
-                  ),
-              ],
-            ),
-          ],
-          if (changelog.isNotEmpty) ...[
+          if (r.changelog.isNotEmpty) ...[
             SizedBox(height: 8.h),
             Text(
-              changelog,
+              FirmwareModulePresentation.sanitizeCustomerCopy(
+                r.changelog,
+                l10n,
+              ),
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
@@ -531,27 +455,25 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
                     : const SizedBox.shrink(),
               ),
               if (downloading) SizedBox(width: 10.w),
-              if (downloaded)
+              if (downloaded && r.canLocalUpgrade)
                 FilledButton.icon(
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.success,
                     minimumSize: Size(0, 36.h),
                   ),
-                  onPressed: () => _goLocalUpgrade(pkg),
+                  onPressed: () => _goLocalUpgrade(r),
                   icon: Icon(Icons.wifi_rounded, size: 16.sp),
                   label: Text(
                     l10n.str('ota_local_upgrade'),
                     style: TextStyle(fontSize: 13.sp),
                   ),
                 )
-              else
+              else if (!downloaded)
                 FilledButton.tonalIcon(
                   style: FilledButton.styleFrom(
                     minimumSize: Size(0, 36.h),
                   ),
-                  onPressed: downloading
-                      ? null
-                      : () => _downloadPackage(pkg),
+                  onPressed: downloading ? null : () => _download(r),
                   icon: Icon(
                     downloading
                         ? Icons.downloading_rounded

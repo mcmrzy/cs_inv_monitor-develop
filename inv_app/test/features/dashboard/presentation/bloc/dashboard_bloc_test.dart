@@ -10,6 +10,8 @@ import 'package:inv_app/features/dashboard/domain/entities/dashboard_data.dart';
 import 'package:inv_app/features/dashboard/domain/entities/trend_data_point.dart';
 import 'package:inv_app/features/dashboard/domain/entities/station_rank_item.dart';
 import 'package:inv_app/core/errors/failures.dart';
+import 'package:inv_app/core/services/network_status_service.dart';
+import 'package:inv_app/core/services/service_locator.dart';
 
 import '../../../../helpers/mock_providers.dart';
 import '../../../../helpers/test_data.dart';
@@ -48,6 +50,34 @@ void main() {
 
   test('initial state is DashboardInitial', () {
     expect(dashboardBloc.state, equals(const DashboardInitial()));
+  });
+
+  test('offline without cache emits a network-unavailable error', () async {
+    await getIt.reset();
+    final networkStatusService = MockNetworkStatusService();
+    when(() => networkStatusService.checkConnectivity())
+        .thenAnswer((_) async => false);
+    when(() => mockDataCacheService.load(any())).thenReturn(null);
+    getIt.registerSingleton<NetworkStatusService>(networkStatusService);
+
+    final states = <DashboardState>[];
+    final subscription = dashboardBloc.stream.listen(states.add);
+    dashboardBloc.add(const DashboardLoadRequested());
+    await dashboardBloc.stream.firstWhere((state) => state is DashboardError);
+
+    expect(states, hasLength(2));
+    expect(states.first, isA<DashboardLoading>());
+    expect(
+      states.last,
+      isA<DashboardError>().having(
+        (state) => state.kind,
+        'kind',
+        DashboardErrorKind.networkUnavailable,
+      ),
+    );
+
+    await subscription.cancel();
+    await getIt.reset();
   });
 
   // ---------------------------------------------------------------------------

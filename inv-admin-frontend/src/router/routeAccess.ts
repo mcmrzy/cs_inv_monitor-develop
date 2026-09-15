@@ -7,7 +7,8 @@ export const ROUTE_PERMISSIONS = {
   '/monitoring/:id': ['devices:view'],
   '/remote-settings': ['devices:view'],
   '/batch-settings': ['devices:view'],
-  '/ota': ['ota:view'],
+  // /ota 基础访问：设备列表/固件概览依赖 devices:view
+  '/ota': ['devices:view'],
   '/alerts': ['alerts:view'],
   '/work-orders': ['work_orders:view'],
   '/users': ['users:view'],
@@ -56,4 +57,88 @@ export function selectDefaultRoute(
   }
 
   return '/organizations'
+}
+
+/* ==================== OTA Tab 权限 ==================== */
+
+/** OTA 页面五个 Tab */
+export const OTA_TABS = [
+  'deviceFirmware',
+  'firmware',
+  'tasks',
+  'history',
+  'appVersion',
+] as const
+
+export type OtaTabKey = (typeof OTA_TABS)[number]
+
+/**
+ * Tab 级权限：
+ * - deviceFirmware：仅需进入 /ota 的 devices:view
+ * - 管理类 Tab（固件/任务/历史/App）：需要 ota:view
+ */
+export const OTA_TAB_PERMISSIONS: Record<OtaTabKey, readonly string[]> = {
+  deviceFirmware: [],
+  firmware: ['ota:view'],
+  tasks: ['ota:view'],
+  history: ['ota:view'],
+  appVersion: ['ota:view'],
+}
+
+/** OTA 写操作权限码 */
+export const OTA_MUTATION_PERMISSIONS = {
+  create: ['ota:create'],
+  control: ['ota:control'],
+  delete: ['ota:delete'],
+} as const
+
+export type OtaMutationAction = keyof typeof OTA_MUTATION_PERMISSIONS
+
+/** 判断用户是否可访问指定 OTA Tab */
+export function canAccessOtaTab(
+  tab: OtaTabKey,
+  isSystemAdmin: boolean,
+  hasAnyPermission: HasAnyPermission,
+): boolean {
+  const perms = OTA_TAB_PERMISSIONS[tab] ?? EMPTY_PERMISSIONS
+  if (perms.length === 0) return true
+  if (isSystemAdmin) return true
+  return hasAnyPermission(...perms)
+}
+
+/**
+ * 解析深链 Tab：无权或非法 Tab 自动回落「设备固件升级」。
+ */
+export function resolveOtaTab(
+  requested: string | null | undefined,
+  isSystemAdmin: boolean,
+  hasAnyPermission: HasAnyPermission,
+): OtaTabKey {
+  const candidate = String(requested ?? '').trim() as OtaTabKey
+  if (
+    (OTA_TABS as readonly string[]).includes(candidate)
+    && canAccessOtaTab(candidate, isSystemAdmin, hasAnyPermission)
+  ) {
+    return candidate
+  }
+  return 'deviceFirmware'
+}
+
+/** 判断是否具备 OTA 写操作权限 */
+export function canMutateOta(
+  action: OtaMutationAction,
+  isSystemAdmin: boolean,
+  hasAnyPermission: HasAnyPermission,
+): boolean {
+  if (isSystemAdmin) return true
+  return hasAnyPermission(...OTA_MUTATION_PERMISSIONS[action])
+}
+
+/** 设备级固件升级/回退遵循设备控制权限与后端数据范围。 */
+export function canControlDeviceFirmware(
+  isSystemAdmin: boolean,
+  hasAnyPermission: HasAnyPermission,
+): boolean {
+  if (isSystemAdmin) return true
+  return hasAnyPermission('devices:control')
 }

@@ -13,14 +13,12 @@ class PendingLocalOtaResult {
   final String sn;
   final String targetChip;
   final String newVersion;
-  final String? mainVersion;
   final DateTime enqueuedAt;
 
   const PendingLocalOtaResult({
     required this.sn,
     required this.targetChip,
     required this.newVersion,
-    this.mainVersion,
     required this.enqueuedAt,
   });
 
@@ -28,8 +26,6 @@ class PendingLocalOtaResult {
         'sn': sn,
         'target_chip': targetChip,
         'new_version': newVersion,
-        if (mainVersion != null && mainVersion!.isNotEmpty)
-          'main_version': mainVersion,
         'enqueued_at': enqueuedAt.toIso8601String(),
       };
 
@@ -44,7 +40,6 @@ class PendingLocalOtaResult {
       sn: sn,
       targetChip: chip,
       newVersion: version,
-      mainVersion: json['main_version'] as String?,
       enqueuedAt: DateTime.tryParse(json['enqueued_at'] as String? ?? '') ??
           DateTime.now(),
     );
@@ -112,13 +107,11 @@ class LocalOtaResultSyncQueue {
     required String sn,
     required String targetChip,
     required String newVersion,
-    String? mainVersion,
   }) async {
     final item = PendingLocalOtaResult(
       sn: sn,
       targetChip: targetChip,
       newVersion: newVersion,
-      mainVersion: mainVersion,
       enqueuedAt: DateTime.now(),
     );
 
@@ -149,7 +142,6 @@ class LocalOtaResultSyncQueue {
             sn: item.sn,
             targetChip: item.targetChip,
             newVersion: item.newVersion,
-            mainVersion: item.mainVersion,
           );
           result.fold(
             (failure) {

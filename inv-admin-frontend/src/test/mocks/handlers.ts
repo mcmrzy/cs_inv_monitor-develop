@@ -223,7 +223,11 @@ export const handlers = [
     return HttpResponse.json({
       code: 0,
       message: 'success',
-      data: mockFirmwares,
+      data: mockFirmwares.map((fw) => ({
+        ...fw,
+        release_status: fw.release_status || 'published',
+        published_at: fw.published_at || '2026-01-01T00:00:00Z',
+      })),
     })
   }),
 
@@ -232,9 +236,139 @@ export const handlers = [
     return HttpResponse.json({ code: 0, message: 'success', data: null })
   }),
 
-  /** 删除固件 */
+  /** 删除固件（仅 draft） */
   http.delete(`${API_BASE}/ota/firmware/:id`, () => {
     return HttpResponse.json({ code: 0, message: 'success', data: null })
+  }),
+
+  /** 发布固件 */
+  http.post(`${API_BASE}/ota/firmware/:id/publish`, () => {
+    return HttpResponse.json({
+      code: 0,
+      message: 'success',
+      data: { release_status: 'published' },
+    })
+  }),
+
+  /** 停用固件 */
+  http.post(`${API_BASE}/ota/firmware/:id/disable`, () => {
+    return HttpResponse.json({
+      code: 0,
+      message: 'success',
+      data: { release_status: 'disabled' },
+    })
+  }),
+
+  /** 设备四模块固件概览 */
+  http.get(`${API_BASE}/ota/devices/:sn/firmware-overview`, ({ params }) => {
+    return HttpResponse.json({
+      code: 0,
+      message: 'success',
+      data: {
+        device_sn: String(params.sn),
+        device_model: 'SG-5K-D',
+        is_online: true,
+        modules: [
+          {
+            target: 'arm',
+            current_version: '1.0.0',
+            latest_firmware_id: 301,
+            latest_version: '1.1.0',
+            version_state: 'outdated',
+            update_available: true,
+            supported: true,
+            connected: true,
+            eligible: true,
+            supported_channels: ['remote', 'ble', 'wifi_ap'],
+            changelog: '修复系统中控稳定性',
+            published_at: '2026-01-01T00:00:00Z',
+          },
+          {
+            target: 'esp',
+            current_version: '1.5.0',
+            latest_firmware_id: 302,
+            latest_version: '1.5.0',
+            version_state: 'current',
+            update_available: false,
+            supported: true,
+            connected: true,
+            eligible: true,
+            supported_channels: ['remote', 'ble', 'wifi_ap'],
+            changelog: '',
+            published_at: '2026-01-02T00:00:00Z',
+          },
+          {
+            target: 'dsp',
+            current_version: '',
+            latest_firmware_id: 0,
+            latest_version: '',
+            version_state: 'unreported',
+            update_available: false,
+            changelog: '',
+          },
+          {
+            target: 'bms',
+            current_version: '',
+            latest_firmware_id: 0,
+            latest_version: '',
+            version_state: 'unreported',
+            update_available: false,
+            changelog: '',
+          },
+        ],
+      },
+    })
+  }),
+
+  /** 设备可安装固件资源 */
+  http.get(`${API_BASE}/ota/devices/:sn/firmware-resources`, () => {
+    return HttpResponse.json({
+      code: 0,
+      message: 'success',
+      data: mockFirmwares.map((fw) => ({
+        ...fw,
+        release_status: 'published',
+      })),
+    })
+  }),
+
+  /** 设备升级历史 */
+  http.get(`${API_BASE}/ota/devices/:sn/history`, () => {
+    return HttpResponse.json({
+      code: 0,
+      message: 'success',
+      data: paginatedResponse([], 0),
+    })
+  }),
+
+  /** 聚合升级历史 */
+  http.get(`${API_BASE}/ota/history`, () => {
+    return HttpResponse.json({
+      code: 0,
+      message: 'success',
+      data: paginatedResponse([], 0),
+    })
+  }),
+
+  /** 独立模块升级触发 */
+  http.post(`${API_BASE}/ota/trigger`, async ({ request }) => {
+    const body = (await request.json()) as any
+    return HttpResponse.json({
+      code: 0,
+      message: 'success',
+      data: (body.firmware_ids || []).map((id: number, idx: number) => ({
+        task_id: 9000 + idx,
+        firmware_id: id,
+        target_chip: 'arm',
+        version: '1.1.0',
+        status: 'pending',
+      })),
+    })
+  }),
+
+  /** 独立模块固件回退 */
+  http.post(`${API_BASE}/ota/firmware/rollback`, () => {
+    return HttpResponse.json({ code: 0, message: 'success', data: [] })
   }),
 
   /** OTA 任务列表 */
@@ -268,16 +402,6 @@ export const handlers = [
   /** OTA 升级面板 */
   http.get(`${API_BASE}/ota/upgrades/dashboard`, () => {
     return HttpResponse.json({ code: 0, message: 'success', data: { items: [], total: 0 } })
-  }),
-
-  /** OTA 升级包列表 */
-  http.get(`${API_BASE}/ota/packages`, () => {
-    return HttpResponse.json({ code: 0, message: 'success', data: [] })
-  }),
-
-  /** 创建 OTA 升级包 */
-  http.post(`${API_BASE}/ota/packages`, async () => {
-    return HttpResponse.json({ code: 0, message: 'success', data: null })
   }),
 
   /** 仪表盘统计 */

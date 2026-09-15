@@ -155,6 +155,7 @@ export function renderAsAdmin(ui: ReactElement, options: Omit<RenderWithProvider
       'dashboard:view',
       'devices:view',
       'firmware:view',
+      'ota:view',
       'alerts:view',
       'users:view',
       'admin:view',

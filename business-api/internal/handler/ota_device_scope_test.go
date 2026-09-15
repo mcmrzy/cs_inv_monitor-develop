@@ -6,14 +6,18 @@ import (
 	"go/parser"
 	"go/token"
 	"testing"
+
+	"inv-api-server/internal/model"
 )
 
 type denyingOTADeviceScopeChecker struct {
-	calls int
+	calls      int
+	permission string
 }
 
-func (f *denyingOTADeviceScopeChecker) CheckDeviceOwnership(context.Context, string, int64) (bool, error) {
+func (f *denyingOTADeviceScopeChecker) CheckDevicePermission(_ context.Context, _ model.ActorContext, permission, _ string) (bool, error) {
 	f.calls++
+	f.permission = permission
 	return false, nil
 }
 
@@ -29,6 +33,9 @@ func TestOTADeviceScopeDeniesBeforeHistoryRead(t *testing.T) {
 	assertBizResponse(t, recorder, 403, "无权管理该设备")
 	if checker.calls != 1 {
 		t.Fatalf("scope checker calls = %d, want 1", checker.calls)
+	}
+	if checker.permission != "devices:view" {
+		t.Fatalf("permission = %q, want devices:view", checker.permission)
 	}
 }
 
@@ -60,12 +67,12 @@ func TestOTADeviceScopeGuardCoversEveryAppDeviceHandler(t *testing.T) {
 		}
 	}
 
-	helper := functions["ensureDeviceManagementScope"]
+	helper := functions["ensureDeviceScope"]
 	if helper == nil {
-		t.Fatal("ensureDeviceManagementScope helper is missing")
+		t.Fatal("ensureDeviceScope helper is missing")
 	}
-	if !callsMethod(helper, "CheckDeviceOwnership") {
-		t.Error("ensureDeviceManagementScope must delegate to CheckDeviceOwnership")
+	if !callsMethod(helper, "CheckDevicePermission") {
+		t.Error("ensureDeviceScope must delegate to CheckDevicePermission")
 	}
 
 	for _, name := range requiredHandlers {
@@ -74,9 +81,24 @@ func TestOTADeviceScopeGuardCoversEveryAppDeviceHandler(t *testing.T) {
 			t.Errorf("required OTA handler %s is missing", name)
 			continue
 		}
-		if !callsMethod(fn, "ensureDeviceManagementScope") {
-			t.Errorf("%s must call ensureDeviceManagementScope", name)
+		if !callsMethod(fn, "ensureDeviceViewScope") && !callsMethod(fn, "ensureDeviceControlScope") {
+			t.Errorf("%s must call an explicit view/control device scope guard", name)
 		}
+	}
+}
+
+func TestOTADeviceControlScopeUsesDevicesControl(t *testing.T) {
+	checker := &denyingOTADeviceScopeChecker{}
+	handler := &OTAHandler{deviceScopeChecker: checker}
+	c, recorder := createTestGinContext("/api/v1/ota/resend/SN-1", "POST", nil)
+	c.AddParam("sn", "SN-1")
+	c.Set("user_id", int64(42))
+
+	handler.ResendUpgradeCommand(c)
+
+	assertBizResponse(t, recorder, 403, "无权")
+	if checker.permission != "devices:control" {
+		t.Fatalf("permission = %q, want devices:control", checker.permission)
 	}
 }
 

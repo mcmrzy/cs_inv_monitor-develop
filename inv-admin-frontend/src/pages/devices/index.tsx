@@ -75,6 +75,15 @@ interface ExcelPreviewRow {
   error?: string
 }
 
+export function buildBatchOtaDeepLink(deviceSns: readonly React.Key[]): string {
+  const params = new URLSearchParams({
+    tab: 'tasks',
+    create: '1',
+    sns: deviceSns.map(String).join(','),
+  })
+  return `/ota?${params.toString()}`
+}
+
 interface UnbindRequestRecord {
   id: number
   device_sn: string
@@ -770,7 +779,7 @@ const DevicesPage: React.FC = () => {
       icon: <DownloadOutlined />,
       onClick: () => {
         // 跳转 OTA 页并预填所选设备（ota 页读取 create/sns 参数自动打开创建向导）
-        navigate('/ota?create=1&sns=' + selectedRowKeys.map(String).join(','))
+        navigate(buildBatchOtaDeepLink(selectedRowKeys))
       },
     },
     {

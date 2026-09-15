@@ -4,6 +4,7 @@ import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/features/device/domain/repositories/device_repository.dart';
+import 'package:inv_app/features/ota/presentation/models/firmware_module_presentation.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 class OtaTabPage extends StatefulWidget {
@@ -295,7 +296,9 @@ class _DeviceCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         onTap: sn.isEmpty
             ? null
-            : () => context.push('/ota/device/${Uri.encodeComponent(sn)}'),
+            : () => context.push(
+                FirmwareModulePresentation.deviceRoute(sn),
+              ),
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(

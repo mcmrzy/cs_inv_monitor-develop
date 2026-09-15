@@ -53,6 +53,7 @@ export const queryKeys = {
     firmwares: (params?: Record<string, any>) => ['ota', 'firmwares', params] as const,
     upgrades: (params?: Record<string, any>) => ['ota', 'upgrades', params] as const,
     upgradeDetails: (firmwareId: number) => ['ota', 'upgrade-details', firmwareId] as const,
+    appVersionsAll: () => ['ota', 'app-versions'] as const,
     appVersions: (params?: Record<string, any>) => ['ota', 'app-versions', params] as const,
     packages: (params?: Record<string, any>) => ['ota', 'packages', params] as const,
     packageDetails: (packageId: number) => ['ota', 'package-details', packageId] as const,
@@ -60,6 +61,12 @@ export const queryKeys = {
     taskDetail: (id: number | string) => ['ota', 'task-detail', id] as const,
     taskDevices: (id: number | string, params?: Record<string, any>) => ['ota', 'task-devices', id, params] as const,
     taskStats: () => ['ota', 'task-stats'] as const,
+    firmwareOverview: (sn: string) => ['ota', 'firmware-overview', sn] as const,
+    firmwareResources: (sn: string, targetChip?: string) =>
+      ['ota', 'firmware-resources', sn, targetChip] as const,
+    deviceHistory: (sn: string, params?: Record<string, any>) =>
+      ['ota', 'device-history', sn, params] as const,
+    history: (params?: Record<string, any>) => ['ota', 'history', params] as const,
   },
   parallel: {
     all: ['parallel'] as const,

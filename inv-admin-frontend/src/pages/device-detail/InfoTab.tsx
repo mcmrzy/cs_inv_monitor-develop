@@ -42,15 +42,21 @@ const InfoTab: React.FC<InfoTabProps> = ({ sn }) => {
   const loadPercent = detail?.load_percent ?? null
   const otaAvailable = detail?.ota_available ?? false
 
-  // 可升级目标版本（调 CheckUpdate 等价物：available-packages）
-  const { data: packagesRes } = useQuery({
-    queryKey: ['ota-available', sn],
-    queryFn: () => otaApi.getAvailablePackages(sn).then((r) => (r.data?.data ?? r.data) as any[] | null),
+  // 可升级目标：独立模块固件总览（旧 package available-packages 已退役）
+  const { data: overview } = useQuery({
+    queryKey: ['otaFirmwareOverview', sn],
+    queryFn: () =>
+      otaApi.getFirmwareOverview(sn).then((r) => {
+        const d = r.data?.data ?? r.data ?? {}
+        return d as { modules?: Array<{ target: string; latest_version: string; update_available: boolean }> }
+      }),
     enabled: otaAvailable,
     staleTime: 60_000,
   })
-  const packages = Array.isArray(packagesRes) ? packagesRes : ((packagesRes as any)?.items ?? [])
-  const upgradeTarget = (packages as any[])?.[0]?.user_version ?? (packages as any[])?.[0]?.version
+  const upgradeTargets = (overview?.modules ?? [])
+    .filter((m) => m.update_available && m.latest_version)
+    .map((m) => m.latest_version)
+  const upgradeTarget = upgradeTargets[0]
 
   const refreshMutation = useMutation({
     mutationFn: () => deviceApi.sendCommand(sn, { command: 'query_info', params: {} }),

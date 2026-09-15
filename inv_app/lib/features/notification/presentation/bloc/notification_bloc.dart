@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:inv_app/core/services/app_update_service.dart';
 import 'package:inv_app/core/services/realtime_data_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/storage_service.dart';
@@ -21,7 +20,7 @@ enum SystemNotificationType {
   deviceFault, // 设备故障
   alarmCleared, // 告警清除/故障恢复
   otaAvailable,
-  appUpdate,
+  legacyAppUpdate, // 保留 index=5，仅用于识别并迁移旧版缓存
 }
 
 class SystemNotification {
@@ -58,14 +57,11 @@ class SystemNotification {
     // type 是枚举 index：历史版本写入了已删除的枚举值时，
     // 直接取 values[...] 会 RangeError，越界回退 deviceOnline（上线通知语义最中性）
     final typeIndex = json['type'] is int ? json['type'] as int : -1;
-    final type = typeIndex >= 0 &&
-            typeIndex < SystemNotificationType.values.length
-        ? SystemNotificationType.values[typeIndex]
-        : SystemNotificationType.deviceOnline;
+    final type =
+        typeIndex >= 0 && typeIndex < SystemNotificationType.values.length
+            ? SystemNotificationType.values[typeIndex]
+            : SystemNotificationType.deviceOnline;
     final title = json['title'] as String? ?? '';
-    final legacyVersion = type == SystemNotificationType.appUpdate
-        ? RegExp(r'v([^\s]+)').firstMatch(title)?.group(1)
-        : null;
     return SystemNotification(
       type: type,
       title: title,
@@ -75,7 +71,7 @@ class SystemNotification {
               DateTime.now()
           : DateTime.now(),
       deviceSn: json['deviceSn'] as String?,
-      version: json['version'] as String? ?? legacyVersion,
+      version: json['version'] as String?,
     );
   }
 
@@ -115,13 +111,16 @@ class SystemNotification {
       fromBackend: true,
     );
   }
+
+  static bool isRetiredAppUpdatePayload(Map<String, dynamic> json) =>
+      json['notify_type'] == 'app_update';
 }
 
 class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
   final DeviceRepository deviceRepository;
   final RealtimeDataService? realtimeDataService;
   final NotificationRemoteDataSource? notificationDataSource;
-  static const _localNotifKey = 'local_notifications'; // 仅存储OTA/APP更新等本地通知
+  static const _localNotifKey = 'local_notifications'; // 仅存储 OTA 等本地通知
 
   StreamSubscription<dynamic>? _realtimeSub;
   StreamSubscription<dynamic>? _alarmSub;
@@ -138,7 +137,8 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     this.notificationDataSource,
   }) : super(NotificationInitial()) {
     on<SystemNotificationsRequested>(_onSystemNotificationsRequested);
-    on<SystemNotificationsLoadMoreRequested>(_onSystemNotificationsLoadMoreRequested);
+    on<SystemNotificationsLoadMoreRequested>(
+        _onSystemNotificationsLoadMoreRequested);
     on<SystemNotificationDeleteRequested>(_onSystemNotificationDeleteRequested);
     on<SystemNotificationsClearRequested>(_onSystemNotificationsClearRequested);
     on<_MqttStatusUpdate>(_onMqttStatusUpdate);
@@ -232,13 +232,20 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
             if (items is List) {
               for (final item in items) {
                 if (item is Map<String, dynamic>) {
-                  allNotifications.add(SystemNotification.fromBackendJson(item));
+                  if (SystemNotification.isRetiredAppUpdatePayload(item)) {
+                    continue;
+                  }
+                  allNotifications
+                      .add(SystemNotification.fromBackendJson(item));
                 }
               }
             }
           } else if (responseData is List) {
             for (final item in responseData) {
               if (item is Map<String, dynamic>) {
+                if (SystemNotification.isRetiredAppUpdatePayload(item)) {
+                  continue;
+                }
                 allNotifications.add(SystemNotification.fromBackendJson(item));
               }
             }
@@ -249,7 +256,7 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
       }
     }
 
-    // 2. 加载本地存储的 OTA/APP 更新通知
+    // 2. 加载本地存储的 OTA 通知，并过滤旧版本遗留的 App 更新通知
     // 单条解析失败（版本升级后字段变化等）只跳过该条，不再整批丢弃
     final storage = getIt<StorageService>();
     final storedJson = await storage.getString(_localNotifKey);
@@ -261,41 +268,13 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
             .whereType<Map<String, dynamic>>()
             .map(_tryParseStoredNotification)
             .whereType<SystemNotification>()
+            .where(
+                (item) => item.type != SystemNotificationType.legacyAppUpdate)
             .toList();
       } catch (_) {}
     }
 
-    // 3. 检查 App 更新（首载或手动刷新时检查，见 SystemNotificationsRequested.manual）
-    if (event.manual || state is! SystemNotificationsLoaded) {
-      try {
-        final updateService = getIt<AppUpdateService>();
-        final info = await updateService.checkUpdate(
-          await updateService.resolveCurrentVersionCode(),
-        );
-        if (info.hasUpdate) {
-          final appUpdateNotif = SystemNotification(
-            type: SystemNotificationType.appUpdate,
-            title: '',
-            subtitle: info.changelog,
-            timestamp: DateTime.now(),
-            version: info.latestVersionName,
-          );
-          final exists = localStored.any(
-            (n) =>
-                n.type == SystemNotificationType.appUpdate &&
-                n.version == appUpdateNotif.version,
-          );
-          if (!exists) {
-            localStored = [appUpdateNotif, ...localStored];
-            final saveJson =
-                json.encode(localStored.map((e) => e.toJson()).toList());
-            await storage.saveString(_localNotifKey, saveJson);
-          }
-        }
-      } catch (_) {}
-    }
-
-    // 4. 合并后端通知和本地通知
+    // 3. 合并后端通知和本地通知
     allNotifications.addAll(localStored);
 
     // 推送通知桌面小组件：最新告警标题 + 告警条数（fire-and-forget）
@@ -338,8 +317,8 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
 
     final nextPage = current.page + 1;
     try {
-      final response =
-          await notificationDataSource!.getList(page: nextPage, pageSize: pageSize);
+      final response = await notificationDataSource!
+          .getList(page: nextPage, pageSize: pageSize);
       final data = response.data;
       if (data == null) return;
       final responseData = data['data'] ?? data;
@@ -353,6 +332,9 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
         if (items is List) {
           for (final item in items) {
             if (item is Map<String, dynamic>) {
+              if (SystemNotification.isRetiredAppUpdatePayload(item)) {
+                continue;
+              }
               freshItems.add(SystemNotification.fromBackendJson(item));
             }
           }
@@ -433,7 +415,7 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
         // 删除失败不阻断本地刷新（列表会重新拉取真实状态）
       }
     } else {
-      // 本地通知（OTA/APP 更新）：按类型+标题+时间戳从存储中移除。
+      // 本地通知（OTA）：按类型+标题+时间戳从存储中移除。
       // 单条解析失败只剔除该条（写回时顺带清理坏条目），不再让整批删除失败
       final storage = getIt<StorageService>();
       final storedJson = await storage.getString(_localNotifKey);

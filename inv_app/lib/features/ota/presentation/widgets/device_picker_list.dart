@@ -7,7 +7,6 @@ import 'package:inv_app/core/widgets/device_list_view.dart';
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
-import 'package:inv_app/features/ota/config/device_local_capabilities.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 /// OTA 场景通用设备选择列表（本地升级 / 升级历史共用）
@@ -100,8 +99,7 @@ class _DevicePickerListState extends State<DevicePickerList> {
         return ListView.builder(
           physics: const BouncingScrollPhysics(),
           padding: EdgeInsets.fromLTRB(16.w, 8.h, 16.w, 32.h),
-          itemCount: leadingItemCount +
-              (devices.isEmpty ? 1 : devices.length),
+          itemCount: leadingItemCount + (devices.isEmpty ? 1 : devices.length),
           itemBuilder: (context, index) {
             if (index == 0) {
               return DeviceSearchBar(
@@ -144,12 +142,9 @@ class _DevicePickerListState extends State<DevicePickerList> {
   Widget _buildRow(dynamic device, AppLocalizations l10n) {
     final sn = _str(device, ['sn', 'device_sn']);
     final name = _str(device, ['name', 'device_name', 'alias']);
-    final model = _str(device, ['model', 'device_model']);
     final firmware = _str(device, ['firmware_version', 'fw_version']);
     final status = device is Map ? (device['status'] ?? 0) : 0;
     final isOnline = status == 1 || status == 2;
-    final supportsBle = DeviceLocalCapabilities.supportsBle(model);
-    final supportsWifi = DeviceLocalCapabilities.supportsWifiAp(model);
 
     return Container(
       margin: EdgeInsets.only(bottom: 8.h),
@@ -171,9 +166,8 @@ class _DevicePickerListState extends State<DevicePickerList> {
                 height: 8.w,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: isOnline
-                      ? AppColors.success
-                      : AppColor.textHint(context),
+                  color:
+                      isOnline ? AppColors.success : AppColor.textHint(context),
                 ),
               ),
               SizedBox(width: 12.w),
@@ -201,16 +195,13 @@ class _DevicePickerListState extends State<DevicePickerList> {
                         color: AppColor.textHint(context),
                       ),
                     ),
-                    if (widget.showCapabilities &&
-                        (supportsBle || supportsWifi)) ...[
+                    if (widget.showCapabilities) ...[
                       SizedBox(height: 4.h),
                       Row(
                         children: [
-                          if (supportsBle) _capBadge('BLE', AppColors.blue),
-                          if (supportsBle && supportsWifi)
-                            SizedBox(width: 6.w),
-                          if (supportsWifi)
-                            _capBadge('WiFi', AppColors.success),
+                          _capBadge('BLE', AppColors.blue),
+                          SizedBox(width: 6.w),
+                          _capBadge('WiFi', AppColors.success),
                         ],
                       ),
                     ],

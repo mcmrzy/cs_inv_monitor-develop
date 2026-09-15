@@ -39,7 +39,11 @@ export interface User {
 export interface Device {
   id: string
   sn: string
+  alias?: string
+  name?: string
   model: string
+  hardware_version?: string
+  hardwareVersion?: string
   ratedPower: number
   firmwareVersion: string
   firmware_arm?: string
@@ -56,7 +60,8 @@ export interface Firmware {
   id: string
   model: string
   version: string
-  main_version: string
+  /** @deprecated Read-only compatibility with historical API records. */
+  main_version?: string
   target_chip: string
   file_url: string
   file_size: number
@@ -67,6 +72,84 @@ export interface Firmware {
   changelog: string
   is_force: boolean
   created_at: string
+  /** 发布生命周期：draft/published/disabled */
+  release_status?: 'draft' | 'published' | 'disabled' | string
+  published_at?: string | null
+}
+
+/** 设备单模块固件概览（独立模块 OTA） */
+export interface FirmwareModuleOverview {
+  target: string
+  current_version: string
+  latest_firmware_id: number
+  latest_version: string
+  version_state: 'unreported' | 'current' | 'outdated' | string
+  update_available: boolean
+  changelog: string
+  published_at?: string | null
+  supported?: boolean
+  connected?: boolean
+  eligible?: boolean
+  supported_channels?: string[]
+}
+
+/** 设备固件总览 */
+export interface DeviceFirmwareOverview {
+  device_sn: string
+  device_model: string
+  is_online: boolean
+  modules: FirmwareModuleOverview[]
+}
+
+/** 设备侧可安装固件资源（published） */
+export interface FirmwareResource {
+  id: number | string
+  model: string
+  version: string
+  main_version?: string
+  target_chip: string
+  changelog?: string
+  release_status?: string
+  published_at?: string | null
+  created_at?: string
+  file_size?: number
+  file_sha256?: string
+}
+
+/** 独立模块升级触发请求 */
+export interface TriggerFirmwareRequest {
+  device_sn: string
+  firmware_ids: number[]
+  idempotency_key: string
+  force_reason?: string
+}
+
+/** 单模块固件回退请求 */
+export interface RollbackFirmwareRequest {
+  device_sn: string
+  firmware_id: number
+  idempotency_key: string
+  force_reason?: string
+}
+
+/** 触发/回退返回的任务引用 */
+export interface FirmwareTaskRef {
+  task_id: number
+  firmware_id: number
+  target_chip: string
+  version: string
+  status: string
+}
+
+/** 升级历史筛选（在 API 层序列化，组件不拼 URL） */
+export interface UpgradeHistoryQuery {
+  device_sn?: string
+  target_chip?: string
+  status?: string
+  start_time?: string
+  end_time?: string
+  page?: number
+  page_size?: number
 }
 
 export interface DeviceUpgrade {
@@ -76,11 +159,13 @@ export interface DeviceUpgrade {
   firmware_version: string
   target_chip: string
   old_version: string
-  status: string // pending/downloading/upgrading/success/failed/cancelled
+  status: string // pending/downloading/upgrading/success/failed/cancelled/blocked/skipped
+  stage: string // 设备上报的原始阶段(accepted/downloading/verifying/installing/rebooting/succeeded/failed)，空=旧数据
   progress: number
   error_message: string
   retry_count: number
   pushed_by: string | null
+  source?: string // admin/app/local
   started_at: string | null
   completed_at: string | null
   created_at: string

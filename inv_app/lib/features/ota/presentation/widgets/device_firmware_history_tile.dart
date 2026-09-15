@@ -30,6 +30,23 @@ class DeviceFirmwareHistoryTile extends StatelessWidget {
     final statusLabel = knownStatuses.contains(item.status)
         ? l10n.str('upgrade_history_status_${item.status}')
         : l10n.unknown;
+    // 设备上报的原始阶段(比 status 细): 进行中时用它替代笼统的「升级中」，
+    // 让用户看清是在下载 / 校验 / 写入设备 / 重启生效。receiving 与 downloading 同义。
+    const knownStages = {
+      'accepted',
+      'downloading',
+      'verifying',
+      'installing',
+      'rebooting',
+      'succeeded',
+      'failed',
+      'rolled_back',
+    };
+    final stageKey =
+        item.stage == 'receiving' ? 'downloading' : item.stage;
+    final stageLabel =
+        knownStages.contains(stageKey) ? l10n.str('upgrade_stage_$stageKey') : '';
+    final label = stageLabel.isNotEmpty ? stageLabel : statusLabel;
     final time = item.updatedAt == null
         ? '—'
         : DateFormat('yyyy-MM-dd HH:mm').format(item.updatedAt!.toLocal());
@@ -108,7 +125,7 @@ class DeviceFirmwareHistoryTile extends StatelessWidget {
                     color: statusColor.withValues(alpha: .10),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text(statusLabel,
+                  child: Text(label,
                       style: TextStyle(
                           color: statusColor,
                           fontSize: 11,
@@ -149,7 +166,9 @@ class DeviceFirmwareHistoryTile extends StatelessWidget {
                     color: AppColor.surfaceHover(context),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Text(item.changelog,
+                  child: Text(
+                      FirmwareModulePresentation.sanitizeCustomerCopy(
+                          item.changelog, l10n),
                       style: TextStyle(
                           height: 1.4,
                           fontSize: 13,
@@ -158,7 +177,8 @@ class DeviceFirmwareHistoryTile extends StatelessWidget {
               ],
               if (item.errorMessage.trim().isNotEmpty) ...[
                 const SizedBox(height: 8),
-                Text(item.errorMessage,
+                Text(FirmwareModulePresentation.sanitizeCustomerCopy(
+                    item.errorMessage, l10n),
                     style: const TextStyle(color: AppColors.errorLight)),
               ],
             ]),

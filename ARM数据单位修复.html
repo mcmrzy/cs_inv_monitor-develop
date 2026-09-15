@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ARM 固件遥测单位 / 空值修复指南</title>
+<style>
+  :root {
+    --bg: #f6f4ef;
+    --ink: #1c1b19;
+    --muted: #5c5850;
+    --line: #d9d3c7;
+    --card: #ffffff;
+    --accent: #0b6e4f;
+    --accent-soft: #e6f3ed;
+    --danger: #9b1c1c;
+    --danger-soft: #fde8e8;
+    --warn: #9a5b00;
+    --warn-soft: #fff4e0;
+    --ok: #0b6e4f;
+    --ok-soft: #e6f3ed;
+    --code-bg: #1e1f22;
+    --code-fg: #e8e6e1;
+    --mono: "Cascadia Code", "Consolas", "SF Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 32px 20px 80px;
+  }
+  header {
+    border-bottom: 2px solid var(--ink);
+    padding-bottom: 20px;
+    margin-bottom: 28px;
+  }
+  header .kicker {
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  h1 {
+    margin: 0 0 10px;
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1.25;
+  }
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 18px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .meta strong { color: var(--ink); font-weight: 600; }
+  h2 {
+    font-size: 20px;
+    margin: 36px 0 12px;
+    padding-top: 8px;
+    border-top: 1px solid var(--line);
+  }
+  h3 {
+    font-size: 16px;
+    margin: 22px 0 8px;
+  }
+  p, li { font-size: 14.5px; }
+  code {
+    font-family: var(--mono);
+    font-size: 0.92em;
+    background: #ece8df;
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+  pre {
+    background: var(--code-bg);
+    color: var(--code-fg);
+    padding: 14px 16px;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.55;
+    margin: 10px 0 16px;
+  }
+  pre .cmt { color: #8b919a; }
+  pre .kw { color: #c792ea; }
+  pre .num { color: #f78c6c; }
+  pre .str { color: #c3e88d; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin: 14px 0;
+  }
+  .card.p0 { border-left: 4px solid var(--danger); }
+  .card.p1 { border-left: 4px solid var(--warn); }
+  .card.p2 { border-left: 4px solid var(--accent); }
+  .badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    padding: 2px 8px;
+    border-radius: 999px;
+    vertical-align: middle;
+    margin-right: 8px;
+  }
+  .badge.p0 { background: var(--danger-soft); color: var(--danger); }
+  .badge.p1 { background: var(--warn-soft); color: var(--warn); }
+  .badge.p2 { background: var(--accent-soft); color: var(--accent); }
+  .badge.ok { background: var(--ok-soft); color: var(--ok); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin: 12px 0 18px;
+    background: var(--card);
+  }
+  th, td {
+    border: 1px solid var(--line);
+    padding: 8px 10px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background: #efebe3;
+    font-weight: 600;
+  }
+  tr.bad td { background: #fff8f8; }
+  tr.fix td { background: #f4fbf7; }
+  td.mono { font-family: var(--mono); font-size: 12px; }
+  .filepath {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    background: #efebe3;
+    border: 1px dashed var(--line);
+    padding: 8px 12px;
+    border-radius: 6px;
+    margin: 8px 0;
+    word-break: break-all;
+  }
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 18px;
+  }
+  .toc ol { margin: 6px 0 0 18px; padding: 0; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .note {
+    background: var(--warn-soft);
+    border: 1px solid #e8d4a8;
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 13.5px;
+    margin: 12px 0;
+  }
+  .note strong { color: var(--warn); }
+  .checklist {
+    list-style: none;
+    padding: 0;
+    margin: 10px 0;
+  }
+  .checklist li {
+    padding: 8px 10px 8px 32px;
+    position: relative;
+    border-bottom: 1px solid var(--line);
+    background: var(--card);
+  }
+  .checklist li:before {
+    content: "□";
+    position: absolute;
+    left: 10px;
+    color: var(--accent);
+    font-weight: 700;
+  }
+  footer {
+    margin-top: 48px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 12.5px;
+  }
+  @media print {
+    body { background: #fff; }
+    pre { white-space: pre-wrap; }
+    .card, table { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">CS-L10 / App(5) · ARM 固件修改说明</div>
+  <h1>遥测空值 &amp; 单位错位 — 修改指南（可直接照改）</h1>
+  <div class="meta">
+    <span><strong>目标工程：</strong><code>App(5)\App</code></span>
+    <span><strong>核心文件：</strong><code>source\Collector\Collector.c</code></span>
+    <span><strong>辅助：</strong><code>source\ComDSP\UsartDsp.c</code> · <code>SystemManage.h</code></span>
+    <span><strong>原则：</strong>本文只说明怎么改，不代替联调</span>
+  </div>
+</header>
+
+<div class="toc">
+  <strong>目录</strong>
+  <ol>
+    <li><a href="#bg">背景与数据链路</a></li>
+    <li><a href="#p0-collector">P0 · ReadRunParam 必改（空值 + ×10）</a></li>
+    <li><a href="#p0-bus">P0 · BusVolt /10 写反</a></li>
+    <li><a href="#p0-sign">P0 · 电池电流/功率符号拆分</a></li>
+    <li><a href="#p1-usart">P1 · UsartDsp 注释与 Ppv1/2</a></li>
+    <li><a href="#p1-test">P1 · ReadTestRunParam</a></li>
+    <li><a href="#before-after">改前 / 改后对照表</a></li>
+    <li><a href="#accept">验收清单</a></li>
+  </ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="bg">1. 背景与数据链路</h2>
+<p>系统侧「很多字段为空、单位差 10 倍」的主因在 <strong>ARM 采集器协议填充</strong>，不在云端解析。</p>
+
+<pre class="lang-text">
+DSP CMD04 (TxBuf)
+  → UsartDsp.c  DspDataParsing()  写入 SysParam（量纲混杂：1V / 0.1V / 0.01A …）
+  → Collector.c ReadRunParam()    填 RunParamDef @ 0x03E8（协议要求 0.1V / 0.1A / 0.01Hz / 0.01V …）
+  → ESP32 心跳 v2 位置数组
+  → 云端 heartbeat_v2 v2Scales
+  → 管理后台 / App
+</pre>
+
+<div class="note">
+  <strong>改法原则：</strong>只在 <code>ReadRunParam()</code> 做「SysParam 量纲 → 协议量纲」换算。
+  <code>SysParam</code> 保持 DSP 原样，避免牵动 LCD、保护逻辑、电量统计。
+</div>
+
+<p><strong>SysParam 实际量纲（以 DSP TxBuf 为准，勿信旧注释）：</strong></p>
+<table>
+  <tr><th>字段</th><th>真实量纲</th><th>类型</th></tr>
+  <tr><td class="mono">VgridA / VinvtA / VloadA / Vpv1 / Vpv2</td><td>1V</td><td class="mono">u16</td></tr>
+  <tr><td class="mono">IgridA / IinvtA / IloadA / Ibus / Ipv1 / Ipv2</td><td>0.01A（DSP ×100）</td><td class="mono">s16 / u16</td></tr>
+  <tr><td class="mono">Ibat</td><td>0.1A（可负）</td><td class="mono">s16</td></tr>
+  <tr><td class="mono">GridFreq / InvtFreq / LoadFreq</td><td>0.1Hz</td><td class="mono">u16</td></tr>
+  <tr><td class="mono">Pgrid / Sgrid / Pinvt / Sinvt / Pload / Sload / Ppv / Pbat</td><td>1W / 1VA（Pbat 可负）</td><td class="mono">s16 / u16</td></tr>
+  <tr><td class="mono">VbatA / BusVoltage</td><td>0.1V</td><td class="mono">u16</td></tr>
+  <tr><td class="mono">LoadPercent / GridPercent</td><td>0.1%</td><td class="mono">u16</td></tr>
+  <tr><td class="mono">BatPercent / InvtPercent</td><td>1%（DSP 未 ×10）</td><td class="mono">u16</td></tr>
+  <tr><td class="mono">InvtTemperature</td><td>0.1°C</td><td class="mono">s16</td></tr>
+</table>
+
+<p><strong>协议 RunParamDef 要求（CollectorParamAddr.h 注释 + MQTT V2.1）：</strong></p>
+<table>
+  <tr><th>寄存器</th><th>协议量纲</th></tr>
+  <tr><td class="mono">Vpv1/Vpv2/GridVolt/ACOutputVolt</td><td>0.1V</td></tr>
+  <tr><td class="mono">Buck1Curr/Buck2Curr/OutputCurr/ACChrCurr</td><td>0.1A</td></tr>
+  <tr><td class="mono">GridFreq/ACOutputFreq</td><td>0.01Hz</td></tr>
+  <tr><td class="mono">Ppv/OutputWatt/ACInWatt/ACChrWatt/BatChrWatt…</td><td>0.1W</td></tr>
+  <tr><td class="mono">BatVolt / BusVolt</td><td>0.01V</td></tr>
+  <tr><td class="mono">BatterySOC</td><td>1%</td></tr>
+  <tr><td class="mono">LoadPercent</td><td>0.1%</td></tr>
+  <tr><td class="mono">InvertTemp / BoostTemp</td><td>0.1°C</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="p0-collector">2. P0 · ReadRunParam 必改（空值 + ×10）</h2>
+
+<div class="filepath">文件：source\Collector\Collector.c　函数：ReadRunParam()　约 L469–L560</div>
+
+<div class="card p0">
+  <span class="badge p0">P0</span>
+  <strong>空值根因（必须先修）</strong>
+  <table>
+    <tr><th>现象</th><th>代码现状</th><th>改法</th></tr>
+    <tr class="bad">
+      <td>PV 总功率恒 0</td>
+      <td class="mono">// pRunParam-&gt;Ppv=…<br/>从未赋值</td>
+      <td class="mono">pRunParam-&gt;Ppv = (u32)SysParam.Ppv * 10;</td>
+    </tr>
+    <tr class="bad">
+      <td>Buck 电流恒 0</td>
+      <td class="mono">Buck1Curr=0;<br/>Buck2Curr=0;</td>
+      <td class="mono">Buck1Curr = Ipv1*10;<br/>Buck2Curr = Ipv2*10;</td>
+    </tr>
+    <tr class="bad">
+      <td>电池充/放电流恒 0</td>
+      <td class="mono">batChgCurr / batDsgCurr<br/>只声明从未赋值</td>
+      <td>见第 4 节符号拆分；不要继续用未赋值的全局变量</td>
+    </tr>
+    <tr class="bad">
+      <td>风扇/并机/运行时长恒 0</td>
+      <td class="mono">MpptFanSpeed=0 等</td>
+      <td>无源可暂保持 0，但需产品确认「不支持」；有源则填</td>
+    </tr>
+  </table>
+</div>
+
+<div class="card p0">
+  <span class="badge p0">P0</span>
+  <strong>单位：几乎全部功率/电压/频率要 ×10</strong>
+  <p>下列赋值在现有代码里<strong>直接拷贝 SysParam</strong>，相对协议差 10 倍。请整段替换 <code>ReadRunParam</code> 中数据填充部分：</p>
+</div>
+
+<pre>
+<span class="cmt">/* ===== ReadRunParam 数据填充（建议整段替换） ===== */</span>
+
+<span class="cmt">/* ---- PV：1V→0.1V，0.01A→0.1A，1W→0.1W ---- */</span>
+pRunParam-&gt;Vpv1     = (u16)((u32)SysParam.Vpv1 * <span class="num">10</span>);
+pRunParam-&gt;Vpv2     = (u16)((u32)SysParam.Vpv2 * <span class="num">10</span>);
+pRunParam-&gt;Ppv      = (u32)SysParam.Ppv * <span class="num">10</span>;
+pRunParam-&gt;Buck1Curr= (u16)((u32)SysParam.Ipv1 * <span class="num">10</span>);
+pRunParam-&gt;Buck2Curr= (u16)((u32)SysParam.Ipv2 * <span class="num">10</span>);
+
+<span class="cmt">/* ---- 温度：InvertTemp 已是 0.1°C；BoostTemp 为 float °C，×10 正确，保持 ---- */</span>
+pRunParam-&gt;BoostTemp  = Temperature_Struct.LV_MOS * <span class="num">10</span>;
+pRunParam-&gt;InvertTemp = SysParam.InvtTemperature;
+
+<span class="cmt">/* ---- 输出：1W→0.1W，0.01A→0.1A；负值钳 0 ---- */</span>
+pRunParam-&gt;OutputWatt = (u32)(SysParam.Pload  &lt; <span class="num">0</span> ? <span class="num">0</span> : SysParam.Pload)  * <span class="num">10</span>;
+pRunParam-&gt;OutputVA   = (u32)(SysParam.Sload  &lt; <span class="num">0</span> ? <span class="num">0</span> : SysParam.Sload)  * <span class="num">10</span>;
+pRunParam-&gt;OutputCurr = (u16)(SysParam.IloadA &lt; <span class="num">0</span> ? <span class="num">0</span> : (u16)SysParam.IloadA * <span class="num">10</span>);
+
+<span class="cmt">/* ---- 市电 / 逆变电压频率：1V→0.1V，0.1Hz→0.01Hz，0.01A→0.1A，1W→0.1W ---- */</span>
+pRunParam-&gt;GridVolt     = (u16)((u32)SysParam.VgridA * <span class="num">10</span>);
+pRunParam-&gt;GridFreq     = (u16)((u32)SysParam.GridFreq * <span class="num">10</span>);
+pRunParam-&gt;ACOutputVolt = (u16)((u32)SysParam.VloadA * <span class="num">10</span>);
+pRunParam-&gt;ACOutputFreq = (u16)((u32)SysParam.LoadFreq * <span class="num">10</span>);
+
+pRunParam-&gt;ACInWatt = (u32)(SysParam.Pgrid &lt; <span class="num">0</span> ? <span class="num">0</span> : SysParam.Pgrid) * <span class="num">10</span>;
+pRunParam-&gt;ACInVA   = (u32)(SysParam.Sgrid &lt; <span class="num">0</span> ? <span class="num">0</span> : SysParam.Sgrid) * <span class="num">10</span>;
+
+<span class="cmt">/* ACChr / ACDisChr：无独立充电/旁路功率源时，可暂与 ACIn 同源（与现网一致），
+   但必须 ×10；语义确认后再换数据源。 */</span>
+pRunParam-&gt;ACChrWatt    = pRunParam-&gt;ACInWatt;
+pRunParam-&gt;ACChrVA      = pRunParam-&gt;ACInVA;
+pRunParam-&gt;ACDisChrWatt = pRunParam-&gt;ACInWatt;
+pRunParam-&gt;ACDisChrVA   = pRunParam-&gt;ACInVA;
+pRunParam-&gt;ACChrCurr    = (u16)(SysParam.IgridA &lt; <span class="num">0</span> ? <span class="num">0</span> : (u16)SysParam.IgridA * <span class="num">10</span>);
+
+<span class="cmt">/* ---- 电池电压 0.1V→0.01V（现有 *10 正确，保留） ---- */</span>
+pRunParam-&gt;BatVolt = (u16)((u32)SysParam.VbatA * <span class="num">10</span>);
+pRunParam-&gt;BatterySOC = SysParam.BatPercent;   <span class="cmt">/* 1%，不要再乘 */</span>
+<span class="kw">if</span> (pRunParam-&gt;BatterySOC &gt; <span class="num">100</span>) pRunParam-&gt;BatterySOC = <span class="num">0</span>;
+
+<span class="cmt">/* ---- 母线：0.1V→0.01V，必须 *10，不是 /10（见第 3 节） ---- */</span>
+pRunParam-&gt;BusVolt = (u16)((u32)SysParam.BusVoltage * <span class="num">10</span>);
+
+<span class="cmt">/* ---- 负载率：SysParam 已是 0.1%，协议也是 0.1% ---- */</span>
+pRunParam-&gt;LoadPercent = SysParam.LoadPercent;
+
+<span class="cmt">/* ---- 电池功率/电流符号拆分见第 4 节，替换原来的 ---- */</span>
+<span class="cmt">/* pRunParam-&gt;BatDisChrWatt = SysParam.Pbat;  // 删掉 */</span>
+<span class="cmt">/* pRunParam-&gt;BatChrWatt    = SysParam.Pbat;  // 删掉 */</span>
+</pre>
+
+<!-- ============================================================ -->
+<h2 id="p0-bus">3. P0 · BusVolt「/10 写反」</h2>
+
+<div class="card p0">
+  <span class="badge p0">P0 严重</span>
+  <p>当前代码（<code>Collector.c:504</code> 附近）：</p>
+  <pre>pRunParam-&gt;BusVolt = SysParam.BusVoltage / <span class="num">10</span>;   <span class="cmt">/* 错误 */</span></pre>
+  <p>算例：母线 410V → SysParam=<strong>4100</strong>（0.1V）→ 现代码填 410 → 云端 ×0.01 = <strong>4.1V</strong>（偏小 100 倍）。</p>
+  <p>正确：</p>
+  <pre>pRunParam-&gt;BusVolt = (u16)((u32)SysParam.BusVoltage * <span class="num">10</span>);  <span class="cmt">/* 4100 → 41000 → 410.0V */</span></pre>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="p0-sign">4. P0 · 电池电流 / 功率符号拆分</h2>
+
+<div class="filepath">涉及：Collector.c ReadRunParam；以及 UsartDsp.c 中 batChgCurr/batDsgCurr（可删除依赖）</div>
+
+<div class="card p0">
+  <p>问题：</p>
+  <ul>
+    <li><code>batChgCurr</code>/<code>batDsgCurr</code> 在全工程<strong>只有声明、没有赋值</strong>，永远是 0。</li>
+    <li><code>Pbat</code> 可为负（放电），直接赋给 <code>u32 BatDisChrWatt</code> 会变成极大值。</li>
+  </ul>
+  <p>请用下面代码<strong>替换</strong>原来的 Bat*Watt / BatChgCurr / BatDischgCurr 赋值：</p>
+</div>
+
+<pre>
+<span class="cmt">/* 电池功率：SysParam.Pbat 充电为正、放电为负，单位 1W → 协议 0.1W */</span>
+<span class="kw">if</span> (SysParam.Pbat &gt;= <span class="num">0</span>) {
+    pRunParam-&gt;BatChrWatt    = (u32)SysParam.Pbat * <span class="num">10</span>;
+    pRunParam-&gt;BatDisChrWatt = <span class="num">0</span>;
+} <span class="kw">else</span> {
+    pRunParam-&gt;BatChrWatt    = <span class="num">0</span>;
+    pRunParam-&gt;BatDisChrWatt = (u32)(-(s32)SysParam.Pbat) * <span class="num">10</span>;
+}
+
+<span class="cmt">/* 电池电流：SysParam.Ibat 已是 0.1A，协议也是 0.1A，只拆符号，不要再 ×10 */</span>
+<span class="kw">if</span> (SysParam.Ibat &gt;= <span class="num">0</span>) {
+    pRunParam-&gt;BatChgCurr    = (u16)SysParam.Ibat;
+    pRunParam-&gt;BatDischgCurr = <span class="num">0</span>;
+} <span class="kw">else</span> {
+    pRunParam-&gt;BatChgCurr    = <span class="num">0</span>;
+    pRunParam-&gt;BatDischgCurr = (u16)(-(s32)SysParam.Ibat);
+}
+
+<span class="cmt">/* 若仍要维护全局 batChgCurr/batDsgCurr（UI 可能用），在这里同步赋值 */</span>
+batChgCurr = (SysParam.Ibat &gt;= <span class="num">0</span>) ? SysParam.Ibat : <span class="num">0</span>;
+batDsgCurr = (SysParam.Ibat &lt;  <span class="num">0</span>) ? (s16)(-(s32)SysParam.Ibat) : <span class="num">0</span>;
+</pre>
+
+<div class="note">
+  <strong>注意：</strong>市电/逆变电流（IgridA/IloadA）若现场可能为负，赋给 <code>u16</code> 前同样先取绝对值或钳 0。
+  正常并网负载场景通常为正，可先钳 0 保证不出现 6 万+ 的异常大电流。
+</div>
+
+<!-- ============================================================ -->
+<h2 id="p1-usart">5. P1 · UsartDsp.c 注释订正（可选恢复 Ppv1/Ppv2）</h2>
+
+<div class="filepath">文件：source\ComDSP\UsartDsp.c　case 0x04</div>
+
+<p>解析赋值本身大体可用（电流已是 <code>s16</code> 字段）。主要改<strong>注释</strong>，防止后人按错单位再换算一次：</p>
+
+<table>
+  <tr><th>字段</th><th>错误注释</th><th>应写成</th></tr>
+  <tr class="bad"><td class="mono">IgridA / IinvtA / Ibus</td><td>0.1A</td><td><strong>0.01A</strong>（DSP ×100）</td></tr>
+  <tr class="bad"><td class="mono">IloadA</td><td>单位:? 或 0.01A 不完整</td><td><strong>0.01A</strong></td></tr>
+  <tr class="bad"><td class="mono">GridPercent</td><td>1W</td><td><strong>0.1%</strong></td></tr>
+  <tr class="bad"><td class="mono">Sload</td><td>0.1Hz</td><td><strong>1VA</strong></td></tr>
+  <tr class="bad"><td class="mono">InvtTemperature</td><td>W</td><td><strong>0.1°C</strong></td></tr>
+  <tr class="bad"><td class="mono">BusVoltage</td><td>单位?</td><td><strong>0.1V</strong></td></tr>
+  <tr><td class="mono">InvtPercent / BatPercent</td><td>—</td><td>1%（与 LoadPercent 0.1% 不同）</td></tr>
+</table>
+
+<p>若需要分路 PV 功率：</p>
+<ol>
+  <li>在 <code>SystemManage.h</code> 的 <code>SysParamDef</code> 恢复 <code>u16 Ppv1; u16 Ppv2;</code>（当前被注释）。</li>
+  <li>在 <code>UsartDsp.c</code> 恢复解析 <code>USART1_RxBuff[59..62]</code>。</li>
+  <li>本协议 V2 心跳<strong>不拆分</strong> PV 功率，只上报总功率 <code>Ppv</code>；恢复仅用于本机 UI/调试。</li>
+</ol>
+
+<!-- ============================================================ -->
+<h2 id="p1-test">6. P1 · ReadTestRunParam（命令 0x14）</h2>
+
+<div class="filepath">文件：source\Collector\Collector.c　ReadTestRunParam()　约 L1232</div>
+
+<div class="card p1">
+  <span class="badge p1">P1</span>
+  <p>若产测/ESP32 仍可能读 0x14，当前有明显错误：</p>
+  <ul>
+    <li><code>ACOutputVolt/Freq</code> 抄成了 <code>VgridA/GridFreq</code>（源错）。</li>
+    <li><code>BatDisChrWatt = Ibat</code>（电流写入功率字段）。</li>
+    <li><code>BatChrWatt = Pgrid</code>（源错）。</li>
+    <li><code>Ppv</code> 未赋值。</li>
+    <li>电压/频率同样缺 ×10。</li>
+  </ul>
+  <p><strong>建议：</strong>生产心跳只保证 0x03 <code>ReadRunParam</code> 正确；0x14 要么与 RUNPARAM 同一套换算，要么明确废弃、ESP32 不要读。</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="before-after">7. 改前 / 改后对照（核心字段）</h2>
+
+<table>
+  <tr>
+    <th>寄存器</th>
+    <th>改前代码</th>
+    <th>问题</th>
+    <th>改后</th>
+  </tr>
+  <tr class="bad">
+    <td class="mono">Vpv1/Vpv2</td>
+    <td class="mono">=SysParam.Vpvx</td>
+    <td>偏小 10×</td>
+    <td class="mono fix">=Vpvx*10</td>
+  </tr>
+  <tr class="bad">
+    <td class="mono">Ppv</td>
+    <td class="mono">未赋值</td>
+    <td>恒 0</td>
+    <td class="mono">=Ppv*10</td>
+  </tr>
+  <tr class="bad">
+    <td class="mono">Buck1/2Curr</td>
+    <td class="mono">=0</td>
+    <td>恒 0</td>
+    <td class="mono">=Ipv1/2*10</td>
+  </tr>
+  <tr class="bad">
+    <td class="mono">OutputWatt</td>
+    <td class="mono">=Pload</td>
+    <td>偏小 10×</td>
+    <td class="mono">=Pload*10</td>
+  </tr>
+  <tr class="bad">
+    <td class="mono">OutputCurr</td>
+    <td class="mono">=IloadA</td>
+    <td>偏小 10×</td>
+    <td class="mono">=IloadA*10</td>
+  </tr>
+  <tr class="bad">
+    <td class="mono">GridVolt</td>
+    <td class="mono">=VgridA</td>
+    <td>偏小 10×</td>
+    <td class="mono">=VgridA*10</td>
+  </tr>
+  <tr class="bad">
+    <td class="mono">GridFreq</td>
+    <td class="mono">=GridFreq</td>
+    <td>偏小 10×</td>
+    <td class="mono">=GridFreq*10</td>
+  </tr>
+  <tr class="bad">
+    <td class="mono">ACOutputVolt/Freq</td>
+    <td class="mono">=VloadA / LoadFreq</td>
+    <td>偏小 10×</td>
+    <td class="mono">=*10</td>
+  </tr>
+  <tr class="bad">
+    <td class="mono">ACInWatt/VA 等</td>
+    <td class="mono">=Pgrid/Sgrid</td>
+    <td>偏小 10×</td>
+    <td class="mono">=*10</td>
+  </tr>
+  <tr class="bad">
+    <td class="mono">ACChrCurr</td>
+    <td class="mono">=IgridA</td>
+    <td>偏小 10×</td>
+    <td class="mono">=IgridA*10</td>
+  </tr>
+  <tr class="bad">
+    <td class="mono">BatChr/DisChrWatt</td>
+    <td class="mono">=Pbat（直接）</td>
+    <td>偏小 10× + 负数爆</td>
+    <td class="mono">按符号拆 *10</td>
+  </tr>
+  <tr class="bad">
+    <td class="mono">BatChg/DischgCurr</td>
+    <td class="mono">=batChgCurr（恒0）</td>
+    <td>空</td>
+    <td class="mono">按 Ibat 符号拆</td>
+  </tr>
+  <tr class="bad">
+    <td class="mono">BusVolt</td>
+    <td class="mono">=BusVoltage/10</td>
+    <td>偏小 100×</td>
+    <td class="mono">=BusVoltage*10</td>
+  </tr>
+  <tr class="fix">
+    <td class="mono">BatVolt</td>
+    <td class="mono">=VbatA*10</td>
+    <td class="badge ok">正确</td>
+    <td class="mono">保持</td>
+  </tr>
+  <tr class="fix">
+    <td class="mono">BatterySOC</td>
+    <td class="mono">=BatPercent</td>
+    <td class="badge ok">正确</td>
+    <td class="mono">保持</td>
+  </tr>
+  <tr class="fix">
+    <td class="mono">LoadPercent</td>
+    <td class="mono">=LoadPercent</td>
+    <td class="badge ok">正确</td>
+    <td class="mono">保持</td>
+  </tr>
+  <tr class="fix">
+    <td class="mono">InvertTemp</td>
+    <td class="mono">=InvtTemperature</td>
+    <td class="badge ok">正确</td>
+    <td class="mono">保持</td>
+  </tr>
+  <tr class="fix">
+    <td class="mono">BoostTemp</td>
+    <td class="mono">=LV_MOS*10</td>
+    <td class="badge ok">正确</td>
+    <td class="mono">保持</td>
+  </tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="accept">8. 验收清单</h2>
+
+<p>烧录后抓一条 ESP32 心跳 v2（或读 0x03E8 寄存器），核对：</p>
+
+<table>
+  <tr><th>现场真值</th><th>期望寄存器原值</th><th>云端应显示</th></tr>
+  <tr><td>电网 220V</td><td class="mono">2200</td><td>220.0 V</td></tr>
+  <tr><td>电网 50Hz</td><td class="mono">5000</td><td>50.00 Hz</td></tr>
+  <tr><td>输出电压 220V</td><td class="mono">2200</td><td>220.0 V</td></tr>
+  <tr><td>PV1 145V</td><td class="mono">1450</td><td>145.0 V</td></tr>
+  <tr><td>PV 电流 8.2A</td><td class="mono">82</td><td>8.2 A</td></tr>
+  <tr><td>PV 功率 1240W</td><td class="mono">12400</td><td>1240.0 W</td></tr>
+  <tr><td>电池 51.2V</td><td class="mono">5120</td><td>51.2 V</td></tr>
+  <tr><td>母线 410V</td><td class="mono">41000</td><td>410.0 V</td></tr>
+  <tr><td>负载电流 8.52A</td><td class="mono">85</td><td>8.5 A</td></tr>
+  <tr><td>负载功率 1870W</td><td class="mono">18700</td><td>1870.0 W</td></tr>
+  <tr><td>逆变温度 28.2°C</td><td class="mono">282</td><td>28.2 °C</td></tr>
+  <tr><td>SOC 80%</td><td class="mono">80</td><td>80 %</td></tr>
+  <tr><td>电池充电 5A / 放电 0</td><td class="mono">50 / 0</td><td>充电电流 5.0A</td></tr>
+  <tr><td>电池放电 5A / 充电 0</td><td class="mono">0 / 50</td><td>放电电流 5.0A（云端电流为负）</td></tr>
+</table>
+
+<p>若心跳里出现 <code>sys[8]=410</code>（不是 41000）、<code>pv[0]=145</code>（不是 1450）、放电时 <code>bat[2]=0</code>，说明 P0 还没改完。</p>
+
+<ul class="checklist">
+  <li><code>ReadRunParam</code>：PV/AC/功率/频率 全部 ×10</li>
+  <li><code>BusVolt</code>：/10 改为 *10</li>
+  <li><code>Ppv</code>、<code>Buck1/2Curr</code> 已赋值</li>
+  <li>电池功率/电流按符号拆到 Chr/DisChr 两个字段</li>
+  <li><code>batChgCurr/batDsgCurr</code> 不再依赖未赋值全局，或已同步赋值</li>
+  <li><code>UsartDsp.c</code> 注释已按真实量纲修正</li>
+  <li>0x14 测试路径已修或确认不被心跳使用</li>
+  <li>实机对照表 12 项通过</li>
+</ul>
+
+<div class="note">
+  <strong>不在本次范围（可另开任务）：</strong>
+  BMS 扩展组（云端 <code>bms[45]</code> / 寄存器 0x0440~0x046E）——本包 ARM 未实现，心跳缺组属预期，界面 BMS 详情会为空。
+</div>
+
+<footer>
+  基于工程 <code>App(5)\App</code> 源码审计：Collector.c ReadRunParam / SystemManage.h SysParamDef / UsartDsp.c case 0x04，
+  并与 cs_inv_monitor 云端 <code>heartbeat_v2.go</code> v2Scales、CS-L10-6K2 MQTT V2.1 协议对齐。
+  改完请先在台架对照第 8 节数值，再批量烧录。
+</footer>
+
+</div>
+</body>
+</html>

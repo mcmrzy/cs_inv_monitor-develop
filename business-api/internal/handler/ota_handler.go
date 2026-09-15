@@ -41,7 +41,7 @@ type OTAHandler struct {
 }
 
 type otaDeviceScopeChecker interface {
-	CheckDeviceOwnership(ctx context.Context, sn string, userID int64) (bool, error)
+	CheckDevicePermission(ctx context.Context, actor model.ActorContext, permissionCode, sn string) (bool, error)
 }
 
 // toUserVersion 将 main_version (V1.0.0.20260703) 转换为 user_version 格式 (V1.0.0)
@@ -62,11 +62,15 @@ func NewOTAHandler(otaService *service.OTAService, db *pgxpool.Pool, jpushServic
 	}
 }
 
-// ensureDeviceManagementScope 统一校验 App OTA 的设备管理范围。
-// App 不重建用户/组织层级，系统管理员、上级组织和显式共享均由后端判定。
-func (h *OTAHandler) ensureDeviceManagementScope(c *gin.Context, sn string) bool {
+// ensureDeviceScope couples the requested capability to the selected
+// organization context and its data_scope. A global permission-code match is
+// not sufficient for device-scoped OTA operations.
+func (h *OTAHandler) ensureDeviceScope(c *gin.Context, sn, permissionCode string) bool {
+	if middleware.GetIsSystemAdmin(c) {
+		return true
+	}
 	userID := middleware.GetUserID(c)
-	allowed, err := h.deviceScopeChecker.CheckDeviceOwnership(c.Request.Context(), sn, userID)
+	allowed, err := h.deviceScopeChecker.CheckDevicePermission(c.Request.Context(), middleware.GetActorContext(c), permissionCode, sn)
 	if err != nil {
 		logger.Error("query OTA device management scope failed",
 			zap.String("device_sn", sn), zap.Int64("user_id", userID), zap.Error(err))
@@ -78,6 +82,14 @@ func (h *OTAHandler) ensureDeviceManagementScope(c *gin.Context, sn string) bool
 		return false
 	}
 	return true
+}
+
+func (h *OTAHandler) ensureDeviceViewScope(c *gin.Context, sn string) bool {
+	return h.ensureDeviceScope(c, sn, "devices:view")
+}
+
+func (h *OTAHandler) ensureDeviceControlScope(c *gin.Context, sn string) bool {
+	return h.ensureDeviceScope(c, sn, "devices:control")
 }
 
 // logOTAAudit 记录OTA相关审计日志的辅助函数
@@ -212,8 +224,9 @@ func detectFirmwareVersion(f *os.File, targetChip, originalName string) string {
 		}
 	}
 	base := strings.TrimSuffix(filepath.Base(originalName), filepath.Ext(originalName))
-	if m := versionTokenPattern.FindStringSubmatch(base); len(m) == 2 {
-		return m[1]
+	matches := versionTokenPattern.FindAllStringSubmatch(base, -1)
+	if len(matches) > 0 {
+		return matches[len(matches)-1][1]
 	}
 	return ""
 }
@@ -283,12 +296,12 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 		if version == "" {
 			version = detectFirmwareVersion(f, targetChip, file.Filename)
 			if version == "" {
-				response.Error(c, 400, "无法从固件识别版本号，请填写版本号")
+				response.Error(c, 400, "无法从固件识别版本号，请按“型号_芯片_版本号.bin”规范命名后重新上传")
 				return
 			}
 		}
 		if !fileTokenPattern.MatchString(version) {
-			response.Error(c, 400, "识别出的版本号包含非法字符，请手动填写")
+			response.Error(c, 400, "识别出的版本号包含非法字符，请按规范重命名固件后重新上传")
 			return
 		}
 		if strings.EqualFold(targetChip, "esp") {
@@ -344,29 +357,6 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 		}
 		keepFile = true
 
-		// 上传即自动组装单固件升级包（草稿）：App 端按包触发升级，管理员
-		// 无需手工挑选固件组装；但**发布仍由管理员手动进行**——未发布的包
-		// 不会出现在 App 端升级列表里。
-		autoPkgID := int64(0)
-		pkg, pkgErr := h.otaService.CreateUpgradePackage(c.Request.Context(), &service.CreatePackageReq{
-			Model:         created.Model,
-			FirmwareIDs:   []int64{created.ID},
-			Changelog:     changelog,
-			UserVersion:   created.Version,
-			UserChangelog: changelog,
-			IsPublished:   false,
-			CreatedBy:     c.GetInt64("user_id"),
-		})
-		if pkgErr != nil {
-			logger.Warn("auto package creation failed after firmware upload",
-				zap.String("model", created.Model),
-				zap.String("target_chip", created.TargetChip),
-				zap.Int64("firmware_id", created.ID),
-				zap.Error(pkgErr))
-		} else {
-			autoPkgID = pkg.ID
-		}
-
 		// 回显服务端识别/计算的元数据（版本号、大小、摘要），
 		// 管理端据此提示「自动识别出了什么」，无需再翻列表核对。
 		response.SuccessWithMessage(c, "固件上传成功", gin.H{
@@ -377,7 +367,6 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 			"file_url":    created.FileURL,
 			"file_size":   created.FileSize,
 			"file_sha256": created.FileSHA256,
-			"package_id":  autoPkgID,
 		})
 		return
 	}
@@ -612,7 +601,7 @@ func (h *OTAHandler) CheckUpdate(c *gin.Context) {
 		response.Error(c, 400, "设备SN不能为空")
 		return
 	}
-	if !h.ensureDeviceManagementScope(c, sn) {
+	if !h.ensureDeviceViewScope(c, sn) {
 		return
 	}
 
@@ -806,7 +795,7 @@ func (h *OTAHandler) TriggerOTA(c *gin.Context) {
 		response.Error(c, 400, "invalid request: "+err.Error())
 		return
 	}
-	if !h.ensureDeviceManagementScope(c, req.SN) {
+	if !h.ensureDeviceControlScope(c, req.SN) {
 		return
 	}
 
@@ -832,26 +821,13 @@ func (h *OTAHandler) ResendUpgradeCommand(c *gin.Context) {
 		return
 	}
 
-	if !h.ensureDeviceManagementScope(c, sn) {
+	if !h.ensureDeviceControlScope(c, sn) {
 		return
 	}
-	userID := middleware.GetUserID(c)
 
 	err := h.otaService.ResendPendingUpgradeCommand(c.Request.Context(), sn)
 	if err != nil {
-		// 没有待执行的升级任务，尝试获取可用升级包并创建新任务
-		packages, _ := h.otaService.GetAvailablePackagesForDevice(c.Request.Context(), sn, userID)
-		if len(packages) > 0 {
-			// 使用第一个可用升级包创建升级任务
-			taskID, triggerErr := h.otaService.TriggerUpgradeFromApp(c.Request.Context(), userID, sn, packages[0].ID)
-			if triggerErr != nil {
-				log.Printf("[ResendUpgradeCommand] trigger error: sn=%s, err=%v", sn, triggerErr)
-				response.Error(c, 500, "创建升级任务失败: "+triggerErr.Error())
-				return
-			}
-			response.Success(c, gin.H{"message": "升级任务已创建", "task_id": taskID})
-			return
-		}
+		// 旧「无任务则自动创建包任务」回退已退役
 		log.Printf("[ResendUpgradeCommand] error: sn=%s, err=%v", sn, err)
 		response.Error(c, 500, "重新发送升级命令失败: "+err.Error())
 		return
@@ -863,7 +839,7 @@ func (h *OTAHandler) ResendUpgradeCommand(c *gin.Context) {
 func (h *OTAHandler) GetDeviceOTAStatus(c *gin.Context) {
 	sn := c.Param("sn")
 	userID := middleware.GetUserID(c)
-	if !h.ensureDeviceManagementScope(c, sn) {
+	if !h.ensureDeviceViewScope(c, sn) {
 		return
 	}
 
@@ -905,7 +881,7 @@ func (h *OTAHandler) GetDeviceOTAHistory(c *gin.Context) {
 		response.Error(c, 400, "设备SN不能为空")
 		return
 	}
-	if !h.ensureDeviceManagementScope(c, sn) {
+	if !h.ensureDeviceViewScope(c, sn) {
 		return
 	}
 	page := parseInt(c.DefaultQuery("page", "1"))
@@ -1315,49 +1291,53 @@ func (h *OTAHandler) RestoreAppVersion(c *gin.Context) {
 
 // CreateUpgradePackage 创建升级包
 func (h *OTAHandler) CreateUpgradePackage(c *gin.Context) {
-	var req struct {
-		Model          string  `json:"model" binding:"required"`
-		FirmwareIDs    []int64 `json:"firmware_ids" binding:"required"`
-		Changelog      string  `json:"changelog"`
-		IsForce        bool    `json:"is_force"`
-		UserVersion    string  `json:"user_version"`
-		UserChangelog  string  `json:"user_changelog"`
-		RolloutType    string  `json:"rollout_type"`
-		RolloutTargets string  `json:"rollout_targets"`
-		IsPublished    bool    `json:"is_published"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, 400, "invalid request: "+err.Error())
-		return
-	}
-	if req.RolloutType == "" {
-		req.RolloutType = "all"
-	}
-
-	userID := c.GetInt64("user_id")
-	createdPkg, err := h.otaService.CreateUpgradePackage(c.Request.Context(), &service.CreatePackageReq{
-		Model:          req.Model,
-		FirmwareIDs:    req.FirmwareIDs,
-		Changelog:      req.Changelog,
-		IsForce:        req.IsForce,
-		UserVersion:    req.UserVersion,
-		UserChangelog:  req.UserChangelog,
-		RolloutType:    req.RolloutType,
-		RolloutTargets: req.RolloutTargets,
-		IsPublished:    req.IsPublished,
-		CreatedBy:      userID,
-	})
-	if err != nil {
-		log.Printf("[CreateUpgradePackage] error: %v", err)
-		// (model, main_version) 唯一键冲突: 通常是并发重复提交，新版本号已被占用
-		if strings.Contains(err.Error(), "uq_package_model_version") {
-			response.Error(c, 400, "该型号刚刚已创建过相同主版本号的升级包，请刷新升级包列表后使用")
+	respondLegacyPackageRetired(c)
+	return
+	/*
+		var req struct {
+			Model          string  `json:"model" binding:"required"`
+			FirmwareIDs    []int64 `json:"firmware_ids" binding:"required"`
+			Changelog      string  `json:"changelog"`
+			IsForce        bool    `json:"is_force"`
+			UserVersion    string  `json:"user_version"`
+			UserChangelog  string  `json:"user_changelog"`
+			RolloutType    string  `json:"rollout_type"`
+			RolloutTargets string  `json:"rollout_targets"`
+			IsPublished    bool    `json:"is_published"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			response.Error(c, 400, "invalid request: "+err.Error())
 			return
 		}
-		response.Error(c, 500, "创建升级包失败: "+err.Error())
-		return
-	}
-	response.SuccessWithMessage(c, "升级包创建成功", createdPkg)
+		if req.RolloutType == "" {
+			req.RolloutType = "all"
+		}
+
+		userID := c.GetInt64("user_id")
+		createdPkg, err := h.otaService.CreateUpgradePackage(c.Request.Context(), &service.CreatePackageReq{
+			Model:          req.Model,
+			FirmwareIDs:    req.FirmwareIDs,
+			Changelog:      req.Changelog,
+			IsForce:        req.IsForce,
+			UserVersion:    req.UserVersion,
+			UserChangelog:  req.UserChangelog,
+			RolloutType:    req.RolloutType,
+			RolloutTargets: req.RolloutTargets,
+			IsPublished:    req.IsPublished,
+			CreatedBy:      userID,
+		})
+		if err != nil {
+			log.Printf("[CreateUpgradePackage] error: %v", err)
+			// (model, main_version) 唯一键冲突: 通常是并发重复提交，新版本号已被占用
+			if strings.Contains(err.Error(), "uq_package_model_version") {
+				response.Error(c, 400, "该型号刚刚已创建过相同主版本号的升级包，请刷新升级包列表后使用")
+				return
+			}
+			response.Error(c, 500, "创建升级包失败: "+err.Error())
+			return
+		}
+		response.SuccessWithMessage(c, "升级包创建成功", createdPkg)
+	*/
 }
 
 // ListUpgradePackages 升级包列表
@@ -1530,6 +1510,10 @@ func (h *OTAHandler) CreateUpgradeTask(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, 400, "invalid request: "+err.Error())
+		return
+	}
+	if req.TaskType == model.TaskTypePackage {
+		respondLegacyPackageRetired(c)
 		return
 	}
 	if len(req.DeviceSNs) == 0 {
@@ -1711,7 +1695,7 @@ func (h *OTAHandler) ReportLocalOTAResult(c *gin.Context) {
 		response.Error(c, 400, "设备SN不能为空")
 		return
 	}
-	if !h.ensureDeviceManagementScope(c, sn) {
+	if !h.ensureDeviceControlScope(c, sn) {
 		return
 	}
 
@@ -1841,7 +1825,7 @@ func (h *OTAHandler) AppInstallPackage(c *gin.Context) {
 		return
 	}
 
-	if !h.ensureDeviceManagementScope(c, req.SN) {
+	if !h.ensureDeviceControlScope(c, req.SN) {
 		return
 	}
 	userID := c.GetInt64("user_id")
@@ -1873,7 +1857,7 @@ func (h *OTAHandler) GetDevicePackageUpgradeInfo(c *gin.Context) {
 		return
 	}
 
-	if !h.ensureDeviceManagementScope(c, sn) {
+	if !h.ensureDeviceViewScope(c, sn) {
 		return
 	}
 
@@ -1893,7 +1877,7 @@ func (h *OTAHandler) ListDeviceUpgradePackages(c *gin.Context) {
 		return
 	}
 
-	if !h.ensureDeviceManagementScope(c, sn) {
+	if !h.ensureDeviceViewScope(c, sn) {
 		return
 	}
 
@@ -2013,7 +1997,7 @@ func (h *OTAHandler) GetAvailablePackages(c *gin.Context) {
 		response.Error(c, 400, "设备SN不能为空")
 		return
 	}
-	if !h.ensureDeviceManagementScope(c, sn) {
+	if !h.ensureDeviceViewScope(c, sn) {
 		return
 	}
 
