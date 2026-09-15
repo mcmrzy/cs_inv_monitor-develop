@@ -154,6 +154,8 @@ func FirmwareModuleOverview(target, currentVersion string, deviceOnline bool, la
 		ov.LatestVersion = latestFirmware.Version
 		ov.Changelog = latestFirmware.Changelog
 		ov.PublishedAt = latestFirmware.PublishedAt
+		ov.RolloutPercent = latestFirmware.RolloutPercent
+		ov.RolloutType = latestFirmware.RolloutType
 	}
 	ov.VersionState, ov.UpdateAvailable = VersionState(ov.CurrentVersion, ov.LatestVersion)
 	ov.Eligible = deviceOnline && ov.Supported && ov.Connected

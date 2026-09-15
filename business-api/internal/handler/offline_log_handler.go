@@ -47,11 +47,29 @@ func validOfflineLog(log model.OfflineOpLog) bool {
 	return true
 }
 
+func normalizeOfflineLog(log *model.OfflineOpLog) {
+	if log.Channel == "" {
+		log.Channel = "ble"
+	}
+	if log.Result == "" {
+		log.Result = "unknown"
+	}
+	if log.Params == nil {
+		log.Params = map[string]interface{}{}
+	}
+}
+
 // UploadOfflineLogs receives operation logs collected by the App while
-// offline (BLE local mode). Deduplication is enforced by the
-// (user_id, log_id) unique constraint.
+// offline (BLE local mode). Authorization is checked per device before
+// insertion; the existing (user_id, log_id) unique constraint deduplicates
+// authorized records.
 func (h *DeviceHandler) UploadOfflineLogs(c *gin.Context) {
-	userID := middleware.GetUserID(c)
+	actor := middleware.GetActorContext(c)
+	if actor.UserID == 0 {
+		// Handler tests and older internal callers may carry only user_id. The
+		// JWT middleware normally provides the full actor context.
+		actor.UserID = middleware.GetUserID(c)
+	}
 
 	var req struct {
 		Logs []model.OfflineOpLog `json:"logs"`
@@ -65,29 +83,22 @@ func (h *DeviceHandler) UploadOfflineLogs(c *gin.Context) {
 		return
 	}
 	for i := range req.Logs {
-		// 归一化：缺省 channel 视为 ble、缺省 result 视为 ok
-		if req.Logs[i].Channel == "" {
-			req.Logs[i].Channel = "ble"
-		}
-		if req.Logs[i].Result == "" {
-			req.Logs[i].Result = "ok"
-		}
-		if req.Logs[i].Params == nil {
-			req.Logs[i].Params = map[string]interface{}{}
-		}
+		// 归一化：缺省 channel 视为 ble；结果未知不得伪装成成功。
+		normalizeOfflineLog(&req.Logs[i])
 		if !validOfflineLog(req.Logs[i]) {
 			response.Error(c, 400, "invalid log entry")
 			return
 		}
 	}
 
-	accepted, duplicates, err := h.deviceService.SaveOfflineLogs(c.Request.Context(), userID, req.Logs)
+	if h.deviceService == nil {
+		response.Error(c, 500, "offline log service unavailable")
+		return
+	}
+	result, err := h.deviceService.SaveOfflineLogs(c.Request.Context(), actor, req.Logs)
 	if err != nil {
 		response.Error(c, 500, "save offline logs failed")
 		return
 	}
-	response.Success(c, gin.H{
-		"accepted":   accepted,
-		"duplicates": duplicates,
-	})
+	response.Success(c, result)
 }
