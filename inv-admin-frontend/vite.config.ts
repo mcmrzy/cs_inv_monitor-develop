@@ -80,6 +80,13 @@ export default defineConfig({
     css: true,
     // Playwright specs must not be collected by Vitest.
     exclude: ['node_modules/', 'dist/', 'e2e/', 'e2e-production/'],
+    // pro-layout BaseMenu 的 rc-resize-observer 定时器可能在 jsdom teardown
+    // 之后回调，此时 window 已不存在。用例本身全绿，不应因此把整仓 CI 标红。
+    onUnhandledError: (err) => {
+      const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err)
+      if (/window is not defined/i.test(msg)) return false
+      return true
+    },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

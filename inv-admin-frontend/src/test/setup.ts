@@ -8,6 +8,7 @@
  */
 
 import '@testing-library/jest-dom'
+import { cleanup } from '@testing-library/react'
 import { beforeAll, beforeEach, afterEach, afterAll, vi } from 'vitest'
 import { server } from './mocks/server'
 
@@ -44,7 +45,11 @@ beforeEach(() => {
   })
 })
 
-afterEach(() => {
+afterEach(async () => {
+  // 卸载 React 树，避免 pro-layout 等组件在 env 拆卸后仍 setState
+  cleanup()
+  // 冲刷 0ms 定时器/微任务，让 BaseMenu 等残留回调在 window 仍在时跑完
+  await new Promise((resolve) => setTimeout(resolve, 0))
   // 重置所有运行时覆盖的 handler（通过 server.use(...) 添加的）
   server.resetHandlers()
 })
@@ -79,6 +84,21 @@ class MockIntersectionObserver {
 Object.defineProperty(window, 'IntersectionObserver', {
   writable: true,
   value: MockIntersectionObserver,
+})
+
+/** jsdom 不支持 ResizeObserver；pro-layout / rc-resize-observer 依赖 */
+class MockResizeObserver {
+  observe = vi.fn()
+  unobserve = vi.fn()
+  disconnect = vi.fn()
+}
+Object.defineProperty(window, 'ResizeObserver', {
+  writable: true,
+  value: MockResizeObserver,
+})
+Object.defineProperty(globalThis, 'ResizeObserver', {
+  writable: true,
+  value: MockResizeObserver,
 })
 
 /** 安全包装 getComputedStyle，避免 jsdom 对未挂载元素抛出异常 */
