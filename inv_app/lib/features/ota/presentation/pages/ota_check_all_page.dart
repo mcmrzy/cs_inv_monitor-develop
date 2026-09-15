@@ -22,7 +22,6 @@ enum _CheckResult {
   upToDate,
   failed,
   offline,
-  unreported,
 }
 
 class _CheckEntry {
