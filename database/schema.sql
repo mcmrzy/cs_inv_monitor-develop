@@ -7130,4 +7130,5 @@ INSERT INTO schema_migrations (version, name) VALUES (95, '095_device_alias_stat
 -- device_config_schema.permission_code 拼写（'device:control'→'devices:control'）
 -- 及其列默认值（096 遗留缺陷，见迁移内注释），幂等可重放。
 
--- Next migration version to use: 111
+-- Next migration version to use: 119
+-- 118 (independent module firmware OTA) 由 migrator 回放，不在本基线。
