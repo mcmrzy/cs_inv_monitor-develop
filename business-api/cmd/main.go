@@ -1264,6 +1264,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			otaGroup.DELETE("/firmware/:id", middleware.RequirePermission(deps.PermChecker, "ota", "delete"), deps.OTAHandler.DeleteFirmwareDraft)
 			// 发布生命周期
 			otaGroup.POST("/firmware/:id/publish", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.PublishFirmware)
+			otaGroup.PUT("/firmware/:id/rollout", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.UpdateFirmwareRollout)
 			otaGroup.POST("/firmware/:id/disable", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.DisableFirmware)
 			// 鍗囩骇绠＄悊锛堟浛浠ｆ棫 /tasks锛?
 			otaGroup.GET("/upgrades/dashboard", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetUpgradeDashboard)

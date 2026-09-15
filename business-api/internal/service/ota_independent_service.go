@@ -29,7 +29,7 @@ func (s *OTAService) GetDeviceFirmwareOverview(ctx context.Context, sn string) (
 	modules := make([]model.FirmwareModuleOverview, 0, len(targets))
 	for _, target := range targets {
 		current, _ := CurrentModuleVersion(device.Model, device.FirmwareArm, device.FirmwareEsp, device.FirmwareDSP, device.FirmwareBMS, target)
-		latest, _ := s.repo.GetLatestFirmware(ctx, device.Model, target)
+		latest, _ := s.repo.GetLatestFirmware(ctx, sn, device.Model, target)
 		modules = append(modules, FirmwareModuleOverview(target, current, device.IsOnline, latest))
 	}
 	return &model.DeviceFirmwareOverview{
@@ -52,9 +52,14 @@ func (s *OTAService) GetPublishedFirmwareResources(ctx context.Context, sn, targ
 	return resources, nil
 }
 
-// PublishFirmware 发布固件
-func (s *OTAService) PublishFirmware(ctx context.Context, id int64, actorID int64) error {
-	return s.repo.PublishFirmware(ctx, id, actorID)
+// PublishFirmware 发布固件（含范围/灰度/回退目标）
+func (s *OTAService) PublishFirmware(ctx context.Context, id int64, actorID int64, opts model.FirmwarePublishOptions) error {
+	return s.repo.PublishFirmware(ctx, id, actorID, opts)
+}
+
+// UpdateFirmwareRollout 发布后调整灰度
+func (s *OTAService) UpdateFirmwareRollout(ctx context.Context, id int64, opts model.FirmwarePublishOptions) error {
+	return s.repo.UpdateFirmwareRollout(ctx, id, opts)
 }
 
 // DisableFirmware 停用固件

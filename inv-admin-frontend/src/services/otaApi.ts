@@ -1,5 +1,6 @@
 import api from './api'
 import type {
+  FirmwarePublishRequest,
   FirmwareTaskRef,
   RollbackFirmwareRequest,
   TriggerFirmwareRequest,
@@ -46,9 +47,13 @@ export const otaApi = {
   /** 仅 draft 可删除 */
   deleteFirmware: (id: string | number) => api.delete(`/ota/firmware/${id}`),
   getAllFirmware: () => api.get('/ota/firmware', { params: { page_size: 9999 }, expectedDataShape: 'array' }),
-  /** 发布固件（draft/disabled → published） */
-  publishFirmware: (id: string | number) => api.post(`/ota/firmware/${id}/publish`),
-  /** 停用固件（published → disabled，保留历史） */
+  /** 发布固件（draft/disabled → published），可选范围/灰度/回退目标 */
+  publishFirmware: (id: string | number, data?: FirmwarePublishRequest) =>
+    api.post(`/ota/firmware/${id}/publish`, data ?? {}),
+  /** 发布后调整灰度比例/范围 */
+  updateFirmwareRollout: (id: string | number, data: FirmwarePublishRequest) =>
+    api.put(`/ota/firmware/${id}/rollout`, data),
+  /** 停用固件（published → disabled，保留历史，设备不可再获取） */
   disableFirmware: (id: string | number) => api.post(`/ota/firmware/${id}/disable`),
 
   // ── 独立模块固件升级 ──

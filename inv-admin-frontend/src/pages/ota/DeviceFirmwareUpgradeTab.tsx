@@ -8,11 +8,14 @@ import {
   Col,
   Descriptions,
   Empty,
+  Flex,
   Input,
+  List,
   Modal,
   Row,
   Select,
   Space,
+  Statistic,
   Table,
   Tag,
   Typography,
@@ -25,6 +28,7 @@ import {
   ReloadOutlined,
   RollbackOutlined,
   RocketOutlined,
+  SearchOutlined,
 } from '@ant-design/icons'
 import { otaApi, createOtaIdempotencyKey } from '@/services/otaApi'
 import { deviceApi } from '@/services/deviceApi'
@@ -35,7 +39,6 @@ import useTimezoneStore from '@/stores/timezoneStore'
 import { formatInTimezone } from '@/utils/timezone'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
 import { canControlDeviceFirmware } from '@/router/routeAccess'
-import UpgradeHistoryTab from './UpgradeHistoryTab'
 import {
   firmwareModuleLabel,
   normalizeFirmwareTarget,
@@ -282,18 +285,30 @@ const DeviceFirmwareUpgradeTab: React.FC = () => {
     },
     { title: t('ota.progress'), dataIndex: 'progress', key: 'progress', width: 80, render: (v: number) => `${v ?? 0}%` },
     {
+      title: t('ota.executeTime'),
+      dataIndex: 'started_at',
+      key: 'started_at',
+      width: 160,
+      render: (v: string, r) =>
+        v
+          ? formatInTimezone(v, timezone, 'YYYY-MM-DD HH:mm:ss')
+          : r.created_at
+            ? formatInTimezone(r.created_at, timezone, 'YYYY-MM-DD HH:mm:ss')
+            : '-',
+    },
+    {
+      title: t('ota.completeTime'),
+      dataIndex: 'completed_at',
+      key: 'completed_at',
+      width: 160,
+      render: (v: string) => (v ? formatInTimezone(v, timezone, 'YYYY-MM-DD HH:mm:ss') : '-'),
+    },
+    {
       title: t('ota.errorInfo'),
       dataIndex: 'error_message',
       key: 'error_message',
       ellipsis: true,
       render: (v: string) => v || '-',
-    },
-    {
-      title: t('common.createdAt'),
-      dataIndex: 'created_at',
-      key: 'created_at',
-      width: 160,
-      render: (v: string) => (v ? formatInTimezone(v, timezone, 'YYYY-MM-DD HH:mm:ss') : '-'),
     },
   ]
 
@@ -306,6 +321,7 @@ const DeviceFirmwareUpgradeTab: React.FC = () => {
         : null
 
   const modules = overview?.modules ?? []
+  const upgradeableCount = modules.filter((m) => m.update_available && canRemoteUpgradeFirmwareModule(m)).length
 
   return (
     <div>
@@ -316,76 +332,99 @@ const DeviceFirmwareUpgradeTab: React.FC = () => {
           style={{ marginBottom: 16 }}
         />
       )}
-      <Row gutter={16}>
-        <Col xs={24} md={8}>
+      <Row gutter={[16, 16]}>
+        {/* 设备选择栏 */}
+        <Col xs={24} md={7} lg={6}>
           <Card
             size="small"
-            title={t('ota.selectDevice')}
+            title={
+              <Space>
+                <DesktopOutlined />
+                <span>{t('ota.selectDevice')}</span>
+              </Space>
+            }
             extra={
-              <Button icon={<ReloadOutlined />} size="small" onClick={() => refetchDevices()}>
+              <Button icon={<ReloadOutlined />} size="small" type="text" onClick={() => refetchDevices()}>
                 {t('common.refresh')}
               </Button>
             }
+            styles={{ body: { padding: 12 } }}
           >
-            <Input.Search
+            <Input
               allowClear
+              prefix={<SearchOutlined />}
               placeholder={t('ota.filterByDeviceSn')}
               style={{ marginBottom: 12 }}
               value={deviceSearch}
               onChange={(e) => setDeviceSearch(e.target.value)}
             />
-            <Table<Device>
-              rowKey="sn"
-              size="small"
-              loading={devicesLoading}
-              dataSource={filteredDevices}
-              pagination={{ pageSize: 8, size: 'small' }}
-              locale={{ emptyText: <Empty description={t('ota.noDeviceData')} /> }}
-              onRow={(record) => ({
-                onClick: () => {
-                  setSelectedSn(record.sn)
-                  setHistoryPage(1)
-                },
-                style: { cursor: 'pointer', background: record.sn === selectedSn ? '#e6f4ff' : undefined },
-              })}
-              columns={[
-                {
-                  title: t('dev.deviceName'),
-                  key: 'display_name',
-                  ellipsis: true,
-                  render: (_: unknown, device: Device) => device.alias || device.name || device.model || device.sn,
-                },
-                { title: t('dev.deviceSN'), dataIndex: 'sn', key: 'sn', ellipsis: true },
-                { title: t('ota.model'), dataIndex: 'model', key: 'model', width: 100 },
-                {
-                  title: t('common.status'),
-                  dataIndex: 'status',
-                  key: 'status',
-                  width: 70,
-                  render: (s: string) =>
-                    s === 'online' ? (
-                      <Tag color="success">{t('ota.online')}</Tag>
-                    ) : (
-                      <Tag>{t('ota.offline')}</Tag>
-                    ),
-                },
-              ]}
-            />
+            <div style={{ maxHeight: 520, overflow: 'auto' }}>
+              <List
+                size="small"
+                loading={devicesLoading}
+                dataSource={filteredDevices}
+                locale={{ emptyText: <Empty description={t('ota.noDeviceData')} image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
+                pagination={{ pageSize: 8, size: 'small', hideOnSinglePage: false }}
+                renderItem={(device) => {
+                  const active = device.sn === selectedSn
+                  return (
+                    <List.Item
+                      onClick={() => {
+                        setSelectedSn(device.sn)
+                        setHistoryPage(1)
+                      }}
+                      style={{
+                        cursor: 'pointer',
+                        padding: '10px 12px',
+                        borderRadius: 8,
+                        marginBottom: 6,
+                        background: active ? '#e6f4ff' : '#fafafa',
+                        border: active ? '1px solid #91caff' : '1px solid transparent',
+                      }}
+                    >
+                      <div style={{ width: '100%' }}>
+                        <Flex justify="space-between" align="center" gap={8}>
+                          <Text strong ellipsis style={{ maxWidth: '70%' }}>
+                            {device.alias || device.name || device.model || device.sn}
+                          </Text>
+                          <Tag color={device.status === 'online' ? 'success' : 'default'} style={{ marginRight: 0 }}>
+                            {device.status === 'online' ? t('ota.online') : t('ota.offline')}
+                          </Tag>
+                        </Flex>
+                        <div style={{ marginTop: 2, display: 'flex', gap: 6 }}>
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            {device.sn}
+                          </Text>
+                          {device.model && (
+                            <Text type="secondary" style={{ fontSize: 12 }}>
+                              · {device.model}
+                            </Text>
+                          )}
+                        </div>
+                      </div>
+                    </List.Item>
+                  )
+                }}
+              />
+            </div>
           </Card>
         </Col>
-        <Col xs={24} md={16}>
+
+        {/* 设备固件详情 */}
+        <Col xs={24} md={17} lg={18}>
           {!selectedSn ? (
-            <Card size="small">
+            <Card size="small" styles={{ body: { padding: 48 } }}>
               <Empty description={t('ota.selectDeviceHint')} />
             </Card>
           ) : (
             <Space direction="vertical" size={16} style={{ width: '100%' }}>
+              {/* 设备信息 + 总览统计 */}
               <Card
                 size="small"
                 title={
-                  <Space>
+                  <Space wrap>
                     <DesktopOutlined />
-                    <span>{selectedSn}</span>
+                    <Text strong>{selectedSn}</Text>
                     {overview?.device_model && <Tag>{overview.device_model}</Tag>}
                     {overview && (
                       <Tag color={overview.is_online ? 'success' : 'default'}>
@@ -395,10 +434,11 @@ const DeviceFirmwareUpgradeTab: React.FC = () => {
                   </Space>
                 }
                 extra={
-                  <Space>
+                  <Space wrap>
                     <Button
                       icon={<CheckCircleOutlined />}
                       size="small"
+                      loading={overviewLoading}
                       onClick={() => refetchOverview()}
                     >
                       {t('ota.checkUpdates')}
@@ -408,7 +448,7 @@ const DeviceFirmwareUpgradeTab: React.FC = () => {
                         type="primary"
                         size="small"
                         icon={<RocketOutlined />}
-                        disabled={!modules.some((m) => m.update_available && canRemoteUpgradeFirmwareModule(m))}
+                        disabled={upgradeableCount === 0}
                         onClick={handleUpgradeAll}
                       >
                         {t('ota.upgradeAllModules')}
@@ -417,89 +457,124 @@ const DeviceFirmwareUpgradeTab: React.FC = () => {
                   </Space>
                 }
               >
-                <Title level={5} style={{ marginTop: 0 }}>
-                  {t('dev.deviceInfo')}
-                </Title>
-                <Descriptions column={{ xs: 1, sm: 2 }} size="small" style={{ marginBottom: 16 }}>
+                <Row gutter={[16, 12]} style={{ marginBottom: 12 }}>
+                  <Col xs={12} sm={6}>
+                    <Statistic
+                      title={t('ota.model')}
+                      value={selectedDevice?.model || overview?.device_model || '-'}
+                      valueStyle={{ fontSize: 16 }}
+                    />
+                  </Col>
+                  <Col xs={12} sm={6}>
+                    <Statistic
+                      title={t('dev.hardwareVersion')}
+                      value={selectedDevice?.hardware_version || selectedDevice?.hardwareVersion || '-'}
+                      valueStyle={{ fontSize: 16 }}
+                    />
+                  </Col>
+                  <Col xs={12} sm={6}>
+                    <Statistic title={t('ota.module')} value={`${modules.length}`} valueStyle={{ fontSize: 16 }} />
+                  </Col>
+                  <Col xs={12} sm={6}>
+                    <Statistic
+                      title={t('ota.moduleUpdateAvailable')}
+                      value={`${upgradeableCount}`}
+                      valueStyle={{ fontSize: 16, color: upgradeableCount > 0 ? '#fa8c16' : undefined }}
+                    />
+                  </Col>
+                </Row>
+                <Descriptions column={{ xs: 1, sm: 2 }} size="small">
                   <Descriptions.Item label={t('dev.deviceName')}>
                     {selectedDevice?.alias || selectedDevice?.name || selectedDevice?.model || selectedSn}
                   </Descriptions.Item>
-                  <Descriptions.Item label={t('common.model')}>
-                    {selectedDevice?.model || overview?.device_model || '-'}
-                  </Descriptions.Item>
                   <Descriptions.Item label={t('dev.deviceSN')}>{selectedSn}</Descriptions.Item>
-                  <Descriptions.Item label={t('dev.hardwareVersion')}>
-                    {selectedDevice?.hardware_version || selectedDevice?.hardwareVersion || '-'}
-                  </Descriptions.Item>
                 </Descriptions>
-                <Title level={5} style={{ marginTop: 0 }}>
-                  {t('ota.deviceFirmwareOverview')}
-                </Title>
-                <Row gutter={[12, 12]}>
-                  {modules.length === 0 && (
-                    <Col span={24}>
-                      <Empty description={t('ota.noFirmwareResources')} />
-                    </Col>
-                  )}
-                  {modules.map((mod) => {
-                    const state = VERSION_STATE_MAP[mod.version_state]
-                    return (
-                      <Col xs={24} sm={12} key={mod.target || mod.latest_firmware_id}>
-                        <Card size="small" variant="outlined">
-                          <Space direction="vertical" size={6} style={{ width: '100%' }}>
-                            <Space style={{ justifyContent: 'space-between', width: '100%' }}>
-                              <Text strong>{firmwareModuleLabel(mod.target, t)}</Text>
-                              <Tag color={state?.color || 'default'}>
-                                {state ? t(state.i18nKey) : mod.version_state}
-                              </Tag>
-                            </Space>
-                            <Descriptions column={1} size="small">
-                              <Descriptions.Item label={t('ota.moduleCurrentVersion')}>
-                                {mod.current_version || '-'}
-                              </Descriptions.Item>
-                              <Descriptions.Item label={t('ota.moduleLatestVersion')}>
-                                {mod.latest_version || '-'}
-                              </Descriptions.Item>
-                            </Descriptions>
-                            {mod.changelog && (
-                              <Text type="secondary" style={{ fontSize: 12 }} ellipsis={{ tooltip: mod.changelog }}>
-                                {mod.changelog}
-                              </Text>
-                            )}
-                            <Space>
-                              {canControl && mod.update_available && canRemoteUpgradeFirmwareModule(mod) && (
-                                <Button
-                                  type="primary"
-                                  size="small"
-                                  icon={<CloudUploadOutlined />}
-                                  onClick={() => openUpgrade(mod)}
-                                >
-                                  {t('ota.upgradeModule')}
-                                </Button>
-                              )}
-                              {canControl && (
-                                <Button
-                                  size="small"
-                                  icon={<RollbackOutlined />}
-                                  onClick={() => {
-                                    setUpgradeTarget(mod)
-                                    setForceReason('')
-                                    setRollbackOpen(true)
-                                    setRollbackResource(null)
-                                  }}
-                                >
-                                  {t('ota.rollbackFirmware')}
-                                </Button>
-                              )}
-                            </Space>
-                          </Space>
-                        </Card>
-                      </Col>
-                    )
-                  })}
-                </Row>
               </Card>
 
+              {/* 模块固件总览 */}
+              <Card
+                size="small"
+                title={t('ota.deviceFirmwareOverview')}
+                loading={overviewLoading}
+                styles={{ body: { padding: 12 } }}
+              >
+                {modules.length === 0 ? (
+                  <Empty description={t('ota.noFirmwareResources')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                ) : (
+                  <Row gutter={[12, 12]}>
+                    {modules.map((mod) => {
+                      const state = VERSION_STATE_MAP[mod.version_state]
+                      const canUpgrade = canControl && mod.update_available && canRemoteUpgradeFirmwareModule(mod)
+                      return (
+                        <Col xs={24} sm={12} xl={8} key={mod.target || mod.latest_firmware_id}>
+                          <Card
+                            size="small"
+                            variant="outlined"
+                            styles={{
+                              body: {
+                                background: mod.update_available ? '#fffbe6' : undefined,
+                                borderRadius: 8,
+                              },
+                            }}
+                          >
+                            <Flex vertical gap={8}>
+                              <Flex justify="space-between" align="center">
+                                <Text strong>{firmwareModuleLabel(mod.target, t)}</Text>
+                                <Tag color={state?.color || 'default'} style={{ marginRight: 0 }}>
+                                  {state ? t(state.i18nKey) : mod.version_state}
+                                </Tag>
+                              </Flex>
+                              <Flex vertical gap={2}>
+                                <Flex justify="space-between">
+                                  <Text type="secondary">{t('ota.moduleCurrentVersion')}</Text>
+                                  <Text>{mod.current_version || '-'}</Text>
+                                </Flex>
+                                <Flex justify="space-between">
+                                  <Text type="secondary">{t('ota.moduleLatestVersion')}</Text>
+                                  <Text>{mod.latest_version || '-'}</Text>
+                                </Flex>
+                              </Flex>
+                              {mod.changelog && (
+                                <Text type="secondary" style={{ fontSize: 12 }} ellipsis={{ tooltip: mod.changelog }}>
+                                  {mod.changelog}
+                                </Text>
+                              )}
+                              <Flex gap={8} wrap>
+                                {canUpgrade && (
+                                  <Button
+                                    type="primary"
+                                    size="small"
+                                    icon={<CloudUploadOutlined />}
+                                    onClick={() => openUpgrade(mod)}
+                                  >
+                                    {t('ota.upgradeModule')}
+                                  </Button>
+                                )}
+                                {canControl && (
+                                  <Button
+                                    size="small"
+                                    icon={<RollbackOutlined />}
+                                    onClick={() => {
+                                      setUpgradeTarget(mod)
+                                      setForceReason('')
+                                      setRollbackOpen(true)
+                                      setRollbackResource(null)
+                                    }}
+                                  >
+                                    {t('ota.rollbackFirmware')}
+                                  </Button>
+                                )}
+                              </Flex>
+                            </Flex>
+                          </Card>
+                        </Col>
+                      )
+                    })}
+                  </Row>
+                )}
+              </Card>
+
+              {/* 本机升级历史 */}
               <Card
                 size="small"
                 title={t('ota.upgradeHistory')}
@@ -522,7 +597,7 @@ const DeviceFirmwareUpgradeTab: React.FC = () => {
                   loading={historyLoading}
                   columns={historyColumns}
                   dataSource={historyRes?.items ?? []}
-                  scroll={{ x: 800 }}
+                  scroll={{ x: 1000 }}
                   pagination={{
                     current: historyPage,
                     pageSize: historyPageSize,
@@ -533,17 +608,13 @@ const DeviceFirmwareUpgradeTab: React.FC = () => {
                       setHistoryPageSize(ps)
                     },
                   }}
-                  locale={{ emptyText: <Empty description={t('ota.noUpgradeHistory')} /> }}
+                  locale={{ emptyText: <Empty description={t('ota.noUpgradeHistory')} image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
                 />
               </Card>
             </Space>
           )}
         </Col>
       </Row>
-
-      <Card size="small" title={t('ota.allUpgradeHistory')} style={{ marginTop: 16 }}>
-        <UpgradeHistoryTab />
-      </Card>
 
       {/* 单模块升级 Modal */}
       <Modal

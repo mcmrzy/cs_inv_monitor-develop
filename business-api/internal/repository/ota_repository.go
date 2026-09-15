@@ -9,6 +9,7 @@ import (
 	"inv-api-server/internal/model"
 	"inv-api-server/pkg/timezone"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -18,6 +19,30 @@ type OTARepository struct {
 
 func NewOTARepository(db *pgxpool.Pool) *OTARepository {
 	return &OTARepository{db: db}
+}
+
+// firmwareSelectCols 固件基础列（含发布策略字段），alias 为空时用于裸表查询
+func firmwareSelectCols(alias string) string {
+	p := ""
+	if alias != "" {
+		p = alias + "."
+	}
+	return p + `id, ` + p + `model, ` + p + `version, ` + p + `file_url, COALESCE(` + p + `file_size,0),
+		COALESCE(` + p + `file_md5,''), COALESCE(` + p + `file_sha256,''), COALESCE(` + p + `security_version,0),
+		COALESCE(` + p + `release_signature,''), COALESCE(` + p + `changelog,''), ` + p + `is_force,
+		COALESCE(` + p + `uploaded_by,0), ` + p + `status, ` + p + `created_at,
+		COALESCE(` + p + `updated_at, ` + p + `created_at), COALESCE(` + p + `target_chip,''),
+		COALESCE(` + p + `main_version,''), ` + p + `release_status, ` + p + `published_at,
+		COALESCE(` + p + `rollout_percent,100), COALESCE(` + p + `rollout_type,'all'),
+		COALESCE(` + p + `rollout_targets,''), ` + p + `rollback_to_firmware_id`
+}
+
+func scanFirmware(row pgx.Row, f *model.Firmware) error {
+	return row.Scan(&f.ID, &f.Model, &f.Version, &f.FileURL, &f.FileSize,
+		&f.FileMD5, &f.FileSHA256, &f.SecurityVersion, &f.ReleaseSignature, &f.Changelog,
+		&f.IsForce, &f.UploadedBy, &f.Status, &f.CreatedAt, &f.UpdatedAt, &f.TargetChip,
+		&f.MainVersion, &f.ReleaseStatus, &f.PublishedAt, &f.RolloutPercent, &f.RolloutType,
+		&f.RolloutTargets, &f.RollbackToFirmwareID)
 }
 
 func (r *OTARepository) CreateFirmware(ctx context.Context, f *model.Firmware) error {
@@ -30,22 +55,94 @@ func (r *OTARepository) CreateFirmware(ctx context.Context, f *model.Firmware) e
 		Scan(&f.ID, &f.CreatedAt, &f.ReleaseStatus)
 }
 
-// PublishFirmware 将固件置为 published。已 published 时幂等不刷新 published_at；
-// 从 draft/disabled 重新发布时刷新 published_at=NOW()。
-func (r *OTARepository) PublishFirmware(ctx context.Context, id int64, actorID int64) error {
+// PublishFirmware 将固件置为 published，并写入发布策略（范围/灰度/回退目标）。
+// 已 published 时幂等不刷新 published_at；从 draft/disabled 重新发布时刷新 published_at=NOW()。
+func (r *OTARepository) PublishFirmware(ctx context.Context, id int64, actorID int64, opts model.FirmwarePublishOptions) error {
+	if opts.RolloutPercent < 0 || opts.RolloutPercent > 100 {
+		opts.RolloutPercent = 100
+	}
+	if opts.RolloutType != "device" {
+		opts.RolloutType = "all"
+		opts.RolloutTargets = ""
+	}
 	_, err := r.db.Exec(ctx, `
 		UPDATE firmware_versions
 		SET release_status = 'published',
 		    status = 1,
+		    rollout_percent = $2,
+		    rollout_type = $3,
+		    rollout_targets = $4,
+		    rollback_to_firmware_id = $5,
 		    published_at = CASE
 		        WHEN release_status = 'published' AND published_at IS NOT NULL THEN published_at
 		        ELSE NOW()
 		    END,
 		    updated_at = NOW()
 		WHERE id = $1
-	`, id)
+	`, id, opts.RolloutPercent, opts.RolloutType, opts.RolloutTargets, opts.RollbackToFirmwareID)
 	_ = actorID
 	return err
+}
+
+// UpdateFirmwareRollout 发布后调整灰度比例/范围（不刷新 published_at）
+func (r *OTARepository) UpdateFirmwareRollout(ctx context.Context, id int64, opts model.FirmwarePublishOptions) error {
+	if opts.RolloutPercent < 0 || opts.RolloutPercent > 100 {
+		opts.RolloutPercent = 100
+	}
+	if opts.RolloutType != "device" {
+		opts.RolloutType = "all"
+		opts.RolloutTargets = ""
+	}
+	_, err := r.db.Exec(ctx, `
+		UPDATE firmware_versions
+		SET rollout_percent = $2,
+		    rollout_type = $3,
+		    rollout_targets = $4,
+		    rollback_to_firmware_id = COALESCE($5, rollback_to_firmware_id),
+		    updated_at = NOW()
+		WHERE id = $1 AND release_status = 'published'
+	`, id, opts.RolloutPercent, opts.RolloutType, opts.RolloutTargets, opts.RollbackToFirmwareID)
+	return err
+}
+
+// firmwareEligibleForDevice 判断设备是否在固件发布范围内（scope + 确定性灰度）
+func firmwareEligibleForDevice(f *model.Firmware, sn string) bool {
+	if f == nil || sn == "" {
+		return f != nil
+	}
+	if f.RolloutType == "device" {
+		targets := strings.Split(f.RolloutTargets, ",")
+		matched := false
+		for _, t := range targets {
+			if strings.TrimSpace(t) == sn {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+	return isDeviceInRolloutHash(sn, f.ID, f.RolloutPercent)
+}
+
+// isDeviceInRolloutHash 与 service 层保持一致的确定性灰度哈希（基于 SN + entityID）
+func isDeviceInRolloutHash(deviceSN string, entityID int64, percent int) bool {
+	if percent >= 100 {
+		return true
+	}
+	if percent <= 0 {
+		return false
+	}
+	var snHash int64
+	for _, c := range deviceSN {
+		snHash = snHash*31 + int64(c)
+	}
+	hash := (snHash + entityID) % 100
+	if hash < 0 {
+		hash = -hash
+	}
+	return hash < int64(percent)
 }
 
 // DisableFirmware 将固件置为 disabled（保留历史，用户侧不可见）
@@ -61,14 +158,10 @@ func (r *OTARepository) DisableFirmware(ctx context.Context, id int64, actorID i
 	return err
 }
 
-// ListPublishedFirmwareForDevice 返回设备型号下、指定芯片（可选）的已发布固件
+// ListPublishedFirmwareForDevice 返回设备型号下、指定芯片（可选）且在发布范围内的已发布固件
 func (r *OTARepository) ListPublishedFirmwareForDevice(ctx context.Context, sn, target string) ([]model.Firmware, error) {
 	query := `
-		SELECT f.id, f.model, f.version, f.file_url, COALESCE(f.file_size,0), COALESCE(f.file_md5,''),
-		       COALESCE(f.file_sha256,''), COALESCE(f.security_version,0), COALESCE(f.release_signature,''),
-		       COALESCE(f.changelog,''), f.is_force, COALESCE(f.uploaded_by,0), f.status, f.created_at,
-		       COALESCE(f.updated_at, f.created_at), COALESCE(f.target_chip,''), COALESCE(f.main_version,''),
-		       f.release_status, f.published_at
+		SELECT ` + firmwareSelectCols("f") + `
 		FROM firmware_versions f
 		JOIN devices d ON d.model = f.model
 		WHERE d.sn = $1 AND f.release_status = 'published'
@@ -89,10 +182,10 @@ func (r *OTARepository) ListPublishedFirmwareForDevice(ctx context.Context, sn, 
 	result := make([]model.Firmware, 0)
 	for rows.Next() {
 		var f model.Firmware
-		if err := rows.Scan(&f.ID, &f.Model, &f.Version, &f.FileURL, &f.FileSize,
-			&f.FileMD5, &f.FileSHA256, &f.SecurityVersion, &f.ReleaseSignature, &f.Changelog,
-			&f.IsForce, &f.UploadedBy, &f.Status, &f.CreatedAt, &f.UpdatedAt, &f.TargetChip,
-			&f.MainVersion, &f.ReleaseStatus, &f.PublishedAt); err != nil {
+		if err := scanFirmware(rows, &f); err != nil {
+			continue
+		}
+		if !firmwareEligibleForDevice(&f, sn) {
 			continue
 		}
 		result = append(result, f)
@@ -103,9 +196,7 @@ func (r *OTARepository) ListPublishedFirmwareForDevice(ctx context.Context, sn, 
 func (r *OTARepository) ListFirmware(ctx context.Context, modelFilter string) ([]model.Firmware, error) {
 	// 管理端列表返回全部发布生命周期状态（draft/published/disabled）
 	query := `
-		SELECT id, model, version, file_url, COALESCE(file_size,0), COALESCE(file_md5,''),
-		       COALESCE(file_sha256,''), COALESCE(security_version,0), COALESCE(release_signature,''), COALESCE(changelog,''), is_force, COALESCE(uploaded_by,0), status, created_at,
-		       COALESCE(updated_at, created_at), COALESCE(target_chip,''), COALESCE(main_version,''), release_status, published_at
+		SELECT ` + firmwareSelectCols("") + `
 		FROM firmware_versions WHERE TRUE
 	`
 	args := []interface{}{}
@@ -124,9 +215,7 @@ func (r *OTARepository) ListFirmware(ctx context.Context, modelFilter string) ([
 	result := make([]model.Firmware, 0)
 	for rows.Next() {
 		var f model.Firmware
-		if err := rows.Scan(&f.ID, &f.Model, &f.Version, &f.FileURL, &f.FileSize,
-			&f.FileMD5, &f.FileSHA256, &f.SecurityVersion, &f.ReleaseSignature, &f.Changelog, &f.IsForce, &f.UploadedBy,
-			&f.Status, &f.CreatedAt, &f.UpdatedAt, &f.TargetChip, &f.MainVersion, &f.ReleaseStatus, &f.PublishedAt); err != nil {
+		if err := scanFirmware(rows, &f); err != nil {
 			continue
 		}
 		result = append(result, f)
@@ -136,14 +225,10 @@ func (r *OTARepository) ListFirmware(ctx context.Context, modelFilter string) ([
 
 func (r *OTARepository) GetFirmware(ctx context.Context, id int64) (*model.Firmware, error) {
 	var f model.Firmware
-	err := r.db.QueryRow(ctx, `
-		SELECT id, model, version, file_url, COALESCE(file_size,0), COALESCE(file_md5,''),
-		       COALESCE(file_sha256,''), COALESCE(security_version,0), COALESCE(release_signature,''), COALESCE(changelog,''), is_force, COALESCE(uploaded_by,0), status, created_at,
-		       COALESCE(updated_at, created_at), COALESCE(target_chip,''), COALESCE(main_version,''), release_status, published_at
+	err := scanFirmware(r.db.QueryRow(ctx, `
+		SELECT `+firmwareSelectCols("")+`
 		FROM firmware_versions WHERE id = $1
-	`, id).Scan(&f.ID, &f.Model, &f.Version, &f.FileURL, &f.FileSize,
-		&f.FileMD5, &f.FileSHA256, &f.SecurityVersion, &f.ReleaseSignature, &f.Changelog, &f.IsForce, &f.UploadedBy,
-		&f.Status, &f.CreatedAt, &f.UpdatedAt, &f.TargetChip, &f.MainVersion, &f.ReleaseStatus, &f.PublishedAt)
+	`, id), &f)
 	return &f, err
 }
 
@@ -658,39 +743,37 @@ func (r *OTARepository) CheckDeviceOwnership(ctx context.Context, sn string, use
 	return allowed, err
 }
 
-// GetLatestFirmware 获取指定型号的最新固件
-func (r *OTARepository) GetLatestFirmware(ctx context.Context, deviceModel string, targetChip string) (*model.Firmware, error) {
-	var f model.Firmware
-	var err error
+// GetLatestFirmware 获取指定型号的最新固件。sn 非空时按发布范围/灰度过滤。
+func (r *OTARepository) GetLatestFirmware(ctx context.Context, sn, deviceModel, targetChip string) (*model.Firmware, error) {
+	query := `
+		SELECT ` + firmwareSelectCols("") + `
+		FROM firmware_versions
+		WHERE model = $1 AND release_status = 'published'
+	`
+	args := []interface{}{deviceModel}
 	if targetChip != "" {
-		err = r.db.QueryRow(ctx, `
-			SELECT id, model, version, file_url, COALESCE(file_size,0), COALESCE(file_md5,''),
-			       COALESCE(file_sha256,''), COALESCE(security_version,0), COALESCE(release_signature,''), COALESCE(changelog,''), is_force, COALESCE(uploaded_by,0), status, created_at,
-			       COALESCE(target_chip,''), COALESCE(main_version,''), release_status, published_at
-			FROM firmware_versions
-			WHERE target_chip = $1 AND model = $2 AND release_status = 'published'
-			ORDER BY published_at DESC NULLS LAST, id DESC
-			LIMIT 1
-		`, targetChip, deviceModel).Scan(&f.ID, &f.Model, &f.Version, &f.FileURL, &f.FileSize,
-			&f.FileMD5, &f.FileSHA256, &f.SecurityVersion, &f.ReleaseSignature, &f.Changelog, &f.IsForce, &f.UploadedBy,
-			&f.Status, &f.CreatedAt, &f.TargetChip, &f.MainVersion, &f.ReleaseStatus, &f.PublishedAt)
-	} else {
-		err = r.db.QueryRow(ctx, `
-			SELECT id, model, version, file_url, COALESCE(file_size,0), COALESCE(file_md5,''),
-			       COALESCE(file_sha256,''), COALESCE(security_version,0), COALESCE(release_signature,''), COALESCE(changelog,''), is_force, COALESCE(uploaded_by,0), status, created_at,
-			       COALESCE(target_chip,''), COALESCE(main_version,''), release_status, published_at
-			FROM firmware_versions
-			WHERE model = $1 AND release_status = 'published'
-			ORDER BY published_at DESC NULLS LAST, id DESC
-			LIMIT 1
-		`, deviceModel).Scan(&f.ID, &f.Model, &f.Version, &f.FileURL, &f.FileSize,
-			&f.FileMD5, &f.FileSHA256, &f.SecurityVersion, &f.ReleaseSignature, &f.Changelog, &f.IsForce, &f.UploadedBy,
-			&f.Status, &f.CreatedAt, &f.TargetChip, &f.MainVersion, &f.ReleaseStatus, &f.PublishedAt)
+		query += " AND target_chip = $2"
+		args = append(args, targetChip)
 	}
+	query += " ORDER BY published_at DESC NULLS LAST, id DESC"
+
+	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
-	return &f, nil
+	defer rows.Close()
+
+	for rows.Next() {
+		var f model.Firmware
+		if err := scanFirmware(rows, &f); err != nil {
+			continue
+		}
+		if sn != "" && !firmwareEligibleForDevice(&f, sn) {
+			continue
+		}
+		return &f, nil
+	}
+	return nil, pgx.ErrNoRows
 }
 
 // GetLatestMainVersion 获取指定芯片的最大主版本号

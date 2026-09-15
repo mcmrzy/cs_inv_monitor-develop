@@ -203,7 +203,7 @@ func TestFirmwareReleaseLifecyclePublishDisable(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, list, "draft 固件不得出现在用户可安装列表")
 
-	require.NoError(t, repo.PublishFirmware(ctx, fw.ID, 1))
+	require.NoError(t, repo.PublishFirmware(ctx, fw.ID, 1, model.FirmwarePublishOptions{RolloutPercent: 100, RolloutType: "all"}))
 	list, err = repo.ListPublishedFirmwareForDevice(ctx, "SN-RL-1", "arm")
 	require.NoError(t, err)
 	require.Len(t, list, 1)
@@ -212,7 +212,7 @@ func TestFirmwareReleaseLifecyclePublishDisable(t *testing.T) {
 	// 重复 publish 幂等，不刷新 published_at
 	var publishedAt1 time.Time
 	require.NoError(t, pool.QueryRow(ctx, `SELECT published_at FROM firmware_versions WHERE id=$1`, fw.ID).Scan(&publishedAt1))
-	require.NoError(t, repo.PublishFirmware(ctx, fw.ID, 1))
+	require.NoError(t, repo.PublishFirmware(ctx, fw.ID, 1, model.FirmwarePublishOptions{RolloutPercent: 100, RolloutType: "all"}))
 	var publishedAt2 time.Time
 	require.NoError(t, pool.QueryRow(ctx, `SELECT published_at FROM firmware_versions WHERE id=$1`, fw.ID).Scan(&publishedAt2))
 	assert.True(t, publishedAt1.Equal(publishedAt2), "已 published 时重复 publish 不应刷新 published_at")
@@ -223,7 +223,7 @@ func TestFirmwareReleaseLifecyclePublishDisable(t *testing.T) {
 	assert.Empty(t, list, "disabled 固件不得出现在用户可安装列表")
 
 	// disabled -> published 重新发布刷新 published_at
-	require.NoError(t, repo.PublishFirmware(ctx, fw.ID, 1))
+	require.NoError(t, repo.PublishFirmware(ctx, fw.ID, 1, model.FirmwarePublishOptions{RolloutPercent: 100, RolloutType: "all"}))
 	var publishedAt3 time.Time
 	require.NoError(t, pool.QueryRow(ctx, `SELECT published_at FROM firmware_versions WHERE id=$1`, fw.ID).Scan(&publishedAt3))
 	assert.True(t, publishedAt3.After(publishedAt1) || publishedAt3.After(publishedAt2.Add(-time.Millisecond)),
@@ -244,7 +244,7 @@ func TestLatestPublishedFirmwareOrdersByPublishedAt(t *testing.T) {
 	// draft 不参与
 	insertFirmwareForIndependent(t, pool, 710503, "CS-INV-LF", "0.0.1", "dsp", "draft", nil)
 
-	latest, err := repo.GetLatestFirmware(ctx, "CS-INV-LF", "dsp")
+	latest, err := repo.GetLatestFirmware(ctx, "", "CS-INV-LF", "dsp")
 	require.NoError(t, err)
 	assert.Equal(t, int64(710502), latest.ID, "最新固件必须按 published_at DESC, id DESC，而不是版本字符串")
 	assert.Equal(t, "1.0.0", latest.Version)
