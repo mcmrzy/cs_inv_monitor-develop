@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:fpdart/fpdart.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inv_app/core/errors/ota_error_types.dart';
 import 'package:inv_app/core/services/local_communication_service.dart';
@@ -15,6 +16,12 @@ class _FakeLocalCommunication implements LocalCommunicationRepository {
   final List<String> calls = [];
   Object? triggerError;
   Map<String, dynamic> deviceInfo = const {'device_model': 'INV-10K'};
+  Map<String, dynamic> progress = const {
+    'status': 'failed',
+    'progress': 0,
+    'message': 'device rejected upgrade',
+  };
+  final List<Map<String, dynamic>> deviceInfoSequence = [];
 
   @override
   Future<void> uploadFirmware({
@@ -36,11 +43,7 @@ class _FakeLocalCommunication implements LocalCommunicationRepository {
   @override
   Future<Map<String, dynamic>> getProgress(String deviceIP) async {
     calls.add('progress');
-    return const {
-      'status': 'failed',
-      'progress': 0,
-      'message': 'device rejected upgrade',
-    };
+    return progress;
   }
 
   @override
@@ -57,6 +60,9 @@ class _FakeLocalCommunication implements LocalCommunicationRepository {
   @override
   Future<Map<String, dynamic>> getDeviceInfo(String deviceIP) async {
     calls.add('info');
+    if (deviceInfoSequence.isNotEmpty) {
+      return deviceInfoSequence.removeAt(0);
+    }
     return deviceInfo;
   }
 
@@ -187,5 +193,47 @@ void main() {
     expect(controller.state.phase, LocalOTAPhase.failed);
     expect(controller.state.error, isA<LocalOtaDeviceModelException>());
     expect(terminateCount, 1);
+  });
+
+  test('reports a module version recovered after reboot to the cloud', () async {
+    final repository = _MockOtaRepository();
+    when(
+      () => repository.reportLocalOTAResult(
+        sn: any(named: 'sn'),
+        targetChip: any(named: 'targetChip'),
+        newVersion: any(named: 'newVersion'),
+      ),
+    ).thenAnswer((_) async => const Right(<String, dynamic>{}));
+    controller.dispose();
+    communication
+      ..progress = const {'status': 'done', 'progress': 100}
+      ..deviceInfoSequence.addAll(const [
+        {'device_model': 'INV-10K'},
+        {'device_model': 'INV-10K', 'firmware_arm': '2.0.0'},
+      ]);
+    controller = LocalOTAController(
+      communication: communication,
+      repository: repository,
+      channel: LocalCommunicationChannel.ble,
+      deviceSN: 'SN001',
+      deviceIP: '192.168.4.1',
+      onTerminateConnection: () => terminateCount++,
+    );
+
+    await controller.execute(
+      filePath: '/tmp/firmware.bin',
+      manifest: manifest,
+      fallbackVersion: '',
+      firmwareModel: 'INV-10K',
+    );
+
+    expect(controller.state.newVersion, '2.0.0');
+    verify(
+      () => repository.reportLocalOTAResult(
+        sn: 'SN001',
+        targetChip: 'arm',
+        newVersion: '2.0.0',
+      ),
+    ).called(1);
   });
 }

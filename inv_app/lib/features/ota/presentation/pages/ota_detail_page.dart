@@ -6,6 +6,7 @@ import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/features/ota/presentation/bloc/ota_bloc.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
+import 'package:inv_app/features/ota/presentation/models/firmware_module_presentation.dart';
 
 class OTADetailPage extends StatefulWidget {
   final String deviceSN;
@@ -50,7 +51,7 @@ class _OTADetailPageState extends State<OTADetailPage> {
       case 'failed':
         return l10n.failure;
       default:
-        return status;
+        return FirmwareModulePresentation.sanitizeCustomerCopy(status, l10n);
     }
   }
 
@@ -504,7 +505,10 @@ class _OTADetailPageState extends State<OTADetailPage> {
           ),
           SizedBox(height: 8.h),
           Text(
-            l10n.translateError(state.message),
+            FirmwareModulePresentation.sanitizeCustomerCopy(
+              l10n.translateError(state.message),
+              l10n,
+            ),
             style: TextStyle(fontSize: 14.sp, color: AppColor.textSecondary(context)),
             textAlign: TextAlign.center,
           ),

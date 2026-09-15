@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -16,7 +17,10 @@ import (
 
 // respondLegacyPackageRetired 升级包写路径统一退役响应
 func respondLegacyPackageRetired(c *gin.Context) {
-	response.Error(c, 410, "升级包功能已退役，请使用独立模块固件升级")
+	c.AbortWithStatusJSON(http.StatusGone, gin.H{
+		"code":    model.ErrCodeLegacyPackageRetired,
+		"message": "升级包功能已退役，请使用独立模块固件升级",
+	})
 }
 
 // LegacyPackageRetired 路由级 410 处理器
@@ -31,7 +35,7 @@ func (h *OTAHandler) GetDeviceFirmwareOverview(c *gin.Context) {
 		response.Error(c, 400, "device_sn 不能为空")
 		return
 	}
-	if !h.ensureDeviceManagementScope(c, sn) {
+	if !h.ensureDeviceViewScope(c, sn) {
 		return
 	}
 	ov, err := h.otaService.GetDeviceFirmwareOverview(c.Request.Context(), sn)
@@ -49,7 +53,7 @@ func (h *OTAHandler) GetPublishedFirmwareResources(c *gin.Context) {
 		response.Error(c, 400, "device_sn 不能为空")
 		return
 	}
-	if !h.ensureDeviceManagementScope(c, sn) {
+	if !h.ensureDeviceViewScope(c, sn) {
 		return
 	}
 	target := c.Query("target_chip")
@@ -74,7 +78,7 @@ func (h *OTAHandler) GetDeviceFirmwareHistory(c *gin.Context) {
 		response.Error(c, 400, "device_sn 不能为空")
 		return
 	}
-	if !h.ensureDeviceManagementScope(c, sn) {
+	if !h.ensureDeviceViewScope(c, sn) {
 		return
 	}
 	filter, ok := parseHistoryFilter(c, sn)
@@ -97,15 +101,22 @@ func (h *OTAHandler) GetAuthorizedUpgradeHistory(c *gin.Context) {
 	}
 	userID := middleware.GetUserID(c)
 	if !middleware.GetIsSystemAdmin(c) && filter.DeviceSN != "" {
-		if !h.ensureDeviceManagementScope(c, filter.DeviceSN) {
+		if !h.ensureDeviceViewScope(c, filter.DeviceSN) {
 			return
 		}
 	}
 	if !middleware.GetIsSystemAdmin(c) && filter.DeviceSN == "" {
-		// 聚合历史：无 SN 时仅管理员；普通用户必须指定设备
+		deviceSNs, err := h.otaService.ListAuthorizedDeviceSNs(c.Request.Context(), middleware.GetActorContext(c), "devices:view")
+		if err != nil {
+			response.Error(c, 500, "查询设备范围失败")
+			return
+		}
+		if len(deviceSNs) == 0 {
+			response.Page(c, []model.DeviceUpgrade{}, 0, filter.Page, filter.PageSize)
+			return
+		}
+		filter.DeviceSNs = deviceSNs
 		_ = userID
-		response.Error(c, 400, "请指定 device_sn")
-		return
 	}
 	items, total, err := h.otaService.GetFilteredUpgradeHistory(c.Request.Context(), filter)
 	if err != nil {
@@ -224,7 +235,11 @@ func (h *OTAHandler) TriggerIndependentOTA(c *gin.Context) {
 		response.Error(c, 400, "invalid request: "+err.Error())
 		return
 	}
-	if !h.ensureDeviceManagementScope(c, req.DeviceSN) {
+	if !h.ensureDeviceControlScope(c, req.DeviceSN) {
+		return
+	}
+	if strings.TrimSpace(req.ForceReason) != "" && !middleware.GetIsSystemAdmin(c) {
+		response.Error(c, 403, "只有系统管理员可以强制升级")
 		return
 	}
 	userID := middleware.GetUserID(c)
@@ -234,7 +249,7 @@ func (h *OTAHandler) TriggerIndependentOTA(c *gin.Context) {
 			response.Error(c, 409, "idempotency_key 与已有请求不一致")
 			return
 		}
-		if errors.Is(err, service.ErrFirmwareNotPublished) || errors.Is(err, service.ErrDuplicateTarget) || errors.Is(err, service.ErrDeviceNotFound) {
+		if errors.Is(err, service.ErrFirmwareNotPublished) || errors.Is(err, service.ErrDuplicateTarget) || errors.Is(err, service.ErrDeviceNotFound) || errors.Is(err, repository.ErrDeviceOffline) || errors.Is(err, service.ErrCurrentVersionUnknown) {
 			response.Error(c, 409, err.Error())
 			return
 		}
@@ -257,14 +272,14 @@ func (h *OTAHandler) RollbackIndependentFirmware(c *gin.Context) {
 		response.Error(c, 400, "invalid request: "+err.Error())
 		return
 	}
-	if !h.ensureDeviceManagementScope(c, req.DeviceSN) {
+	if !h.ensureDeviceControlScope(c, req.DeviceSN) {
 		return
 	}
 	userID := middleware.GetUserID(c)
 	isAdmin := middleware.GetIsSystemAdmin(c)
 	ref, err := h.otaService.RollbackIndependentFirmware(c.Request.Context(), userID, req.DeviceSN, req.FirmwareID, req.IdempotencyKey, req.ForceReason, isAdmin)
 	if err != nil {
-		if errors.Is(err, service.ErrCurrentVersionUnknown) {
+		if errors.Is(err, service.ErrCurrentVersionUnknown) || errors.Is(err, repository.ErrDeviceOffline) {
 			response.Error(c, 409, "当前模块版本未上报，无法回滚")
 			return
 		}

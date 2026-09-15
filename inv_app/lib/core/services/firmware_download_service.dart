@@ -36,6 +36,10 @@ class DownloadedFirmwareInfo {
   /// 防回滚安全版本号，旧记录可能缺失
   final int? securityVersion;
 
+  /// Backend-advertised delivery channels. Null keeps compatible ESP/ARM
+  /// records usable; an explicit list is enforced exactly.
+  final List<String>? supportedChannels;
+
   const DownloadedFirmwareInfo({
     required this.firmwareId,
     required this.filePath,
@@ -47,6 +51,7 @@ class DownloadedFirmwareInfo {
     this.sha256,
     this.signature,
     this.securityVersion,
+    this.supportedChannels,
   });
 
   /// 是否具备本地升级所需的完整元数据
@@ -58,6 +63,16 @@ class DownloadedFirmwareInfo {
       (sha256?.isNotEmpty ?? false) &&
       (signature?.isNotEmpty ?? false) &&
       (securityVersion ?? 0) > 0;
+
+  bool supportsLocalChannel(String channel) {
+    final target = targetChip?.trim().toLowerCase() ?? '';
+    if (target != 'esp' && target != 'arm') return false;
+    final channels = supportedChannels;
+    if (channels == null) return true;
+    return channels.any(
+      (value) => value.trim().toLowerCase() == channel.trim().toLowerCase(),
+    );
+  }
 }
 
 /// 下载进度事件：携带 firmwareId，按任务分流，
@@ -128,6 +143,7 @@ class FirmwareDownloadService {
     String? version,
     String? signature,
     int? securityVersion,
+    List<String>? supportedChannels,
     CancelToken? cancelToken,
     void Function(int received, int total)? onProgress,
   }) async {
@@ -161,6 +177,7 @@ class FirmwareDownloadService {
             version: version,
             signature: signature,
             securityVersion: securityVersion,
+            supportedChannels: supportedChannels,
           );
           _emit(firmwareId, 1.0);
           return filePath;
@@ -256,6 +273,7 @@ class FirmwareDownloadService {
           version: version,
           signature: signature,
           securityVersion: securityVersion,
+          supportedChannels: supportedChannels,
         );
 
         _emit(firmwareId, 1.0);
@@ -304,6 +322,7 @@ class FirmwareDownloadService {
     String? version,
     String? signature,
     int? securityVersion,
+    List<String>? supportedChannels,
   }) async {
     final fileSize = await file.length();
     await _sharedPreferences.setString('$_keyPrefix$firmwareId', filePath);
@@ -323,6 +342,7 @@ class FirmwareDownloadService {
       version: version,
       signature: signature,
       securityVersion: securityVersion,
+      supportedChannels: supportedChannels,
     );
   }
 
@@ -336,13 +356,15 @@ class FirmwareDownloadService {
     String? version,
     String? signature,
     int? securityVersion,
+    List<String>? supportedChannels,
   }) async {
     if ((deviceModel?.isEmpty ?? true) &&
         (fileSize ?? 0) <= 0 &&
         (targetChip?.isEmpty ?? true) &&
         (version?.isEmpty ?? true) &&
         (signature?.isEmpty ?? true) &&
-        (securityVersion ?? 0) <= 0) {
+        (securityVersion ?? 0) <= 0 &&
+        supportedChannels == null) {
       return;
     }
     final meta = <String, dynamic>{
@@ -355,6 +377,8 @@ class FirmwareDownloadService {
       if (signature != null && signature.isNotEmpty) 'signature': signature,
       if (securityVersion != null && securityVersion > 0)
         'security_version': securityVersion,
+      if (supportedChannels != null)
+        'supported_channels': supportedChannels,
     };
     await _sharedPreferences.setString(
       '$_keyMetaPrefix$firmwareId',
@@ -411,6 +435,11 @@ class FirmwareDownloadService {
             sha256: _sharedPreferences.getString('$_keySHA256Prefix$id'),
             signature: meta['signature'] as String?,
             securityVersion: (meta['security_version'] as num?)?.toInt(),
+            supportedChannels: meta['supported_channels'] is List
+                ? (meta['supported_channels'] as List)
+                    .map((value) => value.toString())
+                    .toList(growable: false)
+                : null,
           ),
         );
       }

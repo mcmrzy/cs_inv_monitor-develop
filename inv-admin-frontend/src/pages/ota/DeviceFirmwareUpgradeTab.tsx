@@ -34,10 +34,12 @@ import useTranslation from '@/hooks/useTranslation'
 import useTimezoneStore from '@/stores/timezoneStore'
 import { formatInTimezone } from '@/utils/timezone'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
-import { canMutateOta } from '@/router/routeAccess'
+import { canControlDeviceFirmware } from '@/router/routeAccess'
+import UpgradeHistoryTab from './UpgradeHistoryTab'
 import {
   firmwareModuleLabel,
   normalizeFirmwareTarget,
+  canRemoteUpgradeFirmwareModule,
 } from './firmwarePresentation'
 import type {
   Device,
@@ -79,9 +81,7 @@ const DeviceFirmwareUpgradeTab: React.FC = () => {
   const { timezone } = useTimezoneStore()
   const isSystemAdmin = useAuthStore((s) => s.user?.isSystemAdmin === true)
   const hasAnyPermission = useAuthStore((s) => s.hasAnyPermission)
-  const canCreate = canMutateOta('create', isSystemAdmin, hasAnyPermission)
-  const canControl = canMutateOta('control', isSystemAdmin, hasAnyPermission)
-  const canDelete = canMutateOta('delete', isSystemAdmin, hasAnyPermission)
+  const canControl = canControlDeviceFirmware(isSystemAdmin, hasAnyPermission)
 
   const [selectedSn, setSelectedSn] = useState<string | null>(null)
   const [deviceSearch, setDeviceSearch] = useState('')
@@ -107,6 +107,10 @@ const DeviceFirmwareUpgradeTab: React.FC = () => {
       (d) => d.sn?.toLowerCase().includes(q) || d.model?.toLowerCase().includes(q),
     )
   }, [devices, deviceSearch])
+  const selectedDevice = useMemo(
+    () => devices.find((device) => device.sn === selectedSn),
+    [devices, selectedSn],
+  )
 
   const {
     data: overview,
@@ -227,7 +231,7 @@ const DeviceFirmwareUpgradeTab: React.FC = () => {
   const handleUpgradeAll = () => {
     if (!selectedSn || !overview?.modules) return
     const ids = overview.modules
-      .filter((m) => m.update_available && m.latest_firmware_id)
+      .filter((m) => m.update_available && m.latest_firmware_id && canRemoteUpgradeFirmwareModule(m))
       .map((m) => Number(m.latest_firmware_id))
       .filter((id) => Number.isFinite(id) && id > 0)
     if (ids.length === 0) {
@@ -345,7 +349,13 @@ const DeviceFirmwareUpgradeTab: React.FC = () => {
                 style: { cursor: 'pointer', background: record.sn === selectedSn ? '#e6f4ff' : undefined },
               })}
               columns={[
-                { title: 'SN', dataIndex: 'sn', key: 'sn', ellipsis: true },
+                {
+                  title: t('dev.deviceName'),
+                  key: 'display_name',
+                  ellipsis: true,
+                  render: (_: unknown, device: Device) => device.alias || device.name || device.model || device.sn,
+                },
+                { title: t('dev.deviceSN'), dataIndex: 'sn', key: 'sn', ellipsis: true },
                 { title: t('ota.model'), dataIndex: 'model', key: 'model', width: 100 },
                 {
                   title: t('common.status'),
@@ -398,7 +408,7 @@ const DeviceFirmwareUpgradeTab: React.FC = () => {
                         type="primary"
                         size="small"
                         icon={<RocketOutlined />}
-                        disabled={!modules.some((m) => m.update_available)}
+                        disabled={!modules.some((m) => m.update_available && canRemoteUpgradeFirmwareModule(m))}
                         onClick={handleUpgradeAll}
                       >
                         {t('ota.upgradeAllModules')}
@@ -407,6 +417,21 @@ const DeviceFirmwareUpgradeTab: React.FC = () => {
                   </Space>
                 }
               >
+                <Title level={5} style={{ marginTop: 0 }}>
+                  {t('dev.deviceInfo')}
+                </Title>
+                <Descriptions column={{ xs: 1, sm: 2 }} size="small" style={{ marginBottom: 16 }}>
+                  <Descriptions.Item label={t('dev.deviceName')}>
+                    {selectedDevice?.alias || selectedDevice?.name || selectedDevice?.model || selectedSn}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t('common.model')}>
+                    {selectedDevice?.model || overview?.device_model || '-'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t('dev.deviceSN')}>{selectedSn}</Descriptions.Item>
+                  <Descriptions.Item label={t('dev.hardwareVersion')}>
+                    {selectedDevice?.hardware_version || selectedDevice?.hardwareVersion || '-'}
+                  </Descriptions.Item>
+                </Descriptions>
                 <Title level={5} style={{ marginTop: 0 }}>
                   {t('ota.deviceFirmwareOverview')}
                 </Title>
@@ -442,7 +467,7 @@ const DeviceFirmwareUpgradeTab: React.FC = () => {
                               </Text>
                             )}
                             <Space>
-                              {canControl && mod.update_available && (
+                              {canControl && mod.update_available && canRemoteUpgradeFirmwareModule(mod) && (
                                 <Button
                                   type="primary"
                                   size="small"
@@ -452,7 +477,7 @@ const DeviceFirmwareUpgradeTab: React.FC = () => {
                                   {t('ota.upgradeModule')}
                                 </Button>
                               )}
-                              {canDelete && (
+                              {canControl && (
                                 <Button
                                   size="small"
                                   icon={<RollbackOutlined />}
@@ -516,6 +541,10 @@ const DeviceFirmwareUpgradeTab: React.FC = () => {
         </Col>
       </Row>
 
+      <Card size="small" title={t('ota.allUpgradeHistory')} style={{ marginTop: 16 }}>
+        <UpgradeHistoryTab />
+      </Card>
+
       {/* 单模块升级 Modal */}
       <Modal
         title={`${t('ota.upgradeModule')} · ${upgradeTarget ? firmwareModuleLabel(upgradeTarget.target, t) : ''}`}
@@ -530,7 +559,7 @@ const DeviceFirmwareUpgradeTab: React.FC = () => {
         confirmLoading={triggerMutation.isPending}
         destroyOnClose
         width={520}
-        okButtonProps={{ disabled: !canCreate }}
+        okButtonProps={{ disabled: !canControl || !selectedFirmwareId }}
       >
         {resourcesError && (
           <QueryErrorAlert error={resourcesError} onRetry={() => void refetchResources()} style={{ marginBottom: 12 }} />

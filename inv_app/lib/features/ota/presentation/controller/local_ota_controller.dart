@@ -291,14 +291,12 @@ class LocalOTAController extends ChangeNotifier {
             .toLowerCase();
         final percent = (progress['progress'] as num?)?.toDouble() ?? 0.0;
         final message = progress['message'] as String? ?? '';
-        // 版本获取优先级：main_version > version > 芯片专属字段
-        final mainVer = progress['main_version'] as String? ?? '';
+        // 仅使用独立功能模块版本；main_version 已退出写入契约。
         final chipVer = (progress['version'] as String? ?? '').isNotEmpty
             ? (progress['version'] as String)
             : (progress[versionKey] as String? ?? '');
-        final displayVersion = mainVer.isNotEmpty
-            ? mainVer
-            : (chipVer.isNotEmpty ? chipVer : fallbackVersion);
+        final displayVersion =
+            chipVer.isNotEmpty ? chipVer : fallbackVersion;
 
         _emit(_state.copyWith(
           upgradeProgress: percent / 100.0,
@@ -310,7 +308,7 @@ class LocalOTAController extends ChangeNotifier {
         if (status == 'done' || status == 'succeeded') {
           String? newVersion =
               displayVersion.isNotEmpty ? displayVersion : null;
-          final chipNewVersion =
+          var chipNewVersion =
               (progress[firmwareKey] as String? ?? '').isNotEmpty
                   ? (progress[firmwareKey] as String)
                   : chipVer.isNotEmpty
@@ -319,16 +317,14 @@ class LocalOTAController extends ChangeNotifier {
           if (newVersion == null) {
             try {
               final info = await _communication.getDeviceInfo(_deviceIP);
-              final infoMainVer = info['main_version'] as String? ?? '';
               final infoChipVer =
                   (info[firmwareKey] as String? ?? '').isNotEmpty
                       ? (info[firmwareKey] as String)
                       : (info[versionKey] as String? ?? '').isNotEmpty
                           ? (info[versionKey] as String)
                           : (info['version'] as String? ?? '');
-              newVersion = infoMainVer.isNotEmpty
-                  ? infoMainVer
-                  : (infoChipVer.isNotEmpty ? infoChipVer : null);
+              newVersion = infoChipVer.isNotEmpty ? infoChipVer : null;
+              if (infoChipVer.isNotEmpty) chipNewVersion = infoChipVer;
             } catch (e) {
               debugPrint('[LocalOTA] get device info failed: $e');
             }

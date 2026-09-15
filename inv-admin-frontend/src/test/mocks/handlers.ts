@@ -276,6 +276,10 @@ export const handlers = [
             latest_version: '1.1.0',
             version_state: 'outdated',
             update_available: true,
+            supported: true,
+            connected: true,
+            eligible: true,
+            supported_channels: ['remote', 'ble', 'wifi_ap'],
             changelog: '修复系统中控稳定性',
             published_at: '2026-01-01T00:00:00Z',
           },
@@ -286,6 +290,10 @@ export const handlers = [
             latest_version: '1.5.0',
             version_state: 'current',
             update_available: false,
+            supported: true,
+            connected: true,
+            eligible: true,
+            supported_channels: ['remote', 'ble', 'wifi_ap'],
             changelog: '',
             published_at: '2026-01-02T00:00:00Z',
           },
@@ -317,12 +325,10 @@ export const handlers = [
     return HttpResponse.json({
       code: 0,
       message: 'success',
-      data: {
-        items: mockFirmwares.map((fw) => ({
-          ...fw,
-          release_status: 'published',
-        })),
-      },
+      data: mockFirmwares.map((fw) => ({
+        ...fw,
+        release_status: 'published',
+      })),
     })
   }),
 

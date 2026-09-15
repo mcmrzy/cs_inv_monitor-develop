@@ -22,15 +22,11 @@ export function normalizeFirmwareTarget(target: string | null | undefined): stri
 
 /**
  * 将模块 target 映射为用户可见名称。
- * 未知 target 时回退为大写原值，避免空白。
+ * 未知 target 不得回显内部标识，统一使用通用名称。
  */
 export function firmwareModuleLabel(target: string | null | undefined, t: TranslateFn): string {
   const key = MODULE_LABEL_KEYS[normalizeFirmwareTarget(target)]
-  if (!key) {
-    const raw = String(target ?? '').trim()
-    return raw ? raw.toUpperCase() : '-'
-  }
-  return t(key)
+  return t(key || 'ota.moduleUnknown')
 }
 
 /**
@@ -76,4 +72,16 @@ export function displayFirmwareModuleLabel(
   const cleaned = sanitizeLegacyFirmwareLabel(legacyLabel)
   if (cleaned) return cleaned
   return firmwareModuleLabel(target, t)
+}
+
+export function canRemoteUpgradeFirmwareModule(module: {
+  supported?: boolean
+  connected?: boolean
+  eligible?: boolean
+  supported_channels?: string[]
+}): boolean {
+  return module.supported === true
+    && module.connected === true
+    && module.eligible === true
+    && (module.supported_channels ?? []).includes('remote')
 }

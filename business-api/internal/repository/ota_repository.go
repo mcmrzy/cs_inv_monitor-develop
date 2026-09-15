@@ -158,23 +158,6 @@ func (r *OTARepository) UpsertDeviceUpgrade(ctx context.Context, du *model.Devic
 		INSERT INTO device_upgrades (device_sn, firmware_id, firmware_version, target_chip,
 		    old_version, status, progress, error_message, retry_count, pushed_by, upgrade_package_id, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
-		ON CONFLICT (device_sn, firmware_id, COALESCE(upgrade_package_id, 0)) DO UPDATE SET
-		    status = CASE
-		        WHEN device_upgrades.status = 'success' THEN device_upgrades.status
-		        WHEN $6 = 'pending' AND device_upgrades.status = 'failed' THEN 'pending'
-		        ELSE $6
-		    END,
-		    firmware_version = $3,
-		    old_version = CASE WHEN device_upgrades.old_version = '' THEN $5 ELSE device_upgrades.old_version END,
-		    progress = $7,
-		    error_message = CASE WHEN $6 = 'failed' THEN $8 ELSE device_upgrades.error_message END,
-		    retry_count = CASE WHEN $6 = 'pending' AND device_upgrades.status = 'failed'
-		                  THEN device_upgrades.retry_count + 1 ELSE device_upgrades.retry_count END,
-		    pushed_by = COALESCE($10, device_upgrades.pushed_by),
-		    started_at = CASE WHEN $6 IN ('downloading','upgrading') AND device_upgrades.started_at IS NULL
-		                THEN NOW() ELSE device_upgrades.started_at END,
-		    completed_at = CASE WHEN $6 IN ('success','failed') THEN NOW() ELSE device_upgrades.completed_at END,
-		    updated_at = NOW()
 		RETURNING id, created_at, updated_at
 	`, du.DeviceSN, du.FirmwareID, du.FirmwareVersion, du.TargetChip,
 		du.OldVersion, du.Status, du.Progress, du.ErrorMessage, du.RetryCount, du.PushedBy, du.UpgradePackageID).
@@ -194,7 +177,7 @@ func (r *OTARepository) GetPendingUpgradeForDevice(ctx context.Context, sn strin
 		FROM device_upgrades du
 		JOIN firmware_versions f ON du.firmware_id = f.id
 		WHERE du.device_sn = $1 AND du.status = 'pending'
-		ORDER BY du.updated_at DESC
+		ORDER BY du.created_at ASC, du.id ASC
 		LIMIT 1
 	`, sn).Scan(
 		&du.ID, &du.DeviceSN, &du.FirmwareID, &du.FirmwareVersion, &du.TargetChip,
@@ -1158,7 +1141,7 @@ func (r *OTARepository) RollbackToPackage(ctx context.Context, sn string, packag
 			    old_version, status, progress, error_message, retry_count, pushed_by,
 			    upgrade_package_id, task_id, source, created_at, updated_at)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
-			ON CONFLICT (device_sn, firmware_id, COALESCE(upgrade_package_id, 0)) DO UPDATE SET
+			ON CONFLICT (task_id, device_sn, target_chip) WHERE task_id IS NOT NULL DO UPDATE SET
 			    status = CASE
 			        WHEN device_upgrades.status = 'success' THEN device_upgrades.status
 			        ELSE $6
@@ -1204,7 +1187,7 @@ func (r *OTARepository) UpsertPackageUpgrade(ctx context.Context, du *model.Devi
 		INSERT INTO device_upgrades (device_sn, firmware_id, firmware_version, target_chip,
 		    old_version, status, progress, error_message, retry_count, pushed_by, upgrade_package_id, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
-		ON CONFLICT (device_sn, firmware_id, COALESCE(upgrade_package_id, 0)) DO UPDATE SET
+		ON CONFLICT (task_id, device_sn, target_chip) WHERE task_id IS NOT NULL DO UPDATE SET
 		    status = CASE
 		        WHEN device_upgrades.status = 'success' THEN device_upgrades.status
 		        WHEN $6 = 'pending' AND device_upgrades.status = 'failed' THEN 'pending'
@@ -1614,7 +1597,7 @@ func (r *OTARepository) CreateTaskFromAppTrigger(ctx context.Context, userID int
 			    old_version, status, progress, error_message, retry_count, pushed_by,
 			    upgrade_package_id, task_id, source, created_at, updated_at)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
-			ON CONFLICT (device_sn, firmware_id, COALESCE(upgrade_package_id, (0)::bigint))
+			ON CONFLICT (task_id, device_sn, target_chip) WHERE task_id IS NOT NULL
 			DO UPDATE SET
 			    status = EXCLUDED.status,
 			    task_id = EXCLUDED.task_id,
@@ -1725,15 +1708,6 @@ func (r *OTARepository) CreateTaskFromLocalOTA(ctx context.Context, userID int64
 		), sn, newVersion)
 		if err != nil {
 			return 0, fmt.Errorf("update firmware version: %w", err)
-		}
-	}
-
-	if mainVersion != "" {
-		_, err = tx.Exec(ctx,
-			"UPDATE devices SET main_version = $2, updated_at = NOW() WHERE sn = $1",
-			sn, mainVersion)
-		if err != nil {
-			return 0, fmt.Errorf("update main version: %w", err)
 		}
 	}
 
@@ -1952,7 +1926,7 @@ func (r *OTARepository) UpsertDeviceUpgradeWithTask(ctx context.Context, du *mod
 		INSERT INTO device_upgrades (device_sn, firmware_id, firmware_version, target_chip,
 		    old_version, status, progress, error_message, retry_count, pushed_by, upgrade_package_id, task_id, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW())
-		ON CONFLICT (device_sn, firmware_id, COALESCE(upgrade_package_id, 0)) DO UPDATE SET
+		ON CONFLICT (task_id, device_sn, target_chip) WHERE task_id IS NOT NULL DO UPDATE SET
 		    status = CASE
 		        WHEN device_upgrades.status = 'success' THEN device_upgrades.status
 		        WHEN $6 = 'pending' AND device_upgrades.status = 'failed' THEN 'pending'
@@ -2040,16 +2014,7 @@ func (r *OTARepository) ReportLocalOTAResult(ctx context.Context, sn string, tar
 		}
 	}
 
-	// 2. 如果有 mainVersion，更新设备主版本号
-	if mainVersion != "" {
-		if _, err := r.db.Exec(ctx,
-			"UPDATE devices SET main_version = $2, updated_at = NOW() WHERE sn = $1",
-			sn, mainVersion); err != nil {
-			return fmt.Errorf("update main version: %w", err)
-		}
-	}
-
-	// 3. 记录一条 device_upgrades 历史记录（标记为本地升级）
+	// 2. 记录一条 device_upgrades 历史记录（标记为本地升级）
 	if newVersion != "" {
 		if _, err := r.db.Exec(ctx, `
 			INSERT INTO device_upgrades (device_sn, firmware_version, target_chip, old_version, status, completed_at, created_at, updated_at)

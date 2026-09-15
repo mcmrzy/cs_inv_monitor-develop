@@ -39,7 +39,7 @@ const FirmwareUpgradeTab: React.FC<FirmwareUpgradeTabProps> = ({ sn }) => {
   const { timezone } = useTimezoneStore()
   const { user, hasPermission } = useAuthStore()
   const isSuperAdmin = user?.isSystemAdmin
-  const canControl = Boolean(isSuperAdmin) || hasPermission('devices:control') || hasPermission('ota:control')
+  const canControl = Boolean(isSuperAdmin) || hasPermission('devices:control')
 
   const [historyPage, setHistoryPage] = React.useState(1)
   const [historyPageSize, setHistoryPageSize] = React.useState(10)
@@ -107,13 +107,17 @@ const FirmwareUpgradeTab: React.FC<FirmwareUpgradeTabProps> = ({ sn }) => {
   const firmwareItems = React.useMemo(() => {
     if (!deviceData) return []
     return [
-      { label: t('dev.firmwareArm'), children: deviceData.firmware_arm || '-' },
-      { label: t('dev.firmwareEsp'), children: deviceData.firmware_esp || '-' },
-      { label: t('dev.firmwareDsp'), children: deviceData.firmware_dsp || '-' },
-      { label: t('dev.firmwareBms'), children: deviceData.firmware_bms || '-' },
+      { label: t('dev.deviceName'), children: deviceData.alias || deviceData.model || deviceData.sn || sn },
+      { label: t('common.model'), children: deviceData.model || '-' },
+      { label: t('dev.deviceSN'), children: deviceData.sn || sn },
+      { label: t('dev.hardwareVersion'), children: deviceData.hardware_version || deviceData.hardwareVersion || '-' },
+      { label: firmwareModuleLabel('arm', t), children: deviceData.firmware_arm || '-' },
+      { label: firmwareModuleLabel('esp', t), children: deviceData.firmware_esp || '-' },
+      { label: firmwareModuleLabel('dsp', t), children: deviceData.firmware_dsp || '-' },
+      { label: firmwareModuleLabel('bms', t), children: deviceData.firmware_bms || '-' },
       { label: t('dev.bootloaderVersion'), children: deviceData.bootloader_version || '-' },
     ]
-  }, [deviceData, t])
+  }, [deviceData, sn, t])
 
   const historyColumns: ColumnsType<DeviceUpgrade> = [
     {

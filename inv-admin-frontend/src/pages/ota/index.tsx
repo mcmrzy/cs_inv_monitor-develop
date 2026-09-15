@@ -251,7 +251,11 @@ const UpgradeTasksTab: React.FC = () => {
         setSelectedDeviceSns(sns)
         setCreateOpen(true)
       }
-      setSearchParams({}, { replace: true })
+      const nextParams = new URLSearchParams(searchParams)
+      nextParams.delete('create')
+      nextParams.delete('sns')
+      nextParams.set('tab', 'tasks')
+      setSearchParams(nextParams, { replace: true })
     }
   }, [searchParams, setSearchParams, canCreate])
 
@@ -419,7 +423,7 @@ const UpgradeTasksTab: React.FC = () => {
   const targetVersion = useMemo(() => {
     if (selectedFirmwareId) {
       const fw = firmwareList.find((f) => Number(f.id) === selectedFirmwareId)
-      return fw ? (fw.main_version || fw.version) : ''
+      return fw?.version || ''
     }
     return ''
   }, [selectedFirmwareId, firmwareList])
@@ -442,7 +446,7 @@ const UpgradeTasksTab: React.FC = () => {
       title: t('ota.upgradeType'), key: 'task_type', width: 90,
       render: (_: any, r: UpgradeTask) => (
         <Tag color={r.task_type === 'package' ? 'default' : 'blue'}>
-          {r.task_type === 'package' ? t('ota.packageMode') : t('ota.singleChip')}
+          {r.task_type === 'package' ? t('ota.legacyTask') : t('ota.singleChip')}
         </Tag>
       ),
     },
@@ -600,7 +604,7 @@ const UpgradeTasksTab: React.FC = () => {
   const publishedFirmwareOptions = firmwareList
     .filter((fw) => (fw.release_status || 'published') === 'published')
     .map((fw) => ({
-      label: `${sanitizeLegacyFirmwareLabel(fw.model) || fw.model} · ${firmwareModuleLabel(fw.target_chip, t)} · ${fw.main_version || fw.version}`,
+      label: `${sanitizeLegacyFirmwareLabel(fw.model) || fw.model} · ${firmwareModuleLabel(fw.target_chip, t)} · ${fw.version}`,
       value: Number(fw.id),
     }))
 
@@ -1197,7 +1201,6 @@ const FirmwareTab: React.FC = () => {
               columns={[
                 { title: t('common.deviceSN'), dataIndex: 'sn', key: 'sn', width: 140 },
                 { title: t('ota.model'), dataIndex: 'model', key: 'model', width: 100 },
-                { title: t('ota.mainVersion'), dataIndex: 'main_version', key: 'main_version', width: 120, render: (_: any, record: any) => record.main_version || '-' },
                 { title: firmwareModuleLabel('arm', t), dataIndex: 'firmware_arm', key: 'firmware_arm', width: 110, render: (_: any, record: any) => record.firmware_arm || '-' },
                 { title: firmwareModuleLabel('esp', t), dataIndex: 'firmware_esp', key: 'firmware_esp', width: 110, render: (_: any, record: any) => record.firmware_esp || '-' },
                 { title: firmwareModuleLabel('dsp', t), dataIndex: 'firmware_dsp', key: 'firmware_dsp', width: 110, render: (_: any, record: any) => record.firmware_dsp || '-' },

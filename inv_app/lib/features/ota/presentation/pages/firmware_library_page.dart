@@ -179,6 +179,7 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
           version: r.version,
           signature: r.releaseSignature,
           securityVersion: r.securityVersion,
+          supportedChannels: r.supportedChannels,
         );
       }
       if (!mounted) return;
@@ -426,7 +427,10 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
           if (r.changelog.isNotEmpty) ...[
             SizedBox(height: 8.h),
             Text(
-              r.changelog,
+              FirmwareModulePresentation.sanitizeCustomerCopy(
+                r.changelog,
+                l10n,
+              ),
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
@@ -451,7 +455,7 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
                     : const SizedBox.shrink(),
               ),
               if (downloading) SizedBox(width: 10.w),
-              if (downloaded)
+              if (downloaded && r.canLocalUpgrade)
                 FilledButton.icon(
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.success,
@@ -464,7 +468,7 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
                     style: TextStyle(fontSize: 13.sp),
                   ),
                 )
-              else
+              else if (!downloaded)
                 FilledButton.tonalIcon(
                   style: FilledButton.styleFrom(
                     minimumSize: Size(0, 36.h),

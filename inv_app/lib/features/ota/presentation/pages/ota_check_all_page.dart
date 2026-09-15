@@ -167,12 +167,12 @@ class _OtaCheckAllPageState extends State<OtaCheckAllPage> {
                     latestFirmwareId: m.latestFirmwareId,
                     taskStatus: m.isUnreported
                         ? 'skipped'
-                        : m.updateAvailable
+                        : m.canRemoteUpgrade
                             ? 'updating'
                             : 'success',
                   )));
             final hasUpdate =
-                overview.modules.any((m) => m.updateAvailable);
+                overview.modules.any((m) => m.canRemoteUpgrade);
             _mark(
               entry,
               hasUpdate ? _CheckResult.updating : _CheckResult.upToDate,
@@ -462,7 +462,9 @@ class _OtaCheckAllPageState extends State<OtaCheckAllPage> {
                   padding: EdgeInsets.symmetric(horizontal: 14.w),
                   minimumSize: Size(0, 34.h),
                 ),
-                onPressed: () => context.push('/ota/${entry.sn}'),
+                onPressed: () => context.push(
+                  FirmwareModulePresentation.deviceRoute(entry.sn),
+                ),
                 child: Text(
                   l10n.str('ota_check_all_go_upgrade'),
                   style: TextStyle(fontSize: 13.sp),

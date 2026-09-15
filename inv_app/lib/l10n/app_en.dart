@@ -1948,8 +1948,8 @@ const Map<String, String> en = {
 
   // Device firmware modules
   'firmware_module_communication': 'Communication',
-  'firmware_module_system_control': 'Main Control',
-  'firmware_module_power_control': 'Digital Signal',
+  'firmware_module_system_control': 'System Control',
+  'firmware_module_power_control': 'Power Control',
   'firmware_module_battery_management': 'Battery Management',
   'firmware_module_generic': 'Device Component',
   'firmware_module_communication_description':

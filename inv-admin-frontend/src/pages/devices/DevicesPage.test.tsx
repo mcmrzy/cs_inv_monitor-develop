@@ -2,8 +2,14 @@ import { describe, it, expect } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import { renderAsAdmin } from '@/test/test-utils'
 import DevicesPage from './index'
+import { buildBatchOtaDeepLink } from './index'
 
 describe('DevicesPage', () => {
+  it('builds batch OTA deep links that preserve the tasks tab', () => {
+    expect(buildBatchOtaDeepLink(['INV20250001', 'INV/2'])).toBe(
+      '/ota?tab=tasks&create=1&sns=INV20250001%2CINV%2F2',
+    )
+  })
   it('renders device table rows from the device list API', async () => {
     renderAsAdmin(<DevicesPage />)
 

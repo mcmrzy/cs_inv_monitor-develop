@@ -59,7 +59,7 @@ export const otaApi = {
   getFirmwareResources: (sn: string, targetChip?: string) =>
     api.get(`/ota/devices/${encodeURIComponent(sn)}/firmware-resources`, {
       params: targetChip ? { target_chip: targetChip } : {},
-      expectedDataShape: 'object',
+      expectedDataShape: 'array',
     }),
   /** 触发单模块/多模块固件升级 */
   triggerFirmwareUpgrade: (data: TriggerFirmwareRequest) =>

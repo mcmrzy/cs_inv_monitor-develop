@@ -147,7 +147,7 @@ class _DeviceFirmwareDetailPageState extends State<DeviceFirmwareDetailPage> {
       !_triggering;
 
   List<FirmwareModuleOverview> get _updatableModules =>
-      _overview?.modules.where((m) => m.updateAvailable).toList() ??
+      _overview?.modules.where((m) => m.canRemoteUpgrade).toList() ??
       const [];
 
   Future<void> _triggerSingle(FirmwareModuleOverview module) async {
@@ -400,8 +400,11 @@ class _DeviceFirmwareDetailPageState extends State<DeviceFirmwareDetailPage> {
                 width: double.infinity,
                 child: FilledButton.icon(
                   onPressed: canCheckUpdate
-                      ? () => context
-                          .push('/ota/${Uri.encodeComponent(widget.deviceSN)}')
+                      ? () => context.push(
+                          FirmwareModulePresentation.deviceRoute(
+                            widget.deviceSN,
+                          ),
+                        )
                       : null,
                   icon: const Icon(Icons.refresh_rounded),
                   label: Text(
@@ -473,12 +476,12 @@ class _DeviceFirmwareDetailPageState extends State<DeviceFirmwareDetailPage> {
                   ? l10n.str('firmware_version_not_reported')
                   : m.currentVersion),
           latestVersion: m.latestVersion,
-          changelog: m.changelog,
+          changelog: FirmwareModulePresentation.sanitizeCustomerCopy(
+            m.changelog,
+            l10n,
+          ),
           updateAvailable: m.updateAvailable,
-          canUpgrade: online &&
-              m.updateAvailable &&
-              m.latestFirmwareId > 0 &&
-              !m.isUnreported,
+          canUpgrade: online && m.canRemoteUpgrade,
           onUpgrade: () => _triggerSingle(m),
         );
       },
