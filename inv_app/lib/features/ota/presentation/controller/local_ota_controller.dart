@@ -340,11 +340,11 @@ class LocalOTAController extends ChangeNotifier {
           ));
           _onTerminateConnection?.call();
           // 成功后经 Repository 上报（不再由页面直连 Dio 绕过分层）
-          if (newVersion != null) {
+          // 本地 OTA 完成只上报 target/new_version，不再产生 main_version
+          if (chipNewVersion.isNotEmpty) {
             await _reportResult(
               targetChip: targetChip,
-              chipNewVersion: chipNewVersion.isNotEmpty ? chipNewVersion : '',
-              mainVersion: mainVer.isNotEmpty ? mainVer : null,
+              chipNewVersion: chipNewVersion,
             );
           }
           return;
@@ -383,7 +383,6 @@ class LocalOTAController extends ChangeNotifier {
   Future<void> _reportResult({
     required String targetChip,
     required String chipNewVersion,
-    String? mainVersion,
   }) async {
     // 等待网络恢复（断开热点后需要几秒切回移动网络/普通 WiFi）
     await Future.delayed(const Duration(seconds: 3));
@@ -397,7 +396,6 @@ class LocalOTAController extends ChangeNotifier {
         sn: _deviceSN,
         targetChip: targetChip,
         newVersion: chipNewVersion,
-        mainVersion: mainVersion,
       );
       return;
     }
@@ -407,7 +405,6 @@ class LocalOTAController extends ChangeNotifier {
         sn: _deviceSN,
         targetChip: targetChip,
         newVersion: chipNewVersion,
-        mainVersion: mainVersion,
       );
     } catch (e) {
       debugPrint('[LocalOTA] report result failed: $e');

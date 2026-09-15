@@ -889,8 +889,10 @@ class _OTAPageState extends State<OTAPage> {
                   ? null
                   : () => _confirmStartUpgrade(() {
                         setState(() => _triggering = true);
+                        // packages 已退役：直接重发升级命令并开始轮询
                         context.read<OtaBloc>().add(
-                            OTAPackageTriggerRequested(sn: widget.deviceSN));
+                            OTAProgressStartPollRequested(
+                                deviceSn: widget.deviceSN));
                       }),
               style: ElevatedButton.styleFrom(
                 backgroundColor: _triggering

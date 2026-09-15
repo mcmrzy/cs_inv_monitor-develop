@@ -107,14 +107,21 @@ void main() {
       expectFormatFailure(result);
     });
 
-    test('OTA package list rejects an unexpected successful shape', () async {
+    test('OTA firmware resources accepts list data', () async {
       final remote = _OtaRemote();
-      when(() => remote.getAvailablePackages(any()))
-          .thenAnswer((_) async => responseWith({'code': 0, 'data': {}}));
+      when(() => remote.getFirmwareResources(any(),
+          targetChip: any(named: 'targetChip'))).thenAnswer(
+        (_) async => responseWith({
+          'code': 0,
+          'data': [
+            {'id': 1, 'version': '1.0.0', 'target_chip': 'arm'},
+          ],
+        }),
+      );
 
       final result =
-          await OtaRepositoryImpl(remote).getAvailablePackages('SN1');
-      expectFormatFailure(result);
+          await OtaRepositoryImpl(remote).getFirmwareResources('SN1');
+      expect(result.isRight(), isTrue);
     });
   });
 

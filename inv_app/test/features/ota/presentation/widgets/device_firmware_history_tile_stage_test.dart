@@ -35,9 +35,10 @@ void main() {
       DeviceFirmwareHistory(
         id: 1,
         deviceSn: 'H1ZZX0013900001P',
+        firmwareId: 10,
         target: 'arm',
         oldVersion: '1.0.0',
-        newVersion: '1.1.0',
+        firmwareVersion: '1.1.0',
         status: status,
         stage: stage,
         changelog: '',

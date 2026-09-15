@@ -1,4 +1,3 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -9,17 +8,20 @@ import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/core/widgets/pagination_bar.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:inv_app/features/ota/domain/entities/device_firmware_history.dart';
+import 'package:inv_app/features/ota/domain/entities/device_firmware_overview.dart';
+import 'package:inv_app/features/ota/domain/repositories/ota_repository.dart';
+import 'package:inv_app/features/ota/presentation/models/firmware_module_presentation.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 
-/// 全设备升级历史页（需求 16：OTA 四卡片 Hub 的“升级历史”入口）
+/// 全设备升级历史页（OTA 四卡片 Hub 的「升级历史」入口）
 ///
-/// 数据源：GET /ota/history（分页返回当前用户可见的全部设备升级记录，
-/// 系统管理员返回全部，普通用户由后端按数据权限过滤）。
-/// 回退：POST /ota/rollback `{sn, package_id}`，后端要求 `ota:control` 权限，
-/// 终端用户无权限时按钮置灰并在点击时提示“联系代理商”，不伪造回退逻辑。
+/// 数据源：GET /ota/history（支持 device/module/status/time 四类筛选）。
+/// UI 选择本地时区时间，请求时转 ISO8601 UTC。
+/// 回退：POST /ota/firmware/rollback `{device_sn, firmware_id}`。
 class UpgradeHistoryPage extends StatefulWidget {
-  /// 设备序列号：仅为兼容旧路由保留，页面不再按设备过滤。
+  /// 设备序列号：为空时展示全部设备
   final String deviceSN;
 
   const UpgradeHistoryPage({super.key, required this.deviceSN});
@@ -29,7 +31,9 @@ class UpgradeHistoryPage extends StatefulWidget {
 }
 
 class _UpgradeHistoryPageState extends State<UpgradeHistoryPage> {
-  List<UpgradeHistoryItem> _items = const [];
+  final OtaRepository _repository = getIt<OtaRepository>();
+
+  List<DeviceFirmwareHistory> _items = const [];
   int _page = 1;
   int _total = 0;
   final int _pageSize = 20;
@@ -37,9 +41,30 @@ class _UpgradeHistoryPageState extends State<UpgradeHistoryPage> {
   String? _error;
   bool _rollbackSubmitting = false;
 
+  // 四类筛选
+  String? _filterDeviceSn;
+  String? _filterTargetChip;
+  String? _filterStatus;
+  DateTimeRange? _filterTimeRange;
+
+  static const List<String> _statusOptions = [
+    'pending',
+    'downloading',
+    'upgrading',
+    'success',
+    'failed',
+    'cancelled',
+  ];
+
+  static const List<String> _moduleOptions = [
+    'arm',
+    'esp',
+    'dsp',
+    'bms',
+  ];
+
   int get _totalPages => (_total / _pageSize).ceil();
 
-  /// 是否具备回退权限（ota:control）
   bool get _canRollback {
     final state = context.read<AuthBloc>().state;
     if (state is! AuthAuthenticated) return false;
@@ -49,6 +74,7 @@ class _UpgradeHistoryPageState extends State<UpgradeHistoryPage> {
   @override
   void initState() {
     super.initState();
+    _filterDeviceSn = widget.deviceSN.isNotEmpty ? widget.deviceSN : null;
     _load();
   }
 
@@ -57,39 +83,27 @@ class _UpgradeHistoryPageState extends State<UpgradeHistoryPage> {
       _loading = true;
       _error = null;
     });
-    try {
-      final dio = getIt<Dio>();
-      final response = await dio.get(
-        '/ota/history',
-        queryParameters: {'page': _page, 'page_size': _pageSize},
-      );
-      final data = response.data;
-      if (data is Map<String, dynamic> && data['code'] == 0) {
-        final payload = (data['data'] as Map<String, dynamic>?) ?? {};
-        final items = (payload['items'] as List? ?? const [])
-            .map(
-              (e) => UpgradeHistoryItem.fromJson(
-                Map<String, dynamic>.from(e as Map),
-              ),
-            )
-            .toList();
-        if (!mounted) return;
-        setState(() {
-          _items = items;
-          _total = (payload['total'] as num?)?.toInt() ?? 0;
-          _loading = false;
-        });
-      } else {
-        throw Exception(data is Map ? data['message'] : 'bad response');
-      }
-    } catch (e) {
-      debugPrint('[UpgradeHistoryPage] load failed: $e');
-      if (!mounted) return;
-      setState(() {
+    final result = await _repository.getHistory(
+      deviceSn: _filterDeviceSn,
+      targetChip: _filterTargetChip,
+      status: _filterStatus,
+      startTime: _filterTimeRange?.start,
+      endTime: _filterTimeRange?.end,
+      page: _page,
+      pageSize: _pageSize,
+    );
+    if (!mounted) return;
+    result.match(
+      (failure) => setState(() {
         _loading = false;
-        _error = e.toString();
-      });
-    }
+        _error = failure.message;
+      }),
+      (page) => setState(() {
+        _items = page.items;
+        _total = page.total;
+        _loading = false;
+      }),
+    );
   }
 
   void _onPageChanged(int page) {
@@ -97,8 +111,46 @@ class _UpgradeHistoryPageState extends State<UpgradeHistoryPage> {
     _load();
   }
 
-  /// 回退入口：权限门控 + 确认弹窗 + POST /ota/rollback
-  Future<void> _onRollback(UpgradeHistoryItem item) async {
+  void _resetAndLoad() {
+    _page = 1;
+    _load();
+  }
+
+  void _clearFilters() {
+    setState(() {
+      _filterDeviceSn =
+          widget.deviceSN.isNotEmpty ? widget.deviceSN : null;
+      _filterTargetChip = null;
+      _filterStatus = null;
+      _filterTimeRange = null;
+    });
+    _resetAndLoad();
+  }
+
+  Future<void> _pickTimeRange() async {
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(now.year - 2),
+      lastDate: now,
+      initialDateRange: _filterTimeRange,
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _filterTimeRange = picked);
+    _resetAndLoad();
+  }
+
+  void _applyQuickRange(int days) {
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month, now.day)
+        .subtract(Duration(days: days - 1));
+    setState(() {
+      _filterTimeRange = DateTimeRange(start: start, end: now);
+    });
+    _resetAndLoad();
+  }
+
+  Future<void> _onRollback(DeviceFirmwareHistory item) async {
     if (!_canRollback) {
       AppToast.show(
         context,
@@ -107,16 +159,18 @@ class _UpgradeHistoryPageState extends State<UpgradeHistoryPage> {
       );
       return;
     }
+    if (item.firmwareId <= 0) return;
     final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(l10n.str('upgrade_history_rollback')),
+        title: Text(l10n.str('firmware_rollback')),
         content: Text(
-          l10n.str(
-            'upgrade_history_rollback_confirm',
-            {'version': item.firmwareVersion},
-          ),
+          l10n.str('firmware_rollback_confirm', {
+            'version': item.oldVersion.isEmpty
+                ? item.firmwareVersion
+                : item.oldVersion,
+          }),
         ),
         actions: [
           TextButton(
@@ -133,36 +187,30 @@ class _UpgradeHistoryPageState extends State<UpgradeHistoryPage> {
     if (confirmed != true || !mounted) return;
 
     setState(() => _rollbackSubmitting = true);
-    try {
-      final dio = getIt<Dio>();
-      final response = await dio.post(
-        '/ota/rollback',
-        data: {'sn': item.sn, 'package_id': item.upgradePackageId},
-      );
-      final data = response.data;
-      if (data is Map<String, dynamic> && data['code'] == 0) {
-        if (!mounted) return;
+    final key =
+        'rollback-${item.deviceSn}-${item.firmwareId}-${DateTime.now().millisecondsSinceEpoch}';
+    final result = await _repository.rollbackFirmware(
+      item.deviceSn,
+      item.firmwareId,
+      idempotencyKey: key,
+    );
+    if (!mounted) return;
+    setState(() => _rollbackSubmitting = false);
+    result.match(
+      (failure) => AppToast.show(
+        context,
+        l10n.str('firmware_rollback_failed', {'error': failure.message}),
+        type: ToastType.error,
+      ),
+      (_) {
         AppToast.show(
           context,
-          l10n.str('upgrade_history_rollback_sent'),
+          l10n.str('firmware_rollback_sent'),
           type: ToastType.success,
         );
         _load();
-      } else {
-        final message = data is Map ? data['message'] : 'bad response';
-        throw Exception(message);
-      }
-    } catch (e) {
-      debugPrint('[UpgradeHistoryPage] rollback failed: $e');
-      if (!mounted) return;
-      AppToast.show(
-        context,
-        l10n.str('upgrade_history_rollback_failed', {'error': '$e'}),
-        type: ToastType.error,
-      );
-    } finally {
-      if (mounted) setState(() => _rollbackSubmitting = false);
-    }
+      },
+    );
   }
 
   @override
@@ -181,9 +229,211 @@ class _UpgradeHistoryPageState extends State<UpgradeHistoryPage> {
         scrolledUnderElevation: 0.5,
         backgroundColor: AppColor.surfaceContainer(context),
         foregroundColor: AppColor.textPrimary(context),
+        actions: [
+          if (_filterTargetChip != null ||
+              _filterStatus != null ||
+              _filterTimeRange != null)
+            TextButton(
+              onPressed: _clearFilters,
+              child: Text(l10n.str('upgrade_history_filter_clear')),
+            ),
+        ],
       ),
-      body: _buildBody(context, l10n),
+      body: Column(
+        children: [
+          _buildFilterBar(l10n),
+          Expanded(child: _buildBody(context, l10n)),
+        ],
+      ),
     );
+  }
+
+  Widget _buildFilterBar(AppLocalizations l10n) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+      color: AppColor.surfaceContainer(context),
+      child: Column(
+        children: [
+          SizedBox(
+            height: 36.h,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                // 模块筛选
+                _filterChip(
+                  label: _filterTargetChip == null
+                      ? l10n.str('upgrade_history_filter_module')
+                      : FirmwareModulePresentation.fromTarget(_filterTargetChip)
+                          .displayLabel(l10n),
+                  selected: _filterTargetChip != null,
+                  onTap: () => _showModulePicker(l10n),
+                ),
+                SizedBox(width: 8.w),
+                // 状态筛选
+                _filterChip(
+                  label: _filterStatus == null
+                      ? l10n.str('upgrade_history_filter_status')
+                      : _statusLabel(l10n, _filterStatus!),
+                  selected: _filterStatus != null,
+                  onTap: () => _showStatusPicker(l10n),
+                ),
+                SizedBox(width: 8.w),
+                // 时间筛选
+                _filterChip(
+                  label: _filterTimeRange == null
+                      ? l10n.str('upgrade_history_filter_time')
+                      : _formatRange(_filterTimeRange!),
+                  selected: _filterTimeRange != null,
+                  onTap: _pickTimeRange,
+                ),
+                SizedBox(width: 8.w),
+                _filterChip(
+                  label: l10n.str('upgrade_history_filter_today'),
+                  selected: false,
+                  onTap: () => _applyQuickRange(1),
+                ),
+                SizedBox(width: 8.w),
+                _filterChip(
+                  label: l10n.str('upgrade_history_filter_7days'),
+                  selected: false,
+                  onTap: () => _applyQuickRange(7),
+                ),
+                SizedBox(width: 8.w),
+                _filterChip(
+                  label: l10n.str('upgrade_history_filter_30days'),
+                  selected: false,
+                  onTap: () => _applyQuickRange(30),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _filterChip({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18.r),
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
+        decoration: BoxDecoration(
+          color: selected
+              ? AppColors.primary.withValues(alpha: 0.12)
+              : AppColor.surfaceHover(context),
+          borderRadius: BorderRadius.circular(18.r),
+          border: Border.all(
+            color: selected
+                ? AppColors.primary.withValues(alpha: 0.4)
+                : AppColor.border(context),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12.sp,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                color: selected
+                    ? AppColors.primary
+                    : AppColor.textSecondary(context),
+              ),
+            ),
+            if (selected) ...[
+              SizedBox(width: 4.w),
+              Icon(Icons.close_rounded, size: 14.sp, color: AppColors.primary),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showModulePicker(AppLocalizations l10n) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(l10n.str('upgrade_history_filter_all')),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                setState(() => _filterTargetChip = null);
+                _resetAndLoad();
+              },
+            ),
+            for (final m in _moduleOptions)
+              ListTile(
+                leading: Icon(
+                  FirmwareModulePresentation.fromTarget(m).icon,
+                ),
+                title: Text(
+                  FirmwareModulePresentation.fromTarget(m).displayLabel(l10n),
+                ),
+                selected: _filterTargetChip == m,
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  setState(() => _filterTargetChip = m);
+                  _resetAndLoad();
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showStatusPicker(AppLocalizations l10n) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(l10n.str('upgrade_history_filter_all')),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                setState(() => _filterStatus = null);
+                _resetAndLoad();
+              },
+            ),
+            for (final s in _statusOptions)
+              ListTile(
+                title: Text(_statusLabel(l10n, s)),
+                selected: _filterStatus == s,
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  setState(() => _filterStatus = s);
+                  _resetAndLoad();
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _statusLabel(AppLocalizations l10n, String status) {
+    final key = 'upgrade_history_status_$status';
+    final label = l10n.str(key);
+    return label == key ? status : label;
+  }
+
+  String _formatRange(DateTimeRange range) {
+    String two(int v) => v.toString().padLeft(2, '0');
+    final s = range.start.toLocal();
+    final e = range.end.toLocal();
+    return '${s.month}/${s.day} - ${e.month}/${e.day}';
   }
 
   Widget _buildBody(BuildContext context, AppLocalizations l10n) {
@@ -253,55 +503,8 @@ class _UpgradeHistoryPageState extends State<UpgradeHistoryPage> {
   }
 }
 
-/// 单条升级记录（对应后端 DeviceUpgrade）
-class UpgradeHistoryItem {
-  final String sn; // 设备序列号（json tag: device_sn）
-  final String firmwareVersion;
-  final String oldVersion;
-  final String status; // pending/downloading/upgrading/success/failed/cancelled
-  final int progress;
-  final String errorMessage;
-  final String source; // admin/app/local
-  final int? upgradePackageId;
-  final int? taskId;
-  final DateTime createdAt;
-
-  const UpgradeHistoryItem({
-    required this.sn,
-    required this.firmwareVersion,
-    required this.oldVersion,
-    required this.status,
-    required this.progress,
-    required this.errorMessage,
-    required this.source,
-    required this.upgradePackageId,
-    required this.taskId,
-    required this.createdAt,
-  });
-
-  factory UpgradeHistoryItem.fromJson(Map<String, dynamic> json) {
-    return UpgradeHistoryItem(
-      sn: (json['device_sn'] ?? '').toString(),
-      firmwareVersion: json['firmware_version'] as String? ?? '',
-      oldVersion: json['old_version'] as String? ?? '',
-      status: json['status'] as String? ?? 'pending',
-      progress: (json['progress'] as num?)?.toInt() ?? 0,
-      errorMessage: json['error_message'] as String? ?? '',
-      source: json['source'] as String? ?? '',
-      upgradePackageId: (json['upgrade_package_id'] as num?)?.toInt(),
-      taskId: (json['task_id'] as num?)?.toInt(),
-      createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ??
-          DateTime.now(),
-    );
-  }
-
-  /// 成功且带升级包 ID 的记录才可回退
-  bool get canRollback =>
-      status == 'success' && upgradePackageId != null && upgradePackageId! > 0;
-}
-
 class _UpgradeTile extends StatelessWidget {
-  final UpgradeHistoryItem item;
+  final DeviceFirmwareHistory item;
   final bool canRollback;
   final bool rollbackSubmitting;
   final VoidCallback onRollback;
@@ -316,27 +519,21 @@ class _UpgradeTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final module = FirmwareModulePresentation.fromTarget(item.target);
     final versionText = item.firmwareVersion.isEmpty
         ? l10n.unknown
-        : 'v${item.firmwareVersion}';
+        : item.firmwareVersion;
     final showRollback = item.canRollback;
+    final time = (item.updatedAt ?? item.createdAt)?.toLocal();
     return ListTile(
-      onTap: item.taskId != null && item.taskId! > 0 && item.sn.isNotEmpty
-          ? () {
-              final route = Uri(
-                path: '/ota/${item.sn}/detail',
-                queryParameters: {'task_id': '${item.taskId}'},
-              );
-              context.push(route.toString());
-            }
-          : null,
+      onTap: null,
       leading: Icon(
-        Icons.system_update_rounded,
+        module.icon,
         size: 22.sp,
         color: _statusColor(context, item.status),
       ),
       title: Text(
-        versionText,
+        '${module.displayLabel(l10n)} · $versionText',
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
@@ -348,13 +545,13 @@ class _UpgradeTile extends StatelessWidget {
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (item.sn.isNotEmpty) ...[
+          if (item.deviceSn.isNotEmpty) ...[
             Text(
-              item.sn,
+              item.deviceSn,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize: 14.sp,
+                fontSize: 13.sp,
                 fontWeight: FontWeight.w500,
                 color: AppColor.textPrimary(context),
               ),
@@ -362,8 +559,7 @@ class _UpgradeTile extends StatelessWidget {
             SizedBox(height: 2.h),
           ],
           Text(
-            '${_sourceLabel(l10n, item.source)}'
-            ' · ${_formatTime(item.createdAt)}',
+            time == null ? '—' : _formatTime(time),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
@@ -374,7 +570,7 @@ class _UpgradeTile extends StatelessWidget {
           if (item.oldVersion.isNotEmpty) ...[
             SizedBox(height: 2.h),
             Text(
-              '${l10n.str('upgrade_history_old_version')}: v${item.oldVersion}',
+              '${l10n.str('upgrade_history_old_version')}: ${item.oldVersion}',
               style: TextStyle(
                 fontSize: 11.sp,
                 color: AppColor.textHint(context),
@@ -399,7 +595,7 @@ class _UpgradeTile extends StatelessWidget {
           if (showRollback) ...[
             SizedBox(width: 6.w),
             Tooltip(
-              message: l10n.str('upgrade_history_rollback_hint'),
+              message: l10n.str('firmware_rollback'),
               child: IconButton(
                 icon: const Icon(Icons.restore_rounded, size: 20),
                 color: canRollback
@@ -415,15 +611,6 @@ class _UpgradeTile extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  String _sourceLabel(AppLocalizations l10n, String source) {
-    return switch (source) {
-      'admin' => l10n.str('upgrade_history_source_admin'),
-      'app' => l10n.str('upgrade_history_source_app'),
-      'local' => l10n.str('upgrade_history_source_local'),
-      _ => source,
-    };
   }
 }
 

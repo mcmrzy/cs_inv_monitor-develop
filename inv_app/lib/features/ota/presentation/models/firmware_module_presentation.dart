@@ -47,6 +47,25 @@ final class FirmwareModulePresentation {
 
   String displayLabel(AppLocalizations l10n) => l10n.str(labelKey);
 
+  /// 清理遗留展示名尾部的芯片后缀（ESP/ARM/DSP/BMS 的各种大小写与括号形态）。
+  static String sanitizeLegacyLabel(String label) {
+    var result = label.trim();
+    // 去掉尾部全角/半角括号芯片后缀：（ESP）/(esp)/（Arm）等
+    result = result.replaceAll(
+      RegExp(
+        r'[\s]*[\(（]\s*(esp|arm|dsp|bms)\s*[\)）]\s*$',
+        caseSensitive: false,
+      ),
+      '',
+    );
+    // 去掉尾部裸芯片词：… ESP / … eSp / …ARM
+    result = result.replaceAll(
+      RegExp(r'\s+(esp|arm|dsp|bms)\s*$', caseSensitive: false),
+      '',
+    );
+    return result.trim();
+  }
+
   static FirmwareModulePresentation fromTarget(String? value) {
     final raw = value?.trim() ?? '';
     final kind = switch (raw.toLowerCase()) {

@@ -8,12 +8,12 @@ void main() {
   test('maps internal firmware targets to functional module names', () async {
     final zh = await AppLocalizations.delegate.load(const Locale('zh', 'CN'));
 
-    // 展示名统一为「中文模块名（芯片）」，见 e14f20575
+    // 展示名固定为功能名，不带芯片后缀
     final cases = <String, String>{
-      'esp': '通信采集（ESP）',
-      'ARM': '系统中控（ARM）',
-      'dsp': '计算控制（DSP）',
-      'bms': '电池管理（BMS）',
+      'esp': '通信采集',
+      'ARM': '主控',
+      'dsp': '数字信号',
+      'bms': '电池管理',
       'vendor_x': '设备组件',
     };
 
@@ -27,10 +27,10 @@ void main() {
     final en = await AppLocalizations.delegate.load(const Locale('en'));
 
     final cases = <String, String>{
-      'esp': 'Communication (ESP)',
-      'ARM': 'System Control (ARM)',
-      'dsp': 'Computation (DSP)',
-      'bms': 'Battery Management (BMS)',
+      'esp': 'Communication',
+      'ARM': 'Main Control',
+      'dsp': 'Digital Signal',
+      'bms': 'Battery Management',
       'vendor_x': 'Device Component',
     };
 
@@ -65,5 +65,52 @@ void main() {
       FirmwareModulePresentation.fromFirmwareField('firmware_bms').kind,
       FirmwareModuleKind.batteryManagement,
     );
+  });
+
+  group('sanitizeLegacyLabel', () {
+    test('strips trailing parenthesized chip suffixes', () {
+      expect(
+        FirmwareModulePresentation.sanitizeLegacyLabel('通信采集（ESP）'),
+        '通信采集',
+      );
+      expect(
+        FirmwareModulePresentation.sanitizeLegacyLabel('System Control (ARM)'),
+        'System Control',
+      );
+      expect(
+        FirmwareModulePresentation.sanitizeLegacyLabel('Computation (dsp)'),
+        'Computation',
+      );
+      expect(
+        FirmwareModulePresentation.sanitizeLegacyLabel('Battery (BMS)'),
+        'Battery',
+      );
+    });
+
+    test('strips trailing bare chip words', () {
+      expect(
+        FirmwareModulePresentation.sanitizeLegacyLabel('Communication ESP'),
+        'Communication',
+      );
+      expect(
+        FirmwareModulePresentation.sanitizeLegacyLabel('Main Control eSp'),
+        'Main Control',
+      );
+      expect(
+        FirmwareModulePresentation.sanitizeLegacyLabel('数字信号 ARM'),
+        '数字信号',
+      );
+    });
+
+    test('leaves labels without chip suffixes unchanged', () {
+      expect(
+        FirmwareModulePresentation.sanitizeLegacyLabel('通信采集'),
+        '通信采集',
+      );
+      expect(
+        FirmwareModulePresentation.sanitizeLegacyLabel('Main Control'),
+        'Main Control',
+      );
+    });
   });
 }
