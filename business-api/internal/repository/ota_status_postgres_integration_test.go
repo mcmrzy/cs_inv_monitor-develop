@@ -84,8 +84,8 @@ func seedOTAStatusTask(t *testing.T, pool *pgxpool.Pool, taskID int64, targetVer
 func seedOTAStatusUpgrade(t *testing.T, pool *pgxpool.Pool, deviceSN string, firmwareID, taskID int64, targetChip, version, status string, progress int, updatedAt time.Time) {
 	t.Helper()
 	_, err := pool.Exec(context.Background(), `
-		INSERT INTO firmware_versions (id, model, version, file_url, target_chip, main_version)
-		VALUES ($1, 'CS-INV-TEST', $2, $3, $4, $5)
+		INSERT INTO firmware_versions (id, model, version, file_url, target_chip, main_version, release_status, published_at)
+		VALUES ($1, 'CS-INV-TEST', $2, $3, $4, $5, 'published', NOW())
 	`, firmwareID, version, "/firmware/"+version+".bin", targetChip, "V"+version)
 	require.NoError(t, err)
 

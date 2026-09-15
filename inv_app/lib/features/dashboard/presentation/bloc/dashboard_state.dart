@@ -60,13 +60,19 @@ class DashboardLoaded extends DashboardState {
       ];
 }
 
+enum DashboardErrorKind { requestFailed, networkUnavailable }
+
 class DashboardError extends DashboardState {
   final String message;
+  final DashboardErrorKind kind;
 
-  const DashboardError({required this.message});
+  const DashboardError({
+    required this.message,
+    this.kind = DashboardErrorKind.requestFailed,
+  });
 
   @override
-  List<Object?> get props => [message];
+  List<Object?> get props => [message, kind];
 }
 
 /// SSE连接中状态

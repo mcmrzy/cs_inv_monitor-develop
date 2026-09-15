@@ -36,11 +36,12 @@ class OTATriggering extends OtaState {
 
 class OTATriggered extends OtaState {
   final int taskId;
+  final List<OtaTriggerTask> tasks;
 
-  const OTATriggered({required this.taskId});
+  const OTATriggered({required this.taskId, this.tasks = const []});
 
   @override
-  List<Object?> get props => [taskId];
+  List<Object?> get props => [taskId, tasks];
 }
 
 class OTAProgress extends OtaState {
@@ -69,26 +70,53 @@ class OTAError extends OtaState {
   List<Object?> get props => [message];
 }
 
-class OTAFirmwareListLoading extends OtaState {}
+/// 固件总览加载中
+class OTAFirmwareOverviewLoading extends OtaState {}
 
-class OTAFirmwareListLoaded extends OtaState {
-  final List<dynamic> packages;
+/// 固件总览加载成功
+class OTAFirmwareOverviewLoaded extends OtaState {
+  final DeviceFirmwareOverview overview;
 
-  const OTAFirmwareListLoaded({required this.packages});
+  const OTAFirmwareOverviewLoaded({required this.overview});
 
   @override
-  List<Object?> get props => [packages];
+  List<Object?> get props => [overview];
 }
 
-class OTAFirmwareListError extends OtaState {
+/// 固件总览加载失败
+class OTAFirmwareOverviewError extends OtaState {
   final String message;
 
-  const OTAFirmwareListError({required this.message});
+  const OTAFirmwareOverviewError({required this.message});
 
   @override
   List<Object?> get props => [message];
 }
 
+/// 固件资源列表加载中
+class OTAFirmwareResourcesLoading extends OtaState {}
+
+/// 固件资源列表加载成功
+class OTAFirmwareResourcesLoaded extends OtaState {
+  final List<FirmwareResource> resources;
+
+  const OTAFirmwareResourcesLoaded({required this.resources});
+
+  @override
+  List<Object?> get props => [resources];
+}
+
+/// 固件资源列表加载失败
+class OTAFirmwareResourcesError extends OtaState {
+  final String message;
+
+  const OTAFirmwareResourcesError({required this.message});
+
+  @override
+  List<Object?> get props => [message];
+}
+
+/// 兼容别名：固件安装中（旧 UI 引用）
 class OTAFirmwareInstalling extends OtaState {
   final int packageId;
 
@@ -96,28 +124,4 @@ class OTAFirmwareInstalling extends OtaState {
 
   @override
   List<Object?> get props => [packageId];
-}
-
-/// 可用升级包列表加载中
-class OTAAvailablePackagesLoading extends OtaState {}
-
-/// 可用升级包列表加载成功
-/// packages 结构: [{id, user_version, user_changelog, is_force, model, main_version, ...}]
-class OTAAvailablePackagesLoaded extends OtaState {
-  final List<dynamic> packages;
-
-  const OTAAvailablePackagesLoaded({required this.packages});
-
-  @override
-  List<Object?> get props => [packages];
-}
-
-/// 可用升级包列表加载失败
-class OTAAvailablePackagesError extends OtaState {
-  final String message;
-
-  const OTAAvailablePackagesError({required this.message});
-
-  @override
-  List<Object?> get props => [message];
 }

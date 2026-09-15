@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:inv_app/features/ota/domain/entities/device_firmware_overview.dart';
 import 'package:inv_app/features/ota/domain/repositories/ota_repository.dart';
 
 part 'ota_event.dart';
@@ -43,13 +44,13 @@ class OtaBloc extends Bloc<OtaEvent, OtaState> {
   OtaBloc({required this.repository}) : super(OTAInitial()) {
     on<OTACheckRequested>(_onCheckRequested);
     on<OTATriggerRequested>(_onTriggerRequested);
-    on<OTAPackageTriggerRequested>(_onPackageTriggerRequested);
+    on<OTAFirmwareTriggerRequested>(_onFirmwareTriggerRequested);
+    on<OTAFirmwareRollbackRequested>(_onFirmwareRollbackRequested);
     on<OTAProgressStartPollRequested>(_onProgressStartPollRequested);
     on<OTAProgressPollRequested>(_onProgressPollRequested);
     on<OTAProgressStopPoll>(_onProgressStopPoll);
-    on<OTAFirmwareListRequested>(_onFirmwareListRequested);
-    on<OTAFirmwareInstallRequested>(_onFirmwareInstallRequested);
-    on<LoadAvailablePackages>(_onLoadAvailablePackages);
+    on<OTAFirmwareOverviewRequested>(_onFirmwareOverviewRequested);
+    on<OTAFirmwareResourcesRequested>(_onFirmwareResourcesRequested);
   }
 
   Future<void> _onCheckRequested(
@@ -73,23 +74,29 @@ class OtaBloc extends Bloc<OtaEvent, OtaState> {
     );
   }
 
-  Future<void> _onTriggerRequested(
-    OTATriggerRequested event,
+  /// 按 firmware_ids 批量触发升级（新契约）
+  Future<void> _onFirmwareTriggerRequested(
+    OTAFirmwareTriggerRequested event,
     Emitter<OtaState> emit,
   ) async {
-    // 防重入：升级进行中禁止再次触发
     if (_upgradeActive) return;
     _commandRequestInFlight = true;
     emit(const OTATriggering());
     try {
-      final result = await repository.triggerOTA(event.sn, event.packageId);
+      final result = await repository.triggerFirmware(
+        event.sn,
+        event.firmwareIds,
+        idempotencyKey: event.idempotencyKey,
+        forceReason: event.forceReason,
+      );
       result.fold(
         (failure) => emit(OTAError(message: failure.message)),
-        (data) {
-          // 从响应中提取 task_id 并保存到状态中
-          final taskId = (data['task_id'] as num?)?.toInt() ?? 0;
-          emit(OTATriggered(taskId: taskId));
-          _startProgressPoll(event.sn, taskId: taskId, immediate: false);
+        (tasks) {
+          final firstTaskId = tasks.isNotEmpty ? tasks.first.taskId : 0;
+          emit(OTATriggered(taskId: firstTaskId, tasks: tasks));
+          if (firstTaskId > 0) {
+            _startProgressPoll(event.sn, taskId: firstTaskId, immediate: false);
+          }
         },
       );
     } catch (e) {
@@ -99,26 +106,60 @@ class OtaBloc extends Bloc<OtaEvent, OtaState> {
     }
   }
 
-  /// Package mode: admin already pushed, but command may not have been delivered.
-  /// Call resend API to ensure command is sent, then start polling.
-  Future<void> _onPackageTriggerRequested(
-    OTAPackageTriggerRequested event,
+  /// 按 firmware_id 回滚
+  Future<void> _onFirmwareRollbackRequested(
+    OTAFirmwareRollbackRequested event,
     Emitter<OtaState> emit,
   ) async {
-    // 防重入：升级进行中禁止再次触发
     if (_upgradeActive) return;
     _commandRequestInFlight = true;
     emit(const OTATriggering());
-    // 先调用 resend API 确保升级命令被发送到设备；
-    // 下发失败时不再伪装"已触发"并空转轮询
     try {
-      final result = await repository.resendUpgradeCommand(event.sn);
+      final result = await repository.rollbackFirmware(
+        event.sn,
+        event.firmwareId,
+        idempotencyKey: event.idempotencyKey,
+        forceReason: event.forceReason,
+      );
       result.fold(
         (failure) => emit(OTAError(message: failure.message)),
         (data) {
           final taskId = (data['task_id'] as num?)?.toInt() ?? 0;
           emit(OTATriggered(taskId: taskId));
-          _startProgressPoll(event.sn, taskId: taskId, immediate: false);
+          if (taskId > 0) {
+            _startProgressPoll(event.sn, taskId: taskId, immediate: false);
+          }
+        },
+      );
+    } catch (e) {
+      emit(OTAError(message: e.toString()));
+    } finally {
+      _commandRequestInFlight = false;
+    }
+  }
+
+  /// 兼容旧调用：单 package 已废弃，转发为单 firmware trigger
+  Future<void> _onTriggerRequested(
+    OTATriggerRequested event,
+    Emitter<OtaState> emit,
+  ) async {
+    if (_upgradeActive) return;
+    _commandRequestInFlight = true;
+    emit(const OTATriggering());
+    try {
+      final result = await repository.triggerFirmware(
+        event.sn,
+        [event.packageId],
+        idempotencyKey: 'legacy-${event.sn}-${event.packageId}',
+      );
+      result.fold(
+        (failure) => emit(OTAError(message: failure.message)),
+        (tasks) {
+          final taskId = tasks.isNotEmpty ? tasks.first.taskId : 0;
+          emit(OTATriggered(taskId: taskId, tasks: tasks));
+          if (taskId > 0) {
+            _startProgressPoll(event.sn, taskId: taskId, immediate: false);
+          }
         },
       );
     } catch (e) {
@@ -293,56 +334,31 @@ class OtaBloc extends Bloc<OtaEvent, OtaState> {
     emit(OTAInitial());
   }
 
-  Future<void> _onFirmwareListRequested(
-    OTAFirmwareListRequested event,
+  Future<void> _onFirmwareOverviewRequested(
+    OTAFirmwareOverviewRequested event,
     Emitter<OtaState> emit,
   ) async {
-    emit(OTAFirmwareListLoading());
-    final result =
-        await repository.listUpgradePackages(model: event.deviceModel);
+    emit(OTAFirmwareOverviewLoading());
+    final result = await repository.getFirmwareOverview(event.sn);
     result.fold(
-      (failure) => emit(OTAFirmwareListError(message: failure.message)),
-      (packages) => emit(OTAFirmwareListLoaded(packages: packages)),
+      (failure) => emit(OTAFirmwareOverviewError(message: failure.message)),
+      (overview) => emit(OTAFirmwareOverviewLoaded(overview: overview)),
     );
   }
 
-  Future<void> _onFirmwareInstallRequested(
-    OTAFirmwareInstallRequested event,
+  Future<void> _onFirmwareResourcesRequested(
+    OTAFirmwareResourcesRequested event,
     Emitter<OtaState> emit,
   ) async {
-    // 防重入：升级进行中禁止再次触发
-    if (_upgradeActive) return;
-    _commandRequestInFlight = true;
-    emit(OTAFirmwareInstalling(packageId: event.packageId));
-    try {
-      final result = await repository.installPackage(event.sn, event.packageId);
-      result.fold(
-        (failure) => emit(OTAError(message: failure.message)),
-        (data) {
-          final taskId = (data['task_id'] as num?)?.toInt() ?? 0;
-          emit(OTATriggered(taskId: taskId));
-          _startProgressPoll(event.sn, taskId: taskId, immediate: false);
-        },
-      );
-    } catch (e) {
-      emit(OTAError(message: e.toString()));
-    } finally {
-      _commandRequestInFlight = false;
-    }
-  }
-
-  /// 加载设备可用升级包列表
-  /// 调用 GET /ota/available-packages/:sn
-  /// 响应: {code: 0, data: [{id, user_version, user_changelog, is_force, model, main_version, ...}]}
-  Future<void> _onLoadAvailablePackages(
-    LoadAvailablePackages event,
-    Emitter<OtaState> emit,
-  ) async {
-    emit(OTAAvailablePackagesLoading());
-    final result = await repository.getAvailablePackages(event.sn);
+    emit(OTAFirmwareResourcesLoading());
+    final result = await repository.getFirmwareResources(
+      event.sn,
+      targetChip: event.targetChip,
+    );
     result.fold(
-      (failure) => emit(OTAAvailablePackagesError(message: failure.message)),
-      (packages) => emit(OTAAvailablePackagesLoaded(packages: packages)),
+      (failure) => emit(OTAFirmwareResourcesError(message: failure.message)),
+      (resources) =>
+          emit(OTAFirmwareResourcesLoaded(resources: resources)),
     );
   }
 

@@ -31,7 +31,6 @@ import 'package:inv_app/core/services/deep_link_service.dart';
 import 'package:inv_app/core/services/locale_service.dart';
 import 'package:inv_app/core/services/theme_service.dart';
 import 'package:inv_app/core/services/data_cache_service.dart';
-import 'package:inv_app/core/services/app_update_service.dart';
 import 'package:inv_app/core/services/domain_config_service.dart';
 import 'package:inv_app/core/services/jpush_service.dart';
 import 'package:inv_app/core/services/jverify_service.dart';
@@ -245,8 +244,8 @@ class ServiceLocator {
           newToken = (data['access_token'] ??
               data['token'] ??
               data['accessToken']) as String?;
-          newRefreshToken = (data['refresh_token'] ??
-              data['refreshToken']) as String?;
+          newRefreshToken =
+              (data['refresh_token'] ?? data['refreshToken']) as String?;
         } else if (responseData['access_token'] != null ||
             responseData['token'] != null) {
           newToken = (responseData['access_token'] ??
@@ -318,7 +317,7 @@ class ServiceLocator {
       () => NotificationService(),
     );
 
-getIt.registerLazySingleton<NotifyPrefsService>(
+    getIt.registerLazySingleton<NotifyPrefsService>(
       () => NotifyPrefsService(getIt(), getIt()),
     );
 
@@ -413,10 +412,6 @@ getIt.registerLazySingleton<NotifyPrefsService>(
     getIt.registerLazySingleton<ThemeService>(
       () => ThemeService(getIt()),
       dispose: (service) => service.dispose(),
-    );
-
-    getIt.registerLazySingleton<AppUpdateService>(
-      () => AppUpdateService(getIt(), domainConfig: getIt<DomainConfigService>()),
     );
 
     getIt.registerLazySingleton<DomainConfigService>(

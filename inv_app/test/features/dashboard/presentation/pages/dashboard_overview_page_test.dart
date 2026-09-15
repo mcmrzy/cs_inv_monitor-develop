@@ -4,6 +4,7 @@ import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inv_app/core/services/connection_mode_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
+import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/features/dashboard/domain/entities/dashboard_data.dart';
 import 'package:inv_app/features/dashboard/presentation/bloc/dashboard_bloc.dart';
 import 'package:inv_app/features/dashboard/presentation/pages/dashboard_overview_page.dart';
@@ -83,4 +84,57 @@ void main() {
       semantics.dispose();
     },
   );
+
+  testWidgets('network-unavailable error uses the dedicated retry panel',
+      (tester) async {
+    whenListen(
+      dashboardBloc,
+      const Stream<DashboardState>.empty(),
+      initialState: const DashboardError(
+        message: 'Failed to load, please check network',
+        kind: DashboardErrorKind.networkUnavailable,
+      ),
+    );
+
+    await pumpApp(
+      tester,
+      const DashboardOverviewPage(),
+      dashboardBloc: dashboardBloc,
+      locale: const Locale('zh', 'CN'),
+    );
+
+    expect(find.byKey(const Key('network-failure-panel')), findsOneWidget);
+    expect(
+      find.byKey(const Key('network-connection-failed-illustration')),
+      findsOneWidget,
+    );
+    final illustration = tester.widget<Image>(
+      find.byKey(const Key('network-connection-failed-illustration')),
+    );
+    expect(
+      (illustration.image as AssetImage).assetName,
+      CsergyAssets.xiaoshuoOffline,
+    );
+    expect(find.byKey(const Key('dashboard-generic-error')), findsNothing);
+  });
+
+  testWidgets('online request failure remains a generic error', (tester) async {
+    whenListen(
+      dashboardBloc,
+      const Stream<DashboardState>.empty(),
+      initialState: const DashboardError(
+        message: 'Failed to load',
+        kind: DashboardErrorKind.requestFailed,
+      ),
+    );
+
+    await pumpApp(
+      tester,
+      const DashboardOverviewPage(),
+      dashboardBloc: dashboardBloc,
+    );
+
+    expect(find.byKey(const Key('dashboard-generic-error')), findsOneWidget);
+    expect(find.byKey(const Key('network-failure-panel')), findsNothing);
+  });
 }

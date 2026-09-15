@@ -242,6 +242,10 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	// OTA 升级任务超时收口：后台定时扫描卡住的 pending/running 任务并置为 failed
 	otaService.SetTaskTimeout(time.Duration(cfg.OTA.TaskTimeoutMinutes) * time.Minute)
 	go runOTATaskTimeoutWatcher(otaService, time.Duration(cfg.OTA.TaskScanIntervalSeconds)*time.Second, heartbeatDone)
+	// 启动收口：取消未运行的旧 package 任务（幂等）
+	if n, err := otaRepo.RetirePendingPackageTasks(context.Background()); err == nil && n > 0 {
+		logger.Info("retired pending package tasks", zap.Int64("count", n))
+	}
 	// 每日统计报告：每 60 秒轮询，向到达推送时间（用户时区）的用户推送当日发电统计摘要
 	dailyReportSvc := service.NewDailyReportService(db, notifyPrefsRepo, jpushService, emailService)
 	go dailyReportSvc.Start(heartbeatDone)
@@ -1238,26 +1242,29 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			otaGroup.GET("/firmware", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.ListFirmware)
 			otaGroup.GET("/firmware/:id", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetFirmware)
 			otaGroup.POST("/firmware", middleware.RequirePermission(deps.PermChecker, "ota", "create"), deps.OTAHandler.CreateFirmware)
-			otaGroup.DELETE("/firmware/:id", middleware.RequirePermission(deps.PermChecker, "ota", "delete"), deps.OTAHandler.DeleteFirmware)
+			otaGroup.DELETE("/firmware/:id", middleware.RequirePermission(deps.PermChecker, "ota", "delete"), deps.OTAHandler.DeleteFirmwareDraft)
+			// 发布生命周期
+			otaGroup.POST("/firmware/:id/publish", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.PublishFirmware)
+			otaGroup.POST("/firmware/:id/disable", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.DisableFirmware)
 			// 鍗囩骇绠＄悊锛堟浛浠ｆ棫 /tasks锛?
 			otaGroup.GET("/upgrades/dashboard", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetUpgradeDashboard)
-			otaGroup.POST("/upgrades/push", middleware.RequirePermission(deps.PermChecker, "ota", "create"), deps.OTAHandler.PushUpgrade)
+			otaGroup.POST("/upgrades/push", deps.OTAHandler.LegacyPackageRetired)
 			otaGroup.GET("/upgrades/firmware/:firmwareId", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetFirmwareUpgradeDetails)
 			otaGroup.POST("/upgrades/retry", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.RetryUpgrade)
 			otaGroup.POST("/upgrades/cancel", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.CancelUpgrade)
-			otaGroup.DELETE("/upgrades/firmware/:firmwareId", middleware.RequirePermission(deps.PermChecker, "ota", "delete"), deps.OTAHandler.DeleteUpgradesByFirmware)
+			otaGroup.DELETE("/upgrades/firmware/:firmwareId", deps.OTAHandler.LegacyPackageRetired)
 
 			// 鍗囩骇鍖呯鐞?
 			otaGroup.GET("/packages", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.ListUpgradePackages)
 			otaGroup.GET("/packages/:id", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetUpgradePackage)
-			otaGroup.POST("/packages", middleware.RequirePermission(deps.PermChecker, "ota", "create"), deps.OTAHandler.CreateUpgradePackage)
-			otaGroup.PUT("/packages/:id", middleware.RequirePermission(deps.PermChecker, "ota", "create"), deps.OTAHandler.UpdateUpgradePackage)
-			otaGroup.DELETE("/packages/:id", middleware.RequirePermission(deps.PermChecker, "ota", "delete"), deps.OTAHandler.DeleteUpgradePackage)
-			otaGroup.PATCH("/packages/:id/publish", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.PublishPackage)
+			otaGroup.POST("/packages", deps.OTAHandler.LegacyPackageRetired)
+			otaGroup.PUT("/packages/:id", deps.OTAHandler.LegacyPackageRetired)
+			otaGroup.DELETE("/packages/:id", deps.OTAHandler.LegacyPackageRetired)
+			otaGroup.PATCH("/packages/:id/publish", deps.OTAHandler.LegacyPackageRetired)
 			// NOTE: POST /packages (collection create) conflicts with any static
 			// sub-route at POST method, so push is at /upgrades/push-package.
-			otaGroup.POST("/upgrades/push-package", middleware.RequirePermission(deps.PermChecker, "ota", "create"), deps.OTAHandler.PushPackageUpgrade)
-			otaGroup.POST("/packages/:id/rollback", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.RollbackPackageUpgrade)
+			otaGroup.POST("/upgrades/push-package", deps.OTAHandler.LegacyPackageRetired)
+			otaGroup.POST("/packages/:id/rollback", deps.OTAHandler.LegacyPackageRetired)
 			otaGroup.GET("/packages/:id/details", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetPackageUpgradeDetails)
 
 			// 鍗囩骇浠诲姟绠＄悊锛堟柊缁熶竴鎺ュ彛锛?
@@ -1270,7 +1277,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			otaGroup.POST("/tasks/:id/execute", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.ExecuteUpgradeTask)
 			otaGroup.POST("/tasks/:id/cancel", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.CancelUpgradeTask)
 			otaGroup.POST("/tasks/:id/retry", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.RetryUpgradeTask)
-			otaGroup.DELETE("/tasks/:id", middleware.RequirePermission(deps.PermChecker, "ota", "delete"), deps.OTAHandler.DeleteUpgradeTask)
+			otaGroup.DELETE("/tasks/:id", deps.OTAHandler.LegacyPackageRetired)
 			otaGroup.GET("/tasks/:id/devices", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetUpgradeTaskDevices)
 
 			// NOTE: /firmware/:id wildcard conflicts with static sub-routes,
@@ -1282,19 +1289,23 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			otaGroup.GET("/check/:sn", deps.OTAHandler.CheckUpdate)
 			// APP端本地 OTA 固件元数据（路由仅传 firmware_id，页面按 ID 拉取）
 			otaGroup.GET("/firmware-info/:id", deps.OTAHandler.GetFirmwareInfoForApp)
-			otaGroup.POST("/trigger", deps.OTAHandler.TriggerOTA)
+			// 独立模块固件升级
+			otaGroup.GET("/devices/:sn/firmware-overview", middleware.RequirePermission(deps.PermChecker, "devices", "view"), deps.OTAHandler.GetDeviceFirmwareOverview)
+			otaGroup.GET("/devices/:sn/firmware-resources", middleware.RequirePermission(deps.PermChecker, "devices", "view"), deps.OTAHandler.GetPublishedFirmwareResources)
+			otaGroup.POST("/trigger", middleware.RequirePermission(deps.PermChecker, "devices", "control"), deps.OTAHandler.TriggerIndependentOTA)
+			otaGroup.POST("/firmware/rollback", middleware.RequirePermission(deps.PermChecker, "devices", "control"), deps.OTAHandler.RollbackIndependentFirmware)
 			otaGroup.POST("/resend/:sn", deps.OTAHandler.ResendUpgradeCommand)
 			otaGroup.GET("/devices/:sn/status", deps.OTAHandler.GetDeviceOTAStatus)
-			otaGroup.GET("/history", deps.OTAHandler.GetAllOTAHistory)
-			otaGroup.GET("/devices/:sn/history", deps.OTAHandler.GetDeviceOTAHistory)
+			otaGroup.GET("/history", middleware.RequirePermission(deps.PermChecker, "devices", "view"), deps.OTAHandler.GetAuthorizedUpgradeHistory)
+			otaGroup.GET("/devices/:sn/history", middleware.RequirePermission(deps.PermChecker, "devices", "view"), deps.OTAHandler.GetDeviceFirmwareHistory)
 			otaGroup.POST("/devices/:sn/local-ota-result", deps.OTAHandler.ReportLocalOTAResult)
 			otaGroup.GET("/app/packages", deps.OTAHandler.AppListUpgradePackages)
-			otaGroup.POST("/app/packages/install", deps.OTAHandler.AppInstallPackage)
+			otaGroup.POST("/app/packages/install", deps.OTAHandler.LegacyPackageRetired)
 			otaGroup.GET("/devices/:sn/package-upgrade/:packageId", deps.OTAHandler.GetDevicePackageUpgradeInfo)
 			otaGroup.GET("/devices/:sn/upgrade-packages", deps.OTAHandler.ListDeviceUpgradePackages)
 			otaGroup.GET("/available-packages/:sn", deps.OTAHandler.GetAvailablePackages)
-			otaGroup.POST("/rollback", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.RollbackUpgrade)
-			otaGroup.POST("/rollback-to-published", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.RollbackToPublishedVersion)
+			otaGroup.POST("/rollback", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.LegacyPackageRetired)
+			otaGroup.POST("/rollback-to-published", deps.OTAHandler.LegacyPackageRetired)
 
 			// App鐗堟湰绠＄悊
 			otaGroup.GET("/app/versions", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.ListAppVersions)

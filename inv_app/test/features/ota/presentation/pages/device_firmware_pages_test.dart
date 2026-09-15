@@ -11,6 +11,7 @@ import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/features/device/domain/repositories/device_repository.dart';
 import 'package:inv_app/features/ota/domain/entities/device_firmware_history.dart';
+import 'package:inv_app/features/ota/domain/entities/device_firmware_overview.dart';
 import 'package:inv_app/features/ota/domain/repositories/ota_repository.dart';
 import 'package:inv_app/features/ota/presentation/pages/device_firmware_detail_page.dart';
 import 'package:inv_app/features/ota/presentation/pages/ota_tab_page.dart';
@@ -176,11 +177,11 @@ void main() {
       '设备名称',
       '设备序列号',
       '硬件版本',
-      // 展示名统一为「中文模块名（芯片）」，见 e14f20575
-      '通信采集（ESP）',
-      '系统中控（ARM）',
-      '计算控制（DSP）',
-      '电池管理（BMS）',
+      // 展示名固定为功能名，不带芯片后缀
+      '通信采集',
+      '系统主控',
+      '功率控制',
+      '电池管理',
     ]) {
       expect(find.text(text), findsWidgets);
     }
@@ -288,7 +289,7 @@ void main() {
           ),
         ),
         GoRoute(
-          path: '/ota/:sn',
+          path: '/ota/device/:sn',
           builder: (context, state) =>
               Text('update:${state.pathParameters['sn']}'),
         ),
@@ -567,6 +568,10 @@ class _OtaRepo implements OtaRepository {
   @override
   Future<Either<Failure, DeviceFirmwareHistoryPage>> getDeviceHistory(
     String sn, {
+    String? targetChip,
+    String? status,
+    DateTime? startTime,
+    DateTime? endTime,
     int page = 1,
     int pageSize = 20,
   }) async =>
@@ -575,9 +580,10 @@ class _OtaRepo implements OtaRepository {
           DeviceFirmwareHistory(
             id: 1,
             deviceSn: sn,
+            firmwareId: 10,
             target: 'esp',
             oldVersion: '1.1.0',
-            newVersion: '1.2.0',
+            firmwareVersion: '1.2.0',
             status: 'success',
             changelog: '改善弱网重连稳定性',
             updatedAt: DateTime.utc(2026, 9, 10),
@@ -587,6 +593,68 @@ class _OtaRepo implements OtaRepository {
         page: page,
         pageSize: pageSize,
       ));
+
+  @override
+  Future<Either<Failure, DeviceFirmwareOverview>> getFirmwareOverview(
+    String sn,
+  ) async =>
+      Right(DeviceFirmwareOverview(
+        deviceSn: sn,
+        deviceModel: 'CS-10K',
+        isOnline: true,
+        modules: const [
+          FirmwareModuleOverview(
+            target: 'arm',
+            currentVersion: '2.3.0',
+            latestFirmwareId: 11,
+            latestVersion: '2.4.0',
+            versionState: 'outdated',
+            updateAvailable: true,
+            changelog: '主控稳定性优化',
+          ),
+          FirmwareModuleOverview(
+            target: 'dsp',
+            currentVersion: '3.1.0',
+            latestFirmwareId: 0,
+            latestVersion: '',
+            versionState: 'current',
+            updateAvailable: false,
+          ),
+          FirmwareModuleOverview(
+            target: 'bms',
+            currentVersion: '4.0.1',
+            latestFirmwareId: 0,
+            latestVersion: '',
+            versionState: 'current',
+            updateAvailable: false,
+          ),
+          FirmwareModuleOverview(
+            target: 'esp',
+            currentVersion: '1.2.0',
+            latestFirmwareId: 0,
+            latestVersion: '',
+            versionState: 'current',
+            updateAvailable: false,
+          ),
+        ],
+      ));
+
+  @override
+  Future<Either<Failure, List<OtaTriggerTask>>> triggerFirmware(
+    String sn,
+    List<int> firmwareIds, {
+    required String idempotencyKey,
+    String? forceReason,
+  }) async =>
+      Right([
+        OtaTriggerTask(
+          taskId: 1,
+          firmwareId: firmwareIds.isNotEmpty ? firmwareIds.first : 0,
+          targetChip: 'arm',
+          version: '2.4.0',
+          status: 'pending',
+        ),
+      ]);
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

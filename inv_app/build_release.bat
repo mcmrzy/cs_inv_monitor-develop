@@ -9,7 +9,7 @@ rem  用法:
 rem    build_release.bat              编译 release APK 并复制到 release\
 rem    build_release.bat --analyze    编译前先执行 flutter analyze
 rem  产物: release\inv_app_v版本_时间戳.apk (+ .md5 / .sha256 校验文件)
-rem  行为: 构建号(+N)自动加一并写回 pubspec.yaml, 构建失败自动还原
+rem  行为: 版本号第三段与构建号(+N)各自自动加一并写回 pubspec.yaml, 构建失败自动还原
 rem ============================================================
 echo ==============================================
 echo   inv_app 发版构建 (Release APK)
@@ -45,8 +45,16 @@ for /f "tokens=1,2 delims=+" %%a in ("%APP_VERSION%") do (
     set "VER_BUILD=%%b"
 )
 set /a NEW_BUILD=VER_BUILD+1
-set "NEW_VERSION=%VER_BASE%+%NEW_BUILD%"
-echo 版本: %APP_VERSION% -^> %NEW_VERSION% (构建号自动递增)
+rem ---- 版本号(VER_BASE)也自动升级: 第三段 +1 ----
+rem ---- 例: 1.0.1+11 -> 1.0.2+12 ----
+for /f "tokens=1,2,3 delims=." %%i in ("%VER_BASE%") do (
+    set "VER_MAJOR=%%i"
+    set "VER_MINOR=%%j"
+    set "VER_PATCH=%%k"
+)
+set /a VER_PATCH=VER_PATCH+1
+set "NEW_VERSION=%VER_MAJOR%.%VER_MINOR%.%VER_PATCH%+%NEW_BUILD%"
+echo 版本: %APP_VERSION% -^> %NEW_VERSION% (版本号与构建号自动递增)
 
 rem ---- 把新构建号写回 pubspec.yaml (备份到 TEMP, 构建失败时还原) ----
 copy /y pubspec.yaml "%TEMP%\pubspec.yaml.prebuild.bak" >nul

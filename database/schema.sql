@@ -804,6 +804,7 @@ CREATE TABLE IF NOT EXISTS device_upgrades (
     target_chip         VARCHAR(50) NOT NULL DEFAULT '',
     old_version         VARCHAR(50) NOT NULL DEFAULT '',
     status              VARCHAR(20) NOT NULL DEFAULT 'pending', -- pending/downloading/upgrading/success/failed/cancelled
+    stage               VARCHAR(20) NOT NULL DEFAULT '',       -- (migration 117) 设备上报的原始阶段
     progress            INTEGER NOT NULL DEFAULT 0,
     error_message       TEXT NOT NULL DEFAULT '',
     retry_count         INTEGER NOT NULL DEFAULT 0,
@@ -1529,6 +1530,7 @@ CREATE TABLE IF NOT EXISTS device_upgrades (
     old_version     VARCHAR(50) NOT NULL DEFAULT '',
     status          VARCHAR(20) NOT NULL DEFAULT 'pending',
     -- pending / downloading / upgrading / success / failed / cancelled
+    stage           VARCHAR(20) NOT NULL DEFAULT '',   -- (migration 117) 设备上报的原始阶段
     progress        INTEGER NOT NULL DEFAULT 0,
     error_message   TEXT NOT NULL DEFAULT '',
     retry_count     INTEGER NOT NULL DEFAULT 0,
@@ -7128,4 +7130,5 @@ INSERT INTO schema_migrations (version, name) VALUES (95, '095_device_alias_stat
 -- device_config_schema.permission_code 拼写（'device:control'→'devices:control'）
 -- 及其列默认值（096 遗留缺陷，见迁移内注释），幂等可重放。
 
--- Next migration version to use: 111
+-- Next migration version to use: 119
+-- 118 (independent module firmware OTA) 由 migrator 回放，不在本基线。

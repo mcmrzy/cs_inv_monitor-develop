@@ -8,26 +8,20 @@ import 'package:inv_app/core/network/api_client.dart';
 
 /// 站点域名配置（GET /config/public，无需登录）。
 ///
-/// 后端统一下发部署域名（下载域 / Web 前端域），App 不在构建期硬编码：
+/// 后端统一下发部署域名，App 不在构建期硬编码：
 /// 迁移服务器时在管理后台「域名配置」改一处，所有端自动跟随。
 /// 拉取失败（离线、旧后端无此接口）时静默保留构建期默认值。
+/// 仅使用前端域（邀请链接等分享场景）；下载 URL 以服务端下发为准，
+/// 不做受信域名白名单（换下载域无需发版）。
 class DomainConfigService {
   DomainConfigService(this._apiClient);
 
   final ApiClient _apiClient;
 
   String _frontendBaseUrl = AppConfig.frontendBaseUrl;
-  List<String> _trustedDownloadHosts = AppConfig.trustedDownloadHosts
-      .split(',')
-      .map((h) => h.trim().toLowerCase())
-      .where((h) => h.isNotEmpty)
-      .toList();
 
   /// Web 管理后台地址（邀请链接等分享场景）。
   String get frontendBaseUrl => _frontendBaseUrl;
-
-  /// 受信下载主机：构建期默认 + 后端下发的下载域。
-  List<String> get trustedDownloadHosts => List.unmodifiable(_trustedDownloadHosts);
 
   /// 拉取后端域名配置。任何失败都静默忽略——构建期默认值始终可用。
   Future<void> refresh() async {
@@ -37,15 +31,8 @@ class DomainConfigService {
       if (body is! Map<String, dynamic> || body['code'] != 0) return;
       final data = (body['data'] as Map<String, dynamic>?) ?? const {};
       final frontend = _normalizeBaseURL(data['frontend_base_url'] as String?);
-      final download = _normalizeBaseURL(data['download_base_url'] as String?);
       if (frontend != null) {
         _frontendBaseUrl = frontend;
-      }
-      if (download != null) {
-        final host = Uri.parse(download).host.toLowerCase();
-        if (host.isNotEmpty && !_trustedDownloadHosts.contains(host)) {
-          _trustedDownloadHosts = [..._trustedDownloadHosts, host];
-        }
       }
     } catch (e) {
       debugPrint('DomainConfigService.refresh error: $e');

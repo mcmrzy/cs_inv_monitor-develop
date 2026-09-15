@@ -629,6 +629,7 @@ class AppLocalizations {
   String get onboardingPage3Desc =>
       _localizedStrings['onboarding_page3_desc']!;
   String get onboardingStart => _localizedStrings['onboarding_start']!;
+  String get onboardingContinue => _localizedStrings['onboarding_continue']!;
 
   // 关于页（品牌区）
   String get aboutSlogan => _localizedStrings['about_slogan']!;
@@ -1280,8 +1281,6 @@ class AppLocalizations {
       str('notify_device_offline', {'device': device});
   String notifyOtaAvailable(String device) =>
       str('notify_ota_available', {'device': device});
-  String notifyAppUpdate(String version) =>
-      str('notify_app_update', {'version': version});
   String get updateDetailsHint =>
       _localizedStrings['update_details_hint'] ??
       'Tap to view details and update';

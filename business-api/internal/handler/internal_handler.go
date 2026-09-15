@@ -1230,6 +1230,7 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 	tag, err := h.db.Exec(ctx, `
 		UPDATE device_upgrades SET
 			status = $2::varchar,
+			stage = $7::varchar,
 			progress = $3,
 			error_message = CASE WHEN $2::varchar = 'failed' THEN $4 ELSE error_message END,
 			started_at = CASE WHEN started_at IS NULL AND $2::varchar IN ('downloading','upgrading') THEN NOW() ELSE started_at END,
@@ -1247,7 +1248,7 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 			 WHERE device_sn = $1 AND status NOT IN ('success', 'failed', 'cancelled')
 			 ORDER BY updated_at DESC, id DESC LIMIT 1)
 		)
-	`, req.DeviceSN, dbStatus, req.Progress, req.Message, upgradeID, req.FirmwareID)
+	`, req.DeviceSN, dbStatus, req.Progress, req.Message, upgradeID, req.FirmwareID, req.Status)
 	if err != nil {
 		logger.Error("InternalOTAStatus failed", zap.String("sn", req.DeviceSN), zap.Error(err))
 		response.Error(c, 500, "update OTA status failed")

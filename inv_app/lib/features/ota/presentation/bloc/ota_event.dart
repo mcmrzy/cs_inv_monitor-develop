@@ -16,6 +16,7 @@ class OTACheckRequested extends OtaEvent {
   List<Object?> get props => [sn];
 }
 
+/// 旧调用兼容：单 ID 触发
 class OTATriggerRequested extends OtaEvent {
   final String sn;
   final int packageId;
@@ -24,6 +25,42 @@ class OTATriggerRequested extends OtaEvent {
 
   @override
   List<Object?> get props => [sn, packageId];
+}
+
+/// 新契约：按 firmware_ids 批量触发升级
+class OTAFirmwareTriggerRequested extends OtaEvent {
+  final String sn;
+  final List<int> firmwareIds;
+  final String idempotencyKey;
+  final String? forceReason;
+
+  const OTAFirmwareTriggerRequested({
+    required this.sn,
+    required this.firmwareIds,
+    required this.idempotencyKey,
+    this.forceReason,
+  });
+
+  @override
+  List<Object?> get props => [sn, firmwareIds, idempotencyKey, forceReason];
+}
+
+/// 按 firmware_id 回滚
+class OTAFirmwareRollbackRequested extends OtaEvent {
+  final String sn;
+  final int firmwareId;
+  final String idempotencyKey;
+  final String? forceReason;
+
+  const OTAFirmwareRollbackRequested({
+    required this.sn,
+    required this.firmwareId,
+    required this.idempotencyKey,
+    this.forceReason,
+  });
+
+  @override
+  List<Object?> get props => [sn, firmwareId, idempotencyKey, forceReason];
 }
 
 class OTAProgressPollRequested extends OtaEvent {
@@ -60,46 +97,26 @@ class OTAProgressStopPoll extends OtaEvent {
   const OTAProgressStopPoll();
 }
 
-/// Admin already pushed command; skip trigger API and start polling directly.
-class OTAPackageTriggerRequested extends OtaEvent {
+/// 加载设备固件总览
+class OTAFirmwareOverviewRequested extends OtaEvent {
   final String sn;
-  const OTAPackageTriggerRequested({required this.sn});
+
+  const OTAFirmwareOverviewRequested({required this.sn});
 
   @override
   List<Object?> get props => [sn];
 }
 
-class OTAFirmwareListRequested extends OtaEvent {
-  final String deviceModel;
+/// 加载设备已发布固件资源
+class OTAFirmwareResourcesRequested extends OtaEvent {
   final String sn;
+  final String? targetChip;
 
-  const OTAFirmwareListRequested({required this.deviceModel, required this.sn});
-
-  @override
-  List<Object?> get props => [deviceModel, sn];
-}
-
-/// 加载设备可用升级包列表
-/// 调用 GET /ota/available-packages/:sn 获取设备专属可用升级包
-/// 响应格式: {code: 0, data: [{id, user_version, user_changelog, is_force, model, main_version, ...}]}
-class LoadAvailablePackages extends OtaEvent {
-  final String sn;
-
-  const LoadAvailablePackages({required this.sn});
-
-  @override
-  List<Object?> get props => [sn];
-}
-
-class OTAFirmwareInstallRequested extends OtaEvent {
-  final String sn;
-  final int packageId;
-
-  const OTAFirmwareInstallRequested({
+  const OTAFirmwareResourcesRequested({
     required this.sn,
-    required this.packageId,
+    this.targetChip,
   });
 
   @override
-  List<Object?> get props => [sn, packageId];
+  List<Object?> get props => [sn, targetChip];
 }

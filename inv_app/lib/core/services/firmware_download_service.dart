@@ -17,6 +17,10 @@ class DownloadedFirmwareInfo {
   final String fileName;
   final int fileSize;
 
+  /// Target inverter model. Legacy records may not contain this field and are
+  /// intentionally not eligible for fail-closed local upgrades.
+  final String? deviceModel;
+
   /// 目标芯片（esp/arm），旧记录可能缺失
   final String? targetChip;
 
@@ -32,25 +36,43 @@ class DownloadedFirmwareInfo {
   /// 防回滚安全版本号，旧记录可能缺失
   final int? securityVersion;
 
+  /// Backend-advertised delivery channels. Null keeps compatible ESP/ARM
+  /// records usable; an explicit list is enforced exactly.
+  final List<String>? supportedChannels;
+
   const DownloadedFirmwareInfo({
     required this.firmwareId,
     required this.filePath,
     required this.fileName,
     required this.fileSize,
+    this.deviceModel,
     this.targetChip,
     this.version,
     this.sha256,
     this.signature,
     this.securityVersion,
+    this.supportedChannels,
   });
 
   /// 是否具备本地升级所需的完整元数据
   bool get hasUpgradeMetadata =>
+      fileSize > 0 &&
+      (deviceModel?.isNotEmpty ?? false) &&
       (targetChip?.isNotEmpty ?? false) &&
       (version?.isNotEmpty ?? false) &&
       (sha256?.isNotEmpty ?? false) &&
       (signature?.isNotEmpty ?? false) &&
       (securityVersion ?? 0) > 0;
+
+  bool supportsLocalChannel(String channel) {
+    final target = targetChip?.trim().toLowerCase() ?? '';
+    if (target != 'esp' && target != 'arm') return false;
+    final channels = supportedChannels;
+    if (channels == null) return true;
+    return channels.any(
+      (value) => value.trim().toLowerCase() == channel.trim().toLowerCase(),
+    );
+  }
 }
 
 /// 下载进度事件：携带 firmwareId，按任务分流，
@@ -59,7 +81,8 @@ class DownloadProgressEvent {
   final int firmwareId;
   final double progress;
 
-  const DownloadProgressEvent({required this.firmwareId, required this.progress});
+  const DownloadProgressEvent(
+      {required this.firmwareId, required this.progress});
 }
 
 class FirmwareDownloadService {
@@ -115,10 +138,12 @@ class FirmwareDownloadService {
     required int firmwareId,
     int? expectedSize,
     String? expectedSha256,
+    String? deviceModel,
     String? targetChip,
     String? version,
     String? signature,
     int? securityVersion,
+    List<String>? supportedChannels,
     CancelToken? cancelToken,
     void Function(int received, int total)? onProgress,
   }) async {
@@ -147,10 +172,12 @@ class FirmwareDownloadService {
             filePath,
             file,
             expectedSha256,
+            deviceModel: deviceModel,
             targetChip: targetChip,
             version: version,
             signature: signature,
             securityVersion: securityVersion,
+            supportedChannels: supportedChannels,
           );
           _emit(firmwareId, 1.0);
           return filePath;
@@ -241,10 +268,12 @@ class FirmwareDownloadService {
           filePath,
           File(filePath),
           expectedSha256,
+          deviceModel: deviceModel,
           targetChip: targetChip,
           version: version,
           signature: signature,
           securityVersion: securityVersion,
+          supportedChannels: supportedChannels,
         );
 
         _emit(firmwareId, 1.0);
@@ -288,10 +317,12 @@ class FirmwareDownloadService {
     String filePath,
     File file,
     String? expectedSha256, {
+    String? deviceModel,
     String? targetChip,
     String? version,
     String? signature,
     int? securityVersion,
+    List<String>? supportedChannels,
   }) async {
     final fileSize = await file.length();
     await _sharedPreferences.setString('$_keyPrefix$firmwareId', filePath);
@@ -305,10 +336,13 @@ class FirmwareDownloadService {
     // 持久化离线升级所需元数据（无网时从已下载列表直接本地升级）
     await _saveMetadata(
       firmwareId,
+      deviceModel: deviceModel,
+      fileSize: fileSize,
       targetChip: targetChip,
       version: version,
       signature: signature,
       securityVersion: securityVersion,
+      supportedChannels: supportedChannels,
     );
   }
 
@@ -316,23 +350,35 @@ class FirmwareDownloadService {
   /// 元数据非空时才写入，避免覆盖已有记录为空值。
   Future<void> _saveMetadata(
     int firmwareId, {
+    String? deviceModel,
+    int? fileSize,
     String? targetChip,
     String? version,
     String? signature,
     int? securityVersion,
+    List<String>? supportedChannels,
   }) async {
-    if ((targetChip?.isEmpty ?? true) &&
+    if ((deviceModel?.isEmpty ?? true) &&
+        (fileSize ?? 0) <= 0 &&
+        (targetChip?.isEmpty ?? true) &&
         (version?.isEmpty ?? true) &&
         (signature?.isEmpty ?? true) &&
-        (securityVersion ?? 0) <= 0) {
+        (securityVersion ?? 0) <= 0 &&
+        supportedChannels == null) {
       return;
     }
     final meta = <String, dynamic>{
-      if (targetChip != null && targetChip.isNotEmpty) 'target_chip': targetChip,
+      if (deviceModel != null && deviceModel.isNotEmpty)
+        'device_model': deviceModel,
+      if (fileSize != null && fileSize > 0) 'file_size': fileSize,
+      if (targetChip != null && targetChip.isNotEmpty)
+        'target_chip': targetChip,
       if (version != null && version.isNotEmpty) 'version': version,
       if (signature != null && signature.isNotEmpty) 'signature': signature,
       if (securityVersion != null && securityVersion > 0)
         'security_version': securityVersion,
+      if (supportedChannels != null)
+        'supported_channels': supportedChannels,
     };
     await _sharedPreferences.setString(
       '$_keyMetaPrefix$firmwareId',
@@ -381,13 +427,19 @@ class FirmwareDownloadService {
             firmwareId: id,
             filePath: path,
             fileName: path.split(RegExp(r'[/\\]')).last,
-            fileSize: await file.length(),
+            fileSize:
+                (meta['file_size'] as num?)?.toInt() ?? await file.length(),
+            deviceModel: meta['device_model'] as String?,
             targetChip: meta['target_chip'] as String?,
             version: meta['version'] as String?,
-            sha256:
-                _sharedPreferences.getString('$_keySHA256Prefix$id'),
+            sha256: _sharedPreferences.getString('$_keySHA256Prefix$id'),
             signature: meta['signature'] as String?,
             securityVersion: (meta['security_version'] as num?)?.toInt(),
+            supportedChannels: meta['supported_channels'] is List
+                ? (meta['supported_channels'] as List)
+                    .map((value) => value.toString())
+                    .toList(growable: false)
+                : null,
           ),
         );
       }
