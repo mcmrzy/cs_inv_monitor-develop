@@ -24,9 +24,11 @@ export default defineConfig({
   globalSetup: './e2e/global-setup.ts',
   timeout: 90_000,
   expect: { timeout: 20_000 },
+  // setup 先跑一次登录；功能用例共享 storageState，可在多 worker 下并行。
+  // 串行 1 worker + 失败重试曾把 E2E 拖到 30–45 分钟。
   fullyParallel: false,
-  workers: 1,
-  retries: process.env.CI ? 2 : 0,
+  workers: process.env.CI ? 4 : 1,
+  retries: process.env.CI ? 1 : 0,
   reporter: [
     ['list'],
     ['html', { open: 'never', outputFolder: '../e2e_evidence/playwright-report' }],

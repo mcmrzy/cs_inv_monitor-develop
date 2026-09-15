@@ -29,14 +29,17 @@ test.describe('主路由矩阵', () => {
     await expect(page.locator('.ant-table').first()).toBeVisible()
   })
 
-  test('/ota OTA 升级：升级任务/固件库/App版本管理 三个 Tab', async ({ page }) => {
+  test('/ota OTA 升级：设备固件升级/设备固件管理/升级任务/App版本管理', async ({ page }) => {
     await gotoAuthed(page, '/ota')
     await expect(page.locator('.ant-pro-layout-content')).toBeVisible()
     const tabs = page.locator('.ant-tabs-tab')
+    await expect(tabs.filter({ hasText: '设备固件升级' })).toBeVisible()
+    await expect(tabs.filter({ hasText: '设备固件管理' })).toBeVisible()
     await expect(tabs.filter({ hasText: '升级任务' })).toBeVisible()
-    await expect(tabs.filter({ hasText: '固件库' })).toBeVisible()
     await expect(tabs.filter({ hasText: 'App版本管理' })).toBeVisible()
-    await expect(page.locator('.ant-tabs-tab-active', { hasText: '升级任务' })).toBeVisible()
+    // 默认落在「设备固件升级」；创建入口在「升级任务」Tab
+    await expect(page.locator('.ant-tabs-tab-active', { hasText: '设备固件升级' })).toBeVisible()
+    await tabs.filter({ hasText: '升级任务' }).click()
     await expect(page.getByRole('button', { name: '创建升级任务' })).toBeVisible()
   })
 

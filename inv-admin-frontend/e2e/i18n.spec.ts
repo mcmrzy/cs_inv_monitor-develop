@@ -55,11 +55,13 @@ test.describe('页面级语言切换', () => {
   test('OTA 升级：Tab 标签中英切换', async ({ page }) => {
     await gotoAuthed(page, '/ota')
     await expect(page.locator('.ant-tabs-tab', { hasText: '升级任务' })).toBeVisible()
-    await expect(page.locator('.ant-tabs-tab', { hasText: '固件库' })).toBeVisible()
+    await expect(page.locator('.ant-tabs-tab', { hasText: '设备固件管理' })).toBeVisible()
 
     await switchLang(page, 'en')
     await expect(page.locator('.ant-tabs-tab', { hasText: 'Upgrade Tasks' })).toBeVisible({ timeout: 15_000 })
-    await expect(page.locator('.ant-tabs-tab', { hasText: 'Firmware Library' })).toBeVisible()
+    await expect(page.locator('.ant-tabs-tab', { hasText: 'Firmware Management' })).toBeVisible()
+    // 创建按钮在「升级任务」Tab 工具栏
+    await page.locator('.ant-tabs-tab', { hasText: 'Upgrade Tasks' }).click()
     await expect(page.getByRole('button', { name: 'Create Upgrade Task' })).toBeVisible()
 
     await switchLang(page, 'zh')

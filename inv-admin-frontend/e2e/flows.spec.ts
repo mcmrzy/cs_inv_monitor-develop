@@ -96,10 +96,11 @@ test.describe('告警中心交互', () => {
 })
 
 test.describe('OTA 升级交互', () => {
-  test('固件库 Tab 显示上传固件入口', async ({ page }) => {
+  // OTA 页默认在「设备固件升级」；固件上传入口在「设备固件管理」Tab（旧文案「固件库」已废弃）。
+  test('设备固件管理 Tab 显示上传固件入口', async ({ page }) => {
     await gotoAuthed(page, '/ota')
-    await page.locator('.ant-tabs-tab', { hasText: '固件库' }).click()
-    await expect(page.locator('.ant-tabs-tab-active', { hasText: '固件库' })).toBeVisible()
+    await page.locator('.ant-tabs-tab', { hasText: '设备固件管理' }).click()
+    await expect(page.locator('.ant-tabs-tab-active', { hasText: '设备固件管理' })).toBeVisible()
     await expect(page.getByRole('button', { name: '上传固件' })).toBeVisible({ timeout: 15_000 })
   })
 
@@ -111,8 +112,10 @@ test.describe('OTA 升级交互', () => {
     await expect(page.getByRole('button', { name: '上传安装包' })).toBeVisible({ timeout: 15_000 })
   })
 
+  // 「创建升级任务」在「升级任务」Tab 工具栏，不在默认 Tab。
   test('创建升级任务向导弹窗可打开并关闭', async ({ page }) => {
     await gotoAuthed(page, '/ota')
+    await page.locator('.ant-tabs-tab', { hasText: '升级任务' }).click()
     await page.getByRole('button', { name: '创建升级任务' }).click()
     const modal = page.locator('.ant-modal-content', { hasText: '创建升级任务' })
     await expect(modal).toBeVisible({ timeout: 15_000 })
