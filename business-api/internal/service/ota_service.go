@@ -92,43 +92,15 @@ type CreateFirmwareReq struct {
 	UploadedBy       int64
 }
 
-// CreateFirmware 落库固件并返回创建后的记录（含自动生成的主版本号与落库 ID），
-// 供 handler 向管理端回显服务端识别出的元数据。
+// CreateFirmware 落库固件（默认 draft，不再生成 main_version）
 func (s *OTAService) CreateFirmware(ctx context.Context, req *CreateFirmwareReq) (*model.Firmware, error) {
 	if err := ValidateFirmwareRequest(req); err != nil {
 		return nil, err
-	}
-	// 自动生成主版本号：查询当前芯片的最大主版本号，+1
-	latestVersion, err := s.repo.GetLatestMainVersion(ctx, req.TargetChip)
-	if err != nil {
-		return nil, fmt.Errorf("查询主版本号失败: %w", err)
-	}
-
-	var nextMainVersion string
-	if latestVersion == "" {
-		nextMainVersion = "V1.0.1"
-	} else {
-		// 解析 "V1.0.X" 格式，提取 X 部分并 +1
-		v := latestVersion
-		if len(v) > 1 && v[0] == 'V' {
-			v = v[1:]
-		}
-		parts := strings.Split(v, ".")
-		if len(parts) >= 3 {
-			var num int
-			fmt.Sscanf(parts[len(parts)-1], "%d", &num)
-			num++
-			parts[len(parts)-1] = fmt.Sprintf("%d", num)
-			nextMainVersion = "V" + strings.Join(parts, ".")
-		} else {
-			nextMainVersion = "V1.0.1"
-		}
 	}
 
 	fw := &model.Firmware{
 		Model:            req.Model,
 		TargetChip:       req.TargetChip,
-		MainVersion:      nextMainVersion,
 		Version:          req.Version,
 		FileURL:          req.FileURL,
 		FileSize:         req.FileSize,

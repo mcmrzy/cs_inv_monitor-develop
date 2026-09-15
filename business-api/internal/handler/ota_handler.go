@@ -836,23 +836,10 @@ func (h *OTAHandler) ResendUpgradeCommand(c *gin.Context) {
 	if !h.ensureDeviceManagementScope(c, sn) {
 		return
 	}
-	userID := middleware.GetUserID(c)
 
 	err := h.otaService.ResendPendingUpgradeCommand(c.Request.Context(), sn)
 	if err != nil {
-		// 没有待执行的升级任务，尝试获取可用升级包并创建新任务
-		packages, _ := h.otaService.GetAvailablePackagesForDevice(c.Request.Context(), sn, userID)
-		if len(packages) > 0 {
-			// 使用第一个可用升级包创建升级任务
-			taskID, triggerErr := h.otaService.TriggerUpgradeFromApp(c.Request.Context(), userID, sn, packages[0].ID)
-			if triggerErr != nil {
-				log.Printf("[ResendUpgradeCommand] trigger error: sn=%s, err=%v", sn, triggerErr)
-				response.Error(c, 500, "创建升级任务失败: "+triggerErr.Error())
-				return
-			}
-			response.Success(c, gin.H{"message": "升级任务已创建", "task_id": taskID})
-			return
-		}
+		// 旧「无任务则自动创建包任务」回退已退役
 		log.Printf("[ResendUpgradeCommand] error: sn=%s, err=%v", sn, err)
 		response.Error(c, 500, "重新发送升级命令失败: "+err.Error())
 		return
@@ -1531,6 +1518,10 @@ func (h *OTAHandler) CreateUpgradeTask(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, 400, "invalid request: "+err.Error())
+		return
+	}
+	if req.TaskType == model.TaskTypePackage {
+		respondLegacyPackageRetired(c)
 		return
 	}
 	if len(req.DeviceSNs) == 0 {

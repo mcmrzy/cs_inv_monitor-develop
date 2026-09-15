@@ -409,8 +409,70 @@ type Firmware struct {
 	Status           int       `json:"status"`
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`
-	TargetChip       string    `json:"target_chip"`
-	MainVersion      string    `json:"main_version"`
+	TargetChip       string     `json:"target_chip"`
+	MainVersion      string     `json:"main_version"`
+	ReleaseStatus    string     `json:"release_status"` // draft/published/disabled
+	PublishedAt      *time.Time `json:"published_at,omitempty"`
+}
+
+// FirmwareModuleOverview 设备单模块固件概览（用户侧）
+type FirmwareModuleOverview struct {
+	Target           string     `json:"target"`
+	CurrentVersion   string     `json:"current_version"`
+	LatestFirmwareID int64      `json:"latest_firmware_id"`
+	LatestVersion    string     `json:"latest_version"`
+	VersionState     string     `json:"version_state"` // unreported/current/outdated
+	UpdateAvailable  bool       `json:"update_available"`
+	Changelog        string     `json:"changelog"`
+	PublishedAt      *time.Time `json:"published_at,omitempty"`
+}
+
+// DeviceFirmwareOverview 设备固件总览
+type DeviceFirmwareOverview struct {
+	DeviceSN  string                    `json:"device_sn"`
+	DeviceModel string                  `json:"device_model"`
+	IsOnline  bool                      `json:"is_online"`
+	Modules   []FirmwareModuleOverview  `json:"modules"`
+}
+
+// TriggerFirmwareRequest 独立固件升级触发
+type TriggerFirmwareRequest struct {
+	DeviceSN       string  `json:"device_sn" binding:"required"`
+	FirmwareIDs    []int64 `json:"firmware_ids" binding:"required,min=1"`
+	IdempotencyKey string  `json:"idempotency_key" binding:"required"`
+	ForceReason    string  `json:"force_reason,omitempty"`
+}
+
+// FirmwareTaskRef 升级任务引用
+type FirmwareTaskRef struct {
+	TaskID     int64  `json:"task_id"`
+	FirmwareID int64  `json:"firmware_id"`
+	TargetChip string `json:"target_chip"`
+	Version    string `json:"version"`
+	Status     string `json:"status"`
+}
+
+// UpgradeHistoryFilter 升级历史筛选
+type UpgradeHistoryFilter struct {
+	DeviceSN   string
+	TargetChip string
+	Status     string
+	StartTime  *time.Time
+	EndTime    *time.Time
+	Page       int
+	PageSize   int
+}
+
+// OTAIdempotencyRequest 幂等请求记录
+type OTAIdempotencyRequest struct {
+	ID             int64           `json:"id"`
+	UserID         int64           `json:"user_id"`
+	DeviceSN       string          `json:"device_sn"`
+	IdempotencyKey string          `json:"idempotency_key"`
+	Operation      string          `json:"operation"`
+	PayloadHash    string          `json:"payload_hash"`
+	TaskIDs        json.RawMessage `json:"task_ids"`
+	CreatedAt      time.Time       `json:"created_at"`
 }
 
 type DeviceUpgrade struct {
