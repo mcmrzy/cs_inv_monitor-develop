@@ -26,6 +26,7 @@ type Config struct {
 	RBAC       RBACConfig       `mapstructure:"rbac"`
 	EmailQueue EmailQueueConfig `mapstructure:"email_queue"`
 	OTA        OTAConfig        `mapstructure:"ota"`
+	ESA        ESAConfig        `mapstructure:"esa"`
 }
 
 type CORSConfig struct {
@@ -153,6 +154,18 @@ type OTAConfig struct {
 	TaskScanIntervalSeconds int `mapstructure:"task_scan_interval_seconds"` // 后台超时扫描间隔（秒），默认 60
 }
 
+// ESAConfig 阿里云 ESA 边缘缓存（自动规则对齐 + 发布后刷新）
+// AccessKey/SecretKey/SiteID 三项齐全才启用；任一为空则跳过（Noop）。
+type ESAConfig struct {
+	Enabled     bool   `mapstructure:"enabled"`
+	AccessKey   string `mapstructure:"access_key"`
+	SecretKey   string `mapstructure:"secret_key"`
+	SiteID      string `mapstructure:"site_id"`
+	RefreshHost string `mapstructure:"refresh_host"` // 默认 download.jiuxiaoyw.online
+	Endpoint    string `mapstructure:"endpoint"`     // 默认 esa.aliyuncs.com
+	AutoRules   bool   `mapstructure:"auto_rules"`   // 启动时对齐缓存规则（默认 true）
+}
+
 // EmailQueueConfig 邮件队列配置
 type EmailQueueConfig struct {
 	Enabled      bool          `mapstructure:"enabled"`       // 是否启用邮件队列
@@ -249,6 +262,15 @@ func Load(configPath string) (*Config, error) {
 	viper.SetDefault("ota.task_timeout_minutes", 30)
 	viper.SetDefault("ota.task_scan_interval_seconds", 60)
 
+	// 阿里云 ESA 缓存（自动规则 + 发布后刷新）
+	viper.SetDefault("esa.enabled", true)
+	viper.SetDefault("esa.access_key", "")
+	viper.SetDefault("esa.secret_key", "")
+	viper.SetDefault("esa.site_id", "")
+	viper.SetDefault("esa.refresh_host", "")
+	viper.SetDefault("esa.endpoint", "esa.aliyuncs.com")
+	viper.SetDefault("esa.auto_rules", true)
+
 	// Email Queue defaults
 	viper.SetDefault("email_queue.enabled", false)
 	viper.SetDefault("email_queue.kafka_brokers", []string{})
@@ -323,6 +345,14 @@ func Load(configPath string) (*Config, error) {
 
 	viper.BindEnv("ota.task_timeout_minutes", "OTA_TASK_TIMEOUT_MINUTES")
 	viper.BindEnv("ota.task_scan_interval_seconds", "OTA_TASK_SCAN_INTERVAL_SECONDS")
+
+	viper.BindEnv("esa.enabled", "ESA_CACHE_REFRESH_ENABLED")
+	viper.BindEnv("esa.access_key", "ALIYUN_ACCESS_KEY_ID")
+	viper.BindEnv("esa.secret_key", "ALIYUN_ACCESS_KEY_SECRET")
+	viper.BindEnv("esa.site_id", "ESA_SITE_ID")
+	viper.BindEnv("esa.refresh_host", "ESA_REFRESH_HOST")
+	viper.BindEnv("esa.endpoint", "ESA_ENDPOINT")
+	viper.BindEnv("esa.auto_rules", "ESA_AUTO_CACHE_RULES")
 
 	var config Config
 	if err := viper.Unmarshal(&config); err != nil {

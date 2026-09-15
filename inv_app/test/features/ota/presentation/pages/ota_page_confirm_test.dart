@@ -13,7 +13,6 @@ import 'package:inv_app/features/ota/domain/repositories/ota_repository.dart';
 import 'package:inv_app/features/ota/presentation/bloc/ota_bloc.dart';
 import 'package:inv_app/features/ota/presentation/pages/ota_page.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
-import 'package:mocktail/mocktail.dart';
 
 class _MockOtaBloc extends MockBloc<OtaEvent, OtaState> implements OtaBloc {}
 

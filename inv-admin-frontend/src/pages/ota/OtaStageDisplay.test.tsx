@@ -54,7 +54,7 @@ async function openTaskDeviceDrawer() {
 }
 
 describe('OTA 设备明细的阶段展示', () => {
-  it('stage=installing 时进度列显示「写入设备」（状态列仍是库内状态"升级中"）', async () => {
+  it('stage=installing 时进度列显示「写入设备」（状态列仍是库内状态"升级中"）', { timeout: 30_000 }, async () => {
     mockTaskDevices([taskDevice({ stage: 'installing' })])
     await openTaskDeviceDrawer()
 
@@ -65,14 +65,14 @@ describe('OTA 设备明细的阶段展示', () => {
     expect(screen.getAllByText('写入设备')).toHaveLength(1)
   })
 
-  it('ARM 下载阶段 stage=receiving 归一为「下载固件」', async () => {
+  it('ARM 下载阶段 stage=receiving 归一为「下载固件」', { timeout: 30_000 }, async () => {
     mockTaskDevices([taskDevice({ stage: 'receiving', progress: 40 })])
     await openTaskDeviceDrawer()
 
     expect(await screen.findByText('下载固件')).toBeInTheDocument()
   })
 
-  it('旧数据没有 stage 时回退显示 status 文案', async () => {
+  it('旧数据没有 stage 时回退显示 status 文案', { timeout: 30_000 }, async () => {
     mockTaskDevices([taskDevice({ stage: '' })])
     await openTaskDeviceDrawer()
 

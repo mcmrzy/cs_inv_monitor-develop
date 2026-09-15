@@ -38,6 +38,7 @@ type OTAHandler struct {
 	notifyPrefs        *repository.NotifyPrefsRepository
 	emailService       *service.EmailService
 	userService        *service.UserService
+	cachePurger        service.CachePurger
 }
 
 type otaDeviceScopeChecker interface {
@@ -59,7 +60,25 @@ func NewOTAHandler(otaService *service.OTAService, db *pgxpool.Pool, jpushServic
 		otaService: otaService, deviceScopeChecker: otaService, db: db,
 		jpushService: jpushService, notifyPrefs: notifyPrefs,
 		emailService: emailService, userService: userService,
+		cachePurger: service.NoopCachePurger{},
 	}
+}
+
+// SetCachePurger 注入边缘缓存刷新器（App 发布后刷新下载页元数据接口）。
+func (h *OTAHandler) SetCachePurger(p service.CachePurger) {
+	if p == nil {
+		h.cachePurger = service.NoopCachePurger{}
+		return
+	}
+	h.cachePurger = p
+}
+
+// refreshAppReleaseCache 发布/回滚 App 版本后异步刷新 ESA 上的最新版本元数据缓存。
+func (h *OTAHandler) refreshAppReleaseCache() {
+	if h.cachePurger == nil {
+		return
+	}
+	h.cachePurger.RefreshAsync()
 }
 
 // ensureDeviceScope couples the requested capability to the selected
@@ -1055,6 +1074,7 @@ func (h *OTAHandler) CreateAppVersion(c *gin.Context) {
 	}
 
 	h.notifyAppRelease(c, v, req.VersionName, req.Changelog, req.RolloutPercentage)
+	h.refreshAppReleaseCache()
 	response.Success(c, v)
 }
 
@@ -1165,6 +1185,7 @@ func (h *OTAHandler) createAppVersionFromPackage(c *gin.Context) {
 	keepFile = true
 
 	h.notifyAppRelease(c, v, v.VersionName, v.Changelog, v.RolloutPercentage)
+	h.refreshAppReleaseCache()
 	response.Success(c, v)
 }
 
@@ -1229,6 +1250,7 @@ func (h *OTAHandler) DeleteAppVersion(c *gin.Context) {
 		response.Error(c, 500, "删除失败")
 		return
 	}
+	h.refreshAppReleaseCache()
 	response.SuccessWithMessage(c, "删除成功", nil)
 }
 
@@ -1264,6 +1286,7 @@ func (h *OTAHandler) RollbackAppVersion(c *gin.Context) {
 		response.Error(c, 500, "回滚失败")
 		return
 	}
+	h.refreshAppReleaseCache()
 	response.SuccessWithMessage(c, "版本已回滚", nil)
 }
 
@@ -1284,6 +1307,7 @@ func (h *OTAHandler) RestoreAppVersion(c *gin.Context) {
 		response.Error(c, 500, "恢复失败")
 		return
 	}
+	h.refreshAppReleaseCache()
 	response.SuccessWithMessage(c, "版本已恢复", nil)
 }
 
