@@ -53,6 +53,13 @@ jobs:
             mkdir -p /opt/inv-mqtt/deploy/scripts
             echo "$ESA_SCRIPT_B64" | base64 -d > /opt/inv-mqtt/deploy/scripts/esa-refresh.py
             echo "=== host-side ESA refresh ==="
+            # 宿主机若无法解析 esa.aliyuncs.com，临时补公共 DNS
+            if ! getent hosts esa.aliyuncs.com >/dev/null 2>&1; then
+              echo "宿主机无法解析 esa.aliyuncs.com，写入公共 DNS"
+              grep -q '223.5.5.5' /etc/resolv.conf || echo 'nameserver 223.5.5.5' >> /etc/resolv.conf
+              grep -q '8.8.8.8' /etc/resolv.conf || echo 'nameserver 8.8.8.8' >> /etc/resolv.conf
+              getent hosts esa.aliyuncs.com || true
+            fi
             python3 /opt/inv-mqtt/deploy/scripts/esa-refresh.py
 
             cd /opt/inv-mqtt/deploy
