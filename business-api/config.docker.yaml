@@ -95,6 +95,16 @@ ota:
   task_timeout_minutes: 30       # 升级任务超时阈值（分钟）：pending/running 任务超过该时长无任何更新自动置为 failed
   task_scan_interval_seconds: 60 # 后台超时扫描间隔（秒）
 
+# 阿里云 ESA 缓存（生产用环境变量覆盖，见 deploy/.env.prod.example）
+esa:
+  enabled: true
+  auto_rules: true # 启动时对齐缓存规则：/api/ 与 /app-release-info 禁止边缘缓存
+  access_key: ""   # env: ALIYUN_ACCESS_KEY_ID
+  secret_key: ""   # env: ALIYUN_ACCESS_KEY_SECRET
+  site_id: ""      # env: ESA_SITE_ID
+  refresh_host: "" # 默认 download.jiuxiaoyw.online
+  endpoint: esa.aliyuncs.com
+
 # Email Queue 配置 (生产环境推荐启用)
 email_queue:
   enabled: false  # 开发环境可禁用，生产环境设为 true

@@ -321,6 +321,57 @@ describe('LoginPage', () => {
     })
   })
 
+  it('should send email login code after manually typing email', async () => {
+    useAuthStore.getState().logout()
+    server.use(
+      http.post('/api/v1/auth/send-email-code', () => {
+        return HttpResponse.json({ code: 0, message: 'success' })
+      }),
+    )
+    const user = userEvent.setup()
+    renderWithProviders(<LoginPage />)
+
+    await user.click(screen.getByText('验证码登录'))
+    await user.click(screen.getByText('邮箱'))
+    await user.type(screen.getByPlaceholderText('邮箱'), 'mcmrzy@163.com')
+    await user.click(screen.getByRole('button', { name: '发送验证码' }))
+    await user.click(screen.getByRole('button', { name: '完成滑块验证' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('验证码已发送到邮箱')).toBeInTheDocument()
+    })
+    // 不应再出现「请先输入邮箱」
+    expect(screen.queryByText('请先输入邮箱')).not.toBeInTheDocument()
+  })
+
+  it('should send email code when input value exists only in DOM (autofill desync)', async () => {
+    useAuthStore.getState().logout()
+    let requestBody: { email?: string } | null = null
+    server.use(
+      http.post('/api/v1/auth/send-email-code', async ({ request }) => {
+        requestBody = (await request.json()) as { email?: string }
+        return HttpResponse.json({ code: 0, message: 'success' })
+      }),
+    )
+    const user = userEvent.setup()
+    renderWithProviders(<LoginPage />)
+
+    await user.click(screen.getByText('验证码登录'))
+    await user.click(screen.getByText('邮箱'))
+
+    const emailInput = screen.getByPlaceholderText('邮箱') as HTMLInputElement
+    // 模拟浏览器自动填充：只改 DOM，不触发 React onChange，表单 store 仍为空
+    emailInput.value = 'mcmrzy@163.com'
+
+    await user.click(screen.getByRole('button', { name: '发送验证码' }))
+    await user.click(screen.getByRole('button', { name: '完成滑块验证' }))
+
+    await waitFor(() => {
+      expect(requestBody?.email).toBe('mcmrzy@163.com')
+    })
+    expect(screen.queryByText('请先输入邮箱')).not.toBeInTheDocument()
+  })
+
   it('should reset password via phone channel in reset view', async () => {
     server.use(
       http.post('/api/v1/auth/reset-password', () => {

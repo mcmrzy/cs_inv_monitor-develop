@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:go_router/go_router.dart';
 
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/core/widgets/pagination_bar.dart';
 import 'package:inv_app/features/ota/domain/entities/device_firmware_history.dart';
-import 'package:inv_app/features/ota/domain/entities/device_firmware_overview.dart';
 import 'package:inv_app/features/ota/domain/repositories/ota_repository.dart';
 import 'package:inv_app/features/ota/presentation/models/firmware_module_presentation.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
@@ -427,7 +425,6 @@ class _UpgradeHistoryPageState extends State<UpgradeHistoryPage> {
   }
 
   String _formatRange(DateTimeRange range) {
-    String two(int v) => v.toString().padLeft(2, '0');
     final s = range.start.toLocal();
     final e = range.end.toLocal();
     return '${s.month}/${s.day} - ${e.month}/${e.day}';
