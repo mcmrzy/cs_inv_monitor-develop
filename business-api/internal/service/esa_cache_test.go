@@ -33,7 +33,9 @@ func TestESACachePurger_BuildRefreshPaths(t *testing.T) {
 	paths := p.RefreshPaths()
 	want := []string{
 		"https://download.jiuxiaoyw.online/app-release-info",
+		"https://download.jiuxiaoyw.online/app-release-info?platform=android",
 		"https://download.jiuxiaoyw.online/api/v1/ota/app/latest",
+		"https://download.jiuxiaoyw.online/api/v1/ota/app/latest?platform=android",
 	}
 	if len(paths) != len(want) {
 		t.Fatalf("len=%d want %d: %v", len(paths), len(want), paths)
@@ -71,9 +73,16 @@ func TestDesiredESACacheRules(t *testing.T) {
 	for _, r := range rules {
 		if r.Name == "cs-api-no-store" {
 			foundAPI = true
-			if r.EdgeCacheMode != "off" {
+			// ESA 2024-09-10 枚举是 no_cache，旧 CDN 的 off 会被拒绝。
+			if r.EdgeCacheMode != "no_cache" {
 				t.Fatalf("api rule edge mode=%s", r.EdgeCacheMode)
 			}
+			if r.BrowserCacheMode != "no_cache" {
+				t.Fatalf("api rule browser mode=%s", r.BrowserCacheMode)
+			}
+		}
+		if r.EdgeCacheMode == "off" || r.BrowserCacheMode == "off" {
+			t.Fatalf("rule %s still uses invalid mode off", r.Name)
 		}
 	}
 	if !foundAPI {

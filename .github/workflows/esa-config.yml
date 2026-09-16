@@ -57,4 +57,4 @@ jobs:
             docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --force-recreate inv-api-server
             sleep 10
             docker inspect -f 'business-api health={{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' business-api
-            docker logs --tail 40 business-api 2>&1 | grep -iE 'ESA|error' || true
+            docker logs --tail 80 business-api 2>&1 | grep -iE 'ESA|cache' || true

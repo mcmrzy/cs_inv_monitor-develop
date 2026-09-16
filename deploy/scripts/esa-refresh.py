@@ -10,6 +10,8 @@
 
 只列站点：
   ESA_LIST_SITES=1 python3 deploy/scripts/esa-refresh.py
+
+注意：ESA 2024-09-10 刷新接口是 PurgeCaches（不是旧 CDN 的 RefreshESAObjectCaches）。
 """
 
 from __future__ import annotations
@@ -110,7 +112,7 @@ def main() -> None:
             sys.exit(f"缺少环境变量 {key}")
 
     if os.environ.get("ESA_LIST_SITES") == "1":
-        print(json.dumps(call_esa("ListSitesESA", {"PageSize": "50"}), ensure_ascii=False, indent=2))
+        print(json.dumps(call_esa("ListSites", {"PageSize": "50"}), ensure_ascii=False, indent=2))
         return
 
     site_id = os.environ.get("ESA_SITE_ID", "").strip()
@@ -119,18 +121,20 @@ def main() -> None:
 
     host = os.environ.get("ESA_REFRESH_HOST", "download.jiuxiaoyw.online").strip()
     host = host.removeprefix("https://").removeprefix("http://").split("/")[0]
-    paths = "\n".join(f"https://{host}{p}" for p in DEFAULT_PATHS)
+    # ignoreParams：去掉 query 后匹配，覆盖 ?platform=android 等变体。
+    ignore_urls = [f"https://{host}{p}" for p in DEFAULT_PATHS]
+    content = json.dumps({"IgnoreParams": ignore_urls}, ensure_ascii=False)
 
     print(f"SiteId={site_id}")
-    print("刷新目标:")
-    for line in paths.splitlines():
+    print("刷新目标（ignoreParams，去参数后匹配）:")
+    for line in ignore_urls:
         print(f"  {line}")
 
     result = call_esa(
-        "RefreshESAObjectCaches",
+        "PurgeCaches",
         {
-            "ObjectPath": paths,
-            "ObjectType": "File",
+            "Type": "ignoreParams",
+            "Content": content,
             "SiteId": site_id,
             "Force": "true",
         },

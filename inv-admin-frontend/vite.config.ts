@@ -23,6 +23,10 @@ export default defineConfig({
   },
   build: {
     rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, 'index.html'),
+        download: path.resolve(__dirname, 'download.html'),
+      },
       output: {
         manualChunks(id) {
           const moduleId = id.replace(/\\/g, '/')

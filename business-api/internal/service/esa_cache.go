@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strings"
@@ -23,9 +24,9 @@ type CachePurger interface {
 // NoopCachePurger 未配置 ESA 时的占位实现。
 type NoopCachePurger struct{}
 
-func (NoopCachePurger) Enabled() bool { return false }
-func (NoopCachePurger) RefreshAsync() {}
-func (NoopCachePurger) EnsureCacheRulesAsync() {}
+func (NoopCachePurger) Enabled() bool             { return false }
+func (NoopCachePurger) RefreshAsync()             {}
+func (NoopCachePurger) EnsureCacheRulesAsync()    {}
 
 const (
 	esaAPIEndpoint = "esa.aliyuncs.com"
@@ -33,6 +34,7 @@ const (
 )
 
 // defaultAppReleaseCachePaths 下载页读取最新版本的公开路径。
+// 页面实际请求带 ?platform=android，因此刷新时用 ignoreParams 覆盖任意 query。
 var defaultAppReleaseCachePaths = []string{
 	"/app-release-info",
 	"/api/v1/ota/app/latest",
@@ -42,6 +44,8 @@ var defaultAppReleaseCachePaths = []string{
 //
 // 下载页依赖 /app-release-info 与 /api/v1/ota/app/latest 的实时元数据；
 // ESA 在未遵循源站 no-store 时会对这些路径按默认 TTL 缓存，发布新 APK 后必须主动刷新。
+//
+// 注意：ESA 2024-09-10 的刷新接口是 PurgeCaches（不是旧 CDN 的 RefreshESAObjectCaches）。
 type ESACachePurger struct {
 	client      *openapi.Client
 	ak          string
@@ -61,9 +65,13 @@ func NewESACachePurger(accessKeyID, accessKeySecret, siteID, host string) *ESACa
 	if h == "" {
 		h = "download.jiuxiaoyw.online"
 	}
-	urls := make([]string, 0, len(defaultAppReleaseCachePaths))
+	urls := make([]string, 0, len(defaultAppReleaseCachePaths)*2)
 	for _, p := range defaultAppReleaseCachePaths {
-		urls = append(urls, "https://"+h+p)
+		// 页面请求带 query；同时提交裸路径与带 platform 的变体，避免 cache key 漏刷。
+		urls = append(urls,
+			"https://"+h+p,
+			"https://"+h+p+"?platform=android",
+		)
 	}
 	return &ESACachePurger{
 		ak:          strings.TrimSpace(accessKeyID),
@@ -95,6 +103,9 @@ func (p *ESACachePurger) RefreshPaths() []string {
 }
 
 // Refresh 同步刷新边缘缓存。未启用时直接返回 nil。
+//
+// 使用 PurgeCaches 的 ignoreParams 类型：去掉 query 后匹配，确保
+// /app-release-info?platform=android 与裸路径一并失效。
 func (p *ESACachePurger) Refresh() error {
 	if !p.Enabled() {
 		return nil
@@ -102,11 +113,25 @@ func (p *ESACachePurger) Refresh() error {
 	if err := p.ensureClient(); err != nil {
 		return err
 	}
-	result, err := p.callESA("RefreshESAObjectCaches", map[string]*string{
-		"ObjectPath": tea.String(strings.Join(p.refreshURLs, "\n")),
-		"ObjectType": tea.String("File"),
-		"SiteId":     tea.String(p.siteID),
-		"Force":      tea.String("true"),
+
+	// ignoreParams 列表使用「去参数」后的 URL。
+	ignore := make([]string, 0, len(defaultAppReleaseCachePaths))
+	host := p.extractHost()
+	for _, path := range defaultAppReleaseCachePaths {
+		ignore = append(ignore, "https://"+host+path)
+	}
+	content, err := json.Marshal(map[string]interface{}{
+		"IgnoreParams": ignore,
+	})
+	if err != nil {
+		return fmt.Errorf("marshal purge content: %w", err)
+	}
+
+	result, err := p.callESA("PurgeCaches", map[string]*string{
+		"Type":    tea.String("ignoreParams"),
+		"Content": tea.String(string(content)),
+		"SiteId":  tea.String(p.siteID),
+		"Force":   tea.String("true"),
 	})
 	if err != nil {
 		return err
@@ -120,6 +145,7 @@ func (p *ESACachePurger) Refresh() error {
 	logger.Info("ESA cache refresh submitted",
 		zap.String("site_id", p.siteID),
 		zap.Strings("urls", p.refreshURLs),
+		zap.Strings("ignore_params", ignore),
 		zap.String("task_id", taskID),
 	)
 	return nil
@@ -145,12 +171,24 @@ func (p *ESACachePurger) RefreshAsync() {
 	}()
 }
 
+func (p *ESACachePurger) extractHost() string {
+	h := strings.TrimSpace(p.refreshURLs[0])
+	h = strings.TrimPrefix(strings.TrimPrefix(h, "https://"), "http://")
+	if i := strings.Index(h, "/"); i >= 0 {
+		h = h[:i]
+	}
+	if h == "" {
+		return "download.jiuxiaoyw.online"
+	}
+	return h
+}
+
 // ListSites 查询账号下 ESA 站点（运维排查用）。
 func (p *ESACachePurger) ListSites() (map[string]interface{}, error) {
 	if err := p.ensureClient(); err != nil {
 		return nil, err
 	}
-	return p.callESA("ListSitesESA", map[string]*string{
+	return p.callESA("ListSites", map[string]*string{
 		"PageSize": tea.String("50"),
 	})
 }
@@ -207,32 +245,34 @@ func (p *ESACachePurger) ensureClient() error {
 
 // esaCacheRuleSpec 期望的 ESA 缓存规则（下载域 + API 域元数据路径）。
 type esaCacheRuleSpec struct {
-	Name            string
-	Rule            string // ESA 规则表达式
-	EdgeCacheMode   string // off | follow_origin | ttl
-	BrowserCacheMode string
+	Name             string
+	Rule             string // ESA 规则表达式
+	EdgeCacheMode    string // no_cache | follow_origin | override_origin | follow_origin_bypass | follow_origin_override
+	BrowserCacheMode string // no_cache | follow_origin | override_origin
 }
 
 // desiredESACacheRules 与 deploy/CACHE_POLICY.md 对齐：
 // 动态接口与最新版本元数据禁止边缘缓存，SPA 入口 follow_origin。
+//
+// 注意：ESA EdgeCacheMode 枚举是 no_cache（不是旧 CDN 的 off）。
 func desiredESACacheRules() []esaCacheRuleSpec {
 	return []esaCacheRuleSpec{
 		{
 			Name:             "cs-api-no-store",
 			Rule:             `starts_with(http.request.uri.path, "/api/")`,
-			EdgeCacheMode:    "off",
-			BrowserCacheMode: "off",
+			EdgeCacheMode:    "no_cache",
+			BrowserCacheMode: "no_cache",
 		},
 		{
 			Name:             "cs-app-release-info-no-store",
 			Rule:             `eq(http.request.uri.path, "/app-release-info")`,
-			EdgeCacheMode:    "off",
-			BrowserCacheMode: "off",
+			EdgeCacheMode:    "no_cache",
+			BrowserCacheMode: "no_cache",
 		},
 		{
 			Name:             "cs-spa-follow-origin",
 			Rule:             `eq(http.request.uri.path, "/download") or eq(http.request.uri.path, "/")`,
-			EdgeCacheMode:    "follow_origin",
+			EdgeCacheMode:    "follow_origin_bypass",
 			BrowserCacheMode: "follow_origin",
 		},
 	}
@@ -315,10 +355,11 @@ func (p *ESACachePurger) listCacheRulesByName() (map[string]string, error) {
 
 func (p *ESACachePurger) createCacheRule(spec esaCacheRuleSpec) error {
 	query := map[string]*string{
-		"SiteId":          tea.String(p.siteID),
-		"RuleName":        tea.String(spec.Name),
-		"Rule":            tea.String(spec.Rule),
-		"EdgeCacheMode":   tea.String(spec.EdgeCacheMode),
+		"SiteId":           tea.String(p.siteID),
+		"RuleName":         tea.String(spec.Name),
+		"RuleEnable":       tea.String("on"),
+		"Rule":             tea.String(spec.Rule),
+		"EdgeCacheMode":    tea.String(spec.EdgeCacheMode),
 		"BrowserCacheMode": tea.String(spec.BrowserCacheMode),
 	}
 	if _, err := p.callESA("CreateCacheRule", query); err != nil {
@@ -334,11 +375,12 @@ func (p *ESACachePurger) createCacheRule(spec esaCacheRuleSpec) error {
 
 func (p *ESACachePurger) updateCacheRule(id string, spec esaCacheRuleSpec) error {
 	query := map[string]*string{
-		"SiteId":          tea.String(p.siteID),
-		"ConfigId":        tea.String(id),
-		"RuleName":        tea.String(spec.Name),
-		"Rule":            tea.String(spec.Rule),
-		"EdgeCacheMode":   tea.String(spec.EdgeCacheMode),
+		"SiteId":           tea.String(p.siteID),
+		"ConfigId":         tea.String(id),
+		"RuleName":         tea.String(spec.Name),
+		"RuleEnable":       tea.String("on"),
+		"Rule":             tea.String(spec.Rule),
+		"EdgeCacheMode":    tea.String(spec.EdgeCacheMode),
 		"BrowserCacheMode": tea.String(spec.BrowserCacheMode),
 	}
 	if _, err := p.callESA("UpdateCacheRule", query); err != nil {

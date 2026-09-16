@@ -9,15 +9,30 @@
 - 或跨域 `https://api.jiuxiaoyw.online/api/v1/ota/app/latest`
 
 阿里云 ESA 在未遵循源站 `no-store` 时会对上述路径缓存旧对象（实测最长 30 天），
-导致 App 已发 1.0.4、页面仍显示 1.0.1。
+导致 App 已发 1.0.6、页面仍显示 1.0.4。
 
-后端做两层自动化（均需配齐 AK/SiteId）：
+## 关键：ESA OpenAPI 名称
+
+ESA `2024-09-10` **没有** 旧 CDN 的 `RefreshESAObjectCaches` / `ListSitesESA`。
+正确接口：
+
+| 用途 | Action |
+|------|--------|
+| 刷新缓存 | `PurgeCaches`（`Type=ignoreParams` + `Content.IgnoreParams=[...]`） |
+| 列站点 | `ListSites` |
+| 缓存规则 | `CreateCacheRule` / `UpdateCacheRule` / `ListCacheRules` |
+
+缓存规则的 `EdgeCacheMode` / `BrowserCacheMode` 枚举是
+`no_cache` / `follow_origin` / `override_origin` / `follow_origin_bypass` / `follow_origin_override`
+—— **不是** 旧 CDN 的 `off`。
+
+## 自动化（均需配齐 AK/SiteId）
 
 1. **启动时 `EnsureCacheRules`**：向 ESA 写入缓存规则  
-   - `/api/*`、`/app-release-info` → `EdgeCacheMode=off`（禁止边缘缓存）  
-   - `/`、`/download` → `follow_origin`  
+   - `/api/*`、`/app-release-info` → `EdgeCacheMode=no_cache`  
+   - `/`、`/download` → `follow_origin_bypass`  
    同名规则存在则更新，不存在则创建。
-2. **发布/回滚/恢复/删除 App 版本后** 异步 `RefreshESAObjectCaches` 兜底。
+2. **发布/回滚/恢复/删除 App 版本后** 异步 `PurgeCaches` 兜底（`ignoreParams` 覆盖 `?platform=android`）。
 
 ## 配置
 
@@ -43,9 +58,10 @@ ESA_SITE_ID=你的ESA站点ID
    - 访问方式：编程访问
    - 记下 AccessKey ID / Secret（Secret 只显示一次）
 3. 给子账号授权（最小权限）：
-   - 自定义策略或系统策略，至少允许：
-     - `esa:RefreshObjectCaches`（刷新缓存）
-     - `esa:ListSites`（查站点 ID，可选）
+   - 至少允许：
+     - `esa:PurgeCaches`（刷新缓存）
+     - `esa:ListSites`（查站点 ID）
+     - `esa:CreateCacheRule` / `esa:UpdateCacheRule` / `esa:ListCacheRules`（自动规则）
    - 示例自定义策略：
 
 ```json
@@ -54,7 +70,14 @@ ESA_SITE_ID=你的ESA站点ID
   "Statement": [
     {
       "Effect": "Allow",
-      "Action": ["esa:RefreshObjectCaches", "esa:DescribeSites", "esa:ListSites"],
+      "Action": [
+        "esa:PurgeCaches",
+        "esa:ListSites",
+        "esa:CreateCacheRule",
+        "esa:UpdateCacheRule",
+        "esa:ListCacheRules",
+        "esa:DescribePurgeTasks"
+      ],
       "Resource": "*"
     }
   ]
@@ -80,17 +103,17 @@ go run ./cmd/esa-purge -list-sites
 或用阿里云 CLI：
 
 ```bash
-aliyun esa ListSitesESA --PageSize 50
+aliyun esa ListSites --PageSize 50
 ```
 
-Site ID 通常是数字串（例如 `1234567890123456789`）。
+Site ID 通常是数字串（例如 `172343211966680`）。
 
 ### 3. 刷新目标主机
 
 默认刷新 `https://download.jiuxiaoyw.online` 下的：
 
-- `/app-release-info`
-- `/api/v1/ota/app/latest`
+- `/app-release-info`（含 `?platform=android`，ignoreParams 覆盖）
+- `/api/v1/ota/app/latest`（同上）
 
 若你的下载域不同，设置 `ESA_REFRESH_HOST`。
 
@@ -121,22 +144,44 @@ ALIYUN_ACCESS_KEY_ID=... ALIYUN_ACCESS_KEY_SECRET=... \
 
 `ESA_SITE_ID=172343211966680` —— 写入服务器 `deploy/.env.prod`，**不要提交仓库**。
 
+### GitHub Actions
+
+仓库工作流 `ESA Config`（`.github/workflows/esa-config.yml`）可一键：
+1. 从 Runner 执行刷新
+2. 把凭据写入服务器 `.env.prod` 并重启 `inv-api-server`
+
 ## 验证
 
 发布新 APK 后：
 
 ```bash
+# 权威 API 应返回最新 version_name
 curl -s "https://api.jiuxiaoyw.online/api/v1/ota/app/latest?platform=android"
-# 应返回最新 version_name
 
-curl -sI "https://download.jiuxiaoyw.online/app-release-info"
-# 不应再长期出现 Age 很大的 HIT 旧 1.0.x 对象
+# 下载域同源别名不应再长期 HIT 旧对象
+curl -sI "https://download.jiuxiaoyw.online/app-release-info?platform=android" | grep -iE 'x-site-cache-status|age|date'
+
+# 规则生效后 EdgeCacheMode=no_cache → X-Site-Cache-Status 不应是长期 HIT
 ```
+
+## 排查日志
+
+发布新包后看 business-api：
+
+```bash
+docker logs --tail 80 business-api 2>&1 | grep -iE 'ESA|cache refresh|cache rule'
+```
+
+- `ESA cache integration enabled` — 配置齐全
+- `ESA cache integration skipped` — 缺 AK/SK/SiteId
+- `ESA cache refresh submitted` — 刷新已提交（含 task_id）
+- `ESA cache refresh failed` / `ESA ensure cache rules failed` — 看 error 详情
 
 ## 相关文件
 
 - `deploy/scripts/esa-refresh.py` — 无 Go 环境下的手动刷新脚本
-- `business-api/internal/service/esa_cache.go` — 发布后自动刷新
+- `business-api/internal/service/esa_cache.go` — 发布后自动刷新 + 规则对齐
 - `business-api/internal/handler/ota_handler.go` — 发布后挂钩
 - `business-api/cmd/esa-purge` — 手动刷新 / 列站点 CLI
 - `deploy/.env.prod.example` — 环境变量模板
+- `deploy/CACHE_POLICY.md` — 源站缓存语义

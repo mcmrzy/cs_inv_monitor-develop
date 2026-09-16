@@ -34,7 +34,7 @@ func main() {
 		p := service.NewESACachePurger(ak, sk, "placeholder", *host)
 		result, err := p.ListSites()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "ListSitesESA 失败: %v\n", err)
+			fmt.Fprintf(os.Stderr, "ListSites 失败: %v\n", err)
 			os.Exit(1)
 		}
 		enc := json.NewEncoder(os.Stdout)
