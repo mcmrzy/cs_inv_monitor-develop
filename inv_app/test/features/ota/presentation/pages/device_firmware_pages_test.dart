@@ -551,19 +551,6 @@ class _MissingTotalRepo extends _DeviceRepo {
       });
 }
 
-class _RefreshingDeviceRepo extends _DeviceRepo {
-  _RefreshingDeviceRepo() : super(status: 1, realtimeOnline: true);
-
-  final refreshResult = Completer<Either<Failure, Map<String, dynamic>>>();
-  int callCount = 0;
-
-  @override
-  Future<Either<Failure, Map<String, dynamic>>> getDetail(String sn) {
-    if (callCount++ == 0) return super.getDetail(sn);
-    return refreshResult.future;
-  }
-}
-
 class _OtaRepo implements OtaRepository {
   @override
   Future<Either<Failure, DeviceFirmwareHistoryPage>> getDeviceHistory(
