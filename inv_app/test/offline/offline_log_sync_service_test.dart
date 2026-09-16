@@ -72,6 +72,69 @@ void main() {
     expect(await store.countByStatus('synced'), 2);
   });
 
+  test('partial item results are applied by log id, not batch position',
+      () async {
+    await store.add(sample(1));
+    await store.add(sample(2));
+    when(() => api.upload(any())).thenAnswer(
+      (_) async => const OfflineLogUploadResult(
+        accepted: 1,
+        duplicates: 0,
+        rejected: 1,
+        results: [
+          OfflineLogItemResult(
+            logId: 'sync-log-2',
+            status: OfflineLogItemStatus.accepted,
+          ),
+          OfflineLogItemResult(
+            logId: 'sync-log-1',
+            status: OfflineLogItemStatus.rejected,
+            reason: 'device_access_denied',
+          ),
+        ],
+      ),
+    );
+
+    final service = OfflineLogSyncService(
+      store: store,
+      api: api,
+      networkStatus: networkStatus,
+    );
+    await service.syncNow();
+
+    final rows = await store.listBySn('H1CNA6K20001');
+    final statusById = {for (final row in rows) row.logId: row.syncStatus};
+    expect(statusById['sync-log-1'], 'failed');
+    expect(statusById['sync-log-2'], 'synced');
+    expect(await store.pendingCount(), 0);
+    service.dispose();
+  });
+
+  test('declared item results fail closed when per-id outcomes are missing',
+      () async {
+    await store.add(sample(1));
+    when(() => api.upload(any())).thenAnswer(
+      (_) async => const OfflineLogUploadResult(
+        accepted: 1,
+        duplicates: 0,
+        itemResultsPresent: true,
+      ),
+    );
+
+    final service = OfflineLogSyncService(
+      store: store,
+      api: api,
+      networkStatus: networkStatus,
+    );
+    await service.syncNow();
+
+    final pending = await store.pending();
+    expect(pending, hasLength(1));
+    expect(pending.single.syncAttempts, 1);
+    expect(service.hasPendingRetry, isTrue);
+    service.dispose();
+  });
+
   test('upload failure bumps attempts and schedules backoff retry', () async {
     await store.add(sample(1));
     when(() => api.upload(any())).thenThrow(Exception('network down'));

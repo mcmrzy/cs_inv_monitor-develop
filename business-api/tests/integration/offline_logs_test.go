@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -32,13 +33,32 @@ func TestSaveOfflineLogsIdempotent(t *testing.T) {
 	}
 	defer pool.Close()
 
+	suffix := time.Now().UTC().Format("20060102150405.000000000")
+	userID := time.Now().UTC().UnixNano()
+	userPhone := fmt.Sprintf("7%018d", userID%1_000_000_000_000_000_000)
+	deviceSN := "OFFLOG-IDEMP-" + suffix
+	logID := "offline-idempotent-" + suffix
+	defer func() {
+		_, _ = pool.Exec(ctx, `DELETE FROM device_offline_op_logs WHERE log_id = $1`, logID)
+		_, _ = pool.Exec(ctx, `DELETE FROM devices WHERE sn = $1`, deviceSN)
+		_, _ = pool.Exec(ctx, `DELETE FROM users WHERE id = $1`, userID)
+	}()
+
+	_, err = pool.Exec(ctx, `INSERT INTO users(id, phone, password_hash, status) VALUES ($1, $2, 'offline-log-test', 1)`, userID, userPhone)
+	if err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+	_, err = pool.Exec(ctx, `INSERT INTO devices(sn, model, user_id) VALUES ($1, 'CS-INV-TEST', $2)`, deviceSN, userID)
+	if err != nil {
+		t.Fatalf("seed device: %v", err)
+	}
+
 	// cache 传 nil：本测试路径不触发缓存访问（invalidateDeviceCache 对 nil 安全）
 	repo := repository.NewDeviceRepository(pool, nil)
-	userID := int64(999001)
 	logs := []model.OfflineOpLog{
 		{
-			LogID:    "integ-test-0001",
-			DeviceSN: "H1CNA6K20001",
+			LogID:    logID,
+			DeviceSN: deviceSN,
 			Action:   "set_power",
 			Params:   map[string]interface{}{"power_w": float64(3000)},
 			Result:   "ok",
@@ -82,7 +102,10 @@ func TestOfflineLogBatchRejectsUnauthorizedDeviceAndKeepsAuthorizedOutcomes(t *t
 	defer pool.Close()
 
 	suffix := time.Now().UTC().Format("20060102150405.000000000")
-	userID := int64(990001)
+	userID := time.Now().UTC().UnixNano()
+	deniedUserID := userID + 1
+	userPhone := fmt.Sprintf("9%018d", userID%1_000_000_000_000_000_000)
+	deniedUserPhone := fmt.Sprintf("8%018d", deniedUserID%1_000_000_000_000_000_000)
 	allowedSN := "OFFLOG-ALLOW-" + suffix
 	deniedSN := "OFFLOG-DENY-" + suffix
 	acceptedID := "offline-accepted-" + suffix
@@ -90,12 +113,21 @@ func TestOfflineLogBatchRejectsUnauthorizedDeviceAndKeepsAuthorizedOutcomes(t *t
 	defer func() {
 		_, _ = pool.Exec(ctx, `DELETE FROM device_offline_op_logs WHERE log_id = ANY($1)`, []string{acceptedID, rejectedID})
 		_, _ = pool.Exec(ctx, `DELETE FROM devices WHERE sn = ANY($1)`, []string{allowedSN, deniedSN})
+		_, _ = pool.Exec(ctx, `DELETE FROM users WHERE id = ANY($1)`, []int64{userID, deniedUserID})
 	}()
+
+	_, err = pool.Exec(ctx, `
+		INSERT INTO users(id, phone, password_hash, status) VALUES
+			($1, $2, 'offline-log-test', 1),
+			($3, $4, 'offline-log-test', 1)`, userID, userPhone, deniedUserID, deniedUserPhone)
+	if err != nil {
+		t.Fatalf("seed users: %v", err)
+	}
 
 	_, err = pool.Exec(ctx, `
 		INSERT INTO devices(sn, model, user_id) VALUES
 			($1, 'CS-INV-TEST', $3),
-			($2, 'CS-INV-TEST', $4)`, allowedSN, deniedSN, userID, userID+1)
+			($2, 'CS-INV-TEST', $4)`, allowedSN, deniedSN, userID, deniedUserID)
 	if err != nil {
 		t.Fatalf("seed devices: %v", err)
 	}
@@ -114,6 +146,10 @@ func TestOfflineLogBatchRejectsUnauthorizedDeviceAndKeepsAuthorizedOutcomes(t *t
 	}
 	if result.Accepted != 1 || result.Duplicates != 0 || result.Rejected != 1 {
 		t.Fatalf("first batch counts = %+v, want accepted=1 duplicates=0 rejected=1", result)
+	}
+	if len(result.Results) != len(logs) || result.Results[0].LogID != acceptedID || result.Results[0].Status != model.OfflineLogAccepted ||
+		result.Results[1].LogID != rejectedID || result.Results[1].Status != model.OfflineLogRejected {
+		t.Fatalf("first batch results = %+v, want input-order accepted then rejected", result.Results)
 	}
 	outcomes := make(map[string]model.OfflineLogResult, len(result.Results))
 	for _, item := range result.Results {
