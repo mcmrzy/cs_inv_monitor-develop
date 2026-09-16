@@ -510,7 +510,7 @@ func (p *ProtocolParser) handleHeartbeat(ctx context.Context, raw *RawMessage) e
 			}
 			return nil
 		}
-		// V2 推导字段：work_state（sys_status 位组合）与 battery_power（放电为正）
+		// V2 推导字段：work_state（sys_status 位组合）与 battery_power（充电为正，与电流方向一致）
 		deriveV2WorkState(sample)
 		deriveV2BatteryPower(sample)
 	default:
@@ -664,17 +664,18 @@ func deriveV2WorkState(s *telemetryv2.Sample) {
 	s.System.WorkState = &ws
 }
 
-// deriveV2BatteryPower 由充/放电功率推导 battery_power（放电为正），
-// 与现有 realtime/存储的 battery_power 语义兼容。
+// deriveV2BatteryPower 由充/放电功率推导 battery_power（充电为正、放电为负）。
+// 与协议/设备电流方向一致（CS-L10-6K2 V2.1 §6.2.5：battery_current 充电为正、放电为负），
+// 也与前端 getBattState / 能量流「正=充电」判断对齐。
 func deriveV2BatteryPower(s *telemetryv2.Sample) {
 	switch {
-	case s.Battery.DischargePower != nil && s.Battery.ChargePower != nil:
-		v := *s.Battery.DischargePower - *s.Battery.ChargePower
+	case s.Battery.ChargePower != nil && s.Battery.DischargePower != nil:
+		v := *s.Battery.ChargePower - *s.Battery.DischargePower
 		s.Battery.Power = &v
-	case s.Battery.DischargePower != nil:
-		s.Battery.Power = s.Battery.DischargePower
 	case s.Battery.ChargePower != nil:
-		v := -(*s.Battery.ChargePower)
+		s.Battery.Power = s.Battery.ChargePower
+	case s.Battery.DischargePower != nil:
+		v := -(*s.Battery.DischargePower)
 		s.Battery.Power = &v
 	}
 }

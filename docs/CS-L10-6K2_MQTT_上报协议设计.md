@@ -306,7 +306,7 @@ CS-L10-6K2 是辰烁科技 48V 单相离网逆变器，ARM 主控（GD32F30x）�
 |----------|------|------|
 | `pv_total_power` 拆分 | pv1_power / pv2_power = f(Vpv×BuckCurr) | 可选，展示用 |
 | `work_state` | sys_status 位组合：Fault→1、Charge→2、Discharging→3、ACBypass→4、StandBy→0 | 与旧型号枚举兼容 |
-| `battery_power` | = discharge - charge（放电为正） | 与现有 realtime 结构兼容 |
+| `battery_power` | = charge - discharge（充电为正） | 与 battery_current / 前端判断一致 |
 
 ### 5.3 剔除 / 合并
 

@@ -275,7 +275,14 @@ const StationDetailPage: React.FC = () => {
       // 实时功率
       pvPower += safeNum(rt?.pv_total_power ?? rt?.pv?.pv_power_total)
       loadPower += safeNum(rt?.ac_power ?? rt?.ac?.power)
-      battPower += safeNum(rt?.charge_power ?? rt?.batt?.power ?? rt?.battery_power)
+      // 与设备电流方向一致：充电为正、放电为负。优先用 V2 充/放电功率差，再回退带符号功率
+      const chgW = safeNum(rt?.battery_charge_power ?? rt?.bat?.battery_charge_power)
+      const disW = safeNum(rt?.battery_discharge_power ?? rt?.bat?.battery_discharge_power)
+      if (chgW !== 0 || disW !== 0) {
+        battPower += chgW - disW
+      } else {
+        battPower += safeNum(rt?.battery_power ?? rt?.charge_power ?? rt?.batt?.power ?? rt?.bat?.power)
+      }
       gridPowerSum += safeNum(rt?.grid_power ?? rt?.meter_power)
       // 发电机功率（V2 型号上报 gen 功率或能量时聚合，无数据则为 0）
       genPowerSum += safeNum(rt?.gen_power ?? rt?.gen?.power ?? rt?.gen_energy_daily)
