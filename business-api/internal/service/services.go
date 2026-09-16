@@ -665,31 +665,53 @@ func computeDevicePIN(secret, sn string) string {
 // SaveOfflineLogs authorizes each device independently so one revoked or
 // unrelated device cannot prevent permitted events in the same retry batch.
 func (s *DeviceService) SaveOfflineLogs(ctx context.Context, actor model.ActorContext, logs []model.OfflineOpLog) (model.OfflineLogBatchResult, error) {
-	result := model.OfflineLogBatchResult{Results: make([]model.OfflineLogResult, 0, len(logs))}
+	result := model.OfflineLogBatchResult{}
 	authorized := make([]model.OfflineOpLog, 0, len(logs))
-	for _, log := range logs {
+	authorizedIndexes := make([]int, 0, len(logs))
+	rejected := make(map[int]model.OfflineLogResult)
+	for i, log := range logs {
 		allowed, err := s.repo.HasOfflineLogDeviceAccess(ctx, actor.UserID, log.DeviceSN)
 		if err != nil {
 			return result, fmt.Errorf("check offline log device access for %s: %w", log.DeviceSN, err)
 		}
 		if !allowed {
 			result.Rejected++
-			result.Results = append(result.Results, model.OfflineLogResult{
+			rejected[i] = model.OfflineLogResult{
 				LogID: log.LogID, Status: model.OfflineLogRejected, Reason: "device_access_denied",
-			})
+			}
 			continue
 		}
 		authorized = append(authorized, log)
+		authorizedIndexes = append(authorizedIndexes, i)
 	}
 
 	persisted, err := s.repo.SaveOfflineLogsDetailed(ctx, actor.UserID, authorized)
 	if err != nil {
 		return result, fmt.Errorf("save authorized offline logs: %w", err)
 	}
+	results, err := offlineLogResultsInInputOrder(len(logs), authorizedIndexes, rejected, persisted.Results)
+	if err != nil {
+		return result, err
+	}
 	result.Accepted += persisted.Accepted
 	result.Duplicates += persisted.Duplicates
-	result.Results = append(result.Results, persisted.Results...)
+	result.Results = results
 	return result, nil
+}
+
+func offlineLogResultsInInputOrder(inputCount int, authorizedIndexes []int, rejected map[int]model.OfflineLogResult, persisted []model.OfflineLogResult) ([]model.OfflineLogResult, error) {
+	if len(persisted) != len(authorizedIndexes) {
+		return nil, fmt.Errorf("offline log result count mismatch: got %d outcomes for %d authorized logs", len(persisted), len(authorizedIndexes))
+	}
+
+	results := make([]model.OfflineLogResult, inputCount)
+	for index, outcome := range rejected {
+		results[index] = outcome
+	}
+	for i, outcome := range persisted {
+		results[authorizedIndexes[i]] = outcome
+	}
+	return results, nil
 }
 
 // validDeviceKey reports whether raw is a base64-encoded 32-byte key
