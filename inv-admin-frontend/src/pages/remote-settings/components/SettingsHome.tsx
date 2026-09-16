@@ -42,10 +42,9 @@ const SettingsHome: React.FC<SettingsHomeProps> = ({ cfg, loading, onOpenAdvance
 
   const sections = MODULES.map((m) => {
     const visibleKeys = m.paramKeys.filter((key) => cfg.isVisible(cfg.getMeta(key)))
-    // 字段完全不在 schema 且无上报值时隐藏（扩展参数固件未实现），避免整页全是无法读取的项
-    const availableKeys = visibleKeys.filter(
-      (key) => cfg.schemaMap.has(key) || cfg.getSummaryValue(key) !== undefined,
-    )
+    // 仅展示型号 schema 已登记的项（后端 config-schema 已按 device_model_commands 裁剪）；
+    // 不再用 reported 值兜底，避免 UI 出现型号不允许下发的参数。
+    const availableKeys = visibleKeys.filter((key) => cfg.schemaMap.has(key))
     return { module: m, keys: availableKeys }
   }).filter((s) => s.keys.length > 0)
 
@@ -99,7 +98,11 @@ const SettingsHome: React.FC<SettingsHomeProps> = ({ cfg, loading, onOpenAdvance
       ) : (
         !loading && (
           <Empty
-            description={t('remote3.moduleEmpty')}
+            description={
+              cfg.modelCommandsMissing
+                ? t('remote.schema.emptyModelCommands')
+                : t('remote3.moduleEmpty')
+            }
             image={Empty.PRESENTED_IMAGE_SIMPLE}
             style={{ padding: '40px 0', background: '#fff', borderRadius: 12, border: '1px solid #edf0f5' }}
           />

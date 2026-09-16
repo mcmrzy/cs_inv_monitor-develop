@@ -594,6 +594,8 @@ export default {
     'remote.schema.sub.gen': '发电机',
     'remote.schema.noVisibleParams': '当前联动条件下无可见参数',
     'remote.schema.empty': '该型号暂无配置参数（device_config_schema 未配置）',
+    'remote.schema.emptyModelCommands': '该设备未绑定型号，或型号未配置允许的控制命令，请先在设备信息中选择正确型号',
+    'remote.commandNotAllowed': '该命令不在设备型号允许的控制命令中',
     // 控制参数枚举语义（device_config_schema.enum_map → config.enum.*）
     'config.enum.solar_first': '光伏优先',
     'config.enum.utility_first': '市电优先',
@@ -1341,6 +1343,8 @@ export default {
     'remote.schema.sub.gen': 'Generator',
     'remote.schema.noVisibleParams': 'No visible parameters under current conditions',
     'remote.schema.empty': 'No config parameters for this model (device_config_schema not configured)',
+    'remote.schema.emptyModelCommands': 'Device has no bound model or the model has no allowed control commands. Select the correct model in device info first.',
+    'remote.commandNotAllowed': 'Command is not allowed for this device model',
     // Control parameter enum semantics (device_config_schema.enum_map → config.enum.*)
     'config.enum.solar_first': 'Solar First',
     'config.enum.utility_first': 'Utility First',

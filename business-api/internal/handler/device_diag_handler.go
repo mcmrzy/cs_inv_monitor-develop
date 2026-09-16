@@ -106,17 +106,29 @@ func (h *DeviceHandler) GetHealthHistory(c *gin.Context) {
 	response.Success(c, points)
 }
 
-// GetConfigSchema 返回全部配置参数 schema（device_config_schema，V2.1 文档 9 节）。
-// 前端按 group_code/sub_group 分组渲染（SchemaGroupPanel）。
+// GetConfigSchema 返回该设备型号允许写入的配置参数 schema。
+// 元数据来自全局 device_config_schema，可用性由 device_model_commands（按 model_id + is_enabled）裁剪，
+// 与 /control 下发校验同源，避免 UI 展示型号不支持的参数（如 set_battery_type）。
 func (h *DeviceHandler) GetConfigSchema(c *gin.Context) {
+	sn := c.Param("sn")
 	rows, err := h.db.Query(c.Request.Context(), `
-		SELECT param_key, group_code, COALESCE(sub_group, ''), control_type,
-		       scale, COALESCE(unit, ''), min, max, COALESCE(enum_map, '{}'::jsonb),
-		       step, permission_code, COALESCE(confirmation_mode, ''),
-		       display_name_key, sort_order, COALESCE(visibility, '{}'::jsonb),
-		       COALESCE(validation, '{}'::jsonb)
-		FROM device_config_schema
-		ORDER BY group_code, sort_order, param_key`)
+		SELECT s.param_key, s.group_code, COALESCE(s.sub_group, ''), s.control_type,
+		       s.scale, COALESCE(s.unit, ''), s.min, s.max, COALESCE(s.enum_map, '{}'::jsonb),
+		       s.step, s.permission_code, COALESCE(s.confirmation_mode, ''),
+		       s.display_name_key, s.sort_order, COALESCE(s.visibility, '{}'::jsonb),
+		       COALESCE(s.validation, '{}'::jsonb)
+		FROM device_config_schema s
+		WHERE EXISTS (
+			SELECT 1 FROM devices d
+			JOIN device_model_commands c ON c.model_id = COALESCE(
+				d.model_id,
+				(SELECT dm.id FROM device_models dm
+				 WHERE dm.model_code = d.model AND dm.lifecycle_status != 'retired' LIMIT 1)
+			)
+			WHERE d.sn = $1 AND d.deleted_at IS NULL
+			  AND c.command_code = s.param_key AND c.is_enabled
+		)
+		ORDER BY s.group_code, s.sort_order, s.param_key`, sn)
 	if err != nil {
 		response.Error(c, 500, "query config schema failed")
 		return

@@ -34,6 +34,26 @@ export function useDeviceConfig(sn: string) {
     staleTime: 300_000,
   })
 
+  // 型号控制命令能力（与 /control 校验同源）。schema 已按型号过滤后仍加载一份，
+  // 用于下发前二次拦截，以及 Advanced 中 reported 但不可写的扩展键只读展示。
+  const { data: capabilities, refetch: refetchCapabilities } = useQuery({
+    queryKey: queryKeys.devices.controlCapabilities(sn),
+    queryFn: () =>
+      deviceApi.getControlCapabilities(sn).then((r) => {
+        const d = (r as any).data?.data ?? (r as any).data
+        return (Array.isArray(d) ? d : []) as Array<{ command_code: string; is_enabled?: boolean }>
+      }),
+    staleTime: 300_000,
+  })
+
+  const allowedCommands = useMemo(() => {
+    const s = new Set<string>()
+    for (const c of capabilities ?? []) {
+      if (c?.command_code && c.is_enabled !== false) s.add(c.command_code)
+    }
+    return s
+  }, [capabilities])
+
   const { data: controlState, isLoading: stateLoading, error: stateError, refetch: refetchState } = useQuery({
     queryKey: queryKeys.devices.controlState(sn),
     queryFn: () => deviceApi.getControlState(sn).then((r) => (r.data?.data ?? null) as any),
@@ -55,6 +75,12 @@ export function useDeviceConfig(sn: string) {
     for (const item of schemaItems ?? []) m.set(item.param_key, item)
     return m
   }, [schemaItems])
+
+  // schema 已为空且能力表也为空：通常为设备未绑定型号
+  const modelCommandsMissing = useMemo(
+    () => (schemaItems ?? []).length === 0 && (capabilities ?? []).length === 0 && !schemaLoading,
+    [schemaItems, capabilities, schemaLoading],
+  )
 
   const reported = useMemo(() => (controlState?.reported ?? {}) as Record<string, unknown>, [controlState])
   const desired = useMemo(() => (controlState?.desired ?? {}) as Record<string, unknown>, [controlState])
@@ -128,10 +154,14 @@ export function useDeviceConfig(sn: string) {
   /** 参数是否可编辑（后端 permission_code 校验） */
   const canEdit = useCallback(
     (paramKey: string): boolean => {
+      // schema 已按设备型号命令裁剪：未登记的参数一律只读（含 Advanced 扩展键）
+      if (!schemaMap.has(paramKey)) return false
+      // 能力表加载后二次拦截禁用命令；能力表尚未返回时不额外阻塞
+      if (allowedCommands.size > 0 && !allowedCommands.has(paramKey)) return false
       const code = schemaMap.get(paramKey)?.permission_code
       return !code || hasPermission(code)
     },
-    [schemaMap, hasPermission],
+    [schemaMap, hasPermission, allowedCommands],
   )
 
   /** desired 与 reported 是否一致（用于同步徽标） */
@@ -148,6 +178,10 @@ export function useDeviceConfig(sn: string) {
 
   const doSend = useCallback(
     (meta: ResolvedFieldMeta, physical: number) => {
+      if (allowedCommands.size > 0 && !allowedCommands.has(meta.paramKey)) {
+        message.error(`${t('remote.commandSendFailed')}: ${t('remote.commandNotAllowed')}`)
+        return
+      }
       setSendingKey(meta.paramKey)
       deviceApi
         .sendCommand(sn, { command: meta.paramKey, params: { value: physical } })
@@ -162,7 +196,7 @@ export function useDeviceConfig(sn: string) {
         })
         .finally(() => setSendingKey(null))
     },
-    [sn, message, t, queryClient, refetchHistory],
+    [sn, message, t, queryClient, refetchHistory, allowedCommands],
   )
 
   /** 下发工程单位值；confirm 字段弹二次确认（沿用现有确认逻辑） */
@@ -193,6 +227,9 @@ export function useDeviceConfig(sn: string) {
     schemaMap,
     schemaLoading,
     schemaError,
+    allowedCommands,
+    capabilitiesLoaded: capabilities !== undefined,
+    modelCommandsMissing,
     controlState,
     reported,
     desired,
@@ -214,6 +251,7 @@ export function useDeviceConfig(sn: string) {
     refetchAll: () => {
       void refetchSchema()
       void refetchState()
+      void refetchCapabilities()
     },
   }
 }

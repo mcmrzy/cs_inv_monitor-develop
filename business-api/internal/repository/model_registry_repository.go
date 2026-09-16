@@ -10,12 +10,19 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// resolveModelIDSQL 兼容 model_id 为空但 devices.model 已上报型号编码的存量设备
+const resolveModelIDSQL = `COALESCE(d.model_id, (
+	SELECT dm.id FROM device_models dm
+	WHERE dm.model_code = d.model AND dm.lifecycle_status != 'retired'
+	LIMIT 1
+))`
+
 func (r *ModelRepository) BuildCommandArgs(ctx context.Context, sn, commandCode string, params map[string]interface{}) ([]interface{}, bool, error) {
 	var raw []byte
 	var enabled bool
 	err := r.db.QueryRow(ctx, `
 		SELECT c.parameter_schema,c.is_enabled
-		FROM devices d JOIN device_model_commands c ON c.model_id=d.model_id
+		FROM devices d JOIN device_model_commands c ON c.model_id=`+resolveModelIDSQL+`
 		WHERE d.sn=$1 AND d.deleted_at IS NULL AND c.command_code=$2`, sn, commandCode).Scan(&raw, &enabled)
 	if err == pgx.ErrNoRows {
 		return nil, false, nil
@@ -33,7 +40,7 @@ func (r *ModelRepository) BuildCommandArgs(ctx context.Context, sn, commandCode 
 func (r *ModelRepository) CommandCapability(ctx context.Context, sn, commandCode string) (bool, bool, error) {
 	var enabled bool
 	err := r.db.QueryRow(ctx, `SELECT c.is_enabled FROM devices d
-		JOIN device_model_commands c ON c.model_id=d.model_id
+		JOIN device_model_commands c ON c.model_id=`+resolveModelIDSQL+`
 		WHERE d.sn=$1 AND d.deleted_at IS NULL AND c.command_code=$2`, sn, commandCode).Scan(&enabled)
 	if err == pgx.ErrNoRows {
 		return false, false, nil
@@ -477,7 +484,7 @@ func (r *ModelRepository) GetCommandPermissionCode(ctx context.Context, sn, comm
 	var permCode *string
 	err := r.db.QueryRow(ctx, `
 		SELECT c.permission_code FROM devices d
-		JOIN device_model_commands c ON c.model_id = d.model_id
+		JOIN device_model_commands c ON c.model_id = `+resolveModelIDSQL+`
 		WHERE d.sn = $1 AND d.deleted_at IS NULL AND c.command_code = $2`, sn, commandCode).Scan(&permCode)
 	if err == pgx.ErrNoRows {
 		return "", nil
