@@ -1263,11 +1263,12 @@ const FirmwareTab: React.FC = () => {
               filterOption={(input, option) => (option?.label as string)?.toLowerCase().includes(input.toLowerCase())} />
           </Form.Item>
           <Form.Item name="targetChip" label={t('ota.module')} rules={[{ required: true, message: t('ota.pleaseSelectTargetChip') }]}>
+            {/* 管理员上传需展示芯片型号括号，与用户侧「通信采集/系统中控」区分 */}
             <Select placeholder={t('ota.pleaseSelectTargetChip')}>
-              <Select.Option value="esp">{firmwareModuleLabel('esp', t)}</Select.Option>
-              <Select.Option value="arm">{firmwareModuleLabel('arm', t)}</Select.Option>
-              <Select.Option value="dsp">{firmwareModuleLabel('dsp', t)}</Select.Option>
-              <Select.Option value="bms">{firmwareModuleLabel('bms', t)}</Select.Option>
+              <Select.Option value="esp">{t('ota.espChip')}</Select.Option>
+              <Select.Option value="arm">{t('ota.armChip')}</Select.Option>
+              <Select.Option value="dsp">{t('ota.dspChip')}</Select.Option>
+              <Select.Option value="bms">{t('ota.bmsChip')}</Select.Option>
             </Select>
           </Form.Item>
           <Form.Item name="changelog" label={t('ota.changelog')}><TextArea rows={3} placeholder={t('ota.inputChangelog')} /></Form.Item>

@@ -427,7 +427,12 @@ class AppRouter {
       GoRoute(
         path: '/about',
         name: 'about',
-        pageBuilder: (context, state) => _slidePage(state, const AboutPage()),
+        pageBuilder: (context, state) => _slidePage(
+          state,
+          AboutPage(
+            autoCheck: state.uri.queryParameters['check'] == '1',
+          ),
+        ),
       ),
       GoRoute(
         path: '/notify-settings',

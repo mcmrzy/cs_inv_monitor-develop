@@ -118,7 +118,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('deviceFirmwareHero')), findsOneWidget);
-    expect(find.text('系统中控（ARM）'), findsOneWidget);
+    expect(find.text('系统中控'), findsOneWidget);
     expect(find.text('V9.9.9'), findsNothing);
     expect(find.text('V8.8.8'), findsNothing);
   });
