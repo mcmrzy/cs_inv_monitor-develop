@@ -11,6 +11,7 @@ import (
 
 	"inv-device-server/internal/mqtt"
 	"inv-device-server/internal/repository"
+	telemetryv2 "inv-device-server/internal/telemetry"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -655,4 +656,28 @@ func mapKeys(values map[string]json.RawMessage) []string {
 		keys = append(keys, key)
 	}
 	return keys
+}
+
+// battery_power 推导必须与设备电流方向一致：充电为正、放电为负。
+func TestDeriveV2BatteryPower_ChargePositive(t *testing.T) {
+	f := func(v float64) *float64 { return &v }
+
+	t.Run("both present: charge-discharge", func(t *testing.T) {
+		s := &telemetryv2.Sample{Battery: telemetryv2.Battery{ChargePower: f(800), DischargePower: f(200)}}
+		deriveV2BatteryPower(s)
+		require.NotNil(t, s.Battery.Power)
+		assert.InDelta(t, 600.0, *s.Battery.Power, 0.001)
+	})
+	t.Run("only charge: positive", func(t *testing.T) {
+		s := &telemetryv2.Sample{Battery: telemetryv2.Battery{ChargePower: f(500)}}
+		deriveV2BatteryPower(s)
+		require.NotNil(t, s.Battery.Power)
+		assert.InDelta(t, 500.0, *s.Battery.Power, 0.001)
+	})
+	t.Run("only discharge: negative", func(t *testing.T) {
+		s := &telemetryv2.Sample{Battery: telemetryv2.Battery{DischargePower: f(1305.6)}}
+		deriveV2BatteryPower(s)
+		require.NotNil(t, s.Battery.Power)
+		assert.InDelta(t, -1305.6, *s.Battery.Power, 0.001)
+	})
 }

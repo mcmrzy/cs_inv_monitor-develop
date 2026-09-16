@@ -1358,7 +1358,7 @@ func normalizeRealtimeData(data map[string]interface{}) map[string]interface{} {
 			if v, exists := battMap["voltage"]; exists {
 				data["battery_voltage"] = v
 			}
-			// 充放电功率：power > 0 充电, power < 0 放电
+			// 充放电功率：power 充电为正、放电为负（与 battery_current / 协议一致）
 			if v, exists := battMap["power"]; exists {
 				if power, ok := v.(float64); ok {
 					if power >= 0 {
