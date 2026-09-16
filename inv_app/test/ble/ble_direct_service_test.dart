@@ -20,6 +20,13 @@ void main() {
   setUpAll(() {
     // any(named: 'timeout') 匹配 Duration 需要 fallback 值
     registerFallbackValue(Duration.zero);
+    registerFallbackValue(
+      const BleScanResult(
+        macAddress: '00:00:00:00:00:00',
+        name: '',
+        rssi: 0,
+      ),
+    );
   });
 
   late MockBleAdapter adapter;
@@ -44,6 +51,8 @@ void main() {
     when(() => manager.startAutoConnect()).thenAnswer((_) async {});
     when(() => manager.stopAutoConnect()).thenAnswer((_) async {});
     when(() => manager.disconnectAll()).thenAnswer((_) async {});
+    when(() => manager.tryAutoConnect(any())).thenAnswer((_) async {});
+    when(() => adapter.stopScan()).thenAnswer((_) async {});
     // 默认扫描返回空流，避免未 stub 时 mocktail 返回 null 导致类型错误
     when(() => adapter.scan(
             serviceUuids: any(named: 'serviceUuids'),

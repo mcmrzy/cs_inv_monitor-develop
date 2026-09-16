@@ -208,13 +208,13 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
       return;
     }
 
-    // 2. 扫描附近设备（按 CSIV-CT 服务 UUID 过滤）
+    // 2. 扫描附近设备（按 CSIV-PR/CSIV-CT 服务 UUID 过滤）
     setState(() => _phase = _QrBindPhase.bleScanning);
     List<BleScanResult> results;
     try {
       results = await _adapter
           .scan(
-            serviceUuids: const [BleCtProtocol.serviceUuid],
+            serviceUuids: BleCtProtocol.scanServiceUuids,
             timeout: const Duration(seconds: 15),
           )
           .toList();

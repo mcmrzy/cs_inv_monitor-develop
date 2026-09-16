@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_ultra/flutter_blue_ultra.dart';
+import 'package:inv_app/core/services/ble/ble_adapter.dart';
 import 'package:inv_app/core/services/ble/ble_device_manager.dart';
 import 'package:inv_app/core/services/ble/ble_direct_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
@@ -71,8 +72,8 @@ class BleProvisioningService {
   static const String statusCharacteristicUuid =
       '43534956-5354-1000-8000-00805f9b34fb';
 
-  // 扫描超时时间
-  static const Duration scanTimeout = Duration(seconds: 10);
+  // 扫描超时时间（无硬件过滤时需要略长，保证扫到慢广播设备）
+  static const Duration scanTimeout = Duration(seconds: 15);
   // 连接超时时间
   static const Duration connectionTimeout = Duration(seconds: 10);
   // 配网超时时间
@@ -111,7 +112,7 @@ class BleProvisioningService {
   Timer? _provisioningTimer;
 
   // 扫描结果流订阅（dispose 时必须取消，否则页面销毁后回调仍会触发）
-  StreamSubscription<List<ScanResult>>? _scanResultsSub;
+  StreamSubscription<BleScanResult>? _scanResultsSub;
 
   // 是否正在运行
   bool _running = false;
@@ -219,43 +220,56 @@ class BleProvisioningService {
         return;
       }
 
-      // 开始扫描，过滤服务UUID
-      await FlutterBlueUltra.startScan(
-        withServices: [Guid(serviceUuid)],
+      // 先停掉可能残留的底层扫描，避免与本轮扫描抢占
+      await getIt<BleAdapter>().stopScan().catchError((_) {});
+
+      // 走 BleAdapter：无硬件 UUID 过滤 + 软件匹配 CSIV 设备
+      // （硬件 ScanFilter 在部分机型会漏扫，调试助手无过滤所以能搜到）
+      _scanResultsSub = getIt<BleAdapter>()
+          .scan(
+        serviceUuids: BleCtProtocol.scanServiceUuids,
         timeout: scanTimeout,
-      );
-
-      // 监听扫描结果（存储订阅以便 dispose 时取消，防止页面销毁后回调触发）
-      _scanResultsSub = FlutterBlueUltra.scanResults.listen((results) {
+      )
+          .listen((result) {
         if (_disposed) return; // 服务已释放，忽略迟到的回调
-        _discoveredDevices = results.map((result) {
-          // 协议说明：广播名是 CS_INV_完整SN，GAP Device Name也是完整SN
-          final advName = result.advertisementData.advName;
-          String deviceName;
-          String sn = '';
+        // 协议说明：广播名是 CS_INV_完整SN，GAP Device Name也是完整SN
+        final advName = result.name;
+        String deviceName;
+        String sn = '';
 
-          if (advName.isNotEmpty) {
-            // 使用获取到的设备名
-            deviceName = advName;
-            // 从设备名中提取SN（去掉CS_INV_前缀）
-            if (advName.startsWith('CS_INV_')) {
-              sn = advName.substring(7); // 'CS_INV_'.length = 7
-            }
-          } else {
-            // 如果没有设备名，用MAC地址后6位生成
-            final mac = result.device.remoteId.toString();
-            deviceName =
-                'CS_INV_${mac.substring(mac.length - 6).replaceAll(':', '')}';
+        if (advName.isNotEmpty) {
+          // 使用获取到的设备名
+          deviceName = advName;
+          // 从设备名中提取SN（去掉CS_INV_前缀）
+          final upper = advName.toUpperCase();
+          if (upper.startsWith('CS_INV_')) {
+            sn = advName.substring(7); // 'CS_INV_'.length = 7
+          } else if (upper.startsWith('CS-INV-')) {
+            sn = advName.substring(7);
           }
+        } else {
+          // 如果没有设备名，用MAC地址后6位生成
+          final mac = result.macAddress;
+          deviceName =
+              'CS_INV_${mac.substring(mac.length - 6).replaceAll(':', '')}';
+        }
 
-          return BleDeviceInfo(
-            sn: sn,
-            firmwareVersion: '',
-            macAddress: result.device.remoteId.toString(),
-            deviceName: deviceName,
-            rssi: result.rssi,
-          );
-        }).toList();
+        final device = BleDeviceInfo(
+          sn: sn,
+          firmwareVersion: '',
+          macAddress: result.macAddress,
+          deviceName: deviceName,
+          rssi: result.rssi,
+        );
+
+        // 按 MAC 去重合并
+        final idx = _discoveredDevices
+            .indexWhere((d) => d.macAddress == device.macAddress);
+        if (idx >= 0) {
+          _discoveredDevices[idx] = device;
+        } else {
+          _discoveredDevices.add(device);
+        }
 
         // 发现设备后，取消超时定时器，避免显示“配网超时”
         if (_discoveredDevices.isNotEmpty) {
@@ -263,8 +277,10 @@ class BleProvisioningService {
         }
 
         if (!_devicesController.isClosed) {
-          _devicesController.add(_discoveredDevices);
+          _devicesController.add(List.of(_discoveredDevices));
         }
+      }, onError: (Object e) {
+        debugPrint('[BLE] Provisioning scan error: $e');
       });
 
       // 设置扫描超时
@@ -283,7 +299,7 @@ class BleProvisioningService {
 
   /// 停止扫描（不恢复直连，供连接流程内部使用）
   void _stopScanInternal() {
-    FlutterBlueUltra.stopScan();
+    unawaited(getIt<BleAdapter>().stopScan().catchError((_) {}));
     _scanResultsSub?.cancel();
     _scanResultsSub = null;
     _scanTimer?.cancel();

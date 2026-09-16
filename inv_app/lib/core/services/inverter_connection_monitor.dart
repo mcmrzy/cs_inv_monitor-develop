@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:inv_app/core/entities/inverter_data.dart';
-import 'package:wifi_iot/wifi_iot.dart';
+import 'package:inv_app/core/platform/platform.dart';
 
 /// 逆变器连接监控器：连接设备热点后，基于"通信是否应答"判定设备是否失联。
 ///
@@ -119,12 +119,13 @@ class InverterConnectionMonitor {
 
   Future<void> _autoDisconnect(VoidCallback? callback) async {
     try {
+      final wifi = WifiApController.instance;
       // 1. 断开设备热点连接
-      await WiFiForIoTPlugin.disconnect();
+      await wifi.disconnect();
       debugPrint('[InverterMonitor] WiFi disconnected from device AP');
 
       // 2. 取消强制 WiFi 使用，让系统自动切回家用 WiFi
-      await WiFiForIoTPlugin.forceWifiUsage(false);
+      await wifi.forceWifiUsage(false);
       debugPrint(
         '[InverterMonitor] forceWifiUsage(false) - OS will reconnect to home WiFi',
       );

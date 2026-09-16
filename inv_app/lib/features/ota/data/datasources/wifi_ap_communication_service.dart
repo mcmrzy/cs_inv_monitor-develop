@@ -4,11 +4,11 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:inv_app/core/errors/ota_error_types.dart';
+import 'package:inv_app/core/platform/platform.dart';
 import 'package:inv_app/core/services/local_communication_service.dart';
 import 'package:inv_app/core/services/wifi_scan_service.dart';
 import 'package:inv_app/features/ota/domain/repositories/local_communication_repository.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:wifi_iot/wifi_iot.dart';
 
 /// WiFi AP 通信服务实现
 /// 用于本地OTA升级，通过设备WiFi热点进行固件传输
@@ -19,10 +19,12 @@ class WifiApCommunicationService implements LocalCommunicationRepository {
 
   WifiApCommunicationService();
 
+  WifiApController get _wifi => WifiApController.instance;
+
   /// 确保HTTP请求走WiFi网络
   Future<void> _ensureWifiUsage() async {
     try {
-      await WiFiForIoTPlugin.forceWifiUsage(true);
+      await _wifi.forceWifiUsage(true);
     } catch (_) {}
   }
 
@@ -41,7 +43,7 @@ class WifiApCommunicationService implements LocalCommunicationRepository {
       }
 
       // 启用WiFi
-      await WiFiForIoTPlugin.forceWifiUsage(true);
+      await _wifi.forceWifiUsage(true);
 
       // 扫描WiFi网络
       final networks = await scanWifiNetworks();
@@ -63,10 +65,10 @@ class WifiApCommunicationService implements LocalCommunicationRepository {
           !cap.contains('WPA') && !cap.contains('WEP') && !cap.contains('EAP');
 
       // 连接WiFi
-      final connected = await WiFiForIoTPlugin.connect(
+      final connected = await _wifi.connect(
         ssid,
         password: password,
-        security: isOpen ? NetworkSecurity.NONE : NetworkSecurity.WPA,
+        security: isOpen ? AppWifiSecurity.none : AppWifiSecurity.wpa,
         joinOnce: true,
       );
 
@@ -76,11 +78,11 @@ class WifiApCommunicationService implements LocalCommunicationRepository {
       }
 
       // 等待连接稳定
-      await WiFiForIoTPlugin.forceWifiUsage(true);
+      await _wifi.forceWifiUsage(true);
       await Future.delayed(const Duration(seconds: 3));
 
       // 验证连接
-      final currentSsid = await WiFiForIoTPlugin.getSSID();
+      final currentSsid = await _wifi.currentSsid;
       if (currentSsid == null ||
           !(currentSsid.toUpperCase().contains('CS_INV') ||
               currentSsid.toUpperCase().contains('CS-INV'))) {
@@ -116,8 +118,8 @@ class WifiApCommunicationService implements LocalCommunicationRepository {
   @override
   Future<void> disconnect() async {
     try {
-      await WiFiForIoTPlugin.disconnect().catchError((_) => false);
-      await WiFiForIoTPlugin.forceWifiUsage(false).catchError((_) => false);
+      await _wifi.disconnect();
+      await _wifi.forceWifiUsage(false);
       _connectedSSID = null;
       _deviceIP = _defaultGateway;
     } catch (e) {
@@ -318,7 +320,7 @@ class WifiApCommunicationService implements LocalCommunicationRepository {
   @override
   Future<bool> isConnectedToDeviceAP() async {
     try {
-      final ssid = await WiFiForIoTPlugin.getSSID();
+      final ssid = await _wifi.currentSsid;
       if (ssid == null || ssid.isEmpty || ssid == '<unknown ssid>') {
         return false;
       }
