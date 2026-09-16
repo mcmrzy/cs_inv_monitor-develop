@@ -465,9 +465,21 @@ jobs:
             # ---------- 仅拉取有变更的服务镜像 ----------
             DEPLOY_PHASE=pull_candidate_images
             if [ -n "$CHANGED_SERVICES" ]; then
+              # 源码目录名 → compose 服务名（docker compose pull 只认服务名）
+              to_compose_service() {
+                case "$1" in
+                  device-communication) echo "inv-device-server" ;;
+                  business-api) echo "inv-api-server" ;;
+                  *) echo "$1" ;;
+                esac
+              }
+              COMPOSE_PULL_SERVICES=""
+              for s in $CHANGED_SERVICES; do
+                COMPOSE_PULL_SERVICES="$COMPOSE_PULL_SERVICES $(to_compose_service "$s")"
+              done
               # shellcheck disable=SC2086
-              echo "拉取变更镜像: $CHANGED_SERVICES"
-              docker compose -f docker-compose.prod.yml --env-file .env.prod pull $CHANGED_SERVICES
+              echo "拉取变更镜像: $CHANGED_SERVICES → compose:$COMPOSE_PULL_SERVICES"
+              docker compose -f docker-compose.prod.yml --env-file .env.prod pull $COMPOSE_PULL_SERVICES
             else
               echo "无镜像变更，跳过 pull（复用本机已有镜像）"
             fi
