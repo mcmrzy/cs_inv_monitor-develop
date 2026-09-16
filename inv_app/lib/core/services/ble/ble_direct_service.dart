@@ -120,6 +120,7 @@ class BleDirectService {
     _scanTimer = null;
     await _scanSub?.cancel();
     _scanSub = null;
+    await adapter.stopScan();
     polling.stop();
     await manager.stopAutoConnect();
     await manager.disconnectAll();
@@ -155,6 +156,7 @@ class BleDirectService {
     _scanTimer = null;
     await _scanSub?.cancel();
     _scanSub = null;
+    await adapter.stopScan();
     polling.stop();
     await manager.stopAutoConnect();
     await manager.disconnectAll();
@@ -186,6 +188,7 @@ class BleDirectService {
     _scanTimer = null;
     await _scanSub?.cancel();
     _scanSub = null;
+    await adapter.stopScan();
     polling.stop();
     await manager.stopAutoConnect();
     await manager.disconnectAll();
@@ -201,14 +204,16 @@ class BleDirectService {
   }
 
   Future<void> _scanOnce() async {
-    if (!_enabled) return;
+    if (!_enabled || _suspended) return;
     await _scanSub?.cancel();
+    _scanSub = null;
+    await adapter.stopScan();
     _scanSub = adapter.scan(
-      serviceUuids: const [BleCtProtocol.serviceUuid],
+      serviceUuids: BleCtProtocol.scanServiceUuids,
       timeout: const Duration(seconds: 15),
     ).listen(
       (result) {
-        if (!_enabled) return;
+        if (!_enabled || _suspended) return;
         final device = BleDiscoveredDevice(
           macAddress: result.macAddress,
           name: result.name,
@@ -219,6 +224,8 @@ class BleDirectService {
         // 已连接会话忽略；未绑定候选交由 UI 确认（场景 B）
         if (manager.sessionOf(result.macAddress) != null) return;
         _unboundController.add(device);
+        // 自动连接由本轮发现扫描统一驱动，不再另起 startScan
+        unawaited(manager.tryAutoConnect(result));
       },
       onError: (Object e) {
         if (kDebugMode) debugPrint('[BleDirect] scan error: $e');

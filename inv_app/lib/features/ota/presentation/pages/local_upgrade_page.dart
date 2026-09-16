@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:inv_app/core/platform/app_platform.dart';
 import 'package:inv_app/core/services/ble/ble_adapter.dart';
 import 'package:inv_app/core/services/ble/ble_device_manager.dart';
 import 'package:inv_app/core/services/local_discovery_service.dart';
@@ -50,11 +51,16 @@ class _LocalUpgradePageState extends State<LocalUpgradePage>
     with TickerProviderStateMixin {
   late final TabController _tabController;
 
+  /// iOS/鸿蒙无 WiFi AP 扫描与热点加入能力，只保留 BLE 通道
+  bool get _showWifiApTab => PlatformCapabilities.canLocalOtaWifiAp;
+
   @override
   void initState() {
     super.initState();
-    // 固定两个 Tab（BLE / AP），不做型号过滤
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(
+      length: _showWifiApTab ? 2 : 1,
+      vsync: this,
+    );
   }
 
   @override
@@ -87,11 +93,12 @@ class _LocalUpgradePageState extends State<LocalUpgradePage>
               icon: const Icon(Icons.bluetooth_rounded, size: 20),
               height: 52.h,
             ),
-            Tab(
-              text: l10n.str('local_upgrade_tab_ap'),
-              icon: const Icon(Icons.wifi_rounded, size: 20),
-              height: 52.h,
-            ),
+            if (_showWifiApTab)
+              Tab(
+                text: l10n.str('local_upgrade_tab_ap'),
+                icon: const Icon(Icons.wifi_rounded, size: 20),
+                height: 52.h,
+              ),
           ],
           labelColor: AppColors.primary,
           unselectedLabelColor: AppColor.textSecondary(context),
@@ -104,7 +111,7 @@ class _LocalUpgradePageState extends State<LocalUpgradePage>
         controller: _tabController,
         children: [
           _BleUpgradeTab(firmwareId: widget.firmwareId),
-          _ApUpgradeTab(firmwareId: widget.firmwareId),
+          if (_showWifiApTab) _ApUpgradeTab(firmwareId: widget.firmwareId),
         ],
       ),
     );
@@ -296,7 +303,7 @@ class _BleUpgradeTabState extends State<_BleUpgradeTab>
   }
 
   /// 开始一轮 BLE 扫描（参考 BleDirectService._scanOnce：
-  /// 按 CSIV-CT 服务 UUID 过滤，15s 超时）
+  /// 按 CSIV-PR/CSIV-CT 服务 UUID 过滤，15s 超时）
   Future<void> _startScan() async {
     if (_scanning) return;
     final l10n = AppLocalizations.of(context)!;
@@ -321,7 +328,7 @@ class _BleUpgradeTabState extends State<_BleUpgradeTab>
 
     await _scanSub?.cancel();
     _scanSub = _adapter.scan(
-      serviceUuids: const [BleCtProtocol.serviceUuid],
+      serviceUuids: BleCtProtocol.scanServiceUuids,
       timeout: const Duration(seconds: 15),
     ).listen(
       _onScanResult,

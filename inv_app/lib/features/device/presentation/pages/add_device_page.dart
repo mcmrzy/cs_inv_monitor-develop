@@ -1082,7 +1082,7 @@ class _AddDevicePageState extends State<AddDevicePage>
       for (final d in _bleDevices) d.macAddress: d,
     };
     _standaloneScanSub = getIt<BleAdapter>().scan(
-      serviceUuids: const [BleCtProtocol.serviceUuid],
+      serviceUuids: BleCtProtocol.scanServiceUuids,
       timeout: const Duration(seconds: 15),
     ).listen(
       (result) {

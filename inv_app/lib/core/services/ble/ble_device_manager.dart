@@ -27,6 +27,22 @@ class BleCtProtocol {
       '43534956-5052-1000-8000-00805f9b34fb';
   static const String provisioningSnCharUuid =
       '43534956-534e-1000-8000-00805f9b34fb';
+  static const String otaControlCharUuid =
+      '43534f54-4354-1000-8000-00805f9b34fb';
+  static const String otaDataCharUuid =
+      '43534f54-4441-1000-8000-00805f9b34fb';
+  static const String otaStatusCharUuid =
+      '43534f54-5354-1000-8000-00805f9b34fb';
+
+  /// 广播扫描过滤 UUID 列表。
+  ///
+  /// 现有固件 ADV 仅携带 CSIV-PR；协议规范建议同时携带 CSIV-CT。
+  /// 只按 CSIV-CT 过滤会导致数据链路/本地 OTA 扫不到设备。
+  /// 扫描时两个都传，兼容当前与后续固件。
+  static const List<String> scanServiceUuids = [
+    provisioningServiceUuid,
+    serviceUuid,
+  ];
 
   static const int preferredMtu = 512;
   static const Duration commandTimeout = Duration(seconds: 5);
@@ -40,7 +56,33 @@ class BleCtProtocol {
     Duration(seconds: 5),
     Duration(seconds: 10),
   ];
+
+  static List<int> computeAuthProof({
+    required List<int> key,
+    required BleAuthProofRole role,
+    required String sessionId,
+    required List<int> phoneNonce,
+    required List<int> deviceNonce,
+    required int deviceTimestamp,
+  }) {
+    final prefix = role == BleAuthProofRole.phone
+        ? 'CSIV-CT/v2/app|'
+        : 'CSIV-CT/v2/device|';
+    final message = <int>[
+      ...utf8.encode(prefix),
+      ...utf8.encode(sessionId),
+      0x7c,
+      ...phoneNonce,
+      0x7c,
+      ...deviceNonce,
+      0x7c,
+      ...utf8.encode('$deviceTimestamp'),
+    ];
+    return Hmac(sha256, key).convert(message).bytes;
+  }
 }
+
+enum BleAuthProofRole { phone, device }
 
 /// 每设备连接状态机
 enum BleDeviceState { disconnected, connecting, authenticating, ready }
@@ -145,6 +187,18 @@ class BleFrameReassembler {
 }
 
 /// 单设备会话：状态机 + 命令队列 + 鉴权 + 遥测 + 退避重连
+class _PendingBleCommand {
+  final Completer<Map<String, dynamic>> completer;
+  final String messageId;
+  final String sessionId;
+
+  const _PendingBleCommand({
+    required this.completer,
+    required this.messageId,
+    required this.sessionId,
+  });
+}
+
 class BleDeviceSession {
   final BleAdapter _adapter;
   final String macAddress;
@@ -168,9 +222,17 @@ class BleDeviceSession {
 
   /// 命令队列（Future 链串行化，防 GATT 并发冲突）
   Future<void> _commandChain = Future.value();
-  final _pendingCommands = <String, Completer<Map<String, dynamic>>>{};
+  final _pendingCommands = <String, _PendingBleCommand>{};
+  var _commandSequence = 0;
   Completer<Map<String, dynamic>>? _authCompleter;
+  String? _expectedAuthType;
+  String? _expectedAuthReplyTo;
   final _random = Random.secure();
+  final Duration authTimeout;
+  int protocolVersion = 0;
+  Set<String> capabilities = const {};
+  String? connectionSessionId;
+  bool _otaInProgress = false;
 
   /// 断线自动重连
   bool _autoReconnect = false;
@@ -182,8 +244,17 @@ class BleDeviceSession {
     required BleAdapter adapter,
     required this.macAddress,
     required BleDeviceKeyStore keyStore,
+    Duration? authTimeout,
   })  : _adapter = adapter,
-        _keyStore = keyStore;
+        _keyStore = keyStore,
+        authTimeout = authTimeout ?? BleCtProtocol.authTimeout;
+
+  bool get supportsSecureDirectControl =>
+      protocolVersion == 2 &&
+      connectionSessionId != null &&
+      capabilities.contains('control');
+
+  bool get isOtaInProgress => _otaInProgress;
 
   BleDeviceState get state => _state;
 
@@ -243,6 +314,7 @@ class BleDeviceSession {
   /// 连接成功后：读 SN → 订阅通知 → 若已有 device_key 则直接鉴权
   Future<void> _afterConnected() async {
     sn ??= await _readSn();
+    await _loadProtocolInfo();
 
     _cmdResultSub = _connection!
         .subscribe(BleCtProtocol.serviceUuid, BleCtProtocol.cmdResultCharUuid)
@@ -261,6 +333,30 @@ class BleDeviceSession {
     } else {
       // 未绑定设备：保持连接等待上层走绑定流程（配网页/绑定页）
       _setState(BleDeviceState.authenticating);
+    }
+  }
+
+  Future<void> _loadProtocolInfo() async {
+    try {
+      final info = await readInfo();
+      if (info['v'] == 2 && info['type'] == 'info' && info['body'] is Map) {
+        final body = (info['body'] as Map).cast<String, dynamic>();
+        protocolVersion = (body['proto_version'] as num?)?.toInt() ?? 0;
+        connectionSessionId = info['session_id'] as String?;
+        capabilities = ((body['capabilities'] as List?) ?? const [])
+            .whereType<String>()
+            .toSet();
+        final infoSn = body['device_sn'] as String?;
+        if (infoSn != null && infoSn.isNotEmpty) sn = infoSn;
+        return;
+      }
+      protocolVersion = 1;
+      capabilities = const {};
+      connectionSessionId = null;
+    } catch (_) {
+      protocolVersion = 1;
+      capabilities = const {};
+      connectionSessionId = null;
     }
   }
 
@@ -297,6 +393,9 @@ class BleDeviceSession {
 
   /// 读取最新遥测快照（协议修订①：TELEMETRY 支持 Read，App 轮询用）
   Future<Map<String, dynamic>> readTelemetrySnapshot() async {
+    if (_otaInProgress) {
+      throw const BleCommandException('OTA_IN_PROGRESS', 'OTA owns BLE link');
+    }
     final connection = _connection;
     if (connection == null) {
       throw const BleCommandException('UNAUTHENTICATED', 'not connected');
@@ -325,14 +424,16 @@ class BleDeviceSession {
     final resp = await completer.future.timeout(BleCtProtocol.authTimeout);
     if (resp['mode'] != 'pin_check' || resp['result'] != 'ok') {
       final err = (resp['error'] as String?) ?? 'pin rejected';
-      throw BleCommandException(err == 'locked' ? 'PIN_LOCKED' : 'PIN_REJECTED', err);
+      throw BleCommandException(
+          err == 'locked' ? 'PIN_LOCKED' : 'PIN_REJECTED', err);
     }
   }
 
   /// 绑定（协议 §4.1 + 附录 B）：设备未绑定时写入 bind 消息，设备 notify 返回结果。
   /// [deviceKeyBase64] App 本地生成的 32B Base64 key；[pin] 场景 B 必传（设备端校验），
   /// 场景 A 配网已验证可不传；[issuedAt] 设备时钟校准用（缺省当前时间）。
-  Future<void> bind(String deviceKeyBase64, {String? pin, DateTime? issuedAt}) async {
+  Future<void> bind(String deviceKeyBase64,
+      {String? pin, DateTime? issuedAt}) async {
     final connection = _connection;
     if (connection == null) {
       throw const BleCommandException('UNAUTHENTICATED', 'not connected');
@@ -370,43 +471,104 @@ class BleDeviceSession {
     if (connection == null) {
       throw const BleCommandException('UNAUTHENTICATED', 'not connected');
     }
+    if (!supportsSecureDirectControl) {
+      throw const BleCommandException(
+        'UNSUPPORTED_SECURE_DIRECT_CONTROL',
+        'device does not support CSIV-CT v2 secure control',
+      );
+    }
     _setState(BleDeviceState.authenticating);
     try {
       final key = base64Decode(deviceKeyBase64);
-      final nonce = List<int>.generate(16, (_) => _random.nextInt(256));
-      final ts = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-      final expected =
-          Hmac(sha256, key).convert([...nonce, ...utf8.encode(':$ts')]);
-
-      final completer = Completer<Map<String, dynamic>>();
-      _authCompleter = completer;
+      if (key.length != 32) {
+        throw const BleCommandException(
+            'UNAUTHENTICATED', 'invalid device key');
+      }
+      final phoneNonce = List<int>.generate(16, (_) => _random.nextInt(256));
+      final initId = _generateMessageId();
+      final challengeFuture = _waitForAuth('auth.challenge', initId);
       await connection.write(
         BleCtProtocol.serviceUuid,
         BleCtProtocol.authCharUuid,
         utf8.encode(
           jsonEncode({
-            'mode': 'auth',
-            'nonce': base64Encode(nonce),
-            'ts': ts,
+            'v': 2,
+            'type': 'auth.init',
+            'message_id': initId,
+            'session_id': connectionSessionId,
+            'body': {'phone_nonce': base64Encode(phoneNonce)},
           }),
         ),
       );
-
-      final resp = await completer.future.timeout(BleCtProtocol.authTimeout);
-      final digest = resp['digest'] as String?;
-      if (digest == null ||
-          !_constantTimeEquals(base64Decode(digest), expected.bytes)) {
+      final challenge = await challengeFuture.timeout(authTimeout);
+      final challengeBody = (challenge['body'] as Map).cast<String, dynamic>();
+      final deviceNonce = base64Decode(challengeBody['device_nonce'] as String);
+      final deviceTimestamp = (challengeBody['device_ts'] as num).toInt();
+      if (deviceNonce.length != 16) {
+        throw const BleCommandException('UNAUTHENTICATED', 'invalid challenge');
+      }
+      final phoneProof = BleCtProtocol.computeAuthProof(
+        key: key,
+        role: BleAuthProofRole.phone,
+        sessionId: connectionSessionId!,
+        phoneNonce: phoneNonce,
+        deviceNonce: deviceNonce,
+        deviceTimestamp: deviceTimestamp,
+      );
+      final proofId = _generateMessageId();
+      final resultFuture = _waitForAuth('auth.result', proofId);
+      await connection.write(
+        BleCtProtocol.serviceUuid,
+        BleCtProtocol.authCharUuid,
+        utf8.encode(jsonEncode({
+          'v': 2,
+          'type': 'auth.proof',
+          'message_id': proofId,
+          'session_id': connectionSessionId,
+          'body': {'phone_proof': base64Encode(phoneProof)},
+        })),
+      );
+      final result = await resultFuture.timeout(authTimeout);
+      final body = (result['body'] as Map).cast<String, dynamic>();
+      final expected = BleCtProtocol.computeAuthProof(
+        key: key,
+        role: BleAuthProofRole.device,
+        sessionId: connectionSessionId!,
+        phoneNonce: phoneNonce,
+        deviceNonce: deviceNonce,
+        deviceTimestamp: deviceTimestamp,
+      );
+      if (body['result'] != 'ok' ||
+          body['device_proof'] is! String ||
+          !_constantTimeEquals(
+              base64Decode(body['device_proof'] as String), expected)) {
         throw const BleCommandException(
           'UNAUTHENTICATED',
           'digest mismatch',
         );
       }
       _setState(BleDeviceState.ready);
+    } on TimeoutException catch (_) {
+      if (_state != BleDeviceState.disconnected) {
+        _setState(BleDeviceState.connecting);
+      }
+      throw const BleCommandException(
+          'AUTH_TIMEOUT', 'authentication timed out');
     } catch (e) {
       // 鉴权失败不断开连接，交由上层决定（可重试或走绑定）
-      _setState(BleDeviceState.connecting);
+      if (_state != BleDeviceState.disconnected) {
+        _setState(BleDeviceState.connecting);
+      }
       rethrow;
     }
+  }
+
+  Future<Map<String, dynamic>> _waitForAuth(String type, String replyTo) {
+    final completer = Completer<Map<String, dynamic>>();
+    _authCompleter = completer;
+    _expectedAuthType = type;
+    _expectedAuthReplyTo = replyTo;
+    return completer.future;
   }
 
   void _onAuthNotify(List<int> bytes) {
@@ -414,7 +576,16 @@ class BleDeviceSession {
     if (completer == null || completer.isCompleted) return;
     try {
       final json = jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
-      if (json['mode'] == 'auth' || json['mode'] == 'bind' || json['mode'] == 'pin_check') {
+      if (_expectedAuthType != null &&
+          json['v'] == 2 &&
+          json['type'] == _expectedAuthType &&
+          json['session_id'] == connectionSessionId &&
+          json['in_reply_to'] == _expectedAuthReplyTo) {
+        _expectedAuthType = null;
+        _expectedAuthReplyTo = null;
+        completer.complete(json);
+      } else if (_expectedAuthType == null &&
+          (json['mode'] == 'bind' || json['mode'] == 'pin_check')) {
         completer.complete(json);
       }
     } catch (e) {
@@ -440,6 +611,11 @@ class BleDeviceSession {
     String action, [
     Map<String, dynamic> params = const {},
   ]) {
+    if (_otaInProgress) {
+      return Future.error(
+        const BleCommandException('OTA_IN_PROGRESS', 'OTA owns BLE link'),
+      );
+    }
     return _enqueue(() => _sendCommandInternal(action, params));
   }
 
@@ -460,15 +636,33 @@ class BleDeviceSession {
     }
 
     final commandId = _generateCommandId();
+    final operationId = _generateMessageId();
+    final messageId = _generateMessageId();
+    final sessionId = connectionSessionId;
+    if (sessionId == null) {
+      throw const BleCommandException('UNAUTHENTICATED', 'missing session id');
+    }
     final completer = Completer<Map<String, dynamic>>();
-    _pendingCommands[commandId] = completer;
+    _pendingCommands[commandId] = _PendingBleCommand(
+      completer: completer,
+      messageId: messageId,
+      sessionId: sessionId,
+    );
 
     final payload = utf8.encode(
       jsonEncode({
-        'command_id': commandId,
-        'action': action,
-        'params': params,
-        'ts': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        'v': 2,
+        'type': 'control.request',
+        'message_id': messageId,
+        'session_id': sessionId,
+        'body': {
+          'operation_id': operationId,
+          'command_id': commandId,
+          'session_id': sessionId,
+          'sequence': ++_commandSequence,
+          'action': action,
+          'params': params,
+        },
       }),
     );
 
@@ -501,17 +695,28 @@ class BleDeviceSession {
     } catch (_) {
       return;
     }
-    final id = json['command_id'] as String?;
-    final completer = _pendingCommands.remove(id);
-    if (completer == null || completer.isCompleted) return;
+    if (json['v'] != 2 || json['type'] != 'control.result') return;
+    final body = json['body'];
+    if (body is! Map) return;
+    final result = body.cast<String, dynamic>();
+    final id = result['command_id'] as String?;
+    final pending = _pendingCommands[id];
+    if (pending == null || pending.completer.isCompleted) return;
+    if (json['session_id'] != pending.sessionId ||
+        json['in_reply_to'] != pending.messageId) {
+      return;
+    }
 
-    if (json['status'] == 'ok') {
-      completer.complete(
-        (json['data'] as Map?)?.cast<String, dynamic>() ?? const {},
+    final status = result['status'] as String?;
+    if (status == 'accepted' || status == 'executing') return;
+    _pendingCommands.remove(id);
+    if (status == 'applied') {
+      pending.completer.complete(
+        (result['actual'] as Map?)?.cast<String, dynamic>() ?? const {},
       );
     } else {
-      final err = json['error'] as Map?;
-      completer.completeError(
+      final err = result['error'] as Map?;
+      pending.completer.completeError(
         BleCommandException(
           (err?['code'] as String?) ?? 'INTERNAL',
           (err?['message'] as String?) ?? 'unknown error',
@@ -521,6 +726,10 @@ class BleDeviceSession {
   }
 
   String _generateCommandId() => List.generate(4, (_) => _random.nextInt(256))
+      .map((b) => b.toRadixString(16).padLeft(2, '0'))
+      .join();
+
+  String _generateMessageId() => List.generate(12, (_) => _random.nextInt(256))
       .map((b) => b.toRadixString(16).padLeft(2, '0'))
       .join();
 
@@ -539,20 +748,77 @@ class BleDeviceSession {
     }
   }
 
+  Future<BleOtaLease> acquireOtaLease() async {
+    if (_connection == null || _state != BleDeviceState.ready) {
+      throw const BleCommandException('UNAUTHENTICATED', 'session not ready');
+    }
+    if (_otaInProgress) {
+      throw const BleCommandException('OTA_IN_PROGRESS', 'OTA already active');
+    }
+    _otaInProgress = true;
+    final status = _connection!
+        .subscribe(
+          BleCtProtocol.provisioningServiceUuid,
+          BleCtProtocol.otaStatusCharUuid,
+        )
+        .map((bytes) =>
+            jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>);
+    return BleOtaLease._(this, status);
+  }
+
+  Future<void> _writeOta(
+    String characteristicUuid,
+    Map<String, dynamic> value,
+  ) async {
+    if (!_otaInProgress || _connection == null) {
+      throw const BleCommandException('OTA_NOT_ACTIVE', 'OTA lease missing');
+    }
+    await _connection!.write(
+      BleCtProtocol.provisioningServiceUuid,
+      characteristicUuid,
+      utf8.encode(jsonEncode(value)),
+    );
+  }
+
+  Future<Map<String, dynamic>> _readOtaStatus() async {
+    if (!_otaInProgress || _connection == null) {
+      throw const BleCommandException('OTA_NOT_ACTIVE', 'OTA lease missing');
+    }
+    final bytes = await _connection!.read(
+      BleCtProtocol.provisioningServiceUuid,
+      BleCtProtocol.otaStatusCharUuid,
+    );
+    return jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
+  }
+
+  void _releaseOtaLease() => _otaInProgress = false;
+
   // ---------------------------------------------------------------------------
   // 断线与重连（指数退避 1s/2s/5s/10s 封顶）
   // ---------------------------------------------------------------------------
 
   void _handleUnexpectedDisconnect() {
-    _pendingCommands.forEach((_, c) {
-      if (!c.isCompleted) {
-        c.completeError(
+    _pendingCommands.forEach((_, pending) {
+      if (!pending.completer.isCompleted) {
+        pending.completer.completeError(
           const BleCommandException('UNAUTHENTICATED', 'disconnected'),
         );
       }
     });
     _pendingCommands.clear();
+    final auth = _authCompleter;
+    if (auth != null && !auth.isCompleted) {
+      auth.completeError(
+        const BleCommandException('UNAUTHENTICATED', 'disconnected'),
+      );
+    }
     _authCompleter = null;
+    _expectedAuthType = null;
+    _expectedAuthReplyTo = null;
+    connectionSessionId = null;
+    protocolVersion = 0;
+    capabilities = const {};
+    _otaInProgress = false;
     _setState(BleDeviceState.disconnected);
     _connection = null;
 
@@ -603,17 +869,38 @@ class BleDeviceSession {
   }
 }
 
+class BleOtaLease {
+  BleOtaLease._(this._session, this.statuses);
+
+  final BleDeviceSession _session;
+  final Stream<Map<String, dynamic>> statuses;
+  bool _released = false;
+
+  Future<void> writeControl(Map<String, dynamic> value) =>
+      _session._writeOta(BleCtProtocol.otaControlCharUuid, value);
+
+  Future<void> writeData(Map<String, dynamic> value) =>
+      _session._writeOta(BleCtProtocol.otaDataCharUuid, value);
+
+  Future<Map<String, dynamic>> readStatus() => _session._readOtaStatus();
+
+  void release() {
+    if (_released) return;
+    _released = true;
+    _session._releaseOtaLease();
+  }
+}
+
 /// 多设备管理器
 ///
 /// - `Map<macAddress, BleDeviceSession>` 多设备并发管理
-/// - 自动连接：按服务 UUID 低功耗扫描 → 命中设备读 SN →
+/// - 自动连接：由外部发现扫描驱动 → 命中设备读 SN →
 ///   keyStore 存在 device_key（已绑定）则连接并鉴权
 class BleDeviceManager {
   final BleAdapter _adapter;
   final BleDeviceKeyStore _keyStore;
 
   final Map<String, BleDeviceSession> _sessions = {};
-  StreamSubscription<BleScanResult>? _scanSub;
   bool _autoConnectRunning = false;
 
   BleDeviceManager({
@@ -665,48 +952,42 @@ class BleDeviceManager {
     }
   }
 
-  /// 启动自动连接（Android 后台场景建议配合 autoConnect=true 挂起直连）
+  /// 启动自动连接。
   ///
-  /// 扫描过滤 CSIV-PR 服务 UUID（现有固件广播即携带），命中后：
-  /// 先从广播名解析 SN → keyStore 有 device_key（已绑定）才连接并鉴权；
-  /// 未绑定/无法解析 SN 的设备一律不连接，避免占用 BLE 链路
-  /// 导致配网/绑定流程扫描不到设备。
+  /// 仅置位，不独立发起扫描：由 [BleDirectService] 的发现扫描统一驱动
+  /// [tryAutoConnect]，避免两路 startScan 互相抢占（后一次会 stop 前一次）。
   Future<void> startAutoConnect() async {
-    if (_autoConnectRunning) return;
-    _autoConnectRunning = true;
-
     final status = await _adapter.status;
     if (status != BleAdapterStatus.on) {
-      _autoConnectRunning = false;
       throw StateError('BLE adapter not on: $status');
     }
+    _autoConnectRunning = true;
+  }
 
-    _scanSub = _adapter
-        .scan(serviceUuids: const [BleCtProtocol.provisioningServiceUuid])
-        .listen((result) async {
-      if (!_autoConnectRunning) return;
-      final existing = _sessions[result.macAddress];
-      if (existing != null && existing.state != BleDeviceState.disconnected) {
-        return;
-      }
-      // 仅自动连接已绑定设备：广播名解析 SN → keyStore 校验 device_key
-      final sn = parseSnFromAdvName(result.name);
-      if (sn.isEmpty) return;
-      String? deviceKey;
-      try {
-        deviceKey = await _keyStore.read(sn);
-      } catch (e) {
-        debugPrint('BleDeviceManager: keyStore read $sn failed: $e');
-        return;
-      }
-      if (deviceKey == null || !_autoConnectRunning) return;
-      try {
-        await connectDevice(result.macAddress, autoReconnect: true);
-      } catch (e) {
-        debugPrint('BleDeviceManager: auto-connect ${result.macAddress} '
-            'failed: $e');
-      }
-    });
+  /// 外部发现扫描命中设备时调用；已绑定才连接并鉴权。
+  Future<void> tryAutoConnect(BleScanResult result) async {
+    if (!_autoConnectRunning) return;
+    final existing = _sessions[result.macAddress];
+    if (existing != null && existing.state != BleDeviceState.disconnected) {
+      return;
+    }
+    // 仅自动连接已绑定设备：广播名解析 SN → keyStore 校验 device_key
+    final sn = parseSnFromAdvName(result.name);
+    if (sn.isEmpty) return;
+    String? deviceKey;
+    try {
+      deviceKey = await _keyStore.read(sn);
+    } catch (e) {
+      debugPrint('BleDeviceManager: keyStore read $sn failed: $e');
+      return;
+    }
+    if (deviceKey == null || !_autoConnectRunning) return;
+    try {
+      await connectDevice(result.macAddress, autoReconnect: true);
+    } catch (e) {
+      debugPrint('BleDeviceManager: auto-connect ${result.macAddress} '
+          'failed: $e');
+    }
   }
 
   /// 从广播名解析 SN（广播名形如 CS_INV_<SN> / CS-INV-<SN>）；
@@ -719,8 +1000,5 @@ class BleDeviceManager {
 
   Future<void> stopAutoConnect() async {
     _autoConnectRunning = false;
-    await _scanSub?.cancel();
-    _scanSub = null;
-    await _adapter.stopScan();
   }
 }

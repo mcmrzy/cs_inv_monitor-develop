@@ -10,6 +10,19 @@ class BlePolledTelemetry {
   const BlePolledTelemetry({required this.sn, required this.data});
 }
 
+/// A single device read failure, kept observable without stopping the cycle.
+class BlePollingError {
+  final String sn;
+  final Object error;
+  final StackTrace stackTrace;
+
+  const BlePollingError({
+    required this.sn,
+    required this.error,
+    required this.stackTrace,
+  });
+}
+
 /// 定时轮询已就绪 BLE 会话的遥测快照（设计文档 §3.3）
 ///
 /// 默认 180s；与设备 80s 节拍 notify 推送并存，轮询作为主动拉取兜底。
@@ -24,7 +37,8 @@ class BlePollingService {
 
   Timer? _timer;
   final _controller = StreamController<BlePolledTelemetry>.broadcast();
-  bool _pollInFlight = false;
+  final _errorController = StreamController<BlePollingError>.broadcast();
+  int? _pollInFlightGeneration;
   bool _disposed = false;
   int _generation = 0;
 
@@ -33,6 +47,9 @@ class BlePollingService {
   /// 轮询遥测流
   Stream<BlePolledTelemetry> get telemetry => _controller.stream;
 
+  /// Per-device read failures. One failed device does not stop other reads.
+  Stream<BlePollingError> get errors => _errorController.stream;
+
   void start() {
     if (_disposed || isRunning) return;
     final generation = ++_generation;
@@ -40,12 +57,14 @@ class BlePollingService {
       interval,
       (_) => unawaited(_pollOnce(generation)),
     );
+    unawaited(_pollOnce(generation));
   }
 
   void stop() {
     _generation++;
     _timer?.cancel();
     _timer = null;
+    _pollInFlightGeneration = null;
   }
 
   void setInterval(Duration value) {
@@ -64,26 +83,37 @@ class BlePollingService {
       !_disposed && generation == _generation && isRunning;
 
   Future<void> _pollOnce(int generation) async {
-    if (_pollInFlight || !_isCurrent(generation)) return;
-    _pollInFlight = true;
+    if (_pollInFlightGeneration != null || !_isCurrent(generation)) return;
+    _pollInFlightGeneration = generation;
     try {
       for (final session in manager.sessions.values) {
         if (!_isCurrent(generation)) return;
         if (session.state != BleDeviceState.ready || session.sn == null) {
           continue;
         }
+        if (session.isOtaInProgress) continue;
         try {
           final data = await session.readTelemetrySnapshot();
           if (!_isCurrent(generation)) return;
           _controller.add(
             BlePolledTelemetry(sn: session.sn!, data: data),
           );
-        } catch (_) {
-          // 单设备读取失败不影响其他设备与下一周期
+        } catch (error, stackTrace) {
+          if (_isCurrent(generation)) {
+            _errorController.add(
+              BlePollingError(
+                sn: session.sn!,
+                error: error,
+                stackTrace: stackTrace,
+              ),
+            );
+          }
         }
       }
     } finally {
-      _pollInFlight = false;
+      if (_pollInFlightGeneration == generation) {
+        _pollInFlightGeneration = null;
+      }
     }
   }
 
@@ -92,5 +122,6 @@ class BlePollingService {
     _disposed = true;
     stop();
     _controller.close();
+    _errorController.close();
   }
 }

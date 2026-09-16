@@ -4,8 +4,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:inv_app/core/errors/ota_error_types.dart';
+import 'package:inv_app/core/platform/platform.dart';
 import 'package:inv_app/core/services/local_discovery_service.dart';
-import 'package:wifi_iot/wifi_iot.dart';
 
 class LocalOtaManifest {
   final String target;
@@ -90,7 +90,7 @@ class LocalCommunicationService {
   /// 确保HTTP请求走WiFi网络
   Future<void> _ensureWifiUsage() async {
     try {
-      await WiFiForIoTPlugin.forceWifiUsage(true);
+      await WifiApController.instance.forceWifiUsage(true);
     } catch (_) {}
   }
 
