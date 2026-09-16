@@ -25,6 +25,10 @@ jobs:
       packages: write
     env:
       DEPLOY_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+    outputs:
+      # 空格分隔的 compose 服务名，仅包含源码有变更的服务
+      changed_services: ${{ steps.changes.outputs.services }}
+      any_changed: ${{ steps.changes.outputs.any_changed }}
 
     steps:
       - name: Checkout code
@@ -32,14 +36,67 @@ jobs:
         with:
           ref: ${{ env.DEPLOY_SHA }}
           lfs: true
+          # paths-filter 需要完整历史才能 diff
+          fetch-depth: 0
 
       - name: Validate production compose topology
         run: bash deploy/validate-production-compose.sh
 
+      - name: Detect changed services
+        id: changes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # 与上一次成功 CD 的 head_sha 对比；拿不到则退化为 HEAD~1
+          BASE_SHA=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow=cd.yml \
+            --branch="$GITHUB_REF_NAME" --status=success --limit 1 \
+            --json headSha --jq '.[0].headSha // empty' 2>/dev/null || true)
+          if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "$DEPLOY_SHA" ]; then
+            BASE_SHA=$(git rev-parse "$DEPLOY_SHA^" 2>/dev/null || true)
+          fi
+          if [ -z "$BASE_SHA" ]; then
+            echo "无法确定对比基线，强制全量构建"
+            echo "services=device-communication mqtt-kafka-bridge business-api api-gateway inv-admin-frontend" >> "$GITHUB_OUTPUT"
+            echo "any_changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          CHANGED=$(git diff --name-only "$BASE_SHA" "$DEPLOY_SHA" || true)
+          echo "=== base=$BASE_SHA → head=$DEPLOY_SHA ==="
+          echo "$CHANGED"
+
+          has() { echo "$CHANGED" | grep -qE "^$1"; }
+
+          SERVICES=""
+          # 部署编排/流水线本身变更 → 全量
+          if has 'deploy/docker-compose.prod.yml' || has '.github/workflows/cd.yml'; then
+            SERVICES="device-communication mqtt-kafka-bridge business-api api-gateway inv-admin-frontend"
+          else
+            has 'device-communication/' && SERVICES="$SERVICES device-communication"
+            has 'mqtt-kafka-bridge/' && SERVICES="$SERVICES mqtt-kafka-bridge"
+            has 'business-api/' && SERVICES="$SERVICES business-api"
+            has 'api-gateway/' && SERVICES="$SERVICES api-gateway"
+            has 'inv-admin-frontend/' && SERVICES="$SERVICES inv-admin-frontend"
+          fi
+          SERVICES=$(echo "$SERVICES" | xargs)
+
+          if [ -z "$SERVICES" ]; then
+            echo "无业务服务源码变更，跳过镜像构建"
+            echo "services=" >> "$GITHUB_OUTPUT"
+            echo "any_changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "services=$SERVICES" >> "$GITHUB_OUTPUT"
+            echo "any_changed=true" >> "$GITHUB_OUTPUT"
+            echo "将构建: $SERVICES"
+          fi
+
       - name: Set up Docker Buildx
+        if: steps.changes.outputs.any_changed == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Login to GitHub Container Registry
+        if: steps.changes.outputs.any_changed == 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -47,6 +104,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build & Push inv-device-server
+        if: contains(steps.changes.outputs.services, 'device-communication')
         uses: docker/build-push-action@v6
         with:
           context: ./device-communication
@@ -59,6 +117,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build & Push mqtt-kafka-bridge
+        if: contains(steps.changes.outputs.services, 'mqtt-kafka-bridge')
         uses: docker/build-push-action@v6
         with:
           context: ./mqtt-kafka-bridge
@@ -71,6 +130,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build & Push inv-api-server
+        if: contains(steps.changes.outputs.services, 'business-api')
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -83,6 +143,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build & Push api-gateway
+        if: contains(steps.changes.outputs.services, 'api-gateway')
         uses: docker/build-push-action@v6
         with:
           context: ./api-gateway
@@ -95,6 +156,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build & Push inv-admin-frontend
+        if: contains(steps.changes.outputs.services, 'inv-admin-frontend')
         uses: docker/build-push-action@v6
         with:
           context: ./inv-admin-frontend
@@ -117,6 +179,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DEPLOY_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+      # 空格分隔 compose 服务名；空表示本次无需更新任何业务镜像
+      CHANGED_SERVICES: ${{ needs.build.outputs.changed_services }}
 
     steps:
       - name: Checkout code
@@ -285,6 +349,12 @@ jobs:
               cd /opt/inv-mqtt/deploy
               sed -i '/^IMAGE_TAG=/d' .env.prod
               echo "IMAGE_TAG=$PREV_IMAGE_TAG" >> .env.prod
+              # 回滚后补齐按服务镜像 tag（兼容仅有全局 IMAGE_TAG 的历史 .env.prod）
+              for key in IMAGE_TAG_BRIDGE IMAGE_TAG_DEVICE IMAGE_TAG_API IMAGE_TAG_GATEWAY IMAGE_TAG_FRONTEND; do
+                if ! grep -q "^${key}=" .env.prod; then
+                  echo "${key}=$PREV_IMAGE_TAG" >> .env.prod
+                fi
+              done
 
               DEPLOY_PHASE=pull_previous_images
               if ! docker compose -f docker-compose.prod.yml --env-file .env.prod pull; then
@@ -328,8 +398,49 @@ jobs:
             echo "当前 IMAGE_TAG: ${PREV_IMAGE_TAG:-none}"
             echo "目标 IMAGE_TAG: ${{ env.DEPLOY_SHA }}"
 
-            # ---------- 设置新镜像 tag ----------
+            # ---------- 设置镜像 tag（仅更新有源码变更的服务） ----------
+            # 存量 .env.prod 可能只有全局 IMAGE_TAG，先补齐各服务变量（回退到旧 tag）
+            ensure_env_tag() {
+              local key="$1"
+              if ! grep -q "^${key}=" .env.prod; then
+                echo "${key}=${PREV_IMAGE_TAG:-CHANGE_ME_GIT_COMMIT_SHA}" >> .env.prod
+              fi
+            }
+            ensure_env_tag IMAGE_TAG_BRIDGE
+            ensure_env_tag IMAGE_TAG_DEVICE
+            ensure_env_tag IMAGE_TAG_API
+            ensure_env_tag IMAGE_TAG_GATEWAY
+            ensure_env_tag IMAGE_TAG_FRONTEND
+
+            set_env_tag() {
+              local key="$1"
+              sed -i "/^${key}=/d" .env.prod
+              echo "${key}=${{ env.DEPLOY_SHA }}" >> .env.prod
+            }
+
             DEPLOY_PHASE=activate_candidate_tag
+            CHANGED_SERVICES="${{ env.CHANGED_SERVICES }}"
+            echo "变更服务: ${CHANGED_SERVICES:-（无，沿用现有镜像）}"
+
+            # compose 服务名 → 环境变量名
+            # 无变更时完全不动 IMAGE_TAG_*，本地已有镜像直接复用
+            case " $CHANGED_SERVICES " in
+              *" mqtt-kafka-bridge "*) set_env_tag IMAGE_TAG_BRIDGE ;;
+            esac
+            case " $CHANGED_SERVICES " in
+              *" device-communication "*) set_env_tag IMAGE_TAG_DEVICE ;;
+            esac
+            case " $CHANGED_SERVICES " in
+              *" business-api "*) set_env_tag IMAGE_TAG_API ;;
+            esac
+            case " $CHANGED_SERVICES " in
+              *" api-gateway "*) set_env_tag IMAGE_TAG_GATEWAY ;;
+            esac
+            case " $CHANGED_SERVICES " in
+              *" inv-admin-frontend "*) set_env_tag IMAGE_TAG_FRONTEND ;;
+            esac
+
+            # 全局 IMAGE_TAG 仅作发布记录/回滚诊断，不再驱动镜像引用
             sed -i '/^IMAGE_TAG=/d' .env.prod
             echo "IMAGE_TAG=${{ env.DEPLOY_SHA }}" >> .env.prod
 
@@ -351,9 +462,15 @@ jobs:
             remove_legacy_container inv-kafka
             remove_legacy_container mqtt-kafka-bridge
 
-            # ---------- 拉取新镜像 ----------
+            # ---------- 仅拉取有变更的服务镜像 ----------
             DEPLOY_PHASE=pull_candidate_images
-            docker compose -f docker-compose.prod.yml --env-file .env.prod pull
+            if [ -n "$CHANGED_SERVICES" ]; then
+              # shellcheck disable=SC2086
+              echo "拉取变更镜像: $CHANGED_SERVICES"
+              docker compose -f docker-compose.prod.yml --env-file .env.prod pull $CHANGED_SERVICES
+            else
+              echo "无镜像变更，跳过 pull（复用本机已有镜像）"
+            fi
 
             # ---------- 上传数据持久化迁移（仅首次） ----------
             # 历史版本 inv-api-server 未挂载持久卷，头像/电站图/固件存于容器可写层，

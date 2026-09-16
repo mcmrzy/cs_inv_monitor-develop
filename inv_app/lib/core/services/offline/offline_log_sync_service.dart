@@ -84,6 +84,37 @@ class OfflineLogSyncService {
       await store.markSyncing(pending.map((log) => log.logId).toList());
       try {
         final result = await api.upload(pending);
+        if (result.hasItemResults) {
+          final pendingById = {for (final log in pending) log.logId: log};
+          final seen = <String>{};
+          final syncedIds = <String>[];
+          final rejectedIds = <String>[];
+          for (final item in result.results) {
+            if (!pendingById.containsKey(item.logId) ||
+                !seen.add(item.logId)) {
+              continue;
+            }
+            switch (item.status) {
+              case OfflineLogItemStatus.accepted:
+              case OfflineLogItemStatus.duplicate:
+                syncedIds.add(item.logId);
+              case OfflineLogItemStatus.rejected:
+                rejectedIds.add(item.logId);
+            }
+          }
+          if (syncedIds.isNotEmpty) await store.markSynced(syncedIds);
+          if (rejectedIds.isNotEmpty) await store.markFailed(rejectedIds);
+
+          final unresolved = pending
+              .where((log) => !seen.contains(log.logId))
+              .toList(growable: false);
+          if (unresolved.isNotEmpty) {
+            await _bumpOrFail(unresolved);
+            return;
+          }
+          continue;
+        }
+
         // 服务端按 (user_id, log_id) 幂等去重：accepted 为新接收，
         // duplicates 为已存在——两者都算"已处理"，
         // 否则重传时 accepted=0 会导致日志永久卡在 pending 无限重试

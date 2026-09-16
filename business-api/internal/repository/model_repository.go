@@ -247,8 +247,14 @@ type BatchFieldItem struct {
 
 func (r *ModelRepository) GetModelIDByDeviceSN(ctx context.Context, sn string) (int64, error) {
 	var modelID int64
+	// model_id 为空时回退 devices.model 匹配型号编码，避免 UI 显示型号但控制能力为空
 	err := r.db.QueryRow(ctx, `
-		SELECT COALESCE(d.model_id, 0) FROM devices d WHERE d.sn = $1 AND d.deleted_at IS NULL`, sn).Scan(&modelID)
+		SELECT COALESCE(
+			d.model_id,
+			(SELECT dm.id FROM device_models dm
+			 WHERE dm.model_code = d.model AND dm.lifecycle_status != 'retired' LIMIT 1),
+			0
+		) FROM devices d WHERE d.sn = $1 AND d.deleted_at IS NULL`, sn).Scan(&modelID)
 	if err != nil {
 		return 0, err
 	}

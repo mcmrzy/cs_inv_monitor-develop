@@ -177,11 +177,11 @@ void main() {
       '设备名称',
       '设备序列号',
       '硬件版本',
-      // 中文展示名与 app_zh.dart 对齐（带芯片后缀）
-      '通信采集（ESP）',
-      '系统中控（ARM）',
-      '计算控制（DSP）',
-      '电池管理（BMS）',
+      // 用户端不展示芯片内部后缀
+      '通信采集',
+      '系统中控',
+      '计算控制',
+      '电池管理',
     ]) {
       expect(find.text(text), findsWidgets);
     }
@@ -235,7 +235,7 @@ void main() {
   });
 
   testWidgets(
-      'realtime offline status disables the in-flow update action and explains why',
+      'realtime offline status keeps check-update available with offline hint',
       (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
@@ -260,7 +260,8 @@ void main() {
     expect(find.text('设备当前离线，联网后可检查固件更新'), findsOneWidget);
     final action = find.widgetWithText(FilledButton, '检查固件更新');
     expect(action, findsOneWidget);
-    expect(tester.widget<FilledButton>(action).onPressed, isNull);
+    // 检查更新改为原地刷新：离线仍可点，便于查看已发布固件
+    expect(tester.widget<FilledButton>(action).onPressed, isNotNull);
     expect(
       tester.widget<Scaffold>(find.byType(Scaffold)).bottomNavigationBar,
       isNull,
@@ -271,27 +272,23 @@ void main() {
     );
   });
 
-  testWidgets('online device update action keeps routing to the update flow',
+  testWidgets(
+      'online device check-update refreshes in place without stacking same route',
       (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     final router = GoRouter(
-      initialLocation: '/device',
+      initialLocation: '/ota/device/INV-001',
       routes: [
         GoRoute(
-          path: '/device',
+          path: '/ota/device/:sn',
           builder: (context, state) => DeviceFirmwareDetailPage(
-            deviceSN: 'INV-001',
+            deviceSN: state.pathParameters['sn']!,
             deviceRepository: _DeviceRepo(status: 1, realtimeOnline: true),
             otaRepository: _OtaRepo(),
           ),
-        ),
-        GoRoute(
-          path: '/ota/device/:sn',
-          builder: (context, state) =>
-              Text('update:${state.pathParameters['sn']}'),
         ),
       ],
     );
@@ -317,7 +314,9 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, '检查固件更新'));
     await tester.pumpAndSettle();
 
-    expect(find.text('update:INV-001'), findsOneWidget);
+    // 不再 push 同一路由：仍只有一页 DeviceFirmwareDetailPage
+    expect(find.byType(DeviceFirmwareDetailPage), findsOneWidget);
+    expect(find.text('检查固件更新'), findsOneWidget);
   });
 
   testWidgets('device status is used when realtime online status is absent',
@@ -343,17 +342,17 @@ void main() {
     expect(tester.widget<FilledButton>(action).onPressed, isNotNull);
   });
 
-  testWidgets('update action is disabled while refresh loads and after failure',
+  testWidgets('check-update action is disabled while reloading and re-enabled',
       (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    final repository = _RefreshingDeviceRepo();
+    final ota = _PendingOverviewOtaRepo();
     await tester.pumpWidget(app(DeviceFirmwareDetailPage(
       deviceSN: 'INV-001',
-      deviceRepository: repository,
-      otaRepository: _OtaRepo(),
+      deviceRepository: _DeviceRepo(status: 1, realtimeOnline: true),
+      otaRepository: ota,
     )));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
@@ -362,22 +361,23 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
 
-    FilledButton action() => tester.widget<FilledButton>(
-          find.widgetWithText(FilledButton, '检查固件更新'),
+    FilledButton actionBtn() => tester.widget<FilledButton>(
+          find.descendant(
+            of: find.byKey(const Key('firmwareUpdateAction')),
+            matching: find.byType(FilledButton),
+          ),
         );
-    expect(action().onPressed, isNotNull);
+    expect(actionBtn().onPressed, isNotNull);
 
-    final refresh =
-        tester.widget<RefreshIndicator>(find.byType(RefreshIndicator));
-    final refreshFuture = refresh.onRefresh();
+    await tester.tap(find.byKey(const Key('firmwareUpdateAction')));
     await tester.pump();
-    expect(action().onPressed, isNull);
+    expect(actionBtn().onPressed, isNull);
 
-    repository.refreshResult
-        .complete(const Left(ServerFailure('refresh failed')));
-    await refreshFuture;
+    ota.overviewResult.complete(
+      const Left(ServerFailure('refresh failed')),
+    );
     await tester.pumpAndSettle();
-    expect(action().onPressed, isNull);
+    expect(actionBtn().onPressed, isNotNull);
   });
 
   testWidgets('update action is the final list content after the update log',
@@ -551,19 +551,6 @@ class _MissingTotalRepo extends _DeviceRepo {
       });
 }
 
-class _RefreshingDeviceRepo extends _DeviceRepo {
-  _RefreshingDeviceRepo() : super(status: 1, realtimeOnline: true);
-
-  final refreshResult = Completer<Either<Failure, Map<String, dynamic>>>();
-  int callCount = 0;
-
-  @override
-  Future<Either<Failure, Map<String, dynamic>>> getDetail(String sn) {
-    if (callCount++ == 0) return super.getDetail(sn);
-    return refreshResult.future;
-  }
-}
-
 class _OtaRepo implements OtaRepository {
   @override
   Future<Either<Failure, DeviceFirmwareHistoryPage>> getDeviceHistory(
@@ -658,4 +645,18 @@ class _OtaRepo implements OtaRepository {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+/// 第二次起 getFirmwareOverview 挂起，用于断言检查更新按钮的 loading 态
+class _PendingOverviewOtaRepo extends _OtaRepo {
+  final overviewResult = Completer<Either<Failure, DeviceFirmwareOverview>>();
+  int overviewCalls = 0;
+
+  @override
+  Future<Either<Failure, DeviceFirmwareOverview>> getFirmwareOverview(
+    String sn,
+  ) {
+    if (overviewCalls++ == 0) return super.getFirmwareOverview(sn);
+    return overviewResult.future;
+  }
 }

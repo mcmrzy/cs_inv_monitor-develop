@@ -129,7 +129,7 @@ services:
 
   # ---------- MQTT → Kafka bridge ----------
   mqtt-kafka-bridge:
-    image: ghcr.io/mcmrzy/mqtt-kafka-bridge:${IMAGE_TAG:?IMAGE_TAG must be an immutable release tag}
+    image: ghcr.io/mcmrzy/mqtt-kafka-bridge:${IMAGE_TAG_BRIDGE:?IMAGE_TAG_BRIDGE must be set}
     container_name: mqtt-kafka-bridge
     ports:
       # EMQX is external to this Compose project and posts webhook events here.
@@ -170,7 +170,7 @@ services:
 
   # ---------- inv-device-server ----------
   inv-device-server:
-    image: ghcr.io/mcmrzy/inv-device-server:${IMAGE_TAG:?IMAGE_TAG must be an immutable release tag}
+    image: ghcr.io/mcmrzy/inv-device-server:${IMAGE_TAG_DEVICE:?IMAGE_TAG_DEVICE must be set}
     container_name: device-communication
     expose:
       - "8081"
@@ -221,7 +221,7 @@ services:
 
   # ---------- inv-api-server ----------
   inv-api-server:
-    image: ghcr.io/mcmrzy/inv-api-server:${IMAGE_TAG:?IMAGE_TAG must be an immutable release tag}
+    image: ghcr.io/mcmrzy/inv-api-server:${IMAGE_TAG_API:?IMAGE_TAG_API must be set}
     container_name: business-api
     expose:
       - "8080"
@@ -284,7 +284,7 @@ services:
 
   # ---------- api-gateway ----------
   api-gateway:
-    image: ghcr.io/mcmrzy/api-gateway:${IMAGE_TAG:?IMAGE_TAG must be an immutable release tag}
+    image: ghcr.io/mcmrzy/api-gateway:${IMAGE_TAG_GATEWAY:?IMAGE_TAG_GATEWAY must be set}
     container_name: api-gateway
     ports:
       - "127.0.0.1:8080:8080"
@@ -321,7 +321,7 @@ services:
 
   # ---------- inv-admin-frontend ----------
   inv-admin-frontend:
-    image: ghcr.io/mcmrzy/inv-admin-frontend:${IMAGE_TAG:?IMAGE_TAG must be an immutable release tag}
+    image: ghcr.io/mcmrzy/inv-admin-frontend:${IMAGE_TAG_FRONTEND:?IMAGE_TAG_FRONTEND must be set}
     container_name: inv-admin-frontend
     expose:
       - "8080"

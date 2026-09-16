@@ -1888,11 +1888,11 @@ const Map<String, String> zh = {
   'location_search_nearby': '搜索附近地址...',
   'location_nearby_addresses': '附近地址',
 
-  // 设备固件模块
-  'firmware_module_communication': '通信采集（ESP）',
-  'firmware_module_system_control': '系统中控（ARM）',
-  'firmware_module_power_control': '计算控制（DSP）',
-  'firmware_module_battery_management': '电池管理（BMS）',
+  // 设备固件模块（用户端不展示芯片内部后缀）
+  'firmware_module_communication': '通信采集',
+  'firmware_module_system_control': '系统中控',
+  'firmware_module_power_control': '计算控制',
+  'firmware_module_battery_management': '电池管理',
   'firmware_module_generic': '设备组件',
   'firmware_module_communication_description': '负责设备联网、数据采集与远程通信',
   'firmware_module_system_control_description': '负责设备运行协调与系统控制',

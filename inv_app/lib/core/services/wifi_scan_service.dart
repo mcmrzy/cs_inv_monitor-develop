@@ -7,10 +7,11 @@
 //    权限请求仍由页面层 permission_handler 统一负责；
 // 4. 本封装增加 8 秒超时兜底：插件/系统扫描挂起时返回空列表，避免"扫描不到一直扫"。
 import 'dart:async';
-import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+
+import 'package:inv_app/core/platform/app_platform.dart';
 
 class ScannedWifiNetwork {
   final String? ssid;
@@ -53,7 +54,7 @@ const _kScanTimeout = Duration(seconds: 8);
 Future<List<ScannedWifiNetwork>> scanWifiNetworks({
   bool triggerScan = true,
 }) async {
-  if (!Platform.isAndroid) return const [];
+  if (!PlatformCapabilities.canScanWifi) return const [];
   try {
     if (triggerScan) {
       final canStart = await _wifiScanChannel

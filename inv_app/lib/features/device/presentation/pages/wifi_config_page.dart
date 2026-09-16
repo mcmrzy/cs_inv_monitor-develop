@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:wifi_iot/wifi_iot.dart';
+import 'package:inv_app/core/platform/platform.dart';
 import 'package:inv_app/core/services/provision_service.dart';
 import 'package:inv_app/core/services/ble_provisioning_service.dart';
 import 'package:inv_app/core/services/ble/ble_binding_service.dart';
@@ -131,7 +131,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
 
   Future<void> _loadCurrentWifiSsid() async {
     try {
-      final ssid = await WiFiForIoTPlugin.getSSID();
+      final ssid = await WifiApController.instance.currentSsid;
       if (ssid != null && ssid.isNotEmpty && mounted) {
         _originalSsid = ssid;
         _scSsidController.text = ssid;
@@ -205,7 +205,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
     final operation = _wifiRouteQueue
         .catchError((_) {})
         .then<void>((_) async {
-          await WiFiForIoTPlugin.forceWifiUsage(force);
+          await WifiApController.instance.forceWifiUsage(force);
         });
     _wifiRouteQueue = operation;
     return operation;
@@ -352,12 +352,12 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       // 改进：连接AP时增加重试机制（Android 10+ WiFi连接有时不稳定）
       bool connected = false;
       for (int attempt = 0; attempt < 3; attempt++) {
-        connected = await WiFiForIoTPlugin.connect(
+        connected = await WifiApController.instance.connect(
           ssid,
           password: null,
           security: _isOpenNetwork(network)
-              ? NetworkSecurity.NONE
-              : NetworkSecurity.WPA,
+              ? AppWifiSecurity.none
+              : AppWifiSecurity.wpa,
           joinOnce: true,
         );
         if (!_isWifiOperationActive(operationId)) return;
@@ -389,7 +389,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         // 验证确实连上了设备热点（增加重试检查）
         String? currentSsid;
         for (int i = 0; i < 3; i++) {
-          currentSsid = await WiFiForIoTPlugin.getSSID();
+          currentSsid = await WifiApController.instance.currentSsid;
           if (!_isWifiOperationActive(operationId)) return;
           if (currentSsid != null &&
               _normalizeSsid(currentSsid) == _normalizeSsid(ssid)) {
@@ -665,10 +665,10 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
     if (shouldSwitch) {
       try {
         if (_originalSsid != null) {
-          await WiFiForIoTPlugin.connect(
+          await WifiApController.instance.connect(
             _originalSsid!,
             password: null,
-            security: NetworkSecurity.WPA,
+            security: AppWifiSecurity.wpa,
             joinOnce: false,
           );
         }

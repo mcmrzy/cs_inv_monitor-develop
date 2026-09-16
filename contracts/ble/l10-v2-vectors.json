@@ -1,0 +1,80 @@
+{
+  "contract": "CSIV-CT",
+  "version": 2,
+  "test_only": true,
+  "warning": "All keys, nonces, IDs, signatures and device identifiers are synthetic. Never use this file for production authentication or OTA.",
+  "encoding": {"text": "UTF-8", "binary": "base64", "sha256": "lowercase-hex"},
+  "vectors": [
+    {
+      "id": "info-minimal",
+      "kind": "info",
+      "transport": "gatt_read",
+      "response": {"v": 2, "type": "info", "message_id": "msg-info-002", "session_id": "sess-001", "body": {"device_sn": "TEST-L10-0001", "proto_version": 2, "model": "CS-L10-6K2", "hardware_version": "HW-TEST", "firmware_version": "FW-TEST", "parameter_schema_version": "PARAM-TEST", "capabilities": ["info", "telemetry", "control", "ota"], "supported_upgrade_modules": ["communication_module", "system_controller"], "max_report_bytes": 1024, "bound": true}}
+    },
+    {
+      "id": "telemetry-envelope",
+      "kind": "telemetry",
+      "message": {"v": 2, "type": "telemetry.snapshot", "message_id": "msg-tlm-001", "session_id": "sess-001", "body": {"device_sn": "TEST-L10-0001", "boot_id": "boot-test-01", "sample_seq": 42, "sampled_at": "2026-09-15T08:00:00Z", "time_quality": "device_clock", "schema_version": "telemetry-test-1", "data": {"ac": {"voltage": 230.1, "power": 552.0}, "battery": {"soc": 86.5, "current": -3.2}}, "quality": {"flags": 0}}},
+      "app_metadata": {"received_at": "2026-09-15T08:00:01Z", "source": "ble"},
+      "assertions": ["phone_does_not_relay_telemetry_to_cloud", "sampled_at_is_device_time"]
+    },
+    {
+      "id": "telemetry-single-frame",
+      "kind": "telemetry-frame",
+      "frames": [{"header_hex": "c0", "payload_utf8": "{\"v\":2,\"type\":\"telemetry.snapshot\"}"}],
+      "expected_reassembled_utf8": "{\"v\":2,\"type\":\"telemetry.snapshot\"}"
+    },
+    {
+      "id": "telemetry-reject-gap",
+      "kind": "telemetry-frame",
+      "frames": [{"header_hex": "80", "payload_utf8": "{\"v\":2"}, {"header_hex": "02", "payload_utf8": "}"}],
+      "expected": "discard_and_wait_for_next_first_frame"
+    },
+    {
+      "id": "control-applied",
+      "kind": "control",
+      "request": {"v": 2, "type": "control.request", "message_id": "msg-cmd-001", "session_id": "sess-001", "body": {"operation_id": "op-001", "command_id": "cmd-001", "session_id": "sess-001", "sequence": 7, "action": "set_power_limit", "params": {"value": 3000}}},
+      "responses": [{"status": "accepted"}, {"status": "executing"}, {"status": "applied", "operation_id": "op-001", "command_id": "cmd-001", "result_id": "result-001", "error": null, "actual": {"param_id": "set_power_limit", "value": 3000}, "parameter_revision": 12}]
+    },
+    {
+      "id": "control-idempotency-conflict",
+      "kind": "control",
+      "request": {"v": 2, "type": "control.request", "message_id": "msg-cmd-002", "session_id": "sess-001", "body": {"operation_id": "op-002", "command_id": "cmd-001", "sequence": 8, "action": "set_power_limit", "params": {"value": 4000}}},
+      "expected_response": {"status": "rejected", "error": {"code": "IDEMPOTENCY_CONFLICT"}},
+      "assertion": "same_command_id_with_different_canonical_payload_is_never_executed"
+    },
+    {
+      "id": "auth-mutual-proof",
+      "kind": "mutual-auth",
+      "key_hex_test_only": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "session_id": "sess-auth-001",
+      "phone_nonce_b64": "AAECAwQFBgcICQoLDA0ODw==",
+      "device_nonce_b64": "EBESExQVFhcYGRobHB0eHw==",
+      "device_ts": 1789459200,
+      "phone_proof_b64": "NLcF3Z4wBkA8MvgZaLRy2c7ek5HjQOTIa9oCG6AFHto=",
+      "device_proof_b64": "CnRbldiYxhYnuBsaV4vu8UyvVySVooX/XF72Dtthcls=",
+      "messages": [
+        {"v": 2, "type": "auth.init", "message_id": "msg-auth-001", "session_id": "sess-auth-001", "body": {"phone_nonce": "AAECAwQFBgcICQoLDA0ODw=="}},
+        {"v": 2, "type": "auth.challenge", "message_id": "msg-auth-002", "in_reply_to": "msg-auth-001", "session_id": "sess-auth-001", "body": {"device_nonce": "EBESExQVFhcYGRobHB0eHw==", "device_ts": 1789459200}},
+        {"v": 2, "type": "auth.proof", "message_id": "msg-auth-003", "session_id": "sess-auth-001", "body": {"phone_proof": "NLcF3Z4wBkA8MvgZaLRy2c7ek5HjQOTIa9oCG6AFHto="}},
+        {"v": 2, "type": "auth.result", "message_id": "msg-auth-004", "in_reply_to": "msg-auth-003", "session_id": "sess-auth-001", "body": {"result": "ok", "device_proof": "CnRbldiYxhYnuBsaV4vu8UyvVySVooX/XF72Dtthcls="}}
+      ],
+      "proof_message": "ASCII(prefix)|session_id|phone_nonce_raw|device_nonce_raw|decimal(device_ts)",
+      "assertion": "proofs_are_test_only_and_must_never_be_used_as_production_credentials"
+    },
+    {
+      "id": "ota-ctrl-data-status",
+      "kind": "ota",
+      "ctrl": {"v": 2, "type": "ota.ctrl", "message_id": "msg-ota-001", "session_id": "sess-ota-001", "body": {"transfer_id": "transfer-001", "task_id": "task-test-001", "manifest_version": 1, "target": "communication_module", "model": "CS-L10-6K2", "version": "TEST-2.0.0", "size": 4, "sha256": "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589", "signature": "TEST_SIGNATURE_ONLY", "security_version": 1}},
+      "data": {"v": 2, "type": "ota.data", "message_id": "msg-ota-002", "session_id": "sess-ota-001", "body": {"transfer_id": "transfer-001", "offset": 0, "payload": "YWJjZA==", "payload_sha256": "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589"}},
+      "status": {"v": 2, "type": "ota.status", "message_id": "msg-ota-003", "session_id": "sess-ota-001", "body": {"transfer_id": "transfer-001", "stage": "receiving", "accepted_offset": 4, "progress": 100, "result_code": "OK", "message": "test only"}},
+      "assertions": ["manifest_is_versioned_and_complete", "accepted_offset_is_contiguous", "receiving_100_percent_is_not_succeeded"]
+    },
+    {
+      "id": "audit-timeout-unknown",
+      "kind": "audit",
+      "event": {"operation_id": "op-timeout-001", "device_sn": "TEST-L10-0001", "channel": "ble", "request_digest": "synthetic", "state": "unknown", "reason": "result_timeout"},
+      "expected": "query_same_command_id_before_any_retry_or_channel_change"
+    }
+  ]
+}

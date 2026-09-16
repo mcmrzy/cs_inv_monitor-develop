@@ -47,6 +47,8 @@ func (s *OTAService) GetPublishedFirmwareResources(ctx context.Context, sn, targ
 		return nil, err
 	}
 	for i := range resources {
+		// App/前端按 file_url 直接下载；库内为相对路径，必须补全域名
+		resources[i].FileURL = s.BuildDownloadURL(resources[i].FileURL)
 		resources[i].SupportedChannels = FirmwareSupportedChannels(resources[i].TargetChip)
 	}
 	return resources, nil

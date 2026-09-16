@@ -1,4 +1,4 @@
-import 'package:wifi_iot/wifi_iot.dart';
+import 'package:inv_app/core/platform/platform.dart';
 import 'package:inv_app/core/services/wifi_scan_service.dart';
 
 class DiscoveredDevice {
@@ -30,6 +30,8 @@ class DiscoveredDevice {
 }
 
 class LocalDiscoveryService {
+  WifiApController get _wifi => WifiApController.instance;
+
   Future<List<DiscoveredDevice>> scanCSInvAPs() async {
     try {
       final results = await scanWifiNetworks();
@@ -65,7 +67,7 @@ class LocalDiscoveryService {
 
   Future<bool> isConnectedToCSInvAP() async {
     try {
-      final ssid = await WiFiForIoTPlugin.getSSID();
+      final ssid = await _wifi.currentSsid;
       if (ssid == null) return false;
       final upper = ssid.toUpperCase();
       return upper.startsWith('CS-INV') || upper.startsWith('CS_INV');
@@ -76,14 +78,11 @@ class LocalDiscoveryService {
 
   Future<bool> connectToAP(String ssid, {String? password}) async {
     try {
-      final isRegistered = await WiFiForIoTPlugin.isRegisteredWifiNetwork(ssid);
-      if (isRegistered == true) {
-        return await WiFiForIoTPlugin.findAndConnect(
-          ssid,
-          password: password ?? '',
-        );
+      final isRegistered = await _wifi.isRegistered(ssid);
+      if (isRegistered) {
+        return await _wifi.findAndConnect(ssid, password: password ?? '');
       }
-      return await WiFiForIoTPlugin.connect(
+      return await _wifi.connect(
         ssid,
         password: password ?? '',
         withInternet: false,
@@ -95,7 +94,7 @@ class LocalDiscoveryService {
 
   Future<bool> disconnectFromAP() async {
     try {
-      return await WiFiForIoTPlugin.disconnect();
+      return await _wifi.disconnect();
     } catch (_) {
       return false;
     }

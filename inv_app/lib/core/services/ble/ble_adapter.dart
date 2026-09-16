@@ -116,33 +116,62 @@ class FlutterBlueUltraAdapter implements BleAdapter {
   }) {
     final controller = StreamController<BleScanResult>();
     StreamSubscription<List<fbu.ScanResult>>? sub;
+    final seen = <String, BleScanResult>{};
+
+    final wanted = serviceUuids.map((e) => e.toLowerCase()).toSet();
+
+    bool accept(fbu.ScanResult r) {
+      if (wanted.isEmpty) return true;
+      final name = r.advertisementData.advName.toUpperCase();
+      // 名称匹配兜底：部分机型/固件把服务 UUID 只放 SCAN_RSP，
+      // 硬件 ScanFilter 会漏扫，调试助手无过滤所以能搜到。
+      if (name.contains('CS_INV') || name.contains('CS-INV')) return true;
+      final advertised = r.advertisementData.serviceUuids
+          .map((g) => g.str.toLowerCase())
+          .toSet();
+      return wanted.any(advertised.contains);
+    }
 
     sub = fbu.FlutterBlueUltra.scanResults.listen(
       (results) {
         for (final r in results) {
-          controller.add(
-            BleScanResult(
-              macAddress: r.device.remoteId.str,
-              name: r.advertisementData.advName,
-              rssi: r.rssi,
-              serviceUuids: r.advertisementData.serviceUuids
-                  .map((g) => g.str)
-                  .toList(growable: false),
-            ),
+          if (!accept(r)) continue;
+          final mapped = BleScanResult(
+            macAddress: r.device.remoteId.str,
+            name: r.advertisementData.advName,
+            rssi: r.rssi,
+            serviceUuids: r.advertisementData.serviceUuids
+                .map((g) => g.str)
+                .toList(growable: false),
           );
+          final prev = seen[mapped.macAddress];
+          if (prev != null &&
+              prev.name == mapped.name &&
+              prev.rssi == mapped.rssi) {
+            continue;
+          }
+          seen[mapped.macAddress] = mapped;
+          controller.add(mapped);
         }
       },
       onError: controller.addError,
     );
 
+    // 不传硬件 UUID 过滤：Android ScanFilter 只匹配 ADV 包，
+    // UUID 在 SCAN_RSP 或广播不稳定时会漏扫。androidLegacy
+    // 走 1M PHY，兼容 ESP32 传统广播（调试助手同策略）。
     fbu.FlutterBlueUltra.startScan(
-      withServices: serviceUuids.map(fbu.Guid.new).toList(growable: false),
+      withServices: const [],
       timeout: timeout,
+      androidLegacy: true,
     ).catchError((Object e) {
       controller.addError(e);
     });
 
-    controller.onCancel = () => sub?.cancel();
+    controller.onCancel = () async {
+      await sub?.cancel();
+      await fbu.FlutterBlueUltra.stopScan();
+    };
     return controller.stream;
   }
 
