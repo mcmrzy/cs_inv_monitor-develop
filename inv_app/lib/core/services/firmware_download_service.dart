@@ -7,6 +7,8 @@ import 'package:crypto/crypto.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:inv_app/core/config/app_config.dart';
+
 /// 已下载固件的信息（含离线升级所需的签名元数据）。
 ///
 /// 元数据（目标芯片/版本/签名/安全版本）在下载时一并持久化，
@@ -86,8 +88,18 @@ class DownloadProgressEvent {
 }
 
 class FirmwareDownloadService {
-  final Dio _dio;
   final SharedPreferences _sharedPreferences;
+  /// 固件 bin 走独立下载 Dio，避免主 API Dio 的 baseUrl 拼接、
+  /// Bearer 头、JSON 解析与 401 刷新链路干扰 CDN/直链下载。
+  final Dio _downloadDio = Dio(
+    BaseOptions(
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(minutes: 5),
+      responseType: ResponseType.bytes,
+      followRedirects: true,
+      validateStatus: (status) => status != null && status < 500,
+    ),
+  );
 
   static const String _keyPrefix = 'firmware_path_';
   static const String _keySizePrefix = 'firmware_size_';
@@ -115,7 +127,7 @@ class FirmwareDownloadService {
   Stream<DownloadProgressEvent> get progressStream =>
       _progressController.stream;
 
-  FirmwareDownloadService(this._dio, this._sharedPreferences);
+  FirmwareDownloadService(this._sharedPreferences);
 
   void _emit(int firmwareId, double progress) {
     if (_disposed || _progressController.isClosed) return;
@@ -130,6 +142,17 @@ class FirmwareDownloadService {
     if (_activeDownloadId == firmwareId) {
       _activeCancelToken?.cancel();
     }
+  }
+
+  /// 相对路径（/firmware/xxx.bin）拼到 API 站点 origin；绝对 URL 原样使用。
+  static String resolveFirmwareUrl(String url) {
+    final trimmed = url.trim();
+    if (trimmed.isEmpty) return trimmed;
+    final uri = Uri.tryParse(trimmed);
+    if (uri != null && uri.hasScheme) return trimmed;
+    final origin = Uri.parse(AppConfig.apiBaseUrl).origin;
+    if (trimmed.startsWith('/')) return '$origin$trimmed';
+    return '$origin/${trimmed.replaceFirst(RegExp(r'^/+'), '')}';
   }
 
   Future<String> downloadFirmware({
@@ -154,6 +177,10 @@ class FirmwareDownloadService {
       );
     }
     _activeDownloadId = firmwareId;
+    final effectiveUrl = resolveFirmwareUrl(url);
+    if (effectiveUrl.isEmpty) {
+      throw const FormatException('Firmware download URL is empty');
+    }
     final serviceToken = cancelToken ?? CancelToken();
     _activeCancelToken = serviceToken;
 
@@ -195,8 +222,8 @@ class FirmwareDownloadService {
         if (downloadedBytes > 0) {
           // 断点续传：从 .part 分片末尾继续
           try {
-            final response = await _dio.download(
-              url,
+            final response = await _downloadDio.download(
+              effectiveUrl,
               partFile.path,
               fileAccessMode: FileAccessMode.append,
               options: Options(
@@ -218,7 +245,7 @@ class FirmwareDownloadService {
             if (response.statusCode != HttpStatus.partialContent) {
               await partFile.delete();
               await _downloadFresh(
-                url,
+                effectiveUrl,
                 partFile,
                 firmwareId,
                 serviceToken,
@@ -235,7 +262,7 @@ class FirmwareDownloadService {
                 // 分片不完整：删除后整包重下
                 await partFile.delete();
                 await _downloadFresh(
-                  url,
+                  effectiveUrl,
                   partFile,
                   firmwareId,
                   serviceToken,
@@ -248,7 +275,7 @@ class FirmwareDownloadService {
           }
         } else {
           await _downloadFresh(
-            url,
+            effectiveUrl,
             partFile,
             firmwareId,
             serviceToken,
@@ -298,7 +325,7 @@ class FirmwareDownloadService {
     CancelToken cancelToken,
     void Function(int received, int total)? onProgress,
   ) async {
-    await _dio.download(
+    await _downloadDio.download(
       url,
       partFile.path,
       cancelToken: cancelToken,

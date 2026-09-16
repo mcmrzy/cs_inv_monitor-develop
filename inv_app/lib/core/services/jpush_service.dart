@@ -1,10 +1,10 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:jpush_flutter/jpush_flutter.dart';
 import 'package:jpush_flutter/jpush_interface.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:inv_app/core/platform/app_platform.dart';
 import 'package:inv_app/core/router/app_router.dart';
 
 /// 极光推送消息对象
@@ -59,10 +59,10 @@ class JPushService {
 
   /// 检查当前平台是否支持 JPush
   ///
-  /// JPush 仅支持 Android、iOS 和 HarmonyOS
+  /// 能力矩阵见 [PlatformCapabilities.supportsPush]；鸿蒙需换华为推送通道
   bool get isSupported {
     if (kIsWeb) return false;
-    return Platform.isAndroid || Platform.isIOS;
+    return PlatformCapabilities.supportsPush;
   }
 
   /// 初始化 JPush SDK
@@ -204,7 +204,7 @@ class JPushService {
   /// - device_alarm / alarm_cleared / device_offline / device_online → 通知中心页面（/alarms）
   ///   （上下线/告警等通知统一进通知中心，用户可在列表中查看具体告警并进入详情）
   /// - system_announcement → 通知中心页面（/alarms）
-  /// - app_update → 已下线，显式忽略
+  /// - app_update → 关于页（有检查更新入口，可触发更新弹窗）
   /// - 未知类型 → 兜底打开通知中心，避免点击无响应
   void _handleNavigation(JPushNotification notification) {
     final notifyType = notification.notifyType;
@@ -221,7 +221,8 @@ class JPushService {
         AppRouter.router.go('/ota');
         break;
       case 'app_update':
-        debugPrint('[JPushService] Ignoring retired app_update notification');
+        // 深链到关于页并自动检查，保证点通知后能立刻看到更新弹窗/已是最新
+        AppRouter.router.push('/about?check=1');
         break;
       case 'daily_report':
         AppRouter.router.go('/statistics');

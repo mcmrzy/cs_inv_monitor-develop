@@ -41,11 +41,25 @@ class _DeviceFirmwareDetailPageState extends State<DeviceFirmwareDetailPage> {
   String? _overviewError;
   String? _historyError;
   bool _triggering = false;
+  bool _refreshing = false;
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  /// 检查更新：原地刷新固件概览与历史，不再 push 本页路由
+  Future<void> _reloadOverview() async {
+    setState(() => _refreshing = true);
+    try {
+      await Future.wait([
+        _loadOverview(),
+        _loadHistory(),
+      ]);
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
   }
 
   Future<void> _load() async {
@@ -399,14 +413,16 @@ class _DeviceFirmwareDetailPageState extends State<DeviceFirmwareDetailPage> {
                 key: const Key('firmwareUpdateAction'),
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: canCheckUpdate
-                      ? () => context.push(
-                          FirmwareModulePresentation.deviceRoute(
-                            widget.deviceSN,
-                          ),
+                  // 原地刷新概览，避免 push 同一路由导致导航栈层层叠加
+                  onPressed:
+                      (_refreshing || _loadingOverview) ? null : _reloadOverview,
+                  icon: (_refreshing || _loadingOverview)
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : null,
-                  icon: const Icon(Icons.refresh_rounded),
+                      : const Icon(Icons.refresh_rounded),
                   label: Text(
                     l10n.str('firmware_check_update'),
                     maxLines: 2,

@@ -438,7 +438,7 @@ class ServiceLocator {
     // 固件下载：应用级单例（并发守卫/进度流需跨页面共享，
     // 页面各自实例化会让守卫形同虚设）
     getIt.registerLazySingleton<FirmwareDownloadService>(
-      () => FirmwareDownloadService(getIt<Dio>(), getIt()),
+      () => FirmwareDownloadService(getIt()),
       dispose: (service) => service.dispose(),
     );
 

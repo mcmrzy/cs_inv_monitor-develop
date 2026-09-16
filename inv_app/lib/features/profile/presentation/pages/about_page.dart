@@ -12,7 +12,10 @@ import 'package:inv_app/core/widgets/settings_widgets.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 class AboutPage extends StatefulWidget {
-  const AboutPage({super.key});
+  /// 进入页面后自动触发一次检查更新（App 更新推送深链）。
+  final bool autoCheck;
+
+  const AboutPage({super.key, this.autoCheck = false});
 
   @override
   State<AboutPage> createState() => _AboutPageState();
@@ -28,6 +31,11 @@ class _AboutPageState extends State<AboutPage> {
   void initState() {
     super.initState();
     _loadDisplayVersion();
+    if (widget.autoCheck) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_checkingUpdate) _checkForUpdates();
+      });
+    }
   }
 
   Future<void> _loadDisplayVersion() async {

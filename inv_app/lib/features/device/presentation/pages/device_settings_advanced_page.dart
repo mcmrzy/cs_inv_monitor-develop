@@ -9,6 +9,7 @@ import 'package:inv_app/core/utils/api_response.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 import 'package:inv_app/features/device/domain/entities/config_schema.dart';
+import 'package:inv_app/features/device/domain/services/config_param_apply.dart';
 import 'package:inv_app/features/device/presentation/widgets/config_param_controls.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
@@ -234,7 +235,7 @@ class _DeviceSettingsAdvancedPageState
     );
   }
 
-  /// 应用修改：POST set_params 仅写改动项
+  /// 应用修改：按 param_key 逐条下发独立命令（与 Web 远程设置一致）
   Future<void> _applyChanges() async {
     final l10n = AppLocalizations.of(context)!;
     final paramsToWrite = <String, dynamic>{};
@@ -247,16 +248,10 @@ class _DeviceSettingsAdvancedPageState
 
     setState(() => _applying = true);
     try {
-      final dio = getIt<Dio>();
-      final response = await dio.post(
-        '/devices/by-sn/${widget.sn}/control',
-        data: {'command': 'set_params', 'params': paramsToWrite},
-      );
-      unwrapApiResponse<Map<String, dynamic>>(
-        response.data,
-        validate: (value) =>
-            value is Map<String, dynamic> && value['task_id'] is String,
-        expected: 'an object containing task_id',
+      await applyConfigParamWrites(
+        dio: getIt<Dio>(),
+        sn: widget.sn,
+        changes: paramsToWrite,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -269,12 +264,20 @@ class _DeviceSettingsAdvancedPageState
         _applying = false;
       });
       _refreshState();
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
+      final detail = e is ApiBusinessException
+          ? e.message
+          : (e is FormatException ? e.message : null);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: Text(l10n.settingSetFailed),
-            backgroundColor: AppColors.error),
+          content: Text(
+            detail == null || detail.isEmpty
+                ? l10n.settingSetFailed
+                : '${l10n.settingSetFailed}: $detail',
+          ),
+          backgroundColor: AppColors.error,
+        ),
       );
       setState(() => _applying = false);
     }

@@ -8,6 +8,7 @@ import 'package:inv_app/core/utils/api_response.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 import 'package:inv_app/features/device/domain/entities/config_schema.dart';
+import 'package:inv_app/features/device/domain/services/config_param_apply.dart';
 import 'package:inv_app/features/device/presentation/pages/device_settings_advanced_page.dart';
 import 'package:inv_app/features/device/presentation/widgets/config_param_controls.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
@@ -15,7 +16,7 @@ import 'package:inv_app/l10n/app_localizations.dart';
 /// 远程设置 Tab（设备详情页内嵌，手风琴式）
 ///
 /// 单页展示 8 大功能分类：点击分类卡片原地展开参数控件，
-/// 再点收起；修改项全局汇总，底部应用条一次性提交（set_params 仅写改动项）。
+/// 再点收起；修改项全局汇总，底部应用条按 param_key 逐条下发独立命令。
 /// 高级参数仍为独立页（工程师模式，参数多且按 group_code 分组）。
 /// 作为 TabBarView 子页内嵌于设备详情页（无 Scaffold/AppBar），
 /// AutomaticKeepAliveClientMixin 保持切 Tab 不重建（避免重复 query_config）。
@@ -336,7 +337,7 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
     );
   }
 
-  /// 应用修改：POST set_params 仅写改动项（跨分类汇总）
+  /// 应用修改：按 param_key 逐条下发独立命令（与 Web 远程设置一致）
   Future<void> _applyChanges() async {
     final l10n = AppLocalizations.of(context)!;
     final paramsToWrite = <String, dynamic>{
@@ -347,16 +348,10 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
 
     setState(() => _applying = true);
     try {
-      final dio = getIt<Dio>();
-      final response = await dio.post(
-        '/devices/by-sn/${widget.sn}/control',
-        data: {'command': 'set_params', 'params': paramsToWrite},
-      );
-      unwrapApiResponse<Map<String, dynamic>>(
-        response.data,
-        validate: (value) =>
-            value is Map<String, dynamic> && value['task_id'] is String,
-        expected: 'an object containing task_id',
+      await applyConfigParamWrites(
+        dio: getIt<Dio>(),
+        sn: widget.sn,
+        changes: paramsToWrite,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -371,11 +366,18 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
       });
       // 成功后刷新 control-state，同步服务端 desired
       _refreshState();
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
+      final detail = e is ApiBusinessException
+          ? e.message
+          : (e is FormatException ? e.message : null);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(l10n.settingSetFailed),
+          content: Text(
+            detail == null || detail.isEmpty
+                ? l10n.settingSetFailed
+                : '${l10n.settingSetFailed}: $detail',
+          ),
           backgroundColor: AppColors.error,
         ),
       );
