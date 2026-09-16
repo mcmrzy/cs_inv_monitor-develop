@@ -37,7 +37,8 @@ interface DeviceItem {
   sn: string
   model: string
   status: number
-  stationId?: string
+  /** 后端 JSON 字段为 snake_case */
+  station_id?: number | string | null
   station_name?: string
   owner?: { nickname?: string; phone?: string }
   [key: string]: any
@@ -151,23 +152,23 @@ const BatchSettingsPage: React.FC = () => {
   const { data: devicesRes, isLoading: devicesLoading, error: devicesError, refetch: refetchDevices } = useQuery({
     queryKey: ['batch', 'devices', selectedStationIds],
     queryFn: () => {
-      const params: any = { page_size: 9999 }
+      const params: any = { page: 1, page_size: 200 }
+      // 后端只接受 station_id（snake_case）。单选时服务端过滤；多选时拉全量后本地过滤
       if (selectedStationIds.length === 1) {
-        params.stationId = selectedStationIds[0]
+        params.station_id = Number(selectedStationIds[0])
       }
       return deviceApi.getDevices(params).then((r) => {
         const d = r.data?.data ?? r.data
-        return (d?.items ?? []) as DeviceItem[]
+        return (d?.items ?? (Array.isArray(d) ? d : [])) as DeviceItem[]
       })
     },
   })
 
   const allDevices = useMemo(() => {
-    let devices = devicesRes ?? []
-    if (selectedStationIds.length > 1) {
-      devices = devices.filter((d) =>
-        selectedStationIds.includes(String(d.stationId))
-      )
+    let devices = Array.isArray(devicesRes) ? devicesRes : []
+    if (selectedStationIds.length > 0) {
+      const ids = new Set(selectedStationIds.map(String))
+      devices = devices.filter((d) => ids.has(String(d.station_id ?? '')))
     }
     return devices
   }, [devicesRes, selectedStationIds])
@@ -370,7 +371,7 @@ const BatchSettingsPage: React.FC = () => {
       key: 'station',
       width: 150,
       render: (_: any, record: DeviceItem) => {
-        const station = stationList.find((s) => String(s.id) === String(record.stationId))
+        const station = stationList.find((s) => String(s.id) === String(record.station_id))
         return station?.name || record.station_name || t('batch.noStation')
       },
     },
