@@ -649,6 +649,8 @@ const Map<String, String> en = {
   'control_no_command_history': 'No command history',
   'confirm_execute': 'Confirm execution of {label}?',
   'latest_version_label': 'Latest Version: {version}',
+  'update_available_desc': 'A new version is available. Installation will start automatically after download.',
+  'download_not_apk': 'Downloaded content is not an install package. Please retry later or contact support.',
   'current_version_label': 'Current Version: {version}',
   'new_version_label': 'New Version: {version}',
   'waiting_device_response': 'Waiting for device response... ({seconds}s)',
@@ -1285,10 +1287,6 @@ const Map<String, String> en = {
   'search_alarm_hint': 'Search alarm device/SN',
 
   // App Update
-  'browser_download_title': 'Download in Browser',
-  'browser_download_desc':
-      'The download link is a web page and cannot be installed directly. Please open the link in your browser to manually download and install v{version}',
-  'open_in_browser': 'Open in Browser',
 
   // ====== Parameter Settings Page ======
   // Tab titles

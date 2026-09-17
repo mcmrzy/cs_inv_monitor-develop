@@ -623,6 +623,8 @@ const Map<String, String> zh = {
   'control_no_command_history': '暂无命令记录',
   'confirm_execute': '确认执行 {label}？',
   'latest_version_label': '最新版本: {version}',
+  'update_available_desc': '有新版本可用，下载完成后将自动安装。',
+  'download_not_apk': '下载内容不是安装包，请稍后重试或联系管理员。',
   'current_version_label': '当前版本: {version}',
   'new_version_label': '新版本: {version}',
   'waiting_device_response': '等待设备响应... ({seconds})',
@@ -1243,9 +1245,6 @@ const Map<String, String> zh = {
   'search_alarm_hint': '搜索告警设备/SN',
 
   // App更新
-  'browser_download_title': '请在浏览器中下载',
-  'browser_download_desc': '当前下载链接为网页，无法直接安装。请在浏览器中打开链接后手动下载并安装 v{version}',
-  'open_in_browser': '打开浏览器',
 
   // ====== 参数设置页 ======
   // Tab 标题
