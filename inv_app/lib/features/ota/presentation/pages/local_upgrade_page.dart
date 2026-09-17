@@ -378,21 +378,23 @@ class _BleUpgradeTabState extends State<_BleUpgradeTab>
 
     setState(() => _connectingMac = device.macAddress);
     try {
-      // 连接并读取设备 SN（autoReconnect=false：临时连接，不做后台重连）
+      // 连接并读取设备 SN；保留会话供升级执行页复用，
+      // autoReconnect=true：选固件期间意外断开可自动重连
       final session = await manager.connectDevice(
         device.macAddress,
-        autoReconnect: false,
+        autoReconnect: true,
       );
       final sn = (session.sn ?? '').trim().isNotEmpty
           ? session.sn!.trim()
           : _parseSn(device.name);
 
-      // 释放连接：升级执行页（BLE 通道）会自行重新扫描并连接设备，
-      // 避免两条链路同时占用同一 GATT 连接导致冲突
-      await manager.disconnectDevice(device.macAddress);
+      // 保留已鉴权会话：升级执行页直接复用 manager 中的 ready session，
+      // 避免二次扫描失败或两条链路抢 GATT 连接
 
       if (!mounted) return;
       if (sn.isEmpty) {
+        await manager.disconnectDevice(device.macAddress);
+        if (!mounted) return;
         AppToast.show(
           context,
           l10n.str('ble_connection_failed'),
@@ -428,11 +430,6 @@ class _BleUpgradeTabState extends State<_BleUpgradeTab>
 
     return Column(
       children: [
-        _ScanButton(
-          scanning: _scanning,
-          icon: Icons.bluetooth_searching_rounded,
-          onPressed: _startScan,
-        ),
         Expanded(
           child: _scanning && _sortedDevices.isEmpty
               ? const Center(child: CircularProgressIndicator())
@@ -443,11 +440,20 @@ class _BleUpgradeTabState extends State<_BleUpgradeTab>
                       onRescan: _startScan,
                     )
                   : ListView.builder(
-                      padding: EdgeInsets.fromLTRB(16.w, 4.h, 16.w, 20.h),
+                      padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 12.h),
                       itemCount: _sortedDevices.length,
                       itemBuilder: (_, index) =>
                           _buildDeviceCard(_sortedDevices[index]),
                     ),
+        ),
+        // 主操作固定在底部，避免顶在列表上方
+        SafeArea(
+          top: false,
+          child: _ScanButton(
+            scanning: _scanning,
+            icon: Icons.bluetooth_searching_rounded,
+            onPressed: _startScan,
+          ),
         ),
       ],
     );
@@ -617,11 +623,6 @@ class _ApUpgradeTabState extends State<_ApUpgradeTab>
 
     return Column(
       children: [
-        _ScanButton(
-          scanning: _scanning,
-          icon: Icons.wifi_find_rounded,
-          onPressed: _startScan,
-        ),
         Expanded(
           child: _scanning && _devices.isEmpty
               ? const Center(child: CircularProgressIndicator())
@@ -632,11 +633,20 @@ class _ApUpgradeTabState extends State<_ApUpgradeTab>
                       onRescan: _startScan,
                     )
                   : ListView.builder(
-                      padding: EdgeInsets.fromLTRB(16.w, 4.h, 16.w, 20.h),
+                      padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 12.h),
                       itemCount: _devices.length,
                       itemBuilder: (_, index) =>
                           _buildDeviceCard(_devices[index]),
                     ),
+        ),
+        // 主操作固定在底部，避免顶在列表上方
+        SafeArea(
+          top: false,
+          child: _ScanButton(
+            scanning: _scanning,
+            icon: Icons.wifi_find_rounded,
+            onPressed: _startScan,
+          ),
         ),
       ],
     );
