@@ -96,7 +96,7 @@ echo [1/2] 开始编译: flutter build apk --release --build-number=%NEW_BUILD% 
 set "EXTRA_DEFINES="
 if defined TRUSTED_DOWNLOAD_HOSTS set "EXTRA_DEFINES=--dart-define=TRUSTED_DOWNLOAD_HOSTS=%TRUSTED_DOWNLOAD_HOSTS%"
 
-%PS% -NoProfile -Command "$ErrorActionPreference='Continue'; Write-Host 'flutter build apk --release --build-number=%NEW_BUILD% ...'; & flutter build apk --release --build-number=%NEW_BUILD% --dart-define=APP_VERSION_CODE=%NEW_BUILD% --dart-define=APP_VERSION_NAME=%VER_BASE% %EXTRA_DEFINES% 2>&1 | Tee-Object -FilePath '%BUILD_LOG%'; exit $LASTEXITCODE"
+%PS% -NoProfile -Command "$ErrorActionPreference='Continue'; Write-Host 'flutter build apk --release --build-number=%NEW_BUILD% ...'; & flutter build apk --release --build-number=%NEW_BUILD% --dart-define=APP_VERSION_CODE=%NEW_BUILD% --dart-define=APP_VERSION_NAME=%VER_MAJOR%.%VER_MINOR%.%VER_PATCH% %EXTRA_DEFINES% 2>&1 | Tee-Object -FilePath '%BUILD_LOG%'; exit $LASTEXITCODE"
 
 if errorlevel 1 (
     echo.
