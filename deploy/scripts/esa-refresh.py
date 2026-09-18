@@ -33,6 +33,9 @@ VERSION = "2024-09-10"
 DEFAULT_PATHS = (
     "/app-release-info",
     "/api/v1/ota/app/latest",
+    # SPA 入口：边缘曾把 / 缓存成指向自身的 301（ERR_TOO_MANY_REDIRECTS）。
+    "/",
+    "/download",
 )
 
 

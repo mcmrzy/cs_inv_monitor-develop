@@ -49,6 +49,17 @@ var defaultAppReleaseCachePaths = []string{
 	"/api/v1/ota/app/latest",
 }
 
+// defaultDownloadEntryPaths 下载域的 SPA 入口。
+//
+// 必须一起刷新：2026-09-18 实测边缘把 / 缓存成一个指向自身的 301
+// （Location 与请求 URL 相同，Age 已 46 分钟且忽略 query），浏览器跟随后
+// 直接报 ERR_TOO_MANY_REDIRECTS。源站实际返回 302 → /download（正确），
+// 属边缘毒缓存；不刷新入口则该毒对象会一直滞留到 TTL 过期。
+var defaultDownloadEntryPaths = []string{
+	"/",
+	"/download",
+}
+
 // ESACachePurger 调用阿里云 ESA OpenAPI 刷新指定 URL 的边缘缓存。
 //
 // 下载页依赖 /app-release-info 与 /api/v1/ota/app/latest 的实时元数据；
@@ -71,13 +82,17 @@ type ESACachePurger struct {
 func NewESACachePurger(accessKeyID, accessKeySecret, siteID, host, apiHost string) *ESACachePurger {
 	downloadHost := normalizeHost(host, "download.jiuxiaoyw.online")
 	api := normalizeHost(apiHost, defaultAPIRefreshHost)
-	urls := make([]string, 0, (len(defaultAppReleaseCachePaths)+1)*2)
+	urls := make([]string, 0, (len(defaultAppReleaseCachePaths)+len(defaultDownloadEntryPaths)+1)*2)
 	for _, path := range defaultAppReleaseCachePaths {
 		// 页面请求带 query；同时提交裸路径与带 platform 的变体，避免 cache key 漏刷。
 		urls = append(urls,
 			"https://"+downloadHost+path,
 			"https://"+downloadHost+path+"?platform=android",
 		)
+	}
+	// SPA 入口单独刷新（不带 query 变体）：毒 301 会让手机输裸域名时打不开。
+	for _, path := range defaultDownloadEntryPaths {
+		urls = append(urls, "https://"+downloadHost+path)
 	}
 	// api 域的权威端点单独追加：2026-09-18 实测 api 域 /api/* 当前为 DYNAMIC，
 	// 但一旦某节点开启缓存，漏刷会让下载页在权威端点上读到旧版本。
@@ -141,9 +156,12 @@ func (p *ESACachePurger) Refresh() error {
 		return err
 	}
 
-	// ignoreParams 列表使用「去参数」后的 URL，覆盖下载域别名与 api 域权威端点。
-	ignore := make([]string, 0, len(defaultAppReleaseCachePaths)+1)
+	// ignoreParams 列表使用「去参数」后的 URL，覆盖下载域别名、SPA 入口与 api 域权威端点。
+	ignore := make([]string, 0, len(defaultAppReleaseCachePaths)+len(defaultDownloadEntryPaths)+1)
 	for _, path := range defaultAppReleaseCachePaths {
+		ignore = append(ignore, "https://"+p.downloadHost+path)
+	}
+	for _, path := range defaultDownloadEntryPaths {
 		ignore = append(ignore, "https://"+p.downloadHost+path)
 	}
 	ignore = append(ignore, "https://"+p.apiHost+apiReleaseCachePath)

@@ -36,6 +36,9 @@ func TestESACachePurger_BuildRefreshPaths(t *testing.T) {
 		"https://download.jiuxiaoyw.online/app-release-info?platform=android",
 		"https://download.jiuxiaoyw.online/api/v1/ota/app/latest",
 		"https://download.jiuxiaoyw.online/api/v1/ota/app/latest?platform=android",
+		// SPA 入口：边缘毒 301 会让手机输裸域名时报重定向过多。
+		"https://download.jiuxiaoyw.online/",
+		"https://download.jiuxiaoyw.online/download",
 		// api 域权威端点：下载页优先请求它，发布后必须一并刷新。
 		"https://api.jiuxiaoyw.online/api/v1/ota/app/latest",
 		"https://api.jiuxiaoyw.online/api/v1/ota/app/latest?platform=android",
