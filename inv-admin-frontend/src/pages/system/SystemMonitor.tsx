@@ -777,7 +777,7 @@ const SystemLogTab: React.FC = () => {
       render: (v: string) => v || '-',
     },
     {
-      title: t('logs.detail'), dataIndex: 'details', key: 'details', ellipsis: true,
+      title: t('logs.detail'), dataIndex: 'details', key: 'details', width: 240, ellipsis: true,
       render: (v: any) => formatDetail(v) || '-',
     },
     {
@@ -820,7 +820,7 @@ const SystemLogTab: React.FC = () => {
           showTotal: (total) => t('common.total', { total }),
           onChange: (p, ps) => { setPage(p); setPageSize(ps) },
         }}
-        scroll={{ x: 800 }}
+        scroll={{ x: 1110 }}
         size="small"
       />
     </div>

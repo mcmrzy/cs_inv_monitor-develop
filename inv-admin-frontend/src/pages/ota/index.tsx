@@ -622,7 +622,7 @@ const UpgradeTasksTab: React.FC = () => {
       },
     },
     {
-      title: t('ota.errorInfo'), dataIndex: 'error_message', key: 'error_message', ellipsis: true,
+      title: t('ota.errorInfo'), dataIndex: 'error_message', key: 'error_message', width: 240, ellipsis: true,
       render: (_: any, record: DeviceUpgrade) => record.error_message || '-',
     },
   ]
@@ -866,7 +866,7 @@ const UpgradeTasksTab: React.FC = () => {
           loading={devicesLoading}
           size="small"
           search={false}
-          scroll={{ x: 900 }}
+          scroll={{ x: 1120 }}
           pagination={false}
         />
       </Drawer>

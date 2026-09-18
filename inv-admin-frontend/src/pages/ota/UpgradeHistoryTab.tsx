@@ -160,6 +160,7 @@ const UpgradeHistoryTab: React.FC = () => {
       title: t('ota.errorInfo'),
       dataIndex: 'error_message',
       key: 'error_message',
+      width: 240,
       ellipsis: true,
       render: (v: string) => v || '-',
     },
@@ -285,7 +286,7 @@ const UpgradeHistoryTab: React.FC = () => {
         loading={isLoading}
         columns={columns}
         dataSource={data?.items ?? []}
-        scroll={{ x: 1100 }}
+        scroll={{ x: 1580 }}
         locale={{ emptyText: <Empty description={t('ota.noUpgradeHistory')} /> }}
         pagination={{
           current: page,
