@@ -85,7 +85,8 @@ rem 可选: 追加受信下载域名(逗号分隔, 不要空格), 例如对象�
 rem   set TRUSTED_DOWNLOAD_HOSTS=mybucket.oss-cn-beijing.aliyuncs.com
 set "EXTRA_DEFINES="
 if defined TRUSTED_DOWNLOAD_HOSTS set "EXTRA_DEFINES=--dart-define=TRUSTED_DOWNLOAD_HOSTS=%TRUSTED_DOWNLOAD_HOSTS%"
-call flutter build apk --release --build-number=%NEW_BUILD% --dart-define=APP_VERSION_CODE=%NEW_BUILD% --dart-define=APP_VERSION_NAME=%VER_BASE% %EXTRA_DEFINES%
+rem APP_VERSION_NAME 必须传自增后的版本名(VER_PATCH 已 +1)，否则 APK 显示上一个版本
+call flutter build apk --release --build-number=%NEW_BUILD% --dart-define=APP_VERSION_CODE=%NEW_BUILD% --dart-define=APP_VERSION_NAME=%VER_MAJOR%.%VER_MINOR%.%VER_PATCH% %EXTRA_DEFINES%
 if errorlevel 1 (
     echo [错误] 编译失败, 已还原 pubspec.yaml, 请检查上方日志。
     copy /y "%TEMP%\pubspec.yaml.prebuild.bak" pubspec.yaml >nul
