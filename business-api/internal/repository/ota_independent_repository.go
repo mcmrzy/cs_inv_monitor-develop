@@ -193,7 +193,7 @@ func (r *OTARepository) CreateIndependentFirmwareTasks(ctx context.Context, user
 	var device DeviceInfo
 	err = tx.QueryRow(ctx, `
 		SELECT sn, COALESCE(model,''), COALESCE(firmware_arm,''), COALESCE(firmware_esp,''),
-		       COALESCE(firmware_dsp,''), COALESCE(firmware_bms,''), COALESCE(status,0)=1
+		       COALESCE(firmware_dsp,''), COALESCE(firmware_bms,''), COALESCE(status,0) IN (1,2)
 		FROM devices WHERE sn = $1 AND deleted_at IS NULL FOR UPDATE
 	`, deviceSN).Scan(&device.SN, &device.Model, &device.FirmwareArm, &device.FirmwareEsp, &device.FirmwareDSP, &device.FirmwareBMS, &device.IsOnline)
 	if err != nil {
