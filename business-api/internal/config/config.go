@@ -152,6 +152,12 @@ type RBACConfig struct {
 type OTAConfig struct {
 	TaskTimeoutMinutes      int `mapstructure:"task_timeout_minutes"`       // 升级任务超时阈值（分钟），处于 pending/running 且超过该时长无任何更新的任务自动置为 failed，默认 30
 	TaskScanIntervalSeconds int `mapstructure:"task_scan_interval_seconds"` // 后台超时扫描间隔（秒），默认 60
+	// RecordTimeoutMinutes 单条升级记录(device_upgrades)的静默超时阈值（分钟），
+	// 默认 20。按 updated_at 判定「无任何状态更新」——设备持续上报进度会刷新
+	// updated_at 从而续命。走 IAP 串口的 arm/dsp 升级在 9600 baud 下本身就慢
+	// （256KB 约 4.6 分钟纯传输 + 擦除/重试），阈值过小会把仍在正常推进的
+	// 升级误判为失败，且失败后设备的成功回报会被 status 守卫静默丢弃。
+	RecordTimeoutMinutes int `mapstructure:"record_timeout_minutes"`
 }
 
 // ESAConfig 阿里云 ESA 边缘缓存（自动规则对齐 + 发布后刷新）
@@ -261,6 +267,8 @@ func Load(configPath string) (*Config, error) {
 	// OTA 升级任务超时收口
 	viper.SetDefault("ota.task_timeout_minutes", 30)
 	viper.SetDefault("ota.task_scan_interval_seconds", 60)
+	// 单条升级记录静默超时（按 updated_at，进度上报可续命）
+	viper.SetDefault("ota.record_timeout_minutes", 20)
 
 	// 阿里云 ESA 缓存（自动规则 + 发布后刷新）
 	viper.SetDefault("esa.enabled", true)
@@ -345,6 +353,7 @@ func Load(configPath string) (*Config, error) {
 
 	viper.BindEnv("ota.task_timeout_minutes", "OTA_TASK_TIMEOUT_MINUTES")
 	viper.BindEnv("ota.task_scan_interval_seconds", "OTA_TASK_SCAN_INTERVAL_SECONDS")
+	viper.BindEnv("ota.record_timeout_minutes", "OTA_RECORD_TIMEOUT_MINUTES")
 
 	viper.BindEnv("esa.enabled", "ESA_CACHE_REFRESH_ENABLED")
 	viper.BindEnv("esa.access_key", "ALIYUN_ACCESS_KEY_ID")

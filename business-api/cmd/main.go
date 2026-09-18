@@ -255,7 +255,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	go runPipelineHealthPing(rdb, heartbeatDone)
 
 	// OTA 鍗囩骇瓒呮椂娓呯悊锛氭瘡 5 鍒嗛挓鎵弿鍗′綇鐨勫崌绾ц褰曞苟鏇存柊鍏宠仈浠诲姟缁熻
-	go runOTATimeoutCleanup(db, heartbeatDone)
+	go runOTATimeoutCleanup(db, cfg.OTA.RecordTimeoutMinutes, heartbeatDone)
 	// OTA 瀹氭椂浠诲姟锛氶鍙栧苟鎵ц鍒版湡浠诲姟锛岄噸鍚悗涔熶細鎭㈠宸插埌鏈熶絾鏈墽琛岀殑浠诲姟銆?
 	go runOTAScheduler(db, otaService, heartbeatDone)
 	// OTA 升级任务超时收口：后台定时扫描卡住的 pending/running 任务并置为 failed
@@ -481,10 +481,18 @@ func sendOfflineNotification(ctx context.Context, db *pgxpool.Pool, sn string, u
 	// 当前只插入数据库通知记录，前端轮询时会读取
 }
 
-// runOTATimeoutCleanup 瀹氭湡娓呯悊鍗′綇鐨?OTA 鍗囩骇璁板綍銆?
-// 姣?5 鍒嗛挓鎵弿涓€娆?status='upgrading' 涓?started_at 瓒呰繃 15 鍒嗛挓鐨勮褰曪紝
-// 灏嗗叾鏍囪涓?failed锛屽苟鏇存柊鍏宠仈 upgrade_tasks 鐨勭粺璁℃暟鎹笌鐘舵€併€?
-func runOTATimeoutCleanup(db *pgxpool.Pool, done chan struct{}) {
+// runOTATimeoutCleanup 定期清理卡住的 OTA 升级记录。
+// 每 5 分钟扫描一次 status='upgrading' 且 updated_at 超过 timeoutMinutes 无任何
+// 更新的记录，将其标记为 failed，并更新关联 upgrade_tasks 的统计数据与状态。
+//
+// 判据用 updated_at 而非 started_at：设备每次上报进度都会刷新 updated_at，
+// 因此仍在正常推进的升级不会被误判；started_at 只在首次置位、永不刷新，用它
+// 判超时会让慢速升级（arm/dsp 走 9600 baud IAP 串口）在中途被判失败，而失败后
+// 设备的成功回报会被 `WHERE status='upgrading'` 守卫静默丢弃。
+func runOTATimeoutCleanup(db *pgxpool.Pool, timeoutMinutes int, done chan struct{}) {
+	if timeoutMinutes < 1 {
+		timeoutMinutes = 20
+	}
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 	for {
@@ -497,8 +505,8 @@ func runOTATimeoutCleanup(db *pgxpool.Pool, done chan struct{}) {
 			rows, err := db.Query(context.Background(), `
 				SELECT id, COALESCE(task_id, 0)
 				FROM device_upgrades
-				WHERE status = 'upgrading' AND started_at IS NOT NULL AND started_at < NOW() - INTERVAL '15 minutes'
-			`)
+				WHERE status = 'upgrading' AND updated_at < NOW() - make_interval(mins => $1)
+			`, timeoutMinutes)
 			if err != nil {
 				logger.Warn("OTA timeout cleanup query failed", zap.Error(err))
 				continue
@@ -520,7 +528,7 @@ func runOTATimeoutCleanup(db *pgxpool.Pool, done chan struct{}) {
 			// 2. 鎵归噺鏍囪涓?failed
 			for _, r := range staleRecords {
 				db.Exec(context.Background(), `
-					UPDATE device_upgrades SET status = 'failed', error_message = '鍗囩骇瓒呮椂锛岃澶囧彲鑳藉凡鏂繛', updated_at = NOW()
+					UPDATE device_upgrades SET status = 'failed', error_message = '升级超时，设备可能已断连', updated_at = NOW()
 					WHERE id = $1 AND status = 'upgrading'`, r.id)
 				logger.Info("OTA upgrade marked as timed out", zap.Int64("id", r.id))
 			}
@@ -630,7 +638,7 @@ func runOTAScheduler(db *pgxpool.Pool, otaService *service.OTAService, done chan
 				_, _ = db.Exec(context.Background(), `
 					UPDATE upgrade_tasks SET status = 'failed', notes = CONCAT_WS(E'\n', NULLIF(notes, ''), $2),
 					completed_at = NOW(), updated_at = NOW() WHERE id = $1 AND status IN ('pending','running')
-				`, taskID, "瀹氭椂鎵ц澶辫触: "+err.Error())
+				`, taskID, "定时执行失败: "+err.Error())
 			}
 		}
 		if len(taskIDs) > 0 {
@@ -879,6 +887,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 	// Device communication service calls these endpoints synchronously.
 	// They must never be throttled, even under burst load.
 	internalHandler := handler.NewInternalHandler(deps.DB, deps.RDB, deps.OTAService, deps.JPushService, nil, nil, deps.NotifyPrefsRepo, deps.EmailService)
+	internalHandler.SetOTARecordTimeout(time.Duration(cfg.OTA.RecordTimeoutMinutes) * time.Minute)
 
 	internal := router.Group("/api/v1/internal").Use(middleware.InternalAuth(cfg.Backends.InternalKey))
 	{

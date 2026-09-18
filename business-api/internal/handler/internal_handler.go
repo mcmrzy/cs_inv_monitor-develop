@@ -173,6 +173,9 @@ type InternalHandler struct {
 	sseHub           chan sseHubEvent
 	notifySvc        NotificationService
 	notifyCfg        *NotificationConfig
+	// otaRecordTimeout 单条升级记录(device_upgrades)的静默超时阈值，按 updated_at
+	// 判定。默认 20 分钟，可由 main 按 ota.record_timeout_minutes 覆盖。
+	otaRecordTimeout time.Duration
 }
 
 func NewInternalHandler(db *pgxpool.Pool, rdb *redis.Client, otaService *service.OTAService, jpushService *service.JPushService, notifySvc NotificationService, notifyCfg *NotificationConfig, notifyPrefs *repository.NotifyPrefsRepository, emailService *service.EmailService) *InternalHandler {
@@ -194,12 +197,39 @@ func NewInternalHandler(db *pgxpool.Pool, rdb *redis.Client, otaService *service
 		sseHub:           make(chan sseHubEvent, 256),
 		notifySvc:        notifySvc,
 		notifyCfg:        notifyCfg,
+		otaRecordTimeout: defaultOTARecordTimeout,
 	}
 	if db != nil {
 		h.protocolV1 = &postgresProtocolV1Store{db: db}
 	}
 	go h.runSSEHub()
 	return h
+}
+
+// defaultOTARecordTimeout 单条升级记录的默认静默超时。
+// 采集器↔主控 UART 仅 9600 baud，arm/dsp 走 IAP 串口升级本身就要 5–8 分钟
+// （256KB 约 4.6 分钟纯传输 + 擦除/握手重试），阈值必须留足余量。
+const defaultOTARecordTimeout = 20 * time.Minute
+
+// SetOTARecordTimeout 覆盖单条升级记录的静默超时阈值（<=0 保持默认）。
+func (h *InternalHandler) SetOTARecordTimeout(d time.Duration) {
+	if d > 0 {
+		h.otaRecordTimeout = d
+	}
+}
+
+// isOTAUpgradeRecordStale 判定一条 upgrading 记录是否已静默超时。
+//
+// 依据 updated_at 而非 started_at：设备每次上报进度都会刷新 updated_at，因此
+// 仍在正常推进的升级不会被误判；started_at 只在首次置位、永不刷新（重试时还会
+// 被清空），拿它判超时会让 arm/dsp 这类慢速 IAP 升级在中途被判失败，而记录一旦
+// 变成 failed，设备随后的成功回报会被 `WHERE status='upgrading'` 守卫静默丢弃
+// —— 表现为「设备已升级成功、后台永久显示失败」。
+func isOTAUpgradeRecordStale(updatedAt time.Time, timeout time.Duration, now time.Time) bool {
+	if timeout <= 0 {
+		return false
+	}
+	return now.Sub(updatedAt) > timeout
 }
 
 // runSSEHub SSE Hub 主循环，单 goroutine 串行处理订阅/退订，避免 map 并发竞争
@@ -472,6 +502,10 @@ func (h *InternalHandler) DeviceInfo(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
+	// 升级前基线必须在下面 upsert 之前读取：upsert 之后 devices 里已是设备本次
+	// 上报的新版本，reconcile 的「版本是否变化」判定会退化成恒假而失效。
+	oldARM, oldESP, oldDSP, oldBMS := h.deviceFirmwareVersions(ctx, req.SN)
+
 	_, err := h.db.Exec(ctx, `
 		INSERT INTO devices (
 			sn, model, manufacturer, firmware_arm, firmware_esp, firmware_dsp, firmware_bms, device_type,
@@ -524,9 +558,6 @@ func (h *InternalHandler) DeviceInfo(c *gin.Context) {
 	}
 
 	// OTA 升级状态校验：设备上报新固件版本后，检查是否有进行中的升级。
-	// 旧版本必须在上面 upsert 之前读取：upsert 后再查，devices 里已是新值，
-	// reconcile 的"版本是否变化"判定会全部失效。
-	oldARM, oldESP, oldDSP, oldBMS := h.deviceFirmwareVersions(ctx, req.SN)
 	h.reconcileOTAStatus(ctx, req.SN, req.FirmwareARM, req.FirmwareESP, req.FirmwareDSP, req.FirmwareBMS, oldARM, oldESP, oldDSP, oldBMS)
 
 	response.Success(c, gin.H{"status": "ok"})
@@ -588,17 +619,7 @@ func (h *InternalHandler) reconcileOTAStatus(ctx context.Context, sn string, fwA
 		reported := chipVersion(rec.targetChip, fwARM, fwESP, fwDSP, fwBMS)
 		oldVersion := chipVersion(rec.targetChip, oldARM, oldESP, oldDSP, oldBMS)
 
-		var result string // "success", "failed", or "" (uncertain)
-
-		if reported != "" && rec.version != "" && matchFirmwareVersion(reported, rec.version) {
-			result = "success"
-		} else if reported != "" && oldVersion != "" && reported != oldVersion {
-			// 版本发生变化但无法精确匹配目标版本 → 大概率升级成功
-			result = "success"
-		} else if (reported == oldVersion || reported == "") && time.Since(rec.startedAt) > 5*time.Minute {
-			// 版本未变化且已超过 5 分钟 → 升级可能失败
-			result = "failed"
-		}
+		result := decideReconcileResult(reported, rec.version, oldVersion, rec.startedAt, time.Now())
 
 		switch result {
 		case "success":
@@ -660,6 +681,27 @@ func (h *InternalHandler) reconcileOTAStatus(ctx context.Context, sn string, fwA
 				zap.String("old", oldVersion))
 		}
 	}
+}
+
+// decideReconcileResult 判定一条 upgrading 记录在设备上报后的归宿。
+// 返回 "success" / "failed" / ""（证据不足，保持原状）。
+//
+// oldVersion 必须是本次 upsert 之前 devices 表里的版本：调用方若在 upsert 之后
+// 才读取，oldVersion 会等于 reported，"版本发生变化"这条分支恒为假，设备实际
+// 升级成功却会被下面的超时分支误判成 failed。
+func decideReconcileResult(reported, target, oldVersion string, startedAt, now time.Time) string {
+	if reported != "" && target != "" && matchFirmwareVersion(reported, target) {
+		return "success"
+	}
+	if reported != "" && oldVersion != "" && reported != oldVersion {
+		// 版本发生变化但无法精确匹配目标版本 → 大概率升级成功
+		return "success"
+	}
+	if (reported == oldVersion || reported == "") && now.Sub(startedAt) > 5*time.Minute {
+		// 版本未变化且已超过 5 分钟 → 升级可能失败
+		return "failed"
+	}
+	return ""
 }
 
 // chipVersion 根据芯片类型返回对应的上报固件版本
@@ -1266,21 +1308,22 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 		go func() {
 			bgCtx := context.Background()
 
-			// ── 超时检测：将卡住超过 15 分钟的 upgrading 记录标记为 failed ──
+			// ── 超时检测：将静默超过阈值的 upgrading 记录标记为 failed ──
+			// 判据用 updated_at：进度上报会刷新它，仍在推进的升级不会被误判。
 			timeoutRows, err := h.db.Query(bgCtx, `
-				SELECT id, COALESCE(task_id, 0), started_at
+				SELECT id, COALESCE(task_id, 0), updated_at
 				FROM device_upgrades
-				WHERE device_sn = $1 AND status = 'upgrading' AND started_at IS NOT NULL
+				WHERE device_sn = $1 AND status = 'upgrading'
 			`, req.DeviceSN)
 			if err == nil {
 				var timedOutTaskIDs []int64
 				for timeoutRows.Next() {
 					var id, taskID int64
-					var startedAt time.Time
-					if err := timeoutRows.Scan(&id, &taskID, &startedAt); err != nil {
+					var recordUpdatedAt time.Time
+					if err := timeoutRows.Scan(&id, &taskID, &recordUpdatedAt); err != nil {
 						continue
 					}
-					if time.Since(startedAt) > 15*time.Minute {
+					if isOTAUpgradeRecordStale(recordUpdatedAt, h.otaRecordTimeout, time.Now()) {
 						if _, err := h.db.Exec(bgCtx, `
 							UPDATE device_upgrades SET status = 'failed', error_message = '升级超时，设备可能已断连', updated_at = NOW()
 							WHERE id = $1`, id); err != nil {
@@ -1290,7 +1333,7 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 						logger.Info("OTA upgrade timed out",
 							zap.String("sn", req.DeviceSN),
 							zap.Int64("upgrade_id", id),
-							zap.Time("started_at", startedAt))
+							zap.Time("updated_at", recordUpdatedAt))
 						if taskID > 0 {
 							timedOutTaskIDs = append(timedOutTaskIDs, taskID)
 						}
