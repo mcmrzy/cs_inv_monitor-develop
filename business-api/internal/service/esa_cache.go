@@ -155,7 +155,8 @@ func (p *ESACachePurger) Refresh() error {
 	}
 
 	result, err := p.callESA("PurgeCaches", map[string]*string{
-		"Type":    tea.String("ignoreParams"),
+		// ESA 枚举全小写；驼峰 ignoreParams 会被拒（InvalidType，2026-09-18 实测）。
+		"Type":    tea.String("ignoreparams"),
 		"Content": tea.String(string(content)),
 		"SiteId":  tea.String(p.siteID),
 		"Force":   tea.String("true"),

@@ -134,7 +134,8 @@ def main() -> None:
     result = call_esa(
         "PurgeCaches",
         {
-            "Type": "ignoreParams",
+            # ESA 枚举全小写；驼峰 ignoreParams 会被拒（InvalidType，2026-09-18 实测）。
+            "Type": "ignoreparams",
             "Content": content,
             "SiteId": site_id,
             "Force": "true",
