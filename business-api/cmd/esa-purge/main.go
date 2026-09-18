@@ -3,7 +3,7 @@
 // 用法：
 //
 //	esa-purge -list-sites
-//	esa-purge -site-id <ID> [-host download.jiuxiaoyw.online]
+//	esa-purge -site-id <ID> [-host download.jiuxiaoyw.online] [-api-host https://api.jiuxiaoyw.online]
 //
 // 凭据从环境变量读取：ALIYUN_ACCESS_KEY_ID、ALIYUN_ACCESS_KEY_SECRET。
 package main
@@ -20,7 +20,8 @@ import (
 func main() {
 	listSites := flag.Bool("list-sites", false, "列出账号下 ESA 站点")
 	siteID := flag.String("site-id", os.Getenv("ESA_SITE_ID"), "ESA Site ID")
-	host := flag.String("host", "download.jiuxiaoyw.online", "刷新目标主机")
+	host := flag.String("host", "download.jiuxiaoyw.online", "刷新目标主机（下载域）")
+	apiHost := flag.String("api-host", "https://api.jiuxiaoyw.online", "版本元数据权威 API 域")
 	flag.Parse()
 
 	ak := os.Getenv("ALIYUN_ACCESS_KEY_ID")
@@ -31,7 +32,7 @@ func main() {
 	}
 
 	if *listSites {
-		p := service.NewESACachePurger(ak, sk, "placeholder", *host)
+		p := service.NewESACachePurger(ak, sk, "placeholder", *host, *apiHost)
 		result, err := p.ListSites()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "ListSites 失败: %v\n", err)
@@ -48,7 +49,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	purger := service.NewESACachePurger(ak, sk, *siteID, *host)
+	purger := service.NewESACachePurger(ak, sk, *siteID, *host, *apiHost)
 	fmt.Printf("刷新 %v\n", purger.RefreshPaths())
 	if err := purger.Refresh(); err != nil {
 		fmt.Fprintf(os.Stderr, "刷新失败: %v\n", err)

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """强制刷新阿里云 ESA 边缘缓存（纯标准库，不依赖 Go/SDK）。
 
-用法（在能访问 esa.aliyuncs.com 的服务器上）：
+用法（在能访问 esa.cn-hangzhou.aliyuncs.com 的服务器上）：
 
   export ALIYUN_ACCESS_KEY_ID='LTAI...'
   export ALIYUN_ACCESS_KEY_SECRET='...'   # 真实 Secret，不要写 <占位符>
@@ -27,7 +27,8 @@ import urllib.parse
 import urllib.request
 import uuid
 
-ENDPOINT = os.environ.get("ESA_ENDPOINT", "https://esa.aliyuncs.com")
+# 旧默认 esa.aliyuncs.com 已全球 NXDOMAIN（2026-09-18 实测）。
+ENDPOINT = os.environ.get("ESA_ENDPOINT", "https://esa.cn-hangzhou.aliyuncs.com")
 VERSION = "2024-09-10"
 DEFAULT_PATHS = (
     "/app-release-info",

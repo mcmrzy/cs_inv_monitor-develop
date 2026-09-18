@@ -190,7 +190,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	var esaPurger service.CachePurger = service.NoopCachePurger{}
 	if cfg.ESA.Enabled {
 		esaPurger = service.NewESACachePurgerFromConfig(
-			cfg.ESA.AccessKey, cfg.ESA.SecretKey, cfg.ESA.SiteID, cfg.Backends.AppDownloadURL,
+			cfg.ESA.AccessKey, cfg.ESA.SecretKey, cfg.ESA.SiteID, cfg.Backends.AppDownloadURL, cfg.ESA.RefreshAPIHost,
 		)
 		otaHandler.SetCachePurger(esaPurger)
 		if esaPurger.Enabled() {

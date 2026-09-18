@@ -5,37 +5,40 @@ import (
 )
 
 func TestESACachePurger_EnabledRequiresKeysAndSiteID(t *testing.T) {
-	if NewESACachePurger("", "", "1", "").Enabled() {
+	if NewESACachePurger("", "", "1", "", "").Enabled() {
 		t.Fatal("empty ak should disable")
 	}
-	if NewESACachePurger("ak", "", "1", "").Enabled() {
+	if NewESACachePurger("ak", "", "1", "", "").Enabled() {
 		t.Fatal("empty sk should disable")
 	}
-	if NewESACachePurger("ak", "sk", "", "").Enabled() {
+	if NewESACachePurger("ak", "sk", "", "", "").Enabled() {
 		t.Fatal("empty site id should disable")
 	}
-	if !NewESACachePurger("ak", "sk", "1", "").Enabled() {
+	if !NewESACachePurger("ak", "sk", "1", "", "").Enabled() {
 		t.Fatal("all set should enable")
 	}
 }
 
 func TestNewESACachePurgerFromConfig_NoopWhenIncomplete(t *testing.T) {
-	if _, ok := NewESACachePurgerFromConfig("ak", "sk", "", "").(NoopCachePurger); !ok {
+	if _, ok := NewESACachePurgerFromConfig("ak", "sk", "", "", "").(NoopCachePurger); !ok {
 		t.Fatal("missing site id should be Noop")
 	}
-	if _, ok := NewESACachePurgerFromConfig("ak", "sk", "9", "").(*ESACachePurger); !ok {
+	if _, ok := NewESACachePurgerFromConfig("ak", "sk", "9", "", "").(*ESACachePurger); !ok {
 		t.Fatal("full config should be ESA purger")
 	}
 }
 
 func TestESACachePurger_BuildRefreshPaths(t *testing.T) {
-	p := NewESACachePurger("ak", "sk", "999", "https://download.jiuxiaoyw.online")
+	p := NewESACachePurger("ak", "sk", "999", "https://download.jiuxiaoyw.online", "")
 	paths := p.RefreshPaths()
 	want := []string{
 		"https://download.jiuxiaoyw.online/app-release-info",
 		"https://download.jiuxiaoyw.online/app-release-info?platform=android",
 		"https://download.jiuxiaoyw.online/api/v1/ota/app/latest",
 		"https://download.jiuxiaoyw.online/api/v1/ota/app/latest?platform=android",
+		// api 域权威端点：下载页优先请求它，发布后必须一并刷新。
+		"https://api.jiuxiaoyw.online/api/v1/ota/app/latest",
+		"https://api.jiuxiaoyw.online/api/v1/ota/app/latest?platform=android",
 	}
 	if len(paths) != len(want) {
 		t.Fatalf("len=%d want %d: %v", len(paths), len(want), paths)
@@ -47,8 +50,29 @@ func TestESACachePurger_BuildRefreshPaths(t *testing.T) {
 	}
 }
 
+func TestESACachePurger_APIHostOverride(t *testing.T) {
+	p := NewESACachePurger("ak", "sk", "999", "download.jiuxiaoyw.online", "https://api.example.com")
+	paths := p.RefreshPaths()
+	want := []string{
+		"https://api.example.com/api/v1/ota/app/latest",
+		"https://api.example.com/api/v1/ota/app/latest?platform=android",
+	}
+	for _, w := range want {
+		found := false
+		for _, path := range paths {
+			if path == w {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("missing %s in %v", w, paths)
+		}
+	}
+}
+
 func TestESACachePurger_RefreshSkipWhenDisabled(t *testing.T) {
-	p := NewESACachePurger("", "", "", "")
+	p := NewESACachePurger("", "", "", "", "")
 	if err := p.Refresh(); err != nil {
 		t.Fatalf("disabled should no-op, got %v", err)
 	}

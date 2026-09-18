@@ -20,7 +20,7 @@ jobs:
         run: |
           set -e
           echo "Runner DNS check:"
-          getent hosts esa.aliyuncs.com || true
+          getent hosts esa.cn-hangzhou.aliyuncs.com || true
           python3 deploy/scripts/esa-refresh.py
 
       - name: Write credentials into production .env.prod and restart
