@@ -710,7 +710,7 @@ class _FirmwareCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(7),
                 ),
                 child: Text(
-                  l10n.str('firmware_latest_version'),
+                  l10n.str('firmware_upgrade_available'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(

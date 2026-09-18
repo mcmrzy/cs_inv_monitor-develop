@@ -50,12 +50,14 @@ func (r *OTARepository) UpdateDeviceFirmwareVersion(ctx context.Context, sn, tar
 }
 
 // GetDeviceInfoForOTA 读取设备模块版本信息
+// 在线口径与 device_handler 保持一致：status=1(在线)、status=2(故障) 均视为在线，
+// 仅 status=0 判离线；否则故障态设备会被固件页误判离线而隐藏升级入口。
 func (r *OTARepository) GetDeviceInfoForOTA(ctx context.Context, sn string) (*DeviceInfo, error) {
 	var d DeviceInfo
 	var online bool
 	err := r.db.QueryRow(ctx, `
 		SELECT sn, COALESCE(model,''), COALESCE(firmware_arm,''), COALESCE(firmware_esp,''),
-		       COALESCE(firmware_dsp,''), COALESCE(firmware_bms,''), COALESCE(main_version,''), COALESCE(status,0)=1
+		       COALESCE(firmware_dsp,''), COALESCE(firmware_bms,''), COALESCE(main_version,''), COALESCE(status,0) IN (1,2)
 		FROM devices WHERE sn = $1 AND deleted_at IS NULL
 	`, sn).Scan(&d.SN, &d.Model, &d.FirmwareArm, &d.FirmwareEsp, &d.FirmwareDSP, &d.FirmwareBMS, &d.MainVersion, &online)
 	if err != nil {

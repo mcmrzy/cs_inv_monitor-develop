@@ -1962,6 +1962,7 @@ const Map<String, String> en = {
   'firmware_version_not_reported': 'Version not reported',
   'firmware_current_version': 'Current version',
   'firmware_latest_version': 'Latest version',
+  'firmware_upgrade_available': 'Upgrade',
   'firmware_no_update_available': 'No update available',
   'firmware_upgrade_this_module': 'Upgrade this module',
   'firmware_upgrade_all_modules': 'Upgrade all',

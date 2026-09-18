@@ -1901,6 +1901,7 @@ const Map<String, String> zh = {
   'firmware_version_not_reported': '版本未上报',
   'firmware_current_version': '当前版本',
   'firmware_latest_version': '最新版本',
+  'firmware_upgrade_available': '可升级',
   'firmware_no_update_available': '暂无可用更新',
   'firmware_upgrade_this_module': '升级此模块',
   'firmware_upgrade_all_modules': '全部升级',
