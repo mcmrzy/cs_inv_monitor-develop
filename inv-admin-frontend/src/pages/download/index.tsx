@@ -124,7 +124,14 @@ const DownloadPage: React.FC = () => {
       ]
       for (const endpoint of endpoints) {
         try {
-          const res = await fetch(endpoint)
+          // api 域偶发黑洞式挂起（TCP 通但响应不来）会让 await 卡到浏览器级超时，
+          // 页面表现为一直转圈；5 秒拿不到就放弃，回退同源别名。
+          // AbortSignal.timeout 较新浏览器才有，老 WebView 退化为无超时（原行为）。
+          const signal =
+            typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
+              ? AbortSignal.timeout(5000)
+              : undefined
+          const res = await fetch(endpoint, { signal })
           if (!res.ok) continue
           const payload = (await res.json()) as { code?: number; data?: LatestRelease }
           if (payload?.data?.available !== undefined) {
