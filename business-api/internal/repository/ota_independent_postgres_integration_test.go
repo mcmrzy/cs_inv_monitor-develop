@@ -261,3 +261,34 @@ func seedIndependentTestDevice(t *testing.T, pool *pgxpool.Pool, sn, deviceModel
 	`, sn, deviceModel)
 	return err
 }
+
+// 在线口径回归：status=1(在线)、status=2(故障) 都表示设备在线，仅 0 离线。
+// 此前只认 status=1，故障态设备在固件页被误判离线：eligible=false 隐藏升级按钮，
+// 触发升级也报 device offline。与 device_handler 详情页口径必须一致。
+func TestGetDeviceInfoForOTATreatsFaultStatusAsOnline(t *testing.T) {
+	pool, cleanup := setupCommandTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	repo := NewOTARepository(pool)
+
+	sn := "INV-OTA-ONLINE-SEM"
+	require.NoError(t, seedIndependentTestDevice(t, pool, sn, "CS-INV-LF"))
+	t.Cleanup(func() {
+		_, _ = pool.Exec(context.Background(), `DELETE FROM devices WHERE sn = $1`, sn)
+	})
+
+	// seed 默认 status=0 → 离线
+	info, err := repo.GetDeviceInfoForOTA(ctx, sn)
+	require.NoError(t, err)
+	assert.False(t, info.IsOnline, "status=0 应判离线")
+
+	for _, status := range []int{1, 2} {
+		_, err := pool.Exec(ctx,
+			`UPDATE devices SET status = $1, firmware_arm = '1.5.10' WHERE sn = $2`, status, sn)
+		require.NoError(t, err)
+		info, err := repo.GetDeviceInfoForOTA(ctx, sn)
+		require.NoError(t, err)
+		assert.True(t, info.IsOnline, "status=%d 应视为在线（2=故障但仍在线）", status)
+		assert.Equal(t, "1.5.10", info.FirmwareArm)
+	}
+}

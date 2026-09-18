@@ -185,6 +185,10 @@ void main() {
     ]) {
       expect(find.text(text), findsWidgets);
     }
+    // 可升级徽标：仅 arm 有新版本 → 显示「可升级」而非「最新版本」，避免误读为已是最新
+    expect(find.text('可升级'), findsOneWidget);
+    // arm 可远程升级（updateAvailable + 在线）→ 显示单模块升级按钮
+    expect(find.text('升级此模块'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('改善弱网重连稳定性'),
       300,
