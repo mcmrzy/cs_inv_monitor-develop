@@ -35,6 +35,8 @@ import 'package:inv_app/features/device/presentation/pages/device_qr_bind_page.d
 
 import 'package:inv_app/features/device_protocol/presentation/pages/device_protocol_page.dart';
 
+import 'package:inv_app/features/device/presentation/pages/device_debug_page.dart';
+
 import 'package:inv_app/features/device/presentation/pages/wifi_config_page.dart';
 
 import 'package:inv_app/features/device/presentation/pages/add_device_page.dart';
@@ -304,6 +306,15 @@ class AppRouter {
           final sn = state.pathParameters['sn']!;
 
           return _slidePage(state, DeviceProtocolPage(sn: sn));
+        },
+      ),
+      GoRoute(
+        path: '/device/:sn/debug',
+        name: 'deviceDebug',
+        pageBuilder: (context, state) {
+          final sn = state.pathParameters['sn']!;
+
+          return _slidePage(state, DeviceDebugPage(sn: sn));
         },
       ),
       GoRoute(
