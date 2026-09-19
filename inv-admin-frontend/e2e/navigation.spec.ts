@@ -170,12 +170,12 @@ test.describe('重定向', () => {
 })
 
 test.describe('全屏页面', () => {
-  test('设备详情全屏页：返回按钮 + 11 个 Tab + 无侧边栏', async ({ page }) => {
+  test('设备详情全屏页：返回按钮 + 12 个 Tab + 无侧边栏', async ({ page }) => {
     await gotoAuthed(page, `/devices/${acc.devices[0]}/detail`)
     await expect(page.getByRole('button', { name: /返回|Back/i })).toBeVisible({ timeout: 15_000 })
     await expect(page.getByText('设备详情', { exact: true })).toBeVisible()
     await expect(page.getByText(new RegExp(`设备序列号:\\s*${acc.devices[0]}`))).toBeVisible()
-    await expect(page.locator('.ant-tabs-tab')).toHaveCount(11)
+    await expect(page.locator('.ant-tabs-tab')).toHaveCount(12)
     await expect(page.locator('.ant-layout-sider')).toHaveCount(0)
     await expect(page.locator('.ant-menu-root')).toHaveCount(0)
   })
