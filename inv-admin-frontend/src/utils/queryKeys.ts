@@ -22,6 +22,8 @@ export const queryKeys = {
     batteryConfig: (sn: string) => ['devices', 'battery-config', sn] as const,
     controlOverrides: (sn: string) => ['devices', 'control-overrides', sn] as const,
     commands: (sn: string, params?: Record<string, any>) => ['devices', 'commands', sn, params] as const,
+    debugSession: (sn: string) => ['devices', 'debug-session', sn] as const,
+    debugSamples: (sn: string, sessionId?: number) => ['devices', 'debug-samples', sn, sessionId] as const,
   },
   alerts: {
     all: ['alerts'] as const,
