@@ -330,6 +330,9 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     }
   }
 
+  bool get _isBleChannel =>
+      widget.channel == LocalCommunicationChannel.ble;
+
   /// 自动扫描热点并连接，整个流程只触发两次 setState（开始/结束）
   Future<void> _autoScanAndConnect() async {
     // 已在处理中或已连接成功，不重复触发
@@ -345,6 +348,17 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       _errorMessage = null;
     });
     try {
+      // 从扫描页带入时热点可能已连上：先复用，避免重复扫描/切换网络
+      if (await _isDeviceHotspotConnected()) {
+        if (!mounted) return;
+        setState(() {
+          _scanningWifi = false;
+          _autoConnecting = false;
+        });
+        _checkConnectionAndProceed();
+        return;
+      }
+
       final status = await Permission.location.request();
       if (!mounted) return;
       if (!status.isGranted && !status.isLimited) {
@@ -466,6 +480,17 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     });
 
     try {
+      // 从扫描页带入的已鉴权会话：直接复用，不再二次扫描
+      if (await _communicationService.isConnectedToDeviceAP()) {
+        if (!mounted) return;
+        setState(() {
+          _scanningWifi = false;
+          _autoConnecting = false;
+        });
+        _checkConnectionAndProceed();
+        return;
+      }
+
       // 检查蓝牙权限
       final bluetoothStatus = await Permission.bluetooth.request();
       if (!mounted) return;
@@ -478,7 +503,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         return;
       }
 
-      // 使用通信服务连接设备
+      // 使用通信服务连接设备（内部优先复用 manager 中已就绪会话）
       final connected = await _communicationService.connectToDevice(
         deviceSN: widget.deviceSN,
         deviceIP: widget.deviceIP,
@@ -610,7 +635,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       _goToStep(LocalOTAStep.pushFirmware);
       _startPushFirmware();
     } else {
-      // 连接失败，显示对话框提示用户关闭移动数据
+      // 连接失败：按通道给出对应引导（BLE / WiFi AP 文案不能混用）
       setState(() {
         _isProcessing = false;
       });
@@ -624,29 +649,38 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(l10n.connectedHotspotCannotAccess),
+                Text(
+                  _isBleChannel
+                      ? l10n.str('ble_connection_failed', {})
+                      : l10n.connectedHotspotCannotAccess,
+                ),
                 const SizedBox(height: 12),
                 Text(
                   l10n.tryFollowing,
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
-                Text(l10n.disableMobileData),
-                Text(l10n.ensureWifiConnected),
-                Text(l10n.waitAndRetry),
-                const SizedBox(height: 12),
-                Text(
-                  '${l10n.currentHotspot}: $currentSsid',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                if (_isBleChannel) ...[
+                  Text(l10n.str('ble_bluetooth_off')),
+                  Text(l10n.str('ota_mode_ble_hint')),
+                ] else ...[
+                  Text(l10n.disableMobileData),
+                  Text(l10n.ensureWifiConnected),
+                  Text(l10n.waitAndRetry),
+                  const SizedBox(height: 12),
+                  Text(
+                    '${l10n.currentHotspot}: $currentSsid',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
-                ),
-                Text(
-                  '${l10n.deviceIpLabel}: ${widget.deviceIP}',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  Text(
+                    '${l10n.deviceIpLabel}: ${widget.deviceIP}',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
             actions: [
@@ -1495,14 +1529,14 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                     _isProcessing
                         ? l10n.checkConnection
                         : _selectedAp != null
-                            ? (widget.channel == LocalCommunicationChannel.ble
+                            ? (_isBleChannel
                                 ? l10n.str('connecting_ble_device',
-                                    {'sn': widget.deviceSN})
+                                    {'sn': widget.deviceSN},)
                                 : l10n.str(
                                     'connecting_to',
                                     {'ssid': _selectedAp?.ssid ?? ''},
                                   ))
-                            : (widget.channel == LocalCommunicationChannel.ble
+                            : (_isBleChannel
                                 ? l10n.str('scanning_ble_device', {})
                                 : l10n.scanningDeviceHotspot),
                     style: TextStyle(
@@ -1512,7 +1546,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                   ),
                 ] else if (_selectedAp != null && _errorMessage == null) ...[
                   Icon(
-                    widget.channel == LocalCommunicationChannel.ble
+                    _isBleChannel
                         ? Icons.bluetooth_rounded
                         : Icons.wifi_rounded,
                     size: 48.sp,
@@ -1529,7 +1563,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                   ),
                   SizedBox(height: 4.h),
                   Text(
-                    widget.channel == LocalCommunicationChannel.ble
+                    _isBleChannel
                         ? widget.deviceSN
                         : (_selectedAp!.ssid ?? ''),
                     style: TextStyle(
@@ -1539,7 +1573,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                   ),
                 ] else ...[
                   Icon(
-                    widget.channel == LocalCommunicationChannel.ble
+                    _isBleChannel
                         ? Icons.bluetooth_searching_rounded
                         : Icons.wifi_find_rounded,
                     size: 48.sp,
@@ -1547,7 +1581,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                   ),
                   SizedBox(height: 12.h),
                   Text(
-                    l10n.connectDeviceAp,
+                    _isBleChannel ? l10n.connectDevice : l10n.connectDeviceAp,
                     style: TextStyle(
                       fontSize: 16.sp,
                       fontWeight: FontWeight.w600,
@@ -1556,22 +1590,26 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                   ),
                   SizedBox(height: 8.h),
                   Text(
-                    l10n.autoScanHint,
+                    _isBleChannel
+                        ? l10n.str('ota_mode_ble_hint')
+                        : l10n.autoScanHint,
                     style: TextStyle(
                       fontSize: 13.sp,
                       color: AppColor.textSecondary(context),
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  SizedBox(height: 4.h),
-                  Text(
-                    '${l10n.deviceIpLabel}: ${widget.deviceIP}',
-                    style: TextStyle(
-                      fontSize: 12.sp,
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w600,
+                  if (!_isBleChannel) ...[
+                    SizedBox(height: 4.h),
+                    Text(
+                      '${l10n.deviceIpLabel}: ${widget.deviceIP}',
+                      style: TextStyle(
+                        fontSize: 12.sp,
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ],
             ),
@@ -2065,7 +2103,8 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
               borderRadius: BorderRadius.circular(6.r),
             ),
             child: Text(
-              widget.deviceIP,
+              // BLE 通道无设备 IP，展示通道标识，避免与 WiFi AP 混淆
+              _isBleChannel ? 'BLE' : widget.deviceIP,
               style: TextStyle(
                 fontSize: 11.sp,
                 fontWeight: FontWeight.w600,

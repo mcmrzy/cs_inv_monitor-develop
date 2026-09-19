@@ -143,36 +143,6 @@ class AppUpdateService {
     }
   }
 
-  /// 检测URL是否为外部网页（非直接下载链接）
-  /// 通过 HEAD 请求检查 Content-Type
-  Future<bool> _isWebPageUrl(String url) async {
-    try {
-      final checkDio = Dio();
-      final response = await checkDio.head(
-        url,
-        options: Options(
-          followRedirects: true,
-          validateStatus: (status) => status != null && status < 400,
-        ),
-      );
-      final contentType = response.headers.value('content-type') ?? '';
-      return contentType.contains('text/html');
-    } catch (_) {
-      // HEAD 请求失败时，无法判断，返回 false 继续尝试下载
-      return false;
-    }
-  }
-
-  /// 用浏览器打开URL
-  Future<void> openUrlInBrowser(String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      throw Exception('无法打开链接: $url');
-    }
-  }
-
   /// 下载APK并安装（Android）
   /// [expectedSize] 服务端下发的安装包字节数；响应缺少 Content-Length（如 CDN
   ///   分块传输）时用它计算进度，仍拿不到则回调 progress < 0（进度未知）。
@@ -180,6 +150,7 @@ class AppUpdateService {
   ///   第二参数为已接收字节数。
   /// [expectedSha256]/[expectedMd5] 服务端下发的安装包哈希，
   ///   SHA-256 优先；下载完成后强制比对，不匹配则删除文件并拒绝安装。
+  /// 全程应用内下载，不跳转浏览器。
   /// 如果返回的是网页而非安装包，会抛出 [WebPageUrlException]；
   /// 下载URL不满足安全约束时抛出 [InsecureDownloadUrlException]；
   /// 哈希校验失败时抛出 [ChecksumMismatchException]。
@@ -194,11 +165,6 @@ class AppUpdateService {
   }) async {
     // 安全约束：仅允许 https（调试模式豁免本机/局域网地址），且域名需受信
     _assertSecureDownloadUrl(url);
-
-    // 先检测是否为网页链接
-    if (await _isWebPageUrl(url)) {
-      throw WebPageUrlException(url);
-    }
 
     final dir = await getTemporaryDirectory();
     final filePath = '${dir.path}/$fileName';

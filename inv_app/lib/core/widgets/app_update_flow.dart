@@ -103,7 +103,7 @@ class AppUpdateFlow {
                   ),
                   SizedBox(height: 4.h),
                   Text(
-                    l10n.str('browser_download_desc', {'version': info.latestVersionName}),
+                    l10n.str('update_available_desc'),
                     style: TextStyle(fontSize: 13.sp, color: AppColor.textHint(context)),
                   ),
                   if (info.changelog.isNotEmpty) ...[
@@ -250,22 +250,17 @@ class AppUpdateFlow {
         Navigator.pop(dialogContext);
       }
     } catch (e) {
-      if (dialogContext.mounted) {
-        if (e is WebPageUrlException) {
-          // 下载链接是网页而非直接APK：关闭弹窗，用浏览器打开
-          Navigator.pop(dialogContext);
-          final uri = Uri.tryParse(info.downloadUrl);
-          if (uri != null && await canLaunchUrl(uri)) {
-            await launchUrl(uri, mode: LaunchMode.externalApplication);
-          }
-        } else if (e is! DioException) {
-          final l10n = AppLocalizations.of(dialogContext)!;
-          AppToast.show(
-            dialogContext,
-            l10n.str('download_failed', {'error': e.toString()}),
-            type: ToastType.error,
-          );
-        }
+      if (dialogContext.mounted && e is! DioException) {
+        // 全程应用内下载，不再跳转浏览器；失败时提示错误并保留弹窗可重试
+        final l10n = AppLocalizations.of(dialogContext)!;
+        final message = e is WebPageUrlException
+            ? l10n.str('download_not_apk')
+            : l10n.str('download_failed', {'error': e.toString()});
+        AppToast.show(
+          dialogContext,
+          message,
+          type: ToastType.error,
+        );
       }
     } finally {
       downloading.value = false;

@@ -225,7 +225,7 @@ services:
     container_name: business-api
     expose:
       - "8080"
-    # ESA OpenAPI（esa.aliyuncs.com）需公网 DNS；默认 Docker DNS 可能解析失败
+    # ESA OpenAPI（esa.cn-hangzhou.aliyuncs.com；旧 esa.aliyuncs.com 已全球 NXDOMAIN）需公网 DNS
     dns:
       - 223.5.5.5
       - 8.8.8.8

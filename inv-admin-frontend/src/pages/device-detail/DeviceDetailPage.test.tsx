@@ -35,11 +35,11 @@ describe('DeviceDetailPage', () => {
     })
   })
 
-  it('renders all 11 device tabs', async () => {
+  it('renders all 12 device tabs', async () => {
     renderDetail('INV20250001')
 
     await waitFor(() => {
-      expect(document.querySelectorAll('.ant-tabs-tab').length).toBe(11)
+      expect(document.querySelectorAll('.ant-tabs-tab').length).toBe(12)
     })
     // 默认激活能源中心
     expect(document.querySelector('.ant-tabs-tab-active')?.textContent).toContain('能源中心')

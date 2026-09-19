@@ -163,13 +163,14 @@ type OTAConfig struct {
 // ESAConfig 阿里云 ESA 边缘缓存（自动规则对齐 + 发布后刷新）
 // AccessKey/SecretKey/SiteID 三项齐全才启用；任一为空则跳过（Noop）。
 type ESAConfig struct {
-	Enabled     bool   `mapstructure:"enabled"`
-	AccessKey   string `mapstructure:"access_key"`
-	SecretKey   string `mapstructure:"secret_key"`
-	SiteID      string `mapstructure:"site_id"`
-	RefreshHost string `mapstructure:"refresh_host"` // 默认 download.jiuxiaoyw.online
-	Endpoint    string `mapstructure:"endpoint"`     // 默认 esa.aliyuncs.com
-	AutoRules   bool   `mapstructure:"auto_rules"`   // 启动时对齐缓存规则（默认 true）
+	Enabled        bool   `mapstructure:"enabled"`
+	AccessKey      string `mapstructure:"access_key"`
+	SecretKey      string `mapstructure:"secret_key"`
+	SiteID         string `mapstructure:"site_id"`
+	RefreshHost    string `mapstructure:"refresh_host"`     // 默认 download.jiuxiaoyw.online
+	RefreshAPIHost string `mapstructure:"refresh_api_host"` // 版本元数据权威 API 域，默认 https://api.jiuxiaoyw.online
+	Endpoint       string `mapstructure:"endpoint"`         // 默认 esa.cn-hangzhou.aliyuncs.com（旧 esa.aliyuncs.com 已全球 NXDOMAIN）
+	AutoRules      bool   `mapstructure:"auto_rules"`       // 启动时对齐缓存规则（默认 true）
 }
 
 // EmailQueueConfig 邮件队列配置
@@ -276,7 +277,7 @@ func Load(configPath string) (*Config, error) {
 	viper.SetDefault("esa.secret_key", "")
 	viper.SetDefault("esa.site_id", "")
 	viper.SetDefault("esa.refresh_host", "")
-	viper.SetDefault("esa.endpoint", "esa.aliyuncs.com")
+	viper.SetDefault("esa.endpoint", "esa.cn-hangzhou.aliyuncs.com")
 	viper.SetDefault("esa.auto_rules", true)
 
 	// Email Queue defaults
@@ -360,6 +361,7 @@ func Load(configPath string) (*Config, error) {
 	viper.BindEnv("esa.secret_key", "ALIYUN_ACCESS_KEY_SECRET")
 	viper.BindEnv("esa.site_id", "ESA_SITE_ID")
 	viper.BindEnv("esa.refresh_host", "ESA_REFRESH_HOST")
+	viper.BindEnv("esa.refresh_api_host", "ESA_REFRESH_API_HOST")
 	viper.BindEnv("esa.endpoint", "ESA_ENDPOINT")
 	viper.BindEnv("esa.auto_rules", "ESA_AUTO_CACHE_RULES")
 

@@ -667,6 +667,7 @@ V2.1 在 V2.0 基础上的三个核心变化：
 | command_code | 触发行为 |
 |--------------|---------|
 | `set_utc_time` | UTC 时间同步（写 32 位，差值>4s 校时）；**固件由 SNTP 模块自动执行（每日一次），无需云端下发** |
+| `set_debug_telemetry` | 单设备调试模式：临时切换心跳采样周期（args=`[enabled, interval_seconds, duration_seconds]`，enabled 0/1；interval 建议 30；duration 缺省 3600s、上限 86400s）。OK 回执附 `effective_interval_seconds` 与设备侧 `expires_at`（unix 秒）。到期/关闭/重启自动恢复默认周期，不持久化；命令不进入离线队列 |
 
 ### 11.4 命令响应（cs_inv/{sn}/cmd/response）与命令闭环
 

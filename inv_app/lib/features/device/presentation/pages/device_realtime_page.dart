@@ -466,6 +466,12 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
               tooltip: AppLocalizations.of(context)!.str('storage_title'),
               onPressed: () => context.push('/device/${widget.sn}/storage'),
             ),
+            // 云端调试入口（区别于局域网直连的本地模式）
+            IconButton(
+              icon: const Icon(Icons.bug_report_outlined),
+              tooltip: AppLocalizations.of(context)!.str('device_debug'),
+              onPressed: () => context.push('/device/${widget.sn}/debug'),
+            ),
             IconButton(
               icon: const Icon(Icons.refresh_rounded),
               onPressed: () {

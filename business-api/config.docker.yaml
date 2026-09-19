@@ -103,7 +103,7 @@ esa:
   secret_key: ""   # env: ALIYUN_ACCESS_KEY_SECRET
   site_id: ""      # env: ESA_SITE_ID
   refresh_host: "" # 默认 download.jiuxiaoyw.online
-  endpoint: esa.aliyuncs.com
+  endpoint: esa.cn-hangzhou.aliyuncs.com # 旧 esa.aliyuncs.com 已全球 NXDOMAIN
 
 # Email Queue 配置 (生产环境推荐启用)
 email_queue:

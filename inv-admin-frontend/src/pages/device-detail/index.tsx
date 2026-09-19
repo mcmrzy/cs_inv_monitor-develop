@@ -19,6 +19,7 @@ import DiagnosticsTab from './DiagnosticsTab'
 import StrategyTab from './StrategyTab'
 import InstallTab from './InstallTab'
 import ParallelTab from './ParallelTab'
+import DebugTab from './DebugTab'
 import InfoTab from './InfoTab'
 
 const { Text } = Typography
@@ -126,6 +127,7 @@ const DeviceDetailPage: React.FC = () => {
           { key: 'strategy', label: t('deviceDetail.tab.strategy'), children: <StrategyTab sn={sn} /> },
           { key: 'install', label: t('deviceDetail.tab.install'), children: <InstallTab sn={sn} /> },
           { key: 'parallel', label: t('deviceDetail.tab.parallel'), children: <ParallelTab sn={sn} /> },
+          { key: 'debug', label: t('deviceDetail.tab.debug'), children: <DebugTab sn={sn} /> },
           { key: 'info', label: t('deviceDetail.tab.info'), children: <InfoTab sn={sn} /> },
         ]}
       />

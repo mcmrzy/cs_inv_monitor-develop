@@ -151,6 +151,9 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	modelService := service.NewModelService(modelRepo)
 	batteryService := service.NewBatteryService(batteryRepo)
 	energyScheduleService := service.NewEnergyScheduleService(energyScheduleRepo)
+	// 单设备调试模式：30 秒采样周期切换 + 会话状态机 + 曲线样本查询
+	debugService := service.NewDeviceDebugService(deviceRepo, permChecker, cfg.Backends.DeviceServer, cfg.Backends.InternalKey)
+	debugHandler := handler.NewDeviceDebugHandler(debugService)
 
 	// Initialize RBAC cache if enabled
 	var rbacCache *service.RBACCache
@@ -190,7 +193,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	var esaPurger service.CachePurger = service.NoopCachePurger{}
 	if cfg.ESA.Enabled {
 		esaPurger = service.NewESACachePurgerFromConfig(
-			cfg.ESA.AccessKey, cfg.ESA.SecretKey, cfg.ESA.SiteID, cfg.Backends.AppDownloadURL,
+			cfg.ESA.AccessKey, cfg.ESA.SecretKey, cfg.ESA.SiteID, cfg.Backends.AppDownloadURL, cfg.ESA.RefreshAPIHost,
 		)
 		otaHandler.SetCachePurger(esaPurger)
 		if esaPurger.Enabled() {
@@ -268,6 +271,8 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	// 每日统计报告：每 60 秒轮询，向到达推送时间（用户时区）的用户推送当日发电统计摘要
 	dailyReportSvc := service.NewDailyReportService(db, notifyPrefsRepo, jpushService, emailService)
 	go dailyReportSvc.Start(heartbeatDone)
+	// 调试会话收口：样本新鲜度刷新、starting 超时、active 中断、到期补发停止命令
+	go debugService.RunCoordinator(context.Background(), heartbeatDone)
 
 	router := setupRouter(cfg, &RouterDeps{
 		DB:                            db,
@@ -278,6 +283,8 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 		CaptchaHandler:                captchaHandler,
 		StationHandler:                stationHandler,
 		DeviceHandler:                 deviceHandler,
+		DebugHandler:                  debugHandler,
+		DebugService:                  debugService,
 		DeviceClaimTransferHandler:    deviceClaimTransferHandler,
 		AlarmHandler:                  alarmHandler,
 		NotificationHandler:           notificationHandler,
@@ -808,6 +815,8 @@ type RouterDeps struct {
 	CaptchaHandler                *handler.CaptchaHandler
 	StationHandler                *handler.StationHandler
 	DeviceHandler                 *handler.DeviceHandler
+	DebugHandler                  *handler.DeviceDebugHandler
+	DebugService                  *service.DeviceDebugService
 	DeviceClaimTransferHandler    *handler.DeviceClaimTransferHandler
 	AlarmHandler                  *handler.AlarmHandler
 	NotificationHandler           *handler.NotificationHandler
@@ -888,6 +897,10 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 	// They must never be throttled, even under burst load.
 	internalHandler := handler.NewInternalHandler(deps.DB, deps.RDB, deps.OTAService, deps.JPushService, nil, nil, deps.NotifyPrefsRepo, deps.EmailService)
 	internalHandler.SetOTARecordTimeout(time.Duration(cfg.OTA.RecordTimeoutMinutes) * time.Minute)
+	if deps.DebugService != nil {
+		// 命令回执推进调试会话状态机（starting→active / stopping→stopped）
+		internalHandler.SetDebugService(deps.DebugService)
+	}
 
 	internal := router.Group("/api/v1/internal").Use(middleware.InternalAuth(cfg.Backends.InternalKey))
 	{
@@ -1079,6 +1092,12 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 				devBySN.POST("/:sn/control-overrides", deps.EnergyScheduleHandler.CreateOverride)
 				devBySN.GET("/:sn/control-overrides", deps.EnergyScheduleHandler.ListOverrides)
 				devBySN.DELETE("/:sn/control-overrides/:id", deps.EnergyScheduleHandler.CancelOverride)
+				// ── 单设备调试模式 ──
+				// 查看沿用设备数据归属；开关沿用 devices:control（与 /control 一致）
+				devBySN.GET("/:sn/debug-session", deps.DebugHandler.GetSession)
+				devBySN.POST("/:sn/debug-session", middleware.RequirePermission(deps.PermChecker, "devices", "control"), deps.DebugHandler.StartSession)
+				devBySN.DELETE("/:sn/debug-session/:id", middleware.RequirePermission(deps.PermChecker, "devices", "control"), deps.DebugHandler.StopSession)
+				devBySN.GET("/:sn/debug-samples", deps.DebugHandler.GetSamples)
 			}
 
 			auth.GET("/alarm-events/:id", internalHandler.GetAlarmEventDetail)

@@ -1,15 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { QRCode } from 'antd'
-import {
-  AndroidOutlined,
-  CloudSyncOutlined,
-  DownloadOutlined,
-  LineChartOutlined,
-  NotificationOutlined,
-  SafetyCertificateOutlined,
-  ThunderboltOutlined,
-} from '@ant-design/icons'
-import useTranslation from '@/hooks/useTranslation'
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react'
+import useDownloadT from './useDownloadT'
 
 /**
  * App 安装包下载页（download.jiuxiaoyw.online）
@@ -17,6 +7,9 @@ import useTranslation from '@/hooks/useTranslation'
  * 版本信息来自公开接口 /ota/app/latest，不需要登录：上传新安装包后
  * 页面自动展示最新版本、体积与摘要，无需手工维护页面内容。
  * 手机端第一屏即下载按钮；桌面端右侧展示机型预览与扫码下载卡片。
+ *
+ * 独立入口 download.html 只打包本页：不引入 antd / 全站 locales，
+ * 避免手机浏览器为打开下载页拉取整个管理后台 SPA。
  */
 
 interface LatestRelease {
@@ -89,12 +82,19 @@ function changelogLines(changelog?: string): string[] {
     .slice(0, 8)
 }
 
+/** 桌面端才加载 antd QRCode，手机端不下载该 chunk。 */
+const DesktopQRCode = lazy(async () => {
+  const { QRCode } = await import('antd')
+  return { default: QRCode }
+})
+
 const DownloadPage: React.FC = () => {
-  const { t, lang } = useTranslation()
+  const { t, lang } = useDownloadT()
   const [loading, setLoading] = useState(true)
   const [release, setRelease] = useState<LatestRelease | null>(null)
   const [copied, setCopied] = useState(false)
   const [copiedField, setCopiedField] = useState<'sha256' | 'url' | null>(null)
+  const [showDesktopQR, setShowDesktopQR] = useState(false)
 
   // 该页面托管在下载子域，浏览器标签页需要显示下载相关标题而不是后台标题。
   useEffect(() => {
@@ -104,6 +104,14 @@ const DownloadPage: React.FC = () => {
       document.title = previous
     }
   }, [t])
+
+  useEffect(() => {
+    // 手机端 CSS 已隐藏扫码区，避免为看不见的二维码下载 antd。
+    const update = () => setShowDesktopQR(window.innerWidth >= 980)
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [])
 
   useEffect(() => {
     let alive = true
@@ -116,7 +124,14 @@ const DownloadPage: React.FC = () => {
       ]
       for (const endpoint of endpoints) {
         try {
-          const res = await fetch(endpoint)
+          // api 域偶发黑洞式挂起（TCP 通但响应不来）会让 await 卡到浏览器级超时，
+          // 页面表现为一直转圈；5 秒拿不到就放弃，回退同源别名。
+          // AbortSignal.timeout 较新浏览器才有，老 WebView 退化为无超时（原行为）。
+          const signal =
+            typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
+              ? AbortSignal.timeout(5000)
+              : undefined
+          const res = await fetch(endpoint, { signal })
           if (!res.ok) continue
           const payload = (await res.json()) as { code?: number; data?: LatestRelease }
           if (payload?.data?.available !== undefined) {
@@ -172,10 +187,10 @@ const DownloadPage: React.FC = () => {
   }, [release])
 
   const features = [
-    { icon: <LineChartOutlined />, title: t('dl.featureMonitor'), desc: t('dl.featureMonitorDesc'), tone: 'blue' },
-    { icon: <ThunderboltOutlined />, title: t('dl.featureAnalytics'), desc: t('dl.featureAnalyticsDesc'), tone: 'cyan' },
-    { icon: <NotificationOutlined />, title: t('dl.featureAlerts'), desc: t('dl.featureAlertsDesc'), tone: 'rose' },
-    { icon: <CloudSyncOutlined />, title: t('dl.featureOta'), desc: t('dl.featureOtaDesc'), tone: 'green' },
+    { icon: 'chart', title: t('dl.featureMonitor'), desc: t('dl.featureMonitorDesc'), tone: 'blue' },
+    { icon: 'bolt', title: t('dl.featureAnalytics'), desc: t('dl.featureAnalyticsDesc'), tone: 'cyan' },
+    { icon: 'bell', title: t('dl.featureAlerts'), desc: t('dl.featureAlertsDesc'), tone: 'rose' },
+    { icon: 'cloud', title: t('dl.featureOta'), desc: t('dl.featureOtaDesc'), tone: 'green' },
   ]
 
   const installSteps = [
@@ -214,7 +229,7 @@ const DownloadPage: React.FC = () => {
               onClick={handleDownload}
               disabled={!hasRelease || loading}
             >
-              <DownloadOutlined />
+              <IconDownload />
               {t('dl.downloadBtn')}
             </button>
 
@@ -225,7 +240,7 @@ const DownloadPage: React.FC = () => {
 
           <div className="dlp-meta">
             <span className="dlp-chip">
-              <AndroidOutlined /> {t('dl.androidOnly')}
+              <IconAndroid /> {t('dl.androidOnly')}
             </span>
             {minAndroid ? <span className="dlp-chip">Android {minAndroid}+</span> : null}
             {sizeText ? <span className="dlp-chip">{sizeText}</span> : null}
@@ -237,7 +252,7 @@ const DownloadPage: React.FC = () => {
           </div>
 
           <p className="dlp-security">
-            <SafetyCertificateOutlined /> {t('dl.securityTip')}
+            <IconShield /> {t('dl.securityTip')}
           </p>
 
           {release && !release.available && !loading ? (
@@ -311,9 +326,11 @@ const DownloadPage: React.FC = () => {
             </div>
           </div>
 
-          {hasRelease && release?.download_url ? (
+          {hasRelease && release?.download_url && showDesktopQR ? (
             <div className="dlp-qr-card">
-              <QRCode value={release.download_url} size={116} />
+              <Suspense fallback={<div className="dlp-qr-fallback" />}>
+                <DesktopQRCode value={release.download_url} size={116} />
+              </Suspense>
               <span>{t('dl.qrCaption')}</span>
             </div>
           ) : null}
@@ -393,7 +410,9 @@ const DownloadPage: React.FC = () => {
           <div className="dlp-features">
             {features.map((feature) => (
               <article className={`dlp-feature dlp-feature--${feature.tone}`} key={feature.title}>
-                <span className="dlp-feature-icon">{feature.icon}</span>
+                <span className="dlp-feature-icon">
+                  <FeatureIcon name={feature.icon} />
+                </span>
                 <h3>{feature.title}</h3>
                 <p>{feature.desc}</p>
               </article>
@@ -447,6 +466,62 @@ const DownloadPage: React.FC = () => {
         </div>
       </footer>
     </div>
+  )
+}
+
+function IconDownload() {
+  return (
+    <svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function IconAndroid() {
+  return (
+    <svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M7 8l-1.5-2M17 8l1.5-2M5 13h14M8 13v5a2 2 0 002 2h4a2 2 0 002-2v-5M9 8a3 3 0 016 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <circle cx="9.5" cy="10.5" r="0.8" fill="currentColor" />
+      <circle cx="14.5" cy="10.5" r="0.8" fill="currentColor" />
+    </svg>
+  )
+}
+
+function IconShield() {
+  return (
+    <svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6l7-3z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function FeatureIcon({ name }: { name: string }) {
+  if (name === 'chart') {
+    return (
+      <svg width="1.2em" height="1.2em" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M4 19V5M4 19h16M8 16V10M12 16V7M16 16v-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    )
+  }
+  if (name === 'bolt') {
+    return (
+      <svg width="1.2em" height="1.2em" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      </svg>
+    )
+  }
+  if (name === 'bell') {
+    return (
+      <svg width="1.2em" height="1.2em" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M6 9a6 6 0 1112 0c0 4 1.5 5.5 1.5 5.5h-15S6 13 6 9zM10 18a2 2 0 004 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    )
+  }
+  return (
+    <svg width="1.2em" height="1.2em" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M7 17a4 4 0 01.6-7.96A5.5 5.5 0 0118 10.5 3.5 3.5 0 0117 17H7z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+    </svg>
   )
 }
 
@@ -521,7 +596,7 @@ const dlpStyles = `
   background: #fff; border: 1px solid var(--line); color: #43506a;
 }
 .dlp-security { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 13px; color: var(--muted); }
-.dlp-security .anticon { color: #10b981; }
+.dlp-security svg { color: #10b981; }
 .dlp-empty {
   display: flex; flex-direction: column; gap: 4px; margin: 18px 0 0;
   padding: 14px 16px; border-radius: 14px; font-size: 13px; color: #7a4d00;
@@ -591,8 +666,8 @@ const dlpStyles = `
   background: #fff; border: 1px solid var(--line);
   box-shadow: 0 18px 40px rgba(16, 24, 40, .12);
 }
-.dlp-qr-card .ant-qrcode { border: none; }
 .dlp-qr-card span { font-size: 12px; color: var(--muted); font-weight: 600; }
+.dlp-qr-fallback { width: 116px; height: 116px; border-radius: 8px; background: #f1f5f9; }
 
 /* ---------- 通用区块 ---------- */
 .dlp-card {

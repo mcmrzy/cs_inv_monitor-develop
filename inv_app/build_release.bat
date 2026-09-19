@@ -1,4 +1,4 @@
-@echo off
+﻿@echo off
 setlocal enabledelayedexpansion
 chcp 65001 >nul
 cd /d "%~dp0"
@@ -9,35 +9,39 @@ rem  用法:
 rem    build_release.bat              编译 release APK 并复制到 release\
 rem    build_release.bat --analyze    编译前先执行 flutter analyze
 rem  产物: release\inv_app_v版本_时间戳.apk (+ .md5 / .sha256 校验文件)
-rem  行为: 版本号第三段与构建号(+N)各自自动加一并写回 pubspec.yaml, 构建失败自动还原
+rem  日志: release\logs\build_版本_时间戳.log
+rem        失败时自动打印「关键错误摘要 + 日志最后 80 行」
+rem  行为: 版本号第三段与构建号(+N)各自自动加一并写回 pubspec.yaml,
+rem        构建失败自动还原 pubspec.yaml
 rem ============================================================
 echo ==============================================
 echo   inv_app 发版构建 (Release APK)
 echo ==============================================
 echo.
 
-rem ---- PowerShell 绝对路径（部分环境 PATH 里没有 powershell）----
 set "PS=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
 if not exist "%PS%" (
     echo [错误] 未找到 PowerShell: %PS%
-    exit /b 1
+    goto :fail_keep_open
 )
+
+if "%PROGRAMFILES(X86)%"=="" set "PROGRAMFILES(X86)=C:\Program Files (x86)"
 
 where flutter >nul 2>nul
 if errorlevel 1 (
     echo [错误] 未找到 flutter 命令，请确认 Flutter SDK 已加入 PATH。
-    exit /b 1
+    echo.
+    echo 常见位置: C:\Users\%USERNAME%\develop\flutter\bin
+    goto :fail_keep_open
 )
 
-rem ---- 读取 pubspec.yaml 中的版本号 ----
 set "APP_VERSION="
 for /f "usebackq tokens=2 delims=: " %%a in (`findstr /b /c:"version:" pubspec.yaml`) do set "APP_VERSION=%%a"
 if not defined APP_VERSION (
     echo [错误] 未能从 pubspec.yaml 读取版本号。
-    exit /b 1
+    goto :fail_keep_open
 )
 
-rem ---- 构建号自动递增: 如 1.0.0+1 -> 1.0.0+2 ----
 set "VER_BASE="
 set "VER_BUILD="
 for /f "tokens=1,2 delims=+" %%a in ("%APP_VERSION%") do (
@@ -45,8 +49,6 @@ for /f "tokens=1,2 delims=+" %%a in ("%APP_VERSION%") do (
     set "VER_BUILD=%%b"
 )
 set /a NEW_BUILD=VER_BUILD+1
-rem ---- 版本号(VER_BASE)也自动升级: 第三段 +1 ----
-rem ---- 例: 1.0.1+11 -> 1.0.2+12 ----
 for /f "tokens=1,2,3 delims=." %%i in ("%VER_BASE%") do (
     set "VER_MAJOR=%%i"
     set "VER_MINOR=%%j"
@@ -54,9 +56,21 @@ for /f "tokens=1,2,3 delims=." %%i in ("%VER_BASE%") do (
 )
 set /a VER_PATCH=VER_PATCH+1
 set "NEW_VERSION=%VER_MAJOR%.%VER_MINOR%.%VER_PATCH%+%NEW_BUILD%"
-echo 版本: %APP_VERSION% -^> %NEW_VERSION% (版本号与构建号自动递增)
+echo 版本: %APP_VERSION% -^> %NEW_VERSION%
 
-rem ---- 把新构建号写回 pubspec.yaml (备份到 TEMP, 构建失败时还原) ----
+if not exist "release\logs" mkdir "release\logs"
+set "TS="
+for /f "delims=" %%t in ('%PS% -NoProfile -Command "Get-Date -Format yyyyMMdd_HHmm"') do set "TS=%%t"
+if not defined TS set "TS=unknown"
+set "BUILD_LOG=release\logs\build_v%NEW_VERSION%_%TS%.log"
+set "ANALYZE_LOG=release\logs\analyze_v%NEW_VERSION%_%TS%.log"
+set "ERR_SCRIPT=%~dp0show_build_errors.ps1"
+if not exist "%ERR_SCRIPT%" (
+    echo [警告] 未找到错误摘要脚本: %ERR_SCRIPT%
+    echo         失败时仍会保留完整日志。
+)
+echo 日志: %CD%\%BUILD_LOG%
+
 copy /y pubspec.yaml "%TEMP%\pubspec.yaml.prebuild.bak" >nul
 %PS% -NoProfile -Command "$f='pubspec.yaml'; $c=[IO.File]::ReadAllText($f); $c=$c -replace '(?m)^version:[^\r\n]*', 'version: %NEW_VERSION%'; [IO.File]::WriteAllText($f, $c, (New-Object Text.UTF8Encoding($false)))"
 if errorlevel 1 (
@@ -64,45 +78,45 @@ if errorlevel 1 (
     copy /y "%TEMP%\pubspec.yaml.prebuild.bak" pubspec.yaml >nul
 )
 
-rem ---- 生成时间戳（yyyyMMdd_HHmm，与系统区域设置无关）----
-set "TS="
-for /f "delims=" %%t in ('%PS% -NoProfile -Command "Get-Date -Format yyyyMMdd_HHmm"') do set "TS=%%t"
-if not defined TS set "TS=unknown"
-
-if "%~1"=="--analyze" (
+if /i "%~1"=="--analyze" (
     echo.
-    echo [0/2] flutter analyze ...
-    call flutter analyze
+    echo [0/2] flutter analyze ...  日志: %ANALYZE_LOG%
+    %PS% -NoProfile -Command "$ErrorActionPreference='Continue'; & flutter analyze 2>&1 | Tee-Object -FilePath '%ANALYZE_LOG%'; exit $LASTEXITCODE"
     if errorlevel 1 (
+        echo.
         echo [错误] flutter analyze 未通过，已中止发版。
-        exit /b 1
+        if exist "%ERR_SCRIPT%" %PS% -NoProfile -ExecutionPolicy Bypass -File "%ERR_SCRIPT%" -LogPath "%CD%\%ANALYZE_LOG%"
+        call :restore_pubspec
+        goto :fail_keep_open
     )
 )
 
 echo.
 echo [1/2] 开始编译: flutter build apk --release --build-number=%NEW_BUILD% ...
-rem 可选: 追加受信下载域名(逗号分隔, 不要空格), 例如对象存储/CDN 直链域名
-rem   set TRUSTED_DOWNLOAD_HOSTS=mybucket.oss-cn-beijing.aliyuncs.com
 set "EXTRA_DEFINES="
 if defined TRUSTED_DOWNLOAD_HOSTS set "EXTRA_DEFINES=--dart-define=TRUSTED_DOWNLOAD_HOSTS=%TRUSTED_DOWNLOAD_HOSTS%"
-rem APP_VERSION_NAME 必须传自增后的版本名(VER_PATCH 已 +1)，否则 APK 显示上一个版本
-call flutter build apk --release --build-number=%NEW_BUILD% --dart-define=APP_VERSION_CODE=%NEW_BUILD% --dart-define=APP_VERSION_NAME=%VER_MAJOR%.%VER_MINOR%.%VER_PATCH% %EXTRA_DEFINES%
+
+%PS% -NoProfile -Command "$ErrorActionPreference='Continue'; Write-Host 'flutter build apk --release --build-number=%NEW_BUILD% ...'; & flutter build apk --release --build-number=%NEW_BUILD% --dart-define=APP_VERSION_CODE=%NEW_BUILD% --dart-define=APP_VERSION_NAME=%VER_MAJOR%.%VER_MINOR%.%VER_PATCH% %EXTRA_DEFINES% 2>&1 | Tee-Object -FilePath '%BUILD_LOG%'; exit $LASTEXITCODE"
+
 if errorlevel 1 (
-    echo [错误] 编译失败, 已还原 pubspec.yaml, 请检查上方日志。
-    copy /y "%TEMP%\pubspec.yaml.prebuild.bak" pubspec.yaml >nul
-    del "%TEMP%\pubspec.yaml.prebuild.bak" >nul 2>&1
-    exit /b 1
+    echo.
+    echo [错误] 编译失败，已还原 pubspec.yaml。
+    echo 完整日志: %CD%\%BUILD_LOG%
+    if exist "%ERR_SCRIPT%" %PS% -NoProfile -ExecutionPolicy Bypass -File "%ERR_SCRIPT%" -LogPath "%CD%\%BUILD_LOG%"
+    call :restore_pubspec
+    goto :fail_keep_open
 )
-del "%TEMP%\pubspec.yaml.prebuild.bak" >nul 2>&1
+call :delete_pubspec_bak
 
 set "SRC=build\app\outputs\flutter-apk\app-release.apk"
 if not exist "%SRC%" (
     echo [错误] 未找到编译产物 %SRC%
-    exit /b 1
+    echo 完整日志: %CD%\%BUILD_LOG%
+    if exist "%ERR_SCRIPT%" %PS% -NoProfile -ExecutionPolicy Bypass -File "%ERR_SCRIPT%" -LogPath "%CD%\%BUILD_LOG%"
+    goto :fail_keep_open
 )
 
 if not exist "release" mkdir "release"
-rem 文件名中的 "+"(build号) 规范为 _build，避免 URL/下载场景转义问题
 set "VER_NAME=%NEW_VERSION%"
 for /f "tokens=1,2 delims=+" %%a in ("%NEW_VERSION%") do (
     if not "%%b"=="" set "VER_NAME=%%a_build%%b"
@@ -128,12 +142,30 @@ echo   APK:    %CD%\release\%DEST_NAME%
 echo   大小:   %SIZE_MB% MB
 echo   MD5:    %MD5SUM%
 echo   SHA256: %SHASUM%
+echo   日志:   %CD%\%BUILD_LOG%
 echo ==============================================
 
 endlocal
 exit /b 0
 
-rem ---- certutil hash helper: args = filename, algorithm (MD5 or SHA256), result var name ----
+:restore_pubspec
+if exist "%TEMP%\pubspec.yaml.prebuild.bak" (
+    copy /y "%TEMP%\pubspec.yaml.prebuild.bak" pubspec.yaml >nul
+    del "%TEMP%\pubspec.yaml.prebuild.bak" >nul 2>&1
+    echo [info] pubspec.yaml 已还原
+)
+goto :eof
+
+:delete_pubspec_bak
+del "%TEMP%\pubspec.yaml.prebuild.bak" >nul 2>&1
+goto :eof
+
+:fail_keep_open
+echo.
+echo 构建未完成。窗口保持打开，请查看上方输出或日志文件。
+pause
+exit /b 1
+
 :hash
 set "%~3="
 for /f "skip=1 delims=" %%h in ('certutil -hashfile release\%~1 %~2 2^>nul') do (

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """强制刷新阿里云 ESA 边缘缓存（纯标准库，不依赖 Go/SDK）。
 
-用法（在能访问 esa.aliyuncs.com 的服务器上）：
+用法（在能访问 esa.cn-hangzhou.aliyuncs.com 的服务器上）：
 
   export ALIYUN_ACCESS_KEY_ID='LTAI...'
   export ALIYUN_ACCESS_KEY_SECRET='...'   # 真实 Secret，不要写 <占位符>
@@ -10,6 +10,8 @@
 
 只列站点：
   ESA_LIST_SITES=1 python3 deploy/scripts/esa-refresh.py
+
+注意：ESA 2024-09-10 刷新接口是 PurgeCaches（不是旧 CDN 的 RefreshESAObjectCaches）。
 """
 
 from __future__ import annotations
@@ -25,11 +27,15 @@ import urllib.parse
 import urllib.request
 import uuid
 
-ENDPOINT = os.environ.get("ESA_ENDPOINT", "https://esa.aliyuncs.com")
+# 旧默认 esa.aliyuncs.com 已全球 NXDOMAIN（2026-09-18 实测）。
+ENDPOINT = os.environ.get("ESA_ENDPOINT", "https://esa.cn-hangzhou.aliyuncs.com")
 VERSION = "2024-09-10"
 DEFAULT_PATHS = (
     "/app-release-info",
     "/api/v1/ota/app/latest",
+    # SPA 入口：边缘曾把 / 缓存成指向自身的 301（ERR_TOO_MANY_REDIRECTS）。
+    "/",
+    "/download",
 )
 
 
@@ -110,7 +116,7 @@ def main() -> None:
             sys.exit(f"缺少环境变量 {key}")
 
     if os.environ.get("ESA_LIST_SITES") == "1":
-        print(json.dumps(call_esa("ListSitesESA", {"PageSize": "50"}), ensure_ascii=False, indent=2))
+        print(json.dumps(call_esa("ListSites", {"PageSize": "50"}), ensure_ascii=False, indent=2))
         return
 
     site_id = os.environ.get("ESA_SITE_ID", "").strip()
@@ -119,18 +125,21 @@ def main() -> None:
 
     host = os.environ.get("ESA_REFRESH_HOST", "download.jiuxiaoyw.online").strip()
     host = host.removeprefix("https://").removeprefix("http://").split("/")[0]
-    paths = "\n".join(f"https://{host}{p}" for p in DEFAULT_PATHS)
+    # ignoreParams：去掉 query 后匹配，覆盖 ?platform=android 等变体。
+    ignore_urls = [f"https://{host}{p}" for p in DEFAULT_PATHS]
+    content = json.dumps({"IgnoreParams": ignore_urls}, ensure_ascii=False)
 
     print(f"SiteId={site_id}")
-    print("刷新目标:")
-    for line in paths.splitlines():
+    print("刷新目标（ignoreParams，去参数后匹配）:")
+    for line in ignore_urls:
         print(f"  {line}")
 
     result = call_esa(
-        "RefreshESAObjectCaches",
+        "PurgeCaches",
         {
-            "ObjectPath": paths,
-            "ObjectType": "File",
+            # ESA 枚举全小写；驼峰 ignoreParams 会被拒（InvalidType，2026-09-18 实测）。
+            "Type": "ignoreparams",
+            "Content": content,
             "SiteId": site_id,
             "Force": "true",
         },
