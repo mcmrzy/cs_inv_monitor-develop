@@ -145,7 +145,11 @@ class _DeviceDebugPageState extends State<DeviceDebugPage>
     if (_pollInFlight) return; // 上一次请求未返回时不叠加
     _pollInFlight = true;
     try {
-      await _refreshSessionAndSamples();
+      await _refreshSession();
+      // 终态会话（stopped/expired/failed）数据已定格，不再拉采样，仅轮询会话状态
+      if (!(_session?.isTerminal ?? false)) {
+        await _fetchSamples(incremental: true);
+      }
     } finally {
       _pollInFlight = false;
     }

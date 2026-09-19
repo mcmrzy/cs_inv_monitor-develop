@@ -644,11 +644,6 @@ func actionForRequest(method, path string) string {
 				strings.HasSuffix(path, "/reject")) {
 			return "edit"
 		}
-		// 单设备调试模式：开启/关闭是设备控制动作（与 /control 同权限语义），
-		// DELETE /debug-session/:id 语义是「停止调试」而非资源删除。
-		if strings.HasPrefix(path, "/api/v1/devices/") && strings.Contains(path, "/debug-session") {
-			return "edit"
-		}
 		if (strings.HasPrefix(path, "/api/v1/alarms/") || strings.HasPrefix(path, "/api/v1/alerts/")) &&
 			(strings.HasSuffix(path, "/acknowledge") || strings.HasSuffix(path, "/ignore")) {
 			return "edit"
@@ -657,6 +652,12 @@ func actionForRequest(method, path string) string {
 			(strings.HasSuffix(path, "/attachments") || strings.HasSuffix(path, "/escalate")) {
 			return "edit"
 		}
+	}
+	// 单设备调试模式：开启/关闭都是设备控制动作（与 /control 同权限语义）。
+	// 必须同时覆盖 POST /debug-session 与 DELETE /debug-session/:id——后者语义
+	// 是「停止调试」而非资源删除，落到 devices:delete 会挡住无删除权限的角色。
+	if strings.HasPrefix(path, "/api/v1/devices/") && strings.Contains(path, "/debug-session") {
+		return "edit"
 	}
 	switch method {
 	case http.MethodGet:

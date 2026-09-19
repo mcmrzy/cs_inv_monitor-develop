@@ -45,10 +45,10 @@ const CARD_SHADOW = '0 2px 8px rgba(17,24,39,0.06)'
 const MAX_POINTS = 400
 const SAMPLE_LIMIT = 200
 
-/** 会话仍「活着」的状态（显示倒计时/停止按钮） */
-const LIVE_STATUSES = new Set<DebugSessionStatus>(['starting', 'active', 'interrupted', 'stopping'])
+/** 会话仍「活着」的状态（显示倒计时/停止按钮；interrupted 为终态不提供停止） */
+const LIVE_STATUSES = new Set<DebugSessionStatus>(['starting', 'active', 'stopping'])
 /** 仍在产生采样、需要继续拉取的状态 */
-const SAMPLING_STATUSES = new Set<DebugSessionStatus>(['starting', 'active', 'interrupted'])
+const SAMPLING_STATUSES = new Set<DebugSessionStatus>(['starting', 'active'])
 
 /* ═══════════ 曲线分组与选线定义 ═══════════ */
 
@@ -308,7 +308,8 @@ const DebugTab: React.FC<DebugTabProps> = ({ sn }) => {
     }
   }, [samples, selected, timezone, t])
 
-  const hasLiveSession = session != null && (session.status === 'starting' || session.status === 'active')
+  // 占用中（含 stopping）不允许再点开始：避免与后端 409 conflict 空转
+  const hasLiveSession = session != null && LIVE_STATUSES.has(session.status)
 
   return (
     <Spin spinning={sessionLoading}>
