@@ -133,6 +133,9 @@ func (s *DeviceDebugService) StartSession(ctx context.Context, userID int64, isA
 	}
 
 	now := time.Now().UTC()
+	// 先生成并随会话持久化 task_id，再发送命令：命令回执按 task_id 定位会话，
+	// 若回执早于回填到达会漏匹配（会话卡 starting 直至误判 failed）。
+	taskID := generateTaskID()
 	sess = &model.DeviceDebugSession{
 		DeviceSN:        sn,
 		RequestID:       requestID,
@@ -143,6 +146,7 @@ func (s *DeviceDebugService) StartSession(ctx context.Context, userID int64, isA
 		ExpiresAt:       now.Add(time.Duration(durationSeconds) * time.Second),
 		RequestedBy:     userID,
 		Source:          source,
+		StartTaskID:     taskID,
 	}
 	if err := s.repo.CreateDebugSession(ctx, sess); err != nil {
 		if err == repository.ErrDebugSessionConflict {
@@ -154,15 +158,11 @@ func (s *DeviceDebugService) StartSession(ctx context.Context, userID int64, isA
 		return nil, false, fmt.Errorf("create debug session: %w", err)
 	}
 
-	taskID, serr := s.sendDebugCommand(ctx, sn, 1, DebugIntervalSeconds, durationSeconds)
-	if serr != nil {
+	if _, serr := s.sendDebugCommand(ctx, sn, 1, DebugIntervalSeconds, durationSeconds, taskID); serr != nil {
 		_ = s.repo.FinalizeDebugSession(ctx, sess.ID,
 			[]string{model.DebugSessionStarting}, model.DebugSessionFailed, "命令下发失败: "+serr.Error())
 		logger.Warn("debug start command failed", zap.String("sn", sn), zap.Error(serr))
 		return nil, false, apperr.Conflict("命令下发失败: " + serr.Error())
-	}
-	if err := s.repo.UpdateDebugSessionStartTask(ctx, sess.ID, taskID); err != nil {
-		logger.Error("debug session start task persist failed", zap.String("sn", sn), zap.Error(err))
 	}
 	sess.StartTaskID = taskID
 
@@ -190,6 +190,7 @@ func (s *DeviceDebugService) StopSession(ctx context.Context, userID int64, isAd
 		return sess, nil
 	}
 
+	// 与开启同理：先持久化停止 task_id 再发送，保证回执可达会话。
 	stopTaskID := generateTaskID()
 	if err := s.repo.MarkDebugSessionStopping(ctx, sess.ID, stopTaskID); err != nil {
 		return nil, fmt.Errorf("mark stopping: %w", err)
@@ -197,7 +198,7 @@ func (s *DeviceDebugService) StopSession(ctx context.Context, userID int64, isAd
 	sess.Status = model.DebugSessionStopping
 	sess.StopTaskID = stopTaskID
 
-	if _, serr := s.sendDebugCommand(ctx, sn, 0, DebugIntervalSeconds, 0); serr != nil {
+	if _, serr := s.sendDebugCommand(ctx, sn, 0, DebugIntervalSeconds, 0, stopTaskID); serr != nil {
 		// 停止命令失败不回滚：会话保持 stopping，协调循环在 expires_at 兜底置 expired；
 		// 设备侧 TTL 同样会自行恢复默认周期。
 		logger.Warn("debug stop command failed", zap.String("sn", sn), zap.Error(serr))
@@ -341,7 +342,7 @@ func (s *DeviceDebugService) coordinateOnce(ctx context.Context) {
 		// 到期前仍处于 active/stopping 的会话补发停止命令（best-effort，离线即放弃）
 		if reap.Status == model.DebugSessionActive || reap.Status == model.DebugSessionStopping {
 			sctx, scancel := context.WithTimeout(ctx, 8*time.Second)
-			if _, err := s.sendDebugCommand(sctx, reap.DeviceSN, 0, DebugIntervalSeconds, 0); err != nil {
+			if _, err := s.sendDebugCommand(sctx, reap.DeviceSN, 0, DebugIntervalSeconds, 0, generateTaskID()); err != nil {
 				logger.Warn("debug expiry stop command failed",
 					zap.String("sn", reap.DeviceSN), zap.Error(err))
 			}
@@ -351,12 +352,12 @@ func (s *DeviceDebugService) coordinateOnce(ctx context.Context) {
 }
 
 // sendDebugCommand 下发 set_debug_telemetry（V2 命令，args=[enabled, interval, duration]）。
+// taskID 由调用方生成并已随会话持久化（回执按其定位会话）。
 // 复用既有审计表 device_cmd_logs；503（离线）直接报错，绝不入离线队列。
-func (s *DeviceDebugService) sendDebugCommand(ctx context.Context, sn string, enabled, intervalSeconds, durationSeconds int) (string, error) {
+func (s *DeviceDebugService) sendDebugCommand(ctx context.Context, sn string, enabled, intervalSeconds, durationSeconds int, taskID string) (string, error) {
 	if s.deviceSrvURL == "" {
 		return "", fmt.Errorf("device server URL not configured")
 	}
-	taskID := generateTaskID()
 
 	paramsJSON := "{}"
 	if err := s.repo.InsertCommandLog(ctx, sn, taskID, DebugCommandSetDebugTelemetry, paramsJSON); err != nil {
