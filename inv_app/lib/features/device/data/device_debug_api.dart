@@ -60,9 +60,12 @@ class DeviceDebugSession {
   factory DeviceDebugSession.fromJson(Map<String, dynamic> json) {
     DateTime? parseTime(dynamic raw) =>
         raw is String ? DateTime.tryParse(raw)?.toUtc() : null;
+    // 后端 id/requested_by 为 int64，JSON 是 number；兼容字符串以防万一
+    String? asIdText(dynamic raw) =>
+        raw is num ? raw.toString() : (raw is String ? raw : null);
 
     return DeviceDebugSession(
-      id: json['id'] as String? ?? '',
+      id: asIdText(json['id']) ?? '',
       deviceSn: json['device_sn'] as String? ?? '',
       status: json['status'] as String? ?? '',
       intervalSeconds: (json['interval_seconds'] as num?)?.toInt() ?? 30,
@@ -70,7 +73,7 @@ class DeviceDebugSession {
       startedAt: parseTime(json['started_at']),
       expiresAt: parseTime(json['expires_at']),
       stoppedAt: parseTime(json['stopped_at']),
-      requestedBy: json['requested_by'] as String?,
+      requestedBy: asIdText(json['requested_by']),
       source: json['source'] as String? ?? '',
       startTaskId: json['start_task_id'] as String?,
       stopTaskId: json['stop_task_id'] as String?,
@@ -162,6 +165,7 @@ class DeviceDebugSample {
 
   factory DeviceDebugSample.fromJson(Map<String, dynamic> json) {
     final flags = json['quality_flags'];
+    // 后端 quality_flags/protocol_version 均为数值类型
     return DeviceDebugSample(
       time: DateTime.tryParse(json['time'] as String? ?? '')?.toUtc() ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
@@ -171,8 +175,13 @@ class DeviceDebugSample {
               : null,
       qualityFlags: flags is List
           ? flags.whereType<String>().toList(growable: false)
-          : const [],
-      protocolVersion: json['protocol_version'] as String?,
+          : flags is num
+              ? [flags.toString()]
+              : const [],
+      protocolVersion:
+          json['protocol_version'] is num
+              ? (json['protocol_version'] as num).toString()
+              : json['protocol_version'] as String?,
       metrics: DeviceDebugMetrics.fromJson(
         (json['metrics'] as Map?)?.cast<String, dynamic>() ?? const {},
       ),

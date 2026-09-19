@@ -308,4 +308,39 @@ void main() {
     expect(find.text(l10n.str('debug_status_stopped')), findsOneWidget);
     expect(find.text(l10n.str('debug_start')), findsOneWidget);
   });
+
+  test('session/sample fromJson 容忍数值型 id 与 flags（P0 回归）', () {
+    final session = DeviceDebugSession.fromJson(<String, dynamic>{
+      'id': 123,
+      'device_sn': 'SN-1',
+      'status': 'active',
+      'interval_seconds': 30,
+      'duration_seconds': 3600,
+      'requested_by': 42,
+      'source': 'web',
+      'started_at': '2026-09-19T20:00:00Z',
+      'expires_at': '2026-09-19T21:00:00Z',
+      'last_sample_at': null,
+      'stopped_at': null,
+      'failure_reason': '',
+    });
+    expect(session.id, '123');
+    expect(session.requestedBy, '42');
+    expect(session.status, 'active');
+
+    final sample = DeviceDebugSample.fromJson(<String, dynamic>{
+      'time': '2026-09-19T20:00:30Z',
+      'received_at': null,
+      'quality_flags': 0,
+      'protocol_version': 2,
+      'metrics': <String, dynamic>{
+        'battery_voltage': 48.0,
+        'battery_current': null,
+      },
+    });
+    expect(sample.protocolVersion, '2');
+    expect(sample.qualityFlags, ['0']);
+    expect(sample.metrics.batteryVoltage, 48.0);
+    expect(sample.metrics.batteryCurrent, isNull);
+  });
 }

@@ -105,11 +105,14 @@ func (s *DeviceDebugService) StartSession(ctx context.Context, userID int64, isA
 		source = model.DebugSourceWeb
 	}
 
-	// 幂等：同 request_id 直接返回既有会话
-	if requestID != "" {
-		if existing, err := s.repo.GetDebugSessionByRequest(ctx, sn, requestID); err == nil && existing != nil {
-			return existing, false, nil
-		}
+	// 幂等：同 request_id 直接返回既有会话。
+	// 空 request_id 必须服务端兜底生成：UNIQUE(device_sn, request_id) 会让
+	// 第二条 ('sn','') 插入撞 23505，被误判为「已有进行中的会话」永久 409。
+	if requestID == "" {
+		requestID = generateTaskID()
+	}
+	if existing, err := s.repo.GetDebugSessionByRequest(ctx, sn, requestID); err == nil && existing != nil {
+		return existing, false, nil
 	}
 	// 并发：已有占用中会话 → 返回现有会话并标记冲突
 	if existing, err := s.repo.GetActiveDebugSession(ctx, sn); err == nil && existing != nil {

@@ -135,19 +135,6 @@ func (r *DeviceRepository) GetDebugSessionByTaskID(ctx context.Context, taskID s
 	return scanDebugSession(row)
 }
 
-// TouchDebugSample 推进最后样本时间，并将 starting 会话提升为 active
-// （首条新样本落库是「设备真的在按 30 秒上报」的最直接证据）。
-func (r *DeviceRepository) TouchDebugSample(ctx context.Context, sn string, ts time.Time) error {
-	_, err := r.db.Exec(ctx, `
-		UPDATE device_debug_sessions
-		SET last_sample_at = $2,
-		    status = CASE WHEN status = 'starting' THEN 'active' ELSE status END,
-		    updated_at = NOW()
-		WHERE device_sn = $1 AND status IN ('starting', 'active')
-	`, sn, ts)
-	return err
-}
-
 // MarkDebugSessionStopping 停止流程：记停止任务 ID 并置为 stopping。
 func (r *DeviceRepository) MarkDebugSessionStopping(ctx context.Context, id int64, stopTaskID string) error {
 	_, err := r.db.Exec(ctx, `
@@ -200,18 +187,25 @@ func (r *DeviceRepository) ExpireDebugSessions(ctx context.Context) ([]DebugSess
 	return collectDebugReaps(rows, err)
 }
 
-// RefreshDebugSampleTimes 用遥测表最新落库时间刷新占用中会话的 last_sample_at。
-// 设备服务直写 device_telemetry_3min（不经过 business-api 内部 API），
-// 因此样本新鲜度由协调循环直接查询遥测表得到。
+// RefreshDebugSampleTimes 用遥测表最新落库时间刷新占用中会话的 last_sample_at，
+// 并把已见到新样本的 starting 会话提升为 active（首条新样本是设备真正在
+// 按调试周期上报的最直接证据）。设备服务直写 device_telemetry_3min（不经
+// business-api 内部 API），因此样本新鲜度由协调循环直接查询遥测表得到。
+// 聚合通过 JOIN 限定到占用中会话的 SN，避免全设备规模扫描。
 func (r *DeviceRepository) RefreshDebugSampleTimes(ctx context.Context) (int, error) {
 	tag, err := r.db.Exec(ctx, `
 		UPDATE device_debug_sessions s
-		SET last_sample_at = t.max_time, updated_at = NOW()
+		SET last_sample_at = t.max_time,
+		    status = CASE WHEN s.status = 'starting' THEN 'active' ELSE s.status END,
+		    updated_at = NOW()
 		FROM (
-			SELECT device_sn, MAX(event_time) AS max_time
-			FROM device_telemetry_3min
-			WHERE event_time > NOW() - INTERVAL '15 minutes'
-			GROUP BY device_sn
+			SELECT t.device_sn, MAX(t.event_time) AS max_time
+			FROM device_debug_sessions s2
+			JOIN device_telemetry_3min t
+			  ON t.device_sn = s2.device_sn
+			 AND t.event_time > NOW() - INTERVAL '15 minutes'
+			WHERE s2.status IN ('starting', 'active')
+			GROUP BY t.device_sn
 		) t
 		WHERE s.device_sn = t.device_sn
 		  AND s.status IN ('starting', 'active')

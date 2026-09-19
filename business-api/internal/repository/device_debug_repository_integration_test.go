@@ -66,9 +66,11 @@ func TestDebugSessionLifecycle(t *testing.T) {
 	require.NoError(t, repo.FinalizeDebugSession(ctx, sess.ID,
 		[]string{model.DebugSessionStarting}, model.DebugSessionActive, ""))
 
-	// 样本触达推进 last_sample_at
+	// 样本触达推进 last_sample_at（协调循环路径：RefreshDebugSampleTimes 直查遥测表，
+	// 单测里直接落库模拟）
 	ts := time.Now().UTC()
-	require.NoError(t, repo.TouchDebugSample(ctx, sn, ts))
+	require.NoError(t, execPool(ctx, pool,
+		`UPDATE device_debug_sessions SET last_sample_at = $1 WHERE device_sn = $2`, ts, sn))
 	touched, err := repo.GetDebugSessionByID(ctx, sn, sess.ID)
 	require.NoError(t, err)
 	require.NotNil(t, touched.LastSampleAt)
@@ -114,12 +116,15 @@ func TestDebugSessionReaping(t *testing.T) {
 
 	stuck := mk("DBG-STUCK", model.DebugSessionStarting, now.Add(-2*time.Minute), now.Add(time.Hour))
 	stale := mk("DBG-STALE", model.DebugSessionActive, now.Add(-10*time.Minute), now.Add(time.Hour))
-	require.NoError(t, repo.TouchDebugSample(ctx, "DBG-STALE", now.Add(-3*time.Minute)))
+	require.NoError(t, execPool(ctx, pool,
+		`UPDATE device_debug_sessions SET last_sample_at = $1 WHERE device_sn = $2`, now.Add(-3*time.Minute), "DBG-STALE"))
 	fresh := mk("DBG-FRESH", model.DebugSessionActive, now.Add(-10*time.Minute), now.Add(time.Hour))
-	require.NoError(t, repo.TouchDebugSample(ctx, "DBG-FRESH", now.Add(-10*time.Second)))
+	require.NoError(t, execPool(ctx, pool,
+		`UPDATE device_debug_sessions SET last_sample_at = $1 WHERE device_sn = $2`, now.Add(-10*time.Second), "DBG-FRESH"))
 	// 到期但样本新鲜（不会被中断收口抢先）：到期收口的专门用例
 	expired := mk("DBG-EXPIRED", model.DebugSessionActive, now.Add(-10*time.Minute), now.Add(-time.Minute))
-	require.NoError(t, repo.TouchDebugSample(ctx, "DBG-EXPIRED", now.Add(-10*time.Second)))
+	require.NoError(t, execPool(ctx, pool,
+		`UPDATE device_debug_sessions SET last_sample_at = $1 WHERE device_sn = $2`, now.Add(-10*time.Second), "DBG-EXPIRED"))
 
 	// starting 超时（>90s）→ failed；其余不受影响
 	reaps, err := repo.ReapStaleStartingSessions(ctx, 90*time.Second)
