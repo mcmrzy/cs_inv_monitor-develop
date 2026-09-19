@@ -1,0 +1,220 @@
+openapi: 3.1.0
+info:
+  title: Device Debug Session API
+  version: v1
+  description: |
+    单设备调试模式（App / 管理后台共用）：
+    对指定设备开启临时调试后，设备按固定 30 秒周期上报运行快照（heartbeat V2.1），
+    双端按会话时间窗查询原始样本绘制 MPPT/电池/逆变/负载电压电流曲线。
+
+    会话状态机：
+      starting -> active -> stopping -> stopped
+      starting 超时无回执      -> failed
+      active 样本迟到          -> interrupted
+      到期（服务端+设备 TTL）  -> expired
+    interrupted/failed/stopped/expired 为终态，允许重新开启。
+  servers:
+    - url: /api/v1
+tags:
+  - name: device-debug
+security:
+  - bearerAuth: []
+paths:
+  /devices/by-sn/{sn}/debug-session:
+    get:
+      tags: [device-debug]
+      summary: 查询当前/最近一次调试会话与设备在线状态
+      operationId: getDeviceDebugSession
+      parameters:
+        - $ref: '#/components/parameters/DeviceSN'
+      responses:
+        '200':
+          description: 会话信息（无会话时 session 为 null）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DebugSessionEnvelope'
+        '403': { description: 无设备数据权限 }
+    post:
+      tags: [device-debug]
+      summary: 开启调试（devices:control；幂等；同设备至多一个占用中会话）
+      operationId: startDeviceDebugSession
+      parameters:
+        - $ref: '#/components/parameters/DeviceSN'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartDebugSessionRequest'
+      responses:
+        '200':
+          description: 已创建（或幂等返回现有会话；conflict=true 表示设备已有占用中会话）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DebugSessionMutationEnvelope'
+        '400': { description: duration_seconds 越界（允许 300..14400） }
+        '403': { description: 无 devices:control 权限或非设备归属者 }
+        '409': { description: 设备离线 / 命令下发失败 / 并发开启上限 }
+    delete:
+      tags: [device-debug]
+      summary: 关闭调试（幂等；终态会话原样返回）
+      operationId: stopDeviceDebugSession
+      parameters:
+        - $ref: '#/components/parameters/DeviceSN'
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: 会话已进入 stopping（停止回执后 stopped；设备侧 TTL 兜底）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DebugSessionMutationEnvelope'
+        '400': { description: 非法会话 ID }
+        '403': { description: 无 devices:control 权限或非设备归属者 }
+        '404': { description: 会话不存在（或 SN 不匹配） }
+  /devices/by-sn/{sn}/debug-samples:
+    get:
+      tags: [device-debug]
+      summary: 有界查询调试曲线原始样本（白名单字段，游标增量）
+      operationId: getDeviceDebugSamples
+      parameters:
+        - $ref: '#/components/parameters/DeviceSN'
+        - name: session_id
+          in: query
+          schema: { type: integer, format: int64 }
+          description: 缺省时取占用中会话，其次最近会话
+        - name: window_minutes
+          in: query
+          schema: { type: integer, default: 60, minimum: 5, maximum: 240 }
+          description: 回看窗口；下界被会话 started_at 约束
+        - name: after
+          in: query
+          schema: { type: string }
+          description: 上页 next_cursor（不透明字符串）
+        - name: limit
+          in: query
+          schema: { type: integer, default: 200, maximum: 200 }
+      responses:
+        '200':
+          description: 样本按 event_time 升序；metrics 缺失值为 null（绘图断线）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DebugSamplesEnvelope'
+        '403': { description: 无设备数据权限 }
+        '404': { description: 指定会话不存在 }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    DeviceSN:
+      name: sn
+      in: path
+      required: true
+      schema: { type: string }
+  schemas:
+    StartDebugSessionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        duration_seconds:
+          type: integer
+          default: 3600
+          minimum: 300
+          maximum: 14400
+          description: 调试时长；interval 固定 30 秒，本期不开放任意高频配置
+        request_id:
+          type: string
+          maxLength: 64
+          description: 客户端幂等键（UUID），同 (device_sn, request_id) 重复开启返回既有会话
+        source:
+          type: string
+          enum: [web, app]
+    DebugSession:
+      type: object
+      required: [id, device_sn, status, interval_seconds, duration_seconds, started_at, expires_at]
+      properties:
+        id: { type: integer, format: int64 }
+        device_sn: { type: string }
+        request_id: { type: string }
+        status:
+          type: string
+          enum: [starting, active, stopping, stopped, expired, interrupted, failed]
+        interval_seconds: { type: integer, const: 30 }
+        duration_seconds: { type: integer }
+        started_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        stopped_at: { type: [string, 'null'], format: date-time }
+        requested_by: { type: integer, format: int64 }
+        source: { type: string, enum: [web, app] }
+        start_task_id: { type: string }
+        stop_task_id: { type: string }
+        last_sample_at: { type: [string, 'null'], format: date-time }
+        failure_reason: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    DebugSamplePoint:
+      type: object
+      required: [time, received_at, quality_flags, protocol_version, metrics]
+      properties:
+        time: { type: string, format: date-time, description: 设备采样时间（UTC） }
+        received_at: { type: [string, 'null'], format: date-time }
+        quality_flags: { type: integer }
+        protocol_version: { type: integer }
+        metrics:
+          type: object
+          required:
+            [pv1_voltage, buck1_current, pv2_voltage, buck2_current,
+             battery_voltage, battery_current, dc_bus_voltage, inv_current,
+             ac_voltage, ac_current]
+          description: |
+            四组曲线的真实测点（null = 该点无数据，绘图断线）：
+            MPPT/PV1: pv1_voltage + buck1_current（Buck 电流，协议无独立 PV 输入电流）
+            MPPT/PV2: pv2_voltage + buck2_current
+            电池:     battery_voltage + battery_current（充电为正、放电为负）
+            逆变:     dc_bus_voltage（直流母线） + inv_current（逆变电流）
+            负载:     ac_voltage + ac_current（交流输出测点）
+          properties:
+            pv1_voltage: { type: [number, 'null'] }
+            buck1_current: { type: [number, 'null'] }
+            pv2_voltage: { type: [number, 'null'] }
+            buck2_current: { type: [number, 'null'] }
+            battery_voltage: { type: [number, 'null'] }
+            battery_current: { type: [number, 'null'] }
+            dc_bus_voltage: { type: [number, 'null'] }
+            inv_current: { type: [number, 'null'] }
+            ac_voltage: { type: [number, 'null'] }
+            ac_current: { type: [number, 'null'] }
+    DebugSessionEnvelope:
+      type: object
+      required: [session, device_online, supported, interval_seconds]
+      properties:
+        session: { $ref: '#/components/schemas/DebugSession' }
+        device_online: { type: boolean, description: status 1/2 视为在线 }
+        supported: { type: boolean }
+        interval_seconds: { type: integer, const: 30 }
+    DebugSessionMutationEnvelope:
+      type: object
+      required: [session]
+      properties:
+        session: { $ref: '#/components/schemas/DebugSession' }
+        conflict: { type: boolean, description: 仅 POST：true 表示返回的是已有占用中会话 }
+    DebugSamplesEnvelope:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/DebugSamplePoint' }
+        next_cursor:
+          type: string
+          description: 不透明游标；空串表示无增量
+        session: { $ref: '#/components/schemas/DebugSession' }

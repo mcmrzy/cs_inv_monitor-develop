@@ -176,6 +176,9 @@ type InternalHandler struct {
 	// otaRecordTimeout 单条升级记录(device_upgrades)的静默超时阈值，按 updated_at
 	// 判定。默认 20 分钟，可由 main 按 ota.record_timeout_minutes 覆盖。
 	otaRecordTimeout time.Duration
+	// debugService 单设备调试会话状态机：set_debug_telemetry 命令回执推进
+	// starting→active / stopping→stopped；可为 nil（调试功能未装配时）。
+	debugService *service.DeviceDebugService
 }
 
 func NewInternalHandler(db *pgxpool.Pool, rdb *redis.Client, otaService *service.OTAService, jpushService *service.JPushService, notifySvc NotificationService, notifyCfg *NotificationConfig, notifyPrefs *repository.NotifyPrefsRepository, emailService *service.EmailService) *InternalHandler {
@@ -216,6 +219,11 @@ func (h *InternalHandler) SetOTARecordTimeout(d time.Duration) {
 	if d > 0 {
 		h.otaRecordTimeout = d
 	}
+}
+
+// SetDebugService 注入调试会话状态机（命令回执推进）。
+func (h *InternalHandler) SetDebugService(ds *service.DeviceDebugService) {
+	h.debugService = ds
 }
 
 // isOTAUpgradeRecordStale 判定一条 upgrading 记录是否已静默超时。
@@ -1077,6 +1085,12 @@ func (h *InternalHandler) DeviceCmdResult(c *gin.Context) {
 
 	// 插入命令结果通知
 	userID, stationID := h.getDeviceOwner(ctx, req.SN)
+
+	// 调试会话状态机：set_debug_telemetry 回执推进 starting/stopping
+	if h.debugService != nil && req.Cmd == "set_debug_telemetry" {
+		h.debugService.HandleCommandResult(ctx, req.TaskID, status, req.Message)
+	}
+
 	if userID > 0 {
 		notifyTitle := "控制指令执行成功"
 		notifyContent := fmt.Sprintf("设备 %s 执行「%s」指令成功", req.SN, req.Cmd)

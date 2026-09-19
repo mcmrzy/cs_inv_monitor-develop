@@ -26,7 +26,7 @@ android {
 
         manifestPlaceholders = [
                 JPUSH_PKGNAME : applicationId,
-                JPUSH_APPKEY  : "*REMOVED*",//值来自开发者平台取得的AppKey
+                JPUSH_APPKEY  : "5a5df0da74b0ec20becb9bb1",//值来自开发者平台取得的AppKey
                 JPUSH_CHANNEL : "default_developer",
 
 

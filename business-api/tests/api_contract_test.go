@@ -120,6 +120,12 @@ var expectedFrontendRoutes = []struct {
 	{"POST", "/api/v1/devices/add-to-station"},
 	{"POST", "/api/v1/devices/by-sn/:sn/remove-from-station"},
 
+	// ---- Device Debug Session（单设备调试模式）----
+	{"GET", "/api/v1/devices/by-sn/:sn/debug-session"},
+	{"POST", "/api/v1/devices/by-sn/:sn/debug-session"},
+	{"DELETE", "/api/v1/devices/by-sn/:sn/debug-session/:id"},
+	{"GET", "/api/v1/devices/by-sn/:sn/debug-samples"},
+
 	// ---- Parallel Groups ----
 	{"GET", "/api/v1/parallel-groups"},
 	{"GET", "/api/v1/parallel-groups/:id"},

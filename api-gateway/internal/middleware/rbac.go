@@ -644,6 +644,11 @@ func actionForRequest(method, path string) string {
 				strings.HasSuffix(path, "/reject")) {
 			return "edit"
 		}
+		// 单设备调试模式：开启/关闭是设备控制动作（与 /control 同权限语义），
+		// DELETE /debug-session/:id 语义是「停止调试」而非资源删除。
+		if strings.HasPrefix(path, "/api/v1/devices/") && strings.Contains(path, "/debug-session") {
+			return "edit"
+		}
 		if (strings.HasPrefix(path, "/api/v1/alarms/") || strings.HasPrefix(path, "/api/v1/alerts/")) &&
 			(strings.HasSuffix(path, "/acknowledge") || strings.HasSuffix(path, "/ignore")) {
 			return "edit"
