@@ -38,6 +38,7 @@ import useTranslation from '@/hooks/useTranslation'
 import useTimezoneStore from '@/stores/timezoneStore'
 import { formatInTimezone } from '@/utils/timezone'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
+import StatusBadge from '@/components/StatusBadge'
 import { canControlDeviceFirmware } from '@/router/routeAccess'
 import {
   firmwareModuleLabel,
@@ -387,9 +388,7 @@ const DeviceFirmwareUpgradeTab: React.FC = () => {
                           <Text strong ellipsis style={{ maxWidth: '70%' }}>
                             {device.alias || device.name || device.model || device.sn}
                           </Text>
-                          <Tag color={device.status === 'online' ? 'success' : 'default'} style={{ marginRight: 0 }}>
-                            {device.status === 'online' ? t('ota.online') : t('ota.offline')}
-                          </Tag>
+                          <StatusBadge status={device.status} style={{ marginRight: 0 }} />
                         </Flex>
                         <div style={{ marginTop: 2, display: 'flex', gap: 6 }}>
                           <Text type="secondary" style={{ fontSize: 12 }}>

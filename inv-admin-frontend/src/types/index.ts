@@ -49,7 +49,8 @@ export interface Device {
   firmware_arm?: string
   firmware_esp?: string
   main_version?: string
-  status: 'online' | 'offline' | 'fault'
+  /** 0=离线 1=在线 2=故障（2 仍视为在线）。后端 /devices 下发数字，勿按字符串比较。 */
+  status: number
   lastOnlineAt: string
   userId: string
   installerId: string

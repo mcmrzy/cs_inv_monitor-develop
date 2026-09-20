@@ -22,17 +22,19 @@ describe('deviceApi', () => {
           return HttpResponse.json({
             code: 0,
             data: paginatedResponse(
-              mockDevices.filter((d) => d.status === status),
+              // 后端 status 是 strconv.Atoi 解析的数字串（设备页筛选项为 '1'/'0'/'2'），
+              // 不是 'online' 这类字符串。
+              mockDevices.filter((d) => String(d.status) === status),
               1,
             ),
           })
         }),
       )
 
-      const res = await deviceApi.getDevices({ keyword: 'INV', status: 'online' })
+      const res = await deviceApi.getDevices({ keyword: 'INV', status: '1' })
       const data = res.data?.data ?? res.data
       expect(data.items).toHaveLength(1)
-      expect(data.items[0].status).toBe('online')
+      expect(data.items[0].status).toBe(1)
     })
   })
 
