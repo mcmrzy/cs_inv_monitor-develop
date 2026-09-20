@@ -72,6 +72,13 @@ export default {
     'deviceDetail.debug.metric.invCurrent': '逆变电流',
     'deviceDetail.debug.metric.acVoltage': '交流电压',
     'deviceDetail.debug.metric.acCurrent': '交流电流',
+    'deviceDetail.debug.live': '实时',
+    'deviceDetail.debug.reconnecting': '重连中…',
+    'deviceDetail.debug.streamError': '实时连接失败',
+    'deviceDetail.debug.retry': '重试连接',
+    'deviceDetail.debug.latestValues': '最新读数',
+    'deviceDetail.debug.waitingSample': '等待数据',
+    'deviceDetail.debug.pushHint': '采样由服务端实时推送（SSE），新点位到达即刻上屏。',
 
     // 储能 BMS 页
     'deviceDetail.bms.offlineTitle': '设备离线',
@@ -550,6 +557,13 @@ export default {
     'deviceDetail.debug.metric.invCurrent': 'Inverter Current',
     'deviceDetail.debug.metric.acVoltage': 'AC Voltage',
     'deviceDetail.debug.metric.acCurrent': 'AC Current',
+    'deviceDetail.debug.live': 'Live',
+    'deviceDetail.debug.reconnecting': 'Reconnecting…',
+    'deviceDetail.debug.streamError': 'Live connection failed',
+    'deviceDetail.debug.retry': 'Retry',
+    'deviceDetail.debug.latestValues': 'Latest readings',
+    'deviceDetail.debug.waitingSample': 'waiting',
+    'deviceDetail.debug.pushHint': 'Samples are pushed by the server over SSE and drawn the moment they arrive.',
 
     // Storage BMS tab
     'deviceDetail.bms.offlineTitle': 'Device Offline',

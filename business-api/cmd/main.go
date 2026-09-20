@@ -1390,6 +1390,15 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 				middleware.AuthWithQueryToken(deps.JWTService, deps.AuthorizationContextValidator),
 				handler.PipelineHealthSSE(deps.RDB))
 		}
+
+		// 调试采样 SSE（EventSource 同样带不了 Authorization 头）：
+		// 单独注册在 auth 组之外并显式挂 AuthWithQueryToken——组级 Auth 会先执行并 401，
+		// 因此不能放进 devBySN 组。设备数据归属校验由服务层 authorize 兜住，与
+		// GET /devices/by-sn/:sn/debug-samples 一致。
+		debugStream := api.Group("/devices/by-sn")
+		debugStream.GET("/:sn/debug-stream",
+			middleware.AuthWithQueryToken(deps.JWTService, deps.AuthorizationContextValidator),
+			deps.DebugHandler.StreamSamples)
 	}
 
 	// Static file serving for uploads

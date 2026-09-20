@@ -6,7 +6,7 @@
  */
 import React, { useEffect, useRef } from 'react'
 import * as echarts from 'echarts/core'
-import { LineChart, PieChart, BarChart } from 'echarts/charts'
+import { LineChart, PieChart, BarChart, EffectScatterChart } from 'echarts/charts'
 import {
   TitleComponent,
   TooltipComponent,
@@ -22,6 +22,8 @@ echarts.use([
   LineChart,
   PieChart,
   BarChart,
+  // 调试模式实时曲线的最新点脉冲光点（effectScatter）
+  EffectScatterChart,
   TitleComponent,
   TooltipComponent,
   GridComponent,

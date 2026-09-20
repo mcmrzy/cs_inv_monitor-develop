@@ -70,17 +70,6 @@ export const AppRoutes: React.FC = () => (
         </ProtectedRoute>
       }
     />
-    {/* 设备完整详情页：全屏布局（无侧边栏），便于聚焦查看 */}
-    <Route
-      path="/devices/:sn/detail"
-      element={
-        <ProtectedRoute>
-          <PermissionRoute permissions={getRoutePermissions('/devices/:sn/detail')}>
-            <DeviceDetailPage />
-          </PermissionRoute>
-        </ProtectedRoute>
-      }
-    />
     <Route
       element={
         <ProtectedRoute>
@@ -90,6 +79,9 @@ export const AppRoutes: React.FC = () => (
     >
       <Route path="/dashboard" element={<PermissionRoute permissions={getRoutePermissions('/dashboard')}><DashboardPage /></PermissionRoute>} />
       <Route path="/devices" element={<PermissionRoute permissions={getRoutePermissions('/devices')}><DevicesPage /></PermissionRoute>} />
+      {/* 设备完整详情页：与其它页面共用同一外壳（侧边栏 + 纸面底色 + 24px 内边距），
+          不再走 MainLayout 之外的全屏布局，避免侧边栏消失、配色与其它页不一致 */}
+      <Route path="/devices/:sn/detail" element={<PermissionRoute permissions={getRoutePermissions('/devices/:sn/detail')}><DeviceDetailPage /></PermissionRoute>} />
       <Route path="/ota" element={<PermissionRoute permissions={getRoutePermissions('/ota')}><OtaPage /></PermissionRoute>} />
       <Route path="/alerts" element={<PermissionRoute permissions={getRoutePermissions('/alerts')}><AlertsPage /></PermissionRoute>} />
       <Route path="/work-orders" element={<PermissionRoute permissions={getRoutePermissions('/work-orders')}><WorkOrdersPage /></PermissionRoute>} />
