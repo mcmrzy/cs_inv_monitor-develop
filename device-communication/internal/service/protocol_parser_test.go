@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"inv-device-server/internal/model"
 	"inv-device-server/internal/mqtt"
 	"inv-device-server/internal/repository"
 	telemetryv2 "inv-device-server/internal/telemetry"
@@ -680,4 +681,95 @@ func TestDeriveV2BatteryPower_ChargePositive(t *testing.T) {
 		require.NotNil(t, s.Battery.Power)
 		assert.InDelta(t, -1305.6, *s.Battery.Power, 0.001)
 	})
+}
+
+// ==================== 并机派生字段的型号字段能力门控（迁移 124，CS-L10-6K2） ====================
+
+// paired_socket/online_socket 被声明未实现时，随机堆内存值不得被解读成 standalone/master/degraded，
+// 一律返回 "n/a"（与 Sock.PairedSocket == nil 的"未知"语义一致）；未声明时行为不变。
+func TestDeriveParallelFieldsUnsupportedMask(t *testing.T) {
+	u := func(v uint32) *uint32 { return &v }
+
+	// 现场实景：ARM 上报的垃圾掩码（paired=3、online=1、on=1）
+	garbage := &telemetryv2.Sample{Sock: telemetryv2.Sock{
+		PairedSocket: u(3), OnlineSocket: u(1), OnSocket: u(1),
+	}}
+
+	// 未声明未实现（其它型号/旧行为）：保持原判定
+	assert.Equal(t, "master", deriveParallelRole(garbage, testHealthSpecs()))
+	assert.Equal(t, "degraded", deriveParallelHealth(garbage, testHealthSpecs()))
+
+	// 声明 unsupported（L10 规格：三个插座位字段均未实现）→ 均为 "n/a"
+	assert.Equal(t, "n/a", deriveParallelRole(garbage, l10Specs()))
+	assert.Equal(t, "n/a", deriveParallelHealth(garbage, l10Specs()))
+
+	// 部分支持：仅 paired_socket 未实现 → "n/a"（不解读垃圾值）
+	pairedOnly := model.DefaultDiagnosticSpecs()
+	pairedOnly.UnsupportedFields = []string{model.FieldKeyPairedSocket}
+	assert.Equal(t, "n/a", deriveParallelRole(garbage, pairedOnly))
+	assert.Equal(t, "n/a", deriveParallelHealth(garbage, pairedOnly))
+
+	// 部分支持：paired_socket 有效但 online_socket 未实现 → 角色/健康无法判定 → "n/a"
+	onlineOnly := model.DefaultDiagnosticSpecs()
+	onlineOnly.UnsupportedFields = []string{model.FieldKeyOnlineSocket}
+	assert.Equal(t, "n/a", deriveParallelRole(garbage, onlineOnly))
+	assert.Equal(t, "n/a", deriveParallelHealth(garbage, onlineOnly))
+
+	// 未声明的有效样本：单机语义保持（paired=0 → standalone；无指针 → n/a）
+	standalone := &telemetryv2.Sample{Sock: telemetryv2.Sock{PairedSocket: u(0)}}
+	assert.Equal(t, "standalone", deriveParallelRole(standalone, testHealthSpecs()))
+	assert.Equal(t, "n/a", deriveParallelHealth(standalone, testHealthSpecs()))
+	// 声明未实现后即使上报 0 也不解读（字段整体不可信）→ n/a
+	assert.Equal(t, "n/a", deriveParallelRole(standalone, l10Specs()))
+	assert.Equal(t, "n/a", deriveParallelHealth(standalone, l10Specs()))
+
+	// 字段缺失（nil）：两种规格下均为 n/a（既有收口语义不变）
+	empty := &telemetryv2.Sample{}
+	for _, specs := range []model.DiagnosticSpecs{testHealthSpecs(), l10Specs()} {
+		assert.Equal(t, "n/a", deriveParallelRole(empty, specs))
+		assert.Equal(t, "n/a", deriveParallelHealth(empty, specs))
+	}
+}
+
+// buildRealtimeV2：derived 组的并机派生字段随型号字段能力门控；
+// 各遥测组（含 sock 组原值）写入行为不变。
+func TestBuildRealtimeV2ParallelDerivedUnsupported(t *testing.T) {
+	u := func(v uint32) *uint32 { return &v }
+	s := &telemetryv2.Sample{Sock: telemetryv2.Sock{
+		PairedSocket: u(3), OnlineSocket: u(1), OnSocket: u(1),
+	}}
+
+	derivedOf := func(rt map[string]interface{}) map[string]interface{} {
+		derived, ok := rt["derived"].(map[string]interface{})
+		require.True(t, ok)
+		data, ok := derived["data"].(map[string]interface{})
+		require.True(t, ok)
+		return data
+	}
+
+	data := derivedOf(buildRealtimeV2(s, "SN001", 1700000000, testHealthSpecs()))
+	assert.Equal(t, "master", data["parallel_role"])
+	assert.Equal(t, "degraded", data["parallel_health"])
+
+	data = derivedOf(buildRealtimeV2(s, "SN001", 1700000000, l10Specs()))
+	assert.Equal(t, "n/a", data["parallel_role"])
+	assert.Equal(t, "n/a", data["parallel_health"])
+
+	// sock 组仍保留原始上报值（取证/前端按字段能力隐藏，不在此处丢弃）
+	sock, ok := realtimeGroupData(t, buildRealtimeV2(s, "SN001", 1700000000, l10Specs()), "sock")
+	require.True(t, ok, "sock 组应仍然写入")
+	paired, ok := sock["paired_socket"].(*uint32)
+	require.True(t, ok)
+	assert.Equal(t, uint32(3), *paired)
+}
+
+// realtimeGroupData 取 realtime 顶层组的 data 子映射（测试辅助）。
+func realtimeGroupData(t *testing.T, rt map[string]interface{}, group string) (map[string]interface{}, bool) {
+	t.Helper()
+	g, ok := rt[group].(map[string]interface{})
+	if !ok {
+		return nil, false
+	}
+	data, _ := g["data"].(map[string]interface{})
+	return data, data != nil
 }

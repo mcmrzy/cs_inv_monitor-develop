@@ -30,7 +30,7 @@ func ComputeHealth(s *telemetryv2.Sample, active []model.DiagnosticEvent, specs 
 		score -= specs.DeductTempHigh
 		factors["temp_high"] = specs.DeductTempHigh
 	}
-	if fanAbnormal(s, specs.FanSpeedLowPercent) {
+	if fanAbnormal(s, specs) {
 		score -= specs.DeductFanAbnormal
 		factors["fan_abnormal"] = specs.DeductFanAbnormal
 	}
@@ -74,12 +74,17 @@ func tempHigh(s *telemetryv2.Sample, threshold float64) bool {
 	return false
 }
 
-// fanAbnormal 任一风扇转速低于阈值（见 14.4）。
-func fanAbnormal(s *telemetryv2.Sample, threshold float64) bool {
-	for _, v := range []*float64{s.Fan.MPPTSpeed, s.Fan.InvSpeed} {
-		if v != nil && *v < threshold {
-			return true
-		}
+// fanAbnormal 任一"型号已实现"的风扇转速低于阈值（见 14.4）。
+// 按字段能力逐字段门控：型号声明未实现（UnsupportedFields）的字段上报的 0/随机值不代表真实工况
+// （CS-L10-6K2 ARM 对 mppt_fan_speed / inv_fan_speed 恒填 0），跳过该字段；两者都跳过时不判异常、不扣分。
+func fanAbnormal(s *telemetryv2.Sample, specs model.DiagnosticSpecs) bool {
+	if !specs.IsUnsupported(model.FieldKeyMpptFanSpeed) &&
+		s.Fan.MPPTSpeed != nil && *s.Fan.MPPTSpeed < specs.FanSpeedLowPercent {
+		return true
+	}
+	if !specs.IsUnsupported(model.FieldKeyInvFanSpeed) &&
+		s.Fan.InvSpeed != nil && *s.Fan.InvSpeed < specs.FanSpeedLowPercent {
+		return true
 	}
 	return false
 }

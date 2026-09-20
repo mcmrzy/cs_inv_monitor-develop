@@ -19,6 +19,38 @@ type DiagnosticSpecs struct {
 	DeductFanAbnormal     float64 `json:"deduct_fan_abnormal"`      // 风扇异常扣分
 	DeductLowSOC          float64 `json:"deduct_low_soc"`           // 低电量扣分
 	DeductParallelOffline float64 `json:"deduct_parallel_offline"`  // 并机掉线扣分
+
+	// UnsupportedFields 型号固件未实现的字段 key 列表（device_models.specifications.diagnostics.unsupported_fields）。
+	// 语义：该字段上报的 0 / 随机值不代表真实工况（如 CS-L10-6K2 ARM 恒填 0 或 malloc 未清零的堆垃圾），
+	// 因此诊断判据与健康度扣分项必须跳过它；字段能力表同步置 is_supported/is_visible=FALSE（迁移 124）。
+	// 默认 nil/空 = 现有行为不变（向后兼容），只有显式声明的型号受影响；厂家补齐固件后清空即可恢复判据。
+	UnsupportedFields []string `json:"unsupported_fields"`
+}
+
+// 字段 key 常量（与 telemetry_field_catalog.field_key / device_model_fields.field_key / 心跳遥测键名一致），
+// 用于 DiagnosticSpecs.UnsupportedFields 的取值，避免字符串字面量散落各处。
+const (
+	FieldKeyMpptFanSpeed           = "mppt_fan_speed"          // 风扇：MPPT 转速（%）
+	FieldKeyInvFanSpeed            = "inv_fan_speed"           // 风扇：逆变转速（%）
+	FieldKeyInvCurrent             = "inv_current"             // 逆变器输出电流（A）
+	FieldKeyParallelChargeCurrent  = "parallel_charge_current" // 并机充电电流（A）
+	FieldKeyWorkTimeTotal          = "work_time_total"         // 累计运行时长（s）
+	FieldKeyPVTemperature          = "pv_temperature"          // PV 温度（°C）
+	FieldKeyTransformerTemperature = "transformer_temperature" // 变压器温度（°C）
+	FieldKeyPairedSocket           = "paired_socket"           // 已配对插座位掩码
+	FieldKeyOnlineSocket           = "online_socket"           // 在线插座位掩码
+	FieldKeyOnSocket               = "on_socket"               // 运行中插座位掩码
+)
+
+// IsUnsupported 判断字段是否被型号声明为"固件未实现"。
+// 未实现字段不参与诊断事件、散热状态与健康度扣分判据。
+func (s DiagnosticSpecs) IsUnsupported(fieldKey string) bool {
+	for _, k := range s.UnsupportedFields {
+		if k == fieldKey {
+			return true
+		}
+	}
+	return false
 }
 
 // DefaultDiagnosticSpecs 返回默认阈值（与迁移 096 写入 device_models.specifications 的初值一致）。

@@ -113,12 +113,16 @@ func (e *DiagnosticEngine) evaluateRules(ctx context.Context, sn string, s *tele
 	var events []model.DiagnosticEvent
 
 	// 14.1 散热诊断：风扇低速 + 对应温度过高 → fault
+	// 风扇判据按字段能力门控：型号声明未实现的 fan 字段（ARM 恒填 0）不参与判定，
+	// overheat（纯温度）判据保留，不受门控影响。
 	invT, boostT := s.System.InverterTemperature, s.System.BoostTemperature
-	if s.Fan.InvSpeed != nil && invT != nil && *s.Fan.InvSpeed < specs.FanSpeedLowPercent && *invT > specs.FanAbnormalTempC {
+	if !specs.IsUnsupported(model.FieldKeyInvFanSpeed) &&
+		s.Fan.InvSpeed != nil && invT != nil && *s.Fan.InvSpeed < specs.FanSpeedLowPercent && *invT > specs.FanAbnormalTempC {
 		events = append(events, mk(model.RuleInvFanAbnormal, "fault", detail(
 			"inv_fan_speed", round1(*s.Fan.InvSpeed), "inverter_temperature", round1(*invT))))
 	}
-	if s.Fan.MPPTSpeed != nil && boostT != nil && *s.Fan.MPPTSpeed < specs.FanSpeedLowPercent && *boostT > specs.FanAbnormalTempC {
+	if !specs.IsUnsupported(model.FieldKeyMpptFanSpeed) &&
+		s.Fan.MPPTSpeed != nil && boostT != nil && *s.Fan.MPPTSpeed < specs.FanSpeedLowPercent && *boostT > specs.FanAbnormalTempC {
 		events = append(events, mk(model.RuleMpptFanAbnormal, "fault", detail(
 			"mppt_fan_speed", round1(*s.Fan.MPPTSpeed), "boost_temperature", round1(*boostT))))
 	}
@@ -128,7 +132,10 @@ func (e *DiagnosticEngine) evaluateRules(ctx context.Context, sn string, s *tele
 	}
 
 	// 14.2 并机诊断：paired>0 且 online<paired → warning；online>on → info
-	if s.Sock.PairedSocket != nil {
+	// 字段能力门控：paired_socket 被型号声明为未实现时（ARM 侧的随机堆内存是合法 u32，
+	// PairedSocket 指针恒非 nil，"缺失即跳过"收不住），整条并机判据跳过，避免垃圾值触达
+	// PARALLEL_SLAVE_OFFLINE / PARALLEL_SLAVE_NOT_RUNNING。
+	if !specs.IsUnsupported(model.FieldKeyPairedSocket) && s.Sock.PairedSocket != nil {
 		paired := *s.Sock.PairedSocket
 		online := sockOrZero(s.Sock.OnlineSocket)
 		on := sockOrZero(s.Sock.OnSocket)
@@ -143,7 +150,8 @@ func (e *DiagnosticEngine) evaluateRules(ctx context.Context, sn string, s *tele
 	}
 
 	// 14.3 维护提醒：work_time_total 跨过阈值（上次 < 阈值 ≤ 本次）
-	if s.Diag.WorkTimeTotal != nil {
+	// 字段能力门控：型号声明未实现（ARM 恒填 0）时该字段不代表真实运行时长，跳过判据。
+	if !specs.IsUnsupported(model.FieldKeyWorkTimeTotal) && s.Diag.WorkTimeTotal != nil {
 		thresholdSec := specs.MaintenanceHours * 3600
 		cur := *s.Diag.WorkTimeTotal
 		if cur >= thresholdSec {
@@ -160,17 +168,21 @@ func (e *DiagnosticEngine) evaluateRules(ctx context.Context, sn string, s *tele
 }
 
 // deriveThermalStatus 散热状态（文档 6.3/14.1）：fault / warning / normal。
+// 风扇相关判据（fanFault/fanLow）按型号字段能力门控：声明未实现（ARM 恒填 0）的 fan 字段不参与，
+// 避免"风扇 0% 恒 warning"；纯温度判据（overheat/highTemp）不门控，超温仍准确上报 fault/warning。
 func deriveThermalStatus(s *telemetryv2.Sample, specs model.DiagnosticSpecs) string {
 	invT, boostT := s.System.InverterTemperature, s.System.BoostTemperature
 	overheat := (invT != nil && *invT > specs.OverheatTempC) || (boostT != nil && *boostT > specs.OverheatTempC)
-	fanFault := (s.Fan.InvSpeed != nil && invT != nil && *s.Fan.InvSpeed < specs.FanSpeedLowPercent && *invT > specs.FanAbnormalTempC) ||
-		(s.Fan.MPPTSpeed != nil && boostT != nil && *s.Fan.MPPTSpeed < specs.FanSpeedLowPercent && *boostT > specs.FanAbnormalTempC)
+	invFanUsable := !specs.IsUnsupported(model.FieldKeyInvFanSpeed)
+	mpptFanUsable := !specs.IsUnsupported(model.FieldKeyMpptFanSpeed)
+	fanFault := (invFanUsable && s.Fan.InvSpeed != nil && invT != nil && *s.Fan.InvSpeed < specs.FanSpeedLowPercent && *invT > specs.FanAbnormalTempC) ||
+		(mpptFanUsable && s.Fan.MPPTSpeed != nil && boostT != nil && *s.Fan.MPPTSpeed < specs.FanSpeedLowPercent && *boostT > specs.FanAbnormalTempC)
 	if overheat || fanFault {
 		return "fault"
 	}
 	highTemp := (invT != nil && *invT > specs.FanAbnormalTempC) || (boostT != nil && *boostT > specs.FanAbnormalTempC)
-	fanLow := (s.Fan.InvSpeed != nil && *s.Fan.InvSpeed < specs.FanSpeedLowPercent) ||
-		(s.Fan.MPPTSpeed != nil && *s.Fan.MPPTSpeed < specs.FanSpeedLowPercent)
+	fanLow := (invFanUsable && s.Fan.InvSpeed != nil && *s.Fan.InvSpeed < specs.FanSpeedLowPercent) ||
+		(mpptFanUsable && s.Fan.MPPTSpeed != nil && *s.Fan.MPPTSpeed < specs.FanSpeedLowPercent)
 	if highTemp || fanLow {
 		return "warning"
 	}
