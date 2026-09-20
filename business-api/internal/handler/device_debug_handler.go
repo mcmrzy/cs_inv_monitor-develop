@@ -35,7 +35,7 @@ func (h *DeviceDebugHandler) GetSession(c *gin.Context) {
 		"session":       sess, // 无会话时为 null
 		"device_online": online,
 		"supported":     true,
-		"interval_seconds": 30,
+		"interval_seconds": service.DebugIntervalSeconds,
 	})
 }
 

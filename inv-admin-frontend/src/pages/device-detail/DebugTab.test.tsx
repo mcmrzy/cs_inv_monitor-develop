@@ -37,14 +37,14 @@ const SESSION_ID = 42
 
 const ok = (data: unknown) => ({ data: { code: 0, message: 'success', data } })
 
-const noSession = { session: null, device_online: true, supported: true, interval_seconds: 30 }
+const noSession = { session: null, device_online: true, supported: true, interval_seconds: 5 }
 
 function buildActiveSession() {
   return {
     id: SESSION_ID,
     device_sn: SN,
     status: 'active' as const,
-    interval_seconds: 30,
+    interval_seconds: 5,
     duration_seconds: 3600,
     started_at: new Date(Date.now() - 5 * 60_000).toISOString(),
     // 55 分钟后到期 → 倒计时可见
@@ -92,7 +92,7 @@ const samplesPage = {
 function mockActiveSession() {
   const session = buildActiveSession()
   mockedApi.getDebugSession.mockResolvedValue(
-    ok({ session, device_online: true, supported: true, interval_seconds: 30 }) as any,
+    ok({ session, device_online: true, supported: true, interval_seconds: 5 }) as any,
   )
   mockedApi.getDebugSamples.mockResolvedValue(ok(samplesPage) as any)
 }

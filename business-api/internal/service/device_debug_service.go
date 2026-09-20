@@ -19,9 +19,9 @@ import (
 	"go.uber.org/zap"
 )
 
-// 调试模式运行参数（协议固定 30 秒，本期不开放任意高频配置）。
+// 调试模式运行参数（固定 5 秒采样，本期不开放任意周期配置）。
 const (
-	DebugIntervalSeconds     = 30
+	DebugIntervalSeconds     = 5
 	DebugDefaultDurationSec  = 3600  // 每次开启默认 60 分钟
 	DebugMinDurationSec      = 300   // 最短 5 分钟
 	DebugMaxDurationSec      = 14400 // 最长 4 小时
@@ -31,7 +31,7 @@ const (
 	debugCoordinatorInterval = 30 * time.Second
 )
 
-// DebugCommandSetDebugTelemetry 设备命令：切换心跳采样周期（V2 协议，args=[enabled, interval, duration]）。
+// DebugCommandSetDebugTelemetry 设备命令：切换心跳采样周期（V2 协议，args=[enabled, interval, duration]，interval=5 秒）。
 const DebugCommandSetDebugTelemetry = "set_debug_telemetry"
 
 // DeviceDebugService 单设备调试会话：权限、状态机、命令调度、有界样本查询。
