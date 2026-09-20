@@ -1325,7 +1325,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			otaGroup.POST("/tasks/:id/execute", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.ExecuteUpgradeTask)
 			otaGroup.POST("/tasks/:id/cancel", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.CancelUpgradeTask)
 			otaGroup.POST("/tasks/:id/retry", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.RetryUpgradeTask)
-			otaGroup.DELETE("/tasks/:id", deps.OTAHandler.LegacyPackageRetired)
+			otaGroup.DELETE("/tasks/:id", middleware.RequirePermission(deps.PermChecker, "ota", "delete"), deps.OTAHandler.DeleteUpgradeTask)
 			otaGroup.GET("/tasks/:id/devices", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetUpgradeTaskDevices)
 
 			// NOTE: /firmware/:id wildcard conflicts with static sub-routes,
