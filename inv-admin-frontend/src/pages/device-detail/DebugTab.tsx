@@ -11,17 +11,22 @@
  *
  * 语义约定：
  *  - 关闭页面不调用停止 API：会话由服务端 TTL（expires_at）自动过期；
- *  - 曲线四组：MPPT/PV（PV1/PV2 电压 + Buck1/Buck2 电流）、电池、逆变（母线电压+逆变电流）、
- *    负载（交流输出测点）；电压画左轴(V)、电流画右轴(A)，null 断线不连；
+ *  - 曲线分四组（MPPT/PV、电池、逆变、负载），每组含实测测点与派生功率
+ *    （P = U × I，见 debugMetrics.ts）；电压走左轴、电流走右轴、计算功率走第三条右轴，
+ *    「正负轴」开关控制三条纵轴是否以 0 为中心对称展开；
+ *  - 超出物理量程的采样点判为固件脏值：曲线剔除（单点会把纵轴撑爆），
+ *    表格原样保留并标红，卡片头部明示剔除数量；
+ *  - 明细表与曲线同源同窗口，另带窗口内最小/最大汇总行与 CSV 导出；
  *  - 本地累积采样点上限 400（超出裁掉最旧）；切换时间窗会重连并由服务端重发快照。
  */
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Alert, App, Button, Card, Checkbox, Collapse, Select, Space, Spin, Tag, Tooltip, Typography,
+  Alert, App, Button, Card, Checkbox, Collapse, Select, Space, Switch, Tag, Tooltip, Typography,
 } from 'antd'
 import {
-  ClearOutlined, PauseCircleOutlined, PlayCircleOutlined, ReloadOutlined, ThunderboltOutlined,
+  ClearOutlined, DownloadOutlined, PauseCircleOutlined, PlayCircleOutlined,
+  ReloadOutlined, TableOutlined, ThunderboltOutlined, WarningOutlined,
 } from '@ant-design/icons'
 
 import { deviceApi } from '@/services/deviceApi'
@@ -35,7 +40,21 @@ import { formatInTimezone } from '@/utils/timezone'
 import useTimezoneStore from '@/stores/timezoneStore'
 import useTranslation from '@/hooks/useTranslation'
 import { useDebugStream } from '@/hooks/useDebugStream'
-import ReactECharts from '@/lib/echarts'
+import {
+  GROUPS,
+  SERIES_DEFS,
+  formatSeriesValue,
+  groupSeries,
+  isDerived,
+  DEFAULT_SELECTED,
+  type SeriesKey,
+} from './debug/debugMetrics'
+import { buildCsv, computeSeriesStat, qualityFlagsOf } from './debug/debugAnalysis'
+import { buildDebugChartOption } from './debug/debugChartOption'
+import { DEBUG_ACCENT, DEBUG_CHIP_BG, DEBUG_PANEL_STYLE, DEBUG_TEXT, DEBUG_TITLE } from './debug/debugTheme'
+import DebugChart from './debug/DebugChart'
+import DebugTable from './debug/DebugTable'
+import { useDebugLabels } from './debug/useDebugLabels'
 
 const { Text } = Typography
 
@@ -49,64 +68,6 @@ const MAX_POINTS = 400
 
 /** 会话仍「活着」的状态（显示倒计时/停止按钮；interrupted 为终态不提供停止） */
 const LIVE_STATUSES = new Set<DebugSessionStatus>(['starting', 'active', 'stopping'])
-
-/* ═══════════ 曲线分组与选线定义 ═══════════ */
-
-type MetricKey = keyof import('@/services/deviceApi').DebugSampleMetrics
-type GroupKey = 'mppt' | 'battery' | 'inverter' | 'load'
-
-interface MetricDef {
-  key: MetricKey
-  /** 0 = 左轴电压(V)，1 = 右轴电流(A) */
-  axis: 0 | 1
-  color: string
-  /** 读数徽标上的单位 */
-  unit: 'V' | 'A'
-}
-
-/** 界面按测点原名标注：MPPT 组电流注明为 Buck1/Buck2 电流 */
-const METRIC_DEFS: Record<MetricKey, MetricDef> = {
-  pv1_voltage: { key: 'pv1_voltage', axis: 0, color: '#fbbf24', unit: 'V' },
-  buck1_current: { key: 'buck1_current', axis: 1, color: '#fb923c', unit: 'A' },
-  pv2_voltage: { key: 'pv2_voltage', axis: 0, color: '#38bdf8', unit: 'V' },
-  buck2_current: { key: 'buck2_current', axis: 1, color: '#60a5fa', unit: 'A' },
-  battery_voltage: { key: 'battery_voltage', axis: 0, color: '#34d399', unit: 'V' },
-  battery_current: { key: 'battery_current', axis: 1, color: '#10b981', unit: 'A' },
-  dc_bus_voltage: { key: 'dc_bus_voltage', axis: 0, color: '#a78bfa', unit: 'V' },
-  inv_current: { key: 'inv_current', axis: 1, color: '#c084fc', unit: 'A' },
-  ac_voltage: { key: 'ac_voltage', axis: 0, color: '#f87171', unit: 'V' },
-  ac_current: { key: 'ac_current', axis: 1, color: '#f97316', unit: 'A' },
-}
-
-const METRIC_TKEY: Record<MetricKey, string> = {
-  pv1_voltage: 'deviceDetail.debug.metric.pv1Voltage',
-  buck1_current: 'deviceDetail.debug.metric.buck1Current',
-  pv2_voltage: 'deviceDetail.debug.metric.pv2Voltage',
-  buck2_current: 'deviceDetail.debug.metric.buck2Current',
-  battery_voltage: 'deviceDetail.debug.metric.batteryVoltage',
-  battery_current: 'deviceDetail.debug.metric.batteryCurrent',
-  dc_bus_voltage: 'deviceDetail.debug.metric.dcBusVoltage',
-  inv_current: 'deviceDetail.debug.metric.invCurrent',
-  ac_voltage: 'deviceDetail.debug.metric.acVoltage',
-  ac_current: 'deviceDetail.debug.metric.acCurrent',
-}
-
-const GROUPS: { key: GroupKey; metrics: MetricKey[] }[] = [
-  { key: 'mppt', metrics: ['pv1_voltage', 'buck1_current', 'pv2_voltage', 'buck2_current'] },
-  { key: 'battery', metrics: ['battery_voltage', 'battery_current'] },
-  { key: 'inverter', metrics: ['dc_bus_voltage', 'inv_current'] },
-  { key: 'load', metrics: ['ac_voltage', 'ac_current'] },
-]
-
-const GROUP_NOTE_TKEY: Record<GroupKey, string> = {
-  mppt: 'deviceDetail.debug.note.mppt',
-  battery: 'deviceDetail.debug.note.battery',
-  inverter: 'deviceDetail.debug.note.inverter',
-  load: 'deviceDetail.debug.note.load',
-}
-
-/** 默认勾选：电池电压/电流 + 交流电压/电流 */
-const DEFAULT_SELECTED: MetricKey[] = ['battery_voltage', 'battery_current', 'ac_voltage', 'ac_current']
 
 const DURATION_OPTIONS = [1800, 3600, 7200, 14400]
 const WINDOW_OPTIONS = [15, 30, 60] as const
@@ -122,20 +83,6 @@ const STATUS_TAG_COLOR: Record<DebugSessionStatus | 'none', string> = {
   expired: 'default',
   failed: 'error',
 }
-
-/* ═══════════ 深色仪表盘样式常量 ═══════════ */
-
-/** 深色示波器面板：微透明描边 + 深蓝底，曲线在此之上更醒目 */
-const SCOPE_PANEL_STYLE: React.CSSProperties = {
-  borderRadius: 12,
-  border: '1px solid rgba(56,189,248,0.28)',
-  background: 'linear-gradient(165deg, #101a2e 0%, #0b1220 55%, #101f38 100%)',
-  boxShadow: '0 4px 18px rgba(8,15,30,0.45)',
-}
-
-const SCOPE_TEXT = '#94a3b8'
-const SCOPE_SPLIT = 'rgba(148,163,184,0.16)'
-const SCOPE_AXIS = 'rgba(148,163,184,0.35)'
 
 /* ═══════════ 工具函数 ═══════════ */
 
@@ -159,6 +106,19 @@ function formatRemaining(ms: number): string {
 
 const getErrMsg = (e: unknown): string => (e instanceof Error && e.message ? `: ${e.message}` : '')
 
+/** CSV 下载（文件名带 SN 与本地时区时间戳，便于留档） */
+function downloadCsv(filename: string, content: string) {
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+
 /* ═══════════ 主组件 ═══════════ */
 
 const DebugTab: React.FC<DebugTabProps> = ({ sn }) => {
@@ -166,10 +126,13 @@ const DebugTab: React.FC<DebugTabProps> = ({ sn }) => {
   const { timezone } = useTimezoneStore()
   const { message } = App.useApp()
   const queryClient = useQueryClient()
+  const { labels, shortLabels } = useDebugLabels()
 
   const [durationSeconds, setDurationSeconds] = useState(3600)
   const [windowMinutes, setWindowMinutes] = useState<15 | 30 | 60>(60)
-  const [selected, setSelected] = useState<MetricKey[]>(DEFAULT_SELECTED)
+  const [selected, setSelected] = useState<SeriesKey[]>([...DEFAULT_SELECTED])
+  /** 正负轴：三条纵轴以 0 为中心对称展开 */
+  const [symmetricAxis, setSymmetricAxis] = useState(true)
   /** 每秒跳动的「当前时间」，驱动倒计时刷新 */
   const [now, setNow] = useState(() => Date.now())
 
@@ -229,10 +192,20 @@ const DebugTab: React.FC<DebugTabProps> = ({ sn }) => {
     })
   }
 
-  const toggleMetric = (key: MetricKey, checked: boolean) => {
+  const toggleSeries = (key: SeriesKey, checked: boolean) => {
     setSelected((prev) =>
       checked ? (prev.includes(key) ? prev : [...prev, key]) : prev.filter((k) => k !== key),
     )
+  }
+
+  /** 整组选中/清空（分组里既有实测也有派生功率） */
+  const toggleGroup = (keys: SeriesKey[], checked: boolean) => {
+    setSelected((prev) => {
+      if (!checked) return prev.filter((k) => !keys.includes(k))
+      const merged = [...prev]
+      for (const key of keys) if (!merged.includes(key)) merged.push(key)
+      return merged
+    })
   }
 
   /* ── 倒计时 / 最新样本 ── */
@@ -244,111 +217,45 @@ const DebugTab: React.FC<DebugTabProps> = ({ sn }) => {
 
   const lastSampleTime = samples.length > 0 ? samples[samples.length - 1].time : (session?.last_sample_at ?? null)
 
-  /** 每条选中曲线的最新读数（读数徽标用） */
-  const latestReadings = useMemo(() => {
-    const last = samples.length > 0 ? samples[samples.length - 1] : null
-    return selected.map((key) => {
-      const def = METRIC_DEFS[key]
-      const raw = last?.metrics?.[key] ?? null
-      const value = raw != null && Number.isFinite(raw) ? raw : null
-      return { key, def, label: t(METRIC_TKEY[key]), value }
-    })
-  }, [samples, selected, t])
+  /** 每条选中曲线的窗口统计（读数徽标 tooltip + 汇总参照） */
+  const stats = useMemo(
+    () => new Map(selected.map((key) => [key, computeSeriesStat(samples, key)])),
+    [samples, selected],
+  )
 
-  /* ── 深色示波器：双纵轴 + 辉光线 + 渐变面积 + 最新点脉冲光斑 ── */
-  const chartOption = useMemo(() => {
-    if (samples.length === 0) return null
-    const times = samples.map((s) => formatInTimezone(s.time, timezone, 'HH:mm:ss'))
-    const series: Record<string, unknown>[] = []
-    const legendNames: string[] = []
+  /** 曲线 option（越界点在这里被剔除，dropped 计数用于卡片头部明示） */
+  const chart = useMemo(
+    () => buildDebugChartOption({
+      samples,
+      selected,
+      labels,
+      timezone,
+      symmetric: symmetricAxis,
+      axisNames: { voltage: 'V', current: 'A', power: 'W' },
+    }),
+    [samples, selected, labels, timezone, symmetricAxis],
+  )
 
-    for (const key of selected) {
-      const def = METRIC_DEFS[key]
-      const data = samples.map((s) => s.metrics?.[key] ?? null)
-      // 无数据的线不渲染 series
-      if (!data.some((v) => v != null && Number.isFinite(v))) continue
-
-      legendNames.push(t(METRIC_TKEY[key]))
-      series.push({
-        name: t(METRIC_TKEY[key]),
-        type: 'line',
-        yAxisIndex: def.axis,
-        data,
-        showSymbol: false,
-        // null 断线不连
-        connectNulls: false,
-        smooth: 0.25,
-        lineStyle: { width: 2, color: def.color, shadowColor: def.color, shadowBlur: 7 },
-        itemStyle: { color: def.color },
-        emphasis: { focus: 'series' },
-        areaStyle: {
-          color: {
-            type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
-            colorStops: [
-              { offset: 0, color: `${def.color}30` },
-              { offset: 1, color: `${def.color}02` },
-            ],
-          },
+  const handleExport = () => {
+    try {
+      const csv = buildCsv(samples, selected, {
+        timezone,
+        headers: {
+          time: t('deviceDetail.debug.table.time'),
+          quality: t('deviceDetail.debug.table.quality'),
+          series: labels,
         },
+        qualityText: (flags) =>
+          qualityFlagsOf(flags).map((f) => t(f.labelKey)).join('|') || t('deviceDetail.debug.table.qualityOk'),
       })
-
-      // 最新点的脉冲光斑：一眼看出「数据正在进来」
-      let lastIdx = data.length - 1
-      while (lastIdx >= 0 && data[lastIdx] == null) lastIdx -= 1
-      if (lastIdx >= 0) {
-        series.push({
-          name: `${t(METRIC_TKEY[key])}·live`,
-          type: 'effectScatter',
-          yAxisIndex: def.axis,
-          data: [[lastIdx, data[lastIdx]]],
-          symbolSize: 6,
-          rippleEffect: { scale: 3.2, brushType: 'stroke' },
-          itemStyle: { color: def.color, shadowColor: def.color, shadowBlur: 10 },
-          tooltip: { show: false },
-          silent: true,
-          z: 6,
-        })
-      }
+      downloadCsv(
+        `debug-${sn}-${formatInTimezone(new Date().toISOString(), timezone, 'YYYYMMDD-HHmmss')}.csv`,
+        csv,
+      )
+    } catch (e) {
+      message.error(`${t('deviceDetail.debug.table.exportFailed')}${getErrMsg(e)}`)
     }
-    if (series.length === 0) return null
-    return {
-      backgroundColor: 'transparent',
-      tooltip: {
-        trigger: 'axis' as const,
-        backgroundColor: 'rgba(13,20,36,0.92)',
-        borderColor: 'rgba(56,189,248,0.35)',
-        textStyle: { color: '#e2e8f0', fontSize: 12 },
-        axisPointer: { type: 'cross' as const, lineStyle: { color: 'rgba(148,163,184,0.45)' } },
-      },
-      legend: { data: legendNames, top: 0, textStyle: { color: SCOPE_TEXT, fontSize: 11 }, itemGap: 12 },
-      grid: { left: '3%', right: '4%', bottom: '14%', top: 36, containLabel: true },
-      xAxis: {
-        type: 'category' as const,
-        data: times,
-        axisLabel: { fontSize: 11, color: SCOPE_TEXT },
-        axisLine: { lineStyle: { color: SCOPE_AXIS } },
-      },
-      yAxis: [
-        {
-          type: 'value' as const, name: 'V', scale: true,
-          nameTextStyle: { color: SCOPE_TEXT },
-          axisLabel: { fontSize: 11, color: SCOPE_TEXT },
-          splitLine: { lineStyle: { color: SCOPE_SPLIT } },
-        },
-        {
-          type: 'value' as const, name: 'A', scale: true,
-          nameTextStyle: { color: SCOPE_TEXT },
-          axisLabel: { fontSize: 11, color: SCOPE_TEXT },
-          splitLine: { show: false },
-        },
-      ],
-      dataZoom: [
-        { type: 'inside', start: 0, end: 100 },
-        { type: 'slider', start: 0, end: 100, height: 16, bottom: 6, borderColor: SCOPE_AXIS },
-      ],
-      series,
-    }
-  }, [samples, selected, timezone, t])
+  }
 
   // 占用中（含 stopping）不允许再点开始：避免与后端 409 conflict 空转
   const hasLiveSession = session != null && LIVE_STATUSES.has(session.status)
@@ -366,205 +273,297 @@ const DebugTab: React.FC<DebugTabProps> = ({ sn }) => {
     </Tooltip>
   )
 
+  /** 越界剔除提示：明确告诉用户「曲线少画的点去哪里了」 */
+  const droppedBadge = chart.dropped > 0 && (
+    <Tooltip title={t('deviceDetail.debug.excludedHint')}>
+      <Tag icon={<WarningOutlined />} color="warning" style={{ marginInlineEnd: 0, borderRadius: 999 }}>
+        {t('deviceDetail.debug.excluded', { n: chart.dropped })}
+      </Tag>
+    </Tooltip>
+  )
+
   return (
-    <Spin spinning={sessionLoading && !session}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {/* ── 控制区 ── */}
-        <Card size="small" style={{ borderRadius: 12, boxShadow: CARD_SHADOW }}>
-          <Space size={16} wrap align="center">
-            <Text code copyable={false}>{sn}</Text>
-            <Tag color={deviceOnline ? 'green' : 'default'} style={{ marginInlineEnd: 0 }}>
-              {deviceOnline ? t('deviceDetail.debug.deviceOnline') : t('deviceDetail.debug.deviceOffline')}
-            </Tag>
-            <Tag color={STATUS_TAG_COLOR[status]} style={{ marginInlineEnd: 0 }}>
-              {t(`deviceDetail.debug.status.${status}`)}
-            </Tag>
-            {liveBadge}
-            {sessionLive && (
-              <Text type="secondary" style={{ fontSize: 13 }}>
-                {t('deviceDetail.debug.remaining')}:{' '}
-                <Text strong style={{ fontFamily: 'monospace', fontSize: 15 }}>
-                  {formatRemaining(remainingMs)}
-                </Text>
-                {session?.expires_at && (
-                  <>（{formatInTimezone(session.expires_at, timezone, 'HH:mm')}）</>
-                )}
-              </Text>
-            )}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* ── 控制区 ── */}
+      <Card size="small" style={{ borderRadius: 12, boxShadow: CARD_SHADOW }} loading={sessionLoading && !session}>
+        <Space size={16} wrap align="center">
+          <Text code copyable={false}>{sn}</Text>
+          <Tag color={deviceOnline ? 'green' : 'default'} style={{ marginInlineEnd: 0 }}>
+            {deviceOnline ? t('deviceDetail.debug.deviceOnline') : t('deviceDetail.debug.deviceOffline')}
+          </Tag>
+          <Tag color={STATUS_TAG_COLOR[status]} style={{ marginInlineEnd: 0 }}>
+            {t(`deviceDetail.debug.status.${status}`)}
+          </Tag>
+          {liveBadge}
+          {sessionLive && (
             <Text type="secondary" style={{ fontSize: 13 }}>
-              {t('deviceDetail.debug.lastSample')}:{' '}
-              {lastSampleTime ? formatInTimezone(lastSampleTime, timezone, 'HH:mm:ss') : t('deviceDetail.debug.noSample')}
+              {t('deviceDetail.debug.remaining')}:{' '}
+              <Text strong style={{ fontFamily: 'monospace', fontSize: 15 }}>
+                {formatRemaining(remainingMs)}
+              </Text>
+              {session?.expires_at && (
+                <>（{formatInTimezone(session.expires_at, timezone, 'HH:mm')}）</>
+              )}
             </Text>
-          </Space>
-
-          <Space size={12} wrap style={{ marginTop: 12 }}>
-            <Space size={8}>
-              <Text type="secondary" style={{ fontSize: 13 }}>{t('deviceDetail.debug.duration')}</Text>
-              <Select
-                value={durationSeconds}
-                onChange={setDurationSeconds}
-                disabled={startMutation.isPending}
-                style={{ width: 120 }}
-                options={DURATION_OPTIONS.map((v) => ({
-                  value: v,
-                  label: t(`deviceDetail.debug.duration.${v}`),
-                }))}
-              />
-            </Space>
-            <Button
-              type="primary"
-              icon={<PlayCircleOutlined />}
-              loading={startMutation.isPending}
-              disabled={hasLiveSession || !deviceOnline}
-              onClick={handleStart}
-            >
-              {t('deviceDetail.debug.start')}
-            </Button>
-            {session && sessionLive && (
-              <Button
-                danger
-                icon={<PauseCircleOutlined />}
-                loading={stopMutation.isPending}
-                disabled={session.status === 'stopping'}
-                onClick={() => session && stopMutation.mutate(session.id)}
-              >
-                {t('deviceDetail.debug.stop')}
-              </Button>
-            )}
-            {session?.status === 'failed' && session.failure_reason && (
-              <Text type="danger" style={{ fontSize: 12 }}>{session.failure_reason}</Text>
-            )}
-          </Space>
-
-          {!supported && (
-            <Alert type="warning" showIcon style={{ marginTop: 12, borderRadius: 10 }}
-              message={t('deviceDetail.debug.unsupported')} />
           )}
-          {sessionLive && stream.error && (
-            <Alert
-              type="error"
-              showIcon
-              style={{ marginTop: 12, borderRadius: 10 }}
-              message={t('deviceDetail.debug.streamError')}
-              description={
-                <Space direction="vertical" size={4}>
-                  <Text type="secondary" style={{ fontSize: 12 }}>{stream.error}</Text>
-                  <Button size="small" icon={<ReloadOutlined />} onClick={stream.reconnect}>
-                    {t('deviceDetail.debug.retry')}
-                  </Button>
-                </Space>
-              }
+          <Text type="secondary" style={{ fontSize: 13 }}>
+            {t('deviceDetail.debug.lastSample')}:{' '}
+            {lastSampleTime ? formatInTimezone(lastSampleTime, timezone, 'HH:mm:ss') : t('deviceDetail.debug.noSample')}
+          </Text>
+        </Space>
+
+        <Space size={12} wrap style={{ marginTop: 12 }}>
+          <Space size={8}>
+            <Text type="secondary" style={{ fontSize: 13 }}>{t('deviceDetail.debug.duration')}</Text>
+            <Select
+              value={durationSeconds}
+              onChange={setDurationSeconds}
+              disabled={startMutation.isPending}
+              style={{ width: 120 }}
+              options={DURATION_OPTIONS.map((v) => ({
+                value: v,
+                label: t(`deviceDetail.debug.duration.${v}`),
+              }))}
             />
+          </Space>
+          <Button
+            type="primary"
+            icon={<PlayCircleOutlined />}
+            loading={startMutation.isPending}
+            disabled={hasLiveSession || !deviceOnline}
+            onClick={handleStart}
+          >
+            {t('deviceDetail.debug.start')}
+          </Button>
+          {session && sessionLive && (
+            <Button
+              danger
+              icon={<PauseCircleOutlined />}
+              loading={stopMutation.isPending}
+              disabled={session.status === 'stopping'}
+              onClick={() => session && stopMutation.mutate(session.id)}
+            >
+              {t('deviceDetail.debug.stop')}
+            </Button>
           )}
-          <Alert type="info" showIcon style={{ marginTop: 12, borderRadius: 10 }}
-            message={t('deviceDetail.debug.note.session')} />
-        </Card>
+          {session?.status === 'failed' && session.failure_reason && (
+            <Text type="danger" style={{ fontSize: 12 }}>{session.failure_reason}</Text>
+          )}
+        </Space>
 
-        {/* ── 选线区 ── */}
-        <Card size="small" style={{ borderRadius: 12, boxShadow: CARD_SHADOW }}>
-          <Collapse
-            size="small"
-            // 调试页默认展开全部分组，方便直接看到所有可勾选曲线
-            defaultActiveKey={GROUPS.map((g) => g.key)}
-            items={GROUPS.map((g) => ({
+        {!supported && (
+          <Alert type="warning" showIcon style={{ marginTop: 12, borderRadius: 10 }}
+            message={t('deviceDetail.debug.unsupported')} />
+        )}
+        {sessionLive && stream.error && (
+          <Alert
+            type="error"
+            showIcon
+            style={{ marginTop: 12, borderRadius: 10 }}
+            message={t('deviceDetail.debug.streamError')}
+            description={
+              <Space direction="vertical" size={4}>
+                <Text type="secondary" style={{ fontSize: 12 }}>{stream.error}</Text>
+                <Button size="small" icon={<ReloadOutlined />} onClick={stream.reconnect}>
+                  {t('deviceDetail.debug.retry')}
+                </Button>
+              </Space>
+            }
+          />
+        )}
+        <Alert type="info" showIcon style={{ marginTop: 12, borderRadius: 10 }}
+          message={t('deviceDetail.debug.note.session')} />
+      </Card>
+
+      {/* ── 选线区 ── */}
+      <Card size="small" style={{ borderRadius: 12, boxShadow: CARD_SHADOW }}>
+        <Collapse
+          size="small"
+          // 调试页默认展开全部分组，方便直接看到所有可勾选曲线
+          defaultActiveKey={GROUPS.map((g) => g.key)}
+          items={GROUPS.map((g) => {
+            const all = groupSeries(g)
+            const allChecked = all.every((k) => selected.includes(k))
+            return {
               key: g.key,
               label: (
                 <Space size={10} wrap>
                   <span style={{ fontWeight: 600 }}>{t(`deviceDetail.debug.group.${g.key}`)}</span>
                   <Text type="secondary" style={{ fontSize: 12, fontWeight: 400 }}>
-                    {t(GROUP_NOTE_TKEY[g.key])}
+                    {t(`deviceDetail.debug.note.${g.key}`)}
                   </Text>
                 </Space>
               ),
+              extra: (
+                <Space size={2} onClick={(e) => e.stopPropagation()}>
+                  <Button type="link" size="small" onClick={() => toggleGroup(all, true)} disabled={allChecked}>
+                    {t('deviceDetail.debug.groupSelectAll')}
+                  </Button>
+                  <Button
+                    type="link"
+                    size="small"
+                    onClick={() => toggleGroup(all, false)}
+                    disabled={!all.some((k) => selected.includes(k))}
+                  >
+                    {t('deviceDetail.debug.groupClear')}
+                  </Button>
+                </Space>
+              ),
               children: (
-                <Space size={[4, 8]} wrap>
-                  {g.metrics.map((mk) => {
-                    const def = METRIC_DEFS[mk]
-                    return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <Space size={[4, 8]} wrap>
+                    {g.metrics.map((mk) => (
                       <Checkbox
                         key={mk}
                         checked={selected.includes(mk)}
-                        onChange={(e) => toggleMetric(mk, e.target.checked)}
+                        onChange={(e) => toggleSeries(mk, e.target.checked)}
                       >
-                        <span style={{ color: def.color, fontWeight: 600, marginInlineEnd: 4 }}>■</span>
-                        {t(METRIC_TKEY[mk])}
+                        <span style={{ color: SERIES_DEFS[mk].color, fontWeight: 600, marginInlineEnd: 4 }}>■</span>
+                        {labels[mk]}
                       </Checkbox>
-                    )
-                  })}
-                </Space>
-              ),
-            }))}
-          />
-        </Card>
-
-        {/* ── 曲线区：深色示波器面板 ── */}
-        <Card
-          size="small"
-          style={{ ...SCOPE_PANEL_STYLE }}
-          styles={{ body: { padding: '12px 16px 8px' } }}
-          title={
-            <Space size={10} wrap>
-              <ThunderboltOutlined style={{ color: '#38bdf8' }} />
-              <span style={{ fontWeight: 600, color: '#e2e8f0' }}>{t('deviceDetail.debug.chartTitle')}</span>
-              {liveBadge}
-            </Space>
-          }
-          extra={
-            <Space size={12} wrap>
-              <Space size={8}>
-                <Text type="secondary" style={{ fontSize: 13, color: SCOPE_TEXT }}>{t('deviceDetail.debug.window')}</Text>
-                <Select
-                  value={windowMinutes}
-                  onChange={(value) => setWindowMinutes(value as 15 | 30 | 60)}
-                  style={{ width: 100 }}
-                  options={WINDOW_OPTIONS.map((v) => ({
-                    value: v,
-                    label: t(`deviceDetail.debug.window.${v}`),
-                  }))}
-                />
-              </Space>
-              <Button
-                size="small"
-                icon={<ClearOutlined />}
-                disabled={selected.length === 0}
-                onClick={() => setSelected([])}
-              >
-                {t('deviceDetail.debug.clearAll')}
-              </Button>
-            </Space>
-          }
-        >
-          {/* 最新读数徽标：数字随推送实时跳动 */}
-          {latestReadings.length > 0 && (
-            <Space size={8} wrap style={{ marginBottom: 10 }}>
-              {latestReadings.map(({ key, def, label, value }) => (
-                <div
-                  key={key}
-                  style={{
-                    display: 'flex', alignItems: 'baseline', gap: 6, padding: '4px 10px', borderRadius: 8,
-                    background: 'rgba(148,163,184,0.08)', border: `1px solid ${def.color}44`,
-                  }}
-                >
-                  <span style={{ width: 8, height: 8, borderRadius: 999, background: def.color, alignSelf: 'center' }} />
-                  <span style={{ fontSize: 12, color: SCOPE_TEXT }}>{label}</span>
-                  <span style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 600, color: def.color }}>
-                    {value != null ? value.toFixed(2) : '--'}
-                  </span>
-                  <span style={{ fontSize: 11, color: SCOPE_TEXT }}>{def.unit}</span>
+                    ))}
+                  </Space>
+                  <Space size={[4, 8]} wrap>
+                    <Text type="secondary" style={{ fontSize: 12 }}>{t('deviceDetail.debug.derivedRow')}</Text>
+                    {g.powers.map((pk) => (
+                      <Checkbox
+                        key={pk}
+                        checked={selected.includes(pk)}
+                        onChange={(e) => toggleSeries(pk, e.target.checked)}
+                      >
+                        <span style={{ color: SERIES_DEFS[pk].color, fontWeight: 600, marginInlineEnd: 4 }}>▬</span>
+                        {labels[pk]}
+                      </Checkbox>
+                    ))}
+                  </Space>
                 </div>
-              ))}
+              ),
+            }
+          })}
+        />
+      </Card>
+
+      {/* ── 曲线区：白底彩色示波器 ── */}
+      <Card
+        size="small"
+        style={{ ...DEBUG_PANEL_STYLE }}
+        styles={{ body: { padding: '12px 16px 8px' } }}
+        title={
+          <Space size={10} wrap>
+            <ThunderboltOutlined style={{ color: DEBUG_ACCENT }} />
+            <span style={{ fontWeight: 600, color: DEBUG_TITLE }}>{t('deviceDetail.debug.chartTitle')}</span>
+            {liveBadge}
+            {droppedBadge}
+          </Space>
+        }
+        extra={
+          <Space size={12} wrap>
+            <Tooltip title={t('deviceDetail.debug.axisToggleHint')}>
+              <Space size={6}>
+                <Text style={{ fontSize: 13, color: DEBUG_TEXT }}>{t('deviceDetail.debug.axisToggle')}</Text>
+                <Switch size="small" checked={symmetricAxis} onChange={setSymmetricAxis} />
+              </Space>
+            </Tooltip>
+            <Space size={8}>
+              <Text style={{ fontSize: 13, color: DEBUG_TEXT }}>{t('deviceDetail.debug.window')}</Text>
+              <Select
+                value={windowMinutes}
+                size="small"
+                onChange={(value) => setWindowMinutes(value as 15 | 30 | 60)}
+                style={{ width: 92 }}
+                options={WINDOW_OPTIONS.map((v) => ({
+                  value: v,
+                  label: t(`deviceDetail.debug.window.${v}`),
+                }))}
+              />
             </Space>
-          )}
-          {chartOption ? (
-            <ReactECharts option={chartOption} notMerge lazyUpdate style={{ height: 380, width: '100%' }} />
-          ) : (
-            <div style={{ padding: '56px 0', textAlign: 'center', color: SCOPE_TEXT, fontSize: 13 }}>
-              {t('deviceDetail.debug.noPoints')}
-            </div>
-          )}
-        </Card>
-      </div>
-    </Spin>
+            <Button
+              size="small"
+              icon={<ClearOutlined />}
+              disabled={selected.length === 0}
+              onClick={() => setSelected([])}
+            >
+              {t('deviceDetail.debug.clearAll')}
+            </Button>
+          </Space>
+        }
+      >
+        {/* 最新读数徽标：数字随推送实时跳动；悬浮看窗口统计 */}
+        {selected.length > 0 && (
+          <Space size={8} wrap style={{ marginBottom: 10 }}>
+            {selected.map((key) => {
+              const def = SERIES_DEFS[key]
+              const stat = stats.get(key)
+              const value = stat?.last ?? null
+              const derived = isDerived(key)
+              return (
+                <Tooltip
+                  key={key}
+                  title={t('deviceDetail.debug.statsHint', {
+                    min: stat?.min == null ? '--' : formatSeriesValue(key, stat.min),
+                    max: stat?.max == null ? '--' : formatSeriesValue(key, stat.max),
+                    avg: stat?.avg == null ? '--' : formatSeriesValue(key, stat.avg),
+                    count: stat?.valid ?? 0,
+                  })}
+                >
+                  <div
+                    style={{
+                      display: 'flex', alignItems: 'baseline', gap: 5, padding: '3px 8px', borderRadius: 8,
+                      background: DEBUG_CHIP_BG,
+                      border: `1px ${derived ? 'dashed' : 'solid'} ${def.color}55`,
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 8, height: 8, borderRadius: derived ? 2 : 999,
+                        background: def.color, alignSelf: 'center',
+                      }}
+                    />
+                    <span style={{ fontSize: 12, color: DEBUG_TEXT }}>{labels[key]}</span>
+                    <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 600, color: def.color }}>
+                      {formatSeriesValue(key, value)}
+                    </span>
+                    <span style={{ fontSize: 11, color: DEBUG_TEXT }}>{def.unit}</span>
+                  </div>
+                </Tooltip>
+              )
+            })}
+          </Space>
+        )}
+        <DebugChart option={chart.option} emptyText={t('deviceDetail.debug.noPoints')} />
+        <div style={{ marginTop: 6, fontSize: 11, color: DEBUG_TEXT, lineHeight: 1.6 }}>
+          {t('deviceDetail.debug.footNote')}
+        </div>
+      </Card>
+
+      {/* ── 明细表：曲线之外可读、可导出的原始数据 ── */}
+      <Card
+        size="small"
+        style={{ ...DEBUG_PANEL_STYLE }}
+        styles={{ body: { padding: '8px 12px 4px' } }}
+        title={
+          <Space size={10} wrap>
+            <TableOutlined style={{ color: DEBUG_ACCENT }} />
+            <span style={{ fontWeight: 600, color: DEBUG_TITLE }}>{t('deviceDetail.debug.table.title')}</span>
+            <Text style={{ fontSize: 12, color: DEBUG_TEXT }}>
+              {t('deviceDetail.debug.table.subtitle')}
+            </Text>
+          </Space>
+        }
+        extra={
+          <Button
+            size="small"
+            icon={<DownloadOutlined />}
+            disabled={samples.length === 0 || selected.length === 0}
+            onClick={handleExport}
+          >
+            {t('deviceDetail.debug.table.export')}
+          </Button>
+        }
+      >
+        <DebugTable samples={samples} keys={selected} labels={labels} shortLabels={shortLabels} timezone={timezone} />
+      </Card>
+    </div>
   )
 }
 

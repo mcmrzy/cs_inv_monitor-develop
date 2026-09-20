@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"math"
 	"time"
 
 	"inv-api-server/internal/model"
@@ -10,6 +11,22 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
+
+// roundDebugMetric 规整 REAL(float32) 指标列读出后带出的表示噪声。
+// device_telemetry_3min 的指标列是 float32，读成 float64 后 51.2 会变成
+// 51.20000076293945；调试页的 tooltip/表格直显这些数字极难读，且会传给
+// 前端参与功率计算。保留 3 位小数（远超传感器有效精度）足以抹掉噪声，
+// 同时把 -0 归一化为 0（否则 JSON 里会出现 "-0"）。
+func roundDebugMetric(p *float64) *float64 {
+	if p == nil {
+		return nil
+	}
+	v := math.Round(*p*1000) / 1000
+	if v == 0 {
+		v = 0
+	}
+	return &v
+}
 
 // ErrDebugSessionConflict 同设备已有占用中会话（部分唯一索引 uq_device_debug_active_sn）。
 var ErrDebugSessionConflict = errors.New("device debug session conflict")
@@ -263,10 +280,11 @@ func (r *DeviceRepository) GetDebugSamples(ctx context.Context, sn string, from,
 			return nil, "", err
 		}
 		p.Metrics = model.DebugSampleMetrics{
-			PV1Voltage: pv1, Buck1Current: buck1, PV2Voltage: pv2, Buck2Current: buck2,
-			BatteryVoltage: batV, BatteryCurrent: batI,
-			DCBusVoltage: busV, InvCurrent: invI,
-			ACVoltage: acV, ACCurrent: acI,
+			PV1Voltage: roundDebugMetric(pv1), Buck1Current: roundDebugMetric(buck1),
+			PV2Voltage: roundDebugMetric(pv2), Buck2Current: roundDebugMetric(buck2),
+			BatteryVoltage: roundDebugMetric(batV), BatteryCurrent: roundDebugMetric(batI),
+			DCBusVoltage: roundDebugMetric(busV), InvCurrent: roundDebugMetric(invI),
+			ACVoltage: roundDebugMetric(acV), ACCurrent: roundDebugMetric(acI),
 		}
 		items = append(items, p)
 		lastCursorHash = dataHash
