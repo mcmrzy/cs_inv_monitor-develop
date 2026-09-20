@@ -3,8 +3,10 @@ package handler
 import (
 	"encoding/csv"
 	"fmt"
+	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"inv-api-server/internal/middleware"
@@ -16,6 +18,9 @@ import (
 	"github.com/xuri/excelize/v2"
 	"go.uber.org/zap"
 )
+
+// telemetryFieldNamePattern 限定可请求的遥测字段名形状（与数据库列名一致）。
+var telemetryFieldNamePattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 
 // GetRealtimeData returns the latest realtime data for a device from Redis.
 func (h *DeviceHandler) GetRealtimeData(c *gin.Context) {
@@ -56,6 +61,10 @@ func (h *DeviceHandler) GetRealtimeData(c *gin.Context) {
 }
 
 // GetTelemetry returns paginated telemetry data for a device.
+//
+// 查询参数：startTime/start_time、endTime/end_time、granularity（raw|hour|day|week|month）、
+// page、page_size、sort（asc|desc）、tz、fields（逗号分隔，仅聚合粒度生效）。
+// 分页在数据库侧完成，长区间的 total 是真实行数/桶数，不会因为只取一页而丢数据。
 func (h *DeviceHandler) GetTelemetry(c *gin.Context) {
 	sn := c.Param("sn")
 	userID := middleware.GetUserID(c)
@@ -66,8 +75,8 @@ func (h *DeviceHandler) GetTelemetry(c *gin.Context) {
 		return
 	}
 
-	startTime := c.Query("startTime")
-	endTime := c.Query("endTime")
+	startTime := firstQueryValue(c, "startTime", "start_time")
+	endTime := firstQueryValue(c, "endTime", "end_time")
 	granularity := c.DefaultQuery("granularity", "")
 
 	// 分页参数
@@ -106,34 +115,64 @@ func (h *DeviceHandler) GetTelemetry(c *gin.Context) {
 		}
 	}
 
-	data, err := h.deviceService.GetTelemetryData(c.Request.Context(), sn, startTime, endTime, granularity)
+	ctx := c.Request.Context()
+	tz := c.Query("tz")
+	if tz == "" {
+		tz = getUserTimezone(ctx, h.db, userID)
+	}
+	fields := parseTelemetryFields(c.Query("fields"))
+	desc := c.DefaultQuery("sort", "asc") == "desc"
+
+	total, err := h.deviceService.CountTelemetry(ctx, sn, startTime, endTime, granularity, tz)
 	if err != nil {
-		logger.Error("GetTelemetry failed", zap.String("sn", sn), zap.Error(err))
+		logger.Error("CountTelemetry failed", zap.String("sn", sn), zap.Error(err))
 		response.Error(c, 500, "获取遥测数据失败")
 		return
 	}
 
-	// 支持降序排序
-	sortOrder := c.DefaultQuery("sort", "asc")
-	if sortOrder == "desc" {
-		for i, j := 0, len(data)-1; i < j; i, j = i+1, j-1 {
-			data[i], data[j] = data[j], data[i]
-		}
+	offset := (page - 1) * pageSizeParam
+	if int64(offset) > total {
+		offset = int(total)
 	}
-
-	// 应用分页
-	total := int64(len(data))
-	start := (page - 1) * pageSizeParam
-	if start > len(data) {
-		start = len(data)
+	pagedData, err := h.deviceService.GetTelemetryPage(ctx, sn, startTime, endTime, granularity, tz,
+		desc, offset, pageSizeParam, fields)
+	if err != nil {
+		logger.Error("GetTelemetryPage failed", zap.String("sn", sn), zap.Error(err))
+		response.Error(c, 500, "获取遥测数据失败")
+		return
 	}
-	end := start + pageSizeParam
-	if end > len(data) {
-		end = len(data)
-	}
-	pagedData := data[start:end]
 
 	response.Page(c, pagedData, total, page, pageSizeParam)
+}
+
+// firstQueryValue 返回第一个非空的查询参数值，用于兼容 camelCase 与 snake_case 两套命名。
+func firstQueryValue(c *gin.Context, keys ...string) string {
+	for _, key := range keys {
+		if value := c.Query(key); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+// parseTelemetryFields 解析 fields=key1,key2 形式的白名单，非法字段名直接丢弃。
+// 字段名会作为 jsonb 取值参数传给数据库，不做字符串拼接，因此这里只做形状校验。
+func parseTelemetryFields(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	fields := make([]string, 0, len(parts))
+	seen := make(map[string]bool, len(parts))
+	for _, part := range parts {
+		field := strings.TrimSpace(part)
+		if field == "" || seen[field] || !telemetryFieldNamePattern.MatchString(field) {
+			continue
+		}
+		seen[field] = true
+		fields = append(fields, field)
+	}
+	return fields
 }
 
 // GetHistory returns historical data for a device.

@@ -1026,6 +1026,16 @@ func (s *DeviceService) GetTelemetryData(ctx context.Context, sn, startTime, end
 	return s.repo.GetTelemetryData(ctx, sn, startTime, endTime, granularity)
 }
 
+// CountTelemetry 返回区间内的遥测行数（raw）或时间桶数（聚合粒度）。
+func (s *DeviceService) CountTelemetry(ctx context.Context, sn, startTime, endTime, granularity, tz string) (int64, error) {
+	return s.repo.CountTelemetry(ctx, sn, startTime, endTime, granularity, tz)
+}
+
+// GetTelemetryPage 读取一页遥测数据，分页与聚合都在数据库侧完成。
+func (s *DeviceService) GetTelemetryPage(ctx context.Context, sn, startTime, endTime, granularity, tz string, desc bool, offset, limit int, fields []string) ([]map[string]interface{}, error) {
+	return s.repo.GetTelemetryPage(ctx, sn, startTime, endTime, granularity, tz, desc, offset, limit, fields)
+}
+
 func (s *DeviceService) GetLifecycleHistory(ctx context.Context, sn string, page, pageSize int) ([]map[string]interface{}, int64, error) {
 	return s.repo.GetLifecycleHistory(ctx, sn, page, pageSize)
 }
