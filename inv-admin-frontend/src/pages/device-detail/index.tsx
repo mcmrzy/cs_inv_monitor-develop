@@ -77,7 +77,7 @@ const DeviceDetailPage: React.FC = () => {
         }}
       >
         <Space size={12} align="center" wrap>
-          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>
+          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/devices')}>
             {t('deviceDetail.back')}
           </Button>
           <span style={{ fontSize: 20, fontWeight: 600, lineHeight: 1.4 }}>
