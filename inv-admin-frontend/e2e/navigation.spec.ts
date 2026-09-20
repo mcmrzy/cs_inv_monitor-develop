@@ -169,23 +169,24 @@ test.describe('重定向', () => {
   })
 })
 
-test.describe('全屏页面', () => {
-  test('设备详情全屏页：返回按钮 + 12 个 Tab + 无侧边栏', async ({ page }) => {
+test.describe('全屏与设备详情页', () => {
+  test('设备详情页：返回按钮 + 12 个 Tab + 统一侧边栏外壳', async ({ page }) => {
     await gotoAuthed(page, `/devices/${acc.devices[0]}/detail`)
     await expect(page.getByRole('button', { name: /返回|Back/i })).toBeVisible({ timeout: 15_000 })
     await expect(page.getByText('设备详情', { exact: true })).toBeVisible()
     await expect(page.getByText(new RegExp(`设备序列号:\\s*${acc.devices[0]}`))).toBeVisible()
     await expect(page.locator('.ant-tabs-tab')).toHaveCount(12)
-    await expect(page.locator('.ant-layout-sider')).toHaveCount(0)
-    await expect(page.locator('.ant-menu-root')).toHaveCount(0)
+    // 与其它页面同一外壳：侧边栏与菜单在详情页内可见（不再走全屏布局）
+    await expect(page.locator('.ant-layout-sider')).toHaveCount(1)
+    await expect(page.locator('.ant-menu-root')).toHaveCount(1)
   })
 
-  test('设备详情全屏页（第二台设备）：SN 正确展示', async ({ page }) => {
+  test('设备详情页（第二台设备）：SN 正确展示', async ({ page }) => {
     await gotoAuthed(page, `/devices/${acc.devices[1]}/detail`)
     await expect(page.getByRole('button', { name: /返回|Back/i })).toBeVisible({ timeout: 15_000 })
     await expect(page.getByText(new RegExp(`设备序列号:\\s*${acc.devices[1]}`))).toBeVisible()
     await expect(page.locator('.ant-tabs')).toBeVisible()
-    await expect(page.locator('.ant-layout-sider')).toHaveCount(0)
+    await expect(page.locator('.ant-layout-sider')).toHaveCount(1)
   })
 
   test('设备详情返回导航：返回按钮回到来源列表', async ({ page }) => {
