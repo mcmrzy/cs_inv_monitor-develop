@@ -779,8 +779,8 @@ func (s *DeviceService) ValidateControlCommand(ctx context.Context, sn string, c
 
 // CheckCommandPermission performs fine-grained permission_code validation for a specific command.
 // If the command has no permission_code configured, the check is skipped (backward compatible).
-// The permission_code format is "resource_action" (e.g. "device_control_basic"),
-// split on the last underscore to get (resource, action).
+// Canonical permission codes use "resource:action". Legacy command-level codes
+// may use "resource_action" (for example "device_control_basic").
 func (s *DeviceService) CheckCommandPermission(ctx context.Context, userID int64, sn, commandCode string) error {
 	permCode, err := s.modelRepo.GetCommandPermissionCode(ctx, sn, commandCode)
 	if err != nil {
@@ -790,17 +790,25 @@ func (s *DeviceService) CheckCommandPermission(ctx context.Context, userID int64
 		// 命令未配置权限码，跳过细粒度检查（向后兼容）
 		return nil
 	}
-	// 将权限码拆分为 (resource, action) 二元组
-	// 例如 "device_control_basic" → resource="device_control", action="basic"
-	idx := strings.LastIndex(permCode, "_")
-	if idx <= 0 || idx == len(permCode)-1 {
+	resource, action, ok := splitCommandPermissionCode(permCode)
+	if !ok {
 		return fmt.Errorf("invalid permission_code format: %s", permCode)
 	}
-	resource, action := permCode[:idx], permCode[idx+1:]
 	if s.permChecker != nil && !s.permChecker.CheckPermission(userID, resource, action) {
 		return fmt.Errorf("缺少权限: %s", permCode)
 	}
 	return nil
+}
+
+func splitCommandPermissionCode(code string) (resource, action string, ok bool) {
+	idx := strings.LastIndex(code, ":")
+	if idx < 0 {
+		idx = strings.LastIndex(code, "_")
+	}
+	if idx <= 0 || idx == len(code)-1 {
+		return "", "", false
+	}
+	return code[:idx], code[idx+1:], true
 }
 
 // GetControlCapabilitiesBySN returns all command capabilities for the device model identified by SN.

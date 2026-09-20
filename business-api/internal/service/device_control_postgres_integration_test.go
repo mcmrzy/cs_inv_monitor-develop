@@ -55,7 +55,7 @@ func setupDeviceControlTestDB(t *testing.T) *pgxpool.Pool {
 
 // replayControlMigrationTail 回放 database/migrations/ 中 096+ 的 up 迁移，
 // 与 MIGRATION_AUTO_RUN 启动回放一致，使测试库与真实生产库形态收敛
-//（基线只含 0..95 的 DDL，例如 device_cmd_logs.result 的 TEXT 化在 111）。
+// （基线只含 0..95 的 DDL，例如 device_cmd_logs.result 的 TEXT 化在 111）。
 func replayControlMigrationTail(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
 	migrationsDir := filepath.Clean(filepath.Join("..", "..", "..", "database", "migrations"))
@@ -228,4 +228,26 @@ func TestValidateAndPrepareCommandOwnerWithRBACGrantAllowed(t *testing.T) {
 	assert.NotEmpty(t, prepared.TaskID)
 	require.Len(t, prepared.Args, 1)
 	assert.Equal(t, "2", fmt.Sprint(prepared.Args[0]))
+}
+
+func TestModelCommandDefaultPermissionAllowsOwnerWithControlGrant(t *testing.T) {
+	pool := setupDeviceControlTestDB(t)
+	seedControlFixture(t, pool)
+	seedControlGrantForOwner(t, pool)
+	_, err := pool.Exec(context.Background(), `
+		INSERT INTO device_model_commands(model_id, command_code, display_name_key, parameter_schema)
+		VALUES (500, 'query_config', 'cmd.query_config', '{"args":[]}')`)
+	require.NoError(t, err)
+
+	svc := newControlTestService(pool)
+	prepared, err := svc.ValidateAndPrepareCommand(context.Background(), 300, "CTL-SN-001",
+		"query_config", map[string]interface{}{}, false)
+	require.NoError(t, err)
+	assert.Equal(t, "query_config", prepared.Command)
+
+	var permissionCode string
+	require.NoError(t, pool.QueryRow(context.Background(), `
+		SELECT permission_code FROM device_model_commands
+		WHERE model_id=500 AND command_code='query_config'`).Scan(&permissionCode))
+	assert.Equal(t, "devices:control", permissionCode)
 }
