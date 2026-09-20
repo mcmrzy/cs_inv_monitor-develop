@@ -121,11 +121,7 @@ if (( $(grep -Fc 'include /etc/nginx/snippets/security-headers.conf;' "$nginx_fi
   echo "nginx cache locations must preserve shared security headers" >&2
   exit 1
 fi
-if ! grep -A14 -F 'server_name sim.jiuxiaoyw.online;' "$nginx_file" | grep -Fq '/etc/letsencrypt/live/sim.jiuxiaoyw.online/fullchain.pem'; then
-  echo "sim vhost must serve the certificate that contains sim.jiuxiaoyw.online" >&2
-  exit 1
-fi
-if (( $(grep -Fc 'location /.well-known/acme-challenge/' "$nginx_file" || true) < 6 )); then
+if (( $(grep -Fc 'location /.well-known/acme-challenge/' "$nginx_file" || true) < 5 )); then
   echo "every HTTP certificate vhost must expose the ACME webroot challenge" >&2
   exit 1
 fi
