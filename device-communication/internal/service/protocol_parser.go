@@ -580,7 +580,10 @@ func (p *ProtocolParser) handleHeartbeat(ctx context.Context, raw *RawMessage) e
 		eventTimeUnix := sample.EventTime.Unix()
 		var realtime map[string]interface{}
 		if sample.ProtocolVersion == 2 {
-			realtime = buildRealtimeV2(sample, raw.SN, eventTimeUnix)
+			// 型号诊断规格（含 unsupported_fields）：供 derived.parallel_role/health 做字段能力门控
+			// （CS-L10-6K2 ARM 未实现 paired_socket/online_socket/on_socket，垃圾值不得解读为并机状态）
+			realtime = buildRealtimeV2(sample, raw.SN, eventTimeUnix,
+				p.repo.GetModelDiagnosticSpecs(ctx, p.getModelID(ctx, raw.SN)))
 		} else {
 			realtime = map[string]interface{}{
 				"ac": map[string]interface{}{
@@ -683,7 +686,8 @@ func deriveV2BatteryPower(s *telemetryv2.Sample) {
 // buildRealtimeV2 组装 V2 心跳的 realtime:latest 扩展结构（组结构与前端对齐）。
 // 组内 key 与 device_protocol_fields.field_key 一致（096 迁移后的文档键名），便于前端按字段能力配置动态取值。
 // fan/diag/sock 为 V2.1 新增组；derived 组承载派生字段（parallel_role/parallel_health，见 V2.1 文档 6.3/12.4）。
-func buildRealtimeV2(s *telemetryv2.Sample, sn string, eventTimeUnix int64) map[string]interface{} {
+// specs 仅用于派生字段的字段能力门控（型号未实现字段不参与解读），不影响各遥测组原值写入。
+func buildRealtimeV2(s *telemetryv2.Sample, sn string, eventTimeUnix int64, specs model.DiagnosticSpecs) map[string]interface{} {
 	realtime := map[string]interface{}{
 		"sys": map[string]interface{}{
 			"data": map[string]interface{}{
@@ -776,8 +780,8 @@ func buildRealtimeV2(s *telemetryv2.Sample, sn string, eventTimeUnix int64) map[
 	// derived 组：并机角色/健康（见 V2.1 文档 6.3）；thermal_status/health_score/health_level 由诊断引擎补充
 	realtime["derived"] = map[string]interface{}{
 		"data": map[string]interface{}{
-			"parallel_role":   deriveParallelRole(s),
-			"parallel_health": deriveParallelHealth(s),
+			"parallel_role":   deriveParallelRole(s, specs),
+			"parallel_health": deriveParallelHealth(s, specs),
 		},
 		"timestamp": eventTimeUnix,
 	}
@@ -832,13 +836,19 @@ func buildRealtimeV2(s *telemetryv2.Sample, sn string, eventTimeUnix int64) map[
 
 // deriveParallelRole 由插座位掩码判定并机角色：
 // paired_socket>0 且 online_socket≥1 → master（主机）；仅自身在线 → standalone（单机）。
-func deriveParallelRole(s *telemetryv2.Sample) string {
-	if s.Sock.PairedSocket == nil {
+// 字段能力门控：型号声明未实现（unsupported_fields）的插座位字段不参与解读——
+// paired_socket 未实现 → n/a；paired_socket 有效但 online_socket 未实现时角色无法判定 → n/a。
+// 语义与 Sock.PairedSocket == nil 一致（"未知"，而不是"单机"），避免垃圾值被解读成 standalone/master。
+func deriveParallelRole(s *telemetryv2.Sample, specs model.DiagnosticSpecs) string {
+	if s.Sock.PairedSocket == nil || specs.IsUnsupported(model.FieldKeyPairedSocket) {
 		return "n/a"
 	}
 	paired := *s.Sock.PairedSocket
 	if paired == 0 {
 		return "standalone"
+	}
+	if specs.IsUnsupported(model.FieldKeyOnlineSocket) {
+		return "n/a"
 	}
 	if s.Sock.OnlineSocket != nil && *s.Sock.OnlineSocket >= 1 {
 		return "master"
@@ -847,11 +857,16 @@ func deriveParallelRole(s *telemetryv2.Sample) string {
 }
 
 // deriveParallelHealth 并机健康状态：paired>0 且 online<paired → degraded；online≥paired → ok；无并机 → n/a。
-func deriveParallelHealth(s *telemetryv2.Sample) string {
-	if s.Sock.PairedSocket == nil || *s.Sock.PairedSocket == 0 {
+// 字段能力门控：paired_socket 未实现 → n/a；paired_socket 有效但 online_socket 未实现时无法判定 → n/a
+// （不把垃圾 online 值解读成 degraded/ok）。
+func deriveParallelHealth(s *telemetryv2.Sample, specs model.DiagnosticSpecs) string {
+	if s.Sock.PairedSocket == nil || specs.IsUnsupported(model.FieldKeyPairedSocket) || *s.Sock.PairedSocket == 0 {
 		return "n/a"
 	}
 	paired := *s.Sock.PairedSocket
+	if specs.IsUnsupported(model.FieldKeyOnlineSocket) {
+		return "n/a"
+	}
 	online := uint32(0)
 	if s.Sock.OnlineSocket != nil {
 		online = *s.Sock.OnlineSocket
