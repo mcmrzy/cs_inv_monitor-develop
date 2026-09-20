@@ -232,9 +232,16 @@ func ParseHeartbeatV2(deviceSN string, payload []byte, receivedAt time.Time) (*S
 	sock := scaled("sock", rawSock)
 	bms := scaled("bms", rawBMS)
 
+	// bounded 越界处理：置 QualityOutOfRange 并返回 nil（落库 NULL / realtime null，前端显示 "--"），
+	// 不再保留越界原值——ARM 固件可能输出垃圾值（如视在功率 2883584VA、负载率 3735%），
+	// 保留会把脏值直接写入数据库并展示到页面。u8/u32/u64 的拒绝语义与其保持一致。
 	bounded := func(p *float64, min, max float64) *float64 {
-		if p != nil && (*p < min || *p > max) {
+		if p == nil {
+			return nil
+		}
+		if *p < min || *p > max {
 			s.QualityFlags |= QualityOutOfRange
+			return nil
 		}
 		return p
 	}

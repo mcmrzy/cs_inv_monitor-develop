@@ -261,7 +261,8 @@ func TestParseHeartbeatV2NullsMarkQualityPartial(t *testing.T) {
 	require.Nil(t, s.Battery.Voltage)
 }
 
-func TestParseHeartbeatV2PreservesOutOfRangeValue(t *testing.T) {
+// 越界值 → 值置 nil（落库 NULL）+ QualityOutOfRange，防止固件脏值上屏（V2 bounded 语义）。
+func TestParseHeartbeatV2DiscardsOutOfRangeValue(t *testing.T) {
 	payload := []byte(`{"v":2,"t":1783000000,"data":{
 	  "sys":[0,0,0,0,9999,450,431,300,5120,624,0],
 	  "pv":[1450,82,0,0,12400],
@@ -273,7 +274,10 @@ func TestParseHeartbeatV2PreservesOutOfRangeValue(t *testing.T) {
 	s, err := ParseHeartbeatV2("sn", payload, time.Unix(1783000005, 0))
 	require.NoError(t, err)
 	require.NotZero(t, s.QualityFlags&QualityOutOfRange)
-	require.InDelta(t, 999.9, *s.System.InverterTemperature, 0.0001) // 越界值保留（9999*0.1）
+	require.Nil(t, s.System.InverterTemperature) // 越界值丢弃（9999*0.1=999.9 > 100）
+	// 同包合法值不受影响
+	require.InDelta(t, 62.4, *s.AC.LoadPercent, 0.0001)
+	require.InDelta(t, 51.2, *s.System.DCBusVoltage, 0.0001) // sys[8]=5120×0.01
 }
 
 func TestParseHeartbeatV2InvalidClockFallback(t *testing.T) {
@@ -303,4 +307,159 @@ func TestParseHeartbeatV2RejectsNonNumeric(t *testing.T) {
 	}}`)
 	_, err := ParseHeartbeatV2("sn", payload, time.Now())
 	require.ErrorIs(t, err, ErrInvalidHeartbeat)
+}
+
+// 现场实测脏心跳（SN H1ZZX0023900002P，ARM 固件输出垃圾值）：合法值照常保留，
+// 越界值全部置 nil + QualityOutOfRange，防止视在功率 2883584VA、负载率 3735% 之类的
+// 脏值落库并显示到页面（缩放按 v2Scales：sys[9] 0.1、ac/chr[1]/diag[0] 0.1）。
+func TestParseHeartbeatV2RealDirtyHeartbeat(t *testing.T) {
+	payload := []byte(`{"v":2,"t":1789887119,"data":{"sys":[265,0,0,0,0,0,null,null,0,37350,0],"pv":[6,0,0,0,0],"ac":[0,0,500,28180480,6187,0,0,10,325714148,0,0],"chr":[0,560726016,0],"bat":[0,0,0,4900,0],"eng":[20078,0,0,0,0,3,0,0,0,11907,0,11907,0,0],"fan":[0,100],"diag":[13340,21008,0],"sock":[0,0,0]}}`)
+	s, err := ParseHeartbeatV2("H1ZZX0023900002P", payload, time.Unix(1789887119+60, 0))
+	require.NoError(t, err)
+	require.NotZero(t, s.QualityFlags&QualityOutOfRange)
+
+	// 合法值保留（原始值 × v2Scales 缩放）
+	require.Equal(t, "H1ZZX0023900002P", s.DeviceSN)
+	require.Equal(t, uint32(265), *s.System.SysStatus)
+	require.InDelta(t, 0.6, *s.PV.PV1Voltage, 0.0001)
+	require.InDelta(t, 50.0, *s.AC.ActivePower, 0.0001)
+	require.InDelta(t, 1.0, *s.AC.ACInputPower, 0.0001)   // ac[7]=10×0.1
+	require.InDelta(t, 100.0, *s.Fan.InvSpeed, 0.0001)
+	require.InDelta(t, 2007.8, *s.Energy.GenDaily, 0.0001)
+	require.InDelta(t, 0.3, *s.Energy.ACChargeTotal, 0.0001)
+	require.InDelta(t, 1190.7, *s.Energy.TotalCharge, 0.0001)
+	require.InDelta(t, 490.0, *s.Battery.ChargePower, 0.0001)
+	require.InDelta(t, 0.0, *s.System.DCBusVoltage, 0.0001)
+
+	// 越界值 → nil（落库 NULL / realtime null）
+	require.Nil(t, s.AC.LoadPercent)                    // 37350×0.1=3735 > 120
+	require.Nil(t, s.AC.Current)                        // 6187×0.1=618.7 > 100
+	require.Nil(t, s.AC.ApparentPower)                  // 28180480×0.1=2818048 > 7500
+	require.Nil(t, s.AC.ACInputApparentPower)           // 325714148×0.1=32571414.8 > 7500
+	require.Nil(t, s.AC.ACChargeApparentPower)          // 560726016×0.1=56072601.6 > 7500
+	require.Nil(t, s.Diag.InvCurrent)                   // 13340×0.1=1334 > 100
+	require.Nil(t, s.Diag.ParallelChargeCurrent)        // 21008 > 600
+}
+
+// mirrorDeriveV2BatteryPower 按 internal/service/protocol_parser.go deriveV2BatteryPower
+// 的语义（battery_power = charge - discharge，充电为正、放电为负，与电流方向一致）复刻派生，
+// 供验收断言 Battery.Power。telemetry 包不能反向 import service，故在此锁定同一契约；
+// 若生产派生逻辑变更，需同步更新此处。
+func mirrorDeriveV2BatteryPower(s *Sample) *float64 {
+	switch {
+	case s.Battery.ChargePower != nil && s.Battery.DischargePower != nil:
+		v := *s.Battery.ChargePower - *s.Battery.DischargePower
+		return &v
+	case s.Battery.ChargePower != nil:
+		return s.Battery.ChargePower
+	case s.Battery.DischargePower != nil:
+		v := -*s.Battery.DischargePower
+		return &v
+	}
+	return nil
+}
+
+// fixedARMLayoutHeartbeatV2 是 ESP 固件按 ARM 新版 200B 寄存器布局 + 单位换算修复后，
+// 对同一组现场寄存器值的预期心跳输出（SN H1ZZX0023900002P）：所有数值经 v2Scales
+// 缩放后必须落在 bounded() 界内，仅语义性 null（sys[6]/sys[7] 温度传感器、diag[0]、sock
+// 全组）与缺省 bms 组允许置 QualityPartial。
+const fixedARMLayoutHeartbeatV2 = `{"v":2,"t":1789887119,"data":{"sys":[265,0,5,0,430,350,null,null,37350,1000,0],"pv":[60,50,0,0,62000],"ac":[2300,5000,61870,65000,8,0,0,0,0,0,0],"chr":[0,0,0],"bat":[4900,0,-1334,0,61870],"eng":[0,0,3,0,0,0,11907,0,11907,0,0,0,0,0],"fan":[0,0],"diag":[null,0,0],"sock":[null,null,null]}}`
+
+// TestParseHeartbeatV2FixedARMLayout 验收测试：锁定"修复后的 ESP 输出"必须解析出的
+// 物理正确值。修复前同一组寄存器错位/未换算时的服务端表现见
+// TestParseHeartbeatV2MisalignedOldLayout（对照负例）。
+func TestParseHeartbeatV2FixedARMLayout(t *testing.T) {
+	s, err := ParseHeartbeatV2("H1ZZX0023900002P", []byte(fixedARMLayoutHeartbeatV2), time.Unix(1789887119+60, 0))
+	require.NoError(t, err)
+
+	require.Equal(t, "H1ZZX0023900002P", s.DeviceSN)
+	require.Equal(t, uint16(2), s.ProtocolVersion)
+	require.Equal(t, int64(1789887119), s.EventTime.Unix()) // t 与 receivedAt 偏差 60s，时钟有效
+
+	// System
+	require.Equal(t, uint32(265), *s.System.SysStatus)
+	require.Equal(t, uint32(0), *s.System.FaultCode)
+	require.Equal(t, uint64(5), *s.System.Warning) // 高位已被固件屏蔽
+	require.Equal(t, uint32(0), *s.System.BmsWarning)
+	require.InDelta(t, 43.0, *s.System.InverterTemperature, 0.0001) // 430×0.1
+	require.InDelta(t, 35.0, *s.System.BoostTemperature, 0.0001)    // 350×0.1
+	require.Nil(t, s.System.TransformerTemperature)                 // 语义性 null
+	require.Nil(t, s.System.PVTemperature)
+	require.InDelta(t, 373.5, *s.System.DCBusVoltage, 0.0001)       // 37350×0.01
+	require.Equal(t, uint8(0), *s.System.BatteryOvercharge)
+
+	// PV
+	require.InDelta(t, 6.0, *s.PV.PV1Voltage, 0.0001)    // 60×0.1
+	require.InDelta(t, 5.0, *s.PV.Buck1Current, 0.0001)  // 50×0.1
+	require.InDelta(t, 0.0, *s.PV.PV2Voltage, 0.0001)
+	require.InDelta(t, 0.0, *s.PV.Buck2Current, 0.0001)
+	require.InDelta(t, 6200.0, *s.PV.TotalPower, 0.0001) // 62000×0.1
+
+	// AC（5000∉[450,650]，不触发 normalizeActualARMACOutputUnits，按 v2Scales 0.01 还原频率）
+	require.InDelta(t, 230.0, *s.AC.Voltage, 0.0001)      // 2300×0.1
+	require.InDelta(t, 50.0, *s.AC.Frequency, 0.0001)     // 5000×0.01
+	require.InDelta(t, 6187.0, *s.AC.ActivePower, 0.0001) // 61870×0.1
+	require.InDelta(t, 6500.0, *s.AC.ApparentPower, 0.0001)
+	require.InDelta(t, 0.8, *s.AC.Current, 0.0001)        // 8×0.1
+	require.InDelta(t, 100.0, *s.AC.LoadPercent, 0.0001)  // sys[9]=1000×0.1，界 0..120
+
+	// Battery
+	require.InDelta(t, 49.0, *s.Battery.Voltage, 0.0001)       // 4900×0.01
+	require.InDelta(t, 0.0, *s.Battery.SOC, 0.0001)
+	require.InDelta(t, -133.4, *s.Battery.Current, 0.0001)     // -1334×0.1，放电为负
+	require.InDelta(t, 0.0, *s.Battery.ChargePower, 0.0001)
+	require.InDelta(t, 6187.0, *s.Battery.DischargePower, 0.0001) // 61870×0.1
+
+	// Energy
+	require.InDelta(t, 0.3, *s.Energy.DailyPV, 0.0001) // eng[2]=3×0.1
+
+	// Fan 全 0（0 是界内有效值，不置 null）
+	require.InDelta(t, 0.0, *s.Fan.MPPTSpeed, 0.0001)
+	require.InDelta(t, 0.0, *s.Fan.InvSpeed, 0.0001)
+
+	// Diag / Sock 的 nil 语义
+	require.Nil(t, s.Diag.InvCurrent)
+	require.InDelta(t, 0.0, *s.Diag.ParallelChargeCurrent, 0.0001)
+	require.Nil(t, s.Sock.PairedSocket)
+	require.Nil(t, s.Sock.OnlineSocket)
+	require.Nil(t, s.Sock.OnSocket)
+
+	// 质量位：null + bms 缺组 → QualityPartial；全部数值在界内 → 不得置 QualityOutOfRange
+	require.NotZero(t, s.QualityFlags&QualityPartial)
+	require.Zero(t, s.QualityFlags&QualityOutOfRange)
+
+	// battery_power 派生（deriveV2BatteryPower）：0 - 6187 = -6187（放电为负）
+	power := mirrorDeriveV2BatteryPower(s)
+	require.NotNil(t, power)
+	require.InDelta(t, -6187.0, *power, 0.0001)
+}
+
+// misalignedDirtyHeartbeatV2 是固件修复前现场实际发出的错位脏 payload（SN H1ZZX0023900002P，
+// 与 TestParseHeartbeatV2RealDirtyHeartbeat 同一输入）：值未按 ARM 新版 200B 布局换算而错位，
+// 作为修复前后的对照负例。
+const misalignedDirtyHeartbeatV2 = `{"v":2,"t":1789887119,"data":{"sys":[265,0,0,0,0,0,null,null,0,37350,0],"pv":[6,0,0,0,0],"ac":[0,0,500,28180480,6187,0,0,10,325714148,0,0],"chr":[0,560726016,0],"bat":[0,0,0,4900,0],"eng":[20078,0,0,0,0,3,0,0,0,11907,0,11907,0,0],"fan":[0,100],"diag":[13340,21008,0],"sock":[0,0,0]}}`
+
+// TestParseHeartbeatV2MisalignedOldLayout 负例：错位旧布局 payload 仍被解析（不拒包），
+// 但越界值全为 nil 且 QualityOutOfRange 置位——服务端防线语义，修复后的固件输出
+// 不应再触发（见 TestParseHeartbeatV2FixedARMLayout）。逐字段细节已由
+// TestParseHeartbeatV2RealDirtyHeartbeat 覆盖，此处仅锁对照签名，避免重复断言膨胀。
+func TestParseHeartbeatV2MisalignedOldLayout(t *testing.T) {
+	s, err := ParseHeartbeatV2("H1ZZX0023900002P", []byte(misalignedDirtyHeartbeatV2), time.Unix(1789887119+60, 0))
+	require.NoError(t, err)
+	require.NotZero(t, s.QualityFlags&QualityOutOfRange)
+
+	// 错位产生的越界值 → 全部 nil（落库 NULL / realtime null）
+	require.Nil(t, s.AC.LoadPercent)           // 37350×0.1=3735% > 120（母线电压真值被挤到 sys[9]）
+	require.Nil(t, s.AC.ApparentPower)         // 28180480×0.1 > 7500
+	require.Nil(t, s.AC.Current)               // 6187×0.1 > 100
+	require.Nil(t, s.AC.ACChargeApparentPower) // 560726016×0.1 > 7500
+	require.Nil(t, s.Diag.InvCurrent)          // 13340×0.1 > 100
+	require.Nil(t, s.Diag.ParallelChargeCurrent)
+
+	// 巧合落在界内的错位值照常保留（服务端只按 V2 位置定义 + 界校验，不做布局推断）
+	require.Equal(t, uint32(265), *s.System.SysStatus)
+	require.InDelta(t, 0.0, *s.System.DCBusVoltage, 0.0001) // sys[8]=0，真值 373.5 在 sys[9] 位置
+	require.InDelta(t, 0.6, *s.PV.PV1Voltage, 0.0001)
+	require.InDelta(t, 490.0, *s.Battery.ChargePower, 0.0001)
+	require.InDelta(t, 2007.8, *s.Energy.GenDaily, 0.0001)
 }
