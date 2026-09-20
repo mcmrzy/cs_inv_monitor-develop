@@ -187,6 +187,12 @@ func TestDebugSamplesBoundedQuery(t *testing.T) {
 			VALUES ($1, 2, $2, $3, $4, $5, $6)
 		`, "DBG-SN", i, ts, hash, float64(51+i), float64(220+i)))
 	}
+	// 指标列是 REAL(float32)：51.2 存进去读出来会带表示噪声，
+	// GetDebugSamples 必须规整（否则调试页 tooltip/表格显示 51.20000076293945）
+	require.NoError(t, execPool(ctx, pool, `
+		UPDATE device_telemetry_3min SET battery_voltage = 51.2
+		WHERE device_sn = 'DBG-SN' AND data_hash = $1
+	`, "hash-"+base.Add(30*time.Second).Format(time.RFC3339Nano)))
 	// 另一台设备的样本：必须被隔离
 	require.NoError(t, execPool(ctx, pool, `
 		INSERT INTO device_telemetry_3min
@@ -209,6 +215,9 @@ func TestDebugSamplesBoundedQuery(t *testing.T) {
 	// i==3 行 battery 为 NULL（断线），ac_voltage 有效
 	assert.Nil(t, items[3].Metrics.BatteryVoltage)
 	require.NotNil(t, items[3].Metrics.ACVoltage)
+	// i==1 行是 float32 表示噪声样本（51.2）→ 必须精确回到 51.2
+	require.NotNil(t, items[1].Metrics.BatteryVoltage)
+	assert.Equal(t, 51.2, *items[1].Metrics.BatteryVoltage)
 	// 未写入列 → nil
 	assert.Nil(t, items[0].Metrics.InvCurrent)
 	assert.Nil(t, items[0].Metrics.PV1Voltage)
