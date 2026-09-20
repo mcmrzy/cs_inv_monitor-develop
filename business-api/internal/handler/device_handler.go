@@ -376,8 +376,18 @@ func (h *DeviceHandler) Update(c *gin.Context) {
 		return
 	}
 
-	// 选择型号（model_id）时：按型号同步更新设备全部关联参数
+	// 别名/备注：App 设备编辑页与后台编辑弹窗均可修改，与型号参数相互独立。
+	// 必须排在型号分支之前：否则请求同时携带 model_id 时名称会被静默丢弃
+	// （后台编辑弹窗提交的正是 alias + model_id 的组合）。
+	if req.Alias != nil || req.Remark != nil {
+		if err := h.deviceService.UpdateAliasRemark(c.Request.Context(), sn, req.Alias, req.Remark); err != nil {
+			response.Error(c, 500, "failed to update device")
+			return
+		}
+	}
+
 	if req.ModelID != nil && *req.ModelID > 0 {
+		// 选择型号（model_id）时：按型号同步更新设备全部关联参数
 		m, err := h.modelService.GetModel(c.Request.Context(), *req.ModelID)
 		if err != nil {
 			response.Error(c, 404, "model not found")
@@ -387,22 +397,11 @@ func (h *DeviceHandler) Update(c *gin.Context) {
 			response.Error(c, 500, "failed to update device")
 			return
 		}
-		response.SuccessWithMessage(c, "device updated", nil)
-		return
-	}
-
-	// 别名/备注：App 设备编辑页可修改字段（独立于型号参数）
-	if req.Alias != nil || req.Remark != nil {
-		if err := h.deviceService.UpdateAliasRemark(c.Request.Context(), sn, req.Alias, req.Remark); err != nil {
-			response.Error(c, 500, "failed to update device")
-			return
-		}
-	}
-
-	if err := h.deviceService.Update(c.Request.Context(), sn, req.Model, req.RatedPower, req.FirmwareVersion, req.HardwareVersion); err != nil {
+	} else if err := h.deviceService.Update(c.Request.Context(), sn, req.Model, req.RatedPower, req.FirmwareVersion, req.HardwareVersion); err != nil {
 		response.Error(c, 500, "failed to update device")
 		return
 	}
+
 	response.SuccessWithMessage(c, "device updated", nil)
 
 	// 记录审计日志
