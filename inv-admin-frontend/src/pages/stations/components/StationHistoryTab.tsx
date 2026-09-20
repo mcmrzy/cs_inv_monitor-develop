@@ -1,9 +1,9 @@
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Row, Col, Select, DatePicker, Button, Space, Alert, Popover, Input, Empty, Tooltip, Typography } from 'antd'
+import { Row, Col, Select, DatePicker, Button, Space, Alert, Popover, Input, Empty, Tooltip, Typography, Segmented } from 'antd'
 import { ProTable, ProCard } from '@ant-design/pro-components'
 import type { ProColumns } from '@ant-design/pro-components'
-import { ReloadOutlined, DownloadOutlined, SettingOutlined, UpOutlined, DownOutlined, CheckOutlined, SearchOutlined, HolderOutlined } from '@ant-design/icons'
+import { ReloadOutlined, DownloadOutlined, SettingOutlined, UpOutlined, DownOutlined, CheckOutlined, SearchOutlined, HolderOutlined, LineChartOutlined } from '@ant-design/icons'
 
 import dayjs from 'dayjs'
 import { deviceApi } from '@/services/deviceApi'
@@ -11,6 +11,8 @@ import { modelApi, type ModelFieldCapability } from '@/services/modelApi'
 import { safeNum } from '@/utils/format'
 import { formatInTimezone } from '@/utils/timezone'
 import { humanizeFieldKey } from '@/utils/fieldI18n'
+import { loadStationHistoryPrefs, saveStationHistoryPrefs } from '@/utils/stationHistoryPrefs'
+import ReactECharts from '@/lib/echarts'
 import useTranslation from '@/hooks/useTranslation'
 
 const { RangePicker } = DatePicker
@@ -35,10 +37,56 @@ function unwrapCaps(res: any): ModelFieldCapability[] {
   return Array.isArray(d) ? d : (d?.items ?? [])
 }
 
-/** 默认可见的数据字段：仅作为「未注册为型号字段能力」时的兜底 */
+/** 从分页响应中解包 items/total */
+function unwrapPage(res: any): { items: any[]; total: number } {
+  const d = res?.data?.data ?? res?.data
+  if (Array.isArray(d)) return { items: d, total: d.length }
+  return { items: d?.items ?? [], total: d?.total ?? 0 }
+}
+
+/** 表格/曲线统一的数据粒度 */
+type Granularity = 'raw' | 'hour' | 'day'
+const GRANULARITY_OPTIONS: Granularity[] = ['raw', 'hour', 'day']
+const isGranularity = (value: unknown): value is Granularity =>
+  typeof value === 'string' && (GRANULARITY_OPTIONS as string[]).includes(value)
+
+/** 曲线最多画几条（再多图例和配色都不够用） */
+const MAX_CURVE_SERIES = 8
+/** 曲线取点上限；配合自动粒度，长区间也不会请求上千个点 */
+const MAX_CURVE_POINTS = 1000
+/** 曲线配色（沿用功率趋势的色板） */
+const CURVE_COLORS = ['#f59e0b', '#22c55e', '#3b82f6', '#8b5cf6', '#ef4444', '#06b6d4', '#eab308', '#ec4899']
+
+/**
+ * 按区间长度挑选曲线粒度：2 天内用原始行（≤960 点），14 天内按小时（≤336 点），
+ * 更长按天。表格仍按用户选择的分辨率分页，两者互不影响。
+ */
+function curveGranularityFor(start?: dayjs.Dayjs, end?: dayjs.Dayjs): Granularity {
+  if (!start || !end) return 'raw'
+  const hours = end.diff(start, 'hour', true)
+  if (hours <= 48) return 'raw'
+  if (hours <= 24 * 14) return 'hour'
+  return 'day'
+}
+
+/** 曲线取值：空值保留为 null，让曲线断开而不是掉到 0 */
+function toCurveNum(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null
+  const n = Number(value)
+  return Number.isFinite(n) ? n : null
+}
+
+/** 默认可见的数据字段：现在只作为「添加常用字段」的一键候选，页面默认不选任何字段 */
 const DEFAULT_VISIBLE_FIELDS = [
   'pv_total_power', 'ac_active_power', 'battery_soc', 'battery_power', 'inverter_temperature',
 ]
+
+/** 遥测行里属于元数据、不作为可选数据字段展示的键 */
+const EXCLUDE_FIELDS = new Set([
+  'id', 'time', 'created_at', 'updated_at', 'event_time', 'received_at',
+  'protocol_version', 'sequence_no', 'quality_flags', 'topic', 'data_hash', 'raw_envelope',
+  'device_sn',
+])
 
 /**
  * 旧版字段标签映射（无型号字段能力时的兜底）。
@@ -191,11 +239,16 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
   ])
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
-  const [visibleFields, setVisibleFields] = useState<string[]>(DEFAULT_VISIBLE_FIELDS)
+  const [granularity, setGranularity] = useState<Granularity>('raw')
+  // 默认不显示任何字段，由用户自己添加；选择结果按型号记忆
+  const [visibleFields, setVisibleFields] = useState<string[]>([])
   const [fieldPickerOpen, setFieldPickerOpen] = useState(false)
   const [fieldSearch, setFieldSearch] = useState('')
   const [dragKey, setDragKey] = useState<string | null>(null)
   const [overKey, setOverKey] = useState<string | null>(null)
+  const [showCurve, setShowCurve] = useState(false)
+  const [refreshToken, setRefreshToken] = useState(0)
+  const prefsScopeRef = useRef<string | number | undefined>(undefined)
 
   // 获取电站下设备列表
   const { data: devices } = useQuery({
@@ -253,58 +306,76 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
     return humanizeFieldKey(key)
   }, [capByKey, t])
 
-  // 默认可见字段：优先型号配置中 show_history 的字段，否则用基础默认
+  // 切换设备/型号时载入该型号记忆的字段与粒度；没有记忆时保持「什么都不显示」
+  const prefsScope = selectedDevice ? (selectedDevice.model_id ?? 'default') : undefined
   useEffect(() => {
-    const historyFields = (fieldCaps ?? [])
-      .filter((f) => f.show_history && f.is_supported !== false && f.is_visible !== false)
-      .map((f) => f.field_key)
-    if (historyFields.length > 0) {
-      setVisibleFields(historyFields)
-    } else if (visibleFields.length === 0) {
-      setVisibleFields(DEFAULT_VISIBLE_FIELDS)
-    }
-    // 仅当型号能力变化时更新，避免每次渲染重置用户勾选
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fieldCaps])
+    if (prefsScope === undefined || prefsScopeRef.current === prefsScope) return
+    prefsScopeRef.current = prefsScope
+    const prefs = loadStationHistoryPrefs(prefsScope)
+    setVisibleFields(prefs.fields)
+    setGranularity(isGranularity(prefs.granularity) ? prefs.granularity : 'raw')
+  }, [prefsScope])
 
-  // 获取历史遥测数据
+  // 字段顺序与粒度变化即记忆（同一型号下次打开自动沿用）
+  useEffect(() => {
+    if (prefsScopeRef.current === undefined) return
+    saveStationHistoryPrefs(prefsScopeRef.current, { fields: visibleFields, granularity })
+  }, [visibleFields, granularity])
+
+  const startIso = dateRange[0]?.toISOString()
+  const endIso = dateRange[1]?.toISOString()
+
+  // 获取历史遥测数据（分页与聚合都在服务端完成，total 是区间内的真实条数/桶数）
   const { data: historyRes, isLoading } = useQuery({
-    queryKey: ['station-history', selectedSn, page, pageSize, dateRange[0]?.toISOString(), dateRange[1]?.toISOString()],
+    queryKey: ['station-history', selectedSn, page, pageSize, granularity, startIso, endIso, refreshToken],
     queryFn: () => deviceApi.getTelemetry(selectedSn!, {
       page,
       page_size: pageSize,
-      startTime: dateRange[0].toISOString(),
-      endTime: dateRange[1].toISOString(),
-      granularity: 'hour',
+      startTime: startIso,
+      endTime: endIso,
+      granularity,
+      tz: timezone,
       sort: 'desc',
-    }).then(r => {
-      const d = r.data?.data ?? r.data
-      if (Array.isArray(d)) return { items: d, total: d.length }
-      return { items: d?.items ?? [], total: d?.total ?? 0 }
-    }),
-    enabled: !!selectedSn && !!dateRange[0] && !!dateRange[1],
+    }).then(unwrapPage),
+    enabled: !!selectedSn && !!startIso && !!endIso,
   })
 
-  const items = historyRes?.items ?? []
+  const items = useMemo(() => historyRes?.items ?? [], [historyRes])
   const total = historyRes?.total ?? 0
 
   // 从数据中提取所有可用字段（排除元数据字段）
-  const EXCLUDE_FIELDS = new Set([
-    'id', 'time', 'created_at', 'updated_at', 'event_time', 'received_at',
-    'protocol_version', 'sequence_no', 'quality_flags', 'topic', 'data_hash', 'raw_envelope',
-    'device_sn',
-  ])
-  const allFields = useMemo(() => {
-    const fieldSet = new Set<string>()
-    items.forEach((item: any) => {
-      Object.keys(item).forEach(key => {
-        if (!EXCLUDE_FIELDS.has(key)) {
-          fieldSet.add(key)
-        }
-      })
-    })
-    return Array.from(fieldSet)
-  }, [items])
+  /**
+   * 可选字段 = 型号字段能力表 ∪ 当前页出现过的字段。
+   * 只用当前页推导会让字段列表随翻页变化（翻到别的时段就找不到字段），
+   * 因此以型号能力表为主，数据里多出来的键追加在后面兜底。
+   */
+  const availableFields = useMemo(() => {
+    const keys: string[] = []
+    const seen = new Set<string>()
+    const push = (key: string) => {
+      if (!key || seen.has(key) || EXCLUDE_FIELDS.has(key)) return
+      seen.add(key)
+      keys.push(key)
+    }
+    for (const cap of fieldCaps ?? []) {
+      if (cap.is_supported === false || cap.is_visible === false) continue
+      push(cap.field_key)
+    }
+    for (const item of items) {
+      Object.keys(item as Record<string, unknown>).forEach(push)
+    }
+    return keys
+  }, [fieldCaps, items])
+
+  // 「常用字段」一键候选：型号配置里标记 show_history 的字段，否则退回基础默认
+  const recommendedFields = useMemo(() => {
+    const fromCaps = (fieldCaps ?? [])
+      .filter((f) => f.show_history && f.is_supported !== false && f.is_visible !== false)
+      .map((f) => f.field_key)
+    const source = fromCaps.length > 0 ? fromCaps : DEFAULT_VISIBLE_FIELDS
+    const available = new Set(availableFields)
+    return source.filter((key) => available.has(key))
+  }, [fieldCaps, availableFields])
 
   // 构建表格列
   const columns: ProColumns<any>[] = useMemo(() => {
@@ -331,6 +402,74 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
     }))
     return [timeCol, ...dataCols]
   }, [visibleFields, resolveFieldLabel, t, timezone])
+
+  // ── 运行数据曲线 ──
+  const curveFields = useMemo(() => visibleFields.slice(0, MAX_CURVE_SERIES), [visibleFields])
+  const curveGranularity = useMemo(() => curveGranularityFor(dateRange[0], dateRange[1]), [dateRange])
+
+  const { data: curveRes, isLoading: curveLoading } = useQuery({
+    queryKey: ['station-history-curve', selectedSn, curveGranularity, startIso, endIso, curveFields.join(','), refreshToken],
+    queryFn: () => deviceApi.getTelemetry(selectedSn!, {
+      page: 1,
+      page_size: MAX_CURVE_POINTS,
+      startTime: startIso,
+      endTime: endIso,
+      granularity: curveGranularity,
+      tz: timezone,
+      fields: curveFields.join(','),
+      sort: 'asc',
+    }).then(unwrapPage),
+    enabled: showCurve && !!selectedSn && !!startIso && !!endIso && curveFields.length > 0,
+  })
+
+  const curveRows = useMemo(() => curveRes?.items ?? [], [curveRes])
+
+  const curveOption = useMemo(() => {
+    if (curveRows.length === 0) return null
+    const timeFormat = curveGranularity === 'day' ? 'YYYY-MM-DD' : 'MM-DD HH:mm'
+    const times = curveRows.map((row: any) => formatInTimezone(row.time, timezone, timeFormat))
+    const series = curveFields.flatMap((field, index) => {
+      const data = curveRows.map((row: any) => toCurveNum(row[field]))
+      // 该字段在区间内没有任何读数时不画，避免出现一条全空的图例
+      if (!data.some((value) => value !== null)) return []
+      const color = CURVE_COLORS[index % CURVE_COLORS.length]
+      return [{
+        name: resolveFieldLabel(field),
+        type: 'line' as const,
+        smooth: true,
+        symbol: 'none',
+        connectNulls: true,
+        data,
+        lineStyle: { color, width: 2 },
+        itemStyle: { color },
+      }]
+    })
+    if (series.length === 0) return null
+    return {
+      tooltip: {
+        trigger: 'axis' as const,
+        axisPointer: { type: 'cross' as const },
+        formatter: (params: any) => {
+          const list = Array.isArray(params) ? params : [params]
+          let html = `<div style="font-weight:600;margin-bottom:4px">${list[0]?.axisValue ?? ''}</div>`
+          list.forEach((p: any) => {
+            if (p.value === null || p.value === undefined) return
+            html += `<div>${p.marker} ${p.seriesName}: ${Number(p.value).toFixed(2)}</div>`
+          })
+          return html
+        },
+      },
+      legend: { type: 'scroll' as const, top: 0, itemGap: 16, data: series.map((s) => s.name) },
+      grid: { left: '3%', right: '4%', bottom: '14%', top: 45, containLabel: true },
+      xAxis: { type: 'category' as const, data: times, axisLabel: { fontSize: 11, hideOverlap: true } },
+      yAxis: { type: 'value' as const, axisLabel: { fontSize: 11 } },
+      dataZoom: [
+        { type: 'inside', start: 0, end: 100 },
+        { type: 'slider', start: 0, end: 100, height: 20, bottom: 8 },
+      ],
+      series,
+    }
+  }, [curveRows, curveFields, curveGranularity, resolveFieldLabel, timezone])
 
   // 点击卡片切换显示：未选→追加到末尾；已选→移除
   const toggleField = React.useCallback((key: string) => {
@@ -393,8 +532,8 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
   const renderFieldPicker = () => {
     const kw = fieldSearch.trim().toLowerCase()
     const filtered = kw
-      ? allFields.filter(k => resolveFieldLabel(k).toLowerCase().includes(kw) || k.toLowerCase().includes(kw))
-      : allFields
+      ? availableFields.filter(k => resolveFieldLabel(k).toLowerCase().includes(kw) || k.toLowerCase().includes(kw))
+      : availableFields
     const selectedKeys = filtered.filter(k => visibleFields.includes(k))
     const unselectedKeys = filtered.filter(k => !visibleFields.includes(k))
     return (
@@ -407,6 +546,18 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
           onChange={(e) => setFieldSearch(e.target.value)}
           style={{ marginBottom: 12 }}
         />
+        <Space style={{ marginBottom: 12 }}>
+          <Button
+            size="small"
+            disabled={recommendedFields.length === 0}
+            onClick={() => setVisibleFields(recommendedFields)}
+          >
+            {t('station.addRecommendedFields')}
+          </Button>
+          <Button size="small" disabled={visibleFields.length === 0} onClick={() => setVisibleFields([])}>
+            {t('station.clearFields')}
+          </Button>
+        </Space>
         <div style={{ maxHeight: 400, overflowY: 'auto', paddingRight: 4 }}>
           {selectedKeys.length > 0 && (
             <div style={{ marginBottom: 12 }}>
@@ -419,6 +570,7 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
                     <div
                       key={key}
                       draggable
+                      data-field-key={key}
                       onDragStart={(e) => { setDragKey(key); e.dataTransfer.effectAllowed = 'move' }}
                       onDragOver={(e) => { e.preventDefault(); setOverKey(key) }}
                       onDrop={(e) => { e.preventDefault(); setOverKey(null); reorderField(dragKey!, key) }}
@@ -442,8 +594,7 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
                       <Text style={{ flex: 1, fontSize: 13 }}>{resolveFieldLabel(key)}</Text>
                     </div>
                   )
-                })}
-              </div>
+                })}              </div>
             </div>
           )}
           {unselectedKeys.length > 0 && (
@@ -462,6 +613,7 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
                         {gFields.map((key) => (
                           <Col span={12} key={key}>
                             <div
+                              data-field-key={key}
                               style={{
                                 padding: '8px 10px', border: '1px solid #d9d9d9', borderRadius: 8, cursor: 'pointer',
                                 background: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
@@ -543,7 +695,7 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
             />
           </Col>
           <Col>
-            <Button icon={<ReloadOutlined />} onClick={() => setPage(1)}>
+            <Button icon={<ReloadOutlined />} onClick={() => { setPage(1); setRefreshToken(n => n + 1) }}>
               {t('station.query')}
             </Button>
           </Col>
@@ -559,6 +711,38 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
           </Col>
         </Row>
 
+        <Row gutter={[12, 12]} align="middle" style={{ marginTop: 12 }}>
+          <Col>
+            <Space size={8}>
+              <Text type="secondary" style={{ fontSize: 12 }}>{t('station.granularity')}</Text>
+              <Segmented
+                value={granularity}
+                onChange={(value) => { setGranularity(value as Granularity); setPage(1) }}
+                options={[
+                  { label: t('station.granularityRaw'), value: 'raw' },
+                  { label: t('station.granularityHour'), value: 'hour' },
+                  { label: t('station.granularityDay'), value: 'day' },
+                ]}
+              />
+            </Space>
+          </Col>
+          <Col>
+            <Tooltip title={t('station.curveHint', { count: MAX_CURVE_SERIES })}>
+              <Button
+                icon={<LineChartOutlined />}
+                type={showCurve ? 'primary' : 'default'}
+                disabled={visibleFields.length === 0}
+                onClick={() => setShowCurve(v => !v)}
+              >
+                {showCurve ? t('station.hideCurve') : t('station.showCurve')}
+              </Button>
+            </Tooltip>
+          </Col>
+          <Col flex="auto">
+            <Text type="secondary" style={{ fontSize: 12 }}>{t('station.granularityHint')}</Text>
+          </Col>
+        </Row>
+
         {capsError && selectedDevice?.model_id && (
           <Alert
             type="warning"
@@ -569,7 +753,7 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
         )}
 
         {/* 字段选择器（卡片式） */}
-        {allFields.length > 0 && (
+        {availableFields.length > 0 && (
           <Row style={{ marginTop: 12 }} align="middle">
             <Col>
               <Popover
@@ -592,26 +776,105 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
         )}
       </ProCard>
 
+      {/* 运行数据曲线 */}
+      {showCurve && (
+        <ProCard
+          title={<Space><LineChartOutlined style={{ color: '#1677ff' }} /><span>{t('station.runningCurve')}</span></Space>}
+          style={{ borderRadius: 12, marginBottom: 16 }}
+          extra={
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {t('station.curveResolution', {
+                value: t(curveGranularity === 'raw' ? 'station.granularityRaw'
+                  : curveGranularity === 'hour' ? 'station.granularityHour' : 'station.granularityDay'),
+              })}
+            </Text>
+          }
+        >
+          {visibleFields.length > MAX_CURVE_SERIES && (
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 12 }}
+              message={t('station.curveTooManyFields', { selected: visibleFields.length, count: MAX_CURVE_SERIES })}
+            />
+          )}
+          {curveLoading && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('common.loading')} style={{ padding: '32px 0' }} />}
+          {!curveLoading && curveOption && (
+            <ReactECharts option={curveOption} style={{ height: 340, width: '100%' }} notMerge />
+          )}
+          {!curveLoading && !curveOption && (
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={
+                // 有数据却画不出线 = 所选字段都不是数值；没有数据才是空区间
+                curveFields.length === 0 || curveRows.length > 0
+                  ? t('station.curveNoNumericFields')
+                  : t('common.noData')
+              }
+              style={{ padding: '32px 0' }}
+            />
+          )}
+        </ProCard>
+      )}
+
       {/* 数据表格 */}
       <ProCard style={{ borderRadius: 12 }}>
-        <ProTable
-          columns={columns}
-          dataSource={items}
-          loading={isLoading}
-          rowKey={(r: any) => r.id || r.time}
-          search={false}
-          options={{ density: true, reload: false, setting: true }}
-          pagination={{
-            current: page,
-            pageSize,
-            total,
-            showSizeChanger: true,
-            pageSizeOptions: ['10', '20', '50', '100'],
-            onChange: (p, ps) => { setPage(p); setPageSize(ps) },
-          }}
-          scroll={{ x: 1200 }}
-          size="small"
-        />
+        {visibleFields.length === 0 ? (
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={
+              <Space direction="vertical" size={4}>
+                <Text strong>{t('station.historyNoFields')}</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>{t('station.historyNoFieldsHint')}</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {t('common.total', { total })}
+                </Text>
+              </Space>
+            }
+            style={{ padding: '32px 0' }}
+          >
+            <Space>
+              <Button
+                type="primary"
+                icon={<SettingOutlined />}
+                disabled={availableFields.length === 0}
+                onClick={() => setFieldPickerOpen(true)}
+              >
+                {t('station.selectFields')}
+              </Button>
+              <Button
+                disabled={recommendedFields.length === 0}
+                onClick={() => setVisibleFields(recommendedFields)}
+              >
+                {t('station.addRecommendedFields')}
+              </Button>
+            </Space>
+          </Empty>
+        ) : (
+          <>
+            <div style={{ marginBottom: 8 }}>
+              <Text type="secondary" style={{ fontSize: 12 }}>{t('common.total', { total })}</Text>
+            </div>
+            <ProTable
+              columns={columns}
+              dataSource={items}
+              loading={isLoading}
+              rowKey={(r: any) => `${r.time ?? ''}|${r.data_hash ?? ''}`}
+              search={false}
+              options={{ density: true, reload: false, setting: true }}
+              pagination={{
+                current: page,
+                pageSize,
+                total,
+                showSizeChanger: true,
+                pageSizeOptions: ['10', '20', '50', '100'],
+                onChange: (p, ps) => { setPage(p); setPageSize(ps) },
+              }}
+              scroll={{ x: 1200 }}
+              size="small"
+            />
+          </>
+        )}
       </ProCard>
     </>
   )
