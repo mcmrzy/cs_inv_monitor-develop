@@ -4,7 +4,7 @@ info:
   version: v1
   description: |
     单设备调试模式（App / 管理后台共用）：
-    对指定设备开启临时调试后，设备按固定 30 秒周期上报运行快照（heartbeat V2.1），
+    对指定设备开启临时调试后，设备按固定 5 秒周期上报运行快照（heartbeat V2.1），
     双端按会话时间窗查询原始样本绘制 MPPT/电池/逆变/负载电压电流曲线。
 
     会话状态机：
@@ -130,7 +130,7 @@ components:
           default: 3600
           minimum: 300
           maximum: 14400
-          description: 调试时长；interval 固定 30 秒，本期不开放任意高频配置
+          description: 调试时长；interval 固定 5 秒，本期不开放任意周期配置
         request_id:
           type: string
           maxLength: 64
@@ -148,7 +148,7 @@ components:
         status:
           type: string
           enum: [starting, active, stopping, stopped, expired, interrupted, failed]
-        interval_seconds: { type: integer, const: 30 }
+        interval_seconds: { type: integer, const: 5 }
         duration_seconds: { type: integer }
         started_at: { type: string, format: date-time }
         expires_at: { type: string, format: date-time }
@@ -200,7 +200,7 @@ components:
         session: { $ref: '#/components/schemas/DebugSession' }
         device_online: { type: boolean, description: status 1/2 视为在线 }
         supported: { type: boolean }
-        interval_seconds: { type: integer, const: 30 }
+        interval_seconds: { type: integer, const: 5 }
     DebugSessionMutationEnvelope:
       type: object
       required: [session]

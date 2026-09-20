@@ -68,7 +68,7 @@ class DeviceDebugSession {
       id: asIdText(json['id']) ?? '',
       deviceSn: json['device_sn'] as String? ?? '',
       status: json['status'] as String? ?? '',
-      intervalSeconds: (json['interval_seconds'] as num?)?.toInt() ?? 30,
+      intervalSeconds: (json['interval_seconds'] as num?)?.toInt() ?? 5,
       durationSeconds: (json['duration_seconds'] as num?)?.toInt() ?? 0,
       startedAt: parseTime(json['started_at']),
       expiresAt: parseTime(json['expires_at']),
@@ -215,7 +215,7 @@ class DeviceDebugSessionInfo {
           : null,
       deviceOnline: json['device_online'] == true,
       supported: json['supported'] != false,
-      intervalSeconds: (json['interval_seconds'] as num?)?.toInt() ?? 30,
+      intervalSeconds: (json['interval_seconds'] as num?)?.toInt() ?? 5,
     );
   }
 }

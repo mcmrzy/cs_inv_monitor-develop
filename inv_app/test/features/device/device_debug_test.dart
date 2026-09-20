@@ -58,7 +58,7 @@ class FakeDeviceDebugApi implements DeviceDebugApi {
       id: 'sess-new',
       deviceSn: sn,
       status: 'active',
-      intervalSeconds: 30,
+      intervalSeconds: 5,
       durationSeconds: durationSeconds,
       startedAt: DateTime.now().toUtc(),
       expiresAt: DateTime.now().toUtc().add(Duration(seconds: durationSeconds)),
@@ -68,7 +68,7 @@ class FakeDeviceDebugApi implements DeviceDebugApi {
       session: session,
       deviceOnline: true,
       supported: true,
-      intervalSeconds: 30,
+      intervalSeconds: 5,
     );
     return DeviceDebugSessionStartResult(session: session);
   }
@@ -104,7 +104,7 @@ class FakeDeviceDebugApi implements DeviceDebugApi {
       session: stopped,
       deviceOnline: true,
       supported: true,
-      intervalSeconds: 30,
+      intervalSeconds: 5,
     );
     return stopped;
   }
@@ -124,7 +124,7 @@ DeviceDebugSession activeSession({String id = 'sess-1'}) => DeviceDebugSession(
       id: id,
       deviceSn: 'SN-DEBUG-1',
       status: 'active',
-      intervalSeconds: 30,
+      intervalSeconds: 5,
       durationSeconds: 3600,
       startedAt: DateTime.now().toUtc(),
       expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 50)),
@@ -213,7 +213,7 @@ void main() {
         session: null,
         deviceOnline: true,
         supported: true,
-        intervalSeconds: 30,
+        intervalSeconds: 5,
       ),
       samplesPage: const DeviceDebugSamplesPage(items: [], nextCursor: ''),
     );
@@ -247,7 +247,7 @@ void main() {
         session: activeSession(),
         deviceOnline: true,
         supported: true,
-        intervalSeconds: 30,
+        intervalSeconds: 5,
       ),
       samplesPage: DeviceDebugSamplesPage(
         items: threeSamples(),
@@ -287,7 +287,7 @@ void main() {
         session: activeSession(),
         deviceOnline: true,
         supported: true,
-        intervalSeconds: 30,
+        intervalSeconds: 5,
       ),
       samplesPage: const DeviceDebugSamplesPage(items: [], nextCursor: ''),
     );
@@ -314,7 +314,7 @@ void main() {
       'id': 123,
       'device_sn': 'SN-1',
       'status': 'active',
-      'interval_seconds': 30,
+      'interval_seconds': 5,
       'duration_seconds': 3600,
       'requested_by': 42,
       'source': 'web',

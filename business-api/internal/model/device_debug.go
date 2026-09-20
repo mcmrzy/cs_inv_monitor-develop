@@ -37,7 +37,7 @@ const (
 	DebugSourceApp = "app"
 )
 
-// DeviceDebugSession 单设备调试会话。曲线样本不入本表，仅保存调试意图与生命周期。
+// DeviceDebugSession 单设备调试会话。曲线样本不入本表，仅保存调试意图与生命周期（采样间隔固定 5 秒）。
 type DeviceDebugSession struct {
 	ID              int64      `json:"id"`
 	DeviceSN        string     `json:"device_sn"`
