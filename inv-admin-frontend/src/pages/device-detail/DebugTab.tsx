@@ -2,28 +2,30 @@
  * 设备调试 Tab（DebugTab）
  *
  * 数据源：
- *  - GET  /devices/by-sn/:sn/debug-session          查询当前调试会话（10s 轮询，仅页面可见时）
- *  - POST /devices/by-sn/:sn/debug-session          开启会话（duration_seconds + request_id 幂等键）
- *  - DELETE /devices/by-sn/:sn/debug-session/:id    停止会话（幂等）
- *  - GET  /devices/by-sn/:sn/debug-samples          采样拉取（10s 轮询，after=游标增量）
+ *  - GET  /devices/by-sn/:sn/debug-session   会话查询（10s 轮询兜底，仅页面可见时）：
+ *            用于发现「是否存在进行中的会话」；会话期间的实时状态由 SSE 推送
+ *  - SSE  /devices/by-sn/:sn/debug-stream    实时推送（useDebugStream）：连接即收到
+ *            时间窗快照，之后每个新采样点 ≤2s 推达，会话状态变化也由流内事件更新
+ *  - POST /devices/by-sn/:sn/debug-session        开启会话（duration_seconds + request_id 幂等键）
+ *  - DELETE /devices/by-sn/:sn/debug-session/:id  停止会话（幂等）
  *
  * 语义约定：
  *  - 关闭页面不调用停止 API：会话由服务端 TTL（expires_at）自动过期；
  *  - 曲线四组：MPPT/PV（PV1/PV2 电压 + Buck1/Buck2 电流）、电池、逆变（母线电压+逆变电流）、
  *    负载（交流输出测点）；电压画左轴(V)、电流画右轴(A)，null 断线不连；
- *  - 本地累积采样点上限 400（超出裁掉最旧）；切换时间窗 / 重新进入页面全量拉取。
+ *  - 本地累积采样点上限 400（超出裁掉最旧）；切换时间窗会重连并由服务端重发快照。
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Alert, App, Button, Card, Checkbox, Collapse, Empty, Select, Space, Spin, Tag, Typography,
+  Alert, App, Button, Card, Checkbox, Collapse, Select, Space, Spin, Tag, Tooltip, Typography,
 } from 'antd'
-import { ClearOutlined, PauseCircleOutlined, PlayCircleOutlined } from '@ant-design/icons'
+import {
+  ClearOutlined, PauseCircleOutlined, PlayCircleOutlined, ReloadOutlined, ThunderboltOutlined,
+} from '@ant-design/icons'
 
 import { deviceApi } from '@/services/deviceApi'
 import type {
-  DebugSample,
-  DebugSampleMetrics,
   DebugSession,
   DebugSessionStatus,
   StartDebugSessionBody,
@@ -32,6 +34,7 @@ import { queryKeys } from '@/utils/queryKeys'
 import { formatInTimezone } from '@/utils/timezone'
 import useTimezoneStore from '@/stores/timezoneStore'
 import useTranslation from '@/hooks/useTranslation'
+import { useDebugStream } from '@/hooks/useDebugStream'
 import ReactECharts from '@/lib/echarts'
 
 const { Text } = Typography
@@ -43,16 +46,13 @@ interface DebugTabProps {
 const CARD_SHADOW = '0 2px 8px rgba(17,24,39,0.06)'
 /** 本地累积采样点上限，超出裁掉最旧的 */
 const MAX_POINTS = 400
-const SAMPLE_LIMIT = 200
 
 /** 会话仍「活着」的状态（显示倒计时/停止按钮；interrupted 为终态不提供停止） */
 const LIVE_STATUSES = new Set<DebugSessionStatus>(['starting', 'active', 'stopping'])
-/** 仍在产生采样、需要继续拉取的状态 */
-const SAMPLING_STATUSES = new Set<DebugSessionStatus>(['starting', 'active'])
 
 /* ═══════════ 曲线分组与选线定义 ═══════════ */
 
-type MetricKey = keyof DebugSampleMetrics
+type MetricKey = keyof import('@/services/deviceApi').DebugSampleMetrics
 type GroupKey = 'mppt' | 'battery' | 'inverter' | 'load'
 
 interface MetricDef {
@@ -60,20 +60,22 @@ interface MetricDef {
   /** 0 = 左轴电压(V)，1 = 右轴电流(A) */
   axis: 0 | 1
   color: string
+  /** 读数徽标上的单位 */
+  unit: 'V' | 'A'
 }
 
 /** 界面按测点原名标注：MPPT 组电流注明为 Buck1/Buck2 电流 */
 const METRIC_DEFS: Record<MetricKey, MetricDef> = {
-  pv1_voltage: { key: 'pv1_voltage', axis: 0, color: '#f59e0b' },
-  buck1_current: { key: 'buck1_current', axis: 1, color: '#fb923c' },
-  pv2_voltage: { key: 'pv2_voltage', axis: 0, color: '#3b82f6' },
-  buck2_current: { key: 'buck2_current', axis: 1, color: '#60a5fa' },
-  battery_voltage: { key: 'battery_voltage', axis: 0, color: '#22c55e' },
-  battery_current: { key: 'battery_current', axis: 1, color: '#16a34a' },
-  dc_bus_voltage: { key: 'dc_bus_voltage', axis: 0, color: '#8b5cf6' },
-  inv_current: { key: 'inv_current', axis: 1, color: '#a78bfa' },
-  ac_voltage: { key: 'ac_voltage', axis: 0, color: '#ef4444' },
-  ac_current: { key: 'ac_current', axis: 1, color: '#f97316' },
+  pv1_voltage: { key: 'pv1_voltage', axis: 0, color: '#fbbf24', unit: 'V' },
+  buck1_current: { key: 'buck1_current', axis: 1, color: '#fb923c', unit: 'A' },
+  pv2_voltage: { key: 'pv2_voltage', axis: 0, color: '#38bdf8', unit: 'V' },
+  buck2_current: { key: 'buck2_current', axis: 1, color: '#60a5fa', unit: 'A' },
+  battery_voltage: { key: 'battery_voltage', axis: 0, color: '#34d399', unit: 'V' },
+  battery_current: { key: 'battery_current', axis: 1, color: '#10b981', unit: 'A' },
+  dc_bus_voltage: { key: 'dc_bus_voltage', axis: 0, color: '#a78bfa', unit: 'V' },
+  inv_current: { key: 'inv_current', axis: 1, color: '#c084fc', unit: 'A' },
+  ac_voltage: { key: 'ac_voltage', axis: 0, color: '#f87171', unit: 'V' },
+  ac_current: { key: 'ac_current', axis: 1, color: '#f97316', unit: 'A' },
 }
 
 const METRIC_TKEY: Record<MetricKey, string> = {
@@ -121,6 +123,20 @@ const STATUS_TAG_COLOR: Record<DebugSessionStatus | 'none', string> = {
   failed: 'error',
 }
 
+/* ═══════════ 深色仪表盘样式常量 ═══════════ */
+
+/** 深色示波器面板：微透明描边 + 深蓝底，曲线在此之上更醒目 */
+const SCOPE_PANEL_STYLE: React.CSSProperties = {
+  borderRadius: 12,
+  border: '1px solid rgba(56,189,248,0.28)',
+  background: 'linear-gradient(165deg, #101a2e 0%, #0b1220 55%, #101f38 100%)',
+  boxShadow: '0 4px 18px rgba(8,15,30,0.45)',
+}
+
+const SCOPE_TEXT = '#94a3b8'
+const SCOPE_SPLIT = 'rgba(148,163,184,0.16)'
+const SCOPE_AXIS = 'rgba(148,163,184,0.35)'
+
 /* ═══════════ 工具函数 ═══════════ */
 
 /** 开启会话幂等键（jsdom/旧浏览器无 crypto.randomUUID 时降级） */
@@ -128,16 +144,6 @@ function newRequestId(): string {
   return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
     ? crypto.randomUUID()
     : `web-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
-}
-
-/** 合并增量采样：按 time 去重、升序，超出上限裁掉最旧的 */
-function mergeSamples(prev: DebugSample[], incoming: DebugSample[]): DebugSample[] {
-  if (incoming.length === 0) return prev
-  const byTime = new Map<string, DebugSample>()
-  for (const s of prev) byTime.set(s.time, s)
-  for (const s of incoming) byTime.set(s.time, s)
-  const merged = [...byTime.values()].sort((a, b) => a.time.localeCompare(b.time))
-  return merged.length > MAX_POINTS ? merged.slice(merged.length - MAX_POINTS) : merged
 }
 
 /** 剩余时间 → mm:ss / h:mm:ss */
@@ -164,66 +170,38 @@ const DebugTab: React.FC<DebugTabProps> = ({ sn }) => {
   const [durationSeconds, setDurationSeconds] = useState(3600)
   const [windowMinutes, setWindowMinutes] = useState<15 | 30 | 60>(60)
   const [selected, setSelected] = useState<MetricKey[]>(DEFAULT_SELECTED)
-  const [samples, setSamples] = useState<DebugSample[]>([])
   /** 每秒跳动的「当前时间」，驱动倒计时刷新 */
   const [now, setNow] = useState(() => Date.now())
-  /** 增量游标（不透明字符串），放 ref 避免进 queryKey 触发多余 refetch */
-  const cursorRef = useRef('')
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(timer)
   }, [])
 
-  /* ── 会话查询：10s 轮询，仅页面可见时 ── */
+  /* ── 会话查询（兜底）：发现「是否有进行中的会话」；实时状态由 SSE 推送 ── */
   const { data: sessionEnvelope, isLoading: sessionLoading } = useQuery({
     queryKey: queryKeys.devices.debugSession(sn),
     queryFn: () => deviceApi.getDebugSession(sn).then((r) => r.data?.data ?? null),
     refetchInterval: () => (document.visibilityState === 'visible' ? 10_000 : false),
   })
 
-  const session: DebugSession | null = sessionEnvelope?.session ?? null
-  const deviceOnline = sessionEnvelope?.device_online ?? false
+  const polledSession = sessionEnvelope?.session ?? null
+  const status: DebugSessionStatus | 'none' = polledSession?.status ?? 'none'
+
+  /* ── 实时流：仅在会话存活期间订阅 ── */
+  const sessionLive = polledSession != null && LIVE_STATUSES.has(polledSession.status)
+  const stream = useDebugStream(sn, { windowMinutes, enabled: sessionLive, maxPoints: MAX_POINTS })
+
+  // 流已连接时以流内会话为准（≤10s 新鲜度），未连接时回退到轮询结果
+  const session: DebugSession | null = stream.session ?? polledSession
+  const deviceOnline = stream.connected ? stream.deviceOnline : (sessionEnvelope?.device_online ?? false)
   const supported = sessionEnvelope?.supported ?? true
-  const status: DebugSessionStatus | 'none' = session?.status ?? 'none'
-  const sessionLive = session != null && LIVE_STATUSES.has(session.status)
-  const sessionId = session?.id ?? null
-  const sampling = session != null && SAMPLING_STATUSES.has(session.status)
-
-  /* ── 采样查询：10s 增量拉取（after=游标），仅会话活跃且页面可见时 ── */
-  const { data: samplesPage } = useQuery({
-    queryKey: [...queryKeys.devices.debugSamples(sn, sessionId ?? undefined), windowMinutes],
-    queryFn: () =>
-      deviceApi
-        .getDebugSamples(sn, {
-          session_id: sessionId ?? undefined,
-          window_minutes: windowMinutes,
-          after: cursorRef.current,
-          limit: SAMPLE_LIMIT,
-        })
-        .then((r) => r.data?.data ?? null),
-    enabled: Boolean(sessionId) && sampling,
-    refetchInterval: () => (document.visibilityState === 'visible' && sampling ? 10_000 : false),
-  })
-
-  // 增量合并：更新游标 + 追加去重后的采样点（上限 400）
-  useEffect(() => {
-    if (!samplesPage) return
-    cursorRef.current = samplesPage.next_cursor ?? ''
-    if (samplesPage.items.length > 0) setSamples((prev) => mergeSamples(prev, samplesPage.items))
-  }, [samplesPage])
-
-  /** 全量重置（切时间窗/开启新会话）：清空游标与本地累积点 */
-  const resetSamples = () => {
-    cursorRef.current = ''
-    setSamples([])
-  }
+  const samples = stream.samples
 
   /* ── 开启 / 停止会话 ── */
   const startMutation = useMutation({
     mutationFn: (body: StartDebugSessionBody) => deviceApi.startDebugSession(sn, body),
     onSuccess: (res) => {
-      resetSamples()
       queryClient.invalidateQueries({ queryKey: queryKeys.devices.debugSession(sn) })
       if (res.data?.data?.conflict) {
         message.warning(t('deviceDetail.debug.startConflict'))
@@ -251,12 +229,6 @@ const DebugTab: React.FC<DebugTabProps> = ({ sn }) => {
     })
   }
 
-  const handleWindowChange = (value: number) => {
-    // 游标是 ref，必须在新 query（新 queryKey）发出前置空，保证切窗后全量拉取
-    resetSamples()
-    setWindowMinutes(value as 15 | 30 | 60)
-  }
-
   const toggleMetric = (key: MetricKey, checked: boolean) => {
     setSelected((prev) =>
       checked ? (prev.includes(key) ? prev : [...prev, key]) : prev.filter((k) => k !== key),
@@ -272,16 +244,31 @@ const DebugTab: React.FC<DebugTabProps> = ({ sn }) => {
 
   const lastSampleTime = samples.length > 0 ? samples[samples.length - 1].time : (session?.last_sample_at ?? null)
 
-  /* ── ECharts 双纵轴折线图（左 V 右 A）── */
+  /** 每条选中曲线的最新读数（读数徽标用） */
+  const latestReadings = useMemo(() => {
+    const last = samples.length > 0 ? samples[samples.length - 1] : null
+    return selected.map((key) => {
+      const def = METRIC_DEFS[key]
+      const raw = last?.metrics?.[key] ?? null
+      const value = raw != null && Number.isFinite(raw) ? raw : null
+      return { key, def, label: t(METRIC_TKEY[key]), value }
+    })
+  }, [samples, selected, t])
+
+  /* ── 深色示波器：双纵轴 + 辉光线 + 渐变面积 + 最新点脉冲光斑 ── */
   const chartOption = useMemo(() => {
     if (samples.length === 0) return null
     const times = samples.map((s) => formatInTimezone(s.time, timezone, 'HH:mm:ss'))
     const series: Record<string, unknown>[] = []
+    const legendNames: string[] = []
+
     for (const key of selected) {
       const def = METRIC_DEFS[key]
       const data = samples.map((s) => s.metrics?.[key] ?? null)
       // 无数据的线不渲染 series
       if (!data.some((v) => v != null && Number.isFinite(v))) continue
+
+      legendNames.push(t(METRIC_TKEY[key]))
       series.push({
         name: t(METRIC_TKEY[key]),
         type: 'line',
@@ -290,19 +277,74 @@ const DebugTab: React.FC<DebugTabProps> = ({ sn }) => {
         showSymbol: false,
         // null 断线不连
         connectNulls: false,
-        lineStyle: { width: 2, color: def.color },
+        smooth: 0.25,
+        lineStyle: { width: 2, color: def.color, shadowColor: def.color, shadowBlur: 7 },
         itemStyle: { color: def.color },
+        emphasis: { focus: 'series' },
+        areaStyle: {
+          color: {
+            type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [
+              { offset: 0, color: `${def.color}30` },
+              { offset: 1, color: `${def.color}02` },
+            ],
+          },
+        },
       })
+
+      // 最新点的脉冲光斑：一眼看出「数据正在进来」
+      let lastIdx = data.length - 1
+      while (lastIdx >= 0 && data[lastIdx] == null) lastIdx -= 1
+      if (lastIdx >= 0) {
+        series.push({
+          name: `${t(METRIC_TKEY[key])}·live`,
+          type: 'effectScatter',
+          yAxisIndex: def.axis,
+          data: [[lastIdx, data[lastIdx]]],
+          symbolSize: 6,
+          rippleEffect: { scale: 3.2, brushType: 'stroke' },
+          itemStyle: { color: def.color, shadowColor: def.color, shadowBlur: 10 },
+          tooltip: { show: false },
+          silent: true,
+          z: 6,
+        })
+      }
     }
     if (series.length === 0) return null
     return {
-      tooltip: { trigger: 'axis' as const },
-      legend: { data: series.map((s) => s.name), top: 0, itemGap: 12 },
-      grid: { left: '3%', right: '4%', bottom: '8%', top: 36, containLabel: true },
-      xAxis: { type: 'category' as const, data: times, axisLabel: { fontSize: 11 } },
+      backgroundColor: 'transparent',
+      tooltip: {
+        trigger: 'axis' as const,
+        backgroundColor: 'rgba(13,20,36,0.92)',
+        borderColor: 'rgba(56,189,248,0.35)',
+        textStyle: { color: '#e2e8f0', fontSize: 12 },
+        axisPointer: { type: 'cross' as const, lineStyle: { color: 'rgba(148,163,184,0.45)' } },
+      },
+      legend: { data: legendNames, top: 0, textStyle: { color: SCOPE_TEXT, fontSize: 11 }, itemGap: 12 },
+      grid: { left: '3%', right: '4%', bottom: '14%', top: 36, containLabel: true },
+      xAxis: {
+        type: 'category' as const,
+        data: times,
+        axisLabel: { fontSize: 11, color: SCOPE_TEXT },
+        axisLine: { lineStyle: { color: SCOPE_AXIS } },
+      },
       yAxis: [
-        { type: 'value' as const, name: 'V', scale: true, axisLabel: { fontSize: 11 } },
-        { type: 'value' as const, name: 'A', scale: true, splitLine: { show: false }, axisLabel: { fontSize: 11 } },
+        {
+          type: 'value' as const, name: 'V', scale: true,
+          nameTextStyle: { color: SCOPE_TEXT },
+          axisLabel: { fontSize: 11, color: SCOPE_TEXT },
+          splitLine: { lineStyle: { color: SCOPE_SPLIT } },
+        },
+        {
+          type: 'value' as const, name: 'A', scale: true,
+          nameTextStyle: { color: SCOPE_TEXT },
+          axisLabel: { fontSize: 11, color: SCOPE_TEXT },
+          splitLine: { show: false },
+        },
+      ],
+      dataZoom: [
+        { type: 'inside', start: 0, end: 100 },
+        { type: 'slider', start: 0, end: 100, height: 16, bottom: 6, borderColor: SCOPE_AXIS },
       ],
       series,
     }
@@ -311,8 +353,21 @@ const DebugTab: React.FC<DebugTabProps> = ({ sn }) => {
   // 占用中（含 stopping）不允许再点开始：避免与后端 409 conflict 空转
   const hasLiveSession = session != null && LIVE_STATUSES.has(session.status)
 
+  /* ── 实时连接状态徽标 ── */
+  const liveBadge = sessionLive && (
+    <Tooltip title={t('deviceDetail.debug.pushHint')}>
+      <Tag
+        icon={<ThunderboltOutlined />}
+        color={stream.connected ? 'success' : 'processing'}
+        style={{ marginInlineEnd: 0, borderRadius: 999 }}
+      >
+        {stream.connected ? t('deviceDetail.debug.live') : t('deviceDetail.debug.reconnecting')}
+      </Tag>
+    </Tooltip>
+  )
+
   return (
-    <Spin spinning={sessionLoading}>
+    <Spin spinning={sessionLoading && !session}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {/* ── 控制区 ── */}
         <Card size="small" style={{ borderRadius: 12, boxShadow: CARD_SHADOW }}>
@@ -324,6 +379,7 @@ const DebugTab: React.FC<DebugTabProps> = ({ sn }) => {
             <Tag color={STATUS_TAG_COLOR[status]} style={{ marginInlineEnd: 0 }}>
               {t(`deviceDetail.debug.status.${status}`)}
             </Tag>
+            {liveBadge}
             {sessionLive && (
               <Text type="secondary" style={{ fontSize: 13 }}>
                 {t('deviceDetail.debug.remaining')}:{' '}
@@ -384,43 +440,30 @@ const DebugTab: React.FC<DebugTabProps> = ({ sn }) => {
             <Alert type="warning" showIcon style={{ marginTop: 12, borderRadius: 10 }}
               message={t('deviceDetail.debug.unsupported')} />
           )}
+          {sessionLive && stream.error && (
+            <Alert
+              type="error"
+              showIcon
+              style={{ marginTop: 12, borderRadius: 10 }}
+              message={t('deviceDetail.debug.streamError')}
+              description={
+                <Space direction="vertical" size={4}>
+                  <Text type="secondary" style={{ fontSize: 12 }}>{stream.error}</Text>
+                  <Button size="small" icon={<ReloadOutlined />} onClick={stream.reconnect}>
+                    {t('deviceDetail.debug.retry')}
+                  </Button>
+                </Space>
+              }
+            />
+          )}
           <Alert type="info" showIcon style={{ marginTop: 12, borderRadius: 10 }}
             message={t('deviceDetail.debug.note.session')} />
         </Card>
 
-        {/* ── 曲线区：选线 + 双纵轴折线图 ── */}
-        <Card
-          size="small"
-          style={{ borderRadius: 12, boxShadow: CARD_SHADOW }}
-          title={<span style={{ fontWeight: 600 }}>📈 {t('deviceDetail.debug.chartTitle')}</span>}
-          extra={
-            <Space size={12} wrap>
-            <Space size={8}>
-              <Text type="secondary" style={{ fontSize: 13 }}>{t('deviceDetail.debug.window')}</Text>
-              <Select
-                value={windowMinutes}
-                onChange={handleWindowChange}
-                style={{ width: 100 }}
-                options={WINDOW_OPTIONS.map((v) => ({
-                  value: v,
-                  label: t(`deviceDetail.debug.window.${v}`),
-                }))}
-              />
-            </Space>
-              <Button
-                size="small"
-                icon={<ClearOutlined />}
-                disabled={selected.length === 0}
-                onClick={() => setSelected([])}
-              >
-                {t('deviceDetail.debug.clearAll')}
-              </Button>
-            </Space>
-          }
-        >
+        {/* ── 选线区 ── */}
+        <Card size="small" style={{ borderRadius: 12, boxShadow: CARD_SHADOW }}>
           <Collapse
             size="small"
-            style={{ marginBottom: 12 }}
             // 调试页默认展开全部分组，方便直接看到所有可勾选曲线
             defaultActiveKey={GROUPS.map((g) => g.key)}
             items={GROUPS.map((g) => ({
@@ -452,10 +495,72 @@ const DebugTab: React.FC<DebugTabProps> = ({ sn }) => {
               ),
             }))}
           />
+        </Card>
+
+        {/* ── 曲线区：深色示波器面板 ── */}
+        <Card
+          size="small"
+          style={{ ...SCOPE_PANEL_STYLE }}
+          styles={{ body: { padding: '12px 16px 8px' } }}
+          title={
+            <Space size={10} wrap>
+              <ThunderboltOutlined style={{ color: '#38bdf8' }} />
+              <span style={{ fontWeight: 600, color: '#e2e8f0' }}>{t('deviceDetail.debug.chartTitle')}</span>
+              {liveBadge}
+            </Space>
+          }
+          extra={
+            <Space size={12} wrap>
+              <Space size={8}>
+                <Text type="secondary" style={{ fontSize: 13, color: SCOPE_TEXT }}>{t('deviceDetail.debug.window')}</Text>
+                <Select
+                  value={windowMinutes}
+                  onChange={(value) => setWindowMinutes(value as 15 | 30 | 60)}
+                  style={{ width: 100 }}
+                  options={WINDOW_OPTIONS.map((v) => ({
+                    value: v,
+                    label: t(`deviceDetail.debug.window.${v}`),
+                  }))}
+                />
+              </Space>
+              <Button
+                size="small"
+                icon={<ClearOutlined />}
+                disabled={selected.length === 0}
+                onClick={() => setSelected([])}
+              >
+                {t('deviceDetail.debug.clearAll')}
+              </Button>
+            </Space>
+          }
+        >
+          {/* 最新读数徽标：数字随推送实时跳动 */}
+          {latestReadings.length > 0 && (
+            <Space size={8} wrap style={{ marginBottom: 10 }}>
+              {latestReadings.map(({ key, def, label, value }) => (
+                <div
+                  key={key}
+                  style={{
+                    display: 'flex', alignItems: 'baseline', gap: 6, padding: '4px 10px', borderRadius: 8,
+                    background: 'rgba(148,163,184,0.08)', border: `1px solid ${def.color}44`,
+                  }}
+                >
+                  <span style={{ width: 8, height: 8, borderRadius: 999, background: def.color, alignSelf: 'center' }} />
+                  <span style={{ fontSize: 12, color: SCOPE_TEXT }}>{label}</span>
+                  <span style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 600, color: def.color }}>
+                    {value != null ? value.toFixed(2) : '--'}
+                  </span>
+                  <span style={{ fontSize: 11, color: SCOPE_TEXT }}>{def.unit}</span>
+                </div>
+              ))}
+            </Space>
+          )}
           {chartOption ? (
-            <ReactECharts option={chartOption} notMerge style={{ height: 360 }} />
+            <ReactECharts option={chartOption} notMerge lazyUpdate style={{ height: 380, width: '100%' }} />
           ) : (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('deviceDetail.debug.noPoints')} />
+            <div style={{ padding: '56px 0', textAlign: 'center', color: SCOPE_TEXT, fontSize: 13 }}>
+              {t('deviceDetail.debug.noPoints')}
+            </div>
           )}
         </Card>
       </div>

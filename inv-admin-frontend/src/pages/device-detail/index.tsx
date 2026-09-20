@@ -32,11 +32,10 @@ interface DeviceHeaderInfo {
 }
 
 /**
- * 设备完整详情页（全屏路由，位于 MainLayout 之外）。
+ * 设备完整详情页（位于 MainLayout 内，与设备管理/电站详情同一套外壳）。
  *
- * 因为没有 ProLayout 容器，本页必须自建页面外壳：布局底色 + 内边距 + 头部信息栏，
- * 否则内容会紧贴视口边缘、底色透空（浏览器为白，宿主容器可能为深色）。
- * 头部展示设备别名/SN/型号/在线状态，方便直接判断当前查看的是哪台设备。
+ * 页面外壳（侧边栏、纸面底色、24px 内边距）由 MainLayout 提供，本页只负责标题行 + Tab，
+ * 与电站详情页保持一致的排布：返回按钮 + 设备别名/SN/型号/在线状态，然后是详情 Tab。
  */
 const DeviceDetailPage: React.FC = () => {
   const { t } = useTranslation()
@@ -65,16 +64,8 @@ const DeviceDetailPage: React.FC = () => {
   }
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        // 与 MainLayout 内容区（.ant-pro-layout-bg-list）同一「纸面」：白→浅灰渐变，
-        // 本页在 ProLayout 之外，必须自行铺底，否则与其它页面的底色/质感不一致。
-        background: 'linear-gradient(#ffffff, #f5f5f5 28%)',
-        padding: screens.md ? 24 : 12,
-      }}
-    >
-      {/* ── 页面标题行：与仪表盘/设备管理等页面一致的标题排布（非卡片） ── */}
+    <>
+      {/* ── 页面标题行：与仪表盘/设备管理/电站详情一致的标题排布（非卡片） ── */}
       <div
         style={{
           display: 'flex',
@@ -131,7 +122,7 @@ const DeviceDetailPage: React.FC = () => {
           { key: 'info', label: t('deviceDetail.tab.info'), children: <InfoTab sn={sn} /> },
         ]}
       />
-    </div>
+    </>
   )
 }
 
