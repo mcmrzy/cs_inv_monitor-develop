@@ -952,7 +952,6 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             _buildSoftApSection()
           else
             _buildBleSection(),
-          const ProvisioningCompanionFooter(),
         ],
       ),
     );
