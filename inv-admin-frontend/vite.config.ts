@@ -26,6 +26,7 @@ export default defineConfig({
       input: {
         main: path.resolve(__dirname, 'index.html'),
         download: path.resolve(__dirname, 'download.html'),
+        bind: path.resolve(__dirname, 'bind.html'),
       },
       output: {
         manualChunks(id) {

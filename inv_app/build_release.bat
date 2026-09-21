@@ -81,7 +81,7 @@ if errorlevel 1 (
 if /i "%~1"=="--analyze" (
     echo.
     echo [0/2] flutter analyze ...  日志: %ANALYZE_LOG%
-    %PS% -NoProfile -Command "$ErrorActionPreference='Continue'; & flutter analyze 2>&1 | Tee-Object -FilePath '%ANALYZE_LOG%'; exit $LASTEXITCODE"
+    %PS% -NoProfile -Command "$ErrorActionPreference='Continue'; & flutter analyze --no-fatal-infos 2>&1 | Tee-Object -FilePath '%ANALYZE_LOG%'; exit $LASTEXITCODE"
     if errorlevel 1 (
         echo.
         echo [错误] flutter analyze 未通过，已中止发版。

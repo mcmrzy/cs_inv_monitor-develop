@@ -174,7 +174,17 @@ class AppRouter {
         path: '/login',
         name: 'login',
         pageBuilder: (context, state) =>
-            _fadePage(state, const AuthPage(initialMode: AuthMode.login)),
+            _fadePage(
+              state,
+              AuthPage(
+                initialMode: AuthMode.login,
+                bindSn: state.uri.queryParameters['bind_sn'],
+                bindPin: state.uri.queryParameters['bind_pin'],
+                bindStationId: parsePositiveRouteInt(
+                  state.uri.queryParameters['station_id'],
+                ),
+              ),
+            ),
       ),
       GoRoute(
         path: '/jverify-login',
@@ -535,6 +545,9 @@ class AppRouter {
           final releaseSignature =
               state.uri.queryParameters['release_signature'];
 
+          // BLE 通道设备 MAC：扫描页连接时带入，执行页凭它免扫描复用会话
+          final deviceMac = state.uri.queryParameters['mac'];
+
           // 旧深链没有 channel 时先进入双通道选择页，不能静默降级为 WiFi。
           final channelParam = state.uri.queryParameters['channel'];
           if (channelParam == null ||
@@ -570,6 +583,7 @@ class AppRouter {
               fileSha256: fileSha256,
               securityVersion: securityVersion,
               releaseSignature: releaseSignature,
+              deviceMac: deviceMac,
             ),
           );
         },

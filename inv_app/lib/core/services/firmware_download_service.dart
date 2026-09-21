@@ -570,6 +570,12 @@ class FirmwareDownloadService {
       if (await file.exists()) {
         await file.delete();
       }
+      // 同时清掉续传分片：删除语义是释放空间，
+      // 残留 .part 会一直占盘且不再被任何下载续用
+      final partFile = File('$path$_partSuffix');
+      if (await partFile.exists()) {
+        await partFile.delete();
+      }
       await _clearDownloadedRecord(firmwareId);
     }
   }

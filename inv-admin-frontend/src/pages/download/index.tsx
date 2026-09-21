@@ -1,5 +1,6 @@
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react'
 import useDownloadT from './useDownloadT'
+import { bindAppUrl, readPendingDeviceBind } from '@/utils/pendingDeviceBind'
 
 /**
  * App 安装包下载页（download.jiuxiaoyw.online）
@@ -95,6 +96,7 @@ const DownloadPage: React.FC = () => {
   const [copied, setCopied] = useState(false)
   const [copiedField, setCopiedField] = useState<'sha256' | 'url' | null>(null)
   const [showDesktopQR, setShowDesktopQR] = useState(false)
+  const [pendingBind] = useState(readPendingDeviceBind)
 
   // 该页面托管在下载子域，浏览器标签页需要显示下载相关标题而不是后台标题。
   useEffect(() => {
@@ -221,6 +223,14 @@ const DownloadPage: React.FC = () => {
           <h1 className="dlp-title">{t('dl.appTitle')}</h1>
           <span className="dlp-title-accent" aria-hidden="true" />
           <p className="dlp-subtitle">{t('dl.subtitle')}</p>
+
+          {pendingBind ? (
+            <div className="dlp-empty" role="status">
+              <strong>{t('dl.pendingBindTitle')}</strong>
+              <span>{t('dl.pendingBindDesc', { sn: pendingBind.sn })}</span>
+              <a href={bindAppUrl(pendingBind)}>{t('dl.openAppToBind')}</a>
+            </div>
+          ) : null}
 
           <div className="dlp-actions">
             <button

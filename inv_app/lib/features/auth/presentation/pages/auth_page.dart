@@ -22,8 +22,17 @@ enum AuthMode { login, register }
 /// 装饰与卖点胶囊）+ 白色悬浮卡片 + 底部切换行。
 class AuthPage extends StatefulWidget {
   final AuthMode initialMode;
+  final String? bindSn;
+  final String? bindPin;
+  final int? bindStationId;
 
-  const AuthPage({super.key, this.initialMode = AuthMode.login});
+  const AuthPage({
+    super.key,
+    this.initialMode = AuthMode.login,
+    this.bindSn,
+    this.bindPin,
+    this.bindStationId,
+  });
 
   @override
   State<AuthPage> createState() => _AuthPageState();
@@ -83,7 +92,19 @@ class _AuthPageState extends State<AuthPage>
               type: ToastType.error,
             );
           } else if (state is AuthAuthenticated) {
-            context.go('/home');
+            final sn = widget.bindSn?.trim().toUpperCase();
+            if (sn != null && RegExp(r'^[A-Z0-9]{16}$').hasMatch(sn)) {
+              final params = <String, String>{
+                'sn': sn,
+                'pin': widget.bindPin ?? '',
+              };
+              if (widget.bindStationId != null) {
+                params['station_id'] = widget.bindStationId.toString();
+              }
+              context.go(Uri(path: '/device/qr-bind', queryParameters: params).toString());
+            } else {
+              context.go('/home');
+            }
           }
         },
         builder: (context, state) {

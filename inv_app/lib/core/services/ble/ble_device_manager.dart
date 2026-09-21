@@ -990,6 +990,48 @@ class BleDeviceManager {
     }
   }
 
+  /// 本机是否已保存该 SN 的 device_key（即是否已在本机完成绑定）。
+  /// 读取失败按未绑定处理，避免把存储异常当成已绑定。
+  Future<bool> hasDeviceKey(String sn) async {
+    if (sn.isEmpty) return false;
+    try {
+      return (await _keyStore.read(sn)) != null;
+    } catch (e) {
+      debugPrint('BleDeviceManager: keyStore read $sn failed: $e');
+      return false;
+    }
+  }
+
+  /// 对已连接会话重试鉴权（本地存在 device_key 时）。
+  ///
+  /// 连接建立时的鉴权可能因链路繁忙/超时失败，会话会停留在
+  /// `connecting`/`authenticating` 而设备此时已停止广播，
+  /// 重新扫描必然找不到设备——只能在本机复用会话重试鉴权。
+  /// 鉴权成功与否由会话自身的写入结果决定：链路已断时会抛错并返回 false。
+  /// 返回会话是否已进入 ready；无会话、无 key 或设备拒绝均返回 false。
+  Future<bool> ensureAuthenticated(String macAddress) async {
+    final session = _sessions[macAddress];
+    if (session == null) return false;
+    if (session.state == BleDeviceState.ready) return true;
+    final sn = (session.sn ?? '').trim();
+    if (sn.isEmpty) return false;
+    String? key;
+    try {
+      key = await _keyStore.read(sn);
+    } catch (e) {
+      debugPrint('BleDeviceManager: keyStore read $sn failed: $e');
+      return false;
+    }
+    if (key == null || key.isEmpty) return false;
+    try {
+      await session.authenticate(key);
+      return session.state == BleDeviceState.ready;
+    } catch (e) {
+      debugPrint('BleDeviceManager: re-auth ${session.macAddress} failed: $e');
+      return false;
+    }
+  }
+
   /// 从广播名解析 SN（广播名形如 CS_INV_<SN> / CS-INV-<SN>）；
   /// 无法解析时返回空串
   static String parseSnFromAdvName(String name) {

@@ -135,18 +135,30 @@ Future<void> _restoreBleServices() async {
   }
 }
 
-/// 最近一次已处理的绑定链接去重键（app_links 冷启动/热启动可能重复投递同一链接）
+/// 最近一次已处理的绑定链接（app_links 冷启动/热启动可能重复投递）。
 String? _lastHandledLinkKey;
+DateTime? _lastHandledLinkAt;
 
 Future<void> _initDeepLinks() async {
   final service = getIt<DeepLinkService>();
 
   void handle(BindLink? link) {
     if (link == null) return;
-    // 同一链接（sn|pin）只触发一次跳转，避免冷启动/热启动重复 push
-    if (_lastHandledLinkKey == link.dedupeKey) return;
+    // 仅压制同一次投递的短时间重复事件；用户重新扫码仍可回到绑定页。
+    final now = DateTime.now();
+    if (_lastHandledLinkKey == link.dedupeKey &&
+        _lastHandledLinkAt != null &&
+        now.difference(_lastHandledLinkAt!) < const Duration(seconds: 2)) {
+      return;
+    }
     _lastHandledLinkKey = link.dedupeKey;
-    AppRouter.router.push('/device/qr-bind?sn=${link.sn}&pin=${link.pin}');
+    _lastHandledLinkAt = now;
+    AppRouter.router.push(
+      Uri(
+        path: '/device/qr-bind',
+        queryParameters: {'sn': link.sn, 'pin': link.pin},
+      ).toString(),
+    );
   }
 
   // 冷启动：等首帧后再跳转，避免路由未就绪

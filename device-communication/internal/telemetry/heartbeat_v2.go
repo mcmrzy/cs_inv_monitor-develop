@@ -292,9 +292,12 @@ func ParseHeartbeatV2(deviceSN string, payload []byte, receivedAt time.Time) (*S
 		BatteryOvercharge:       u8(sys[10], 1),
 	}
 	s.PV = PV{
-		PV1Voltage:   bounded(pv[0], 0, 150),
+		// PV 电压界限 500V：ARM 上送为 1V 量纲（屏幕原值显示实证），实机 PV 工作
+		// 电压常见 200~450V；旧界 150V 把正常电压全部判越界置 NULL（固件同步放宽
+		// 到 raw 5000）。
+		PV1Voltage:   bounded(pv[0], 0, 500),
 		Buck1Current: bounded(pv[1], 0, 30),
-		PV2Voltage:   bounded(pv[2], 0, 150),
+		PV2Voltage:   bounded(pv[2], 0, 500),
 		Buck2Current: bounded(pv[3], 0, 30),
 		TotalPower:   bounded(pv[4], 0, 7500),
 	}

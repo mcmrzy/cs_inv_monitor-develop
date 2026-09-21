@@ -1,8 +1,8 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:jiguang_auth/jiguang_auth.dart';
+import 'package:inv_app/core/platform/app_platform.dart';
 
 /// JVerify 运营商认证异常
 class JVerifyCarrierException implements Exception {
@@ -40,7 +40,7 @@ class JVerifyService {
   /// 检查当前平台是否支持 JVerify
   bool get isSupported {
     if (kIsWeb) return false;
-    return Platform.isAndroid || Platform.isIOS;
+    return PlatformCapabilities.supportsOneTapLogin;
   }
 
   /// 初始化 JVerify SDK

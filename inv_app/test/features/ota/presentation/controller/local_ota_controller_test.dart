@@ -51,6 +51,7 @@ class _FakeLocalCommunication implements LocalCommunicationRepository {
     required String deviceSN,
     required String deviceIP,
     String? password,
+    String? macAddress,
   }) async =>
       true;
 

@@ -6,10 +6,14 @@ import 'package:inv_app/core/services/local_communication_service.dart';
 /// 支持 BLE 和 WiFi AP 两种通道（见 [LocalCommunicationChannel]）。
 abstract class LocalCommunicationRepository {
   /// 连接设备WiFi热点 (CS-INV-xxxx)
+  ///
+  /// [macAddress] 仅 BLE 通道使用：设备被连接后即停止广播，
+  /// 带上已知 MAC 可免扫描直连/复用会话（WiFi AP 通道忽略该参数）。
   Future<bool> connectToDevice({
     required String deviceSN,
     required String deviceIP,
     String? password,
+    String? macAddress,
   });
 
   /// 断开WiFi连接，恢复正常网络

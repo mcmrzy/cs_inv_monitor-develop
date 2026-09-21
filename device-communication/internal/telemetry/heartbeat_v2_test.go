@@ -434,6 +434,53 @@ func TestParseHeartbeatV2FixedARMLayout(t *testing.T) {
 	require.InDelta(t, -6187.0, *power, 0.0001)
 }
 
+// l10App8ContractHeartbeatV2 是 2026-09-21 依 ARM 源码 App(8) Collector.c:ReadRunParam
+// 重校量纲后，ESP 固件 1.7.7 对实机 H1ZZX00139000038 同一组寄存器的预期输出：
+//   - ac[0] ACOutputVolt：VloadA 直传，线上即 0.1V（2310 = 231.0V；旧固件按 1V 再 ×10
+//     得 23100，服务端判越界置 NULL——即现场「交流电压永远 --」的根因）；
+//   - sys[9] LoadPercent：ARM 对 SysParam(0.1%) 又 ×10，线上恰为 0.1%，固件直传
+//     （旧固件再 ×10 成 500，端到端放大 10 倍）；
+//   - chr[2] ACChrCurr：IgridA(0.01A)×10 → 线上 0.1A，固件直传（旧 ÷100 缩小 100 倍）；
+//   - pv[0]：1V 量纲 ×10 不变，但界限放宽到 500V（PV 工作电压常见 200~450V）。
+const l10App8ContractHeartbeatV2 = `{"v":2,"t":1789972771,"data":{"sys":[777,0,0,0,300,0,null,null,39190,50,0],"pv":[3500,0,0,0,0],"ac":[2310,4980,3470,0,0,40,0,0,0,0,0],"chr":[0,0,124],"bat":[5040,0,-69,0,null],"eng":[0,0,0,0,0,0,11929,0,11929,0,0,0,0,0],"fan":[0,0],"diag":[null,0,0],"sock":[null,null,null]}}`
+
+func TestParseHeartbeatV2L10App8UnitsContract(t *testing.T) {
+	s, err := ParseHeartbeatV2("H1ZZX00139000038", []byte(l10App8ContractHeartbeatV2), time.Unix(1789972771+60, 0))
+	require.NoError(t, err)
+
+	// PV：350V 工作电压必须落库（旧界 150V 会置 NULL + QualityOutOfRange）
+	require.InDelta(t, 350.0, *s.PV.PV1Voltage, 0.0001) // 3500×0.1
+
+	// AC：输出电压 231.0V（旧固件发布 23100 → NULL）；频率 49.80Hz 直传
+	require.InDelta(t, 231.0, *s.AC.Voltage, 0.0001)  // 2310×0.1
+	require.InDelta(t, 49.8, *s.AC.Frequency, 0.0001) // 4980×0.01
+	require.InDelta(t, 347.0, *s.AC.ActivePower, 0.0001)
+	// 负载百分比：sys[9]=50 直传 → 5.0%（旧固件 ×10 后为 50%）
+	require.InDelta(t, 5.0, *s.AC.LoadPercent, 0.0001)
+	// AC 充电电流：chr[2]=124 直传 → 12.4A（旧固件 ÷100 后 ≈0.1A）
+	require.InDelta(t, 12.4, *s.AC.ACChargeCurrent, 0.0001)
+
+	// System / Battery：母线 391.9V（scale 0.01 两侧本就一致）、电池 50.40V 放电 6.9A
+	require.InDelta(t, 391.9, *s.System.DCBusVoltage, 0.0001)
+	require.InDelta(t, 30.0, *s.System.InverterTemperature, 0.0001)
+	require.InDelta(t, 50.4, *s.Battery.Voltage, 0.0001)
+	require.InDelta(t, -6.9, *s.Battery.Current, 0.0001)
+	require.Nil(t, s.Battery.DischargePower) // 语义性 null
+
+	// 全部数值在界内：不得置 QualityOutOfRange
+	require.Zero(t, s.QualityFlags&QualityOutOfRange)
+}
+
+// TestParseHeartbeatV2PVVoltageAbove500Rejected：500V 新界仍须拒绝超量程值
+// （如 PV 接线异常/垃圾值），拒绝语义与旧界一致。
+func TestParseHeartbeatV2PVVoltageAbove500Rejected(t *testing.T) {
+	payload := []byte(`{"v":2,"t":1789972771,"data":{"sys":[777,0,0,0,300,0,null,null,0,0,0],"pv":[6300,0,0,0,0],"ac":[0,0,0,0,0,0,0,0,0,0,0],"chr":[0,0,0],"bat":[0,0,0,0,0],"eng":[0,0,0,0,0,0,0,0,0,0,0,0,0,0],"fan":[0,0],"diag":[null,0,0],"sock":[null,null,null]}}`)
+	s, err := ParseHeartbeatV2("H1ZZX00139000038", payload, time.Unix(1789972771+60, 0))
+	require.NoError(t, err)
+	require.Nil(t, s.PV.PV1Voltage) // 630V > 500V → NULL
+	require.NotZero(t, s.QualityFlags&QualityOutOfRange)
+}
+
 // misalignedDirtyHeartbeatV2 是固件修复前现场实际发出的错位脏 payload（SN H1ZZX0023900002P，
 // 与 TestParseHeartbeatV2RealDirtyHeartbeat 同一输入）：值未按 ARM 新版 200B 布局换算而错位，
 // 作为修复前后的对照负例。

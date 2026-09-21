@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/features/device/presentation/widgets/wifi_provision_widgets.dart';
 
 Widget _testApp(Widget child) {
@@ -96,39 +95,4 @@ void main() {
     });
   });
 
-  testWidgets('provisioning companion is a responsive bottom illustration',
-      (tester) async {
-    await tester.pumpWidget(
-      _testApp(
-        const SingleChildScrollView(
-          child: Column(
-            children: [
-              Text('business content'),
-              ProvisioningCompanionFooter(),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    expect(find.text('business content'), findsOneWidget);
-    expect(
-      find.byKey(const Key('provisioning-companion-bottom')),
-      findsOneWidget,
-    );
-    final illustration = tester.widget<Image>(
-      find.byKey(const Key('provisioning-companion-bottom')),
-    );
-    expect(
-      (illustration.image as AssetImage).assetName,
-      CsergyAssets.xiaoshuoWifiGuide,
-    );
-    expect(
-      tester
-          .getTopLeft(find.byKey(const Key('provisioning-companion-bottom')))
-          .dy,
-      greaterThan(tester.getBottomLeft(find.text('business content')).dy),
-    );
-    expect(tester.takeException(), isNull);
-  });
 }

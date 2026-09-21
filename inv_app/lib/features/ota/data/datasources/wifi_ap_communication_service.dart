@@ -33,6 +33,8 @@ class WifiApCommunicationService implements LocalCommunicationRepository {
     required String deviceSN,
     required String deviceIP,
     String? password,
+    // WiFi AP 通道按 SN 匹配热点，不需要设备 MAC
+    String? macAddress,
   }) async {
     try {
       // 检查位置权限

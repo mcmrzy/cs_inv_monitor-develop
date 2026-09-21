@@ -1,7 +1,7 @@
-import 'dart:io' show Platform;
-
 import 'package:flutter/foundation.dart';
 import 'package:home_widget/home_widget.dart';
+
+import 'package:inv_app/core/platform/app_platform.dart';
 
 /// Android 桌面小组件更新服务
 ///
@@ -26,7 +26,7 @@ class WidgetUpdateService {
 
   /// 初始化 home_widget（Android 端注册 AppGroupId）
   static Future<void> init() async {
-    if (!Platform.isAndroid) return;
+    if (!PlatformCapabilities.supportsHomeWidget) return;
     try {
       await HomeWidget.setAppGroupId(_appGroupId);
     } catch (e) {
@@ -46,7 +46,7 @@ class WidgetUpdateService {
     required String deviceTotal,
     required String currentPower,
   }) async {
-    if (!Platform.isAndroid) return;
+    if (!PlatformCapabilities.supportsHomeWidget) return;
     try {
       await Future.wait([
         HomeWidget.saveWidgetData<String>('today_kwh', todayKwh),
@@ -76,7 +76,7 @@ class WidgetUpdateService {
     required String deviceOnline,
     required String deviceTotal,
   }) async {
-    if (!Platform.isAndroid) return;
+    if (!PlatformCapabilities.supportsHomeWidget) return;
     try {
       await Future.wait([
         HomeWidget.saveWidgetData<String>('stats_total_kwh', totalKwh),
@@ -107,7 +107,7 @@ class WidgetUpdateService {
     required String currentPower,
     required String monthKwh,
   }) async {
-    if (!Platform.isAndroid) return;
+    if (!PlatformCapabilities.supportsHomeWidget) return;
     try {
       await Future.wait([
         HomeWidget.saveWidgetData<String>('ef_today_kwh', todayKwh),
@@ -133,7 +133,7 @@ class WidgetUpdateService {
     required String latestAlarmTitle,
     required String alarmCount,
   }) async {
-    if (!Platform.isAndroid) return;
+    if (!PlatformCapabilities.supportsHomeWidget) return;
     try {
       await Future.wait([
         HomeWidget.saveWidgetData<String>('notif_latest_title', latestAlarmTitle),
@@ -151,7 +151,7 @@ class WidgetUpdateService {
 
   /// 清空小组件数据（退出登录时调用）
   static Future<void> clearWidgetData() async {
-    if (!Platform.isAndroid) return;
+    if (!PlatformCapabilities.supportsHomeWidget) return;
     try {
       await Future.wait([
         // 电站概览小组件

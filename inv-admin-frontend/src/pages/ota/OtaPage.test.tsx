@@ -237,7 +237,7 @@ describe('OtaPage', () => {
               alias: '屋顶逆变器',
               model: 'SG-5K-D',
               hardware_version: 'HW-2.0',
-              status: 'online',
+              status: 1,
             }],
             total: 1,
           },
@@ -256,6 +256,34 @@ describe('OtaPage', () => {
     expect(screen.getByText('硬件版本')).toBeInTheDocument()
     expect(screen.getAllByText('DETAIL-SN-001').length).toBeGreaterThan(0)
     expect(screen.getAllByText('HW-2.0').length).toBeGreaterThan(0)
+  })
+
+  // 回归：左侧设备列表曾按 device.status === 'online' 字符串比较，而 /devices 下发的是
+  // 数字 0/1/2，恒为 false，导致列表里每台设备都显示「离线」而右侧详情显示「在线」。
+  it('renders numeric device status as online/fault/offline in the device picker', async () => {
+    server.use(
+      http.get(`${API_BASE}/devices`, () =>
+        HttpResponse.json({
+          code: 0,
+          data: {
+            items: [
+              { id: '1', sn: 'ONLINE-SN-001', model: 'SG-5K-D', status: 1 },
+              { id: '2', sn: 'FAULT-SN-002', model: 'SG-5K-D', status: 2 },
+              { id: '3', sn: 'OFFLINE-SN-003', model: 'SG-5K-D', status: 0 },
+            ],
+            total: 3,
+          },
+        }),
+      ),
+    )
+
+    renderAsAdmin(<OtaPage />)
+
+    await screen.findByText('ONLINE-SN-001')
+    expect(screen.getByText('在线')).toBeInTheDocument()
+    // 2=故障 仍属在线设备，必须与纯离线区分开
+    expect(screen.getByText('故障')).toBeInTheDocument()
+    expect(screen.getByText('离线')).toBeInTheDocument()
   })
 
   // 发布 App 版本改为直接上传 APK：版本号/包名/体积/SHA-256 由服务端解析，

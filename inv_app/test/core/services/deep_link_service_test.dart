@@ -7,6 +7,14 @@ void main() {
     // 16 位字母数字 SN（parse 只校验长度/字符集，无需通过 parseSN 语义校验）
     const validSn = 'H1CNA1238B12345X';
 
+    test('铭牌网页传来的设备号与 PIN 可进入绑定流程', () {
+      final link = DeepLinkService.parse(
+        Uri.parse('csinv://bind?sn=H1ZZX0013900001P&pin=344411'),
+      );
+      expect(link?.sn, 'H1ZZX0013900001P');
+      expect(link?.pin, '344411');
+    });
+
     test('csinv://bind?sn=&pin= 正确解析', () {
       final link = DeepLinkService.parse(
         Uri.parse('csinv://bind?sn=$validSn&pin=123456'),

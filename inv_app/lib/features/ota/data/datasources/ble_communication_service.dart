@@ -3,11 +3,40 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:inv_app/core/services/ble/ble_adapter.dart';
 import 'package:inv_app/core/services/ble/ble_device_manager.dart';
 import 'package:inv_app/core/services/local_communication_service.dart';
 import 'package:inv_app/features/ota/domain/repositories/local_communication_repository.dart';
+
+/// BLE 通道连接失败原因（[BleCommunicationService.connectToDevice] 返回 false 时有效）。
+///
+/// 设备一旦被连接就会停止广播（固件仅在断开事件里重启广播），
+/// 因此"连不上"必须区分是"没扫到"还是"已连上但未鉴权"，
+/// 否则会把未绑定/鉴权失败误报成"扫描不到设备"。
+enum BleConnectFailure {
+  /// 蓝牙未开启或不可用
+  adapterOff,
+
+  /// 扫描不到目标设备（设备不在广播范围内）
+  notFound,
+
+  /// 已连接但本机没有该设备的 device_key（未在本机绑定）
+  notBound,
+
+  /// 已连接但鉴权失败（本机 device_key 与设备不匹配）
+  authFailed,
+
+  /// 设备固件未实现 CSIV-CT v2 安全控制/OTA，无法蓝牙本地升级
+  unsupportedFirmware,
+
+  /// 会话已被 OTA 独占，需等上一次任务收尾
+  otaBusy,
+
+  /// 其他异常
+  unknown,
+}
 
 /// BLE OTA 通信服务
 ///
@@ -35,12 +64,22 @@ class BleCommunicationService implements LocalCommunicationRepository {
   BleOtaLease? _otaLease;
   StreamSubscription<Map<String, dynamic>>? _statusSub;
   String? _connectedMacAddress;
+  String? _targetMacAddress;
+  BleConnectFailure? _lastConnectFailure;
 
   final Random _random = Random.secure();
   final List<Map<String, dynamic>> _statusLog = [];
   final List<_OtaStatusWaiter> _statusWaiters = [];
+  int _statusSequence = 0;
 
   String? get connectedMacAddress => _connectedMacAddress;
+
+  /// 本次连接目标设备 MAC：连接未成功但已知设备地址时也会填充，
+  /// 供页面在"未绑定/鉴权失败"时对同一台设备执行绑定补救
+  String? get targetMacAddress => _targetMacAddress;
+
+  /// 最近一次 connectToDevice 失败原因（成功后为 null）
+  BleConnectFailure? get lastConnectFailure => _lastConnectFailure;
 
   bool get isConnected =>
       _session != null && _session!.state == BleDeviceState.ready;
@@ -50,22 +89,24 @@ class BleCommunicationService implements LocalCommunicationRepository {
     required String deviceSN,
     required String deviceIP,
     String? password,
+    String? macAddress,
   }) async {
-    debugPrint('[BleOTA] connectToDevice: SN=$deviceSN');
+    debugPrint('[BleOTA] connectToDevice: SN=$deviceSN mac=$macAddress');
+    _lastConnectFailure = null;
+    _targetMacAddress = null;
     try {
       final status = await _adapter.status;
       if (status != BleAdapterStatus.on) {
         debugPrint('[BleOTA] BLE adapter not on: $status');
+        _lastConnectFailure = BleConnectFailure.adapterOff;
         return false;
       }
 
-      final session = await _readySessionForSn(deviceSN);
-      if (session == null) {
-        debugPrint('[BleOTA] no authenticated session for $deviceSN');
-        return false;
-      }
+      final session = await _acquireSession(deviceSN, macAddress);
+      if (session == null) return false;
       if (session.isOtaInProgress) {
         debugPrint('[BleOTA] session already has OTA lease');
+        _lastConnectFailure = BleConnectFailure.otaBusy;
         return false;
       }
 
@@ -74,35 +115,121 @@ class BleCommunicationService implements LocalCommunicationRepository {
       return true;
     } catch (e) {
       debugPrint('[BleOTA] connectToDevice failed: $e');
+      _lastConnectFailure ??= BleConnectFailure.unknown;
       await _cleanupLease();
       return false;
     }
   }
 
-  /// 优先复用 manager 中已就绪且 SN 匹配的会话；否则扫描后接入已有会话。
-  Future<BleDeviceSession?> _readySessionForSn(String deviceSN) async {
-    final target = deviceSN.toUpperCase();
-    for (final session in _manager.sessions.values) {
-      if (session.state == BleDeviceState.ready &&
-          (session.sn ?? '').toUpperCase() == target) {
-        return session;
-      }
+  /// 获取可用于 OTA 的会话。
+  ///
+  /// 顺序：复用本机已就绪会话（MAC 优先、SN 兜底）→ 已连接但未就绪时重试鉴权
+  /// → 无活跃会话时按已知 MAC 直连 → 最后才按 SN 扫描兜底。
+  ///
+  /// 关键约束：设备连上后停止广播，只要有活跃会话就绝不能改走扫描，
+  /// 否则用户会看到"第二次连接扫描不到设备"。
+  Future<BleDeviceSession?> _acquireSession(
+    String deviceSN,
+    String? macAddress,
+  ) async {
+    final live = _findLiveSession(deviceSN, macAddress);
+    if (live != null) {
+      _targetMacAddress = live.macAddress;
+      if (live.state == BleDeviceState.ready) return live;
+      // 已连接但未鉴权：先在本机重试鉴权（连接瞬间的鉴权可能因链路繁忙失败）
+      if (await _manager.ensureAuthenticated(live.macAddress)) return live;
+      _lastConnectFailure = await _unauthenticatedFailureOf(live, deviceSN);
+      return null;
+    }
+
+    final mac = (macAddress ?? '').trim();
+    if (mac.isNotEmpty) {
+      return _connectByMac(mac, deviceSN);
     }
 
     final scanResult = await _scanForDevice(deviceSN);
-    if (scanResult == null) return null;
-
-    final session = await _manager.connectDevice(
-      scanResult.macAddress,
-      autoReconnect: false,
-    );
-    if (session.state != BleDeviceState.ready) {
-      throw const BleCommandException(
-        'UNAUTHENTICATED',
-        'device must be bound and authenticated before BLE OTA',
-      );
+    if (scanResult == null) {
+      _lastConnectFailure = BleConnectFailure.notFound;
+      return null;
     }
-    return session;
+    return _connectByMac(scanResult.macAddress, deviceSN);
+  }
+
+  /// 直连已知 MAC（不扫描）。
+  ///
+  /// 直连失败按原因归因：连接层失败（设备不在范围）归"找不到设备"，
+  /// 鉴权被拒（链路已建立但设备拒绝本机密钥）归"未绑定/密钥不匹配"，
+  /// 否则会把密钥问题误报成"扫描不到设备"。
+  Future<BleDeviceSession?> _connectByMac(
+    String macAddress,
+    String deviceSN,
+  ) async {
+    final BleDeviceSession session;
+    try {
+      session = await _manager.connectDevice(
+        macAddress,
+        autoReconnect: false,
+      );
+    } catch (e) {
+      debugPrint('[BleOTA] direct connect $macAddress failed: $e');
+      _targetMacAddress = macAddress;
+      _lastConnectFailure = e is BleCommandException
+          ? await _unauthenticatedFailureOf(
+              _manager.sessionOf(macAddress),
+              deviceSN,
+            )
+          : BleConnectFailure.notFound;
+      return null;
+    }
+    _targetMacAddress = session.macAddress;
+    if (session.state == BleDeviceState.ready) return session;
+    if (await _manager.ensureAuthenticated(session.macAddress)) return session;
+    _lastConnectFailure = await _unauthenticatedFailureOf(session, deviceSN);
+    return null;
+  }
+
+  /// 已连接但未就绪时区分失败原因。
+  ///
+  /// 先做可达性探针：读不到 INFO 说明链路已断（设备不在附近），
+  /// 此时既不是"未绑定"也不是"密钥不匹配"，不能引导用户去绑定；
+  /// 读得到则按固件能力 / 本机是否持有 device_key 归因。
+  Future<BleConnectFailure> _unauthenticatedFailureOf(
+    BleDeviceSession? session,
+    String deviceSN,
+  ) async {
+    if (session == null) return BleConnectFailure.notFound;
+    try {
+      await session.readInfo();
+    } catch (e) {
+      debugPrint('[BleOTA] reachability probe failed: $e');
+      return BleConnectFailure.notFound;
+    }
+    if (!session.supportsSecureDirectControl) {
+      return BleConnectFailure.unsupportedFirmware;
+    }
+    final sessionSn = (session.sn ?? '').trim();
+    final sn = sessionSn.isEmpty ? deviceSN.trim() : sessionSn;
+    final hasKey = await _manager.hasDeviceKey(sn);
+    return hasKey ? BleConnectFailure.authFailed : BleConnectFailure.notBound;
+  }
+
+  /// 匹配本机活跃会话：MAC 精确匹配优先，其次 SN 匹配。
+  BleDeviceSession? _findLiveSession(String deviceSN, String? macAddress) {
+    final targetSn = deviceSN.trim().toUpperCase();
+    final targetMac = (macAddress ?? '').trim().toUpperCase();
+    BleDeviceSession? bySn;
+    for (final session in _manager.sessions.values) {
+      if (session.state == BleDeviceState.disconnected) continue;
+      if (targetMac.isNotEmpty &&
+          session.macAddress.toUpperCase() == targetMac) {
+        return session;
+      }
+      if (targetSn.isNotEmpty &&
+          (session.sn ?? '').trim().toUpperCase() == targetSn) {
+        bySn = session;
+      }
+    }
+    return bySn;
   }
 
   Future<BleScanResult?> _scanForDevice(String deviceSN) async {
@@ -111,9 +238,9 @@ class BleCommunicationService implements LocalCommunicationRepository {
 
     final sub = _adapter
         .scan(
-          serviceUuids: BleCtProtocol.scanServiceUuids,
-          timeout: _scanTimeout,
-        )
+      serviceUuids: BleCtProtocol.scanServiceUuids,
+      timeout: _scanTimeout,
+    )
         .listen(
       (result) {
         final name = result.name.toUpperCase();
@@ -217,8 +344,9 @@ class BleCommunicationService implements LocalCommunicationRepository {
       (s) {
         final body = _normalizeStatusEnvelope(s);
         return body['transfer_id'] == transferId &&
-            const {'accepted', 'receiving', 'verifying', 'installing'}
-                .contains(_stageOf(s));
+            (_isFailed(s) ||
+                const {'accepted', 'receiving', 'verifying', 'installing'}
+                    .contains(_stageOf(s)));
       },
       timeout: _commandTimeout,
     );
@@ -241,6 +369,7 @@ class BleCommunicationService implements LocalCommunicationRepository {
           'transfer_id': transferId,
           'offset': offset,
           'payload': base64Encode(chunk),
+          'payload_sha256': sha256.convert(chunk).toString(),
         },
       });
 
@@ -249,8 +378,8 @@ class BleCommunicationService implements LocalCommunicationRepository {
           final body = _normalizeStatusEnvelope(s);
           final acceptedOffset = (body['accepted_offset'] as num?)?.toInt();
           return body['transfer_id'] == transferId &&
-              acceptedOffset != null &&
-              acceptedOffset >= end;
+              (_isFailed(s) ||
+                  (acceptedOffset != null && acceptedOffset >= end));
         },
         timeout: _commandTimeout,
       );
@@ -264,8 +393,9 @@ class BleCommunicationService implements LocalCommunicationRepository {
       (s) {
         final body = _normalizeStatusEnvelope(s);
         return body['transfer_id'] == transferId &&
-            const {'verifying', 'installing', 'rebooting', 'succeeded'}
-                .contains(_stageOf(s));
+            (_isFailed(s) ||
+                const {'verifying', 'installing', 'rebooting', 'succeeded'}
+                    .contains(_stageOf(s)));
       },
       timeout: _commandTimeout,
     );
@@ -347,6 +477,8 @@ class BleCommunicationService implements LocalCommunicationRepository {
     await _cleanupLease();
     _session = null;
     _connectedMacAddress = null;
+    _targetMacAddress = null;
+    _lastConnectFailure = null;
   }
 
   // ---------------------------------------------------------------------------
@@ -381,6 +513,7 @@ class BleCommunicationService implements LocalCommunicationRepository {
     if (sessionId == null) {
       throw const BleCommandException('UNAUTHENTICATED', 'missing session');
     }
+    final statusStart = _statusSequence;
     await lease.writeControl({
       'v': 2,
       'type': 'ota.query',
@@ -389,9 +522,12 @@ class BleCommunicationService implements LocalCommunicationRepository {
       'body': const {'query': 'status'},
     });
     try {
-      return await _waitForAnyStatus(
-        (s) => s.containsKey('stage') || s.containsKey('body'),
+      return await _waitForStatus(
+        (s) =>
+            s['session_id'] == sessionId &&
+            (s['type'] == 'ota.status' || s.containsKey('stage')),
         timeout: _progressTimeout,
+        startIndex: statusStart,
       );
     } on TimeoutException {
       return await lease.readStatus();
@@ -399,6 +535,7 @@ class BleCommunicationService implements LocalCommunicationRepository {
   }
 
   void _onOtaStatus(Map<String, dynamic> status) {
+    _statusSequence++;
     _statusLog.add(status);
     if (_statusLog.length > 64) {
       _statusLog.removeAt(0);
@@ -414,8 +551,12 @@ class BleCommunicationService implements LocalCommunicationRepository {
   Future<Map<String, dynamic>> _waitForStatus(
     bool Function(Map<String, dynamic> status) predicate, {
     Duration timeout = _commandTimeout,
+    int startIndex = 0,
   }) async {
-    for (final cached in List<Map<String, dynamic>>.from(_statusLog)) {
+    final firstSequence = _statusSequence - _statusLog.length + 1;
+    for (var i = 0; i < _statusLog.length; i++) {
+      if (firstSequence + i <= startIndex) continue;
+      final cached = _statusLog[i];
       if (predicate(cached)) return cached;
     }
     final waiter = _OtaStatusWaiter(
@@ -432,19 +573,18 @@ class BleCommunicationService implements LocalCommunicationRepository {
     }
   }
 
-  Future<Map<String, dynamic>> _waitForAnyStatus(
-    bool Function(Map<String, dynamic> status) predicate, {
-    Duration timeout = _commandTimeout,
-  }) {
-    return _waitForStatus(predicate, timeout: timeout);
+  static bool _isFailed(Map<String, dynamic> status) {
+    final stage = _stageOf(status);
+    final code = _resultCodeOf(status);
+    return const {'failed', 'rolled_back', 'cancelled'}.contains(stage) ||
+        (code.isNotEmpty && code != 'OK');
   }
 
   void _throwIfFailed(Map<String, dynamic> status) {
     final stage = _stageOf(status);
     final code = _resultCodeOf(status);
-    final failedStage = stage == 'failed' ||
-        stage == 'rolled_back' ||
-        stage == 'cancelled';
+    final failedStage =
+        stage == 'failed' || stage == 'rolled_back' || stage == 'cancelled';
     final failedCode = code.isNotEmpty && code != 'OK';
     if (!failedStage && !failedCode) return;
     final message = _messageOf(status);
@@ -485,8 +625,8 @@ class BleCommunicationService implements LocalCommunicationRepository {
 
   static String _stageOf(Map<String, dynamic> status) {
     final body = _normalizeStatusEnvelope(status);
-    final stage =
-        (body['stage'] as String? ?? body['state'] as String? ?? '').toLowerCase();
+    final stage = (body['stage'] as String? ?? body['state'] as String? ?? '')
+        .toLowerCase();
     return stage;
   }
 
