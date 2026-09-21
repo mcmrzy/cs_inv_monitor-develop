@@ -22,11 +22,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Alert, App, Button, Card, Checkbox, Collapse, Select, Space, Switch, Tag, Tooltip, Typography,
+  Alert, App, Button, Card, Select, Space, Switch, Tag, Tooltip, Typography,
 } from 'antd'
 import {
-  ClearOutlined, DownloadOutlined, PauseCircleOutlined, PlayCircleOutlined,
-  ReloadOutlined, TableOutlined, ThunderboltOutlined, WarningOutlined,
+  DownloadOutlined, PauseCircleOutlined, PlayCircleOutlined,
+  ReloadOutlined, SlidersOutlined, TableOutlined, ThunderboltOutlined, WarningOutlined,
 } from '@ant-design/icons'
 
 import { deviceApi } from '@/services/deviceApi'
@@ -41,6 +41,7 @@ import useTimezoneStore from '@/stores/timezoneStore'
 import useTranslation from '@/hooks/useTranslation'
 import { useDebugStream } from '@/hooks/useDebugStream'
 import {
+  ALL_SERIES,
   GROUPS,
   SERIES_DEFS,
   formatSeriesValue,
@@ -53,6 +54,7 @@ import { buildCsv, computeSeriesStat, qualityFlagsOf } from './debug/debugAnalys
 import { buildDebugChartOption } from './debug/debugChartOption'
 import { DEBUG_ACCENT, DEBUG_CHIP_BG, DEBUG_PANEL_STYLE, DEBUG_TEXT, DEBUG_TITLE } from './debug/debugTheme'
 import DebugChart from './debug/DebugChart'
+import SeriesChip from './debug/SeriesChip'
 import DebugTable from './debug/DebugTable'
 import { useDebugLabels } from './debug/useDebugLabels'
 
@@ -375,72 +377,94 @@ const DebugTab: React.FC<DebugTabProps> = ({ sn }) => {
           message={t('deviceDetail.debug.note.session')} />
       </Card>
 
-      {/* ── 选线区 ── */}
-      <Card size="small" style={{ borderRadius: 12, boxShadow: CARD_SHADOW }}>
-        <Collapse
-          size="small"
-          // 调试页默认展开全部分组，方便直接看到所有可勾选曲线
-          defaultActiveKey={GROUPS.map((g) => g.key)}
-          items={GROUPS.map((g) => {
+      {/* ── 选线区：一行一组 + 彩色药丸开关 ── */}
+      <Card
+        size="small"
+        style={{ borderRadius: 12, boxShadow: CARD_SHADOW }}
+        styles={{ body: { padding: '12px 16px' } }}
+        title={
+          <Space size={10} wrap>
+            <SlidersOutlined style={{ color: DEBUG_ACCENT }} />
+            <span style={{ fontWeight: 600, color: DEBUG_TITLE }}>{t('deviceDetail.debug.selectTitle')}</span>
+            <Text type="secondary" style={{ fontSize: 12, fontWeight: 400 }}>
+              {t('deviceDetail.debug.selectHint')}
+            </Text>
+          </Space>
+        }
+        extra={
+          <Space size={12} wrap>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {t('deviceDetail.debug.selectedCount', { n: selected.length, total: ALL_SERIES.length })}
+            </Text>
+            <Space size={2}>
+              <Button
+                type="link"
+                size="small"
+                disabled={selected.length === ALL_SERIES.length}
+                onClick={() => setSelected([...ALL_SERIES])}
+              >
+                {t('deviceDetail.debug.groupSelectAll')}
+              </Button>
+              <Button
+                type="link"
+                size="small"
+                disabled={selected.length === 0}
+                onClick={() => setSelected([])}
+              >
+                {t('deviceDetail.debug.clearAll')}
+              </Button>
+            </Space>
+          </Space>
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {GROUPS.map((g, idx) => {
             const all = groupSeries(g)
             const allChecked = all.every((k) => selected.includes(k))
-            return {
-              key: g.key,
-              label: (
-                <Space size={10} wrap>
-                  <span style={{ fontWeight: 600 }}>{t(`deviceDetail.debug.group.${g.key}`)}</span>
-                  <Text type="secondary" style={{ fontSize: 12, fontWeight: 400 }}>
+            const noneChecked = !all.some((k) => selected.includes(k))
+            return (
+              <div
+                key={g.key}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                  padding: '10px 0',
+                  borderTop: idx === 0 ? undefined : '1px solid #f0f0f0',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontWeight: 600, color: DEBUG_TITLE, fontSize: 13 }}>
+                    {t(`deviceDetail.debug.group.${g.key}`)}
+                  </span>
+                  <span style={{ color: DEBUG_TEXT, fontSize: 12 }}>
                     {t(`deviceDetail.debug.note.${g.key}`)}
-                  </Text>
-                </Space>
-              ),
-              extra: (
-                <Space size={2} onClick={(e) => e.stopPropagation()}>
-                  <Button type="link" size="small" onClick={() => toggleGroup(all, true)} disabled={allChecked}>
-                    {t('deviceDetail.debug.groupSelectAll')}
-                  </Button>
-                  <Button
-                    type="link"
-                    size="small"
-                    onClick={() => toggleGroup(all, false)}
-                    disabled={!all.some((k) => selected.includes(k))}
-                  >
-                    {t('deviceDetail.debug.groupClear')}
-                  </Button>
-                </Space>
-              ),
-              children: (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <Space size={[4, 8]} wrap>
-                    {g.metrics.map((mk) => (
-                      <Checkbox
-                        key={mk}
-                        checked={selected.includes(mk)}
-                        onChange={(e) => toggleSeries(mk, e.target.checked)}
-                      >
-                        <span style={{ color: SERIES_DEFS[mk].color, fontWeight: 600, marginInlineEnd: 4 }}>■</span>
-                        {labels[mk]}
-                      </Checkbox>
-                    ))}
-                  </Space>
-                  <Space size={[4, 8]} wrap>
-                    <Text type="secondary" style={{ fontSize: 12 }}>{t('deviceDetail.debug.derivedRow')}</Text>
-                    {g.powers.map((pk) => (
-                      <Checkbox
-                        key={pk}
-                        checked={selected.includes(pk)}
-                        onChange={(e) => toggleSeries(pk, e.target.checked)}
-                      >
-                        <span style={{ color: SERIES_DEFS[pk].color, fontWeight: 600, marginInlineEnd: 4 }}>▬</span>
-                        {labels[pk]}
-                      </Checkbox>
-                    ))}
-                  </Space>
+                  </span>
+                  <span style={{ marginInlineStart: 'auto' }}>
+                    <Button type="link" size="small" disabled={allChecked} onClick={() => toggleGroup(all, true)}>
+                      {t('deviceDetail.debug.groupSelectAll')}
+                    </Button>
+                    <Button type="link" size="small" disabled={noneChecked} onClick={() => toggleGroup(all, false)}>
+                      {t('deviceDetail.debug.groupClear')}
+                    </Button>
+                  </span>
                 </div>
-              ),
-            }
+                <Space size={[8, 8]} wrap>
+                  {all.map((key) => (
+                    <SeriesChip
+                      key={key}
+                      label={shortLabels[key]}
+                      color={SERIES_DEFS[key].color}
+                      active={selected.includes(key)}
+                      derived={isDerived(key)}
+                      onToggle={() => toggleSeries(key, !selected.includes(key))}
+                    />
+                  ))}
+                </Space>
+              </div>
+            )
           })}
-        />
+        </div>
       </Card>
 
       {/* ── 曲线区：白底彩色示波器 ── */}
@@ -477,14 +501,6 @@ const DebugTab: React.FC<DebugTabProps> = ({ sn }) => {
                 }))}
               />
             </Space>
-            <Button
-              size="small"
-              icon={<ClearOutlined />}
-              disabled={selected.length === 0}
-              onClick={() => setSelected([])}
-            >
-              {t('deviceDetail.debug.clearAll')}
-            </Button>
           </Space>
         }
       >

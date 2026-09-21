@@ -166,10 +166,11 @@ describe('DebugTab', () => {
     expect(screen.getByText(/剩余时间/)).toBeInTheDocument()
     // SSE 已连接 → 实时徽标（控制卡与曲线卡各一个）
     expect(screen.getAllByText('实时').length).toBeGreaterThanOrEqual(1)
-    // 默认勾选：电池与交流的电压/电流 + 各自的派生功率
-    for (const name of [/电池电压/, /电池电流/, /交流电压/, /交流电流/]) {
-      expect(screen.getByRole('checkbox', { name })).toBeChecked()
+    // 默认勾选：电池与交流的电压/电流 + 各自的派生功率（药丸开关 aria-pressed 表选中）
+    for (const name of ['电池电压', '电池电流', '交流电压', '交流电流']) {
+      expect(screen.getByRole('button', { name })).toHaveAttribute('aria-pressed', 'true')
     }
+    expect(screen.getByRole('button', { name: 'PV1 电压' })).toHaveAttribute('aria-pressed', 'false')
     expect(screen.getAllByText('电池功率（计算）').length).toBeGreaterThan(0)
 
     await waitFor(() => expect(screen.getByTestId('echarts-mock')).toBeInTheDocument())
@@ -239,7 +240,7 @@ describe('DebugTab', () => {
     expect(screen.getByRole('button', { name: /导出 CSV/ })).toBeEnabled()
   })
 
-  it('勾选/取消一条电流线时曲线数量随之变化', async () => {
+  it('选线区一行一组：药丸开关可增删曲线，分组全选/清空与全局清空生效', async () => {
     const session = buildActiveSession()
     mockedApi.getDebugSession.mockResolvedValue(
       ok({ session, device_online: true, supported: true, interval_seconds: 5 }) as any,
@@ -252,11 +253,11 @@ describe('DebugTab', () => {
     await waitFor(() => expect(lineSeries(lastOption())).toHaveLength(6))
 
     // 取消勾选「电池电流」→ 5 条
-    fireEvent.click(screen.getByRole('checkbox', { name: /电池电流/ }))
+    fireEvent.click(screen.getByRole('button', { name: '电池电流' }))
     await waitFor(() => expect(lineSeries(lastOption())).toHaveLength(5))
 
     // 勾选「母线电压」（有数据）→ 6 条
-    fireEvent.click(screen.getByRole('checkbox', { name: /母线电压/ }))
+    fireEvent.click(screen.getByRole('button', { name: '母线电压' }))
     await waitFor(() => expect(lineSeries(lastOption())).toHaveLength(6))
 
     // 「全部清除」→ 无曲线 → 图表退化为空态

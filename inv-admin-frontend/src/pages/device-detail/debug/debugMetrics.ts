@@ -135,6 +135,9 @@ export const SERIES_DEFS: Record<SeriesKey, SeriesDef> = {
   ...POWER_DEFS,
 }
 
+/** 全部可选曲线（实测 + 计算功率），顺序即选线区展示顺序 */
+export const ALL_SERIES: readonly SeriesKey[] = [...METRIC_KEYS, ...POWER_KEYS]
+
 export interface DebugGroup {
   key: GroupKey
   metrics: readonly MetricKey[]
