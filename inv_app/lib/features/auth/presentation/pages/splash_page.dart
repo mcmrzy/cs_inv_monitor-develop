@@ -137,17 +137,16 @@ class _SplashPageState extends State<SplashPage> {
     await _waitMinDisplay();
     final needsOnboarding = await OnboardingStorage().needsOnboarding();
     if (!mounted) return;
+    final pendingDeepLink = _pendingDeepLinkUri();
 
     if (needsOnboarding) {
-      // 引导优先：深链放弃（引导完成前叠加深链页体验割裂，
-      // 用户可重新扫码/点小组件再次进入）
-      context.go('/onboarding', extra: target);
+      // 首次安装也保留扫码绑定目标；引导完成后继续处理同一设备。
+      context.go('/onboarding', extra: pendingDeepLink ?? target);
       return;
     }
     // 冷启动深链保护：go 会按目标位置重建栈、丢掉已被压栈的深链页。
     // 先在 go 之前记录栈顶深链（此时路由配置尚未被 go 改写），
     // go 落地后把深链原样压回栈顶（首页在底、深链在顶）
-    final pendingDeepLink = _pendingDeepLinkUri();
     if (pendingDeepLink != null) {
       _restoreDeepLinkOnTop(pendingDeepLink);
     }

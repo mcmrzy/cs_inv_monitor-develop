@@ -137,6 +137,17 @@ void main() {
     );
   });
 
+  testWidgets('未登录时提示登录后继续绑定同一设备', (tester) async {
+    when(
+      () => mockDeviceRepo.bind(any(), any(), pin: any(named: 'pin')),
+    ).thenAnswer((_) async => const Left(UnauthorizedFailure('Unauthorized')));
+
+    await pumpApp(tester, buildPage(), deviceBloc: deviceBloc);
+
+    expect(find.text('登录'), findsOneWidget);
+    expect(find.text('重试'), findsOneWidget);
+  });
+
   testWidgets('云端绑定失败 → 显示 cloudFailed 界面（重试云端 / 尝试BLE / 返回）', (tester) async {
     final l10n = await AppLocalizations.delegate.load(const Locale('zh', 'CN'));
     // 云端绑定返回 404 设备未注册

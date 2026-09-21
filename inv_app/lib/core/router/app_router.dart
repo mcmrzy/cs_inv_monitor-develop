@@ -174,7 +174,17 @@ class AppRouter {
         path: '/login',
         name: 'login',
         pageBuilder: (context, state) =>
-            _fadePage(state, const AuthPage(initialMode: AuthMode.login)),
+            _fadePage(
+              state,
+              AuthPage(
+                initialMode: AuthMode.login,
+                bindSn: state.uri.queryParameters['bind_sn'],
+                bindPin: state.uri.queryParameters['bind_pin'],
+                bindStationId: parsePositiveRouteInt(
+                  state.uri.queryParameters['station_id'],
+                ),
+              ),
+            ),
       ),
       GoRoute(
         path: '/jverify-login',

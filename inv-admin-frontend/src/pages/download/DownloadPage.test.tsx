@@ -31,6 +31,18 @@ const releasePayload = (overrides: Record<string, unknown> = {}) => ({
 })
 
 describe('DownloadPage', () => {
+  it('offers to resume binding after the app is installed', async () => {
+    sessionStorage.setItem('pending-device-bind-v1', JSON.stringify({
+      sn: 'H1ZZX0013900001P', pin: '344411', savedAt: Date.now(),
+    }))
+    server.use(http.get(CANONICAL_LATEST_URL, () => HttpResponse.json(releasePayload())))
+    renderAsAdmin(<DownloadPage />)
+    expect(screen.getByText(/H1ZZX0013900001P/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '打开 App 绑定设备' })).toHaveAttribute(
+      'href', 'csinv://bind?sn=H1ZZX0013900001P&pin=344411',
+    )
+    sessionStorage.clear()
+  })
   it('renders app title, subtitle and feature list', async () => {
     server.use(http.get(CANONICAL_LATEST_URL, () => HttpResponse.json(releasePayload())))
 

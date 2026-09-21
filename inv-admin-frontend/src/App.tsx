@@ -40,6 +40,13 @@ const SystemMonitorPage = lazyWithRetry(() => import('@/pages/system/SystemMonit
 const SystemConfigPage = lazyWithRetry(() => import('@/pages/system/SystemConfig'))
 const DownloadPage = lazyWithRetry(() => import('@/pages/download'))
 
+const BindEntryRedirect: React.FC = () => {
+  useEffect(() => {
+    window.location.replace(`/bind.html${window.location.search}`)
+  }, [])
+  return null
+}
+
 const RoleRedirect: React.FC = () => {
   const user = useAuthStore((s) => s.user)
   const hasAnyPermission = useAuthStore((s) => s.hasAnyPermission)
@@ -52,6 +59,7 @@ export const AppRoutes: React.FC = () => (
     <Route path="/invite/:token" element={<InviteAcceptPage />} />
     <Route path="/unauthorized" element={<UnauthorizedPage />} />
     <Route path="/download" element={<DownloadPage />} />
+    <Route path="/bind" element={<BindEntryRedirect />} />
     <Route
       path="/"
       element={

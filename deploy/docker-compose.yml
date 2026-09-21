@@ -235,7 +235,7 @@ services:
     networks:
       - inv-net
 
-  # 智能链接绑定中间页 + App 安装包下载（deploy/web/）
+  # 绑定中间页由前端镜像提供；此容器保留旧版 /apk/ 路径。
   nginx:
     image: nginx:alpine
     container_name: inv-nginx

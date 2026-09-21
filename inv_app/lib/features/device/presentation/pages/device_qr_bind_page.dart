@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:fpdart/fpdart.dart' hide State;
 
 import 'package:inv_app/core/errors/failures.dart';
@@ -98,6 +99,7 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
 
   /// 云端绑定失败消息（用于展示在 cloudFailed 界面）
   String? _cloudErrorMessage;
+  bool _requiresLogin = false;
 
   /// BLE 失败原因 l10n 键
   String? _failKey;
@@ -132,6 +134,7 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
       _matchName = null;
       _failKey = null;
       _cloudErrorMessage = null;
+      _requiresLogin = false;
     });
 
     // 深链接/二维码未带 PIN：先让用户输入（6 位数字，见设计文档 §5.4）
@@ -166,6 +169,7 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
           _cloudBindingPending = false;
           _phase = _QrBindPhase.cloudFailed;
           _cloudErrorMessage = l10n.translateError(failure.message);
+          _requiresLogin = failure is UnauthorizedFailure;
         });
       case Right():
         // 云端绑定成功：展示 done 页，用户点击「完成」返回
@@ -437,6 +441,23 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
           ),
         ),
         const SizedBox(height: 32),
+        if (_requiresLogin) ...[
+          FilledButton.icon(
+            onPressed: () {
+              final params = <String, String>{
+                'bind_sn': widget.sn,
+                'bind_pin': _pin,
+              };
+              if (widget.stationId != null) {
+                params['station_id'] = widget.stationId.toString();
+              }
+              context.go(Uri(path: '/login', queryParameters: params).toString());
+            },
+            icon: const Icon(Icons.login),
+            label: Text(l10n.str('login')),
+          ),
+          const SizedBox(height: 12),
+        ],
         // 主操作：重试云端绑定
         FilledButton.icon(
           onPressed: _cloudBind,
