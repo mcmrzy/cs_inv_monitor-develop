@@ -5,6 +5,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/errors/ota_error_types.dart';
 import 'package:inv_app/core/platform/platform.dart';
 import 'package:inv_app/core/services/ble/ble_adapter.dart';
+import 'package:inv_app/core/services/ble/ble_binding_service.dart';
 import 'package:inv_app/core/services/ble/ble_device_manager.dart';
 import 'package:inv_app/core/services/firmware_download_service.dart';
 import 'package:inv_app/core/services/local_communication_service.dart';
@@ -12,6 +13,8 @@ import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/wifi_scan_service.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
+import 'package:inv_app/core/widgets/app_toast.dart';
+import 'package:inv_app/core/widgets/ble_pin_bind_dialog.dart';
 import 'package:inv_app/core/widgets/wifi_enable_dialog.dart';
 import 'package:inv_app/features/ota/data/datasources/ble_communication_service.dart';
 import 'package:inv_app/features/ota/data/datasources/local_ota_result_sync_queue.dart';
@@ -50,6 +53,10 @@ class LocalOTAPage extends StatefulWidget {
   final String? releaseSignature;
   final LocalCommunicationChannel channel;
 
+  /// BLE 通道目标设备 MAC（扫描页连接时带入）。
+  /// 设备被连接后停止广播，带 MAC 可在连接步骤免扫描直接复用会话。
+  final String? deviceMac;
+
   /// 嵌入模式：作为 Tab 内容嵌入双通道页时不渲染自身 Scaffold/AppBar，
   /// 仅渲染升级流程主体（步骤指示 + 内容），由外层页面提供 AppBar。
   final bool embedded;
@@ -69,6 +76,7 @@ class LocalOTAPage extends StatefulWidget {
     this.securityVersion,
     this.releaseSignature,
     this.channel = LocalCommunicationChannel.wifiAp,
+    this.deviceMac,
     this.embedded = false,
   });
 
@@ -467,10 +475,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   /// 自动扫描BLE设备并连接
   Future<void> _autoScanAndConnectBle() async {
     // 已在处理中或已连接成功，不重复触发
-    if (_scanningWifi ||
-        _autoConnecting ||
-        _isProcessing ||
-        _selectedAp != null) {
+    if (_scanningWifi || _autoConnecting || _isProcessing) {
       return;
     }
 
@@ -480,17 +485,6 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     });
 
     try {
-      // 从扫描页带入的已鉴权会话：直接复用，不再二次扫描
-      if (await _communicationService.isConnectedToDeviceAP()) {
-        if (!mounted) return;
-        setState(() {
-          _scanningWifi = false;
-          _autoConnecting = false;
-        });
-        _checkConnectionAndProceed();
-        return;
-      }
-
       // 检查蓝牙权限
       final bluetoothStatus = await Permission.bluetooth.request();
       if (!mounted) return;
@@ -503,20 +497,29 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         return;
       }
 
-      // 使用通信服务连接设备（内部优先复用 manager 中已就绪会话）
+      // 连接设备：服务内部优先复用扫描页建立的活跃会话（按 MAC/SN），
+      // 无会话时按已知 MAC 直连，最后才扫描兜底。
+      // 设备连上即停止广播，此处绝不能先扫描，否则必然"扫描不到设备"。
       final connected = await _communicationService.connectToDevice(
         deviceSN: widget.deviceSN,
         deviceIP: widget.deviceIP,
+        macAddress: widget.deviceMac,
       );
       if (!mounted) return;
 
       if (!connected) {
+        final failure = _bleService?.lastConnectFailure;
         final l10n = AppLocalizations.of(context)!;
         setState(() {
           _scanningWifi = false;
-          _errorMessage =
-              l10n.str('ble_connection_failed', {'sn': widget.deviceSN});
+          _errorMessage = _bleFailureMessage(l10n, failure);
         });
+        // 未绑定/鉴权失败：本机与设备之间缺少可用密钥，
+        // 固件侧 OTA 通道要求已鉴权，扫描也无济于事，就地引导重新绑定
+        if (failure == BleConnectFailure.notBound ||
+            failure == BleConnectFailure.authFailed) {
+          await _offerBleBind();
+        }
         return;
       }
 
@@ -535,6 +538,135 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         _scanningWifi = false;
         _errorMessage = l10n.str('ble_scan_failed', {'error': '$e'});
       });
+    }
+  }
+
+  /// BLE 通道通信服务（失败原因与目标 MAC 只在 BLE 实现上）
+  BleCommunicationService? get _bleService {
+    final service = _communicationService;
+    return service is BleCommunicationService ? service : null;
+  }
+
+  /// 连接失败文案：按原因区分，避免把"未绑定/鉴权失败"误报成"扫描不到设备"
+  String _bleFailureMessage(
+    AppLocalizations l10n,
+    BleConnectFailure? failure,
+  ) {
+    switch (failure) {
+      case BleConnectFailure.adapterOff:
+        return l10n.str('ble_bluetooth_off', {});
+      case BleConnectFailure.notBound:
+        return l10n.str('ble_ota_not_bound', {});
+      case BleConnectFailure.authFailed:
+        return l10n.str('ble_ota_auth_failed', {});
+      case BleConnectFailure.unsupportedFirmware:
+        return l10n.str('ble_ota_unsupported_firmware', {});
+      case BleConnectFailure.otaBusy:
+        return l10n.str('ble_ota_connect_busy', {});
+      case BleConnectFailure.notFound:
+      case BleConnectFailure.unknown:
+      case null:
+        return l10n.str('ble_connection_failed', {'sn': widget.deviceSN});
+    }
+  }
+
+  /// 未绑定/鉴权失败时就地补救：输入铭牌 PIN 绑定设备 → 重试鉴权与连接。
+  ///
+  /// 本机密钥与设备不匹配（设备恢复出厂/重刷固件后常见）时清掉陈旧密钥重绑；
+  /// 设备已被其他账号绑定时不动本机密钥，仅提示需在设备端解绑。
+  Future<void> _offerBleBind() async {
+    final l10n = AppLocalizations.of(context)!;
+    final mac = _bleService?.targetMacAddress ?? widget.deviceMac;
+    if (mac == null || mac.trim().isEmpty) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.str('ble_ota_need_bind_title', {})),
+        content: Text(l10n.str('ble_ota_need_bind_message', {})),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l10n.str('ble_ota_bind_action', {})),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final pin = await showBlePinBindDialog(
+      context: context,
+      deviceSn: widget.deviceSN,
+    );
+    if (pin == null || !mounted) return;
+
+    final binding = getIt<BleBindingService>();
+    final manager = getIt<BleDeviceManager>();
+    final keyStore = getIt<BleDeviceKeyStore>();
+
+    setState(() => _errorMessage = null);
+    var outcome = await binding.bindAfterProvision(
+      macAddress: mac,
+      knownSn: widget.deviceSN,
+      pin: pin,
+    );
+
+    // 本机留有陈旧 device_key（设备侧已无绑定）：清掉后重新绑定；
+    // 本机无密钥却返回 alreadyBound，说明设备端已有密钥（换手机/重装应用后常见），
+    // 绑定窗口已关闭，只能提示用户先在设备端解绑
+    if (outcome == BindOutcome.alreadyBound) {
+      final hasLocalKey = await manager.hasDeviceKey(widget.deviceSN);
+      if (hasLocalKey) {
+        await keyStore.delete(widget.deviceSN);
+        outcome = await binding.bindAfterProvision(
+          macAddress: mac,
+          knownSn: widget.deviceSN,
+          pin: pin,
+        );
+      }
+    }
+    if (!mounted) return;
+
+    switch (outcome) {
+      case BindOutcome.bound:
+      case BindOutcome.needLoginForSync:
+        // 绑定写入成功：立即鉴权并重试连接（同一会话，无需重新扫描）
+        await manager.ensureAuthenticated(mac);
+        if (!mounted) return;
+        AppToast.show(
+          context,
+          l10n.str('ble_ota_bind_done', {}),
+          type: ToastType.success,
+        );
+        await _autoScanAndConnectBle();
+      case BindOutcome.alreadyBound:
+        AppToast.show(
+          context,
+          l10n.str('ble_ota_bound_elsewhere', {}),
+          type: ToastType.error,
+        );
+      case BindOutcome.invalidPin:
+        AppToast.show(
+          context,
+          l10n.str('ble_ota_bind_invalid_pin', {}),
+          type: ToastType.error,
+        );
+      case BindOutcome.locked:
+        AppToast.show(
+          context,
+          l10n.str('ble_ota_bind_locked', {}),
+          type: ToastType.error,
+        );
+      case BindOutcome.failed:
+        AppToast.show(
+          context,
+          l10n.str('ble_ota_bind_failed', {}),
+          type: ToastType.error,
+        );
     }
   }
 
@@ -1397,11 +1529,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   Widget _buildDownloadedFirmwareTile(DownloadedFirmwareInfo item) {
     final selected = _selectedFilePath == item.filePath;
     final l10n = AppLocalizations.of(context)!;
-    final module = FirmwareModulePresentation.fromTarget(item.targetChip);
-    final version = item.version?.trim() ?? '';
-    final displayName = version.isEmpty
-        ? module.displayLabel(l10n)
-        : '${module.displayLabel(l10n)} · $version';
+    final displayName = _downloadedDisplayName(item);
     return Container(
       margin: EdgeInsets.only(bottom: 8.h),
       decoration: BoxDecoration(
@@ -1463,11 +1591,95 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                   size: 18.sp,
                   color: AppColors.primary,
                 ),
+              SizedBox(width: 4.w),
+              // 删除已下载固件：释放本地空间，删除后需重新下载才能本地升级
+              IconButton(
+                onPressed: () => _confirmDeleteDownloaded(item),
+                tooltip: l10n.str('downloaded_firmware_delete'),
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: BoxConstraints(minWidth: 32.w, minHeight: 32.w),
+                icon: Icon(
+                  Icons.delete_outline_rounded,
+                  size: 18.sp,
+                  color: AppColors.error,
+                ),
+              ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  /// 删除某个已下载固件（二次确认；删除当前选中项时清空选择）
+  Future<void> _confirmDeleteDownloaded(DownloadedFirmwareInfo item) async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.str('downloaded_firmware_delete')),
+        content: Text(
+          l10n.str('downloaded_firmware_delete_confirm', {
+            'name': _downloadedDisplayName(item),
+          }),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            child: Text(l10n.str('delete')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    // 先清空选择再删除：删除后列表里已无该条目，
+    // 否则 _loadDownloadedFirmwares 会保留指向已删文件的陈旧选中路径
+    if (_selectedDownloaded?.firmwareId == item.firmwareId ||
+        _selectedFilePath == item.filePath) {
+      setState(() {
+        _selectedFilePath = null;
+        _selectedDownloaded = null;
+      });
+    }
+    try {
+      await _downloadService.deleteDownloadedFirmware(item.firmwareId);
+    } catch (e) {
+      if (!mounted) return;
+      AppToast.show(
+        context,
+        l10n.str('downloaded_firmware_delete_failed'),
+        type: ToastType.error,
+      );
+      return;
+    }
+    if (!mounted) return;
+    await _loadDownloadedFirmwares();
+    if (!mounted) return;
+    AppToast.show(
+      context,
+      l10n.str('downloaded_firmware_deleted'),
+      type: ToastType.success,
+    );
+  }
+
+  /// 已下载固件的展示名（模块名 · 版本，缺失时回退文件名）
+  String _downloadedDisplayName(DownloadedFirmwareInfo item) {
+    final l10n = AppLocalizations.of(context)!;
+    final module = FirmwareModulePresentation.fromTarget(item.targetChip);
+    final version = item.version?.trim() ?? '';
+    if (version.isEmpty) {
+      return module.displayLabel(l10n).isEmpty
+          ? item.fileName
+          : module.displayLabel(l10n);
+    }
+    return '${module.displayLabel(l10n)} · $version';
   }
 
   String _formatFirmwareSize(int size) {

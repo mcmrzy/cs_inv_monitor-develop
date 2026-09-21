@@ -535,6 +535,9 @@ class AppRouter {
           final releaseSignature =
               state.uri.queryParameters['release_signature'];
 
+          // BLE 通道设备 MAC：扫描页连接时带入，执行页凭它免扫描复用会话
+          final deviceMac = state.uri.queryParameters['mac'];
+
           // 旧深链没有 channel 时先进入双通道选择页，不能静默降级为 WiFi。
           final channelParam = state.uri.queryParameters['channel'];
           if (channelParam == null ||
@@ -570,6 +573,7 @@ class AppRouter {
               fileSha256: fileSha256,
               securityVersion: securityVersion,
               releaseSignature: releaseSignature,
+              deviceMac: deviceMac,
             ),
           );
         },

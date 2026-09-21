@@ -128,11 +128,15 @@ String _parseSn(String raw) {
 }
 
 /// 跳转本地升级执行页（[LocalOTAPage] 对应路由 /ota/:sn/local）
+///
+/// BLE 通道额外带上设备 MAC：设备被连接后停止广播，
+/// 执行页凭 MAC 免扫描直接复用会话，避免"第二次连接扫描不到设备"。
 Future<bool?> _pushLocalOta(
   BuildContext context, {
   required String sn,
   required String channel,
   int? firmwareId,
+  String? mac,
 }) {
   final uri = Uri(
     path: '/ota/$sn/local',
@@ -140,6 +144,7 @@ Future<bool?> _pushLocalOta(
       'ip': '192.168.4.1',
       'channel': channel,
       if (firmwareId != null) 'firmware_id': '$firmwareId',
+      if (mac != null && mac.isNotEmpty) 'mac': mac,
     },
   );
   return context.push<bool>(uri.toString());
@@ -293,13 +298,33 @@ class _BleUpgradeTabState extends State<_BleUpgradeTab>
   bool _scanning = false;
   String? _connectingMac;
 
+  /// 本页建立的 BLE 会话 MAC 集合。
+  ///
+  /// 会话需要在升级执行页存活以便复用；但设备连着就不广播，
+  /// 离开整个近场升级流程后必须释放，否则设备会对后续扫描永久隐身。
+  /// 进入本页前已存在的会话（离线直连等）由原持有方负责，这里不碰。
+  final Set<String> _ownedMacs = {};
+
   @override
   void dispose() {
     _scanStopTimer?.cancel();
     _scanSub?.cancel();
     // 页面销毁时兜底停止底层扫描，避免残留
     _adapter.stopScan();
+    _releaseOwnedSessions();
     super.dispose();
+  }
+
+  /// 释放本页建立的 BLE 会话（异步执行，页面已销毁不阻塞）
+  void _releaseOwnedSessions() {
+    if (_ownedMacs.isEmpty) return;
+    final manager = getIt<BleDeviceManager>();
+    for (final mac in _ownedMacs) {
+      manager.disconnectDevice(mac).catchError((Object e) {
+        debugPrint('[LocalUpgrade] release session $mac failed: $e');
+      });
+    }
+    _ownedMacs.clear();
   }
 
   /// 开始一轮 BLE 扫描（参考 BleDirectService._scanOnce：
@@ -375,6 +400,7 @@ class _BleUpgradeTabState extends State<_BleUpgradeTab>
     if (_connectingMac != null) return;
     final l10n = AppLocalizations.of(context)!;
     final manager = getIt<BleDeviceManager>();
+    final existedBefore = manager.sessionOf(device.macAddress) != null;
 
     setState(() => _connectingMac = device.macAddress);
     try {
@@ -390,10 +416,12 @@ class _BleUpgradeTabState extends State<_BleUpgradeTab>
 
       // 保留已鉴权会话：升级执行页直接复用 manager 中的 ready session，
       // 避免二次扫描失败或两条链路抢 GATT 连接
+      if (!existedBefore) _ownedMacs.add(device.macAddress);
 
       if (!mounted) return;
       if (sn.isEmpty) {
         await manager.disconnectDevice(device.macAddress);
+        _ownedMacs.remove(device.macAddress);
         if (!mounted) return;
         AppToast.show(
           context,
@@ -407,11 +435,24 @@ class _BleUpgradeTabState extends State<_BleUpgradeTab>
         sn: sn,
         channel: 'ble',
         firmwareId: widget.firmwareId,
+        mac: device.macAddress,
       );
       if (upgraded == true && mounted) context.pop(true);
+    } on BleCommandException catch (e) {
+      // 链路已建立但设备拒绝鉴权：本机 device_key 与设备不匹配
+      // （设备恢复出厂/重刷固件，或设备已被其他手机绑定）
+      await manager.disconnectDevice(device.macAddress);
+      _ownedMacs.remove(device.macAddress);
+      if (!mounted) return;
+      AppToast.show(
+        context,
+        l10n.str(_authFailureMessageKey(e.code)),
+        type: ToastType.error,
+      );
     } catch (_) {
       // 连接失败：清理会话并 Toast 提示
       await manager.disconnectDevice(device.macAddress);
+      _ownedMacs.remove(device.macAddress);
       if (!mounted) return;
       AppToast.show(
         context,
@@ -420,6 +461,18 @@ class _BleUpgradeTabState extends State<_BleUpgradeTab>
       );
     } finally {
       if (mounted) setState(() => _connectingMac = null);
+    }
+  }
+
+  /// 鉴权类失败文案：密钥不匹配与"固件不支持"需要区分，否则用户无从下手
+  static String _authFailureMessageKey(String code) {
+    switch (code) {
+      case 'UNSUPPORTED_SECURE_DIRECT_CONTROL':
+        return 'ble_ota_unsupported_firmware';
+      case 'AUTH_TIMEOUT':
+        return 'ble_ota_auth_timeout';
+      default:
+        return 'ble_ota_auth_mismatch_rebind';
     }
   }
 

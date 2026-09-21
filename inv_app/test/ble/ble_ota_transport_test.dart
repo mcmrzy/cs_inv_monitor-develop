@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inv_app/core/services/ble/ble_adapter.dart';
 import 'package:inv_app/core/services/ble/ble_device_manager.dart';
@@ -37,6 +38,8 @@ void main() {
   late String firmwarePath;
   late List<int> firmwareBytes;
   List<int>? lastPhoneNonce;
+  bool rejectFirstChunk = false;
+  bool rejectAuth = false;
 
   const mac = 'AA:BB:CC:DD:EE:FF';
   const sessionId = 'AAECAwQFBgcICQoLDA0ODw==';
@@ -93,14 +96,15 @@ void main() {
     otaCtrlWrites = [];
     otaDataWrites = [];
     lastPhoneNonce = null;
+    rejectFirstChunk = false;
+    rejectAuth = false;
 
     tempDir = await Directory.systemTemp.createTemp('ble_ota_test_');
     firmwareBytes = List<int>.generate(300, (i) => i & 0xff);
     firmwarePath = '${tempDir.path}/fw.bin';
     await File(firmwarePath).writeAsBytes(firmwareBytes);
 
-    when(() => adapter.status)
-        .thenAnswer((_) async => BleAdapterStatus.on);
+    when(() => adapter.status).thenAnswer((_) async => BleAdapterStatus.on);
     when(() => adapter.connect(any(), autoConnect: any(named: 'autoConnect')))
         .thenAnswer((_) async => connection);
     when(() => adapter.stopScan()).thenAnswer((_) async {});
@@ -154,6 +158,17 @@ void main() {
           },
         })));
       } else if (json['type'] == 'auth.proof') {
+        if (rejectAuth) {
+          authNotify.add(utf8.encode(jsonEncode({
+            'v': 2,
+            'type': 'auth.result',
+            'message_id': 'auth-result-1',
+            'in_reply_to': json['message_id'],
+            'session_id': sessionId,
+            'body': const {'result': 'rejected', 'reason': 'not_bound'},
+          })));
+          return;
+        }
         final phoneNonce = lastPhoneNonce!;
         final expected = BleCtProtocol.computeAuthProof(
           key: base64Decode(deviceKeyBase64),
@@ -230,6 +245,16 @@ void main() {
       final offset = (body['offset'] as num).toInt();
       final payload = body['payload'] as String;
       final end = offset + base64.decode(payload).length;
+      if (rejectFirstChunk) {
+        otaStatusNotify.add(utf8.encode(jsonEncode(otaStatus(
+          stage: 'failed',
+          transferId: transferId,
+          acceptedOffset: offset,
+          resultCode: 'CHUNK_REJECTED',
+          message: 'chunk rejected',
+        ))));
+        return;
+      }
       otaStatusNotify.add(utf8.encode(jsonEncode(otaStatus(
         stage: end >= firmwareBytes.length ? 'verifying' : 'receiving',
         transferId: transferId,
@@ -297,6 +322,7 @@ void main() {
     expect(ctrl['v'], 2);
     expect(ctrl['session_id'], sessionId);
     final body = (ctrl['body'] as Map).cast<String, dynamic>();
+    expect(utf8.encode(jsonEncode(ctrl)).length, lessThanOrEqualTo(509));
     expect(body['target'], 'communication_module');
     expect(body['size'], firmwareBytes.length);
     expect(body['security_version'], 1);
@@ -309,13 +335,17 @@ void main() {
     // 连续 offset
     var expectedOffset = 0;
     for (final write in otaDataWrites) {
+      expect(utf8.encode(jsonEncode(write)).length, lessThanOrEqualTo(509));
       final b = (write['body'] as Map).cast<String, dynamic>();
       expect(b['offset'], expectedOffset);
-      expectedOffset += base64.decode(b['payload'] as String).length;
+      final chunk = base64.decode(b['payload'] as String);
+      expect(b['payload_sha256'], sha256.convert(chunk).toString());
+      expectedOffset += chunk.length;
     }
 
     final progress = await service.getProgress('192.168.4.1');
-    expect(progress['status'], anyOf('uploading', 'verifying', 'installing', 'done'));
+    expect(progress['status'],
+        anyOf('uploading', 'verifying', 'installing', 'done'));
     expect((progress['progress'] as num) >= 0, isTrue);
 
     await service.disconnect();
@@ -323,6 +353,26 @@ void main() {
     expect(session.isOtaInProgress, isFalse);
     // 独占释放后普通控制可恢复
     expect(() => session.sendCommand('power_on'), returnsNormally);
+  });
+
+  test('device failure during chunk ACK is reported without timeout', () async {
+    rejectFirstChunk = true;
+    final service = BleCommunicationService(adapter: adapter, manager: manager);
+    await service.connectToDevice(deviceSN: sn, deviceIP: '192.168.4.1');
+    await expectLater(
+      service.uploadFirmware(
+        deviceIP: '192.168.4.1',
+        filePath: firmwarePath,
+        manifest: manifest(),
+      ),
+      throwsA(isA<BleCommandException>().having(
+        (e) => e.code,
+        'code',
+        'CHUNK_REJECTED',
+      )),
+    );
+    await service.disconnect();
+    expect(manager.sessionOf(mac)!.isOtaInProgress, isFalse);
   });
 
   test('getDeviceInfo flattens v2 info for model gate', () async {
@@ -365,9 +415,9 @@ void main() {
       manifest: manifest(),
     );
 
-    final transfer = (otaCtrlWrites
-        .singleWhere((e) => e['type'] == 'ota.ctrl')['body'] as Map)['transfer_id']
-        as String;
+    final transfer =
+        (otaCtrlWrites.singleWhere((e) => e['type'] == 'ota.ctrl')['body']
+            as Map)['transfer_id'] as String;
     otaStatusNotify.add(utf8.encode(jsonEncode(otaStatus(
       stage: 'failed',
       transferId: transfer,
@@ -389,5 +439,219 @@ void main() {
       session.acquireOtaLease(),
       throwsA(isA<BleCommandException>()),
     );
+  });
+
+  // ---------------------------------------------------------------------------
+  // 连接步骤：设备一旦被连接即停止广播，必须复用会话而不是重新扫描
+  // （"连蓝牙 → 选固件 → 再连蓝牙"曾因此报"扫描不到设备"）
+  // ---------------------------------------------------------------------------
+
+  /// 断言连接步骤从未触发 BLE 扫描
+  void expectNoScan() {
+    verifyNever(() => adapter.scan(
+          serviceUuids: any(named: 'serviceUuids'),
+          timeout: any(named: 'timeout'),
+        ));
+  }
+
+  test('connect reuses the live ready session without scanning', () async {
+    final service = BleCommunicationService(adapter: adapter, manager: manager);
+    final connected = await service.connectToDevice(
+      deviceSN: sn,
+      deviceIP: '192.168.4.1',
+      macAddress: mac,
+    );
+
+    expect(connected, isTrue);
+    expect(service.isConnected, isTrue);
+    expect(service.targetMacAddress, mac);
+    expect(service.lastConnectFailure, isNull);
+    expectNoScan();
+  });
+
+  test('connect without mac reuses the ready session by SN', () async {
+    final service = BleCommunicationService(adapter: adapter, manager: manager);
+    final connected = await service.connectToDevice(
+      deviceSN: sn,
+      deviceIP: '192.168.4.1',
+    );
+
+    expect(connected, isTrue);
+    expect(service.lastConnectFailure, isNull);
+    expectNoScan();
+  });
+
+  test('connected but unbound session reports notBound without scanning',
+      () async {
+    when(() => keyStore.read(any())).thenAnswer((_) async => null);
+    final unboundManager = BleDeviceManager(
+      adapter: adapter,
+      keyStore: keyStore,
+    );
+    addTearDown(unboundManager.disconnectAll);
+    final session = await unboundManager.connectDevice(mac);
+    expect(session.state, BleDeviceState.authenticating);
+
+    final service = BleCommunicationService(
+      adapter: adapter,
+      manager: unboundManager,
+    );
+    final connected = await service.connectToDevice(
+      deviceSN: sn,
+      deviceIP: '192.168.4.1',
+      macAddress: mac,
+    );
+
+    expect(connected, isFalse);
+    expect(service.lastConnectFailure, BleConnectFailure.notBound);
+    // 目标 MAC 仍要暴露给页面，用于就地绑定补救
+    expect(service.targetMacAddress, mac);
+    expectNoScan();
+  });
+
+  test('device rejecting the stored key reports authFailed without scanning',
+      () async {
+    rejectAuth = true;
+    final rejectedManager = BleDeviceManager(
+      adapter: adapter,
+      keyStore: keyStore,
+    );
+    addTearDown(rejectedManager.disconnectAll);
+    // 设备拒绝鉴权：connect 抛错（链路层仍连上），会话不进入 ready
+    await expectLater(
+      rejectedManager.connectDevice(mac),
+      throwsA(isA<BleCommandException>()),
+    );
+    final session = rejectedManager.sessionOf(mac)!;
+    expect(session.state, isNot(BleDeviceState.ready));
+
+    // 会话已不是活跃状态时按"无活跃会话"处理，但仍不得依赖扫描：
+    // 带上 MAC 直连（重连后设备依然拒绝鉴权）→ 归因为密钥不匹配
+    final service = BleCommunicationService(
+      adapter: adapter,
+      manager: rejectedManager,
+    );
+    final connected = await service.connectToDevice(
+      deviceSN: sn,
+      deviceIP: '192.168.4.1',
+      macAddress: mac,
+    );
+
+    expect(connected, isFalse);
+    expect(service.lastConnectFailure, BleConnectFailure.authFailed);
+    expectNoScan();
+  });
+
+  test('manager re-authenticates a session whose auth failed transiently',
+      () async {
+    rejectAuth = true;
+    final retryManager = BleDeviceManager(adapter: adapter, keyStore: keyStore);
+    addTearDown(retryManager.disconnectAll);
+    await expectLater(
+      retryManager.connectDevice(mac),
+      throwsA(isA<BleCommandException>()),
+    );
+    final session = retryManager.sessionOf(mac)!;
+
+    // 设备恢复应答后，本机复用同一会话重试鉴权即可就绪（无需重连/重扫）
+    rejectAuth = false;
+    expect(await retryManager.ensureAuthenticated(mac), isTrue);
+    expect(session.state, BleDeviceState.ready);
+
+    final service = BleCommunicationService(
+      adapter: adapter,
+      manager: retryManager,
+    );
+    expect(
+      await service.connectToDevice(
+        deviceSN: sn,
+        deviceIP: '192.168.4.1',
+        macAddress: mac,
+      ),
+      isTrue,
+    );
+    expectNoScan();
+  });
+
+  test('connect by mac without a session connects directly, no scan', () async {
+    final freshManager = BleDeviceManager(adapter: adapter, keyStore: keyStore);
+    addTearDown(freshManager.disconnectAll);
+    final service = BleCommunicationService(
+      adapter: adapter,
+      manager: freshManager,
+    );
+
+    final connected = await service.connectToDevice(
+      deviceSN: sn,
+      deviceIP: '192.168.4.1',
+      macAddress: mac,
+    );
+
+    expect(connected, isTrue);
+    expect(service.connectedMacAddress, mac);
+    expectNoScan();
+  });
+
+  test('ensureAuthenticated reports false for unknown and unbound sessions',
+      () async {
+    final emptyManager = BleDeviceManager(adapter: adapter, keyStore: keyStore);
+    expect(await emptyManager.ensureAuthenticated(mac), isFalse);
+
+    when(() => keyStore.read(any())).thenAnswer((_) async => null);
+    final unboundManager = BleDeviceManager(
+      adapter: adapter,
+      keyStore: keyStore,
+    );
+    addTearDown(unboundManager.disconnectAll);
+    await unboundManager.connectDevice(mac);
+    expect(await unboundManager.ensureAuthenticated(mac), isFalse);
+  });
+
+  test('device without v2 secure control reports unsupportedFirmware',
+      () async {
+    // 旧固件 INFO 未声明 proto_version=2 / control 能力
+    when(() => connection.read(
+          BleCtProtocol.serviceUuid,
+          BleCtProtocol.infoCharUuid,
+        )).thenAnswer((_) async => utf8.encode(jsonEncode({
+              'v': 2,
+              'type': 'info',
+              'session_id': sessionId,
+              'body': const {
+                'device_sn': sn,
+                'proto_version': 1,
+                'model': 'CS-L10-6K2',
+                'capabilities': ['info', 'telemetry'],
+              },
+            })));
+
+    final legacyManager = BleDeviceManager(adapter: adapter, keyStore: keyStore);
+    addTearDown(legacyManager.disconnectAll);
+    await expectLater(
+      legacyManager.connectDevice(mac),
+      throwsA(isA<BleCommandException>().having(
+        (e) => e.code,
+        'code',
+        'UNSUPPORTED_SECURE_DIRECT_CONTROL',
+      )),
+    );
+
+    final service = BleCommunicationService(
+      adapter: adapter,
+      manager: legacyManager,
+    );
+    expect(
+      await service.connectToDevice(
+        deviceSN: sn,
+        deviceIP: '192.168.4.1',
+        macAddress: mac,
+      ),
+      isFalse,
+    );
+    expect(
+      service.lastConnectFailure,
+      BleConnectFailure.unsupportedFirmware,
+    );
+    expectNoScan();
   });
 }

@@ -214,6 +214,60 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
     );
   }
 
+  /// 删除已下载固件（二次确认；删除后需重新下载才能本地升级）
+  Future<void> _confirmDelete(FirmwareResource r) async {
+    final l10n = AppLocalizations.of(context)!;
+    final module = FirmwareModulePresentation.fromTarget(r.targetChip);
+    final version = r.version.trim();
+    final displayName = version.isEmpty
+        ? module.displayLabel(l10n)
+        : '${module.displayLabel(l10n)} · $version';
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.str('downloaded_firmware_delete')),
+        content: Text(
+          l10n.str('downloaded_firmware_delete_confirm', {'name': displayName}),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            child: Text(l10n.str('delete')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await _downloadService.deleteDownloadedFirmware(r.id);
+    } catch (e) {
+      debugPrint('[FirmwareLibrary] delete failed: $e');
+      if (!mounted) return;
+      AppToast.show(
+        context,
+        l10n.str('downloaded_firmware_delete_failed'),
+        type: ToastType.error,
+      );
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _downloadedCache[r.id] = false;
+    });
+    AppToast.show(
+      context,
+      l10n.str('downloaded_firmware_deleted'),
+      type: ToastType.success,
+    );
+  }
+
   /// 按模块分组
   Map<String, List<FirmwareResource>> get _grouped {
     final map = <String, List<FirmwareResource>>{};
@@ -485,6 +539,18 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
                         ? '${(progress * 100).toInt()}%'
                         : l10n.str('ota_firmware_library_download'),
                     style: TextStyle(fontSize: 13.sp),
+                  ),
+                ),
+              // 已下载固件删除：释放本地空间，删除后需重新下载
+              if (downloaded)
+                IconButton(
+                  onPressed: downloading ? null : () => _confirmDelete(r),
+                  tooltip: l10n.str('downloaded_firmware_delete'),
+                  visualDensity: VisualDensity.compact,
+                  icon: Icon(
+                    Icons.delete_outline_rounded,
+                    size: 20.sp,
+                    color: AppColors.error,
                   ),
                 ),
             ],
