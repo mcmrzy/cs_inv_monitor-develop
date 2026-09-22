@@ -45,13 +45,13 @@ type heartbeatDataV2 struct {
 
 // v2Scales 各组位置值的原始量纲 → 物理量 缩放系数（与迁移 096 device_protocol_fields.scale 一致；
 // bat[1] battery_soc 为 1%，已修正 091 的 0.1 错误）。
-// 2026-09-22 起 ESP 1.7.16 对 ARM App(10) 直传结构体在固件侧换算到本契约量纲
-// （见 ESP telemetry.c 量纲表），线上值与 App(8) 补偿模式逐槽位一致
-// （锁值测试 TestParseHeartbeatV2L10App10DirectPassContract），本表不变。
+// 2026-09-22 依 ARM UsartDsp.c 单位注释重校：ac[0] ACOutputVolt 权威单位为 **1V**
+// （原 0.1 系按错位期 dump 误判，把 230V 显示成 23.00V）；ac[1]/sys[5] 由
+// normalizeActualARMACOutputUnits 按值域归一，其余槽位不变。
 var v2Scales = map[string][]float64{
 	"sys":  {1, 1, 1, 1, 0.1, 0.1, 0.1, 0.1, 0.01, 0.1, 1},
 	"pv":   {0.1, 0.1, 0.1, 0.1, 0.1},
-	"ac":   {0.1, 0.01, 0.1, 0.1, 0.1, 0.1, 0.01, 0.1, 0.1, 0.1, 0.1},
+	"ac":   {1, 0.01, 0.1, 0.1, 0.1, 0.1, 0.01, 0.1, 0.1, 0.1, 0.1},
 	"chr":  {0.1, 0.1, 0.1},
 	"bat":  {0.01, 1, 0.1, 0.1, 0.1},
 	"eng":  {0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1},
@@ -72,23 +72,42 @@ const (
 	armACFrequencyRawMax = 650
 )
 
-// normalizeActualARMACOutputUnits 过渡期兼容（2026-09-22 起 ESP 1.7.16 + ARM
-// App(10) 固件侧已统一输出 0.1V/0.01Hz，不再触发本分支）：现场仍存量的
-// 旧 ESP/旧 ARM 组合直接透传 ARM 能量流界面量纲（电压 1V、频率 0.1Hz，
-// 与早期采集协议文档的 0.1V/0.01Hz 不符），按频率区间识别后还原。
-// 全存量设备升级后本函数可整体移除。
+// normalizeActualARMACOutputUnits 处理 ac 组的 ACOutputVolt / ACOutputFreq 两代
+// ESP 固件量纲差异（2026-09-22 依 ARM 源码 UsartDsp.c 单位注释重校）。
+//
+// 权威单位（App(8)/App(10) 的 UsartDsp.c 逐行相同）：
+//
+//	SysParam.VloadA = ...   // 单位1V     → ACOutputVolt 恒 1V
+//	SysParam.LoadFreq = ...  // 单位0.1Hz → ACOutputFreq 恒 0.1Hz
+//
+// 现场 ESP 固件两代并存：
+//
+//	≤1.7.6  ：按旧 0.1V 契约把 ACOutputVolt ×10（值域 0~2500）；频率直传 0.1Hz
+//	1.7.7+  ：ACOutputVolt 直传 1V 原值（值域 0~250）；频率 ×10 转 0.01Hz
+//
+// 判据用值域而非频率区间：早期实现以"频率落在 45~65Hz"作为触发条件，设备无输出
+// 或故障态（频率非该区间）时电压就退回 ×0.1，把 230V 显示成 23.00V（现场实证）。
+// 值域判据与输出状态无关：ACOutputVolt 物理上限 250V，>500 只可能是旧固件的
+// ×10 值。
 func normalizeActualARMACOutputUnits(raw, scaled []*float64) {
-	if len(raw) < 2 || len(scaled) < 2 || raw[0] == nil || raw[1] == nil {
-		return
-	}
-	if *raw[1] < armACFrequencyRawMin || *raw[1] > armACFrequencyRawMax {
+	if len(raw) < 2 || len(scaled) < 2 {
 		return
 	}
 
-	voltage := *raw[0]
-	frequency := *raw[1] * 0.1
-	scaled[0] = &voltage
-	scaled[1] = &frequency
+	// ACOutputVolt：1V 为单位（v2Scales ac[0]=1.0 已直传），>500 判为旧固件的
+	// ×10 值 → ÷10 覆盖。
+	if raw[0] != nil && *raw[0] > 500 {
+		v := *raw[0] / 10
+		scaled[0] = &v
+	}
+
+	// ACOutputFreq：0.1Hz 为单位。1.7.7+ 已 ×10 成 0.01Hz（值域 4500~6500），
+	// 由 v2Scales ac[1]=0.01 还原；旧固件直传 0.1Hz（值域 450~650）才需在此
+	// 覆盖为 Hz。两值域不重叠，可安全区分（不可无条件覆盖：会跳过 0.01 缩放）。
+	if raw[1] != nil && *raw[1] >= armACFrequencyRawMin && *raw[1] <= armACFrequencyRawMax {
+		f := *raw[1] * 0.1
+		scaled[1] = &f
+	}
 }
 
 func ParseHeartbeatV2(deviceSN string, payload []byte, receivedAt time.Time) (*Sample, error) {
