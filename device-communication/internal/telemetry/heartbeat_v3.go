@@ -126,6 +126,24 @@ const (
 	wordInvtPercent     = 86
 )
 
+// pvVoltageFloor：PV 电压低于该值视为无输入（残压），归 0。
+// 实测无 PV 接入时 Vpv1 上送 ~11V 感应电压，直接展示会被误读为「有 PV 输入」；
+// 而 PV 正常工作电压 200~450V，60V 以下的读数无意义。
+const pvVoltageFloor = 60.0
+
+// pvVoltageNormalized PV 电压归一：<60V 归 0，其余按 0~500V 界限校验。
+// v2/v3 两条解析路径共用（v3 ESP 只转发原值，v2 为存量固件）。
+func pvVoltageNormalized(p *float64, flags *uint32) *float64 {
+	if p == nil {
+		return nil
+	}
+	v := *p
+	if v < pvVoltageFloor {
+		v = 0
+	}
+	return boundedValue(&v, 0, 500, flags)
+}
+
 // boundedValue 越界 → nil 并置 QualityOutOfRange（与 v2 的 bounded 闭包同语义，
 // 提升为包级供 v3 复用）。越界不保留原值：ARM 固件可能输出垃圾值，保留会把
 // 脏值写入数据库并展示到页面。
@@ -302,11 +320,11 @@ func ParseHeartbeatV3(deviceSN string, payload []byte, receivedAt time.Time) (*S
 		BatteryOvercharge:      u8Value(u16At(wordBatOverCharge), 1, &s.QualityFlags),
 	}
 
-	// ---- pv（Vpv 1V、Ipv 0.01A、Ppv 1W）----
+	// ---- pv（Vpv 1V、Ipv 0.01A、Ppv 1W；PV 电压 <60V 视为无输入归 0）----
 	s.PV = PV{
-		PV1Voltage:   boundedValue(u16At(wordVpv1), 0, 500, &s.QualityFlags),
+		PV1Voltage:   pvVoltageNormalized(u16At(wordVpv1), &s.QualityFlags),
 		Buck1Current: boundedValue(scale(u16At(wordBuck1Curr), 0.01), 0, 30, &s.QualityFlags),
-		PV2Voltage:   boundedValue(u16At(wordVpv2), 0, 500, &s.QualityFlags),
+		PV2Voltage:   pvVoltageNormalized(u16At(wordVpv2), &s.QualityFlags),
 		Buck2Current: boundedValue(scale(u16At(wordBuck2Curr), 0.01), 0, 30, &s.QualityFlags),
 		TotalPower:   boundedValue(u16At(wordPpv), 0, 7500, &s.QualityFlags),
 	}

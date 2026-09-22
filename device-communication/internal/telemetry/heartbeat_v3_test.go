@@ -132,6 +132,42 @@ func TestParseHeartbeatV3U32U64Assembly(t *testing.T) {
 	require.InDelta(t, 6553.9, *s.Energy.GenTotal, 0.0001)
 }
 
+// TestPVVoltageFloor：PV 电压 <60V 视为无输入归 0（实测无 PV 接入时 Vpv1 上送
+// ~11V 感应电压，直接展示会被误读为「有 PV 输入」）；≥60V 保留；>500V 仍越界。
+func TestPVVoltageFloor(t *testing.T) {
+	at := func(f float64) *float64 { return &f }
+	var flags uint32
+
+	require.InDelta(t, 0.0, *pvVoltageNormalized(at(0), &flags), 0.0001)
+	require.InDelta(t, 0.0, *pvVoltageNormalized(at(11), &flags), 0.0001)   // 残压
+	require.InDelta(t, 0.0, *pvVoltageNormalized(at(59.9), &flags), 0.0001)
+	require.InDelta(t, 60.0, *pvVoltageNormalized(at(60), &flags), 0.0001)  // 边界保留
+	require.InDelta(t, 350.0, *pvVoltageNormalized(at(350), &flags), 0.0001)
+	require.Zero(t, flags&QualityOutOfRange) // 归零不是越界，不置质量位
+
+	require.Nil(t, pvVoltageNormalized(at(600), &flags)) // >500V 仍判越界
+	require.NotZero(t, flags&QualityOutOfRange)
+	require.Nil(t, pvVoltageNormalized(nil, &flags))
+}
+
+// TestParseHeartbeatV3PVResidualVoltage：端到端——v3 帧里 Vpv1=11（无接入残压）
+// 落 0、Vpv2=350（正常工作电压）保留。
+func TestParseHeartbeatV3PVResidualVoltage(t *testing.T) {
+	run := make([]string, runParamWordsV3)
+	for i := range run {
+		run[i] = "0"
+	}
+	run[wordVpv1] = "11"
+	run[wordVpv2] = "350"
+	ts := int64(1789974000)
+	s, err := ParseHeartbeatV3("SN-TEST",
+		[]byte(`{"v":3,"t":1789974000,"data":{"run":[`+strings.Join(run, ",")+`]}}`),
+		time.Unix(ts+60, 0))
+	require.NoError(t, err)
+	require.InDelta(t, 0.0, *s.PV.PV1Voltage, 0.0001)
+	require.InDelta(t, 350.0, *s.PV.PV2Voltage, 0.0001)
+}
+
 // TestParseHeartbeatV3RejectsBadLength：字数必须精确 = 87（结构体改版必须
 // 同步服务端，否则整帧拒收并落 ingest error，便于发现固件/服务端不同步）。
 func TestParseHeartbeatV3RejectsBadLength(t *testing.T) {
