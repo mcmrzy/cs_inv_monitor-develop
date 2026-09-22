@@ -513,6 +513,20 @@ func (p *ProtocolParser) handleHeartbeat(ctx context.Context, raw *RawMessage) e
 		// V2 推导字段：work_state（sys_status 位组合）与 battery_power（充电为正，与电流方向一致）
 		deriveV2WorkState(sample)
 		deriveV2BatteryPower(sample)
+	case 3:
+		// V3（2026-09-22）：ESP 只按 pack(1) 结构体字序转发 ARM App(10)
+		// RunParamDef 原值（87 个 u16），字段映射/符号/量纲/界限全部在
+		// telemetryv2.ParseHeartbeatV3 内完成——量纲知识集中到服务端一处，
+		// 固件不再承担换算（此前 ESP 侧两次换算结论错误均源于知识分散）。
+		sample, parseErr = telemetryv2.ParseHeartbeatV3(raw.SN, raw.Payload, receivedAt)
+		if parseErr != nil {
+			if saveErr := p.repo.SaveIngestError(ctx, raw.SN, raw.MsgType, raw.Payload, "INVALID_HEARTBEAT", parseErr.Error()); saveErr != nil {
+				return fmt.Errorf("%v; save ingest error: %w", parseErr, saveErr)
+			}
+			return nil
+		}
+		deriveV2WorkState(sample)
+		deriveV2BatteryPower(sample)
 	default:
 		if saveErr := p.repo.SaveIngestError(ctx, raw.SN, raw.MsgType, raw.Payload, "UNSUPPORTED_HEARTBEAT_VERSION", fmt.Sprintf("v=%d", versionProbe.Version)); saveErr != nil {
 			return fmt.Errorf("unsupported heartbeat version %d; save ingest error: %w", versionProbe.Version, saveErr)

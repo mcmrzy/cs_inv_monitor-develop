@@ -78,6 +78,11 @@ jobs:
             has 'business-api/' && SERVICES="$SERVICES business-api"
             has 'api-gateway/' && SERVICES="$SERVICES api-gateway"
             has 'inv-admin-frontend/' && SERVICES="$SERVICES inv-admin-frontend"
+            # database/ 只被 inv-api-server 挂载（../database:/app/database:ro），
+            # 迁移在容器**启动时**执行。故 schema.sql / migrations/ 变更必须触发
+            # business-api 重建，否则迁移文件同步到服务器但容器不重启、迁移永不执行
+            # （2026-09-22 迁移 125 即因此未生效）。
+            has 'database/' && SERVICES="$SERVICES business-api"
           fi
           SERVICES=$(echo "$SERVICES" | xargs)
 
