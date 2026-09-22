@@ -13,8 +13,10 @@ import (
 // 87 个 u16 字序值，ESP 原样转发形态。字段对照见 heartbeat_v3.go 的 word* 常量。
 // 该组值同时被 v2 测试夹具（l10App8ContractHeartbeatV2 / FixedARMLayout）覆盖，
 // 用于锁定「v2 换算值 ≡ v3 原值解析」的跨版本等价性。
-const v3RunSample = `[777,350,0,0,0,1240,820,0,350,300,` +
-	`1870,1875,850,3470,3500,231,498,2300,500,3470,` +
+// 注意 ACOutputVolt=230 与 BoostTemp=35 是 **1V / 1℃ 单位**（UsartDsp.c 权威注释），
+// 非早期误判的 0.1V / 0.1℃。
+const v3RunSample = `[777,350,0,0,0,1240,820,0,35,300,` +
+	`1870,1875,850,3470,3500,231,498,230,500,3470,` +
 	`3500,3470,3500,120,490,80,618,0,0,69,` +
 	`0,3919,0,0,0,0,50,100,0,0,` +
 	`0,0,0,0,0,0,5,0,0,0,` +
@@ -86,13 +88,14 @@ func TestParseHeartbeatV3RawStruct(t *testing.T) {
 // 温度负值（冬季）与负功率是核心用例：若不做补码还原会得到 6552.x℃ / 6553x W，
 // 被界限拒绝成 null（丢数据）。
 func TestParseHeartbeatV3SignedFields(t *testing.T) {
-	// BoostTemp = -50 (0x FFCE = 65486) → -5.0℃; InvertTemp = -100 (65436) → -10.0℃;
+	// BoostTemp = -5 (1℃ 单位, 0x FFFB = 65531) → -5.0℃;
+	// InvertTemp = -100 (0.1℃ 单位, 65436) → -10.0℃;
 	// OutputWatt = -200 (65336) → clamp0 → 0
 	run := make([]string, runParamWordsV3)
 	for i := range run {
 		run[i] = "0"
 	}
-	run[wordBoostTemp] = "65486"
+	run[wordBoostTemp] = "65531"
 	run[wordInvertTemp] = "65436"
 	run[wordOutputWatt] = "65336"
 	ts := int64(1789974000)

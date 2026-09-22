@@ -23,17 +23,22 @@ import (
 //
 // 结构体布局见 ESP esp32c3_l10_idf/main/telemetry/arm_param.h
 // （RunParamDef, 174B = 87×u16, pack(1)；u32 占 2 字、u64 占 4 字，小端）。
-// 权威量纲来源 = DSP 发 ARM 的 TxBuf（UsartDsp.c）：
+// 权威量纲来源 = ARM 接收 DSP 数据的 UsartDsp.c 单位注释（App(8)/App(10) 逐行
+// 相同，比推测可靠）：
 //
-//	Vgrid/Vload/Vpv     ×1   （内部单位分别 1V / 0.1V / 1V，实机实证）
-//	Igrid/Iload/Ipv/    ×100 → 0.01A
+//	Vgrid/Vload/Vpv/Vinvt   ×1   → **1V**（Vload=230 即 230V，非 0.1V；
+//	                               早期按 0.1V 解析曾把 230V 显示成 23.00V）
+//	Igrid/Iload/Ipv/        ×100 → 0.01A
 //	  Iinvt/Ibus
-//	GridFreq/LoadFreq/  ×10  → 0.1Hz
+//	GridFreq/LoadFreq/      ×10  → 0.1Hz
 //	  InvtFreq
-//	Vbat/Vbus/Ibat      ×10  → 0.1V / 0.1A
-//	Percent             ×10  → 0.1%
-//	Temprature          ×10  → 0.1℃
-//	功率                 ×1   → 1W / 1VA
+//	Vbat/Vbus/Ibat          ×10  → 0.1V / 0.1A
+//	Percent                 ×10  → 0.1%
+//	Temprature              ×10  → 0.1℃（DSP 测温 → InvertTemp）
+//	功率                     ×1   → 1W / 1VA
+//
+// 例外：BoostTemp 取自 ARM 板载温度结构 `Temperature_Struct.LV_MOS`（**1℃**，
+// ReadRunParam 不做 ×10；对照 App(8) 的 LV_MOS×10 写法可证），非 DSP 温度。
 
 type heartbeatEnvelopeV3 struct {
 	Version uint16         `json:"v"`
@@ -290,7 +295,7 @@ func ParseHeartbeatV3(deviceSN string, payload []byte, receivedAt time.Time) (*S
 		Warning:                u64Value(uint64At(wordWarning), &s.QualityFlags),
 		BmsWarning:             u32Value(u16At(wordBmsWarning), &s.QualityFlags),
 		InverterTemperature:    boundedValue(scale(int16At(wordInvertTemp), 0.1), -40, 100, &s.QualityFlags),
-		BoostTemperature:       boundedValue(scale(int16At(wordBoostTemp), 0.1), -40, 120, &s.QualityFlags),
+		BoostTemperature:       boundedValue(int16At(wordBoostTemp), -40, 120, &s.QualityFlags),
 		TransformerTemperature: nil, // ARM App(10) 未赋值（memset 恒 0），无测量意义
 		PVTemperature:          nil,
 		DCBusVoltage:           boundedValue(scale(u16At(wordBusVolt), 0.1), 0, 500, &s.QualityFlags),
@@ -306,9 +311,9 @@ func ParseHeartbeatV3(deviceSN string, payload []byte, receivedAt time.Time) (*S
 		TotalPower:   boundedValue(u16At(wordPpv), 0, 7500, &s.QualityFlags),
 	}
 
-	// ---- ac（ACOutputVolt 0.1V、频率 0.1Hz、电流 0.01A、功率 1W/VA）----
+	// ---- ac（**ACOutputVolt 为 1V 单位**、频率 0.1Hz、电流 0.01A、功率 1W/VA）----
 	s.AC = AC{
-		Voltage:                  boundedValue(scale(u16At(wordACOutputVolt), 0.1), 0, 250, &s.QualityFlags),
+		Voltage:                  boundedValue(u16At(wordACOutputVolt), 0, 250, &s.QualityFlags),
 		Frequency:                boundedValue(scale(u16At(wordACOutputFreq), 0.1), 0, 55, &s.QualityFlags),
 		ActivePower:              boundedValue(clamp0(int16At(wordOutputWatt)), 0, 7500, &s.QualityFlags),
 		ApparentPower:            boundedValue(clamp0(int16At(wordOutputVA)), 0, 7500, &s.QualityFlags),
