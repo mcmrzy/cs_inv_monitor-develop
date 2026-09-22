@@ -321,7 +321,7 @@ func TestParseHeartbeatV2RealDirtyHeartbeat(t *testing.T) {
 	// 合法值保留（原始值 × v2Scales 缩放）
 	require.Equal(t, "H1ZZX0023900002P", s.DeviceSN)
 	require.Equal(t, uint32(265), *s.System.SysStatus)
-	require.InDelta(t, 0.6, *s.PV.PV1Voltage, 0.0001)
+	require.InDelta(t, 0.0, *s.PV.PV1Voltage, 0.0001) // pv[0]=6 → 0.6V <60V 残压归 0
 	require.InDelta(t, 50.0, *s.AC.ActivePower, 0.0001)
 	require.InDelta(t, 1.0, *s.AC.ACInputPower, 0.0001)   // ac[7]=10×0.1
 	require.InDelta(t, 100.0, *s.Fan.InvSpeed, 0.0001)
@@ -389,7 +389,7 @@ func TestParseHeartbeatV2FixedARMLayout(t *testing.T) {
 	require.Equal(t, uint8(0), *s.System.BatteryOvercharge)
 
 	// PV
-	require.InDelta(t, 6.0, *s.PV.PV1Voltage, 0.0001)    // 60×0.1
+	require.InDelta(t, 0.0, *s.PV.PV1Voltage, 0.0001)    // 60×0.1=6.0V <60V → 残压归 0
 	require.InDelta(t, 5.0, *s.PV.Buck1Current, 0.0001)  // 50×0.1
 	require.InDelta(t, 0.0, *s.PV.PV2Voltage, 0.0001)
 	require.InDelta(t, 0.0, *s.PV.Buck2Current, 0.0001)
@@ -596,6 +596,6 @@ func TestParseHeartbeatV2MisalignedOldLayout(t *testing.T) {
 	// 巧合落在界内的错位值照常保留（服务端只按 V2 位置定义 + 界校验，不做布局推断）
 	require.Equal(t, uint32(265), *s.System.SysStatus)
 	require.InDelta(t, 0.0, *s.System.DCBusVoltage, 0.0001) // sys[8]=0，真值 373.5 在 sys[9] 位置
-	require.InDelta(t, 0.6, *s.PV.PV1Voltage, 0.0001)
+	require.InDelta(t, 0.0, *s.PV.PV1Voltage, 0.0001)       // pv[0]=6 错位值 <60V → PV 残压归 0
 	require.InDelta(t, 490.0, *s.Battery.ChargePower, 0.0001)
 }
