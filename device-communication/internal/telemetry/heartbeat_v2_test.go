@@ -325,7 +325,6 @@ func TestParseHeartbeatV2RealDirtyHeartbeat(t *testing.T) {
 	require.InDelta(t, 50.0, *s.AC.ActivePower, 0.0001)
 	require.InDelta(t, 1.0, *s.AC.ACInputPower, 0.0001)   // ac[7]=10×0.1
 	require.InDelta(t, 100.0, *s.Fan.InvSpeed, 0.0001)
-	require.InDelta(t, 2007.8, *s.Energy.GenDaily, 0.0001)
 	require.InDelta(t, 0.3, *s.Energy.ACChargeTotal, 0.0001)
 	require.InDelta(t, 1190.7, *s.Energy.TotalCharge, 0.0001)
 	require.InDelta(t, 490.0, *s.Battery.ChargePower, 0.0001)
@@ -339,6 +338,7 @@ func TestParseHeartbeatV2RealDirtyHeartbeat(t *testing.T) {
 	require.Nil(t, s.AC.ACChargeApparentPower)          // 560726016×0.1=56072601.6 > 7500
 	require.Nil(t, s.Diag.InvCurrent)                   // 13340×0.1=1334 > 100
 	require.Nil(t, s.Diag.ParallelChargeCurrent)        // 21008 > 600
+	require.Nil(t, s.Energy.GenDaily)                   // 20078×0.1=2007.8 > 200（日组界）
 }
 
 // mirrorDeriveV2BatteryPower 按 internal/service/protocol_parser.go deriveV2BatteryPower
@@ -363,7 +363,7 @@ func mirrorDeriveV2BatteryPower(s *Sample) *float64 {
 // 对同一组现场寄存器值的预期心跳输出（SN H1ZZX0023900002P）：所有数值经 v2Scales
 // 缩放后必须落在 bounded() 界内，仅语义性 null（sys[6]/sys[7] 温度传感器、diag[0]、sock
 // 全组）与缺省 bms 组允许置 QualityPartial。
-const fixedARMLayoutHeartbeatV2 = `{"v":2,"t":1789887119,"data":{"sys":[265,0,5,0,430,350,null,null,37350,1000,0],"pv":[60,50,0,0,62000],"ac":[2300,5000,61870,65000,8,0,0,0,0,0,0],"chr":[0,0,0],"bat":[4900,0,-1334,0,61870],"eng":[0,0,3,0,0,0,11907,0,11907,0,0,0,0,0],"fan":[0,0],"diag":[null,0,0],"sock":[null,null,null]}}`
+const fixedARMLayoutHeartbeatV2 = `{"v":2,"t":1789887119,"data":{"sys":[265,0,5,0,430,350,null,null,37350,1000,0],"pv":[60,50,0,0,62000],"ac":[2300,5000,61870,65000,8,0,0,0,0,0,0],"chr":[0,0,0],"bat":[4900,0,-1334,0,61870],"eng":[0,0,3,0,0,0,1190,0,1190,0,0,0,0,0],"fan":[0,0],"diag":[null,0,0],"sock":[null,null,null]}}`
 
 // TestParseHeartbeatV2FixedARMLayout 验收测试：锁定"修复后的 ESP 输出"必须解析出的
 // 物理正确值。修复前同一组寄存器错位/未换算时的服务端表现见
@@ -435,14 +435,17 @@ func TestParseHeartbeatV2FixedARMLayout(t *testing.T) {
 }
 
 // l10App8ContractHeartbeatV2 是 2026-09-21 依 ARM 源码 App(8) Collector.c:ReadRunParam
-// 重校量纲后，ESP 固件 1.7.7 对实机 H1ZZX00139000038 同一组寄存器的预期输出：
+// 重校量纲后，ESP 固件对实机 H1ZZX00139000038 同一组寄存器的预期输出
+// （2026-09-22 依 DSP TxBuf 实源 UsartDsp.c 修正 chr[2]/sys[9] 两处结论）：
 //   - ac[0] ACOutputVolt：VloadA 直传，线上即 0.1V（2310 = 231.0V；旧固件按 1V 再 ×10
 //     得 23100，服务端判越界置 NULL——即现场「交流电压永远 --」的根因）；
-//   - sys[9] LoadPercent：ARM 对 SysParam(0.1%) 又 ×10，线上恰为 0.1%，固件直传
-//     （旧固件再 ×10 成 500，端到端放大 10 倍）；
-//   - chr[2] ACChrCurr：IgridA(0.01A)×10 → 线上 0.1A，固件直传（旧 ÷100 缩小 100 倍）；
+//   - sys[9] LoadPercent：DSP PloadPercent×10 已是 0.1%，直传配服务器 scale=0.1
+//     即还原百分比（实机 50 → 5.0%，与 ac 有功 347W/6kW≈5.8% 互证）；
+//   - chr[2] ACChrCurr：IgridA 为 0.01A（DSP Igrid_rms_DP×100），线上契约 0.1A
+//     需 ÷10（实机 chr=12 → 1.2A；09-21 曾按 "×10 后已 0.1A" 直传 124 得 12.4A，
+//     与 347W/231V≈1.5A 负载电流矛盾，系量纲算术错误）；
 //   - pv[0]：1V 量纲 ×10 不变，但界限放宽到 500V（PV 工作电压常见 200~450V）。
-const l10App8ContractHeartbeatV2 = `{"v":2,"t":1789972771,"data":{"sys":[777,0,0,0,300,0,null,null,39190,50,0],"pv":[3500,0,0,0,0],"ac":[2310,4980,3470,0,0,40,0,0,0,0,0],"chr":[0,0,124],"bat":[5040,0,-69,0,null],"eng":[0,0,0,0,0,0,11929,0,11929,0,0,0,0,0],"fan":[0,0],"diag":[null,0,0],"sock":[null,null,null]}}`
+const l10App8ContractHeartbeatV2 = `{"v":2,"t":1789972771,"data":{"sys":[777,0,0,0,300,0,null,null,39190,50,0],"pv":[3500,0,0,0,0],"ac":[2310,4980,3470,0,0,40,0,0,0,0,0],"chr":[0,0,12],"bat":[5040,0,-69,0,null],"eng":[0,0,0,0,0,0,1192,0,1192,0,0,0,0,0],"fan":[0,0],"diag":[null,0,0],"sock":[null,null,null]}}`
 
 func TestParseHeartbeatV2L10App8UnitsContract(t *testing.T) {
 	s, err := ParseHeartbeatV2("H1ZZX00139000038", []byte(l10App8ContractHeartbeatV2), time.Unix(1789972771+60, 0))
@@ -457,8 +460,8 @@ func TestParseHeartbeatV2L10App8UnitsContract(t *testing.T) {
 	require.InDelta(t, 347.0, *s.AC.ActivePower, 0.0001)
 	// 负载百分比：sys[9]=50 直传 → 5.0%（旧固件 ×10 后为 50%）
 	require.InDelta(t, 5.0, *s.AC.LoadPercent, 0.0001)
-	// AC 充电电流：chr[2]=124 直传 → 12.4A（旧固件 ÷100 后 ≈0.1A）
-	require.InDelta(t, 12.4, *s.AC.ACChargeCurrent, 0.0001)
+	// AC 充电电流：chr[2]=12 → 1.2A（IgridA 0.01A 契约 0.1A ÷10，见夹具头注释）
+	require.InDelta(t, 1.2, *s.AC.ACChargeCurrent, 0.0001)
 
 	// System / Battery：母线 391.9V（scale 0.01 两侧本就一致）、电池 50.40V 放电 6.9A
 	require.InDelta(t, 391.9, *s.System.DCBusVoltage, 0.0001)
@@ -471,6 +474,78 @@ func TestParseHeartbeatV2L10App8UnitsContract(t *testing.T) {
 	require.Zero(t, s.QualityFlags&QualityOutOfRange)
 }
 
+// l10App10DirectPassHeartbeatV2 是 2026-09-22 依 ARM 源码 App(10) Collector.c
+// ReadRunParam（全字段直传 DSP 原值，删除旧版全部 ×10/×100 放大）+ ESP 固件
+// 1.7.16 新换算的预期输出。物理场景与 TestParseHeartbeatV2FixedARMLayout
+// （App(8) 时代实测锚点）完全相同——新旧两代固件对同一物理状态必须产出
+// 可互换的线上值，服务端 scale/界无需任何变更：
+//   sys: 温度直传（30.0℃/35.0℃，struct 0.1℃/1℃）；母线 3919(0.1V)×10=39190；
+//        负载率 10(1%)×10=100
+//   pv:  Vpv 350(1V)×10=3500；Buck 820(0.01A)÷10=82（App(10) 不再 ×100，
+//        旧 >6.55A u16 回绕问题随之消失）；Ppv 1240(1W)×10=12400
+//   ac:  输出 2300(0.1V) 直传、频率 500(0.1Hz)×10=5000；功率 1870/1875(1W)×10；
+//        输出电流 852(0.01A)÷10=85；市电 231(1V)×10=2310、498(0.1Hz)×10=4980；
+//        ACIn 347/350(1W)×10；旁路与 ACIn 同源
+//   chr: ACChrWatt/VA=ACInWatt/VA 同源 ×10；ACChrCurr 12(1A)×10=120
+//   bat: 电压 490(0.1V)×10=4900；SOC 直传；放电 6.9A → BatDischgCurr=69(0.1A)
+//        直传取负；放电功率 618(1W)×10=6180
+//   eng: ARM /360000(today)/原值(total) 透传
+//   Transformer/PvTemp、InvCurr、sock：App(10) 未赋值（memset 恒 0）→ null
+const l10App10DirectPassHeartbeatV2 = `{"v":2,"t":1789974000,"data":{"sys":[777,0,0,0,300,350,null,null,39190,100,0],"pv":[3500,82,0,0,12400],"ac":[2300,5000,18700,18750,85,2310,4980,3470,3500,3470,3500],"chr":[3470,3500,120],"bat":[4900,80,-69,0,6180],"eng":[0,0,0,0,0,0,1192,0,0,0,0,0,0,0],"fan":[0,0],"diag":[null,0,0],"sock":[null,null,null]}}`
+
+func TestParseHeartbeatV2L10App10DirectPassContract(t *testing.T) {
+	s, err := ParseHeartbeatV2("H1ZZX00139000038", []byte(l10App10DirectPassHeartbeatV2), time.Unix(1789974000+60, 0))
+	require.NoError(t, err)
+
+	// PV：350V 工作电压、Buck 8.2A（struct 820×0.01A ÷10）、总功率 1240W
+	require.InDelta(t, 350.0, *s.PV.PV1Voltage, 0.0001)  // 3500×0.1
+	require.InDelta(t, 8.2, *s.PV.Buck1Current, 0.0001)  // 82×0.1
+	require.InDelta(t, 1240.0, *s.PV.TotalPower, 0.0001) // 12400×0.1
+
+	// AC：输出 230.0V/50.00Hz（struct 0.1V 直传、0.1Hz×10）；功率 ×10；
+	// 市电 231.0V/49.80Hz；旁路 = ACIn 同源
+	require.InDelta(t, 230.0, *s.AC.Voltage, 0.0001)      // 2300×0.1
+	require.InDelta(t, 50.0, *s.AC.Frequency, 0.0001)     // 5000×0.01
+	require.InDelta(t, 1870.0, *s.AC.ActivePower, 0.0001) // 18700×0.1
+	require.InDelta(t, 1875.0, *s.AC.ApparentPower, 0.0001)
+	require.InDelta(t, 8.5, *s.AC.Current, 0.0001)        // 85×0.1（struct 852×0.01A ÷10）
+	require.InDelta(t, 231.0, *s.AC.GridVoltage, 0.0001)  // 2310×0.1（struct 231×1V ×10）
+	require.InDelta(t, 49.8, *s.AC.GridFrequency, 0.0001) // 4980×0.01（struct 498×0.1Hz ×10）
+	require.InDelta(t, 347.0, *s.AC.ACInputPower, 0.0001)
+	require.InDelta(t, 350.0, *s.AC.ACInputApparentPower, 0.0001)
+	require.InDelta(t, 347.0, *s.AC.ACBypassPower, 0.0001)
+	require.InDelta(t, 350.0, *s.AC.ACBypassApparentPower, 0.0001)
+
+	// chr：与 ACIn 同源 ×10；充电电流 struct 1200×0.01A ÷10 = 12.0A（DSP Igrid 0.01A）
+	require.InDelta(t, 347.0, *s.AC.ACChargePower, 0.0001)
+	require.InDelta(t, 350.0, *s.AC.ACChargeApparentPower, 0.0001)
+	require.InDelta(t, 12.0, *s.AC.ACChargeCurrent, 0.0001)
+
+	// sys：温度直传/×10；母线 ×10；负载率 DSP 已 0.1% 直传 = 10.0%
+	require.InDelta(t, 30.0, *s.System.InverterTemperature, 0.0001) // 300×0.1 直传
+	require.InDelta(t, 35.0, *s.System.BoostTemperature, 0.0001)    // struct 35(1℃)×10=350×0.1
+	require.InDelta(t, 391.9, *s.System.DCBusVoltage, 0.0001)       // 39190×0.01（struct 3919×0.1V ×10）
+	require.InDelta(t, 10.0, *s.AC.LoadPercent, 0.0001)             // 100×0.1（struct 100×0.1% 直传）
+
+	// bat：电压 ×10；SOC 直传；放电电流 0.1A 直传取负；放电功率 ×10
+	require.InDelta(t, 49.0, *s.Battery.Voltage, 0.0001)         // 4900×0.01（struct 490×0.1V ×10）
+	require.InDelta(t, 80.0, *s.Battery.SOC, 0.0001)
+	require.InDelta(t, -6.9, *s.Battery.Current, 0.0001)         // -69×0.1 直传
+	require.InDelta(t, 618.0, *s.Battery.DischargePower, 0.0001) // 6180×0.1（struct 618×1W ×10）
+
+	// eng 透传 / 未赋值槽位 null 语义 / 风扇恒 0
+	require.InDelta(t, 119.2, *s.Energy.DailyDischarge, 0.0001) // 1192×0.1（200kWh 日界内）
+	require.Nil(t, s.System.TransformerTemperature)
+	require.Nil(t, s.System.PVTemperature)
+	require.Nil(t, s.Diag.InvCurrent)
+	require.Nil(t, s.Sock.PairedSocket)
+	require.InDelta(t, 0.0, *s.Fan.MPPTSpeed, 0.0001)
+
+	// null（未赋值 + bms 缺组）→ Partial；全部数值在界内 → 不得 OutOfRange
+	require.NotZero(t, s.QualityFlags&QualityPartial)
+	require.Zero(t, s.QualityFlags&QualityOutOfRange)
+}
+
 // TestParseHeartbeatV2PVVoltageAbove500Rejected：500V 新界仍须拒绝超量程值
 // （如 PV 接线异常/垃圾值），拒绝语义与旧界一致。
 func TestParseHeartbeatV2PVVoltageAbove500Rejected(t *testing.T) {
@@ -478,6 +553,20 @@ func TestParseHeartbeatV2PVVoltageAbove500Rejected(t *testing.T) {
 	s, err := ParseHeartbeatV2("H1ZZX00139000038", payload, time.Unix(1789972771+60, 0))
 	require.NoError(t, err)
 	require.Nil(t, s.PV.PV1Voltage) // 630V > 500V → NULL
+	require.NotZero(t, s.QualityFlags&QualityOutOfRange)
+}
+
+// TestParseHeartbeatV2DailyEnergyAbove200Rejected：2026-09-22 收紧能量组界限。
+// 日组 ≤200kWh（6kW 机型 24h 物理天花板 144kWh 含余量）：实机 14:57 快照
+// eng[4]=11901 → 1190.1kWh「日充电量」在零充电电流下照样落库展示（ARM
+// Statistics 计数器走字脏值，today /360000 与 total 原值换算互相矛盾），
+// 旧界 1e6 等于不设防；总组 ≤1e7kWh 拒 u32 溢出量级（u32max×0.1≈4.29e8）。
+func TestParseHeartbeatV2DailyEnergyAbove200Rejected(t *testing.T) {
+	payload := []byte(`{"v":2,"t":1789974000,"data":{"sys":[0,0,0,0,0,0,null,null,0,0,0],"pv":[0,0,0,0,0],"ac":[0,0,0,0,0,0,0,0,0,0,0],"chr":[0,0,0],"bat":[0,0,0,0,0],"eng":[0,0,0,0,11901,4294967295,0,0,0,0,0,0,0,0],"fan":[0,0],"diag":[null,0,0],"sock":[null,null,null]}}`)
+	s, err := ParseHeartbeatV2("H1ZZX00139000038", payload, time.Unix(1789974000+60, 0))
+	require.NoError(t, err)
+	require.Nil(t, s.Energy.ACChargeDaily) // 1190.1kWh > 200 → NULL
+	require.Nil(t, s.Energy.ACChargeTotal) // 4.29e8 > 1e7 → NULL
 	require.NotZero(t, s.QualityFlags&QualityOutOfRange)
 }
 
@@ -502,11 +591,11 @@ func TestParseHeartbeatV2MisalignedOldLayout(t *testing.T) {
 	require.Nil(t, s.AC.ACChargeApparentPower) // 560726016×0.1 > 7500
 	require.Nil(t, s.Diag.InvCurrent)          // 13340×0.1 > 100
 	require.Nil(t, s.Diag.ParallelChargeCurrent)
+	require.Nil(t, s.Energy.GenDaily) // 20078×0.1=2007.8 > 200（日组界，2026-09-22 收紧）
 
 	// 巧合落在界内的错位值照常保留（服务端只按 V2 位置定义 + 界校验，不做布局推断）
 	require.Equal(t, uint32(265), *s.System.SysStatus)
 	require.InDelta(t, 0.0, *s.System.DCBusVoltage, 0.0001) // sys[8]=0，真值 373.5 在 sys[9] 位置
 	require.InDelta(t, 0.6, *s.PV.PV1Voltage, 0.0001)
 	require.InDelta(t, 490.0, *s.Battery.ChargePower, 0.0001)
-	require.InDelta(t, 2007.8, *s.Energy.GenDaily, 0.0001)
 }

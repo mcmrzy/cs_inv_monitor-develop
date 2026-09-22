@@ -45,6 +45,9 @@ type heartbeatDataV2 struct {
 
 // v2Scales 各组位置值的原始量纲 → 物理量 缩放系数（与迁移 096 device_protocol_fields.scale 一致；
 // bat[1] battery_soc 为 1%，已修正 091 的 0.1 错误）。
+// 2026-09-22 起 ESP 1.7.16 对 ARM App(10) 直传结构体在固件侧换算到本契约量纲
+// （见 ESP telemetry.c 量纲表），线上值与 App(8) 补偿模式逐槽位一致
+// （锁值测试 TestParseHeartbeatV2L10App10DirectPassContract），本表不变。
 var v2Scales = map[string][]float64{
 	"sys":  {1, 1, 1, 1, 0.1, 0.1, 0.1, 0.1, 0.01, 0.1, 1},
 	"pv":   {0.1, 0.1, 0.1, 0.1, 0.1},
@@ -69,9 +72,11 @@ const (
 	armACFrequencyRawMax = 650
 )
 
-// normalizeActualARMACOutputUnits 兼容当前 ESP32 对 ARM 运行参数的直接透传。
-// ARM 能量流界面使用的实际量纲是电压 1V、频率 0.1Hz，而早期采集协议文档
-// 将这两个字段写成了 0.1V、0.01Hz。已按文档放大过的固件仍走 v2Scales。
+// normalizeActualARMACOutputUnits 过渡期兼容（2026-09-22 起 ESP 1.7.16 + ARM
+// App(10) 固件侧已统一输出 0.1V/0.01Hz，不再触发本分支）：现场仍存量的
+// 旧 ESP/旧 ARM 组合直接透传 ARM 能量流界面量纲（电压 1V、频率 0.1Hz，
+// 与早期采集协议文档的 0.1V/0.01Hz 不符），按频率区间识别后还原。
+// 全存量设备升级后本函数可整体移除。
 func normalizeActualARMACOutputUnits(raw, scaled []*float64) {
 	if len(raw) < 2 || len(scaled) < 2 || raw[0] == nil || raw[1] == nil {
 		return
@@ -327,20 +332,26 @@ func ParseHeartbeatV2(deviceSN string, payload []byte, receivedAt time.Time) (*S
 		DischargePower: bounded(bat[4], 0, 7500),
 	}
 	s.Energy = Energy{
-		GenDaily:       bounded(eng[0], 0, 1e6),
-		GenTotal:       bounded(eng[1], 0, 1e12),
-		DailyPV:        bounded(eng[2], 0, 1e6),
-		TotalPV:        bounded(eng[3], 0, 1e12),
-		ACChargeDaily:  bounded(eng[4], 0, 1e6),
-		ACChargeTotal:  bounded(eng[5], 0, 1e12),
-		DailyDischarge: bounded(eng[6], 0, 1e6),
-		TotalDischarge: bounded(eng[7], 0, 1e12),
-		DailyCharge:    bounded(eng[8], 0, 1e6),
-		TotalCharge:    bounded(eng[9], 0, 1e12),
-		ACBypassDaily:  bounded(eng[10], 0, 1e6),
-		ACBypassTotal:  bounded(eng[11], 0, 1e12),
-		OutputDaily:    bounded(eng[12], 0, 1e6),
-		OutputTotal:    bounded(eng[13], 0, 1e12),
+		// 日组 ≤200kWh：6kW 机型 24h 物理天花板 144kWh（含余量）。实测 ARM
+		// Statistics 计数器在零充电时也能走出 1190kWh/日 量级脏值（today 组
+		// 内部 /360000、total 组原值，换算互相矛盾，见
+		// docs/ARM固件问题清单_运行参数上报_20260920.md 能量区条目），
+		// 旧界 1e6 等于不设防，1190.1 直接落库展示。总组 ≤1e7kWh：10 年
+		// 满载 ≈2.6e5，40× 余量，可拒 u32 溢出量级（u32max×0.1≈4.3e8）脏值。
+		GenDaily:       bounded(eng[0], 0, 200),
+		GenTotal:       bounded(eng[1], 0, 1e7),
+		DailyPV:        bounded(eng[2], 0, 200),
+		TotalPV:        bounded(eng[3], 0, 1e7),
+		ACChargeDaily:  bounded(eng[4], 0, 200),
+		ACChargeTotal:  bounded(eng[5], 0, 1e7),
+		DailyDischarge: bounded(eng[6], 0, 200),
+		TotalDischarge: bounded(eng[7], 0, 1e7),
+		DailyCharge:    bounded(eng[8], 0, 200),
+		TotalCharge:    bounded(eng[9], 0, 1e7),
+		ACBypassDaily:  bounded(eng[10], 0, 200),
+		ACBypassTotal:  bounded(eng[11], 0, 1e7),
+		OutputDaily:    bounded(eng[12], 0, 200),
+		OutputTotal:    bounded(eng[13], 0, 1e7),
 	}
 	// V2.1 新增组（57 值扩展）：风扇 / 诊断量 / 插座状态
 	// 旧固件缺组时 len=0，保留零值结构（与 49 值自适应一致）
