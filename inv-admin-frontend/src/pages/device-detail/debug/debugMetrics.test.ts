@@ -97,17 +97,18 @@ describe('readSeries 派生功率', () => {
 })
 
 describe('越界判据', () => {
-  it('PV 电压 0~500V：正常工作电压与 <60V 残压都有效，>500V 才判脏', () => {
+  it('PV 电压 0~530V：正常工作电压与 <60V 残压都有效，>530V 才判脏', () => {
     // 现场误杀：299V 正常工作电压曾被旧界 0~150 剔除
     expect(isOutOfRange('pv1_voltage', 299)).toBe(false)
     expect(isOutOfRange('pv2_voltage', 299)).toBe(false)
     // <60V 为残压/无输入，与 heartbeat_v3 的 pvVoltageFloor 语义一致：有效
     expect(isOutOfRange('pv1_voltage', 11)).toBe(false)
     expect(isOutOfRange('pv2_voltage', 45)).toBe(false)
-    expect(isOutOfRange('pv1_voltage', 500)).toBe(false)
-    expect(isOutOfRange('pv1_voltage', 501)).toBe(true)
+    expect(isOutOfRange('pv1_voltage', 520)).toBe(false)
+    expect(isOutOfRange('pv1_voltage', 530)).toBe(false)
+    expect(isOutOfRange('pv1_voltage', 531)).toBe(true)
     // 量程文案随界值联动，不再出现 0 ~ 150 V
-    expect(rangeText('pv1_voltage')).toBe('0 ~ 500 V')
+    expect(rangeText('pv1_voltage')).toBe('0 ~ 530 V')
   })
 
   it('超出物理量程判越界，null 与派生量不判', () => {

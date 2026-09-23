@@ -64,11 +64,11 @@ export const METRIC_KEYS: readonly MetricKey[] = [
  *  - 所有色值都取 500~800 档，保证白底上的对比度。
  */
 const METRIC_SPECS: Record<MetricKey, Omit<SeriesDef, 'key' | 'labelKey'>> = {
-  // PV 正常工作电压 60~500V；<60V 是残压/无输入（有效读数，不上限），>500V 才判脏值
-  // （对齐 heartbeat_v3.go：pvVoltageFloor=60 归 0、bounded 0~500）
-  pv1_voltage: { axis: 'voltage', color: '#f59e0b', unit: 'V', range: [0, 500], precision: 2 },
+  // PV 正常工作电压 60~530V；<60V 是残压/无输入（有效读数，不上限），>530V 才判脏值
+  // （对齐 heartbeat_v3.go：pvVoltageFloor=60 归 0、bounded 0~530）
+  pv1_voltage: { axis: 'voltage', color: '#f59e0b', unit: 'V', range: [0, 530], precision: 2 },
   buck1_current: { axis: 'current', color: '#b45309', unit: 'A', range: [0, 30], precision: 2 },
-  pv2_voltage: { axis: 'voltage', color: '#06b6d4', unit: 'V', range: [0, 500], precision: 2 },
+  pv2_voltage: { axis: 'voltage', color: '#06b6d4', unit: 'V', range: [0, 530], precision: 2 },
   buck2_current: { axis: 'current', color: '#0e7490', unit: 'A', range: [0, 30], precision: 2 },
   battery_voltage: { axis: 'voltage', color: '#10b981', unit: 'V', range: [0, 70], precision: 2 },
   battery_current: { axis: 'current', color: '#047857', unit: 'A', range: [-150, 150], precision: 2 },
