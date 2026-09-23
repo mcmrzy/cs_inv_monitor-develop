@@ -133,7 +133,7 @@ func TestParseHeartbeatV3U32U64Assembly(t *testing.T) {
 }
 
 // TestPVVoltageFloor：PV 电压 <60V 视为无输入归 0（实测无 PV 接入时 Vpv1 上送
-// ~11V 感应电压，直接展示会被误读为「有 PV 输入」）；≥60V 保留；>500V 仍越界。
+// ~11V 感应电压，直接展示会被误读为「有 PV 输入」）；60~530V 保留；>530V 仍越界。
 func TestPVVoltageFloor(t *testing.T) {
 	at := func(f float64) *float64 { return &f }
 	var flags uint32
@@ -143,9 +143,10 @@ func TestPVVoltageFloor(t *testing.T) {
 	require.InDelta(t, 0.0, *pvVoltageNormalized(at(59.9), &flags), 0.0001)
 	require.InDelta(t, 60.0, *pvVoltageNormalized(at(60), &flags), 0.0001)  // 边界保留
 	require.InDelta(t, 350.0, *pvVoltageNormalized(at(350), &flags), 0.0001)
+	require.InDelta(t, 530.0, *pvVoltageNormalized(at(530), &flags), 0.0001) // 上界保留
 	require.Zero(t, flags&QualityOutOfRange) // 归零不是越界，不置质量位
 
-	require.Nil(t, pvVoltageNormalized(at(600), &flags)) // >500V 仍判越界
+	require.Nil(t, pvVoltageNormalized(at(600), &flags)) // >530V 仍判越界
 	require.NotZero(t, flags&QualityOutOfRange)
 	require.Nil(t, pvVoltageNormalized(nil, &flags))
 }

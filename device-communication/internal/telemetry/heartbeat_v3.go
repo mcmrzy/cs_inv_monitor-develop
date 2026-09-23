@@ -128,10 +128,10 @@ const (
 
 // pvVoltageFloor：PV 电压低于该值视为无输入（残压），归 0。
 // 实测无 PV 接入时 Vpv1 上送 ~11V 感应电压，直接展示会被误读为「有 PV 输入」；
-// 而 PV 正常工作电压 200~450V，60V 以下的读数无意义。
+// PV 正常工作电压 60~530V，60V 以下的读数无意义。
 const pvVoltageFloor = 60.0
 
-// pvVoltageNormalized PV 电压归一：<60V 归 0，其余按 0~500V 界限校验。
+// pvVoltageNormalized PV 电压归一：<60V 归 0，其余按 0~530V 界限校验。
 // v2/v3 两条解析路径共用（v3 ESP 只转发原值，v2 为存量固件）。
 func pvVoltageNormalized(p *float64, flags *uint32) *float64 {
 	if p == nil {
@@ -141,7 +141,7 @@ func pvVoltageNormalized(p *float64, flags *uint32) *float64 {
 	if v < pvVoltageFloor {
 		v = 0
 	}
-	return boundedValue(&v, 0, 500, flags)
+	return boundedValue(&v, 0, 530, flags)
 }
 
 // boundedValue 越界 → nil 并置 QualityOutOfRange（与 v2 的 bounded 闭包同语义，
