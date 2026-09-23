@@ -73,6 +73,12 @@ describe('readSeries 派生功率', () => {
     expect(readSeries(s, 'inv_power')).toBe(2300)
   })
 
+  it('PV 正常工作电压 299V 不再被误杀，派生功率照常计算', () => {
+    const s = sample({ pv1_voltage: 299, buck1_current: 8 })
+    expect(readSeries(s, 'pv1_voltage')).toBe(299)
+    expect(readSeries(s, 'pv1_power')).toBe(2392)
+  })
+
   it('分量为 null → 功率为 null（曲线断线，表格显示 —）', () => {
     expect(readSeries(sample({ battery_voltage: 51.2 }), 'battery_power')).toBeNull()
     expect(readSeries(sample({ battery_current: 3 }), 'battery_power')).toBeNull()
@@ -91,6 +97,19 @@ describe('readSeries 派生功率', () => {
 })
 
 describe('越界判据', () => {
+  it('PV 电压 0~500V：正常工作电压与 <60V 残压都有效，>500V 才判脏', () => {
+    // 现场误杀：299V 正常工作电压曾被旧界 0~150 剔除
+    expect(isOutOfRange('pv1_voltage', 299)).toBe(false)
+    expect(isOutOfRange('pv2_voltage', 299)).toBe(false)
+    // <60V 为残压/无输入，与 heartbeat_v3 的 pvVoltageFloor 语义一致：有效
+    expect(isOutOfRange('pv1_voltage', 11)).toBe(false)
+    expect(isOutOfRange('pv2_voltage', 45)).toBe(false)
+    expect(isOutOfRange('pv1_voltage', 500)).toBe(false)
+    expect(isOutOfRange('pv1_voltage', 501)).toBe(true)
+    // 量程文案随界值联动，不再出现 0 ~ 150 V
+    expect(rangeText('pv1_voltage')).toBe('0 ~ 500 V')
+  })
+
   it('超出物理量程判越界，null 与派生量不判', () => {
     expect(isOutOfRange('ac_current', 618.7)).toBe(true)
     expect(isOutOfRange('ac_current', 4.8)).toBe(false)
