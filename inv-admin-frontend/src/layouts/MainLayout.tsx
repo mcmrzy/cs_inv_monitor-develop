@@ -536,6 +536,8 @@ const MainLayout: React.FC = () => {
               return
             }
             message.success(t('msg.phoneChanged'))
+            const currentUser = useAuthStore.getState().user
+            if (currentUser) useAuthStore.getState().setUser({ ...currentUser, phone: values.newPhone })
             setPhoneModalOpen(false)
             phoneForm.resetFields()
             // 刷新用户信息
@@ -624,6 +626,8 @@ const MainLayout: React.FC = () => {
               return
             }
             message.success(t('msg.emailChanged'))
+            const currentUser = useAuthStore.getState().user
+            if (currentUser) useAuthStore.getState().setUser({ ...currentUser, email: values.newEmail })
             setEmailModalOpen(false)
             emailForm.resetFields()
             // 刷新用户信息

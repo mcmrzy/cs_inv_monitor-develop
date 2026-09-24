@@ -91,6 +91,7 @@ const HelpDocsPanel: React.FC = () => {
   const [faqModalOpen, setFaqModalOpen] = useState(false)
   const [editingFaqIndex, setEditingFaqIndex] = useState<number | null>(null)
   const [faqs, setFaqs] = useState<FaqItem[]>([])
+  const [dirty, setDirty] = useState(false)
 
   // 获取配置（后端返回所有配置的map，需提取help_center字段）
   const { data: config, error, refetch } = useQuery({
@@ -104,9 +105,10 @@ const HelpDocsPanel: React.FC = () => {
   // 保存配置（后端期望map格式：{ help_center: {...} }）
   const saveMutation = useMutation({
     mutationFn: (data: HelpCenterConfig) => api.patch('/admin/system-config', { help_center: data }),
-    onSuccess: () => {
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['system-config'] })
+      if (queryClient.getQueryState(['system-config', 'help-center'])?.status === 'success') setDirty(false)
       message.success(t('system.saveSuccess'))
-      queryClient.invalidateQueries({ queryKey: ['system-config'] })
     },
     onError: () => {
       message.error(t('system.saveFailed'))
@@ -115,7 +117,7 @@ const HelpDocsPanel: React.FC = () => {
 
   // 初始化表单
   useEffect(() => {
-    if (config) {
+    if (config && !dirty) {
       form.setFieldsValue({
         phone: config.phone,
         deviceDoc: config.docs?.device || '',
@@ -124,7 +126,7 @@ const HelpDocsPanel: React.FC = () => {
       })
       setFaqs(config.faqs || [])
     }
-  }, [config, form])
+  }, [config, form, dirty])
 
   if (error) {
     return <QueryErrorAlert error={error} onRetry={() => refetch()} />
@@ -162,6 +164,7 @@ const HelpDocsPanel: React.FC = () => {
       } else {
         setFaqs([...faqs, newFaq])
       }
+      setDirty(true)
 
       setFaqModalOpen(false)
       setEditingFaqIndex(null)
@@ -174,10 +177,12 @@ const HelpDocsPanel: React.FC = () => {
   // 删除 FAQ
   const handleDeleteFaq = (index: number) => {
     setFaqs(faqs.filter((_, i) => i !== index))
+    setDirty(true)
   }
 
   // 编辑 FAQ
   const handleEditFaq = (index: number) => {
+    setDirty(true)
     setEditingFaqIndex(index)
     faqForm.setFieldsValue({
       question: faqs[index].q,
@@ -188,6 +193,7 @@ const HelpDocsPanel: React.FC = () => {
 
   // 添加 FAQ
   const handleAddFaq = () => {
+    setDirty(true)
     setEditingFaqIndex(null)
     faqForm.resetFields()
     setFaqModalOpen(true)
@@ -202,7 +208,7 @@ const HelpDocsPanel: React.FC = () => {
       </div>
 
       <Card title={t('system.helpCenterConfig')} bordered={false} style={{ marginBottom: 16 }}>
-        <Form form={form} layout="vertical">
+        <Form form={form} layout="vertical" onValuesChange={() => setDirty(true)}>
           <Form.Item name="phone" label={t('system.phone')} rules={[{ required: true }]}>
             <Input placeholder={t('system.phonePlaceholder')} />
           </Form.Item>
@@ -603,6 +609,7 @@ const DomainsPanel: React.FC = () => {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [form] = Form.useForm()
+  const [dirty, setDirty] = useState(false)
 
   const { data, error, refetch } = useQuery({
     queryKey: ['system-config', 'domains'],
@@ -620,9 +627,10 @@ const DomainsPanel: React.FC = () => {
           frontend_base_url: data.frontend_base_url?.trim() || '',
         },
       }),
-    onSuccess: () => {
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['system-config'] })
+      if (queryClient.getQueryState(['system-config', 'domains'])?.status === 'success') setDirty(false)
       message.success(t('system.domainsSaveSuccess'))
-      queryClient.invalidateQueries({ queryKey: ['system-config'] })
     },
     onError: (err: Error) => {
       message.error(`${t('system.domainsSaveFailed')}: ${err.message}`)
@@ -630,13 +638,13 @@ const DomainsPanel: React.FC = () => {
   })
 
   useEffect(() => {
-    if (data) {
+    if (data && !dirty) {
       form.setFieldsValue({
         download_base_url: data.download_base_url || '',
         frontend_base_url: data.frontend_base_url || '',
       })
     }
-  }, [data, form])
+  }, [data, form, dirty])
 
   if (error) {
     return <QueryErrorAlert error={error} onRetry={() => refetch()} />
@@ -661,7 +669,7 @@ const DomainsPanel: React.FC = () => {
 
       <Card title={t('system.domainsConfig')} bordered={false}>
         <Alert type="info" showIcon message={t('system.domainsHint')} style={{ marginBottom: 16 }} />
-        <Form form={form} layout="vertical">
+        <Form form={form} layout="vertical" onValuesChange={() => setDirty(true)}>
           <Form.Item
             name="download_base_url"
             label={t('system.domainsDownload')}

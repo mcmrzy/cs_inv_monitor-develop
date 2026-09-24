@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Tag, Button, Space, Spin, Tabs, Row, Col, Empty, Progress, Typography, Select, Statistic, Form, message, Upload,
 } from 'antd'
@@ -153,6 +153,7 @@ const StationDetailPage: React.FC = () => {
   const editMapRef = useRef<LocationPickerRef>(null)
   const [editImageUrl, setEditImageUrl] = useState<string | undefined>(undefined)
   const token = useAuthStore((s) => s.token)
+  const queryClient = useQueryClient()
 
   const { data: station, isLoading: stationLoading, refetch: refetchStation } = useQuery({
     queryKey: ['station', id],
@@ -505,6 +506,7 @@ const StationDetailPage: React.FC = () => {
       await api.put(`/stations/${id}`, values)
       message.success(t('station.updateSuccess'))
       refetchStation()
+      queryClient.invalidateQueries({ queryKey: ['stations'] })
       setEditLocation(undefined)
       setEditImageUrl(undefined)
       return true

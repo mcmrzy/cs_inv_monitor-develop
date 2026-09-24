@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { server } from '@/test/mocks/server'
-import { renderAsAdmin } from '@/test/test-utils'
+import { createTestQueryClient, renderAsAdmin } from '@/test/test-utils'
 import SystemConfigPage from './SystemConfig'
 import SystemMonitorPage from './SystemMonitor'
 
@@ -68,6 +68,36 @@ describe('SystemConfigPage', () => {
         },
       })
     })
+  })
+
+  it('keeps unsaved domain edits when the server config refreshes', async () => {
+    let reads = 0
+    let serverUrl = 'https://initial.example.com'
+    server.use(
+      http.get('/api/v1/admin/system-config', () => {
+        reads++
+        return HttpResponse.json({
+          code: 0,
+          message: 'success',
+          data: { domains: { download_base_url: serverUrl, frontend_base_url: '' } },
+        })
+      }),
+    )
+
+    const queryClient = createTestQueryClient()
+    renderAsAdmin(<SystemConfigPage />, { queryClient })
+    fireEvent.click(screen.getByText('域名配置'))
+
+    const input = await screen.findByPlaceholderText(/download\.jiuxiaoyw\.com/)
+    await waitFor(() => expect(input).toHaveValue('https://initial.example.com'))
+    fireEvent.change(input, { target: { value: 'https://draft.example.com' } })
+
+    serverUrl = 'https://updated.example.com'
+    await act(async () => {
+      await queryClient.invalidateQueries({ queryKey: ['system-config', 'domains'] })
+    })
+    await waitFor(() => expect(reads).toBeGreaterThanOrEqual(2))
+    expect(input).toHaveValue('https://draft.example.com')
   })
 
   it('sends system announcement to admin push-announcement API', async () => {

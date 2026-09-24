@@ -19,7 +19,7 @@ import {
   ReloadOutlined,
 } from '@ant-design/icons';
 import { useWebSocket } from '@/hooks/useWebSocket';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import useTranslation from '@/hooks/useTranslation';
 
 const { Title, Text } = Typography;
@@ -59,20 +59,27 @@ export function BulkOperationProgress({
   onError 
 }: BulkOperationProgressProps) {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refreshedJobRef = useRef<string | null>(null);
 
   // React Query for initial job status fetch
-  const { data: initialStatus, isLoading, error: queryError } = useQuery({
+  const { data: initialStatus, isLoading, error: queryError, refetch } = useQuery({
     queryKey: ['jobStatus', jobId],
     queryFn: () => fetchJobStatus(jobId),
-    refetchInterval: jobStatus?.status === 'processing' ? 5000 : false,
-    refetchOnWindowFocus: false,
+    refetchInterval: jobStatus?.status === 'completed' || jobStatus?.status === 'failed' || jobStatus?.status === 'cancelled' ? false : 5000,
   });
 
   // WebSocket connection for real-time updates
-  const { lastMessage, readyState } = useWebSocket(`/ws/jobs/${jobId}/progress?user_id=${getCurrentUserId()}`);
+  const { lastMessage, readyState } = useWebSocket(jobId);
+
+  useEffect(() => {
+    if (!jobStatus || !['completed', 'failed', 'cancelled'].includes(jobStatus.status) || refreshedJobRef.current === jobId) return;
+    refreshedJobRef.current = jobId;
+    void queryClient.invalidateQueries();
+  }, [jobId, jobStatus, queryClient]);
 
   // Handle WebSocket messages
   useEffect(() => {
@@ -111,13 +118,12 @@ export function BulkOperationProgress({
     }
   }, [lastMessage, onComplete, onError]);
 
-  // Set initial status from query
+  // Keep the view current when WebSocket updates are delayed or disconnected.
   useEffect(() => {
-    if (initialStatus && !jobStatus) {
-      setJobStatus(initialStatus);
-      setConnectionStatus('connected');
-    }
-  }, [initialStatus, jobStatus]);
+    if (!initialStatus) return;
+    setJobStatus((current) => !current || initialStatus.updated_at > current.updated_at ? initialStatus : current);
+    setConnectionStatus('connected');
+  }, [initialStatus]);
 
   // Handle connection state changes
   useEffect(() => {
@@ -210,7 +216,7 @@ export function BulkOperationProgress({
               key="retry" 
               type="primary" 
               icon={<ReloadOutlined />}
-              onClick={() => window.location.reload()}
+              onClick={() => { void refetch(); }}
             >
               {t('common.retry')}
             </Button>,
@@ -301,7 +307,7 @@ export function BulkOperationProgress({
             <Space>
               <Button 
                 type="primary" 
-                onClick={() => window.location.reload()}
+                onClick={() => { void queryClient.invalidateQueries(); }}
                 icon={<ReloadOutlined />}
               >
                 {t('common.refreshList')}
@@ -320,21 +326,6 @@ export function BulkOperationProgress({
       )}
     </Card>
   );
-}
-
-// Helper function to get user ID from current context
-function getCurrentUserId(): string {
-  // This should be replaced with actual user ID retrieval logic
-  const userStr = localStorage.getItem('user');
-  if (userStr) {
-    try {
-      const user = JSON.parse(userStr);
-      return user.id?.toString() || '0';
-    } catch {
-      return '0';
-    }
-  }
-  return '0';
 }
 
 // Helper function to get job type display name (moved inside component to use t)
