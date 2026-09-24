@@ -94,6 +94,15 @@ class _FakeLocalCommunication implements LocalCommunicationRepository {
 }
 
 void main() {
+  test('collector DSP and BMS installation get a longer polling window', () {
+    expect(LocalOTAController.pollTimeoutForTarget('esp'),
+        const Duration(seconds: 180));
+    expect(LocalOTAController.pollTimeoutForTarget('dsp'),
+        const Duration(minutes: 20));
+    expect(LocalOTAController.pollTimeoutForTarget('bms'),
+        const Duration(minutes: 20));
+  });
+
   const manifest = LocalOtaManifest(
     target: 'arm',
     taskId: 'local-test-1',
@@ -176,6 +185,34 @@ void main() {
     expect(terminateCount, 1);
   });
 
+  test('BMS is rejected before upload when BLE INFO omits the module', () async {
+    communication.deviceInfo = const {
+      'device_model': 'INV-10K',
+      'supported_upgrade_modules': [
+        'communication_module',
+        'system_controller',
+      ],
+    };
+
+    await controller.execute(
+      filePath: '/tmp/bms.bin',
+      manifest: const LocalOtaManifest(
+        target: 'bms',
+        taskId: 'local-bms-1',
+        version: '1.2.3',
+        sha256: '',
+        signature: '',
+        securityVersion: 0,
+      ),
+      fallbackVersion: '1.2.3',
+      firmwareModel: 'INV-10K',
+    );
+
+    expect(communication.calls, ['info']);
+    expect(controller.state.phase, LocalOTAPhase.failed);
+    expect(controller.state.error, isA<LocalOtaUnsupportedTargetException>());
+  });
+
   test('WiFi missing device model fails closed before upload', () async {
     controller.dispose();
     communication.deviceInfo = const {};
@@ -236,5 +273,56 @@ void main() {
         newVersion: '2.0.0',
       ),
     ).called(1);
+  });
+
+  test('BMS success reports its target version rather than ARM metadata', () async {
+    final repository = _MockOtaRepository();
+    when(
+      () => repository.reportLocalOTAResult(
+        sn: any(named: 'sn'),
+        targetChip: any(named: 'targetChip'),
+        newVersion: any(named: 'newVersion'),
+      ),
+    ).thenAnswer((_) async => const Right(<String, dynamic>{}));
+    controller.dispose();
+    communication
+      ..deviceInfo = const {
+        'device_model': 'INV-10K',
+        'supported_upgrade_modules': ['communication_module', 'bms'],
+      }
+      ..progress = const {
+        'status': 'done',
+        'progress': 100,
+        'arm_version': '9.9.9',
+        'firmware_arm': '9.9.9',
+      };
+    controller = LocalOTAController(
+      communication: communication,
+      repository: repository,
+      channel: LocalCommunicationChannel.ble,
+      deviceSN: 'SN001',
+      deviceIP: '192.168.4.1',
+    );
+
+    await controller.execute(
+      filePath: '/tmp/bms.bin',
+      manifest: const LocalOtaManifest(
+        target: 'bms',
+        taskId: 'local-bms-2',
+        version: '2.3.4',
+        sha256: '',
+        signature: '',
+        securityVersion: 0,
+      ),
+      fallbackVersion: '',
+      firmwareModel: 'INV-10K',
+    );
+
+    expect(controller.state.newVersion, '2.3.4');
+    verify(() => repository.reportLocalOTAResult(
+          sn: 'SN001',
+          targetChip: 'bms',
+          newVersion: '2.3.4',
+        )).called(1);
   });
 }

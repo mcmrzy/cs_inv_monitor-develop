@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -163,7 +163,17 @@ const DevicesPage: React.FC = () => {
   const [deviceBindModalOpen, setDeviceBindModalOpen] = useState(false)
   const [bindDeviceForm] = Form.useForm()
 
-  const [modelOptions, setModelOptions] = useState<{ label: string; value: string; model: any }[]>([])
+  const { data: modelOptions = [] } = useQuery({
+    queryKey: ['models', 'all'],
+    queryFn: () => modelApi.listModels().then((res) => {
+      const models = res.data?.data ?? res.data ?? []
+      return models.map((model: any) => ({
+        label: `${model.model_name} (${model.model_code})`,
+        value: model.model_code as string,
+        model,
+      })) as { label: string; value: string; model: any }[]
+    }),
+  })
 
   // 新增/编辑弹窗中当前选中的型号（用于联动预览该型号的额定参数）
   const watchedAddModel = Form.useWatch('model', addForm)
@@ -206,19 +216,6 @@ const DevicesPage: React.FC = () => {
         }
       }),
   })
-
-  useEffect(() => {
-    modelApi.listModels().then((res) => {
-      const models = res.data?.data ?? res.data ?? []
-      setModelOptions(
-        models.map((m: any) => ({
-          label: `${m.model_name} (${m.model_code})`,
-          value: m.model_code,
-          model: m,
-        })),
-      )
-    }).catch(() => {})
-  }, [])
 
   const { data: unbindRequestsRes, error: unbindRequestsError, refetch: refetchUnbindRequests } = useQuery({
     queryKey: ['unbindRequests', unbindReqPage, unbindReqPageSize],

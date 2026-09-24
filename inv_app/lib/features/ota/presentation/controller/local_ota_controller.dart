@@ -126,6 +126,11 @@ class LocalOTAController extends ChangeNotifier {
   /// 轮询总超时（挂钟时间，含热点重连与请求耗时）
   static const Duration _maxPollDuration = Duration(seconds: 180);
 
+  static Duration pollTimeoutForTarget(String target) =>
+      const {'dsp', 'bms'}.contains(target.trim().toLowerCase())
+          ? const Duration(minutes: 20)
+          : _maxPollDuration;
+
   LocalOTAControllerState _state = const LocalOTAControllerState();
   LocalOTAControllerState get state => _state;
   bool _disposed = false;
@@ -159,10 +164,18 @@ class LocalOTAController extends ChangeNotifier {
           'local OTA device model validation failed: ${compatibility.name}',
         );
       }
+      if (_channel == LocalCommunicationChannel.ble &&
+          !supportsLocalOtaDeviceTarget(
+            target: manifest.target,
+            deviceInfo: deviceInfo,
+          )) {
+        throw LocalOtaUnsupportedTargetException(manifest.target);
+      }
     } catch (e) {
       _emit(_state.copyWith(
         phase: LocalOTAPhase.failed,
-        error: () => e is LocalOtaDeviceModelException
+        error: () => e is LocalOtaDeviceModelException ||
+                e is LocalOtaUnsupportedTargetException
             ? e
             : LocalOtaDeviceModelException(
                 'local OTA device model unavailable: $e',
@@ -226,7 +239,9 @@ class LocalOTAController extends ChangeNotifier {
     // ---- 4. 轮询升级进度 ----
     await _pollProgress(
       isEsp: isEsp,
-      fallbackVersion: fallbackVersion,
+      fallbackVersion: const {'dsp', 'bms'}.contains(manifest.target.toLowerCase())
+          ? manifest.version
+          : fallbackVersion,
       targetChip: manifest.target,
     );
   }
@@ -237,15 +252,16 @@ class LocalOTAController extends ChangeNotifier {
     required String fallbackVersion,
     required String targetChip,
   }) async {
-    final versionKey = isEsp ? 'esp_version' : 'arm_version';
-    final firmwareKey = isEsp ? 'firmware_esp' : 'firmware_arm';
+    final normalizedTarget = targetChip.toLowerCase();
+    final versionKey = '${normalizedTarget}_version';
+    final firmwareKey = 'firmware_$normalizedTarget';
 
     // 挂钟计时：热点重连、请求耗时都计入总超时
     final stopwatch = Stopwatch()..start();
     int offlineCount = 0;
     bool isFirstPoll = true;
 
-    while (stopwatch.elapsed < _maxPollDuration) {
+    while (stopwatch.elapsed < pollTimeoutForTarget(targetChip)) {
       if (_disposed) return;
       if (!isFirstPoll) {
         await Future.delayed(const Duration(seconds: 1));
@@ -322,7 +338,7 @@ class LocalOTAController extends ChangeNotifier {
                       ? (info[firmwareKey] as String)
                       : (info[versionKey] as String? ?? '').isNotEmpty
                           ? (info[versionKey] as String)
-                          : (info['version'] as String? ?? '');
+                  : isEsp ? (info['version'] as String? ?? '') : '';
               newVersion = infoChipVer.isNotEmpty ? infoChipVer : null;
               if (infoChipVer.isNotEmpty) chipNewVersion = infoChipVer;
             } catch (e) {

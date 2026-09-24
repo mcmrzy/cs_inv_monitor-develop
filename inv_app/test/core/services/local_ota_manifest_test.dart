@@ -57,7 +57,7 @@ void main() {
       );
     });
 
-    test('local channel support is fail-closed for unsupported modules', () {
+    test('local channel support follows explicit module capabilities', () {
       const bleOnly = DownloadedFirmwareInfo(
         firmwareId: 8,
         filePath: '/tmp/fw.bin',
@@ -74,7 +74,7 @@ void main() {
         targetChip: 'arm',
         supportedChannels: ['remote'],
       );
-      const unsupportedModule = DownloadedFirmwareInfo(
+      const dspBle = DownloadedFirmwareInfo(
         firmwareId: 10,
         filePath: '/tmp/fw.bin',
         fileName: 'fw.bin',
@@ -86,7 +86,8 @@ void main() {
       expect(bleOnly.supportsLocalChannel('ble'), isTrue);
       expect(bleOnly.supportsLocalChannel('wifi_ap'), isFalse);
       expect(remoteOnly.supportsLocalChannel('ble'), isFalse);
-      expect(unsupportedModule.supportsLocalChannel('ble'), isFalse);
+      expect(dspBle.supportsLocalChannel('ble'), isTrue);
+      expect(dspBle.supportsLocalChannel('wifi_ap'), isFalse);
     });
   });
 
@@ -111,16 +112,30 @@ void main() {
   test('accepts a canonical signed local OTA manifest', () {
     expect(manifest().validate, returnsNormally);
     expect(manifest(target: 'arm').validate, returnsNormally);
+    expect(manifest(target: 'dsp').validate, returnsNormally);
+    expect(manifest(target: 'bms').validate, returnsNormally);
+  });
+
+  test('accepts unsigned manifest with optional metadata omitted', () {
+    // 2026-09-21：签名/安全版本/SHA-256 改为可选（服务端固件记录可能未签名），
+    // 设备端对空签名跳过验签、对 0 安全版本跳过回滚检查。
+    expect(
+      manifest(
+        sha256: '',
+        signature: '',
+        securityVersion: 0,
+      ).validate,
+      returnsNormally,
+    );
   });
 
   test('rejects metadata the device would reject', () {
-    expect(() => manifest(target: 'dsp').validate(), throwsArgumentError);
+    expect(() => manifest(target: 'gpu').validate(), throwsArgumentError);
     expect(() => manifest(sha256: 'A' * 64).validate(), throwsArgumentError);
     expect(
       () => manifest(signature: 'not-base64').validate(),
       throwsArgumentError,
     );
-    expect(() => manifest(securityVersion: 0).validate(), throwsArgumentError);
     expect(
       () => manifest(securityVersion: 0x100000000).validate(),
       throwsArgumentError,

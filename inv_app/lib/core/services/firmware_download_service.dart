@@ -23,7 +23,7 @@ class DownloadedFirmwareInfo {
   /// intentionally not eligible for fail-closed local upgrades.
   final String? deviceModel;
 
-  /// 目标芯片（esp/arm），旧记录可能缺失
+  /// 目标芯片（esp/arm/dsp/bms），旧记录可能缺失
   final String? targetChip;
 
   /// 固件版本号，旧记录可能缺失
@@ -68,11 +68,15 @@ class DownloadedFirmwareInfo {
 
   bool supportsLocalChannel(String channel) {
     final target = targetChip?.trim().toLowerCase() ?? '';
-    if (target != 'esp' && target != 'arm') return false;
+    if (!const {'esp', 'arm', 'dsp', 'bms'}.contains(target)) return false;
+    final requested = channel.trim().toLowerCase();
+    if (const {'dsp', 'bms'}.contains(target) && requested != 'ble') {
+      return false;
+    }
     final channels = supportedChannels;
-    if (channels == null) return true;
+    if (channels == null) return target == 'esp' || target == 'arm';
     return channels.any(
-      (value) => value.trim().toLowerCase() == channel.trim().toLowerCase(),
+      (value) => value.trim().toLowerCase() == requested,
     );
   }
 }

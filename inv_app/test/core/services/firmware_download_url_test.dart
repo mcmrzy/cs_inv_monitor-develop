@@ -2,6 +2,25 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:inv_app/core/services/firmware_download_service.dart';
 
 void main() {
+  test('downloaded DSP and BMS firmware require explicit BLE channel', () {
+    DownloadedFirmwareInfo item(String target, List<String>? channels) =>
+        DownloadedFirmwareInfo(
+          firmwareId: 1,
+          filePath: 'firmware.bin',
+          fileName: 'firmware.bin',
+          fileSize: 1,
+          targetChip: target,
+          supportedChannels: channels,
+        );
+
+    expect(item('dsp', ['remote', 'ble']).supportsLocalChannel('ble'), isTrue);
+    expect(item('bms', ['remote', 'ble']).supportsLocalChannel('ble'), isTrue);
+    expect(item('dsp', ['remote', 'ble']).supportsLocalChannel('wifi_ap'),
+        isFalse);
+    expect(item('bms', null).supportsLocalChannel('ble'), isFalse);
+    expect(item('arm', null).supportsLocalChannel('ble'), isTrue);
+  });
+
   test('resolveFirmwareUrl keeps absolute URLs', () {
     expect(
       FirmwareDownloadService.resolveFirmwareUrl(

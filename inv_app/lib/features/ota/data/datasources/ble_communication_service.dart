@@ -1,12 +1,14 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
+import 'package:inv_app/core/errors/ota_error_types.dart';
 import 'package:inv_app/core/services/ble/ble_adapter.dart';
 import 'package:inv_app/core/services/ble/ble_device_manager.dart';
+import 'package:inv_app/core/services/ble/ble_write_errors.dart';
 import 'package:inv_app/core/services/local_communication_service.dart';
 import 'package:inv_app/features/ota/domain/repositories/local_communication_repository.dart';
 
@@ -53,8 +55,9 @@ class BleCommunicationService implements LocalCommunicationRepository {
   final BleAdapter _adapter;
   final BleDeviceManager _manager;
 
-  /// 固件 OTA JSON 上限 512B；Base64 后 payload 需留信封余量。
-  static const int _dataChunkSize = 128;
+  static const int _binaryHeaderSize = 10;
+  static const int _binaryPayloadMax = 496;
+  static const int _binaryBatchSize = 1024;
 
   static const Duration _scanTimeout = Duration(seconds: 15);
   static const Duration _commandTimeout = Duration(seconds: 10);
@@ -123,23 +126,20 @@ class BleCommunicationService implements LocalCommunicationRepository {
 
   /// 获取可用于 OTA 的会话。
   ///
-  /// 顺序：复用本机已就绪会话（MAC 优先、SN 兜底）→ 已连接但未就绪时重试鉴权
-  /// → 无活跃会话时按已知 MAC 直连 → 最后才按 SN 扫描兜底。
+  /// 顺序：复用本机已就绪会话（MAC 优先、SN 兜底）→ 无活跃会话时按已知
+  /// MAC 直连 → 最后才按 SN 扫描兜底。
   ///
   /// 关键约束：设备连上后停止广播，只要有活跃会话就绝不能改走扫描，
   /// 否则用户会看到"第二次连接扫描不到设备"。
+  /// 2026-09-22 起会话连接即就绪（无绑定/鉴权前置），不再做鉴权重试归因。
   Future<BleDeviceSession?> _acquireSession(
     String deviceSN,
     String? macAddress,
   ) async {
     final live = _findLiveSession(deviceSN, macAddress);
-    if (live != null) {
+    if (live != null && live.state == BleDeviceState.ready) {
       _targetMacAddress = live.macAddress;
-      if (live.state == BleDeviceState.ready) return live;
-      // 已连接但未鉴权：先在本机重试鉴权（连接瞬间的鉴权可能因链路繁忙失败）
-      if (await _manager.ensureAuthenticated(live.macAddress)) return live;
-      _lastConnectFailure = await _unauthenticatedFailureOf(live, deviceSN);
-      return null;
+      return live;
     }
 
     final mac = (macAddress ?? '').trim();
@@ -157,9 +157,8 @@ class BleCommunicationService implements LocalCommunicationRepository {
 
   /// 直连已知 MAC（不扫描）。
   ///
-  /// 直连失败按原因归因：连接层失败（设备不在范围）归"找不到设备"，
-  /// 鉴权被拒（链路已建立但设备拒绝本机密钥）归"未绑定/密钥不匹配"，
-  /// 否则会把密钥问题误报成"扫描不到设备"。
+  /// 直连失败按原因归因：连接层失败（设备不在范围/链路未建立）归
+  /// "找不到设备"。
   Future<BleDeviceSession?> _connectByMac(
     String macAddress,
     String deviceSN,
@@ -173,44 +172,11 @@ class BleCommunicationService implements LocalCommunicationRepository {
     } catch (e) {
       debugPrint('[BleOTA] direct connect $macAddress failed: $e');
       _targetMacAddress = macAddress;
-      _lastConnectFailure = e is BleCommandException
-          ? await _unauthenticatedFailureOf(
-              _manager.sessionOf(macAddress),
-              deviceSN,
-            )
-          : BleConnectFailure.notFound;
+      _lastConnectFailure = BleConnectFailure.notFound;
       return null;
     }
     _targetMacAddress = session.macAddress;
-    if (session.state == BleDeviceState.ready) return session;
-    if (await _manager.ensureAuthenticated(session.macAddress)) return session;
-    _lastConnectFailure = await _unauthenticatedFailureOf(session, deviceSN);
-    return null;
-  }
-
-  /// 已连接但未就绪时区分失败原因。
-  ///
-  /// 先做可达性探针：读不到 INFO 说明链路已断（设备不在附近），
-  /// 此时既不是"未绑定"也不是"密钥不匹配"，不能引导用户去绑定；
-  /// 读得到则按固件能力 / 本机是否持有 device_key 归因。
-  Future<BleConnectFailure> _unauthenticatedFailureOf(
-    BleDeviceSession? session,
-    String deviceSN,
-  ) async {
-    if (session == null) return BleConnectFailure.notFound;
-    try {
-      await session.readInfo();
-    } catch (e) {
-      debugPrint('[BleOTA] reachability probe failed: $e');
-      return BleConnectFailure.notFound;
-    }
-    if (!session.supportsSecureDirectControl) {
-      return BleConnectFailure.unsupportedFirmware;
-    }
-    final sessionSn = (session.sn ?? '').trim();
-    final sn = sessionSn.isEmpty ? deviceSN.trim() : sessionSn;
-    final hasKey = await _manager.hasDeviceKey(sn);
-    return hasKey ? BleConnectFailure.authFailed : BleConnectFailure.notBound;
+    return session;
   }
 
   /// 匹配本机活跃会话：MAC 精确匹配优先，其次 SN 匹配。
@@ -303,53 +269,74 @@ class BleCommunicationService implements LocalCommunicationRepository {
       throw ArgumentError('Firmware file is empty');
     }
     manifest.validate();
+    // 设备端只在收到非空 SHA-256 时校验整个固件。旧版清单可能没有摘要，
+    // 本地 BLE 传输仍应让设备验证最终写入内容。
+    final firmwareSha = manifest.sha256.isEmpty
+        ? sha256.convert(bytes).toString()
+        : manifest.sha256;
 
     debugPrint(
       '[BleOTA] uploadFirmware size=${bytes.length} '
       'target=${manifest.target} task=${manifest.taskId}',
     );
 
-    _otaLease = await session.acquireOtaLease();
-    _statusLog.clear();
-    _statusSub = _otaLease!.statuses.listen(
-      _onOtaStatus,
-      onError: (Object e) => debugPrint('[BleOTA] status error: $e'),
-    );
+    final lease = await _ensureOtaLease();
 
-    final transferId =
-        '${manifest.taskId}-${DateTime.now().microsecondsSinceEpoch}';
     final infoBody = _flattenInfoBody(await session.readInfo());
+    final capabilities = (infoBody['capabilities'] as List?) ?? const [];
+    if (!capabilities.contains('ota_binary_v1')) {
+      throw const BleCommandException(
+        'OTA_BINARY_UNSUPPORTED',
+        '设备尚未支持二进制 BLE OTA，请先用云端、Wi-Fi 或旧版 App 升级 ESP',
+      );
+    }
+    final mtu = session.negotiatedMtu;
+    if (mtu < 256) {
+      throw BleCommandException(
+        'BLE_MTU_TOO_SMALL',
+        '蓝牙 MTU=$mtu，至少需要 256；请改用 Wi-Fi 或更换手机重试',
+      );
+    }
+    final maxPayload =
+        min(_binaryPayloadMax, min(509, mtu - 3) - _binaryHeaderSize);
+    final transferId = _messageId();
+    final transferToken = int.parse(transferId.substring(0, 8), radix: 16);
+    debugPrint('[BleOTA] binary OTA mtu=$mtu payload=$maxPayload');
 
-    await _writeCtrl({
-      'v': 2,
-      'type': 'ota.ctrl',
-      'message_id': _messageId(),
-      'session_id': sessionId,
-      'body': {
-        'transfer_id': transferId,
-        'task_id': manifest.taskId,
-        'manifest_version': 1,
-        'target': _wireTarget(manifest.target),
-        'model': infoBody['model'] ?? '',
-        'version': manifest.version,
-        'size': bytes.length,
-        'sha256': manifest.sha256,
-        'signature': manifest.signature,
-        'security_version': manifest.securityVersion,
-        'timeout_seconds': manifest.timeoutSeconds,
+    final ctrlAccepted = (Map<String, dynamic> s) {
+      final body = _normalizeStatusEnvelope(s);
+      return body['transfer_id'] == transferId &&
+          (_isFailed(s) ||
+              const {'accepted', 'receiving', 'verifying', 'installing'}
+                  .contains(_stageOf(s)));
+    };
+    await _writeOtaMessage(
+      control: true,
+      what: 'ota.ctrl',
+      message: {
+        'v': 2,
+        'type': 'ota.ctrl',
+        'message_id': _messageId(),
+        'session_id': sessionId,
+        'body': {
+          'transfer_id': transferId,
+          'task_id': manifest.taskId,
+          'manifest_version': 1,
+          'target': _wireTarget(manifest.target),
+          'model': infoBody['model'] ?? '',
+          'version': manifest.version,
+          'size': bytes.length,
+          'sha256': firmwareSha,
+          'signature': manifest.signature,
+          'security_version': manifest.securityVersion,
+          'timeout_seconds': max(manifest.timeoutSeconds, 1200),
+        },
       },
-    });
-
-    final accepted = await _waitForStatus(
-      (s) {
-        final body = _normalizeStatusEnvelope(s);
-        return body['transfer_id'] == transferId &&
-            (_isFailed(s) ||
-                const {'accepted', 'receiving', 'verifying', 'installing'}
-                    .contains(_stageOf(s)));
-      },
-      timeout: _commandTimeout,
+      alreadyLanded: () => _statusLog.any(ctrlAccepted),
     );
+
+    final accepted =
+        await _waitForStatus(ctrlAccepted, timeout: _commandTimeout);
     _throwIfFailed(accepted);
 
     var offset = 0;
@@ -357,67 +344,109 @@ class BleCommunicationService implements LocalCommunicationRepository {
       if (!_otaLeaseIsActive) {
         throw const BleCommandException('OTA_NOT_ACTIVE', 'lease released');
       }
-      final end = min(offset + _dataChunkSize, bytes.length);
-      final chunk = bytes.sublist(offset, end);
-
-      await _writeData({
-        'v': 2,
-        'type': 'ota.data',
-        'message_id': _messageId(),
-        'session_id': sessionId,
-        'body': {
-          'transfer_id': transferId,
-          'offset': offset,
-          'payload': base64Encode(chunk),
-          'payload_sha256': sha256.convert(chunk).toString(),
-        },
-      });
-
-      final ack = await _waitForStatus(
-        (s) {
-          final body = _normalizeStatusEnvelope(s);
-          final acceptedOffset = (body['accepted_offset'] as num?)?.toInt();
-          return body['transfer_id'] == transferId &&
-              (_isFailed(s) ||
-                  (acceptedOffset != null && acceptedOffset >= end));
-        },
-        timeout: _commandTimeout,
+      final batchEnd = min(
+        ((offset ~/ _binaryBatchSize) + 1) * _binaryBatchSize,
+        bytes.length,
       );
+      while (offset < batchEnd) {
+        final payloadLength = min(maxPayload, batchEnd - offset);
+        final frame = Uint8List(_binaryHeaderSize + payloadLength);
+        final header = ByteData.view(frame.buffer);
+        frame[0] = 0xb1;
+        frame[1] = 1;
+        header.setUint32(2, transferToken, Endian.little);
+        header.setUint32(6, offset, Endian.little);
+        frame.setRange(_binaryHeaderSize, frame.length,
+            bytes.getRange(offset, offset + payloadLength));
+        await _writeBinaryFrameWithRecovery(
+          lease: lease,
+          frame: frame,
+          transferId: transferId,
+          offset: offset,
+          payloadLength: payloadLength,
+        );
+        offset += payloadLength;
+      }
+
+      final chunkAcked = (Map<String, dynamic> s) {
+        final body = _normalizeStatusEnvelope(s);
+        final acceptedOffset = (body['accepted_offset'] as num?)?.toInt();
+        return body['transfer_id'] == transferId &&
+            (_isFailed(s) ||
+                (acceptedOffset != null && acceptedOffset >= batchEnd));
+      };
+      // 低 MTU 下 JSON 状态通知可能超过 ATT MTU-3，被设备栈丢弃。
+      // 最后一帧的 write-with-response 返回后，直接读取状态，避免每 1 KB
+      // 空等一次通知超时。
+      Map<String, dynamic> ack;
+      if (mtu < 512) {
+        ack = await _readActiveOtaStatus(lease, transferId);
+      } else {
+        try {
+          ack = await _waitForStatus(chunkAcked, timeout: _commandTimeout);
+        } on TimeoutException {
+          ack = await _readActiveOtaStatus(lease, transferId);
+        }
+      }
       _throwIfFailed(ack);
-      offset = end;
+      final acceptedOffset =
+          (_normalizeStatusEnvelope(ack)['accepted_offset'] as num?)?.toInt();
+      if (acceptedOffset == null ||
+          acceptedOffset < 0 ||
+          acceptedOffset > bytes.length) {
+        throw const BleCommandException(
+          'OTA_STATUS_INVALID',
+          '设备返回无效的已接收偏移量',
+        );
+      }
+      if (acceptedOffset < batchEnd) {
+        offset = acceptedOffset;
+        continue;
+      }
+      offset = acceptedOffset;
       onProgress?.call(offset, bytes.length);
     }
 
     // 写入成功不等于设备已持久接收；等待校验/烧写进入下一阶段。
-    final after = await _waitForStatus(
-      (s) {
-        final body = _normalizeStatusEnvelope(s);
-        return body['transfer_id'] == transferId &&
-            (_isFailed(s) ||
-                const {'verifying', 'installing', 'rebooting', 'succeeded'}
-                    .contains(_stageOf(s)));
-      },
-      timeout: _commandTimeout,
-    );
+    final afterPredicate = (Map<String, dynamic> s) {
+      final body = _normalizeStatusEnvelope(s);
+      return body['transfer_id'] == transferId &&
+          (_isFailed(s) ||
+              const {'verifying', 'installing', 'rebooting', 'succeeded'}
+                  .contains(_stageOf(s)));
+    };
+    late Map<String, dynamic> after;
+    if (mtu < 512) {
+      // 状态通知在低 MTU 下可能完全发不出；读状态直到 worker 离开 receiving。
+      final deadline = Stopwatch()..start();
+      while (true) {
+        final status = await _readActiveOtaStatus(lease, transferId);
+        if (afterPredicate(status)) {
+          after = status;
+          break;
+        }
+        if (deadline.elapsed >= _commandTimeout) {
+          throw TimeoutException('BLE OTA verification status timed out');
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 250));
+      }
+    } else {
+      after = await _waitForStatus(afterPredicate, timeout: _commandTimeout);
+    }
     _throwIfFailed(after);
     debugPrint('[BleOTA] firmware bytes accepted: $offset/${bytes.length}');
   }
 
   @override
   Future<void> triggerUpgrade(String deviceIP) async {
-    _assertConnected();
-    // 固件在 ota.ctrl 后由 worker 自动安装；此处仅确认任务仍在推进。
-    final status = await _queryStatus();
-    final stage = _stageOf(status);
-    if (stage == 'failed' || stage == 'rolled_back' || stage == 'cancelled') {
-      _throwIfFailed(status);
-    }
-    debugPrint('[BleOTA] triggerUpgrade sees stage=$stage');
+    // BLE 固件收到完整 ota.ctrl/data 后会自动校验、刷写并重启，不存在额外的
+    // “触发升级”命令。uploadFirmware 已确认设备至少进入 verifying/installing；
+    // 此时再查询会与 ESP 重启断链竞争，并把正常重启误报为 OTA_NOT_ACTIVE。
+    debugPrint('[BleOTA] triggerUpgrade: already started by ota.ctrl/data');
   }
 
   @override
   Future<Map<String, dynamic>> getProgress(String deviceIP) async {
-    _assertConnected();
     final status = await _queryStatus();
     return _mapProgress(status);
   }
@@ -503,12 +532,120 @@ class BleCommunicationService implements LocalCommunicationRepository {
     await lease.writeData(value);
   }
 
+  /// 写一条 OTA 报文，对本地蓝牙协议栈的瞬时拒绝做有限次重试。
+  ///
+  /// 长写（prepare/execute）在 Android 上是多步序列，回调偶发带回
+  /// GATT_BUSY(132)/GATT_ERROR(133)/GATT_CMD_STARTED(134)；但回调报错不代表
+  /// 设备没收到。固件 handle_data 要求 offset 严格等于已收长度，盲目重发会被
+  /// 设备当成坏帧拒掉，所以每次重试前先查状态流：上一发其实已经落地
+  /// （accepted 阶段 / accepted_offset 达标）就直接当成功。
+  Future<void> _writeOtaMessage({
+    required bool control,
+    required String what,
+    required Map<String, dynamic> message,
+    required bool Function() alreadyLanded,
+  }) async {
+    const maxAttempts = 4;
+    Object? lastError;
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      if (attempt > 1 && alreadyLanded()) return;
+      try {
+        if (control) {
+          await _writeCtrl(message);
+        } else {
+          await _writeData(message);
+        }
+        return;
+      } catch (e) {
+        final attCode = deviceAttErrorCodeOf(e);
+        if (attCode != null) {
+          // 设备侧主动拒绝：重试无意义，直接给出可操作的原因。
+          throw BleCommandException(
+            'DEVICE_REFUSED',
+            '$what 被设备拒绝：${deviceAttRefusalReason(attCode)}；'
+                '请重启设备后重试。原始错误：$e',
+          );
+        }
+        if (!isTransientBleWriteError(e)) rethrow;
+        lastError = e;
+        if (alreadyLanded()) return;
+        if (attempt == maxAttempts) break;
+        await Future<void>.delayed(Duration(milliseconds: 150 * attempt));
+      }
+    }
+    throw BleCommandException(
+      'BLE_WRITE_BUSY',
+      '$what 连续 $maxAttempts 次被本地蓝牙协议栈拒绝'
+          '（GATT_BUSY/GATT_ERROR/GATT_CMD_STARTED），最后一次：$lastError',
+    );
+  }
+
+  Future<Map<String, dynamic>> _readActiveOtaStatus(
+    BleOtaLease lease,
+    String transferId,
+  ) async {
+    final status = await lease.readStatus(timeout: 5);
+    final body = _normalizeStatusEnvelope(status);
+    if (body['transfer_id'] != transferId) {
+      throw const BleCommandException(
+        'OTA_STATUS_MISMATCH',
+        '设备返回的升级会话与当前传输不一致',
+      );
+    }
+    return status;
+  }
+
+  Future<void> _writeBinaryFrameWithRecovery({
+    required BleOtaLease lease,
+    required List<int> frame,
+    required String transferId,
+    required int offset,
+    required int payloadLength,
+  }) async {
+    final elapsed = Stopwatch()..start();
+    while (true) {
+      try {
+        await lease.writeDataBytes(frame);
+        return;
+      } catch (error) {
+        final attCode = deviceAttErrorCodeOf(error);
+        if (attCode != null && attCode != 9) {
+          throw BleCommandException(
+            'DEVICE_REFUSED',
+            'ota.data@$offset 被设备拒绝：${deviceAttRefusalReason(attCode)}；'
+                '原始错误：$error',
+          );
+        }
+        if (attCode != 9 && !isTransientBleWriteError(error)) rethrow;
+        if (elapsed.elapsed >= const Duration(seconds: 20)) {
+          throw BleCommandException(
+            'BLE_WRITE_BUSY',
+            'ota.data@$offset 在 20 秒内未获确认：$error',
+          );
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 150));
+        final status = await _readActiveOtaStatus(lease, transferId);
+        _throwIfFailed(status);
+        final accepted =
+            (_normalizeStatusEnvelope(status)['accepted_offset'] as num?)
+                ?.toInt();
+        if (accepted == offset + payloadLength) return;
+        if (accepted != offset) {
+          throw BleCommandException(
+            'OTA_OFFSET_MISMATCH',
+            '设备已接收偏移量 $accepted，当前帧为 $offset+$payloadLength',
+          );
+        }
+      }
+    }
+  }
+
   Future<Map<String, dynamic>> _queryStatus() async {
     final session = _session;
-    final lease = _otaLease;
-    if (session == null || lease == null) {
-      throw const BleCommandException('OTA_NOT_ACTIVE', 'lease missing');
+    if (session == null) {
+      throw const BleCommandException('UNAUTHENTICATED', 'session missing');
     }
+    final lease = await _ensureOtaLease();
     final sessionId = session.connectionSessionId;
     if (sessionId == null) {
       throw const BleCommandException('UNAUTHENTICATED', 'missing session');
@@ -588,6 +725,9 @@ class BleCommunicationService implements LocalCommunicationRepository {
     final failedCode = code.isNotEmpty && code != 'OK';
     if (!failedStage && !failedCode) return;
     final message = _messageOf(status);
+    if (code == 'INSUFFICIENT_STORAGE') {
+      throw OtaInsufficientStorageException(message);
+    }
     throw BleCommandException(
       failedCode ? code : 'OTA_FAILED',
       message.isEmpty ? 'BLE OTA failed at $stage' : message,
@@ -604,6 +744,10 @@ class BleCommunicationService implements LocalCommunicationRepository {
         return 'communication_module';
       case 'arm':
         return 'system_controller';
+      case 'dsp':
+        return 'dsp_controller';
+      case 'bms':
+        return 'bms';
       default:
         return localTarget;
     }
@@ -687,8 +831,6 @@ class BleCommunicationService implements LocalCommunicationRepository {
       'firmware': firmware,
       if (firmware.isNotEmpty) 'firmware_esp': firmware,
       if (firmware.isNotEmpty) 'esp_version': firmware,
-      if (firmware.isNotEmpty) 'firmware_arm': firmware,
-      if (firmware.isNotEmpty) 'arm_version': firmware,
     };
   }
 
@@ -701,20 +843,61 @@ class BleCommunicationService implements LocalCommunicationRepository {
     }
   }
 
-  Future<void> _cleanupLease() async {
-    await _statusSub?.cancel();
+  /// 获取当前有效 OTA 租约；设备重启并重连后，旧租约已失效，此处为进度查询
+  /// 重新订阅状态特征。上传期间会复用现有租约，不会抢占同一会话。
+  Future<BleOtaLease> _ensureOtaLease() async {
+    var session = _session;
+    if (session == null) {
+      throw const BleCommandException('UNAUTHENTICATED', 'session missing');
+    }
+    if (session.state == BleDeviceState.disconnected) {
+      session = await _manager.connectDevice(
+        session.macAddress,
+        autoReconnect: false,
+      );
+      _session = session;
+      _connectedMacAddress = session.macAddress;
+    }
+    if (session.state != BleDeviceState.ready) {
+      throw const BleCommandException('UNAUTHENTICATED', 'session not ready');
+    }
+    final current = _otaLease;
+    if (current != null && current.isActive) return current;
+
+    final staleSub = _statusSub;
+    final staleLease = _otaLease;
     _statusSub = null;
-    for (final waiter in List<_OtaStatusWaiter>.from(_statusWaiters)) {
+    _otaLease = null;
+    await staleSub?.cancel();
+    staleLease?.release();
+
+    final lease = await session.acquireOtaLease();
+    _otaLease = lease;
+    _statusLog.clear();
+    _statusSub = lease.statuses.listen(
+      _onOtaStatus,
+      onError: (Object e) => debugPrint('[BleOTA] status error: $e'),
+    );
+    return lease;
+  }
+
+  Future<void> _cleanupLease() async {
+    final subscription = _statusSub;
+    final lease = _otaLease;
+    final waiters = List<_OtaStatusWaiter>.from(_statusWaiters);
+    _statusSub = null;
+    _otaLease = null;
+    _statusWaiters.clear();
+    _statusLog.clear();
+    await subscription?.cancel();
+    for (final waiter in waiters) {
       if (!waiter.completer.isCompleted) {
         waiter.completer.completeError(
           const BleCommandException('OTA_NOT_ACTIVE', 'OTA lease released'),
         );
       }
     }
-    _statusWaiters.clear();
-    _otaLease?.release();
-    _otaLease = null;
-    _statusLog.clear();
+    lease?.release();
   }
 }
 

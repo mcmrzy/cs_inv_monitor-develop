@@ -151,9 +151,12 @@ class FirmwareResource {
 
   bool get canLocalUpgrade {
     final target = targetChip.trim().toLowerCase();
-    if (target != 'esp' && target != 'arm') return false;
+    if (!const {'esp', 'arm', 'dsp', 'bms'}.contains(target)) return false;
     final channels = supportedChannels;
-    if (channels == null) return true;
+    if (channels == null) return target == 'esp' || target == 'arm';
+    if (target == 'dsp' || target == 'bms') {
+      return channels.any((channel) => channel.trim().toLowerCase() == 'ble');
+    }
     return channels.any((channel) => const {'local', 'ble', 'wifi', 'wifi_ap'}
         .contains(channel.trim().toLowerCase()));
   }

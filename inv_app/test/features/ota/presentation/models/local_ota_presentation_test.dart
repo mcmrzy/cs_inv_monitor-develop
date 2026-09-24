@@ -2,6 +2,56 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:inv_app/features/ota/presentation/models/local_ota_presentation.dart';
 
 void main() {
+  test('DSP and BMS require explicit BLE resource and device support', () {
+    expect(
+      supportsLocalOtaResourceChannel(
+        target: 'bms',
+        channel: 'ble',
+        supportedChannels: ['remote', 'ble'],
+      ),
+      isTrue,
+    );
+    expect(
+      supportsLocalOtaResourceChannel(
+        target: 'dsp',
+        channel: 'wifi_ap',
+        supportedChannels: ['remote', 'ble'],
+      ),
+      isFalse,
+    );
+    expect(
+      supportsLocalOtaResourceChannel(
+        target: 'bms',
+        channel: 'ble',
+        supportedChannels: null,
+      ),
+      isFalse,
+    );
+    expect(
+      supportsLocalOtaDeviceTarget(
+        target: 'bms',
+        deviceInfo: const {
+          'supported_upgrade_modules': ['communication_module', 'bms'],
+        },
+      ),
+      isTrue,
+    );
+    expect(
+      supportsLocalOtaDeviceTarget(target: 'bms', deviceInfo: const {}),
+      isFalse,
+    );
+    expect(
+      supportsLocalOtaDeviceTarget(target: 'dsp', deviceInfo: const {
+        'supported_upgrade_modules': ['communication_module', 'system_controller'],
+      }),
+      isFalse,
+    );
+    expect(
+      supportsLocalOtaDeviceTarget(target: 'arm', deviceInfo: const {}),
+      isTrue,
+    );
+  });
+
   group('local OTA device model compatibility', () {
     test('accepts the same normalized firmware and connected-device model', () {
       expect(

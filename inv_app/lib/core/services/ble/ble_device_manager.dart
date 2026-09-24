@@ -29,8 +29,7 @@ class BleCtProtocol {
       '43534956-534e-1000-8000-00805f9b34fb';
   static const String otaControlCharUuid =
       '43534f54-4354-1000-8000-00805f9b34fb';
-  static const String otaDataCharUuid =
-      '43534f54-4441-1000-8000-00805f9b34fb';
+  static const String otaDataCharUuid = '43534f54-4441-1000-8000-00805f9b34fb';
   static const String otaStatusCharUuid =
       '43534f54-5354-1000-8000-00805f9b34fb';
 
@@ -232,7 +231,7 @@ class BleDeviceSession {
   int protocolVersion = 0;
   Set<String> capabilities = const {};
   String? connectionSessionId;
-  bool _otaInProgress = false;
+  Object? _activeOtaLeaseToken;
 
   /// 断线自动重连
   bool _autoReconnect = false;
@@ -254,7 +253,9 @@ class BleDeviceSession {
       connectionSessionId != null &&
       capabilities.contains('control');
 
-  bool get isOtaInProgress => _otaInProgress;
+  bool get isOtaInProgress => _activeOtaLeaseToken != null;
+
+  int get negotiatedMtu => _connection?.mtuNow ?? 23;
 
   BleDeviceState get state => _state;
 
@@ -311,7 +312,11 @@ class BleDeviceSession {
     });
   }
 
-  /// 连接成功后：读 SN → 订阅通知 → 若已有 device_key 则直接鉴权
+  /// 连接成功后：读 SN → 订阅通知 → 连接即就绪。
+  ///
+  /// 2026-09-22 起取消绑定/鉴权前置：配网与本地 OTA 不再要求绑定和 PIN。
+  /// 本机留存的 device_key 仍尽力向设备自证身份（兼容仍在验鉴权的旧固件，
+  /// 已绑定设备升级链路不受影响），失败不再阻塞会话进入就绪。
   Future<void> _afterConnected() async {
     sn ??= await _readSn();
     await _loadProtocolInfo();
@@ -319,20 +324,26 @@ class BleDeviceSession {
     _cmdResultSub = _connection!
         .subscribe(BleCtProtocol.serviceUuid, BleCtProtocol.cmdResultCharUuid)
         .listen(_onCmdResult, onError: (_) {});
-    _authSub = _connection!
-        .subscribe(BleCtProtocol.serviceUuid, BleCtProtocol.authCharUuid)
-        .listen(_onAuthNotify, onError: (_) {});
+    // Current firmware omits AUTH; older firmware may still expose it.
+    try {
+      _authSub = _connection!
+          .subscribe(BleCtProtocol.serviceUuid, BleCtProtocol.authCharUuid)
+          .listen(_onAuthNotify, onError: (_) {});
+    } catch (_) {
+      _authSub = null;
+    }
     _telemetrySub = _connection!
         .subscribe(BleCtProtocol.serviceUuid, BleCtProtocol.telemetryCharUuid)
         .listen(_onTelemetry, onError: (_) {});
 
     final deviceKey = await _keyStore.read(sn!);
-    if (deviceKey != null) {
-      await authenticate(deviceKey);
-      _reconnectAttempt = 0;
-    } else {
-      // 未绑定设备：保持连接等待上层走绑定流程（配网页/绑定页）
-      _setState(BleDeviceState.authenticating);
+    if (deviceKey != null && _authSub != null) {
+      try {
+        await authenticate(deviceKey);
+      } catch (_) {}
+    }
+    if (_state != BleDeviceState.disconnected) {
+      _setState(BleDeviceState.ready);
     }
   }
 
@@ -393,7 +404,7 @@ class BleDeviceSession {
 
   /// 读取最新遥测快照（协议修订①：TELEMETRY 支持 Read，App 轮询用）
   Future<Map<String, dynamic>> readTelemetrySnapshot() async {
-    if (_otaInProgress) {
+    if (_activeOtaLeaseToken != null) {
       throw const BleCommandException('OTA_IN_PROGRESS', 'OTA owns BLE link');
     }
     final connection = _connection;
@@ -611,7 +622,7 @@ class BleDeviceSession {
     String action, [
     Map<String, dynamic> params = const {},
   ]) {
-    if (_otaInProgress) {
+    if (_activeOtaLeaseToken != null) {
       return Future.error(
         const BleCommandException('OTA_IN_PROGRESS', 'OTA owns BLE link'),
       );
@@ -752,46 +763,73 @@ class BleDeviceSession {
     if (_connection == null || _state != BleDeviceState.ready) {
       throw const BleCommandException('UNAUTHENTICATED', 'session not ready');
     }
-    if (_otaInProgress) {
+    if (_activeOtaLeaseToken != null) {
       throw const BleCommandException('OTA_IN_PROGRESS', 'OTA already active');
     }
-    _otaInProgress = true;
+    final token = Object();
+    _activeOtaLeaseToken = token;
     final status = _connection!
         .subscribe(
           BleCtProtocol.provisioningServiceUuid,
           BleCtProtocol.otaStatusCharUuid,
         )
-        .map((bytes) =>
-            jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>);
-    return BleOtaLease._(this, status);
+        .map((bytes) => jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>);
+    return BleOtaLease._(this, status, token);
   }
 
   Future<void> _writeOta(
     String characteristicUuid,
     Map<String, dynamic> value,
+    Object leaseToken,
   ) async {
-    if (!_otaInProgress || _connection == null) {
+    if (!identical(_activeOtaLeaseToken, leaseToken) || _connection == null) {
       throw const BleCommandException('OTA_NOT_ACTIVE', 'OTA lease missing');
     }
+    // OTA 报文必然超过单次 ATT 写上限（MTU-3；设备 NimBLE 协商 256 → 253）：
+    // 128 字节分片 base64 后 172 字符，加信封共约 455 字节，正好落在固件
+    // BLE_OTA_JSON_MAX(512) 以内。所以这里必须走长写（prepare/execute），
+    // 否则平台直接拒收：data longer than allowed. dataLen: 455 > max: 253。
     await _connection!.write(
       BleCtProtocol.provisioningServiceUuid,
       characteristicUuid,
       utf8.encode(jsonEncode(value)),
+      allowLongWrite: true,
     );
   }
 
-  Future<Map<String, dynamic>> _readOtaStatus() async {
-    if (!_otaInProgress || _connection == null) {
+  Future<void> _writeOtaBinary(List<int> bytes, Object leaseToken) async {
+    if (!identical(_activeOtaLeaseToken, leaseToken) || _connection == null) {
+      throw const BleCommandException('OTA_NOT_ACTIVE', 'OTA lease missing');
+    }
+    await _connection!.write(
+      BleCtProtocol.provisioningServiceUuid,
+      BleCtProtocol.otaDataCharUuid,
+      bytes,
+      allowLongWrite: false,
+      timeout: 5,
+    );
+  }
+
+  Future<Map<String, dynamic>> _readOtaStatus(
+    Object leaseToken, {
+    int timeout = 15,
+  }) async {
+    if (!identical(_activeOtaLeaseToken, leaseToken) || _connection == null) {
       throw const BleCommandException('OTA_NOT_ACTIVE', 'OTA lease missing');
     }
     final bytes = await _connection!.read(
       BleCtProtocol.provisioningServiceUuid,
       BleCtProtocol.otaStatusCharUuid,
+      timeout: timeout,
     );
     return jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
   }
 
-  void _releaseOtaLease() => _otaInProgress = false;
+  void _releaseOtaLease(Object leaseToken) {
+    if (identical(_activeOtaLeaseToken, leaseToken)) {
+      _activeOtaLeaseToken = null;
+    }
+  }
 
   // ---------------------------------------------------------------------------
   // 断线与重连（指数退避 1s/2s/5s/10s 封顶）
@@ -818,7 +856,7 @@ class BleDeviceSession {
     connectionSessionId = null;
     protocolVersion = 0;
     capabilities = const {};
-    _otaInProgress = false;
+    _activeOtaLeaseToken = null;
     _setState(BleDeviceState.disconnected);
     _connection = null;
 
@@ -846,6 +884,7 @@ class BleDeviceSession {
   }
 
   Future<void> _teardown() async {
+    _activeOtaLeaseToken = null;
     await _telemetrySub?.cancel();
     await _cmdResultSub?.cancel();
     await _authSub?.cancel();
@@ -870,24 +909,32 @@ class BleDeviceSession {
 }
 
 class BleOtaLease {
-  BleOtaLease._(this._session, this.statuses);
+  BleOtaLease._(this._session, this.statuses, this._token);
 
   final BleDeviceSession _session;
   final Stream<Map<String, dynamic>> statuses;
+  final Object _token;
   bool _released = false;
 
+  bool get isActive =>
+      !_released && identical(_session._activeOtaLeaseToken, _token);
+
   Future<void> writeControl(Map<String, dynamic> value) =>
-      _session._writeOta(BleCtProtocol.otaControlCharUuid, value);
+      _session._writeOta(BleCtProtocol.otaControlCharUuid, value, _token);
 
   Future<void> writeData(Map<String, dynamic> value) =>
-      _session._writeOta(BleCtProtocol.otaDataCharUuid, value);
+      _session._writeOta(BleCtProtocol.otaDataCharUuid, value, _token);
 
-  Future<Map<String, dynamic>> readStatus() => _session._readOtaStatus();
+  Future<void> writeDataBytes(List<int> bytes) =>
+      _session._writeOtaBinary(bytes, _token);
+
+  Future<Map<String, dynamic>> readStatus({int timeout = 15}) =>
+      _session._readOtaStatus(_token, timeout: timeout);
 
   void release() {
     if (_released) return;
     _released = true;
-    _session._releaseOtaLease();
+    _session._releaseOtaLease(_token);
   }
 }
 

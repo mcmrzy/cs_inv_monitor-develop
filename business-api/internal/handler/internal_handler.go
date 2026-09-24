@@ -445,7 +445,7 @@ func (h *InternalHandler) DeviceStatus(c *gin.Context) {
 				zap.String("notify_type", notifyType),
 				zap.String("push_title", pushTitle),
 				zap.String("push_content", pushContent))
-			h.sendPushNotification(ctx, notifyType, req.SN, pushTitle, pushContent, 0)
+			h.sendPushNotification(ctx, notifyType, req.SN, pushTitle, pushContent, 0, nil)
 		}
 	}
 
@@ -2052,6 +2052,39 @@ func (h *InternalHandler) getNotificationUsers(ctx context.Context, deviceSN str
 	return userIDs, nil
 }
 
+// notifyAlarmV1 在 V1 告警事件入库成功后补齐通知链路：notifications 表入库、
+// SSE 实时广播与 JPush/邮件推送（按用户偏好过滤，extras 携带 alarm_id 供 App 深链到告警详情）。
+// 告警抖动由事件表幂等屏障 + JPush 侧 Redis 去重兜底；设备未归属用户时与旧链路一致直接跳过。
+func (h *InternalHandler) notifyAlarmV1(ctx context.Context, sn string, data alarmV1Data, alarmID int64) {
+	if h.db == nil {
+		return
+	}
+	notifyType, title, content, alarmLevel := alarmV1PushCopy(sn, data)
+	var userID, stationID int64
+	if err := h.db.QueryRow(ctx,
+		`SELECT COALESCE(user_id,0), COALESCE(station_id,0) FROM devices WHERE sn=$1 AND deleted_at IS NULL`, sn,
+	).Scan(&userID, &stationID); err != nil {
+		logger.Warn("notifyAlarmV1: device lookup failed", zap.String("sn", sn), zap.Error(err))
+		return
+	}
+	if userID == 0 {
+		return
+	}
+	if _, err := h.db.Exec(ctx, `
+		INSERT INTO notifications (device_sn, station_id, user_id, notify_type, title, content, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, NOW())
+	`, sn, stationID, userID, notifyType, title, content); err != nil {
+		logger.Warn("notifyAlarmV1: insert notification failed", zap.String("sn", sn), zap.Error(err))
+	}
+	h.broadcastNotification(userID, notifyType, title, content, sn)
+
+	var extras map[string]string
+	if alarmID > 0 {
+		extras = map[string]string{"alarm_id": strconv.FormatInt(alarmID, 10)}
+	}
+	h.sendPushNotification(ctx, notifyType, sn, title, content, alarmLevel, extras)
+}
+
 // filterPushUsers 按用户通知偏好过滤推送接收者（委托共享过滤函数，见 push_filter.go）。
 func (h *InternalHandler) filterPushUsers(ctx context.Context, userIDs []int64, notifyType string, alarmLevel int) ([]int64, []pushEmailTarget) {
 	return filterPushUsersByPrefs(ctx, h.db, h.notifyPrefs, userIDs, notifyType, alarmLevel)
@@ -2059,7 +2092,8 @@ func (h *InternalHandler) filterPushUsers(ctx context.Context, userIDs []int64, 
 
 // sendPushNotification 按用户通知偏好过滤后发送 JPush 与邮件通知。
 // notifications 表入库与 SSE 推送不受偏好影响（通知中心历史照常记录）。
-func (h *InternalHandler) sendPushNotification(ctx context.Context, notifyType, deviceSN, title, content string, alarmLevel int) {
+// extras 会合并进 JPush 通知的 extras（在 notify_type/device_sn 之外，如 alarm_id）。
+func (h *InternalHandler) sendPushNotification(ctx context.Context, notifyType, deviceSN, title, content string, alarmLevel int, extras map[string]string) {
 	if h.jpushService == nil && h.emailService == nil {
 		return
 	}
@@ -2069,7 +2103,7 @@ func (h *InternalHandler) sendPushNotification(ctx context.Context, notifyType, 
 	}
 	jpushIDs, emailTargets := h.filterPushUsers(ctx, userIDs, notifyType, alarmLevel)
 	if h.jpushService != nil && len(jpushIDs) > 0 {
-		h.jpushService.SendNotificationAsync(ctx, jpushIDs, notifyType, deviceSN, title, content)
+		h.jpushService.SendNotificationWithExtrasAsync(ctx, jpushIDs, notifyType, deviceSN, title, content, extras)
 	}
 	if h.emailService == nil || len(emailTargets) == 0 {
 		return

@@ -333,6 +333,8 @@ const StationsPage: React.FC = () => {
       setAddDeviceModalOpen(false)
       setAddDeviceSn('')
       queryClient.invalidateQueries({ queryKey: ['station-devices', currentStation?.id] })
+      queryClient.invalidateQueries({ queryKey: ['stations'] })
+      queryClient.invalidateQueries({ queryKey: ['station-devices-overview', currentStation?.id] })
     },
     onError: (err: any) => {
       messageApi.error(err?.response?.data?.message || err?.message || t('common.error'))
@@ -344,6 +346,8 @@ const StationsPage: React.FC = () => {
     onSuccess: () => {
       messageApi.success(t('station.removeDeviceSuccess'))
       queryClient.invalidateQueries({ queryKey: ['station-devices', currentStation?.id] })
+      queryClient.invalidateQueries({ queryKey: ['stations'] })
+      queryClient.invalidateQueries({ queryKey: ['station-devices-overview', currentStation?.id] })
     },
     onError: (err: any) => {
       messageApi.error(err?.response?.data?.message || err?.message || t('common.error'))
@@ -360,6 +364,7 @@ const StationsPage: React.FC = () => {
       setAssignVisible(false)
       setAssignStation(null)
       queryClient.invalidateQueries({ queryKey: ['stations'] })
+      queryClient.invalidateQueries({ queryKey: ['station', assignStation.id] })
     } catch {
       messageApi.error(t('station.assignFailed'))
     }
@@ -377,6 +382,7 @@ const StationsPage: React.FC = () => {
       await api.put(`/stations/${currentStation!.id}`, values)
       messageApi.success(t('station.updateSuccess'))
       queryClient.invalidateQueries({ queryKey: ['stations'] })
+      queryClient.invalidateQueries({ queryKey: ['station', currentStation!.id] })
       setCurrentStation({ ...currentStation!, ...values })
       setEditLocation(undefined)
       setEditImageUrl(undefined)

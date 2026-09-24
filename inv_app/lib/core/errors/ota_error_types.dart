@@ -29,6 +29,22 @@ class LocalOtaDeviceModelException implements Exception {
   String toString() => message;
 }
 
+/// The connected BLE device does not advertise this module for local OTA.
+class LocalOtaUnsupportedTargetException implements Exception {
+  final String target;
+  LocalOtaUnsupportedTargetException(this.target);
+  @override
+  String toString() => 'Unsupported local OTA target: $target';
+}
+
+/// The device cannot stage this image in its current cache partition.
+class OtaInsufficientStorageException implements Exception {
+  final String diagnostic;
+  OtaInsufficientStorageException(this.diagnostic);
+  @override
+  String toString() => diagnostic;
+}
+
 /// 设备拒绝固件上传（HTTP 非 2xx / 设备端返回错误）
 class OtaUploadRejectedException implements Exception {
   final String message;
@@ -76,6 +92,12 @@ class OtaErrorMapper {
     if (error is OtaVerificationException) return 'ota_err_verify';
     if (error is LocalFirmwareException) return 'ota_err_firmware';
     if (error is LocalOtaDeviceModelException) return 'ota_err_device_model';
+    if (error is LocalOtaUnsupportedTargetException) {
+      return 'ota_err_unsupported_target';
+    }
+    if (error is OtaInsufficientStorageException) {
+      return 'ota_err_insufficient_storage';
+    }
     if (error is OtaProtocolException) return 'ota_err_protocol';
     return 'ota_err_unknown';
   }

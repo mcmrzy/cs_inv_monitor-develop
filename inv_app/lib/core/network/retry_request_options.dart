@@ -11,6 +11,20 @@ bool isTokenRefreshRetry(RequestOptions options) {
   return options.extra[tokenRefreshRetryKey] == true;
 }
 
+/// Handles a 401 returned by the one-shot request made after token refresh.
+///
+/// A second refresh would loop indefinitely. At this point the refreshed
+/// session is unusable, so the caller must terminate it and return the 401 to
+/// the original request.
+bool handleRetriedUnauthorized(
+  RequestOptions options, {
+  required void Function() onLogoutRequested,
+}) {
+  if (!isTokenRefreshRetry(options)) return false;
+  onLogoutRequested();
+  return true;
+}
+
 /// Creates a retry request without mutating the failed request.
 ///
 /// Dio's [RequestOptions.copyWith] keeps transport behavior such as response

@@ -27,8 +27,8 @@ class LocalOtaManifest {
   });
 
   void validate() {
-    if (target != 'esp' && target != 'arm') {
-      throw ArgumentError.value(target, 'target', 'must be esp or arm');
+    if (!const {'esp', 'arm', 'dsp', 'bms'}.contains(target)) {
+      throw ArgumentError.value(target, 'target', 'must be esp, arm, dsp or bms');
     }
     final asciiToken = RegExp(r'^[\x21-\x7e]+$');
     if (taskId.length > 63 ||
@@ -37,23 +37,28 @@ class LocalOtaManifest {
         !asciiToken.hasMatch(version)) {
       throw ArgumentError('Invalid OTA task ID or firmware version');
     }
-    if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(sha256)) {
+    // 2026-09-21：签名/安全版本改为可选（服务端固件记录可能未签名）。
+    // 提供时仍做格式校验；空值传给设备端，由其跳过验签与回滚检查。
+    if (sha256.isNotEmpty &&
+        !RegExp(r'^[0-9a-f]{64}$').hasMatch(sha256)) {
       throw ArgumentError(
         'OTA SHA-256 must be 64 lowercase hexadecimal characters',
       );
     }
-    var canonicalSignature = false;
-    try {
-      final decoded = base64.decode(signature);
-      canonicalSignature =
-          decoded.length == 64 && base64.encode(decoded) == signature;
-    } on FormatException {
-      canonicalSignature = false;
+    if (signature.isNotEmpty) {
+      var canonicalSignature = false;
+      try {
+        final decoded = base64.decode(signature);
+        canonicalSignature =
+            decoded.length == 64 && base64.encode(decoded) == signature;
+      } on FormatException {
+        canonicalSignature = false;
+      }
+      if (!canonicalSignature) {
+        throw ArgumentError('OTA Ed25519 signature must be canonical Base64');
+      }
     }
-    if (!canonicalSignature) {
-      throw ArgumentError('OTA Ed25519 signature must be canonical Base64');
-    }
-    if (securityVersion <= 0 ||
+    if (securityVersion < 0 ||
         securityVersion > 0xffffffff ||
         timeoutSeconds < 60 ||
         timeoutSeconds > 3600) {

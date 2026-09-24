@@ -520,9 +520,11 @@ const Map<String, String> en = {
   'ota_err_verify': 'Firmware verification failed. Re-download the firmware and retry',
   'ota_err_firmware': 'Firmware file is corrupted or missing. Re-download it',
   'ota_err_protocol': 'Invalid device response. Please retry',
+  'ota_err_unsupported_target': 'This device firmware does not support BLE upgrades for this module. Upgrade the ESP firmware first',
+  'ota_err_insufficient_storage': 'Device cache space is insufficient. Migrate the partition layout or choose a smaller firmware image',
   'ota_err_unknown': 'Upgrade failed: {error}',
   'ota_missing_metadata':
-      'This firmware is missing signature, security version or SHA-256. Re-download it from the upgrade list.',
+      'This firmware is missing version or file size metadata. Re-download it from the upgrade list.',
   'bluetooth_permission_required': 'Bluetooth permission is required. Grant it and retry',
   'ble_connection_failed': 'BLE connection failed. Ensure the device is powered on and nearby',
   'ble_scan_failed': 'BLE scan failed. Check location permission and Bluetooth status',
