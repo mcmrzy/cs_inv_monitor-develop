@@ -38,16 +38,31 @@ abstract class BleGattConnection {
   /// 链路状态流（广播流，可多处订阅）
   Stream<BleLinkState> get linkState;
 
+  /// 当前实际协商 MTU，未协商时为 23。
+  int get mtuNow;
+
   /// 协商 MTU，返回实际生效值
   Future<int> requestMtu(int mtu);
 
-  Future<List<int>> read(String serviceUuid, String characteristicUuid);
+  Future<List<int>> read(
+    String serviceUuid,
+    String characteristicUuid, {
+    int timeout = 15,
+  });
 
+  /// 写入特征值。
+  ///
+  /// [allowLongWrite] 打开 BLE 长写（prepare/execute）子过程：单次 ATT 写上限是
+  /// MTU-3（本设备 NimBLE 协商 256 → 253），而 OTA 的 JSON 报文约 455 字节，
+  /// 不开长写会被平台直接拒（PlatformException: data longer than allowed）。
+  /// 上限 512 字节，且必须与响应一起用（不能和 withoutResponse 组合）。
   Future<void> write(
     String serviceUuid,
     String characteristicUuid,
     List<int> value, {
     bool withoutResponse = false,
+    bool allowLongWrite = false,
+    int timeout = 15,
   });
 
   /// 订阅特征通知。返回流仅推送订阅期间实际收到的值（不重放历史值），
@@ -200,6 +215,9 @@ class FlutterBlueUltraAdapter implements BleAdapter {
 class FbuGattConnection implements BleGattConnection {
   final fbu.BluetoothDevice _device;
   final Map<String, fbu.BluetoothCharacteristic> _charCache = {};
+
+  @override
+  int get mtuNow => _device.mtuNow;
   final Map<String, int> _notifyRefCount = {};
   List<fbu.BluetoothService>? _services;
 
@@ -253,9 +271,13 @@ class FbuGattConnection implements BleGattConnection {
   }
 
   @override
-  Future<List<int>> read(String serviceUuid, String characteristicUuid) async {
+  Future<List<int>> read(
+    String serviceUuid,
+    String characteristicUuid, {
+    int timeout = 15,
+  }) async {
     final c = await _resolve(serviceUuid, characteristicUuid);
-    return c.read();
+    return c.read(timeout: timeout);
   }
 
   @override
@@ -264,9 +286,16 @@ class FbuGattConnection implements BleGattConnection {
     String characteristicUuid,
     List<int> value, {
     bool withoutResponse = false,
+    bool allowLongWrite = false,
+    int timeout = 15,
   }) async {
     final c = await _resolve(serviceUuid, characteristicUuid);
-    await c.write(value, withoutResponse: withoutResponse);
+    await c.write(
+      value,
+      withoutResponse: withoutResponse,
+      allowLongWrite: allowLongWrite,
+      timeout: timeout,
+    );
   }
 
   @override
@@ -275,20 +304,37 @@ class FbuGattConnection implements BleGattConnection {
         '${serviceUuid.toLowerCase()}/${characteristicUuid.toLowerCase()}';
     late StreamController<List<int>> controller;
     StreamSubscription<List<int>>? sub;
+    bool cancelled = false;
+    bool subscribed = false;
 
     controller = StreamController<List<int>>(
       onListen: () async {
-        final c = await _resolve(serviceUuid, characteristicUuid);
-        // onValueReceived：仅推送订阅期间实际收到的值，避免 lastValueStream 重放
-        sub = c.onValueReceived.listen(
-          controller.add,
-          onError: controller.addError,
-        );
-        _notifyRefCount[key] = (_notifyRefCount[key] ?? 0) + 1;
-        await c.setNotifyValue(true);
+        try {
+          final c = await _resolve(serviceUuid, characteristicUuid);
+          if (cancelled) return;
+          // onValueReceived：仅推送订阅期间实际收到的值，避免 lastValueStream 重放
+          sub = c.onValueReceived.listen(
+            controller.add,
+            onError: controller.addError,
+          );
+          await c.setNotifyValue(true);
+          if (cancelled) {
+            await sub?.cancel();
+            await c.setNotifyValue(false);
+            return;
+          }
+          _notifyRefCount[key] = (_notifyRefCount[key] ?? 0) + 1;
+          subscribed = true;
+        } catch (error, stackTrace) {
+          await sub?.cancel();
+          if (!cancelled) controller.addError(error, stackTrace);
+        }
       },
       onCancel: () async {
+        cancelled = true;
         await sub?.cancel();
+        if (!subscribed) return;
+        subscribed = false;
         final count = (_notifyRefCount[key] ?? 1) - 1;
         _notifyRefCount[key] = count;
         if (count <= 0) {

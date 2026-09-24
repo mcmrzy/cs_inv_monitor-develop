@@ -76,6 +76,10 @@ void main() {
           BleCtProtocol.serviceUuid,
           BleCtProtocol.telemetryCharUuid,
         )).thenAnswer((_) => const Stream.empty());
+    when(() => connection.subscribe(
+          BleCtProtocol.provisioningServiceUuid,
+          BleCtProtocol.otaStatusCharUuid,
+        )).thenAnswer((_) => const Stream.empty());
     when(() => connection.write(
           BleCtProtocol.serviceUuid,
           BleCtProtocol.authCharUuid,
@@ -105,14 +109,17 @@ void main() {
     await linkState.close();
   });
 
-  Future<BleDeviceSession> connectSession({Duration? authTimeout}) async {
+  Future<BleDeviceSession> connectSession({
+    Duration? authTimeout,
+    bool autoReconnect = true,
+  }) async {
     final session = BleDeviceSession(
       adapter: adapter,
       macAddress: mac,
       keyStore: keyStore,
       authTimeout: authTimeout,
     );
-    await session.connect();
+    await session.connect(autoReconnect: autoReconnect);
     return session;
   }
 
@@ -226,6 +233,35 @@ void main() {
     expect(session.capabilities, containsAll(['telemetry', 'control']));
     expect(session.supportsSecureDirectControl, isTrue);
     expect(session.connectionSessionId, sessionId);
+  });
+
+  test('connect remains ready when current firmware omits AUTH characteristic',
+      () async {
+    when(() => connection.subscribe(
+          BleCtProtocol.serviceUuid,
+          BleCtProtocol.authCharUuid,
+        )).thenThrow(StateError('AUTH characteristic not found'));
+
+    final session = await connectSession();
+
+    expect(session.state, BleDeviceState.ready);
+    expect(session.protocolVersion, 2);
+    expect(session.sn, 'H1CNA6K20001');
+  });
+
+  test('asynchronous missing AUTH notification does not abort the session',
+      () async {
+    when(() => connection.subscribe(
+          BleCtProtocol.serviceUuid,
+          BleCtProtocol.authCharUuid,
+        )).thenAnswer(
+      (_) => Stream<List<int>>.error(StateError('AUTH characteristic missing')),
+    );
+
+    final session = await connectSession();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(session.state, BleDeviceState.ready);
   });
 
   test('v2 authenticate verifies both proofs before becoming ready', () async {
@@ -430,6 +466,28 @@ void main() {
     expect(session.state, BleDeviceState.disconnected);
   });
 
+  test('releasing a stale OTA lease keeps the newer lease active', () async {
+    final session = await connectSession(autoReconnect: false);
+    final staleLease = await session.acquireOtaLease();
+
+    linkState.add(BleLinkState.disconnected);
+    for (var i = 0;
+        i < 20 && session.state != BleDeviceState.disconnected;
+        i++) {
+      await Future<void>.delayed(Duration.zero);
+    }
+    expect(session.state, BleDeviceState.disconnected);
+
+    await session.connect(autoReconnect: false);
+    expect(session.state, BleDeviceState.ready);
+    final activeLease = await session.acquireOtaLease();
+
+    staleLease.release();
+
+    expect(session.isOtaInProgress, isTrue);
+    activeLease.release();
+  });
+
   test('v1 device explicitly rejects secure direct authentication', () async {
     when(() => connection.read(
           BleCtProtocol.serviceUuid,
@@ -457,7 +515,8 @@ void main() {
       ),
     );
     expect(authWrites, isEmpty);
-    expect(session.state, isNot(BleDeviceState.ready));
+    // 2026-09-22 起鉴权失败不再阻塞会话：连接即就绪
+    expect(session.state, BleDeviceState.ready);
   });
 
   test('readInfo returns INFO json', () async {
@@ -495,8 +554,8 @@ void main() {
         )).thenAnswer((_) async {});
 
     final session = await connectSession();
-    // 未绑定设备：连接后停留在 authenticating
-    expect(session.state, BleDeviceState.authenticating);
+    // 2026-09-22 起连接即就绪（不再要求绑定/鉴权）
+    expect(session.state, BleDeviceState.ready);
 
     final bindFuture = session.bind('a2V5LWJhc2U2NA==');
     // 设备 notify 返回 bind 结果

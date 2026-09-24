@@ -99,8 +99,8 @@ void main() {
         accessToken: 'fresh-token',
       );
 
-      final retriedHeader = retried.headers['X-Metadata']
-          as Map<String, dynamic>;
+      final retriedHeader =
+          retried.headers['X-Metadata'] as Map<String, dynamic>;
       final retriedNested = retriedHeader['nested'] as Map<String, dynamic>;
       retriedNested['value'] = 'changed';
 
@@ -108,8 +108,8 @@ void main() {
       final retriedFlags = retriedExtra['flags'] as List<dynamic>;
       retriedFlags.add('changed');
 
-      final originalHeader = original.headers['X-Metadata']
-          as Map<String, dynamic>;
+      final originalHeader =
+          original.headers['X-Metadata'] as Map<String, dynamic>;
       final originalNested = originalHeader['nested'] as Map<String, dynamic>;
       final originalExtra = original.extra['metadata'] as Map<String, dynamic>;
       final originalFlags = originalExtra['flags'] as List<dynamic>;
@@ -118,7 +118,8 @@ void main() {
       expect(originalFlags, <String>['original']);
     });
 
-    test('clones finalized multipart data so upload requests can retry', () async {
+    test('clones finalized multipart data so upload requests can retry',
+        () async {
       final formData = FormData.fromMap(<String, dynamic>{
         'name': 'station-photo',
         'file': MultipartFile.fromBytes(
@@ -144,6 +145,38 @@ void main() {
       expect(retriedFormData.files.length, formData.files.length);
       expect(retriedFormData.isFinalized, isFalse);
       await retriedFormData.finalize().drain<void>();
+    });
+  });
+
+  group('handleRetriedUnauthorized', () {
+    test('requests logout when a token-refresh retry is still unauthorized',
+        () {
+      var logoutRequests = 0;
+      final options = RequestOptions(
+        path: '/stations/summary',
+        extra: const <String, dynamic>{tokenRefreshRetryKey: true},
+      );
+
+      final handled = handleRetriedUnauthorized(
+        options,
+        onLogoutRequested: () => logoutRequests++,
+      );
+
+      expect(handled, isTrue);
+      expect(logoutRequests, 1);
+    });
+
+    test('leaves the first unauthorized response to the refresh flow', () {
+      var logoutRequests = 0;
+      final options = RequestOptions(path: '/stations/summary');
+
+      final handled = handleRetriedUnauthorized(
+        options,
+        onLogoutRequested: () => logoutRequests++,
+      );
+
+      expect(handled, isFalse);
+      expect(logoutRequests, 0);
     });
   });
 }

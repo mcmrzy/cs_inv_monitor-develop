@@ -5,11 +5,9 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:inv_app/core/platform/platform.dart';
 import 'package:inv_app/core/services/provision_service.dart';
 import 'package:inv_app/core/services/ble_provisioning_service.dart';
-import 'package:inv_app/core/services/ble/ble_binding_service.dart';
 import 'package:inv_app/core/services/connection_mode_service.dart';
 import 'package:inv_app/core/services/wifi_scan_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
-import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/widgets/wifi_switch_dialog.dart';
 import 'package:inv_app/core/widgets/wifi_enable_dialog.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
@@ -53,7 +51,6 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
 
   final _workingSsidController = TextEditingController();
   final _workingPasswordController = TextEditingController();
-  final _pinController = TextEditingController();
   bool _showPassword = false;
 
   final _scSsidController = TextEditingController();
@@ -161,7 +158,6 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
     unawaited(_releaseForcedWifiRoute());
     _workingSsidController.dispose();
     _workingPasswordController.dispose();
-    _pinController.dispose();
     _scSsidController.dispose();
     _scPasswordController.dispose();
     _bleProvisioningService.dispose();
@@ -758,37 +754,6 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       return;
     }
 
-    // 配网写 WiFi 凭据前先校验 PIN（附录 B）
-    final pin = _pinController.text.trim();
-    if (pin.length != 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context)!.pinLengthError)),
-      );
-      return;
-    }
-
-    setState(() {
-      _provisioning = true;
-    });
-
-    final pinResult = await _bleProvisioningService.verifyPin(pin);
-    // widget 可能在 verifyPin（8s 超时）期间被 pop/dispose，
-    // 此时 mounted=false，继续调用 ScaffoldMessenger.of(context) 会触发
-    // framework.dart 断言错误（deactivated element 访问）
-    if (!mounted) return;
-    if (!pinResult.success) {
-      setState(() {
-        _provisioning = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_localizePinMessage(pinResult.message)),
-          backgroundColor: AppColors.errorLight,
-        ),
-      );
-      return;
-    }
-
     final result = await _bleProvisioningService.writeWiFiCredentials(
       ssid: ssid,
       password: password,
@@ -817,25 +782,6 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       _bleErrorMessage = null; // 清除错误消息
     });
 
-    // 场景 A：配网成功后自动绑定（零操作，附录 B）
-    _triggerAutoBind();
-  }
-
-  /// 场景 A：配网成功后自动绑定（零操作，附录 B：离网可用，PIN 配网阶段已验证）
-  Future<void> _triggerAutoBind() async {
-    final device = _selectedBleDevice;
-    if (device == null) return;
-    if (!mounted) return;
-    if (!await getIt<StorageService>().getIsBleDirectEnabled()) return;
-    final binding = getIt<BleBindingService>();
-    await binding.bindAfterProvision(
-      macAddress: device.macAddress,
-      knownSn: device.sn,
-      // 补登记同样携带 PIN（后端严格模式：无 PIN 拒绝登记）
-      pin: _pinController.text.trim(),
-    );
-    if (!mounted) return;
-    // 绑定结果由页面成功卡片（_provisionSuccess）承担，不再弹全局 SnackBar（Q3）
   }
 
   String _localizeBleMessage(String? code) {
@@ -865,20 +811,6 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         return l10n.bleError;
       default:
         return l10n.translateError(code);
-    }
-  }
-
-  String _localizePinMessage(String? code) {
-    final l10n = AppLocalizations.of(context)!;
-    switch (code) {
-      case 'pin_invalid':
-        return l10n.pinInvalid;
-      case 'pin_locked':
-        return l10n.pinLocked;
-      case 'pin_check_failed':
-        return l10n.pinCheckFailed;
-      default:
-        return l10n.pinCheckFailed;
     }
   }
 

@@ -1095,25 +1095,6 @@ extension _WifiConfigProvisionSections on _WifiConfigPageState {
               ),
             ),
           ),
-          SizedBox(height: 12.h),
-          TextField(
-            controller: _pinController,
-            keyboardType: TextInputType.number,
-            maxLength: 6,
-            decoration: InputDecoration(
-              labelText: l10n.pinInputTitle,
-              hintText: l10n.pinInputHint,
-              prefixIcon:
-                  const Icon(Icons.password, color: AppColors.primary),
-              border:
-                  OutlineInputBorder(borderRadius: BorderRadius.circular(12.r)),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12.r),
-                borderSide:
-                    const BorderSide(color: AppColors.primary, width: 1.5),
-              ),
-            ),
-          ),
           SizedBox(height: 20.h),
           SizedBox(
             width: double.infinity,

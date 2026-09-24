@@ -63,7 +63,7 @@ void main() {
     expect(disconnected.canRemoteUpgrade, isFalse);
   });
 
-  test('firmware resources only allow local OTA on advertised ESP or ARM channels',
+  test('firmware resources allow DSP and BMS only on advertised BLE channels',
       () {
     FirmwareResource resource(String target, {Object? channels}) =>
         FirmwareResource.fromJson({
@@ -76,6 +76,12 @@ void main() {
     expect(resource('arm').canLocalUpgrade, isTrue);
     expect(resource('dsp').canLocalUpgrade, isFalse);
     expect(resource('bms').canLocalUpgrade, isFalse);
+    expect(resource('dsp', channels: ['remote', 'ble']).canLocalUpgrade,
+        isTrue);
+    expect(resource('bms', channels: ['remote', 'ble']).canLocalUpgrade,
+        isTrue);
+    expect(resource('bms', channels: ['remote', 'wifi_ap']).canLocalUpgrade,
+        isFalse);
     expect(resource('arm', channels: ['remote']).canLocalUpgrade, isFalse);
     expect(resource('arm', channels: ['ble']).canLocalUpgrade, isTrue);
   });

@@ -5,7 +5,6 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/errors/ota_error_types.dart';
 import 'package:inv_app/core/platform/platform.dart';
 import 'package:inv_app/core/services/ble/ble_adapter.dart';
-import 'package:inv_app/core/services/ble/ble_binding_service.dart';
 import 'package:inv_app/core/services/ble/ble_device_manager.dart';
 import 'package:inv_app/core/services/firmware_download_service.dart';
 import 'package:inv_app/core/services/local_communication_service.dart';
@@ -14,7 +13,6 @@ import 'package:inv_app/core/services/wifi_scan_service.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/widgets/app_toast.dart';
-import 'package:inv_app/core/widgets/ble_pin_bind_dialog.dart';
 import 'package:inv_app/core/widgets/wifi_enable_dialog.dart';
 import 'package:inv_app/features/ota/data/datasources/ble_communication_service.dart';
 import 'package:inv_app/features/ota/data/datasources/local_ota_result_sync_queue.dart';
@@ -514,12 +512,6 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
           _scanningWifi = false;
           _errorMessage = _bleFailureMessage(l10n, failure);
         });
-        // 未绑定/鉴权失败：本机与设备之间缺少可用密钥，
-        // 固件侧 OTA 通道要求已鉴权，扫描也无济于事，就地引导重新绑定
-        if (failure == BleConnectFailure.notBound ||
-            failure == BleConnectFailure.authFailed) {
-          await _offerBleBind();
-        }
         return;
       }
 
@@ -570,105 +562,6 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     }
   }
 
-  /// 未绑定/鉴权失败时就地补救：输入铭牌 PIN 绑定设备 → 重试鉴权与连接。
-  ///
-  /// 本机密钥与设备不匹配（设备恢复出厂/重刷固件后常见）时清掉陈旧密钥重绑；
-  /// 设备已被其他账号绑定时不动本机密钥，仅提示需在设备端解绑。
-  Future<void> _offerBleBind() async {
-    final l10n = AppLocalizations.of(context)!;
-    final mac = _bleService?.targetMacAddress ?? widget.deviceMac;
-    if (mac == null || mac.trim().isEmpty) return;
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.str('ble_ota_need_bind_title', {})),
-        content: Text(l10n.str('ble_ota_need_bind_message', {})),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(l10n.cancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(l10n.str('ble_ota_bind_action', {})),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-
-    final pin = await showBlePinBindDialog(
-      context: context,
-      deviceSn: widget.deviceSN,
-    );
-    if (pin == null || !mounted) return;
-
-    final binding = getIt<BleBindingService>();
-    final manager = getIt<BleDeviceManager>();
-    final keyStore = getIt<BleDeviceKeyStore>();
-
-    setState(() => _errorMessage = null);
-    var outcome = await binding.bindAfterProvision(
-      macAddress: mac,
-      knownSn: widget.deviceSN,
-      pin: pin,
-    );
-
-    // 本机留有陈旧 device_key（设备侧已无绑定）：清掉后重新绑定；
-    // 本机无密钥却返回 alreadyBound，说明设备端已有密钥（换手机/重装应用后常见），
-    // 绑定窗口已关闭，只能提示用户先在设备端解绑
-    if (outcome == BindOutcome.alreadyBound) {
-      final hasLocalKey = await manager.hasDeviceKey(widget.deviceSN);
-      if (hasLocalKey) {
-        await keyStore.delete(widget.deviceSN);
-        outcome = await binding.bindAfterProvision(
-          macAddress: mac,
-          knownSn: widget.deviceSN,
-          pin: pin,
-        );
-      }
-    }
-    if (!mounted) return;
-
-    switch (outcome) {
-      case BindOutcome.bound:
-      case BindOutcome.needLoginForSync:
-        // 绑定写入成功：立即鉴权并重试连接（同一会话，无需重新扫描）
-        await manager.ensureAuthenticated(mac);
-        if (!mounted) return;
-        AppToast.show(
-          context,
-          l10n.str('ble_ota_bind_done', {}),
-          type: ToastType.success,
-        );
-        await _autoScanAndConnectBle();
-      case BindOutcome.alreadyBound:
-        AppToast.show(
-          context,
-          l10n.str('ble_ota_bound_elsewhere', {}),
-          type: ToastType.error,
-        );
-      case BindOutcome.invalidPin:
-        AppToast.show(
-          context,
-          l10n.str('ble_ota_bind_invalid_pin', {}),
-          type: ToastType.error,
-        );
-      case BindOutcome.locked:
-        AppToast.show(
-          context,
-          l10n.str('ble_ota_bind_locked', {}),
-          type: ToastType.error,
-        );
-      case BindOutcome.failed:
-        AppToast.show(
-          context,
-          l10n.str('ble_ota_bind_failed', {}),
-          type: ToastType.error,
-        );
-    }
-  }
 
   Future<void> _startDownload() async {
     if (_metaFirmwareUrl == null ||
@@ -696,6 +589,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         version: _metaFirmwareVersion,
         signature: _metaReleaseSignature,
         securityVersion: _metaSecurityVersion,
+        supportedChannels: _metaSupportedChannels,
       );
       if (mounted) {
         setState(() {
@@ -854,7 +748,9 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
 
     // 升级元数据：优先取选中的已下载固件（离线升级链路），
     // 缺失时回退路由参数（双 Tab 入口不传固件参数时，
-    // 仅靠路由参数会导致校验必败，故必须支持离线元数据）
+    // 仅靠路由参数会导致校验必败，故必须支持离线元数据）。
+    // 2026-09-21：签名/安全版本/SHA-256 改为可选（服务端固件记录可能未签名，
+    // 设备端对空签名跳过验签），预检只拦截协议必需字段：目标芯片/通道/大小/版本。
     final offline = _selectedDownloaded;
     final target = ((offline?.targetChip ?? _metaTargetChip) ?? 'esp')
         .trim()
@@ -875,19 +771,15 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     final selectedChannel = widget.channel == LocalCommunicationChannel.ble
         ? 'ble'
         : 'wifi_ap';
-    final supportsSelectedChannel = supportedChannels == null ||
-        supportedChannels.any(
-          (channel) => channel.trim().toLowerCase() == selectedChannel,
-        );
+    final supportsSelectedChannel = supportsLocalOtaResourceChannel(
+      target: target,
+      channel: selectedChannel,
+      supportedChannels: supportedChannels,
+    );
 
-    if ((target != 'esp' && target != 'arm') ||
-        !supportsSelectedChannel ||
+    if (!supportsSelectedChannel ||
         fileSize <= 0 ||
-        firmwareModel.isEmpty ||
-        version.isEmpty ||
-        sha256.isEmpty ||
-        signature.isEmpty ||
-        securityVersion <= 0) {
+        version.isEmpty) {
       setState(() {
         _isProcessing = false;
         _result = LocalOTAResult.failed;

@@ -24,6 +24,44 @@ enum LocalOtaDeviceCompatibility {
   mismatch,
 }
 
+/// Resource metadata gates which local transport can carry a module image.
+/// Legacy ESP/ARM records may omit the list; DSP/BMS must opt in to BLE.
+bool supportsLocalOtaResourceChannel({
+  required String target,
+  required String channel,
+  required List<String>? supportedChannels,
+}) {
+  final module = target.trim().toLowerCase();
+  final transport = channel.trim().toLowerCase();
+  if (!const {'esp', 'arm', 'dsp', 'bms'}.contains(module)) return false;
+  if (const {'dsp', 'bms'}.contains(module) && transport != 'ble') {
+    return false;
+  }
+  if (supportedChannels == null) return module == 'esp' || module == 'arm';
+  return supportedChannels.any((value) => value.trim().toLowerCase() == transport);
+}
+
+/// INFO is the on-device authority for new module support. Older ESP/ARM
+/// devices omitted this field, so only those two retain legacy compatibility.
+bool supportsLocalOtaDeviceTarget({
+  required String target,
+  required Map<String, dynamic> deviceInfo,
+}) {
+  final module = target.trim().toLowerCase();
+  const wireTargets = {
+    'esp': 'communication_module',
+    'arm': 'system_controller',
+    'dsp': 'dsp_controller',
+    'bms': 'bms',
+  };
+  final wireTarget = wireTargets[module];
+  if (wireTarget == null) return false;
+  final supported = deviceInfo['supported_upgrade_modules'];
+  if (supported is! List) return module == 'esp' || module == 'arm';
+  return supported.any((entry) =>
+      entry is String && entry.trim().toLowerCase() == wireTarget);
+}
+
 String? _readDeviceModel(Map<String, dynamic> info) {
   String? read(Map<dynamic, dynamic> source) {
     for (final key in const ['model', 'device_model', 'model_name']) {

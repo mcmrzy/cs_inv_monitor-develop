@@ -122,7 +122,13 @@ class ServiceLocator {
         },
         onError: (error, handler) async {
           if (error.response?.statusCode == 401) {
-            if (isTokenRefreshRetry(error.requestOptions)) {
+            // 刷新成功后重放请求仍然 401，说明新会话也不可用。
+            // 禁止再次刷新形成死循环，直接终止本地会话并由全局监听跳登录页。
+            if (handleRetriedUnauthorized(
+              error.requestOptions,
+              onLogoutRequested: () =>
+                  getIt<AuthBloc>().add(AuthLogoutRequested()),
+            )) {
               return handler.next(error);
             }
 

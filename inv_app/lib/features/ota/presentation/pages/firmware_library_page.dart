@@ -165,8 +165,9 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
       _downloadingProgress[r.id] = 0.0;
     });
     try {
-      if (!await _downloadService.isFirmwareDownloaded(r.id)) {
-        await _downloadService.downloadFirmware(
+      // 不因已下载而跳过：文件存在且校验通过时幂等返回，并刷新本地元数据
+      // （否则后端通道变更后，旧记录会被近场升级列表按旧通道永久过滤）
+      await _downloadService.downloadFirmware(
           url: r.fileUrl,
           fileName: r.fileName.isEmpty
               ? '${r.targetChip}_${r.version}.bin'
@@ -180,8 +181,7 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
           signature: r.releaseSignature,
           securityVersion: r.securityVersion,
           supportedChannels: r.supportedChannels,
-        );
-      }
+      );
       if (!mounted) return;
       setState(() {
         _downloadedCache[r.id] = true;

@@ -3,11 +3,33 @@ setlocal enabledelayedexpansion
 chcp 65001 >nul
 cd /d "%~dp0"
 
+rem ---- args: --analyze | --version X.Y.Z ----
+set "DO_ANALYZE="
+set "FORCE_VER="
+:parse_args
+if "%~1"=="" goto args_done
+if /i "%~1"=="--analyze" set "DO_ANALYZE=1"
+if /i "%~1"=="--version" (
+    set "FORCE_VER=%~2"
+    shift
+)
+shift
+goto parse_args
+:args_done
+if defined FORCE_VER (
+    echo %FORCE_VER%| findstr /r "^[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*$" >nul
+    if errorlevel 1 (
+        echo [ERROR] --version must look like 1.1.0 ^(got: %FORCE_VER%^)
+        goto :fail_keep_open
+    )
+)
+
 rem ============================================================
 rem  inv_app 发版构建脚本
 rem  用法:
 rem    build_release.bat              编译 release APK 并复制到 release\
 rem    build_release.bat --analyze    编译前先执行 flutter analyze
+rem    build_release.bat --version 1.1.0   指定版本名(跨位升级, 不递增 patch)
 rem  产物: release\inv_app_v版本_时间戳.apk (+ .md5 / .sha256 校验文件)
 rem  日志: release\logs\build_版本_时间戳.log
 rem        失败时自动打印「关键错误摘要 + 日志最后 80 行」
@@ -49,12 +71,14 @@ for /f "tokens=1,2 delims=+" %%a in ("%APP_VERSION%") do (
     set "VER_BUILD=%%b"
 )
 set /a NEW_BUILD=VER_BUILD+1
-for /f "tokens=1,2,3 delims=." %%i in ("%VER_BASE%") do (
+rem --version X.Y.Z: use it as the version name as-is (cross-position upgrade, e.g. 1.0.15 -> 1.1.0)
+if defined FORCE_VER set "VER_BASE=!FORCE_VER!"
+for /f "tokens=1,2,3 delims=." %%i in ("!VER_BASE!") do (
     set "VER_MAJOR=%%i"
     set "VER_MINOR=%%j"
     set "VER_PATCH=%%k"
 )
-set /a VER_PATCH=VER_PATCH+1
+if not defined FORCE_VER set /a VER_PATCH=VER_PATCH+1
 set "NEW_VERSION=%VER_MAJOR%.%VER_MINOR%.%VER_PATCH%+%NEW_BUILD%"
 echo 版本: %APP_VERSION% -^> %NEW_VERSION%
 
@@ -78,7 +102,7 @@ if errorlevel 1 (
     copy /y "%TEMP%\pubspec.yaml.prebuild.bak" pubspec.yaml >nul
 )
 
-if /i "%~1"=="--analyze" (
+if defined DO_ANALYZE (
     echo.
     echo [0/2] flutter analyze ...  日志: %ANALYZE_LOG%
     %PS% -NoProfile -Command "$ErrorActionPreference='Continue'; & flutter analyze --no-fatal-infos 2>&1 | Tee-Object -FilePath '%ANALYZE_LOG%'; exit $LASTEXITCODE"

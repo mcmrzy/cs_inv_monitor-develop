@@ -150,41 +150,42 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
           );
 
           if (firmwareId > 0 && downloadUrl.isNotEmpty) {
-            // 检查是否已下载
-            final alreadyDownloaded =
-                await _downloadService.isFirmwareDownloaded(firmwareId);
-            if (!alreadyDownloaded) {
-              // 进度流事件以 firmwareId 分发：下载前把当前芯片的 firmwareId
-              // 加入跟踪集合并预置字节级进度键，让订阅过滤命中
+            // 进度流事件以 firmwareId 分发：下载前把当前芯片的 firmwareId
+            // 加入跟踪集合并预置字节级进度键，让订阅过滤命中
+            if (mounted) {
+              setState(() {
+                _downloadingIds.add(firmwareId);
+                _downloadingProgress[firmwareId] = 0.0;
+              });
+            }
+            try {
+              // 已下载也照常调用：文件存在且校验通过时幂等返回，
+              // 并以服务端最新元数据（含 supported_channels）刷新本地记录，
+              // 否则后端通道变更后旧记录会被近场升级列表永久过滤
+              await _downloadService.downloadFirmware(
+                url: downloadUrl,
+                fileName: fileName,
+                firmwareId: firmwareId,
+                expectedSize: (chip['file_size'] as num?)?.toInt(),
+                expectedSha256: chip['file_sha256'] as String?,
+                deviceModel: widget.deviceModel,
+                // 持久化离线升级元数据，支持无网时从已下载列表直接本地升级
+                targetChip: chip['target_chip'] as String?,
+                version: chip['firmware_version'] as String?,
+                signature: chip['release_signature'] as String?,
+                securityVersion: (chip['security_version'] as num?)?.toInt(),
+                supportedChannels: (chip['supported_channels'] as List?)
+                    ?.map((value) => value.toString())
+                    .toList(growable: false),
+              );
+            } finally {
+              // 该芯片完成/失败后清理字节级进度键，切换到下一芯片时
+              // 由循环重新写入新键，避免旧键残留污染卡片进度
               if (mounted) {
                 setState(() {
-                  _downloadingIds.add(firmwareId);
-                  _downloadingProgress[firmwareId] = 0.0;
+                  _downloadingIds.remove(firmwareId);
+                  _downloadingProgress.remove(firmwareId);
                 });
-              }
-              try {
-                await _downloadService.downloadFirmware(
-                  url: downloadUrl,
-                  fileName: fileName,
-                  firmwareId: firmwareId,
-                  expectedSize: (chip['file_size'] as num?)?.toInt(),
-                  expectedSha256: chip['file_sha256'] as String?,
-                  deviceModel: widget.deviceModel,
-                  // 持久化离线升级元数据，支持无网时从已下载列表直接本地升级
-                  targetChip: chip['target_chip'] as String?,
-                  version: chip['firmware_version'] as String?,
-                  signature: chip['release_signature'] as String?,
-                  securityVersion: (chip['security_version'] as num?)?.toInt(),
-                );
-              } finally {
-                // 该芯片完成/失败后清理字节级进度键，切换到下一芯片时
-                // 由循环重新写入新键，避免旧键残留污染卡片进度
-                if (mounted) {
-                  setState(() {
-                    _downloadingIds.remove(firmwareId);
-                    _downloadingProgress.remove(firmwareId);
-                  });
-                }
               }
             }
             downloadedCount++;
