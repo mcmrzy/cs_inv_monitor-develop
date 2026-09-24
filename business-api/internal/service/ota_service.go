@@ -177,6 +177,12 @@ func ValidateFirmwareRequest(req *CreateFirmwareReq) error {
 	if !(strings.HasPrefix(req.FileURL, "/firmware/") || strings.HasPrefix(req.FileURL, "https://")) {
 		return fmt.Errorf("固件地址必须是 /firmware/ 路径或 HTTPS URL")
 	}
+	// 前缀合法不代表设备能用：设备端 http_parser（STRICT）遇到空格或非 ASCII 字节会
+	// 直接拒绝整条下载 URL（OTA 0% + "HTTP client init failed"）。JSON 方式创建的记录
+	// 只受上面的前缀约束，故在此补上字符集检查，让脏地址在创建时就 400 而不是等推送时炸。
+	if c, bad := deviceURLUnsafeByte(req.FileURL); bad {
+		return fmt.Errorf("固件地址含空格或非 ASCII 字节（%q），设备端无法解析", string([]byte{c}))
+	}
 	// 签名可选：仅当提供了安全版本或签名时才要求校验通过（管理后台上传固件不再强制填写）
 	if req.SecurityVersion > 0 || req.ReleaseSignature != "" {
 		if !verifyFirmwareReleaseSignature(req) {
@@ -308,6 +314,19 @@ func (s *OTAService) PushUpgrade(ctx context.Context, req *PushUpgradeReq) error
 
 // SendUpgradeCommand 发送MQTT升级命令到设备
 func (s *OTAService) SendUpgradeCommand(ctx context.Context, du *model.DeviceUpgrade, fw *model.Firmware, downloadURL string) {
+	// 下发前先校验地址：设备端解析不了时它只会回报一句 "HTTP client init failed"
+	// （进度 0%、无 trace），云端无从定位。拦在这里，原因进日志与升级记录。
+	if err := ValidateDeviceDownloadURL(downloadURL); err != nil {
+		logger.Error("OTA download URL rejected before dispatch",
+			zap.String("sn", du.DeviceSN),
+			zap.String("target", fw.TargetChip),
+			zap.String("version", fw.Version),
+			zap.String("url", downloadURL),
+			zap.Error(err))
+		s.markUpgradeFailedBeforeDispatch(ctx, du, err)
+		return
+	}
+
 	cmdBody := map[string]interface{}{
 		"v":       1,
 		"t":       time.Now().Unix(),
@@ -365,7 +384,34 @@ func (s *OTAService) SendUpgradeCommand(ctx context.Context, du *model.DeviceUpg
 
 	logger.Info("OTA command sent to device",
 		zap.String("sn", du.DeviceSN),
-		zap.String("version", fw.Version))
+		zap.String("target", fw.TargetChip),
+		zap.String("version", fw.Version),
+		zap.String("url", downloadURL))
+}
+
+// markUpgradeFailedBeforeDispatch 把"地址非法、命令根本没发出去"如实写回升级记录。
+// 不写的话记录会一直停在 pending，重推/对账还会继续推一条设备必然拒绝的命令；
+// 写进去的 message 就是管理后台「错误信息」列看到的那句话。
+func (s *OTAService) markUpgradeFailedBeforeDispatch(ctx context.Context, du *model.DeviceUpgrade, cause error) {
+	if s.repo == nil || du == nil || du.ID <= 0 {
+		return
+	}
+	msg := fmt.Sprintf("下载地址非法，命令未下发：%v", cause)
+	if err := s.repo.UpdateUpgradeStatusByID(ctx, du.ID, "failed", 0, msg); err != nil {
+		logger.Error("mark upgrade failed (invalid download URL) failed",
+			zap.Int64("upgrade_id", du.ID), zap.Error(err))
+		return
+	}
+	if du.TaskID != nil && *du.TaskID > 0 {
+		// 与设备回报 failed 走同一条收尾：重算任务计数，全部终态时把任务置为
+		// partial_success/completed，否则页面上任务会一直停在"进行中"。
+		go func(taskID int64) {
+			if err := s.syncUpgradeTaskStatus(context.Background(), taskID); err != nil {
+				logger.Error("sync task status after URL rejection failed",
+					zap.Int64("task_id", taskID), zap.Error(err))
+			}
+		}(*du.TaskID)
+	}
 }
 
 // CheckPendingUpgrade 设备CheckUpdate时调用

@@ -235,7 +235,11 @@ func respondFirmwareCreateError(c *gin.Context, model, targetChip, version strin
 		zap.String("target_chip", targetChip),
 		zap.String("version", version),
 		zap.Error(err))
-	if strings.Contains(err.Error(), "uq_firmware_versions_model_chip_version") {
+	// 114 创建了旧索引名，118 为独立模块发布重建为新索引名。
+	// 兼容处于不同迁移阶段的环境，避免把可修正的版本重复误报为 500。
+	errText := err.Error()
+	if strings.Contains(errText, "uq_firmware_versions_model_chip_version") ||
+		strings.Contains(errText, "uq_firmware_model_target_version") {
 		response.Error(c, 400, fmt.Sprintf("该型号的 %s 固件已有版本 %s，请更换版本号后重新上传",
 			strings.ToUpper(targetChip), version))
 		return
@@ -487,17 +491,18 @@ func (h *OTAHandler) GetFirmwareInfoForApp(c *gin.Context) {
 		return
 	}
 	response.Success(c, gin.H{
-		"firmware_id":       fw.ID,
-		"model":             fw.Model,
-		"target_chip":       fw.TargetChip,
-		"firmware_version":  fw.Version,
-		"main_version":      fw.MainVersion,
-		"download_url":      h.otaService.BuildDownloadURL(fw.FileURL),
-		"file_name":         fw.Model + "_" + fw.Version + ".bin",
-		"file_size":         fw.FileSize,
-		"file_sha256":       fw.FileSHA256,
-		"security_version":  fw.SecurityVersion,
-		"release_signature": fw.ReleaseSignature,
+		"firmware_id":        fw.ID,
+		"model":              fw.Model,
+		"target_chip":        fw.TargetChip,
+		"firmware_version":   fw.Version,
+		"main_version":       fw.MainVersion,
+		"download_url":       h.otaService.BuildDownloadURL(fw.FileURL),
+		"file_name":          fw.Model + "_" + fw.Version + ".bin",
+		"file_size":          fw.FileSize,
+		"file_sha256":        fw.FileSHA256,
+		"security_version":   fw.SecurityVersion,
+		"release_signature":  fw.ReleaseSignature,
+		"supported_channels": supportedChannelsForTarget(fw.TargetChip),
 	})
 }
 
@@ -1831,6 +1836,9 @@ func buildAppUpgradePackagesPayload(list []model.UpgradePackage, buildURL func(s
 		FileSHA256       string `json:"file_sha256"`
 		SecurityVersion  uint32 `json:"security_version"`
 		ReleaseSignature string `json:"release_signature"`
+		// App 预下载时持久化，近场升级据此做通道门控；
+		// 未知目标省略该字段，App 侧对 ESP/ARM 维持旧兼容语义
+		SupportedChannels []string `json:"supported_channels,omitempty"`
 	}
 	type safePackage struct {
 		ID            int64      `json:"id"`
@@ -1853,16 +1861,17 @@ func buildAppUpgradePackagesPayload(list []model.UpgradePackage, buildURL func(s
 		items := make([]safeItem, 0, len(pkg.Items))
 		for _, item := range pkg.Items {
 			items = append(items, safeItem{
-				TargetChip:       item.TargetChip,
-				FirmwareVersion:  item.FirmwareVersion,
-				FirmwareID:       item.FirmwareID,
-				DownloadURL:      buildURL(item.FileURL),
-				FileName:         item.TargetChip + "_" + item.FirmwareVersion + ".bin",
-				FileSize:         item.FileSize,
-				FileMD5:          item.FileMD5,
-				FileSHA256:       item.FileSHA256,
-				SecurityVersion:  item.SecurityVersion,
-				ReleaseSignature: item.ReleaseSignature,
+				TargetChip:        item.TargetChip,
+				FirmwareVersion:   item.FirmwareVersion,
+				FirmwareID:        item.FirmwareID,
+				DownloadURL:       buildURL(item.FileURL),
+				FileName:          item.TargetChip + "_" + item.FirmwareVersion + ".bin",
+				FileSize:          item.FileSize,
+				FileMD5:           item.FileMD5,
+				FileSHA256:        item.FileSHA256,
+				SecurityVersion:   item.SecurityVersion,
+				ReleaseSignature:  item.ReleaseSignature,
+				SupportedChannels: supportedChannelsForTarget(item.TargetChip),
 			})
 		}
 		packages = append(packages, safePackage{
@@ -1879,6 +1888,16 @@ func buildAppUpgradePackagesPayload(list []model.UpgradePackage, buildURL func(s
 	}
 
 	return gin.H{"packages": packages}
+}
+
+// supportedChannelsForTarget 返回模块可用的传输通道；目标不合法时返回 nil
+// （JSON 中省略），App 侧据此维持 ESP/ARM 旧记录兼容语义。
+func supportedChannelsForTarget(target string) []string {
+	t, err := service.NormalizeFirmwareTarget(target)
+	if err != nil {
+		return nil
+	}
+	return service.FirmwareSupportedChannels(t)
 }
 
 // AppInstallPackage APP端安装指定升级包

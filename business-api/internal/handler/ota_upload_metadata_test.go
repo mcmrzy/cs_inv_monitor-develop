@@ -220,6 +220,22 @@ func TestRespondFirmwareCreateError_唯一键冲突返回可操作提示(t *test
 	assert.Contains(t, msg, "ARM")
 }
 
+// 迁移 118 会把固件唯一索引重建为新名称；生产库返回新索引名时
+// 也必须保持 400 语义，不能退化成「创建固件失败」500。
+func TestRespondFirmwareCreateError_迁移118唯一键冲突返回可操作提示(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	respondFirmwareCreateError(c, "CS-L10-6K2", "dsp", "1.0.0", errors.New(
+		`ERROR: duplicate key value violates unique constraint "uq_firmware_model_target_version" (SQLSTATE 23505)`))
+
+	code, msg := decodeCodeAndMessage(t, w)
+	assert.Equal(t, 400, code)
+	assert.Contains(t, msg, "1.0.0")
+	assert.Contains(t, msg, "DSP")
+}
+
 // 其他错误（连接失败、约束外异常）保持 500 语义，不被误报成用户输入问题。
 func TestRespondFirmwareCreateError_其他错误保持500(t *testing.T) {
 	gin.SetMode(gin.TestMode)

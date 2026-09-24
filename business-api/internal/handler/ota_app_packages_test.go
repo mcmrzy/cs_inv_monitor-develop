@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"inv-api-server/internal/model"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // TestBuildAppUpgradePackagesPayload 验证 APP 端升级包列表响应：
@@ -29,14 +31,23 @@ func TestBuildAppUpgradePackagesPayload(t *testing.T) {
 					ID:               11,
 					PackageID:        1,
 					FirmwareID:       101,
-					TargetChip:       "esp32",
+					TargetChip:       "dsp",
 					FirmwareVersion:  "1.2.1",
-					FileURL:          "/firmware/esp32_1.2.1.bin",
+					FileURL:          "/firmware/dsp_1.2.1.bin",
 					FileSize:         1024,
 					FileMD5:          "md5hash",
 					FileSHA256:       "sha256hash",
 					SecurityVersion:  3,
 					ReleaseSignature: "sig-base64",
+				},
+				{
+					ID:              12,
+					PackageID:       1,
+					FirmwareID:      102,
+					TargetChip:      "legacy", // 未知目标：supported_channels 必须省略
+					FirmwareVersion: "0.0.1",
+					FileURL:         "/firmware/legacy_0.0.1.bin",
+					FileSize:        128,
 				},
 			},
 		},
@@ -68,16 +79,17 @@ func TestBuildAppUpgradePackagesPayload(t *testing.T) {
 			IsForce       bool   `json:"is_force"`
 			Model         string `json:"model"`
 			Items         []struct {
-				TargetChip       string `json:"target_chip"`
-				FirmwareVersion  string `json:"firmware_version"`
-				FirmwareID       int64  `json:"firmware_id"`
-				DownloadURL      string `json:"download_url"`
-				FileName         string `json:"file_name"`
-				FileSize         int64  `json:"file_size"`
-				FileMD5          string `json:"file_md5"`
-				FileSHA256       string `json:"file_sha256"`
-				SecurityVersion  uint32 `json:"security_version"`
-				ReleaseSignature string `json:"release_signature"`
+				TargetChip        string   `json:"target_chip"`
+				FirmwareVersion   string   `json:"firmware_version"`
+				FirmwareID        int64    `json:"firmware_id"`
+				DownloadURL       string   `json:"download_url"`
+				FileName          string   `json:"file_name"`
+				FileSize          int64    `json:"file_size"`
+				FileMD5           string   `json:"file_md5"`
+				FileSHA256        string   `json:"file_sha256"`
+				SecurityVersion   uint32   `json:"security_version"`
+				ReleaseSignature  string   `json:"release_signature"`
+				SupportedChannels []string `json:"supported_channels"`
 			} `json:"items"`
 		} `json:"packages"`
 	}
@@ -92,8 +104,8 @@ func TestBuildAppUpgradePackagesPayload(t *testing.T) {
 	if pkg.ID != 1 || pkg.UserVersion != "V1.0.1" || !pkg.IsForce {
 		t.Fatalf("package fields mismatch: %+v", pkg)
 	}
-	if len(pkg.Items) != 1 {
-		t.Fatalf("expected 1 item, got %d", len(pkg.Items))
+	if len(pkg.Items) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(pkg.Items))
 	}
 	item := pkg.Items[0]
 	if item.FirmwareID != 101 {
@@ -102,14 +114,22 @@ func TestBuildAppUpgradePackagesPayload(t *testing.T) {
 	if !strings.HasPrefix(item.DownloadURL, "https://cdn.example.com/firmware/") {
 		t.Errorf("download_url = %q, want CDN-prefixed firmware path", item.DownloadURL)
 	}
-	if item.FileName != "esp32_1.2.1.bin" {
-		t.Errorf("file_name = %q, want esp32_1.2.1.bin", item.FileName)
+	if item.FileName != "dsp_1.2.1.bin" {
+		t.Errorf("file_name = %q, want dsp_1.2.1.bin", item.FileName)
 	}
 	if item.FileSize != 1024 || item.FileMD5 != "md5hash" || item.FileSHA256 != "sha256hash" {
 		t.Errorf("file metadata mismatch: %+v", item)
 	}
 	if item.SecurityVersion != 3 || item.ReleaseSignature != "sig-base64" {
 		t.Errorf("security metadata mismatch: %+v", item)
+	}
+	// DSP 走近场升级只允许 BLE：App 预下载按该列表做通道门控
+	assert.Equal(t, []string{"remote", "ble"}, item.SupportedChannels)
+
+	// 未知目标必须省略 supported_channels（nil），App 侧维持 ESP/ARM 旧兼容语义
+	legacy := pkg.Items[1]
+	if legacy.SupportedChannels != nil {
+		t.Errorf("unknown target supported_channels = %v, want omitted (nil)", legacy.SupportedChannels)
 	}
 }
 
