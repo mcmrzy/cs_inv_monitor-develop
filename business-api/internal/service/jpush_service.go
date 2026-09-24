@@ -177,6 +177,17 @@ func (s *JPushService) SendNotificationAsync(
 	userIDs []int64,
 	notifyType, deviceSN, title, content string,
 ) {
+	s.SendNotificationWithExtrasAsync(ctx, userIDs, notifyType, deviceSN, title, content, nil)
+}
+
+// SendNotificationWithExtrasAsync 在 SendNotificationAsync 基础上支持附加 extras
+// （如告警深链的 alarm_id），与基础键 notify_type/device_sn 合并后随通知下发。
+func (s *JPushService) SendNotificationWithExtrasAsync(
+	ctx context.Context,
+	userIDs []int64,
+	notifyType, deviceSN, title, content string,
+	extra map[string]string,
+) {
 	if !s.enabled {
 		return
 	}
@@ -222,6 +233,9 @@ func (s *JPushService) SendNotificationAsync(
 		extras := map[string]string{
 			"notify_type": notifyType,
 			"device_sn":   deviceSN,
+		}
+		for key, value := range extra {
+			extras[key] = value
 		}
 
 		audience := map[string][]string{"alias": aliases}

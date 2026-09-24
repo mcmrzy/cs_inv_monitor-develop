@@ -83,6 +83,9 @@ type protocolV1Result struct {
 	ID         int64
 	Duplicate  bool
 	OutOfOrder bool
+	// AlarmID 是 alarms 投影表行 ID（区别于 ID 即 device_alarm_events 事件 ID），
+	// 供推送 extras 深链到 /alarms/:id；duplicate 短路或无投影行时为 0。
+	AlarmID int64
 }
 
 var protocolV1SNPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,50}$`)
@@ -144,6 +147,10 @@ func (h *InternalHandler) IngestAlarmV1(c *gin.Context) {
 		return
 	}
 	result, storeErr := h.protocolStore().IngestAlarm(c.Request.Context(), record, data)
+	// 事件表幂等屏障已挡掉重复上报（Duplicate 短路），此处只为新事件补齐通知链路
+	if storeErr == nil && !result.Duplicate {
+		h.notifyAlarmV1(c.Request.Context(), record.SN, data, result.AlarmID)
+	}
 	h.finishProtocolIngest(c, result, storeErr)
 }
 
@@ -368,6 +375,44 @@ func validateAlarmV1(data alarmV1Data) error {
 		return errors.New("alarm state must be 0 or 1")
 	}
 	return nil
+}
+
+// alarmV1CodeMessageMap 设备告警码到默认描述的映射（code 空间与 legacy 上报一致）。
+// V1 信封只携带 code/level/state，无文本消息，推送与通知文案按此映射生成。
+var alarmV1CodeMessageMap = map[int]string{
+	0:  "设备故障恢复",
+	1:  "逆变器过温保护",
+	2:  "电池过压保护",
+	3:  "电池欠压保护",
+	4:  "输出过载保护",
+	5:  "直流母线过压",
+	6:  "逆变器温度过高",
+	7:  "电池SOC过低",
+	8:  "PV输入异常",
+	9:  "电芯压差过大",
+	10: "系统启动完成",
+	11: "进入待机模式",
+	12: "恢复并网运行",
+}
+
+// alarmV1PushCopy 根据 V1 告警信封生成推送/通知文案。
+// 返回 notifyType、标题、内容与推送告警级别（3=严重可穿透免打扰，2=警告，恢复=0）。
+func alarmV1PushCopy(sn string, data alarmV1Data) (notifyType, title, content string, alarmLevel int) {
+	msg, ok := alarmV1CodeMessageMap[data.Code]
+	if data.State == 1 {
+		if !ok {
+			msg = fmt.Sprintf("未知告警(代码 %d)", data.Code)
+		}
+		alarmLevel = 2
+		if data.Level == 2 {
+			alarmLevel = 3
+		}
+		return "device_alarm", "设备告警", fmt.Sprintf("设备 %s: %s", sn, msg), alarmLevel
+	}
+	if !ok || data.Code == 0 {
+		msg = "故障"
+	}
+	return "alarm_cleared", "故障已恢复", fmt.Sprintf("设备 %s %s 已恢复", sn, msg), 0
 }
 
 func validateParallelV1(sn string, data parallelV1Data) error {
@@ -660,10 +705,20 @@ func (s *postgresProtocolV1Store) IngestAlarm(ctx context.Context, record protoc
 	} else if _, err := tx.Exec(ctx, `UPDATE alarms SET event_state='recovered',recovered_at=$4,updated_at=NOW() WHERE device_sn=$1 AND alarm_source=$2 AND fault_code=$3 AND event_state='active' AND occurred_at<=$4`, record.SN, data.Source, code, record.EventTime); err != nil {
 		return protocolV1Result{}, err
 	}
+	// 深链用投影行 ID：UPSERT 命中的行 updated_at 刚被刷新，按其排序即刚写入的行；
+	// 同 (sn,source,code) 已被事务级 advisory 锁串行化，结果确定。无投影行时为 0。
+	var alarmID int64
+	if err := tx.QueryRow(ctx, `SELECT id FROM alarms WHERE device_sn=$1 AND alarm_source=$2 AND fault_code=$3 ORDER BY updated_at DESC LIMIT 1`, record.SN, data.Source, code).Scan(&alarmID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			alarmID = 0
+		} else {
+			return protocolV1Result{}, err
+		}
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return protocolV1Result{}, err
 	}
-	return protocolV1Result{ID: eventID}, nil
+	return protocolV1Result{ID: eventID, AlarmID: alarmID}, nil
 }
 
 func (s *postgresProtocolV1Store) IngestParallel(ctx context.Context, record protocolV1Record, data parallelV1Data) (protocolV1Result, error) {
