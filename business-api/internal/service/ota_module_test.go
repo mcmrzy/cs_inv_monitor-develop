@@ -118,7 +118,7 @@ func TestFirmwareModuleOverviewFailsClosedWhenOfflineOrUnreported(t *testing.T) 
 func TestFirmwareSupportedChannels(t *testing.T) {
 	assert.Equal(t, []string{"remote", "ble", "wifi_ap"}, FirmwareSupportedChannels("arm"))
 	assert.Equal(t, []string{"remote", "ble", "wifi_ap"}, FirmwareSupportedChannels("esp"))
-	assert.Equal(t, []string{"remote"}, FirmwareSupportedChannels("dsp"))
-	assert.Equal(t, []string{"remote"}, FirmwareSupportedChannels("bms"))
+	assert.Equal(t, []string{"remote", "ble"}, FirmwareSupportedChannels("dsp"))
+	assert.Equal(t, []string{"remote", "ble"}, FirmwareSupportedChannels("bms"))
 	assert.Empty(t, FirmwareSupportedChannels("unknown"))
 }

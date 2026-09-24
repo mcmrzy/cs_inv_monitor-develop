@@ -196,7 +196,7 @@ func FirmwareSupportedChannels(target string) []string {
 	if t == model.TargetChipARM || t == model.TargetChipESP {
 		return []string{"remote", "ble", "wifi_ap"}
 	}
-	return []string{"remote"}
+	return []string{"remote", "ble"}
 }
 
 func FirmwareModuleOverview(target, currentVersion string, deviceOnline bool, latestFirmware *model.Firmware) model.FirmwareModuleOverview {
