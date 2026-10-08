@@ -1,3 +1,5 @@
+import 'package:inv_app/core/entities/bms_summary.dart';
+
 class ACData {
   final double voltage;
   final double current;
@@ -703,6 +705,7 @@ class InverterRealtime {
 
   /// 2026-09 储能 BMS 扩展组（未接电池/旧固件时为 null）
   final BmsData? bms;
+  final BmsSummary? bmsSummary;
   final double loadPower;
 
   /// 遥测数据时间戳；缺失时为 null（视为未知，
@@ -723,6 +726,7 @@ class InverterRealtime {
     this.deviceInfo,
     this.meter,
     this.bms,
+    this.bmsSummary,
     this.loadPower = 0,
     this.updatedAt,
   });
@@ -784,6 +788,9 @@ class InverterRealtime {
       bms: extractGroupData(json['bms']) != null
           ? BmsData.fromJson(extractGroupData(json['bms'])!)
           : null,
+      bmsSummary: extractGroupData(json['bms_summary']) != null
+          ? BmsSummary.fromJson(extractGroupData(json['bms_summary'])!)
+          : null,
       loadPower: (json['load_power'] as num?)?.toDouble() ?? 0,
       updatedAt:
           DateTime.tryParse(json['updated_at'] as String? ?? ''),
@@ -803,6 +810,7 @@ class InverterRealtime {
         'online_status': onlineStatus?.toJson(),
         'device_info': deviceInfo?.toJson(),
         'meter': meter?.toJson(),
+        if (bmsSummary != null) 'bms_summary': bmsSummary!.toJson(),
         'load_power': loadPower,
         'updated_at': updatedAt?.toIso8601String(),
       };

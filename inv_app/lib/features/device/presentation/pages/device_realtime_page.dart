@@ -216,7 +216,8 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
             structured.pv != null ||
             structured.battery != null ||
             structured.sysStatus != null ||
-            structured.energy != null;
+            structured.energy != null ||
+            structured.bmsSummary != null;
 
         if (kDebugMode) {
           debugPrint('[DeviceRealtimePage] structured: ac=${structured.ac != null}, pv=${structured.pv != null}, batt=${structured.battery != null}, sys=${structured.sysStatus != null}, energy=${structured.energy != null}');

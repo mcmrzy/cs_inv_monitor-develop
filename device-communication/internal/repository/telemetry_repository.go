@@ -113,7 +113,8 @@ func sampleRow(s *telemetry.Sample) map[string]any {
 		"device_sn": s.DeviceSN, "protocol_version": s.ProtocolVersion, "sequence_no": s.Sequence,
 		"event_time": s.EventTime, "received_at": s.ReceivedAt, "quality_flags": s.QualityFlags,
 		"topic": "heartbeat", "data_hash": s.DataHash, "raw_envelope": json.RawMessage(s.RawEnvelope),
-		"ac_voltage": s.AC.Voltage, "ac_current": s.AC.Current, "ac_active_power": s.AC.ActivePower,
+		"bms_summary": s.BMSSummary,
+		"ac_voltage":  s.AC.Voltage, "ac_current": s.AC.Current, "ac_active_power": s.AC.ActivePower,
 		"ac_apparent_power": s.AC.ApparentPower, "ac_frequency": s.AC.Frequency,
 		"ac_power_factor": s.AC.PowerFactor, "load_percent": s.AC.LoadPercent, "ac_voltage_thd": s.AC.VoltageTHD,
 		"battery_soc": s.Battery.SOC, "battery_soh": s.Battery.SOH, "battery_voltage": s.Battery.Voltage,
@@ -150,7 +151,7 @@ func sampleRow(s *telemetry.Sample) map[string]any {
 		"ac_input_power": s.AC.ACInputPower, "ac_input_apparent_power": s.AC.ACInputApparentPower,
 		"ac_charge_power": s.AC.ACChargePower, "ac_charge_apparent_power": s.AC.ACChargeApparentPower,
 		"ac_charge_current": s.AC.ACChargeCurrent,
-		"ac_bypass_power": s.AC.ACBypassPower, "ac_bypass_apparent_power": s.AC.ACBypassApparentPower,
+		"ac_bypass_power":   s.AC.ACBypassPower, "ac_bypass_apparent_power": s.AC.ACBypassApparentPower,
 		"battery_charge_power": s.Battery.ChargePower, "battery_discharge_power": s.Battery.DischargePower,
 		"gen_energy_daily": s.Energy.GenDaily, "gen_energy_total": s.Energy.GenTotal,
 		"ac_charge_energy_daily": s.Energy.ACChargeDaily, "ac_charge_energy_total": s.Energy.ACChargeTotal,
@@ -160,6 +161,6 @@ func sampleRow(s *telemetry.Sample) map[string]any {
 		"mppt_fan_speed": s.Fan.MPPTSpeed, "inv_fan_speed": s.Fan.InvSpeed,
 		"inv_current": s.Diag.InvCurrent, "parallel_charge_current": s.Diag.ParallelChargeCurrent,
 		"work_time_total": s.Diag.WorkTimeTotal,
-		"paired_socket": s.Sock.PairedSocket, "online_socket": s.Sock.OnlineSocket, "on_socket": s.Sock.OnSocket,
+		"paired_socket":   s.Sock.PairedSocket, "online_socket": s.Sock.OnlineSocket, "on_socket": s.Sock.OnSocket,
 	}
 }

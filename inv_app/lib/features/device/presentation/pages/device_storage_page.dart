@@ -6,15 +6,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import 'package:inv_app/core/entities/inverter_data.dart';
+import 'package:inv_app/core/entities/bms_summary.dart';
+import 'package:inv_app/features/device/presentation/widgets/bms_summary_view.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 /// 储能 BMS 页面
 ///
-/// 数据源：GET /devices/by-sn/:sn/realtime 的 bms 组（储能 BMS PC485 链路，
-/// 45 字段，见 docs/design/储能BMS遥测扩展协议设计.md §7.7）。
-/// 布局对标主流储能监控：SOC 仪表盘 → 指标网格 → 电芯电压柱状图 → 温度 → 告警。
+/// 数据源：GET /devices/by-sn/:sn/realtime，优先展示 ARM CMD08 的
+/// bms_summary（100 字节完整快照、UTC 有效期）。缺少新组时仍使用原
+/// bms 组及原有 45 字段 PC485 页面，不混用两种协议的状态位。
 class DeviceStoragePage extends StatefulWidget {
   final String sn;
 
@@ -26,6 +28,7 @@ class DeviceStoragePage extends StatefulWidget {
 
 class _DeviceStoragePageState extends State<DeviceStoragePage> {
   BmsData? _bms;
+  BmsSummary? _summary;
   Map<String, dynamic> _bat = {};
   bool _loading = true;
   String? _error;
@@ -60,8 +63,12 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
       }
 
       final bmsRaw = group('bms');
+      final summaryRaw = group('bms_summary');
       if (!mounted) return;
       setState(() {
+        _summary = summaryRaw == null
+            ? null
+            : BmsSummary.fromJson(Map<String, dynamic>.from(summaryRaw));
         _bms = bmsRaw == null ? null : BmsData.fromJson(Map<String, dynamic>.from(bmsRaw));
         final batRaw = group('bat');
         _bat = batRaw == null ? const {} : Map<String, dynamic>.from(batRaw);
@@ -91,14 +98,18 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
         elevation: 0,
         scrolledUnderElevation: 0.5,
         backgroundColor: AppColor.surfaceContainer(context),
-        foregroundColor: AppColors.textPrimary,
+        foregroundColor: _summary == null ? AppColors.textPrimary : AppColor.textPrimary(context),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _fetch),
+          IconButton(
+            tooltip: _t('storage_bms_refresh'),
+            icon: const Icon(Icons.refresh_rounded),
+            onPressed: _fetch,
+          ),
         ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : _error != null
+          : _error != null && _summary == null
               ? _buildEmpty(_t('storage_load_failed'))
               : _buildBody(),
     );
@@ -124,6 +135,14 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
   }
 
   Widget _buildBody() {
+    final summary = _summary;
+    if (summary != null) {
+      return BmsSummaryView(
+        summary: summary,
+        onRefresh: _fetch,
+        refreshFailed: _error != null,
+      );
+    }
     final bms = _bms;
     if (bms == null) {
       return _buildEmpty(_t('storage_not_connected'));

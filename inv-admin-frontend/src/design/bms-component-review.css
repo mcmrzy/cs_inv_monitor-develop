@@ -1,0 +1,13 @@
+body { margin: 0; background: #f4f6f6; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; letter-spacing: 0; }
+.component-review-toolbar { padding: 16px 24px; background: white; border-bottom: 1px solid #dfe6e6; display: flex; justify-content: space-between; gap: 16px; align-items: center; flex-wrap: wrap; }
+.component-review-toolbar > div:first-child { display: flex; flex-direction: column; gap: 4px; }
+.component-review-toolbar strong { font-size: 15px; color: #263537; }
+.component-review-toolbar span { font-size: 11px; color: #7a878c; }
+.component-review-toolbar .ant-segmented-item-label { font-size: 13px; }
+.component-review-main { background: white; max-width: 1280px; padding: 28px; margin: 24px auto; }
+@media (max-width: 600px) {
+  .component-review-toolbar { padding: 12px; gap: 12px; }
+  .component-review-toolbar > div:first-child { width: 100%; }
+  .component-review-toolbar .ant-segmented-item-label { padding: 0 8px; font-size: 12px; }
+  .component-review-main { margin: 12px 0; padding: 18px 14px; }
+}
