@@ -402,6 +402,7 @@ CREATE TABLE IF NOT EXISTS device_telemetry_3min (
     topic VARCHAR(64) NOT NULL DEFAULT 'heartbeat',
     data_hash VARCHAR(64) NOT NULL,
     raw_envelope JSONB NOT NULL DEFAULT '{}'::jsonb,
+    bms_summary JSONB,
     ac_voltage REAL, ac_current REAL, ac_active_power REAL, ac_apparent_power REAL,
     ac_frequency REAL, ac_power_factor REAL, load_percent REAL, ac_voltage_thd REAL,
     battery_soc REAL, battery_soh REAL, battery_voltage REAL, battery_current REAL, battery_power REAL,

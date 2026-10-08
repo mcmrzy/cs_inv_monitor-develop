@@ -406,6 +406,9 @@ class RealtimeDataServiceImpl implements RealtimeDataService {
       deviceInfo: deviceInfoData,
       meter: meterData,
       bms: bmsData,
+      bmsSummary: InverterRealtime.fromJson({
+        'bms_summary': realtime['bms_summary'],
+      }).bmsSummary,
       loadPower: loadPower,
       updatedAt: updatedAt,
     );
@@ -421,6 +424,7 @@ class RealtimeDataServiceImpl implements RealtimeDataService {
     if (a.sysStatus?.state != b.sysStatus?.state) return false;
     if (a.energy?.dailyPV != b.energy?.dailyPV) return false;
     if (a.onlineStatus?.online != b.onlineStatus?.online) return false;
+    if (a.bmsSummary != b.bmsSummary) return false;
     return true;
   }
 }

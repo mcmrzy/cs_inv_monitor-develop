@@ -647,6 +647,9 @@ func (p *ProtocolParser) handleHeartbeat(ctx context.Context, raw *RawMessage) e
 				},
 			}
 		}
+		if sample.BMSSummary != nil {
+			realtime["bms_summary"] = map[string]interface{}{"data": sample.BMSSummary, "timestamp": eventTimeUnix}
+		}
 		rtBytes, rtErr := json.Marshal(realtime)
 		if rtErr == nil {
 			_ = p.rdb.Set(ctx, "realtime:latest:"+raw.SN, rtBytes, 10*time.Minute).Err()

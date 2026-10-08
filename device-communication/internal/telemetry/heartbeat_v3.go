@@ -47,7 +47,8 @@ type heartbeatEnvelopeV3 struct {
 }
 
 type heartbeatRunV3 struct {
-	Run []json.RawMessage `json:"run"`
+	Run        []json.RawMessage       `json:"run"`
+	BMSSummary *BatterySummaryEnvelope `json:"bms_summary,omitempty"`
 }
 
 // runParamWordsV3 = RunParamDef 的 u16 字个数（174B / 2）。
@@ -331,21 +332,21 @@ func ParseHeartbeatV3(deviceSN string, payload []byte, receivedAt time.Time) (*S
 
 	// ---- ac（**ACOutputVolt 为 1V 单位**、频率 0.1Hz、电流 0.01A、功率 1W/VA）----
 	s.AC = AC{
-		Voltage:                  boundedValue(u16At(wordACOutputVolt), 0, 250, &s.QualityFlags),
-		Frequency:                boundedValue(scale(u16At(wordACOutputFreq), 0.1), 0, 55, &s.QualityFlags),
-		ActivePower:              boundedValue(clamp0(int16At(wordOutputWatt)), 0, 7500, &s.QualityFlags),
-		ApparentPower:            boundedValue(clamp0(int16At(wordOutputVA)), 0, 7500, &s.QualityFlags),
-		Current:                  boundedValue(scale(clamp0(int16At(wordOutputCurr)), 0.01), 0, 100, &s.QualityFlags),
-		GridVoltage:              boundedValue(u16At(wordGridVolt), 0, 300, &s.QualityFlags),
-		GridFrequency:            boundedValue(scale(u16At(wordGridFreq), 0.1), 0, 55, &s.QualityFlags),
-		ACInputPower:             boundedValue(clamp0(int16At(wordACInWatt)), 0, 7500, &s.QualityFlags),
-		ACInputApparentPower:     boundedValue(clamp0(int16At(wordACInVA)), 0, 7500, &s.QualityFlags),
-		ACBypassPower:            boundedValue(clamp0(int16At(wordACDisChrWatt)), 0, 7500, &s.QualityFlags),
-		ACBypassApparentPower:    boundedValue(clamp0(int16At(wordACDisChrVA)), 0, 7500, &s.QualityFlags),
-		ACChargePower:            boundedValue(clamp0(int16At(wordACChrWatt)), 0, 7500, &s.QualityFlags),
-		ACChargeApparentPower:    boundedValue(clamp0(int16At(wordACChrVA)), 0, 7500, &s.QualityFlags),
-		ACChargeCurrent:          boundedValue(scale(clamp0(int16At(wordACChrCurr)), 0.01), 0, 150, &s.QualityFlags),
-		LoadPercent:              boundedValue(scale(u16At(wordLoadPercent), 0.1), 0, 120, &s.QualityFlags),
+		Voltage:               boundedValue(u16At(wordACOutputVolt), 0, 250, &s.QualityFlags),
+		Frequency:             boundedValue(scale(u16At(wordACOutputFreq), 0.1), 0, 55, &s.QualityFlags),
+		ActivePower:           boundedValue(clamp0(int16At(wordOutputWatt)), 0, 7500, &s.QualityFlags),
+		ApparentPower:         boundedValue(clamp0(int16At(wordOutputVA)), 0, 7500, &s.QualityFlags),
+		Current:               boundedValue(scale(clamp0(int16At(wordOutputCurr)), 0.01), 0, 100, &s.QualityFlags),
+		GridVoltage:           boundedValue(u16At(wordGridVolt), 0, 300, &s.QualityFlags),
+		GridFrequency:         boundedValue(scale(u16At(wordGridFreq), 0.1), 0, 55, &s.QualityFlags),
+		ACInputPower:          boundedValue(clamp0(int16At(wordACInWatt)), 0, 7500, &s.QualityFlags),
+		ACInputApparentPower:  boundedValue(clamp0(int16At(wordACInVA)), 0, 7500, &s.QualityFlags),
+		ACBypassPower:         boundedValue(clamp0(int16At(wordACDisChrWatt)), 0, 7500, &s.QualityFlags),
+		ACBypassApparentPower: boundedValue(clamp0(int16At(wordACDisChrVA)), 0, 7500, &s.QualityFlags),
+		ACChargePower:         boundedValue(clamp0(int16At(wordACChrWatt)), 0, 7500, &s.QualityFlags),
+		ACChargeApparentPower: boundedValue(clamp0(int16At(wordACChrVA)), 0, 7500, &s.QualityFlags),
+		ACChargeCurrent:       boundedValue(scale(clamp0(int16At(wordACChrCurr)), 0.01), 0, 150, &s.QualityFlags),
+		LoadPercent:           boundedValue(scale(u16At(wordLoadPercent), 0.1), 0, 120, &s.QualityFlags),
 	}
 
 	// ---- bat（Vbat 0.1V、Ibat 0.1A、功率 1W；电流方向由 SysStatus 位决定，
@@ -409,5 +410,15 @@ func ParseHeartbeatV3(deviceSN string, payload []byte, receivedAt time.Time) (*S
 	// 插座三值：ARM App(10) 未赋值（memset 恒 0），无测量意义 → null
 	s.Sock = Sock{PairedSocket: nil, OnlineSocket: nil, OnSocket: nil}
 
+	if raw.Data.BMSSummary != nil {
+		summary, err := DecodeBatterySummary(raw.Data.BMSSummary, s.ReceivedAt)
+		if err != nil {
+			return nil, fmt.Errorf("%w: bms_summary: %v", ErrInvalidHeartbeat, err)
+		}
+		s.BMSSummary = summary
+		if summary["bms_online"] == 0 {
+			s.QualityFlags |= QualityCommFault
+		}
+	}
 	return s, nil
 }

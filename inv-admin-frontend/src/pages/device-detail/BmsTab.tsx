@@ -1,7 +1,9 @@
 /**
- * 储能 BMS 页（BmsTab）
+ * 储能 BMS 页：CMD08 bms_summary 优先，保留旧 PC485 bms 的兼容视图。
+ * CMD08 按自身 expires_at 判断时效，不受逆变器 envelope 的在线状态限制。
  *
  * 数据源：
+ * 旧协议数据源与布局：
  *  - 实时：GET /devices/by-sn/:sn/realtime 的 bms 组（储能BMS PC485 链路，45 字段，见
  *    docs/design/储能BMS遥测扩展协议设计.md §7.7）；bms 组缺失或 bms_online=0 → 空态。
  *  - 历史曲线：GET /devices/by-sn/:sn/telemetry 的逆变器侧电池列（battery_soc/voltage/current/power）。
@@ -28,6 +30,8 @@ import useTimezoneStore from '@/stores/timezoneStore'
 import useTranslation from '@/hooks/useTranslation'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
 import ReactECharts from '@/lib/echarts'
+import BmsSummaryView, { BmsSummaryEmpty } from './BmsSummaryView'
+import { parseBmsSummary } from './bmsSummary'
 import {
   toRtEnvelope, isRealtimeFresh, freshRealtime, extractEnergyMetrics,
   parseRtTimestamp, ENERGY_COLORS,
@@ -201,7 +205,7 @@ const TempCard: React.FC<{ label: string; value: number | null; icon: string }> 
 
 /* ═══════════ 主组件 ═══════════ */
 
-const BmsTab: React.FC<BmsTabProps> = ({ sn }) => {
+const LegacyBmsTab: React.FC<BmsTabProps> = ({ sn }) => {
   const { t } = useTranslation()
   const { timezone } = useTimezoneStore()
   const [historyRange, setHistoryRange] = useState<'24h' | '7d'>('24h')
@@ -680,6 +684,20 @@ const BmsTab: React.FC<BmsTabProps> = ({ sn }) => {
       </div>
     </Spin>
   )
+}
+
+const BmsTab: React.FC<BmsTabProps> = ({ sn }) => {
+  const query = useQuery({
+    queryKey: queryKeys.devices.realtime(sn),
+    queryFn: () => deviceApi.getRealtime(sn).then((r) => toRtEnvelope(r.data?.data ?? r.data)),
+    refetchInterval: () => (document.visibilityState === 'visible' ? 10_000 : false),
+  })
+  const summary = parseBmsSummary(query.data?.realtime)
+  if (summary) return <BmsSummaryView summary={summary} loading={query.isFetching}
+    error={query.error} onRefresh={() => void query.refetch()} />
+  if (!query.data?.realtime?.bms) return <BmsSummaryEmpty loading={query.isFetching} error={query.error}
+    onRefresh={() => void query.refetch()} />
+  return <LegacyBmsTab sn={sn} />
 }
 
 export default BmsTab

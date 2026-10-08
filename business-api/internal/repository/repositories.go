@@ -1549,7 +1549,7 @@ func normalizeRealtimeData(data map[string]interface{}) map[string]interface{} {
 	return data
 }
 
-func (r *DeviceRepository) GetRealtimeData(ctx context.Context, sn string) (map[string]interface{}, error) {
+func (r *DeviceRepository) getRealtimeData(ctx context.Context, sn string) (map[string]interface{}, error) {
 	online := false
 	var deviceStatus int
 	err := r.db.QueryRow(ctx, `SELECT status FROM devices WHERE sn=$1 AND deleted_at IS NULL`, sn).Scan(&deviceStatus)
