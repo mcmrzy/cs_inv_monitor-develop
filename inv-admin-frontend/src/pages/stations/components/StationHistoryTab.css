@@ -1,0 +1,5 @@
+/* Keep the page as the sticky container on narrow screens; the table body
+   already owns horizontal scrolling and synchronizes it with the header. */
+.station-history-table.ant-pro-table .ant-table {
+  overflow: visible;
+}

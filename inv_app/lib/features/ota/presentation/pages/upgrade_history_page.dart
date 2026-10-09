@@ -113,8 +113,7 @@ class _UpgradeHistoryPageState extends State<UpgradeHistoryPage> {
 
   void _clearFilters() {
     setState(() {
-      _filterDeviceSn =
-          widget.deviceSN.isNotEmpty ? widget.deviceSN : null;
+      _filterDeviceSn = widget.deviceSN.isNotEmpty ? widget.deviceSN : null;
       _filterTargetChip = null;
       _filterStatus = null;
       _filterTimeRange = null;
@@ -514,11 +513,25 @@ class _UpgradeTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final module = FirmwareModulePresentation.fromTarget(item.target);
-    final versionText = item.firmwareVersion.isEmpty
-        ? l10n.unknown
-        : item.firmwareVersion;
+    final versionText =
+        item.firmwareVersion.isEmpty ? l10n.unknown : item.firmwareVersion;
     final showRollback = item.canRollback;
     final time = (item.updatedAt ?? item.createdAt)?.toLocal();
+    final stage = switch (item.stage) {
+      'receiving' => 'transferring',
+      'writing' || 'upgrading' => 'installing',
+      _ => item.stage,
+    };
+    final stageLabel = switch (stage) {
+      'transferring' => l10n.transferring,
+      'downloading' ||
+      'verifying' ||
+      'installing' ||
+      'accepted' ||
+      'rebooting' =>
+        l10n.str('upgrade_stage_$stage'),
+      _ => '',
+    };
     return ListTile(
       onTap: null,
       leading: Icon(
@@ -539,6 +552,21 @@ class _UpgradeTile extends StatelessWidget {
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (stageLabel.isNotEmpty)
+            Text(
+              '$stageLabel ${item.stageProgress == null ? '--' : '${item.stageProgress!.clamp(0, 100)}%'}',
+              style: TextStyle(
+                fontSize: 12.sp,
+                color: AppColor.textSecondary(context),
+              ),
+            ),
+          Text(
+            '${l10n.str('ota_overall_progress')} ${(item.overallProgress ?? item.progress).clamp(0, 100)}%',
+            style: TextStyle(
+              fontSize: 12.sp,
+              color: AppColor.textSecondary(context),
+            ),
+          ),
           if (item.deviceSn.isNotEmpty) ...[
             Text(
               item.deviceSn,
@@ -598,9 +626,8 @@ class _UpgradeTile extends StatelessWidget {
                 color: canRollback
                     ? AppColors.primary
                     : AppColor.textHint(context),
-                onPressed: canRollback && !rollbackSubmitting
-                    ? onRollback
-                    : null,
+                onPressed:
+                    canRollback && !rollbackSubmitting ? onRollback : null,
                 visualDensity: VisualDensity.compact,
               ),
             ),

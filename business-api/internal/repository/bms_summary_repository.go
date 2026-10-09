@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"encoding/json"
+	"inv-api-server/internal/model"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -35,6 +36,51 @@ func (r *DeviceRepository) GetRealtimeData(ctx context.Context, sn string) (map[
 	markBMSSummaryFreshness(summary, time.Now())
 	result["bms_summary"] = summary
 	return result, nil
+}
+
+// Batch lookup is restricted to the already-authorized device page.
+func (r *DeviceRepository) attachDeviceListBMS(ctx context.Context, devices []*model.Device) {
+	sns := make([]string, 0, len(devices))
+	for _, d := range devices {
+		sns = append(sns, d.SN)
+	}
+	for sn, summary := range r.batchBMSSummaries(ctx, sns) {
+		for _, d := range devices {
+			if d.SN == sn {
+				d.BMSSummary = summary
+				break
+			}
+		}
+	}
+}
+
+func (r *DeviceRepository) batchBMSSummaries(ctx context.Context, sns []string) map[string]map[string]interface{} {
+	result := make(map[string]map[string]interface{})
+	if len(sns) == 0 {
+		return result
+	}
+	rows, err := r.db.Query(ctx, `SELECT DISTINCT ON (device_sn) device_sn,bms_summary
+		FROM device_telemetry_3min WHERE device_sn=ANY($1) AND bms_summary IS NOT NULL
+		ORDER BY device_sn,received_at DESC,event_time DESC`, sns)
+	if err != nil {
+		return result
+	}
+	defer rows.Close()
+	now := time.Now()
+	for rows.Next() {
+		var sn string
+		var raw []byte
+		if rows.Scan(&sn, &raw) != nil {
+			continue
+		}
+		var summary map[string]interface{}
+		if json.Unmarshal(raw, &summary) != nil {
+			continue
+		}
+		markBMSSummaryFreshness(summary, now)
+		result[sn] = summary
+	}
+	return result
 }
 
 func markBMSSummaryFreshness(summary map[string]interface{}, now time.Time) {

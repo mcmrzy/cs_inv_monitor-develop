@@ -14,6 +14,7 @@ import { humanizeFieldKey } from '@/utils/fieldI18n'
 import { loadStationHistoryPrefs, saveStationHistoryPrefs } from '@/utils/stationHistoryPrefs'
 import ReactECharts from '@/lib/echarts'
 import useTranslation from '@/hooks/useTranslation'
+import './StationHistoryTab.css'
 
 const { RangePicker } = DatePicker
 const { Text } = Typography
@@ -856,6 +857,7 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
               <Text type="secondary" style={{ fontSize: 12 }}>{t('common.total', { total })}</Text>
             </div>
             <ProTable
+              className="station-history-table"
               columns={columns}
               dataSource={items}
               loading={isLoading}
@@ -871,6 +873,8 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
                 onChange: (p, ps) => { setPage(p); setPageSize(ps) },
               }}
               scroll={{ x: 1200 }}
+              // MainLayout uses ProLayout's default 56px fixed header.
+              sticky={{ offsetHeader: 56 }}
               size="small"
             />
           </>

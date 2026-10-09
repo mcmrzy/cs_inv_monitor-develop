@@ -176,6 +176,8 @@ export interface DeviceUpgrade {
   status: string // pending/downloading/upgrading/success/failed/cancelled/blocked/skipped
   stage: string // 设备上报的原始阶段(accepted/downloading/verifying/installing/rebooting/succeeded/failed)，空=旧数据
   progress: number
+  stage_progress?: number | null
+  overall_progress?: number | null
   error_message: string
   retry_count: number
   pushed_by: string | null

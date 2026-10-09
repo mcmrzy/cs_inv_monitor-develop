@@ -10,6 +10,7 @@ part 'ota_state.dart';
 
 class OtaBloc extends Bloc<OtaEvent, OtaState> {
   final OtaRepository repository;
+  final DateTime Function() _now;
   Timer? _progressTimer;
 
   // 轮询三级保护：总时长上限 / 连续失败阈值 / 进度停滞（假死）检测
@@ -21,6 +22,8 @@ class OtaBloc extends Bloc<OtaEvent, OtaState> {
   DateTime? _lastProgressChangedAt;
   double _lastProgress = -1;
   String _lastStatus = '';
+  String _lastStage = '';
+  String _lastTarget = '';
   int _consecutiveFailures = 0;
   int _pollGeneration = 0;
   bool _pollActive = false;
@@ -41,7 +44,9 @@ class OtaBloc extends Bloc<OtaEvent, OtaState> {
       state is OTATriggered ||
       state is OTAProgress;
 
-  OtaBloc({required this.repository}) : super(OTAInitial()) {
+  OtaBloc({required this.repository, DateTime Function()? now})
+      : _now = now ?? DateTime.now,
+        super(OTAInitial()) {
     on<OTACheckRequested>(_onCheckRequested);
     on<OTATriggerRequested>(_onTriggerRequested);
     on<OTAFirmwareTriggerRequested>(_onFirmwareTriggerRequested);
@@ -192,10 +197,12 @@ class OtaBloc extends Bloc<OtaEvent, OtaState> {
     _pollDeviceSn = deviceSn;
     _pollTaskId = taskId != null && taskId > 0 ? taskId : null;
     // 重置三级保护状态
-    _pollStartedAt = DateTime.now();
-    _lastProgressChangedAt = DateTime.now();
+    _pollStartedAt = _now();
+    _lastProgressChangedAt = _now();
     _lastProgress = -1;
     _lastStatus = '';
+    _lastStage = '';
+    _lastTarget = '';
     _consecutiveFailures = 0;
     if (immediate) {
       _requestNextPoll(_pollGeneration);
@@ -240,16 +247,14 @@ class OtaBloc extends Bloc<OtaEvent, OtaState> {
   ) async {
     final generation = event.generation ?? _pollGeneration;
     // 轮询已停止、属于旧会话或已有请求执行中时丢弃事件。
-    if (!_pollActive ||
-        generation != _pollGeneration ||
-        _pollRequestInFlight) {
+    if (!_pollActive || generation != _pollGeneration || _pollRequestInFlight) {
       return;
     }
     _pollRequestInFlight = true;
 
     // 总时长上限：设备端卡死/后端任务异常时避免状态永久悬挂
     if (_pollStartedAt != null &&
-        DateTime.now().difference(_pollStartedAt!) > _maxPollDuration) {
+        _now().difference(_pollStartedAt!) > _maxPollDuration) {
       _stopProgressPoll();
       emit(const OTAError(message: 'Upgrade timed out'));
       return;
@@ -278,23 +283,28 @@ class OtaBloc extends Bloc<OtaEvent, OtaState> {
       (data) {
         _consecutiveFailures = 0;
         final status = data['status'] as String? ?? '';
-        final progress = (data['progress'] as num?)?.toDouble() ?? 0.0;
+        final report = OTAProgress.fromDetail(data);
+        final progress = report.progress;
 
         // 停滞（假死）检测：进度长时间不变视为设备端卡死
-        if (progress != _lastProgress || status != _lastStatus) {
+        if (progress != _lastProgress ||
+            status != _lastStatus ||
+            report.stage != _lastStage ||
+            report.targetChip != _lastTarget) {
           _lastProgress = progress;
           _lastStatus = status;
-          _lastProgressChangedAt = DateTime.now();
+          _lastStage = report.stage;
+          _lastTarget = report.targetChip;
+          _lastProgressChangedAt = _now();
         } else if (_lastProgressChangedAt != null &&
-            DateTime.now().difference(_lastProgressChangedAt!) >
-                _stallTimeout) {
+            _now().difference(_lastProgressChangedAt!) > _stallTimeout) {
           _stopProgressPoll();
           emit(const OTAError(message: 'Upgrade timed out'));
           shouldContinue = false;
           return;
         }
 
-        emit(OTAProgress(progress: progress, status: status, detail: data));
+        emit(report);
         if (status == 'completed' ||
             status == 'success' ||
             status == 'failed' ||
@@ -357,8 +367,7 @@ class OtaBloc extends Bloc<OtaEvent, OtaState> {
     );
     result.fold(
       (failure) => emit(OTAFirmwareResourcesError(message: failure.message)),
-      (resources) =>
-          emit(OTAFirmwareResourcesLoaded(resources: resources)),
+      (resources) => emit(OTAFirmwareResourcesLoaded(resources: resources)),
     );
   }
 

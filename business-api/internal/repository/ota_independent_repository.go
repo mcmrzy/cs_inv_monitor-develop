@@ -428,7 +428,7 @@ func (r *OTARepository) ListUpgradeHistoryFiltered(ctx context.Context, f model.
 	listArgs := append(append([]any{}, args...), f.PageSize, (f.Page-1)*f.PageSize)
 	listSQL := fmt.Sprintf(`
 		SELECT du.id, du.device_sn, du.firmware_id, du.firmware_version, COALESCE(du.target_chip,''),
-		       COALESCE(du.old_version,''), du.status, COALESCE(du.stage,''), COALESCE(du.progress,0),
+		       COALESCE(du.old_version,''), du.status, COALESCE(du.stage,''), du.stage_progress, du.overall_progress, COALESCE(du.progress,0),
 		       COALESCE(du.error_message,''), COALESCE(du.retry_count,0), du.pushed_by,
 		       du.started_at, du.completed_at, du.created_at, du.updated_at,
 		       COALESCE(du.task_id,0), COALESCE(f.changelog,''),
@@ -455,7 +455,7 @@ func (r *OTARepository) ListUpgradeHistoryFiltered(ctx context.Context, f model.
 		var taskID int64
 		var rollbackID int64
 		if err := rows.Scan(&du.ID, &du.DeviceSN, &du.FirmwareID, &du.FirmwareVersion, &du.TargetChip,
-			&du.OldVersion, &du.Status, &du.Stage, &du.Progress, &du.ErrorMessage, &du.RetryCount,
+			&du.OldVersion, &du.Status, &du.Stage, &du.StageProgress, &du.OverallProgress, &du.Progress, &du.ErrorMessage, &du.RetryCount,
 			&du.PushedBy, &du.StartedAt, &du.CompletedAt, &du.CreatedAt, &du.UpdatedAt, &taskID,
 			&du.Changelog, &rollbackID); err != nil {
 			continue

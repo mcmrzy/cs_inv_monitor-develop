@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:inv_app/core/utils/device_card_data.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -197,8 +198,7 @@ class _DeviceEditPageState extends State<DeviceEditPage> {
 
   // 只读信息卡：SN/类型/型号/额定功率/固件/硬件版本
   Widget _buildInfoCard(AppLocalizations l10n) {
-    final ratedPower = widget.device['rated_power'];
-    final ratedPowerW = ratedPower is num ? ratedPower.toDouble() : 0.0;
+    final ratedPowerW = deviceRatedWatts(widget.device);
     final firmware = _extractString(['firmware_arm', 'fw_version']);
     final hardware = _extractString(['hardware_version', 'hw_version']);
     final model = _extractString(['model', 'model_name']);
@@ -212,10 +212,10 @@ class _DeviceEditPageState extends State<DeviceEditPage> {
           _buildInfoRow('SN', widget.sn),
           _buildInfoRow(l10n.deviceTypeLabelKey, _getDeviceTypeLabel(l10n)),
           if (model != '--') _buildInfoRow(l10n.str('device_model'), model),
-          if (ratedPowerW > 0)
+          if (ratedPowerW != null)
             _buildInfoRow(
               l10n.ratedPowerLabel,
-              '${ratedPowerW.toStringAsFixed(0)} W',
+              devicePowerLabel(ratedPowerW),
             ),
           if (firmware != '--')
             _buildInfoRow(l10n.str('firmware_version'), firmware),

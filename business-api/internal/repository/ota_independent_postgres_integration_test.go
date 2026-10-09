@@ -128,7 +128,7 @@ func TestIndependentOTAIdempotencyRequestsUnique(t *testing.T) {
 	`)
 	require.NoError(t, err)
 
-	// 同 user+device+operation+key 拒绝并发重复
+	// Migration 119 keys the request by user/device/key, not operation.
 	_, err = pool.Exec(ctx, `
 		INSERT INTO ota_idempotency_requests (user_id, device_sn, idempotency_key, operation, payload_hash, task_ids)
 		VALUES (1, 'SN-IDEM', 'key-1', 'trigger', 'hash-a', '[7101]'::jsonb)
@@ -136,10 +136,16 @@ func TestIndependentOTAIdempotencyRequestsUnique(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "23505")
 
-	// 不同 operation 允许同 key
+	// Reusing the request identity for another operation is also a conflict.
 	_, err = pool.Exec(ctx, `
 		INSERT INTO ota_idempotency_requests (user_id, device_sn, idempotency_key, operation, payload_hash, task_ids)
 		VALUES (1, 'SN-IDEM', 'key-1', 'rollback', 'hash-a', '[]'::jsonb)
+	`)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "23505")
+	_, err = pool.Exec(ctx, `
+		INSERT INTO ota_idempotency_requests (user_id, device_sn, idempotency_key, operation, payload_hash, task_ids)
+		VALUES (1, 'SN-IDEM', 'key-2', 'rollback', 'hash-a', '[]'::jsonb)
 	`)
 	require.NoError(t, err)
 }

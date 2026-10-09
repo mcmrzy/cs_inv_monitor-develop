@@ -55,7 +55,7 @@ class DeviceDebugSession {
   });
 
   bool get isTerminal =>
-      status == 'stopped' || status == 'expired' || status == 'failed';
+      status == 'stopped' || status == 'expired' || status == 'failed' || status == 'interrupted';
 
   factory DeviceDebugSession.fromJson(Map<String, dynamic> json) {
     DateTime? parseTime(dynamic raw) =>

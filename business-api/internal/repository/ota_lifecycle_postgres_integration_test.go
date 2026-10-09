@@ -15,8 +15,8 @@ import (
 	"inv-api-server/internal/model"
 )
 
-// OTA 升级生命周期真库回归：Upsert → 设备侧拉取 pending → 进度上报 → 终态保护 →
-// 失败重推幂等（retry_count 递增）与成功后重推保持（不复活已完成升级）。
+// Lifecycle and legacy NULL progress compatibility, with immutable attempts
+// under migration 118. Manual repush creates a new row; it is not a retry.
 
 func TestOTAUpgradeLifecyclePendingToSuccess(t *testing.T) {
 	pool, cleanup := setupCommandTestDB(t)
@@ -48,6 +48,8 @@ func TestOTAUpgradeLifecyclePendingToSuccess(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, du.ID, got.ID)
 	assert.Equal(t, "pending", got.Status)
+	assert.Nil(t, got.StageProgress)
+	assert.Nil(t, got.OverallProgress)
 	assert.Equal(t, "esp", got.TargetChip)
 	assert.Equal(t, "2.0.0", fw.Version)
 	assert.Equal(t, "/firmware/2.0.0.bin", fw.FileURL)
@@ -65,6 +67,8 @@ func TestOTAUpgradeLifecyclePendingToSuccess(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "upgrading", active.Status)
 	assert.Equal(t, 45, active.Progress)
+	assert.Nil(t, active.StageProgress)
+	assert.Nil(t, active.OverallProgress)
 
 	// 完成上报：completed_at 落库
 	rows, err = repo.UpdateUpgradeStatus(ctx, sn, "success", 100, "")
@@ -84,7 +88,7 @@ func TestOTAUpgradeLifecyclePendingToSuccess(t *testing.T) {
 		`SELECT status FROM device_upgrades WHERE id=$1`, du.ID).Scan(&status))
 	assert.Equal(t, "success", status)
 
-	// 成功后重推同一固件：ON CONFLICT 保持 success，不复活、不递增 retry_count
+	// A manual repush creates a fresh attempt without reviving the completed row.
 	retryCountBefore := 0
 	require.NoError(t, pool.QueryRow(ctx,
 		`SELECT retry_count FROM device_upgrades WHERE id=$1`, du.ID).Scan(&retryCountBefore))
@@ -93,14 +97,20 @@ func TestOTAUpgradeLifecyclePendingToSuccess(t *testing.T) {
 		TargetChip: "esp", Status: "pending", PushedBy: &pushedBy,
 	}
 	require.NoError(t, repo.UpsertDeviceUpgrade(ctx, repush))
-	assert.Equal(t, du.ID, repush.ID, "重推必须命中同一行")
+	assert.NotEqual(t, du.ID, repush.ID)
+	newAttempt, _, err := repo.GetPendingUpgradeForDevice(ctx, sn)
+	require.NoError(t, err)
+	assert.Equal(t, repush.ID, newAttempt.ID)
+	assert.Zero(t, newAttempt.RetryCount)
+	assert.Nil(t, newAttempt.StageProgress)
+	assert.Nil(t, newAttempt.OverallProgress)
 	require.NoError(t, pool.QueryRow(ctx,
 		`SELECT status, retry_count FROM device_upgrades WHERE id=$1`, du.ID).Scan(&status, &retryCountBefore))
 	assert.Equal(t, "success", status, "已完成升级不得被重推复活")
 	assert.Equal(t, 0, retryCountBefore)
 }
 
-func TestOTAUpgradeLifecycleFailedRepushIncrementsRetry(t *testing.T) {
+func TestOTAUpgradeLifecycleFailedRepushPreservesHistory(t *testing.T) {
 	pool, cleanup := setupCommandTestDB(t)
 	defer cleanup()
 	ctx := context.Background()
@@ -120,21 +130,35 @@ func TestOTAUpgradeLifecycleFailedRepushIncrementsRetry(t *testing.T) {
 	}
 	require.NoError(t, repo.UpsertDeviceUpgrade(ctx, du))
 
-	// 失败后重推：pending 复活 + retry_count 递增 + 保留原 old_version
+	// A new manual attempt must not inherit the failed row's progress or error.
 	repush := &model.DeviceUpgrade{
 		DeviceSN: sn, FirmwareID: firmwareID, FirmwareVersion: "3.1.0",
 		TargetChip: "arm", OldVersion: "", Status: "pending", PushedBy: &pushedBy,
 	}
 	require.NoError(t, repo.UpsertDeviceUpgrade(ctx, repush))
-	assert.Equal(t, du.ID, repush.ID)
+	assert.NotEqual(t, du.ID, repush.ID)
 
 	got, _, err := repo.GetPendingUpgradeForDevice(ctx, sn)
 	require.NoError(t, err)
 	assert.Equal(t, "pending", got.Status)
-	assert.Equal(t, 1, got.RetryCount, "失败重推必须递增 retry_count")
-	assert.Equal(t, "3.0.0", got.OldVersion, "old_version 非空时重推不得覆盖")
-	// upsert 只在新状态为 failed 时写 error_message；复活为 pending 保留上次失败原因供用户查看
-	assert.Equal(t, "download timeout", got.ErrorMessage)
+	assert.Equal(t, repush.ID, got.ID)
+	assert.Zero(t, got.RetryCount)
+	assert.Empty(t, got.OldVersion)
+	assert.Empty(t, got.ErrorMessage)
+	assert.Nil(t, got.StageProgress)
+	assert.Nil(t, got.OverallProgress)
+	history, _, err := repo.GetDeviceUpgradeHistory(ctx, sn, 1, 20)
+	require.NoError(t, err)
+	require.Len(t, history, 2)
+	for _, attempt := range history {
+		assert.Nil(t, attempt.StageProgress)
+		assert.Nil(t, attempt.OverallProgress)
+		if attempt.ID == du.ID {
+			assert.Equal(t, "failed", attempt.Status)
+			assert.Equal(t, "3.0.0", attempt.OldVersion)
+			assert.Equal(t, "download timeout", attempt.ErrorMessage)
+		}
+	}
 }
 
 func seedOTALifecycleFirmware(t *testing.T, pool *pgxpool.Pool, id int64, version, chip string) {

@@ -445,6 +445,76 @@ void main() {
   });
 
   for (final language in ['zh', 'en']) {
+    testWidgets(
+        'legacy $language flat payload, zero temperatures and alarm words fit small dark screen',
+        (tester) async {
+      tester.view.physicalSize = const Size(320, 800);
+      tester.view.devicePixelRatio = 1;
+      tester.platformDispatcher.textScaleFactorTestValue = 1.5;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      realtime = {
+        'bms_online': 1,
+        'bms_soc': 80.5,
+        'bms_soh': 98,
+        'bms_alarm_w0': 65535,
+        'bms_alarm_w1': 65535,
+        'bms_alarm_w2': 65535,
+        'bms_cell_temp_max': 0,
+        'bms_cell_temp_min': -5,
+        'battery_voltage': 51.2,
+        'battery_current': -12,
+      };
+      final preview = Platform.environment['STORAGE_LEGACY_PREVIEW'];
+      final boundary = GlobalKey();
+      if (preview != null && previewFont != null) {
+        await tester.runAsync(() async {
+          final font = FontLoader('Roboto')
+            ..addFont(
+                File(previewFont).readAsBytes().then(ByteData.sublistView));
+          await font.load();
+          final icons = FontLoader('MaterialIcons')
+            ..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'));
+          await icons.load();
+        });
+      }
+      await pumpMinimalApp(
+          tester,
+          RepaintBoundary(
+              key: boundary, child: const DeviceStoragePage(sn: 'SN')),
+          locale: Locale(language),
+          theme: ThemeData.dark(useMaterial3: true));
+      expect(find.text('51.20 V'), findsOneWidget);
+      expect(find.text('-614 W'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      if (preview != null) {
+        await tester.runAsync(() async {
+          final image = await (boundary.currentContext!.findRenderObject()!
+                  as RenderRepaintBoundary)
+              .toImage(pixelRatio: 2);
+          final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+          await File('$preview-$language.png')
+              .writeAsBytes(bytes!.buffer.asUint8List());
+          image.dispose();
+        });
+      }
+      final technical =
+          find.text(language == 'zh' ? '技术详情' : 'Technical details');
+      await tester.scrollUntilVisible(technical, 200);
+      await Scrollable.ensureVisible(tester.element(technical), alignment: 0.5);
+      await tester.pumpAndSettle();
+      await tester.tap(technical);
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.text('0.0 °C'), 200);
+      expect(find.text('0.0 °C'), findsOneWidget);
+      expect(find.text('-5.0 °C'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+
+  for (final language in ['zh', 'en']) {
     for (final scenario in [
       'normal',
       'cells-alarm',

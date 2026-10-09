@@ -76,6 +76,7 @@ import { firmwareModuleLabel, sanitizeLegacyFirmwareLabel } from './firmwarePres
 import DeviceFirmwareUpgradeTab from './DeviceFirmwareUpgradeTab'
 import UpgradeHistoryTab from './UpgradeHistoryTab'
 import FirmwarePublishModal from './components/FirmwarePublishModal'
+import OTAProgressCell from './components/OTAProgressCell'
 
 const { TextArea } = Input
 const { Dragger } = Upload
@@ -120,20 +121,6 @@ const UPGRADE_STATUS_MAP: Record<string, { i18nKey: string; color: string }> = {
   cancelled: { i18nKey: 'ota.cancelled', color: '#d9d9d9' },
   blocked: { i18nKey: 'ota.statusBlocked', color: '#fa8c16' },
   skipped: { i18nKey: 'ota.statusSkipped', color: '#d9d9d9' },
-}
-
-// 设备上报的原始阶段(device_upgrades.stage)
-const UPGRADE_STAGE_MAP: Record<string, string> = {
-  accepted: 'ota.stageAccepted',
-  downloading: 'ota.stageDownloading',
-  receiving: 'ota.stageDownloading',
-  verifying: 'ota.stageVerifying',
-  installing: 'ota.stageInstalling',
-  rebooting: 'ota.stageRebooting',
-  succeeded: 'ota.stageSucceeded',
-  failed: 'ota.stageFailed',
-  cancelled: 'ota.stageCancelled',
-  rolled_back: 'ota.stageRolledBack',
 }
 
 const RELEASE_STATUS_MAP: Record<string, { i18nKey: string; color: string }> = {
@@ -608,18 +595,8 @@ const UpgradeTasksTab: React.FC = () => {
       },
     },
     {
-      title: t('ota.progress'), dataIndex: 'progress', key: 'progress', width: 150,
-      render: (_: any, record: DeviceUpgrade) => {
-        const stageKey = UPGRADE_STAGE_MAP[record.stage]
-        const statusCfg = UPGRADE_STATUS_MAP[record.status]
-        const label = stageKey ? t(stageKey) : statusCfg ? t(statusCfg.i18nKey) : record.status
-        return (
-          <Space direction="vertical" size={0} style={{ width: '100%' }}>
-            <span style={{ fontSize: 12, color: '#8c8c8c' }}>{label}</span>
-            <Progress percent={record.progress} size="small" />
-          </Space>
-        )
-      },
+      title: t('ota.progress'), dataIndex: 'progress', key: 'progress', width: 180,
+      render: (_: any, record: DeviceUpgrade) => <OTAProgressCell record={record} />,
     },
     {
       title: t('ota.errorInfo'), dataIndex: 'error_message', key: 'error_message', width: 240, ellipsis: true,

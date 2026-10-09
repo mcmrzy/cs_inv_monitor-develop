@@ -637,7 +637,10 @@ func (h *InternalHandler) reconcileOTAStatus(ctx context.Context, sn string, fwA
 			} else {
 				_, err = h.db.Exec(ctx, `
 					UPDATE device_upgrades SET
-						status = 'success', progress = 100, completed_at = NOW(), updated_at = NOW()
+						status = 'success', progress = 100, stage = 'succeeded',
+						stage_progress = CASE WHEN stage_progress IS NOT NULL THEN 100 ELSE NULL END,
+						overall_progress = CASE WHEN overall_progress IS NOT NULL THEN 100 ELSE NULL END,
+						completed_at = NOW(), updated_at = NOW()
 					WHERE id = $1 AND status = 'upgrading'
 				`, rec.id)
 			}
@@ -1161,13 +1164,42 @@ func (h *InternalHandler) insertNotification(ctx context.Context, sn string, sta
 }
 
 type internalOTAStatusRequest struct {
-	DeviceSN   string `json:"device_sn"`
-	TaskID     string `json:"task_id"`     // device_upgrades.id echoed by the device
-	FirmwareID *int64 `json:"firmware_id"` // 可选，设备上报时可能携带
-	Status     string `json:"status"`
-	Progress   int    `json:"progress"`
-	Message    string `json:"message"`
-	ErrCode    int    `json:"err_code"`
+	DeviceSN        string `json:"device_sn"`
+	TaskID          string `json:"task_id"`     // device_upgrades.id echoed by the device
+	FirmwareID      *int64 `json:"firmware_id"` // 可选，设备上报时可能携带
+	Status          string `json:"status"`
+	Progress        int    `json:"progress"`
+	Stage           string `json:"stage"`
+	StageProgress   *int   `json:"stage_progress"`
+	OverallProgress *int   `json:"overall_progress"`
+	Message         string `json:"message"`
+	ErrCode         int    `json:"err_code"`
+}
+
+func (req *internalOTAStatusRequest) normalizeProgress() error {
+	if req.Progress < 0 || req.Progress > 100 {
+		return fmt.Errorf("progress must be between 0 and 100")
+	}
+	for name, value := range map[string]*int{"stage_progress": req.StageProgress, "overall_progress": req.OverallProgress} {
+		if value != nil && (*value < 0 || *value > 100) {
+			return fmt.Errorf("%s must be between 0 and 100", name)
+		}
+	}
+	if req.Stage == "" {
+		req.Stage = req.Status
+	}
+	req.Stage = strings.ToLower(strings.TrimSpace(req.Stage))
+	if req.StageProgress != nil {
+		switch req.Stage {
+		case "idle", "accepted", "preparing", "downloading", "receiving", "transferring",
+			"writing", "verifying", "installing", "upgrading", "rebooting", "cancelling",
+			"cancelled", "canceled", "succeeded", "success", "completed", "done", "failed", "rolled_back":
+		default:
+			return fmt.Errorf("invalid OTA stage")
+		}
+	}
+	// Missing fields stay NULL: legacy weighted reports cannot prove phase progress.
+	return nil
 }
 
 // OTACmdAck 处理设备上报的 OTA 命令确认 (cs_inv/{sn}/ota/cmd_ack)
@@ -1262,8 +1294,8 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 		response.Error(c, 400, "device_sn is required")
 		return
 	}
-	if req.Progress < 0 || req.Progress > 100 {
-		response.Error(c, 400, "progress must be between 0 and 100")
+	if err := req.normalizeProgress(); err != nil {
+		response.Error(c, 400, err.Error())
 		return
 	}
 
@@ -1288,6 +1320,8 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 			status = $2::varchar,
 			stage = $7::varchar,
 			progress = $3,
+			stage_progress = $8::integer,
+			overall_progress = $9::integer,
 			error_message = CASE WHEN $2::varchar = 'failed' THEN $4 ELSE error_message END,
 			started_at = CASE WHEN started_at IS NULL AND $2::varchar IN ('downloading','upgrading') THEN NOW() ELSE started_at END,
 			completed_at = CASE WHEN $2::varchar IN ('success', 'failed', 'cancelled') THEN NOW() ELSE completed_at END,
@@ -1304,7 +1338,7 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 			 WHERE device_sn = $1 AND status NOT IN ('success', 'failed', 'cancelled')
 			 ORDER BY updated_at DESC, id DESC LIMIT 1)
 		)
-	`, req.DeviceSN, dbStatus, req.Progress, req.Message, upgradeID, req.FirmwareID, req.Status)
+	`, req.DeviceSN, dbStatus, req.Progress, req.Message, upgradeID, req.FirmwareID, req.Stage, req.StageProgress, req.OverallProgress)
 	if err != nil {
 		logger.Error("InternalOTAStatus failed", zap.String("sn", req.DeviceSN), zap.Error(err))
 		response.Error(c, 500, "update OTA status failed")

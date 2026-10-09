@@ -7,6 +7,8 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import 'package:inv_app/core/entities/inverter_data.dart';
 import 'package:inv_app/core/entities/bms_summary.dart';
+import 'package:inv_app/core/utils/realtime_payload.dart';
+import 'package:inv_app/core/utils/device_card_data.dart';
 import 'package:inv_app/features/device/presentation/widgets/bms_summary_view.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
@@ -30,6 +32,7 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
   BmsData? _bms;
   BmsSummary? _summary;
   Map<String, dynamic> _bat = {};
+  Map<String, dynamic> _bmsFields = {};
   bool _loading = true;
   String? _error;
   Timer? _timer;
@@ -55,23 +58,27 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
           .timeout(const Duration(seconds: 10));
       final body = res.data is Map ? res.data as Map : const {};
       final payload = body['data'] is Map ? body['data'] as Map : body;
-      final rt = payload['realtime'] is Map ? payload['realtime'] as Map : const {};
+      final rt =
+          payload['realtime'] is Map ? payload['realtime'] as Map : payload;
       dynamic group(String key) {
         final g = rt[key];
         if (g is Map && g['data'] is Map) return g['data'];
         return g is Map ? g : null;
       }
 
-      final bmsRaw = group('bms');
+      final bmsRaw = group('bms') ?? (rt.containsKey('bms_online') ? rt : null);
       final summaryRaw = group('bms_summary');
       if (!mounted) return;
       setState(() {
         _summary = summaryRaw == null
             ? null
             : BmsSummary.fromJson(Map<String, dynamic>.from(summaryRaw));
-        _bms = bmsRaw == null ? null : BmsData.fromJson(Map<String, dynamic>.from(bmsRaw));
-        final batRaw = group('bat');
-        _bat = batRaw == null ? const {} : Map<String, dynamic>.from(batRaw);
+        _bms = bmsRaw == null
+            ? null
+            : BmsData.fromJson(Map<String, dynamic>.from(bmsRaw));
+        _bmsFields =
+            bmsRaw == null ? const {} : Map<String, dynamic>.from(bmsRaw);
+        _bat = normalizeRealtimePayload(Map<String, dynamic>.from(rt));
         _loading = false;
         _error = null;
       });
@@ -87,18 +94,26 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
 
   String _t(String key) => AppLocalizations.of(context)!.str(key);
 
+  String _value(Map<String, dynamic> fields, String key, String unit,
+      {int decimals = 1}) {
+    final value = deviceNumber(fields[key]);
+    return value == null ? '--' : '${value.toStringAsFixed(decimals)} $unit';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColor.surfaceContainer(context),
       appBar: AppBar(
-        title: Text(_t('storage_title'),
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17.sp),),
+        title: Text(
+          _t('storage_title'),
+          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17.sp),
+        ),
         centerTitle: true,
         elevation: 0,
         scrolledUnderElevation: 0.5,
         backgroundColor: AppColor.surfaceContainer(context),
-        foregroundColor: _summary == null ? AppColors.textPrimary : AppColor.textPrimary(context),
+        foregroundColor: AppColor.textPrimary(context),
         actions: [
           IconButton(
             tooltip: _t('storage_bms_refresh'),
@@ -124,10 +139,14 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
           SizedBox(height: 12.h),
           Padding(
             padding: EdgeInsets.symmetric(horizontal: 24.w),
-            child: Text(text,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    fontSize: 14.sp, color: AppColors.textSecondary,),),
+            child: Text(
+              text,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14.sp,
+                color: AppColors.textSecondary,
+              ),
+            ),
           ),
         ],
       ),
@@ -154,19 +173,29 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
     return RefreshIndicator(
       onRefresh: _fetch,
       child: ListView(
-        padding: EdgeInsets.all(12.w),
+        padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 12.h),
         children: [
+          Text('SN ${widget.sn}',
+              style: TextStyle(
+                  fontSize: 12.sp, color: AppColor.textSecondary(context))),
+          SizedBox(height: 16.h),
           _statusHeader(bms),
           SizedBox(height: 12.h),
           _metricsRow(bms),
           SizedBox(height: 12.h),
-          _capacityCard(bms),
-          SizedBox(height: 12.h),
-          _cellChartCard(bms),
-          SizedBox(height: 12.h),
-          _tempCard(bms),
-          SizedBox(height: 12.h),
           _switchAndAlarmCard(bms),
+          SizedBox(height: 20.h),
+          _cellChartCard(bms),
+          ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              title: Text(_t('storage_summary_technical'),
+                  style:
+                      TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600)),
+              children: [
+                _capacityCard(bms),
+                SizedBox(height: 20.h),
+                _tempCard(bms)
+              ]),
           SizedBox(height: 24.h),
         ],
       ),
@@ -175,25 +204,24 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
 
   /* ── 状态头：SOC 仪表盘 + 工作模式 ── */
   Widget _statusHeader(BmsData bms) {
-    final mode = _workModeLabel(bms.workMode);
-    final socColor = bms.soc <= 15 ? const Color(0xFFEF4444) : const Color(0xFF22C55E);
-    return Container(
-      padding: EdgeInsets.all(16.w),
-      decoration: BoxDecoration(
-        color: AppColor.surface(context),
-        borderRadius: BorderRadius.circular(16.w),
-      ),
+    final mode = _bmsFields['bms_battery_work_mode'] == null
+        ? (_t('storage_bms_operating_unknown'), Colors.grey)
+        : _workModeLabel(bms.workMode);
+    final socColor =
+        bms.soc <= 15 ? const Color(0xFFEF4444) : const Color(0xFF22C55E);
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 12.h),
       child: Row(
         children: [
           SizedBox(
-            width: 120.w,
-            height: 120.w,
+            width: 96.w,
+            height: 96.w,
             child: Stack(
               alignment: Alignment.center,
               children: [
                 SizedBox(
-                  width: 120.w,
-                  height: 120.w,
+                  width: 96.w,
+                  height: 96.w,
                   child: CircularProgressIndicator(
                     value: (bms.soc / 100).clamp(0.0, 1.0),
                     strokeWidth: 10.w,
@@ -204,13 +232,21 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
                 Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('${bms.soc.toStringAsFixed(1)}%',
-                        style: TextStyle(
+                    SizedBox(
+                        width: 76.w,
+                        child: FittedBox(
+                            child: Text(
+                          _value(_bmsFields, 'bms_soc', '%'),
+                          style: TextStyle(
                             fontSize: 22.sp,
                             fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary,),),
-                    const Text('SOC',
-                        style: TextStyle(fontSize: 11, color: Colors.grey),),
+                            color: AppColor.textPrimary(context),
+                          ),
+                        ))),
+                    const Text(
+                      'SOC',
+                      style: TextStyle(fontSize: 11, color: Colors.grey),
+                    ),
                   ],
                 ),
               ],
@@ -222,33 +258,48 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
+                  padding:
+                      EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
                   decoration: BoxDecoration(
                     color: mode.$2.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(8.w),
                   ),
-                  child: Text(mode.$1,
-                      style: TextStyle(
-                          fontSize: 13.sp,
-                          fontWeight: FontWeight.w600,
-                          color: mode.$2,),),
+                  child: Text(
+                    mode.$1,
+                    style: TextStyle(
+                      fontSize: 13.sp,
+                      fontWeight: FontWeight.w600,
+                      color: mode.$2,
+                    ),
+                  ),
                 ),
                 SizedBox(height: 10.h),
-                Text('SOH ${bms.soh.toStringAsFixed(1)}%',
-                    style: TextStyle(
-                        fontSize: 15.sp,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,),),
+                Text(
+                  'SOH ${_value(_bmsFields, 'bms_soh', '%')}',
+                  style: TextStyle(
+                    fontSize: 15.sp,
+                    fontWeight: FontWeight.w600,
+                    color: AppColor.textPrimary(context),
+                  ),
+                ),
                 SizedBox(height: 4.h),
-                Text('${_t('storage_cycle_count')}: ${bms.cycleCount}',
-                    style: TextStyle(
-                        fontSize: 13.sp, color: AppColors.textSecondary,),),
+                Text(
+                  '${_t('storage_cycle_count')}: ${_value(_bmsFields, 'bms_cycle_count', '', decimals: 0).trim()}',
+                  style: TextStyle(
+                    fontSize: 13.sp,
+                    color: AppColor.textSecondary(context),
+                  ),
+                ),
                 if (bms.cellVoltageDiff > 50)
                   Padding(
                     padding: EdgeInsets.only(top: 4.h),
-                    child: Text('${_t('storage_diff')}: ${bms.cellVoltageDiff} mV',
-                        style: const TextStyle(
-                            fontSize: 13, color: Color(0xFFF59E0B),),),
+                    child: Text(
+                      '${_t('storage_diff')}: ${bms.cellVoltageDiff} mV',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFFF59E0B),
+                      ),
+                    ),
                   ),
               ],
             ),
@@ -268,55 +319,66 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
         return (_t('storage_init'), const Color(0xFF3B82F6));
       case 4:
         return (_t('storage_recharge'), const Color(0xFF8B5CF6));
-      default:
+      case 0:
         return (_t('storage_idle'), Colors.grey);
+      default:
+        return (_t('storage_bms_operating_unknown'), Colors.grey);
     }
   }
 
   /* ── 指标行：总压 / 电流 / 充 / 放功率 ── */
   Widget _metricsRow(BmsData bms) {
-    final v = _bat['battery_voltage'] is num ? (_bat['battery_voltage'] as num).toDouble() : 0.0;
-    final i = _bat['battery_current'] is num ? (_bat['battery_current'] as num).toDouble() : 0.0;
-    final chg = _bat['battery_charge_power'] is num
-        ? (_bat['battery_charge_power'] as num).toDouble()
-        : 0.0;
-    final dsg = _bat['battery_discharge_power'] is num
-        ? (_bat['battery_discharge_power'] as num).toDouble()
-        : 0.0;
-    String kw(num w) => w >= 1000 ? '${(w / 1000).toStringAsFixed(2)} kW' : '${w.toStringAsFixed(0)} W';
-    return Row(
-      children: [
-        _metricCell(_t('storage_pack_voltage'), '${v.toStringAsFixed(2)} V'),
-        _metricCell(_t('storage_current'), '${i.toStringAsFixed(1)} A'),
-        _metricCell(_t('storage_charge_power'), kw(chg)),
-        _metricCell(_t('storage_discharge_power'), kw(dsg)),
-      ],
-    );
+    final v = deviceNumber(_bat['battery_voltage']);
+    final i = deviceNumber(_bat['battery_current']);
+    return LayoutBuilder(
+        builder: (context, constraints) => Wrap(
+              spacing: 16,
+              runSpacing: 18,
+              children: [
+                SizedBox(
+                    width: (constraints.maxWidth - 16) / 2,
+                    child: _metricCell(_t('storage_pack_voltage'),
+                        _value(_bat, 'battery_voltage', 'V', decimals: 2))),
+                SizedBox(
+                    width: (constraints.maxWidth - 16) / 2,
+                    child: _metricCell(_t('storage_current'),
+                        _value(_bat, 'battery_current', 'A'))),
+                SizedBox(
+                    width: (constraints.maxWidth - 16) / 2,
+                    child: _metricCell(
+                        _t('storage_summary_power'),
+                        v == null || i == null
+                            ? '--'
+                            : devicePowerLabel(v * i))),
+                SizedBox(
+                    width: (constraints.maxWidth - 16) / 2,
+                    child: _metricCell(
+                        _t('storage_diff'),
+                        _value(_bmsFields, 'bms_cell_voltage_diff', 'mV',
+                            decimals: 0))),
+              ],
+            ));
   }
 
   Widget _metricCell(String label, String value) {
-    return Expanded(
-      child: Container(
-        margin: EdgeInsets.only(right: 8.w),
-        padding: EdgeInsets.symmetric(vertical: 12.h, horizontal: 8.w),
-        decoration: BoxDecoration(
-          color: AppColor.surface(context),
-          borderRadius: BorderRadius.circular(12.w),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+              fontSize: 12.sp, color: AppColor.textSecondary(context)),
         ),
-        child: Column(
-          children: [
-            Text(label,
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 11.sp, color: AppColors.textSecondary),),
-            SizedBox(height: 4.h),
-            Text(value,
-                style: TextStyle(
-                    fontSize: 15.sp,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,),),
-          ],
+        SizedBox(height: 4.h),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 20.sp,
+            fontWeight: FontWeight.w700,
+            color: AppColor.textPrimary(context),
+          ),
         ),
-      ),
+      ],
     );
   }
 
@@ -338,17 +400,27 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
             valueColor: const AlwaysStoppedAnimation(Color(0xFF22C55E)),
           ),
           SizedBox(height: 8.h),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            spacing: 20,
+            runSpacing: 12,
             children: [
-              _kv(_t('storage_remain_capacity'), '${bms.capacityRemain.toStringAsFixed(1)} Ah'),
-              _kv(_t('storage_full_capacity'), '${bms.capacityFull.toStringAsFixed(1)} Ah'),
-              _kv(_t('storage_design_capacity'), '${bms.capacityDesign.toStringAsFixed(1)} Ah'),
+              _kv(_t('storage_remain_capacity'),
+                  _value(_bmsFields, 'bms_capacity_remain', 'Ah')),
+              _kv(_t('storage_full_capacity'),
+                  _value(_bmsFields, 'bms_capacity_full', 'Ah')),
+              _kv(_t('storage_design_capacity'),
+                  _value(_bmsFields, 'bms_capacity_design', 'Ah')),
+              _kv(_t('storage_charge_power'),
+                  _value(_bat, 'battery_charge_power', 'W')),
+              _kv(_t('storage_discharge_power'),
+                  _value(_bat, 'battery_discharge_power', 'W')),
             ],
           ),
           SizedBox(height: 8.h),
-          _kv(_t('storage_charge_request'),
-              '${bms.chgRequestCurrent.toStringAsFixed(1)} A / ${bms.chgRequestVoltage.toStringAsFixed(1)} V',),
+          _kv(
+            _t('storage_charge_request'),
+            '${_value(_bmsFields, 'bms_chg_request_current', 'A')} / ${_value(_bmsFields, 'bms_chg_request_voltage', 'V')}',
+          ),
         ],
       ),
     );
@@ -361,7 +433,10 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
     final vMax = valid.isEmpty ? 0.0 : valid.reduce((a, b) => a > b ? a : b);
     final vMin = valid.isEmpty ? 0.0 : valid.reduce((a, b) => a < b ? a : b);
     final balancingCount = List<int>.generate(16, (i) => i)
-        .where((i) => (bms.balanceBitmap >> i) & 1 == 1 && i < cells.length && cells[i] > 0)
+        .where((i) =>
+            (bms.balanceBitmap >> i) & 1 == 1 &&
+            i < cells.length &&
+            cells[i] > 0)
         .length;
 
     return _card(
@@ -374,8 +449,11 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
             height: 190.h,
             child: valid.isEmpty
                 ? Center(
-                    child: Text(_t('storage_no_data'),
-                        style: TextStyle(fontSize: 13.sp, color: Colors.grey),),)
+                    child: Text(
+                      _t('storage_no_data'),
+                      style: TextStyle(fontSize: 13.sp, color: Colors.grey),
+                    ),
+                  )
                 : BarChart(
                     BarChartData(
                       alignment: BarChartAlignment.spaceAround,
@@ -391,28 +469,33 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
                       barTouchData: BarTouchData(
                         touchTooltipData: BarTouchTooltipData(
                           getTooltipColor: (_) => const Color(0xE6111827),
-                          getTooltipItem: (group, gi, rod, ri) => BarTooltipItem(
-                              '${_t('storage_cell')} ${group.x + 1}: ${rod.toY.toStringAsFixed(0)} mV',
-                              const TextStyle(color: Colors.white, fontSize: 11),),
+                          getTooltipItem: (group, gi, rod, ri) =>
+                              BarTooltipItem(
+                            '${_t('storage_cell')} ${group.x + 1}: ${rod.toY.toStringAsFixed(0)} mV',
+                            const TextStyle(color: Colors.white, fontSize: 11),
+                          ),
                         ),
                       ),
                       barGroups: List.generate(cells.length, (i) {
                         final v = cells[i];
                         final isMax = v > 0 && v == vMax;
                         final isMin = v > 0 && v == vMin;
-                        return BarChartGroupData(x: i, barRods: [
-                          BarChartRodData(
-                            toY: v > 0 ? v : 0,
-                            width: 13.w,
-                            borderRadius:
-                                BorderRadius.vertical(top: Radius.circular(3.w)),
-                            color: isMax
-                                ? const Color(0xFFEF4444)
-                                : isMin
-                                    ? const Color(0xFF3B82F6)
-                                    : const Color(0xFF22C55E),
-                          ),
-                        ],);
+                        return BarChartGroupData(
+                          x: i,
+                          barRods: [
+                            BarChartRodData(
+                              toY: v > 0 ? v : 0,
+                              width: 13.w,
+                              borderRadius: BorderRadius.vertical(
+                                  top: Radius.circular(3.w)),
+                              color: isMax
+                                  ? const Color(0xFFEF4444)
+                                  : isMin
+                                      ? const Color(0xFF3B82F6)
+                                      : const Color(0xFF22C55E),
+                            ),
+                          ],
+                        );
                       }),
                     ),
                   ),
@@ -434,61 +517,38 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
   }
 
   Widget _legendDot(Color color, String label) {
-    return Row(mainAxisSize: MainAxisSize.min, children: [
-      Container(width: 8.w, height: 8.w,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),),
-      SizedBox(width: 4.w),
-      Text(label,
-          style: TextStyle(fontSize: 11.sp, color: AppColors.textSecondary),),
-    ],);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8.w,
+          height: 8.w,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        SizedBox(width: 4.w),
+        Text(
+          label,
+          style: TextStyle(fontSize: 11.sp, color: AppColors.textSecondary),
+        ),
+      ],
+    );
   }
 
   /* ── 温度 ── */
   Widget _tempCard(BmsData bms) {
-    Color tempColor(double v) {
-      if (v == 0) return Colors.grey;
-      if (v >= 55) return const Color(0xFFEF4444);
-      if (v >= 45) return const Color(0xFFF59E0B);
-      if (v <= 0) return const Color(0xFF3B82F6);
-      return const Color(0xFF22C55E);
-    }
-
-    Widget chip(String label, double v) {
-      return Expanded(
-        child: Container(
-          margin: EdgeInsets.only(right: 8.w),
-          padding: EdgeInsets.symmetric(vertical: 10.h),
-          decoration: BoxDecoration(
-            color: AppColor.surface(context),
-            borderRadius: BorderRadius.circular(12.w),
-          ),
-          child: Column(
-            children: [
-              Text(label,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      fontSize: 10.sp, color: AppColors.textSecondary,),),
-              SizedBox(height: 4.h),
-              Text(v == 0 ? '--' : '${v.toStringAsFixed(1)}°C',
-                  style: TextStyle(
-                      fontSize: 14.sp,
-                      fontWeight: FontWeight.w700,
-                      color: tempColor(v),),),
-            ],
-          ),
-        ),
-      );
-    }
-
     return _card(
       _t('storage_temps'),
-      Row(
+      Wrap(
+        spacing: 24,
+        runSpacing: 16,
         children: [
-          chip(_t('storage_cell_temp_max'), bms.cellTempMax),
-          chip(_t('storage_cell_temp_min'), bms.cellTempMin),
-          chip('MOS', bms.mosTemp),
-          chip(_t('storage_env_temp'), bms.envTemp),
-          chip('PCB', bms.pcbTemp),
+          _kv(_t('storage_cell_temp_max'),
+              _value(_bmsFields, 'bms_cell_temp_max', '°C')),
+          _kv(_t('storage_cell_temp_min'),
+              _value(_bmsFields, 'bms_cell_temp_min', '°C')),
+          _kv('MOS', _value(_bmsFields, 'bms_mos_temp', '°C')),
+          _kv(_t('storage_env_temp'), _value(_bmsFields, 'bms_env_temp', '°C')),
+          _kv('PCB', _value(_bmsFields, 'bms_pcb_temp', '°C')),
         ],
       ),
     );
@@ -499,11 +559,16 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
     final alarms = <Widget>[];
     // 故障位图（bit 序与 BMS pack_info fault_status 一致，见设计文档 §7.4）
     const faultDefs = {
-      0: 'storage_fault_sc', 1: 'storage_fault_reverse',
-      2: 'storage_fault_ntc_break', 3: 'storage_fault_wire_break',
-      4: 'storage_fault_afe_comm', 5: 'storage_fault_chg_mos_fault',
-      6: 'storage_fault_dsg_mos_fault', 7: 'storage_fault_fan_low',
-      8: 'storage_fault_fan_stall', 24: 'storage_fault_lock',
+      0: 'storage_fault_sc',
+      1: 'storage_fault_reverse',
+      2: 'storage_fault_ntc_break',
+      3: 'storage_fault_wire_break',
+      4: 'storage_fault_afe_comm',
+      5: 'storage_fault_chg_mos_fault',
+      6: 'storage_fault_dsg_mos_fault',
+      7: 'storage_fault_fan_low',
+      8: 'storage_fault_fan_stall',
+      24: 'storage_fault_lock',
     };
     faultDefs.forEach((bit, key) {
       if ((bms.faultStatus >> bit) & 1 == 1) {
@@ -512,16 +577,25 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
     });
     // 告警等级字 w0/w1/w2：每类 2bit（0-3 级）
     const alarmDefs = [
-      [0, 0, 'storage_alarm_cell_ov'], [0, 1, 'storage_alarm_pack_ov'],
-      [0, 2, 'storage_alarm_chg_oc'], [0, 3, 'storage_alarm_chg_ot'],
-      [0, 4, 'storage_alarm_chg_ut'], [1, 0, 'storage_alarm_cell_uv'],
-      [1, 1, 'storage_alarm_pack_uv'], [1, 2, 'storage_alarm_dsg_oc'],
-      [1, 3, 'storage_alarm_dsg_ot'], [1, 4, 'storage_alarm_dsg_ut'],
-      [1, 5, 'storage_alarm_soc_low'], [2, 0, 'storage_alarm_env_ot'],
-      [2, 1, 'storage_alarm_env_ut'], [2, 2, 'storage_alarm_pcb_ot'],
-      [2, 3, 'storage_alarm_pcb_ut'], [3, 0, 'storage_alarm_mos_ot'],
-      [3, 1, 'storage_alarm_mos_ut'], [4, 0, 'storage_alarm_dv'],
-      [4, 1, 'storage_alarm_dt'],
+      [0, 0, 'storage_alarm_cell_ov'],
+      [0, 1, 'storage_alarm_pack_ov'],
+      [0, 2, 'storage_alarm_chg_oc'],
+      [0, 3, 'storage_alarm_chg_ot'],
+      [0, 4, 'storage_alarm_chg_ut'],
+      [0, 5, 'storage_alarm_cell_uv'],
+      [0, 6, 'storage_alarm_pack_uv'],
+      [0, 7, 'storage_alarm_dsg_oc'],
+      [1, 0, 'storage_alarm_dsg_ot'],
+      [1, 1, 'storage_alarm_dsg_ut'],
+      [1, 2, 'storage_alarm_soc_low'],
+      [1, 3, 'storage_alarm_env_ot'],
+      [1, 4, 'storage_alarm_env_ut'],
+      [1, 5, 'storage_alarm_pcb_ot'],
+      [1, 6, 'storage_alarm_pcb_ut'],
+      [1, 7, 'storage_alarm_mos_ot'],
+      [2, 0, 'storage_alarm_mos_ut'],
+      [2, 1, 'storage_alarm_dv'],
+      [2, 2, 'storage_alarm_dt'],
     ];
     final words = [bms.alarmW0, bms.alarmW1, bms.alarmW2];
     for (final def in alarmDefs) {
@@ -530,13 +604,16 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
       final key = def[2] as String;
       final level = (words[word] >> (bit * 2)) & 0x3;
       if (level > 0) {
-        alarms.add(_alarmChip(
+        alarms.add(
+          _alarmChip(
             '${_t(key)} L$level',
             level >= 3
                 ? Colors.deepOrange
                 : level == 2
                     ? Colors.orange
-                    : Colors.amber,),);
+                    : Colors.amber,
+          ),
+        );
       }
     }
 
@@ -545,43 +622,79 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              _mosChip(_t('storage_charge_mos'), (bms.mosStatus & 0x01) == 1),
-              SizedBox(width: 8.w),
-              _mosChip(_t('storage_discharge_mos'), (bms.mosStatus & 0x02) == 1),
+              _mosChip(
+                  _t('storage_charge_mos'),
+                  _bmsFields['bms_mos_status'] == null
+                      ? null
+                      : (bms.mosStatus & 0x01) == 1),
+              _mosChip(
+                  _t('storage_discharge_mos'),
+                  _bmsFields['bms_mos_status'] == null
+                      ? null
+                      : (bms.mosStatus & 0x02) == 1),
             ],
           ),
           SizedBox(height: 10.h),
           alarms.isEmpty
-              ? Row(children: [
-                  const Icon(Icons.check_circle_rounded,
-                      color: Color(0xFF22C55E), size: 18,),
-                  SizedBox(width: 6.w),
-                  Text(_t('storage_no_alarms'),
+              ? Row(
+                  children: [
+                    Icon(
+                      [
+                        'bms_fault_status',
+                        'bms_alarm_w0',
+                        'bms_alarm_w1',
+                        'bms_alarm_w2'
+                      ].every((key) => _bmsFields[key] != null)
+                          ? Icons.check_circle_rounded
+                          : Icons.help_outline,
+                      color: AppColor.textSecondary(context),
+                      size: 18,
+                    ),
+                    SizedBox(width: 6.w),
+                    Expanded(
+                        child: Text(
+                      [
+                        'bms_fault_status',
+                        'bms_alarm_w0',
+                        'bms_alarm_w1',
+                        'bms_alarm_w2'
+                      ].every((key) => _bmsFields[key] != null)
+                          ? _t('storage_no_alarms')
+                          : _t('storage_bms_flags_unknown'),
                       style: TextStyle(
-                          fontSize: 13.sp, color: const Color(0xFF22C55E),),),
-                ],)
+                        fontSize: 13.sp,
+                        color: AppColor.textSecondary(context),
+                      ),
+                    )),
+                  ],
+                )
               : Wrap(spacing: 8.w, runSpacing: 8.h, children: alarms),
         ],
       ),
     );
   }
 
-  Widget _mosChip(String label, bool on) {
+  Widget _mosChip(String label, bool? on) {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 5.h),
       decoration: BoxDecoration(
-        color: on
+        color: on == true
             ? const Color(0xFF22C55E).withValues(alpha: 0.12)
             : Colors.grey.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8.w),
       ),
-      child: Text('$label ${on ? _t('storage_on') : _t('storage_off')}',
-          style: TextStyle(
-              fontSize: 12.sp,
-              fontWeight: FontWeight.w600,
-              color: on ? const Color(0xFF16A34A) : Colors.grey,),),
+      child: Text(
+        '$label ${on == null ? '--' : on ? _t('storage_on') : _t('storage_off')}',
+        style: TextStyle(
+          fontSize: 12.sp,
+          fontWeight: FontWeight.w600,
+          color: on == true ? const Color(0xFF16A34A) : Colors.grey,
+        ),
+      ),
     );
   }
 
@@ -592,28 +705,35 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
         color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(8.w),
       ),
-      child: Text(label,
-          style: TextStyle(
-              fontSize: 12.sp, fontWeight: FontWeight.w600, color: color,),),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12.sp,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
+      ),
     );
   }
 
   /* ── 通用卡片 ── */
   Widget _card(String title, Widget child) {
     return Container(
-      padding: EdgeInsets.all(14.w),
+      padding: EdgeInsets.symmetric(vertical: 14.h),
       decoration: BoxDecoration(
-        color: AppColor.surface(context),
-        borderRadius: BorderRadius.circular(16.w),
+        border: Border(bottom: BorderSide(color: AppColor.border(context))),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
-              style: TextStyle(
-                  fontSize: 14.sp,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,),),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 14.sp,
+              fontWeight: FontWeight.w600,
+              color: AppColor.textPrimary(context),
+            ),
+          ),
           SizedBox(height: 10.h),
           child,
         ],
@@ -625,14 +745,20 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label,
-            style: TextStyle(fontSize: 11.sp, color: AppColors.textSecondary),),
+        Text(
+          label,
+          style: TextStyle(
+              fontSize: 11.sp, color: AppColor.textSecondary(context)),
+        ),
         SizedBox(height: 2.h),
-        Text(value,
-            style: TextStyle(
-                fontSize: 13.sp,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,),),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 13.sp,
+            fontWeight: FontWeight.w600,
+            color: AppColor.textPrimary(context),
+          ),
+        ),
       ],
     );
   }

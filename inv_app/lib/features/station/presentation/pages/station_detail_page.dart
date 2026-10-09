@@ -10,6 +10,7 @@ import 'package:inv_app/core/services/network_status_service.dart';
 import 'package:inv_app/core/services/data_cache_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/utils/timezone_utils.dart';
+import 'package:inv_app/core/utils/device_card_data.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
@@ -288,7 +289,13 @@ class _StationDetailPageState extends State<StationDetailPage>
       final rt = getIt<RealtimeDataService>().getLatestData(_selectedDeviceSn);
       pvW = rt?.pv?.pvPower ?? 0;
       loadW = rt?.ac?.power ?? 0;
-      if (rt?.battery != null) {
+      final device = (_cachedState?.devices ?? []).whereType<Map>().where((d) => d['sn'] == _selectedDeviceSn).firstOrNull;
+      final summary = rt?.bmsSummary ?? (device == null ? null : deviceBattery(Map<String, dynamic>.from(device)));
+      if (summary != null) {
+        final live = summary.onlineAt(DateTime.now()) == true;
+        battW = live && summary.voltage != null && summary.current != null ? summary.voltage! * summary.current! : 0;
+        soc = live ? summary.soc ?? 0 : 0;
+      } else if (rt?.battery != null) {
         battW = rt!.battery!.voltage * rt.battery!.current;
         soc = rt.battery!.soc;
       } else {

@@ -284,7 +284,7 @@ const DeviceFirmwareUpgradeTab: React.FC = () => {
         return <Tag color={cfg?.color || 'default'}>{cfg ? t(cfg.i18nKey) : s}</Tag>
       },
     },
-    { title: t('ota.progress'), dataIndex: 'progress', key: 'progress', width: 80, render: (v: number) => `${v ?? 0}%` },
+    { title: t('ota.progress'), dataIndex: 'progress', key: 'progress', width: 180, render: (_: number, record: DeviceUpgrade) => <OTAProgressCell record={record} /> },
     {
       title: t('ota.executeTime'),
       dataIndex: 'started_at',
@@ -718,3 +718,4 @@ const DeviceFirmwareUpgradeTab: React.FC = () => {
 
 export default DeviceFirmwareUpgradeTab
 export { normalizeFirmwareTarget }
+import OTAProgressCell from './components/OTAProgressCell'

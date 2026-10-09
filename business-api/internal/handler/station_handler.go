@@ -35,6 +35,7 @@ func NewStationHandler(stationService *service.StationService, deviceService *se
 	}
 }
 
+// Legacy mutation gate. Reads use the organization-scoped overview queries.
 func (h *StationHandler) canAccessStation(c *gin.Context, stationID int64) (bool, error) {
 	if middleware.GetIsSystemAdmin(c) {
 		return true, nil
@@ -84,7 +85,7 @@ func (h *StationHandler) Create(c *gin.Context) {
 		Timezone:    req.Timezone,
 		// 新建电站初始为离线(0), 首台设备上线事件联动为正常(1):
 		// 与设备实况保持一致, 避免"设备从未上线却显示正常"
-		Status:      0,
+		Status: 0,
 	}
 
 	// 验证时区, 默认使用 Asia/Shanghai
@@ -372,28 +373,21 @@ func (h *StationHandler) GetByID(c *gin.Context) {
 		return
 	}
 
-	station, err := h.stationService.GetByID(c.Request.Context(), stationID)
-	if err != nil {
-		response.Error(c, 500, "system error")
-		return
-	}
-
-	if station == nil {
-		response.Error(c, 404, "station not found")
-		return
-	}
-
-	allowed, accessErr := h.canAccessStation(c, stationID)
-	if accessErr != nil {
-		response.Error(c, 500, "check station permission failed")
-		return
-	}
+	station, plan, systemAdmin, allowed := h.overviewStation(c, stationID)
 	if !allowed {
-		response.Error(c, 403, "permission denied")
 		return
 	}
-
-	devices, _ := h.deviceService.GetByStationID(c.Request.Context(), stationID)
+	devicePlan, deviceAdmin, err := h.overviewDeviceScope(c, plan)
+	if err != nil {
+		response.InternalError(c, "authorization state unavailable")
+		return
+	}
+	admin := systemAdmin && deviceAdmin
+	devices, err := h.deviceService.GetOverviewStationDevices(c.Request.Context(), plan, devicePlan, admin, stationID)
+	if err != nil {
+		response.InternalError(c, "get station devices failed")
+		return
+	}
 
 	// Batch-fetch realtime data for all devices (eliminates N+1 Redis calls)
 	sns := make([]string, len(devices))
@@ -409,18 +403,16 @@ func (h *StationHandler) GetByID(c *gin.Context) {
 		}
 	}
 
-	_, totalPower, _ := h.deviceService.GetStationRealtimeSummary(c.Request.Context(), stationID, station.Timezone)
-	dailyEnergy, _ := h.deviceService.GetStationTodayEnergy(c.Request.Context(), stationID, station.Timezone)
-	totalEnergy, monthEnergy := h.deviceService.GetStationEnergySummary(c.Request.Context(), stationID, station.Timezone)
-	yearEnergy := h.deviceService.GetStationYearEnergy(c.Request.Context(), stationID, station.Timezone)
-
-	pvPower, loadPower, gridPower, battPower, battSoc := h.deviceService.GetStationPowerBreakdown(c.Request.Context(), stationID)
-
-	onlineCount := 0
-	for _, d := range devices {
-		if d.Status == 1 || d.Status == 2 {
-			onlineCount++
-		}
+	statsByStation, err := h.stationService.OverviewDeviceStats(c.Request.Context(), plan, devicePlan, admin, []int64{stationID})
+	if err != nil {
+		response.InternalError(c, "get station device stats failed")
+		return
+	}
+	stats := statsByStation[stationID]
+	power, err := h.deviceService.GetOverviewStationPower(c.Request.Context(), plan, devicePlan, admin, stationID)
+	if err != nil {
+		response.InternalError(c, "get station power failed")
+		return
 	}
 
 	stationMap := map[string]interface{}{
@@ -437,18 +429,18 @@ func (h *StationHandler) GetByID(c *gin.Context) {
 		"longitude":    station.Longitude,
 		"timezone":     station.Timezone,
 		"status":       station.Status,
-		"device_count": len(devices),
-		"online_count": onlineCount,
-		"today_energy": dailyEnergy,
-		"total_energy": totalEnergy,
-		"month_energy": monthEnergy,
-		"year_energy":  yearEnergy,
-		"total_power":  totalPower,
-		"pv_power":     pvPower,
-		"load_power":   loadPower,
-		"grid_power":   gridPower,
-		"batt_power":   battPower,
-		"batt_soc":     battSoc,
+		"device_count": stats.DeviceCount,
+		"online_count": stats.OnlineCount,
+		"today_energy": stats.TodayEnergy,
+		"total_energy": stats.TotalEnergy,
+		"month_energy": stats.MonthEnergy,
+		"year_energy":  stats.YearEnergy,
+		"total_power":  stats.TotalPower,
+		"pv_power":     power.PV,
+		"load_power":   power.Load,
+		"grid_power":   0,
+		"batt_power":   power.Battery,
+		"batt_soc":     power.SOC,
 	}
 
 	result := map[string]interface{}{
@@ -460,8 +452,10 @@ func (h *StationHandler) GetByID(c *gin.Context) {
 }
 
 func (h *StationHandler) List(c *gin.Context) {
-	userID := middleware.GetUserID(c)
-	isAdmin := middleware.GetIsSystemAdmin(c)
+	plan, systemAdmin, allowed := overviewScope(c, h.db, "station")
+	if !allowed {
+		return
+	}
 
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize := getPageSize(c, 20)
@@ -473,45 +467,21 @@ func (h *StationHandler) List(c *gin.Context) {
 		pageSize = 20
 	}
 
-	var stations []*model.Station
-	var total int64
-	var err error
-
-	// 超级管理员始终返回所有电站
-	if isAdmin {
-		stations, total, err = h.stationService.GetAll(c.Request.Context(), page, pageSize)
-	} else {
-		stations, total, err = h.stationService.GetByUserID(c.Request.Context(), userID, page, pageSize)
-	}
+	stations, total, err := h.stationService.ListOverview(c.Request.Context(), plan, systemAdmin, page, pageSize)
 
 	if err != nil {
 		response.Error(c, 500, "system error")
 		return
 	}
 
-	// 为每个电站填充设备统计和发电数据
-	ctx := c.Request.Context()
+	deviceStats, err := h.overviewDeviceStats(c, plan, systemAdmin, stations)
+	if err != nil {
+		response.InternalError(c, "get station device stats failed")
+		return
+	}
 	enrichedStations := make([]map[string]interface{}, 0, len(stations))
 	for _, st := range stations {
-		devices, err := h.deviceService.GetByStationID(ctx, st.ID)
-		if err != nil {
-			response.Error(c, 500, "system error")
-			return
-		}
-		deviceCount := len(devices)
-		onlineCount := 0
-		faultCount := 0
-		for _, d := range devices {
-			if d.Status == 1 || d.Status == 2 {
-				onlineCount++
-			}
-			if d.Status == 2 {
-				faultCount++
-			}
-		}
-
-		todayEnergy, _ := h.deviceService.GetStationTodayEnergy(ctx, st.ID, st.Timezone)
-		totalEnergy, _ := h.deviceService.GetStationEnergySummary(ctx, st.ID, st.Timezone)
+		stats := deviceStats[st.ID]
 
 		item := map[string]interface{}{
 			"id":               st.ID,
@@ -529,11 +499,11 @@ func (h *StationHandler) List(c *gin.Context) {
 			"status":           st.Status,
 			"created_at":       st.CreatedAt,
 			"updated_at":       st.UpdatedAt,
-			"device_count":     deviceCount,
-			"online_count":     onlineCount,
-			"fault_count":      faultCount,
-			"today_generation": todayEnergy,
-			"total_generation": totalEnergy,
+			"device_count":     stats.DeviceCount,
+			"online_count":     stats.OnlineCount,
+			"fault_count":      stats.FaultCount,
+			"today_generation": stats.TodayEnergy,
+			"total_generation": stats.TotalEnergy,
 		}
 		enrichedStations = append(enrichedStations, item)
 	}
@@ -562,22 +532,18 @@ type StationSummary struct {
 }
 
 func (h *StationHandler) GetSummary(c *gin.Context) {
-	userID := middleware.GetUserID(c)
-	isAdmin := middleware.GetIsSystemAdmin(c)
-
-	var stations []*model.Station
-	var total int64
-	var err error
-
-	// 超级管理员始终返回所有电站
-	if isAdmin {
-		stations, total, err = h.stationService.GetAll(c.Request.Context(), 1, 9999)
-	} else {
-		stations, _, err = h.stationService.GetByUserID(c.Request.Context(), userID, 1, 100)
-		total = int64(len(stations))
+	plan, systemAdmin, allowed := overviewScope(c, h.db, "station")
+	if !allowed {
+		return
 	}
+	stations, total, err := h.stationService.ListOverview(c.Request.Context(), plan, systemAdmin, 1, 0)
 	if err != nil {
 		response.Error(c, 500, "system error")
+		return
+	}
+	deviceStats, err := h.overviewDeviceStats(c, plan, systemAdmin, stations)
+	if err != nil {
+		response.InternalError(c, "get station device stats failed")
 		return
 	}
 
@@ -587,38 +553,7 @@ func (h *StationHandler) GetSummary(c *gin.Context) {
 
 	summaries := make([]StationSummary, 0, len(stations))
 	for _, station := range stations {
-		// 直接使用电站的状态而不是计算设备状态
-		devices, err := h.deviceService.GetByStationID(c.Request.Context(), station.ID)
-		if err != nil {
-			response.Error(c, 500, "system error")
-			return
-		}
-		deviceCount := len(devices)
-		onlineCount := 0
-		faultCount := 0
-		totalPower := 0.0
-
-		// 统计设备状态：status=1(在线) 和 status=2(故障) 都算在线
-		for _, device := range devices {
-			if device.Status == 1 || device.Status == 2 {
-				onlineCount++
-			}
-			if device.Status == 2 {
-				faultCount++
-			}
-		}
-
-		_, tp, _ := h.deviceService.GetStationRealtimeSummary(c.Request.Context(), station.ID, station.Timezone)
-		totalPower = tp
-
-		dailyEnergy, _ := h.deviceService.GetStationTodayEnergy(c.Request.Context(), station.ID, station.Timezone)
-		todayData, _ := h.stationService.GetDayData(c.Request.Context(), station.ID, timezone.TodayInTimezone(station.Timezone))
-		todayIncome := 0.0
-		if todayData != nil {
-			todayIncome = todayData.Income
-		}
-
-		stationTotal, monthEnergy := h.deviceService.GetStationEnergySummary(c.Request.Context(), station.ID, station.Timezone)
+		stats := deviceStats[station.ID]
 
 		summaries = append(summaries, StationSummary{
 			StationID:   station.ID,
@@ -629,25 +564,24 @@ func (h *StationHandler) GetSummary(c *gin.Context) {
 			Latitude:    station.Latitude,
 			Longitude:   station.Longitude,
 			Capacity:    station.Capacity,
-			DeviceCount: deviceCount,
-			OnlineCount: onlineCount,
-			FaultCount:  faultCount,
-			TotalPower:  totalPower,
-			TodayEnergy: dailyEnergy,
-			TotalEnergy: stationTotal,
-			MonthEnergy: monthEnergy,
-			TodayIncome: todayIncome,
+			DeviceCount: stats.DeviceCount,
+			OnlineCount: stats.OnlineCount,
+			FaultCount:  stats.FaultCount,
+			TotalPower:  stats.TotalPower,
+			TodayEnergy: stats.TodayEnergy,
+			TotalEnergy: stats.TotalEnergy,
+			MonthEnergy: stats.MonthEnergy,
+			TodayIncome: 0, // Current energy repositories do not calculate income.
 			Status:      station.Status,
 		})
 
-		totalEnergy += dailyEnergy
-		totalIncome += todayIncome
-		totalDeviceCount += deviceCount
-		totalOnlineCount += onlineCount
-		totalFaultCount += faultCount
-		grandTotalEnergy += stationTotal
-		grandMonthEnergy += monthEnergy
-		grandTotalPower += totalPower
+		totalEnergy += stats.TodayEnergy
+		totalDeviceCount += stats.DeviceCount
+		totalOnlineCount += stats.OnlineCount
+		totalFaultCount += stats.FaultCount
+		grandTotalEnergy += stats.TotalEnergy
+		grandMonthEnergy += stats.MonthEnergy
+		grandTotalPower += stats.TotalPower
 	}
 
 	result := map[string]interface{}{
@@ -684,18 +618,13 @@ func (h *StationHandler) GetStatistics(c *gin.Context) {
 		return
 	}
 
-	station, err := h.stationService.GetByID(c.Request.Context(), stationID)
-	if err != nil || station == nil {
-		response.Error(c, 403, "permission denied")
-		return
-	}
-	allowed, accessErr := h.canAccessStation(c, stationID)
-	if accessErr != nil {
-		response.Error(c, 500, "check station permission failed")
-		return
-	}
+	station, plan, systemAdmin, allowed := h.overviewStation(c, stationID)
 	if !allowed {
-		response.Error(c, 403, "permission denied")
+		return
+	}
+	devicePlan, deviceAdmin, err := h.overviewDeviceScope(c, plan)
+	if err != nil {
+		response.InternalError(c, "authorization state unavailable")
 		return
 	}
 
@@ -711,7 +640,7 @@ func (h *StationHandler) GetStatistics(c *gin.Context) {
 		endDate = timezone.TodayInTimezone(tz)
 	}
 
-	data, err := h.stationService.GetStatistics(c.Request.Context(), stationID, startDate, endDate, period, tz)
+	data, err := h.stationService.GetOverviewStatistics(c.Request.Context(), plan, devicePlan, systemAdmin && deviceAdmin, stationID, startDate, endDate, period, tz)
 	if err != nil {
 		response.Error(c, 500, "get statistics failed")
 		return

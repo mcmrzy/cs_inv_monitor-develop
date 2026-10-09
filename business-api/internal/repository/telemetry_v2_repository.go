@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"time"
 
 	"inv-api-server/pkg/timezone"
@@ -68,7 +69,10 @@ func (r *DeviceRepository) GetStatistics(ctx context.Context, sn, startDate, end
 		           SUM(pv_energy) FILTER (WHERE stat_date >= $3::date),
 		           0
 		       ),
-		       COALESCE(SUM(pv_energy),0),
+	       GREATEST(COALESCE(SUM(pv_energy) FILTER (WHERE pv_energy >= 0 AND pv_energy < 'Infinity'::float8),0),
+	           COALESCE(MAX(total_pv_energy) FILTER (WHERE total_pv_energy >= 0 AND total_pv_energy < 'Infinity'::float8),0), COALESCE(
+	           (SELECT l.total_pv_energy FROM device_latest_state l WHERE l.device_sn=$1
+	              AND l.total_pv_energy >= 0 AND l.total_pv_energy < 'Infinity'::float8),0)),
 		       COALESCE(MAX(discharge_energy) FILTER (WHERE stat_date=$2::date),0)
 		FROM device_energy_day WHERE device_sn=$1`, sn, today, monthStart).
 		Scan(&dailyEnergy, &monthlyEnergy, &totalEnergy, &dailyDischarge)
@@ -189,11 +193,70 @@ func (r *DeviceRepository) GetStationRealtimeSummary(ctx context.Context, statio
 }
 
 func (r *DeviceRepository) GetStationPowerBreakdown(ctx context.Context, stationID int64) (pvPower, loadPower, gridPower, battPower, battSoc float64) {
-	// 新鲜度过滤（5 分钟）：离线残留的 device_latest_state 不再计入实时功率/能量流，避免电站离线后能量流仍"流动"
-	_ = r.db.QueryRow(ctx, `SELECT COALESCE(SUM(l.pv_total_power),0),COALESCE(SUM(l.ac_active_power),0),
-		COALESCE(SUM(l.battery_power),0),COALESCE(AVG(l.battery_soc),0)
-		FROM devices d JOIN device_latest_state l ON l.device_sn=d.sn AND l.updated_at > NOW() - INTERVAL '5 minutes'
-		WHERE d.station_id=$1 AND d.deleted_at IS NULL`, stationID).Scan(&pvPower, &loadPower, &battPower, &battSoc)
+	rows, err := r.db.Query(ctx, `SELECT d.sn,l.pv_total_power,l.ac_active_power,l.battery_power,l.battery_soc
+		FROM devices d JOIN device_latest_state l ON l.device_sn=d.sn
+		WHERE d.station_id=$1 AND d.deleted_at IS NULL AND d.status IN (1,2)
+		AND l.updated_at > NOW() - INTERVAL '5 minutes' AND l.updated_at <= NOW()`, stationID)
+	if err != nil {
+		return
+	}
+	type reading struct {
+		sn         string
+		power, soc *float64
+	}
+	var readings []reading
+	var sns []string
+	finite := func(v *float64) bool { return v != nil && !math.IsNaN(*v) && !math.IsInf(*v, 0) }
+	for rows.Next() {
+		var value reading
+		var pv, load *float64
+		if rows.Scan(&value.sn, &pv, &load, &value.power, &value.soc) != nil {
+			rows.Close()
+			return 0, 0, 0, 0, 0
+		}
+		if finite(pv) {
+			pvPower += *pv
+		}
+		if finite(load) {
+			loadPower += *load
+		}
+		readings = append(readings, value)
+		sns = append(sns, value.sn)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return 0, 0, 0, 0, 0
+	}
+	summaries := r.batchBMSSummaries(ctx, sns)
+	socCount := 0
+	for _, value := range readings {
+		if summary, ok := summaries[value.sn]; ok {
+			// CMD08 replaces legacy battery readings for this inverter, never adds a second battery.
+			voltage, vok := summary["voltage"].(float64)
+			current, iok := summary["current"].(float64)
+			if summary["bms_online"] == float64(1) && summary["layout"] == float64(0) {
+				if vok && iok && !math.IsNaN(voltage*current) && !math.IsInf(voltage*current, 0) {
+					battPower += voltage * current
+				}
+				if soc, ok := summary["soc"].(float64); ok && soc >= 0 && soc <= 100 {
+					battSoc += soc
+					socCount++
+				}
+			}
+		} else {
+			if finite(value.power) {
+				battPower += *value.power
+			}
+			if finite(value.soc) && *value.soc >= 0 && *value.soc <= 100 {
+				battSoc += *value.soc
+				socCount++
+			}
+		}
+	}
+	if socCount > 0 {
+		battSoc /= float64(socCount)
+	}
 	return pvPower, loadPower, 0, battPower, battSoc
 }
 
@@ -202,10 +265,18 @@ func (r *DeviceRepository) GetStationEnergySummary(ctx context.Context, stationI
 	now := time.Now().In(loc)
 	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, loc).Format("2006-01-02")
 	var total, month float64
-	_ = r.db.QueryRow(ctx, `SELECT ROUND(COALESCE(SUM(l.total_pv_energy),0)::numeric,2)::float8,ROUND(COALESCE((SELECT SUM(e.pv_energy)
-		FROM device_energy_day e JOIN devices d2 ON d2.sn=e.device_sn
-		WHERE d2.station_id=$1 AND d2.deleted_at IS NULL AND e.stat_date >= $2::date),0)::numeric,2)::float8
+	// A reset/missing device counter must not erase energy already recorded.
+	// Daily rows are deduplicated upstream; never sum absolute telemetry counters.
+	_ = r.db.QueryRow(ctx, `WITH recorded AS (
+		SELECT e.device_sn, GREATEST(COALESCE(SUM(e.pv_energy) FILTER (WHERE e.pv_energy >= 0 AND e.pv_energy < 'Infinity'::float8),0),
+		       COALESCE(MAX(e.total_pv_energy) FILTER (WHERE e.total_pv_energy >= 0 AND e.total_pv_energy < 'Infinity'::float8),0)) AS total,
+		       SUM(e.pv_energy) FILTER (WHERE e.stat_date >= $2::date) AS month
+		FROM device_energy_day e JOIN devices d ON d.sn=e.device_sn
+		WHERE d.station_id=$1 AND d.deleted_at IS NULL GROUP BY e.device_sn
+	) SELECT ROUND(COALESCE(SUM(GREATEST(COALESCE(CASE WHEN l.total_pv_energy >= 0 AND l.total_pv_energy < 'Infinity'::float8 THEN l.total_pv_energy END,0),COALESCE(e.total,0),0)),0)::numeric,2)::float8,
+		ROUND(COALESCE(SUM(e.month),0)::numeric,2)::float8
 		FROM devices d LEFT JOIN device_latest_state l ON l.device_sn=d.sn
+		LEFT JOIN recorded e ON e.device_sn=d.sn
 		WHERE d.station_id=$1 AND d.deleted_at IS NULL`, stationID, monthStart).Scan(&total, &month)
 	return total, month
 }
@@ -282,4 +353,3 @@ func (r *DeviceRepository) getTelemetryV2(ctx context.Context, sn, startTime, en
 	}
 	return result, rows.Err()
 }
-

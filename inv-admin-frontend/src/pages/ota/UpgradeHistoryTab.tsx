@@ -24,6 +24,7 @@ import { formatInTimezone } from '@/utils/timezone'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
 import { firmwareModuleLabel } from './firmwarePresentation'
 import type { DeviceUpgrade } from '@/types'
+import OTAProgressCell from './components/OTAProgressCell'
 
 const { RangePicker } = DatePicker
 
@@ -134,8 +135,8 @@ const UpgradeHistoryTab: React.FC = () => {
       title: t('ota.progress'),
       dataIndex: 'progress',
       key: 'progress',
-      width: 80,
-      render: (v: number) => `${v ?? 0}%`,
+      width: 180,
+      render: (_: number, record: DeviceUpgrade) => <OTAProgressCell record={record} />,
     },
     {
       title: t('ota.executeTime'),

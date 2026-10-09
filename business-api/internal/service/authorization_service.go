@@ -34,6 +34,7 @@ var channelPermissionRegistry = staticPermissionRegistry{
 	"invitation:create": {}, "invitation:revoke": {},
 	"device:view": {}, "device:control": {}, "device:unbind": {}, "device:transfer": {},
 	"station:view": {}, "station:manage": {}, "asset:claim": {}, "asset:transfer": {},
+	"devices:view": {}, "stations:view": {},
 }
 
 type AuthorizationService struct {
@@ -131,7 +132,7 @@ func (s *AuthorizationService) BuildScope(ctx context.Context, actor model.Actor
 		return plan, nil
 	}
 	prefix, _, ok := strings.Cut(permissionCode, ":")
-	if !ok || prefix != resourceType {
+	if !ok || (prefix != resourceType && !((prefix == "devices" && resourceType == "device") || (prefix == "stations" && resourceType == "station"))) {
 		return plan, nil
 	}
 	active, err := s.repository.ValidateContext(ctx, actor)
