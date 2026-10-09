@@ -244,23 +244,26 @@ jobs:
 
       - name: Build documentation site
         run: |
-          mkdir -p _site/docs
-          cp docs/swagger/index.html _site/
-          cp docs/openapi.yaml _site/docs/
+          mkdir -p _site/docs/swagger
+          cp docs/swagger/index.html _site/docs/swagger/
+          cp docs/openapi.yaml _site/docs/swagger/
           
           # Create index.html redirect
           cat > _site/index.html <<'EOF'
           <!DOCTYPE html>
           <html>
           <head>
-            <meta http-equiv="refresh" content="0; url=/docs/swagger/">
+            <meta http-equiv="refresh" content="0; url=./docs/swagger/">
             <title>API Documentation</title>
           </head>
           <body>
-            <p>Redirecting to <a href="/docs/swagger/">API Documentation</a>...</p>
+            <p>Redirecting to <a href="./docs/swagger/">API Documentation</a>...</p>
           </body>
           </html>
           EOF
+
+      - name: Verify documentation site
+        run: node --test scripts/docs-site.test.mjs
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
