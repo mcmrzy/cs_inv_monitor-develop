@@ -205,6 +205,24 @@ Future<void> tapGroupChip(WidgetTester tester, String label) async {
 }
 
 void main() {
+  testWidgets('interrupted terminal session allows a new debug session after reconnect', (tester) async {
+    final l10n = await AppLocalizations.delegate.load(const Locale('zh', 'CN'));
+    final api = FakeDeviceDebugApi(
+      initialInfo: DeviceDebugSessionInfo(session: DeviceDebugSession(
+        id: 'old', deviceSn: 'SN-DEBUG-1', status: 'interrupted',
+        intervalSeconds: 5, durationSeconds: 3600, source: 'app'),
+        deviceOnline: true, supported: true, intervalSeconds: 5),
+      samplesPage: const DeviceDebugSamplesPage(items: [], nextCursor: ''),
+    );
+    useLargeViewport(tester);
+    await pumpMinimalApp(tester, DeviceDebugPage(sn: 'SN-DEBUG-1', api: api));
+    expect(api.initialInfo.session!.isTerminal, true);
+    expect(find.text(l10n.str('debug_start')), findsOneWidget);
+    expect(find.text(l10n.str('debug_stop')), findsNothing);
+    await tester.tap(find.text(l10n.str('debug_start')));
+    await tester.pump(); await tester.pump();
+    expect(api.startCalls,1);
+  });
   testWidgets('无会话显示「未开启」，点开始触发 startDebugSession（默认 1 小时）',
       (tester) async {
     final l10n = await AppLocalizations.delegate.load(const Locale('zh', 'CN'));

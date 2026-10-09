@@ -422,17 +422,20 @@ func (s *DataService) HandleOTAStatus(sn string, payload []byte) {
 	}
 
 	var devicePayload struct {
-		Ack            bool   `json:"ack"`
-		TaskID         string `json:"task_id"`
-		DeviceID       string `json:"device_id"`
-		FirmwareID     *int64 `json:"firmware_id"`
-		CurrentVersion string `json:"current_version"`
-		State          string `json:"state"`
-		Progress       int    `json:"progress"`
-		StatusMessage  string `json:"status_message"`
-		ErrorMessage   string `json:"error_message"`
-		Message        string `json:"message"`
-		Timestamp      int64  `json:"timestamp"`
+		Ack             bool   `json:"ack"`
+		TaskID          string `json:"task_id"`
+		DeviceID        string `json:"device_id"`
+		FirmwareID      *int64 `json:"firmware_id"`
+		CurrentVersion  string `json:"current_version"`
+		State           string `json:"state"`
+		Progress        int    `json:"progress"`
+		Stage           string `json:"stage"`
+		StageProgress   *int   `json:"stage_progress"`
+		OverallProgress *int   `json:"overall_progress"`
+		StatusMessage   string `json:"status_message"`
+		ErrorMessage    string `json:"error_message"`
+		Message         string `json:"message"`
+		Timestamp       int64  `json:"timestamp"`
 	}
 
 	if err := json.Unmarshal(actualPayload, &devicePayload); err != nil {
@@ -454,6 +457,15 @@ func (s *DataService) HandleOTAStatus(sn string, payload []byte) {
 	}
 	if devicePayload.TaskID != "" {
 		apiPayload["task_id"] = devicePayload.TaskID
+	}
+	if devicePayload.Stage != "" {
+		apiPayload["stage"] = devicePayload.Stage
+	}
+	if devicePayload.StageProgress != nil {
+		apiPayload["stage_progress"] = *devicePayload.StageProgress
+	}
+	if devicePayload.OverallProgress != nil {
+		apiPayload["overall_progress"] = *devicePayload.OverallProgress
 	}
 
 	// 传递 firmware_id（如果设备上报了）

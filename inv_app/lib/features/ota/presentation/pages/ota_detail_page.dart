@@ -26,9 +26,7 @@ class _OTADetailPageState extends State<OTADetailPage> {
   @override
   void initState() {
     super.initState();
-    context
-        .read<OtaBloc>()
-        .add(
+    context.read<OtaBloc>().add(
           OTAProgressStartPollRequested(
             deviceSn: widget.deviceSN,
             taskId: widget.taskId,
@@ -41,11 +39,17 @@ class _OTADetailPageState extends State<OTADetailPage> {
       case 'downloading':
         return l10n.downloading;
       case 'transferring':
+      case 'receiving':
         return l10n.transferring;
       case 'verifying':
         return l10n.verifying;
       case 'upgrading':
         return l10n.upgrading;
+      case 'installing':
+        return l10n.str('upgrade_stage_installing');
+      case 'accepted':
+      case 'rebooting':
+        return l10n.str('upgrade_stage_$status');
       case 'completed':
         return l10n.done;
       case 'failed':
@@ -60,10 +64,12 @@ class _OTADetailPageState extends State<OTADetailPage> {
       case 'downloading':
         return Icons.download_rounded;
       case 'transferring':
+      case 'receiving':
         return Icons.swap_vert_rounded;
       case 'verifying':
         return Icons.verified_user_rounded;
       case 'upgrading':
+      case 'installing':
         return Icons.system_update_rounded;
       case 'completed':
         return Icons.check_circle_rounded;
@@ -114,21 +120,19 @@ class _OTADetailPageState extends State<OTADetailPage> {
         builder: (context, state) {
           if (state is OTAProgress) {
             final color = _statusColor(state.status);
-            return Padding(
+            return ListView(
               padding: EdgeInsets.all(16.w),
-              child: Column(
-                children: [
-                  _buildDeviceInfoCard(l10n),
-                  SizedBox(height: 16.h),
-                  _buildProgressCard(state, color, l10n),
-                  SizedBox(height: 16.h),
-                  _buildStatusSteps(state.status, l10n),
-                  if (_canCancel(state.status)) ...[
-                    SizedBox(height: 24.h),
-                    _buildCancelButton(l10n),
-                  ],
+              children: [
+                _buildDeviceInfoCard(l10n),
+                SizedBox(height: 16.h),
+                _buildProgressCard(state, color, l10n),
+                SizedBox(height: 16.h),
+                _buildStatusSteps(state.stage, l10n),
+                if (_canCancel(state.status)) ...[
+                  SizedBox(height: 24.h),
+                  _buildCancelButton(l10n),
                 ],
-              ),
+              ],
             );
           }
 
@@ -213,7 +217,10 @@ class _OTADetailPageState extends State<OTADetailPage> {
                 SizedBox(height: 2.h),
                 Text(
                   widget.deviceSN,
-                  style: TextStyle(fontSize: 12.sp, color: AppColor.textHint(context)),
+                  style: TextStyle(
+                    fontSize: 12.sp,
+                    color: AppColor.textHint(context),
+                  ),
                 ),
               ],
             ),
@@ -228,6 +235,7 @@ class _OTADetailPageState extends State<OTADetailPage> {
     Color color,
     AppLocalizations l10n,
   ) {
+    final primaryProgress = state.stageProgress ?? state.overallProgress;
     return Container(
       padding: EdgeInsets.all(20.w),
       decoration: BoxDecoration(
@@ -243,10 +251,10 @@ class _OTADetailPageState extends State<OTADetailPage> {
       ),
       child: Column(
         children: [
-          Icon(_statusIcon(state.status), size: 48.sp, color: color),
+          Icon(_statusIcon(state.stage), size: 48.sp, color: color),
           SizedBox(height: 12.h),
           Text(
-            _statusText(state.status, l10n),
+            _statusText(state.stage, l10n),
             style: TextStyle(
               fontSize: 18.sp,
               fontWeight: FontWeight.w700,
@@ -254,10 +262,23 @@ class _OTADetailPageState extends State<OTADetailPage> {
             ),
           ),
           SizedBox(height: 20.h),
+          if (state.targetChip.isNotEmpty) ...[
+            Text(
+              FirmwareModulePresentation.fromTarget(state.targetChip)
+                  .displayLabel(l10n),
+            ),
+            SizedBox(height: 12.h),
+          ],
+          if (state.stageProgress == null) ...[
+            const Text('--'),
+            SizedBox(height: 12.h),
+            Text(l10n.str('ota_overall_progress')),
+            SizedBox(height: 6.h),
+          ],
           ClipRRect(
             borderRadius: BorderRadius.circular(8.r),
             child: LinearProgressIndicator(
-              value: state.progress / 100.0,
+              value: primaryProgress == null ? null : primaryProgress / 100.0,
               minHeight: 10.h,
               backgroundColor: AppColor.border(context),
               valueColor: AlwaysStoppedAnimation<Color>(color),
@@ -265,20 +286,49 @@ class _OTADetailPageState extends State<OTADetailPage> {
           ),
           SizedBox(height: 10.h),
           Text(
-            '${state.progress.toStringAsFixed(1)}%',
+            primaryProgress == null
+                ? '--'
+                : '${primaryProgress.toStringAsFixed(1)}%',
             style: TextStyle(
               fontSize: 24.sp,
               fontWeight: FontWeight.w700,
               color: AppColor.textPrimary(context),
             ),
           ),
+          if (state.stageProgress != null && state.overallProgress != null) ...[
+            SizedBox(height: 12.h),
+            Text(
+              l10n.str('ota_overall_progress'),
+              style:
+                  TextStyle(fontSize: 12.sp, color: AppColor.textHint(context)),
+            ),
+            SizedBox(height: 6.h),
+            Row(
+              children: [
+                Icon(
+                  Icons.layers_outlined,
+                  size: 16.sp,
+                  color: AppColor.textHint(context),
+                ),
+                SizedBox(width: 8.w),
+                Expanded(
+                  child: LinearProgressIndicator(
+                    value: state.overallProgress! / 100,
+                    backgroundColor: AppColor.border(context),
+                  ),
+                ),
+                SizedBox(width: 8.w),
+                Text('${state.overallProgress!.toStringAsFixed(1)}%'),
+              ],
+            ),
+          ],
         ],
       ),
     );
   }
 
   Widget _buildStatusSteps(String currentStatus, AppLocalizations l10n) {
-    final steps = ['downloading', 'transferring', 'verifying', 'upgrading'];
+    final steps = ['downloading', 'transferring', 'verifying', 'installing'];
     final currentIndex = steps.indexOf(currentStatus);
 
     return Container(
@@ -341,8 +391,9 @@ class _OTADetailPageState extends State<OTADetailPage> {
                   style: TextStyle(
                     fontSize: 13.sp,
                     fontWeight: isCurrent ? FontWeight.w600 : FontWeight.w400,
-                    color:
-                        isPending ? AppColor.textHint(context) : AppColor.textPrimary(context),
+                    color: isPending
+                        ? AppColor.textHint(context)
+                        : AppColor.textPrimary(context),
                   ),
                 ),
               ),
@@ -444,7 +495,10 @@ class _OTADetailPageState extends State<OTADetailPage> {
           SizedBox(height: 8.h),
           Text(
             l10n.firmwareUpdatedSuccess,
-            style: TextStyle(fontSize: 14.sp, color: AppColor.textSecondary(context)),
+            style: TextStyle(
+              fontSize: 14.sp,
+              color: AppColor.textSecondary(context),
+            ),
           ),
           SizedBox(height: 24.h),
           SizedBox(
@@ -509,7 +563,10 @@ class _OTADetailPageState extends State<OTADetailPage> {
               l10n.translateError(state.message),
               l10n,
             ),
-            style: TextStyle(fontSize: 14.sp, color: AppColor.textSecondary(context)),
+            style: TextStyle(
+              fontSize: 14.sp,
+              color: AppColor.textSecondary(context),
+            ),
             textAlign: TextAlign.center,
           ),
           SizedBox(height: 24.h),

@@ -1,4 +1,5 @@
 import 'package:inv_app/core/entities/bms_summary.dart';
+import 'package:inv_app/core/utils/realtime_payload.dart';
 
 class ACData {
   final double voltage;
@@ -26,7 +27,8 @@ class ACData {
       power: power,
       frequency: (json['ac_output_frequency'] as num?)?.toDouble() ?? 0,
       // V2.1 无独立功率因数字段，由有功/视在功率派生
-      pf: apparent > 0 ? (power / apparent).clamp(0.0, 1.0) : 0,
+      pf: (json['ac_power_factor'] as num?)?.toDouble() ??
+          (apparent > 0 ? (power / apparent).clamp(0.0, 1.0) : 0),
       apparentPower: apparent,
     );
   }
@@ -47,8 +49,10 @@ class BatteryData {
   final double current;
   final String chargeState;
   final double power;
+
   /// V2: 充电功率（正值）
   final double chargePower;
+
   /// V2: 放电功率（正值）
   final double dischargePower;
   final double capacityRemain;
@@ -95,17 +99,21 @@ class BatteryData {
 
   factory BatteryData.fromJson(Map<String, dynamic> json) {
     final chargePower = (json['battery_charge_power'] as num?)?.toDouble() ?? 0;
-    final dischargePower = (json['battery_discharge_power'] as num?)?.toDouble() ?? 0;
+    final dischargePower =
+        (json['battery_discharge_power'] as num?)?.toDouble() ?? 0;
     final power = (chargePower != 0 || dischargePower != 0)
         ? chargePower - dischargePower
-        : (json['power'] as num?)?.toDouble() ?? 0;
+        : (json['battery_power'] as num?)?.toDouble() ??
+            (json['power'] as num?)?.toDouble() ??
+            0;
 
     return BatteryData(
       soc: (json['battery_soc'] as num?)?.toDouble() ?? 0,
       soh: (json['battery_soh'] as num?)?.toDouble() ?? 0,
       voltage: (json['battery_voltage'] as num?)?.toDouble() ?? 0,
       current: (json['battery_current'] as num?)?.toDouble() ?? 0,
-      chargeState: json['charge_state'] as String? ?? '',
+      chargeState:
+          (json['charge_state'] ?? json['battery_state'])?.toString() ?? '',
       power: power,
       chargePower: chargePower,
       dischargePower: dischargePower,
@@ -188,7 +196,7 @@ class PVData {
       pvVoltage: (json['pv1_voltage'] as num?)?.toDouble() ?? 0,
       pvCurrent: (json['pv1_current'] as num?)?.toDouble() ?? 0,
       pvPower: (json['pv_total_power'] as num?)?.toDouble() ?? 0,
-      mpptState: json['mppt_state'] as String? ?? '',
+      mpptState: json['mppt_state']?.toString() ?? '',
       pv1Power: (json['pv1_power'] as num?)?.toDouble() ?? 0,
       pv1VoltageMax: (json['pv1_voltage_max'] as num?)?.toDouble() ?? 0,
       pv1PowerMax: (json['pv1_power_max'] as num?)?.toDouble() ?? 0,
@@ -221,16 +229,22 @@ class SystemStatus {
   final String state;
   final int faultCode;
   final int alarmCode;
+
   /// 逆变器温度（℃）
   final double tempInv;
+
   /// 升压温度（℃）
   final double boostTemp;
+
   /// 变压器温度（℃）
   final double transformerTemp;
+
   /// PV 温度（℃）
   final double pvTemp;
+
   /// 母线电压（V）
   final double dcBusVoltage;
+
   /// 负载率（%）
   final double loadPercent;
 
@@ -347,22 +361,26 @@ class EnergyData {
       totalPV: (json['total_pv_energy'] as num?)?.toDouble() ?? 0,
       dailyCharge: (json['daily_charge_energy'] as num?)?.toDouble() ?? 0,
       totalCharge: (json['total_charge_energy'] as num?)?.toDouble() ?? 0,
-      dailyDischarge:
-          (json['daily_discharge_energy'] as num?)?.toDouble() ?? 0,
-      totalDischarge:
-          (json['total_discharge_energy'] as num?)?.toDouble() ?? 0,
+      dailyDischarge: (json['daily_discharge_energy'] as num?)?.toDouble() ?? 0,
+      totalDischarge: (json['total_discharge_energy'] as num?)?.toDouble() ?? 0,
       // 负载用电：优先负载侧计量，回退输出电量分项（均为 V2 键）
       dailyLoad: (json['daily_load_energy'] as num?)?.toDouble() ??
-                 (json['output_energy_daily'] as num?)?.toDouble() ?? 0,
+          (json['output_energy_daily'] as num?)?.toDouble() ??
+          0,
       totalLoad: (json['total_load_energy'] as num?)?.toDouble() ??
-                 (json['output_energy_total'] as num?)?.toDouble() ?? 0,
+          (json['output_energy_total'] as num?)?.toDouble() ??
+          0,
       // V2 新增
       dailyGenEnergy: (json['gen_energy_daily'] as num?)?.toDouble() ?? 0,
       totalGenEnergy: (json['gen_energy_total'] as num?)?.toDouble() ?? 0,
-      dailyAcChargeEnergy: (json['ac_charge_energy_daily'] as num?)?.toDouble() ?? 0,
-      totalAcChargeEnergy: (json['ac_charge_energy_total'] as num?)?.toDouble() ?? 0,
-      dailyAcBypassEnergy: (json['ac_bypass_energy_daily'] as num?)?.toDouble() ?? 0,
-      totalAcBypassEnergy: (json['ac_bypass_energy_total'] as num?)?.toDouble() ?? 0,
+      dailyAcChargeEnergy:
+          (json['ac_charge_energy_daily'] as num?)?.toDouble() ?? 0,
+      totalAcChargeEnergy:
+          (json['ac_charge_energy_total'] as num?)?.toDouble() ?? 0,
+      dailyAcBypassEnergy:
+          (json['ac_bypass_energy_daily'] as num?)?.toDouble() ?? 0,
+      totalAcBypassEnergy:
+          (json['ac_bypass_energy_total'] as num?)?.toDouble() ?? 0,
       dailyOutputEnergy: (json['output_energy_daily'] as num?)?.toDouble() ?? 0,
       totalOutputEnergy: (json['output_energy_total'] as num?)?.toDouble() ?? 0,
     );
@@ -711,6 +729,7 @@ class InverterRealtime {
   /// 遥测数据时间戳；缺失时为 null（视为未知，
   /// 不用 DateTime.now() 兜底，避免把陈旧数据误当实时值展示）
   final DateTime? updatedAt;
+  final Map<String, dynamic> telemetryFields;
 
   const InverterRealtime({
     required this.deviceSN,
@@ -729,9 +748,11 @@ class InverterRealtime {
     this.bmsSummary,
     this.loadPower = 0,
     this.updatedAt,
+    this.telemetryFields = const {},
   });
 
   factory InverterRealtime.fromJson(Map<String, dynamic> json) {
+    json = normalizeRealtimePayload(json);
     // 兼容 Redis 缓存中的 key 别名: batt → battery, sys → sys_status
     // V2 realtime_data 同时存在嵌套组（Map）和扁平字段（int/double），
     // 需要检查类型后再 cast，避免 "type 'int' is not a subtype of type 'Map'" 错误。
@@ -749,18 +770,56 @@ class InverterRealtime {
     }
 
     final batteryRaw = json['battery'] ?? json['batt'] ?? json['bat'];
-    final batteryMap = extractGroupData(batteryRaw);
+    Map<String, dynamic>? section(Iterable<String> keys) =>
+        keys.any((key) => json[key] != null) ? json : null;
+    final batteryMap = section(const [
+          'battery_soc',
+          'battery_soh',
+          'battery_voltage',
+          'battery_current',
+          'battery_power',
+          'battery_charge_power',
+          'battery_discharge_power',
+          'capacity_remain',
+          'capacity_total',
+          'cycle_count',
+          'battery_temperature',
+          'battery_temp_max',
+          'battery_temp_min',
+          'max_charge_current',
+          'max_discharge_current',
+          'cell_voltage_max',
+          'cell_voltage_min',
+        ]) ??
+        extractGroupData(batteryRaw);
 
-    final sysStatusRaw = json['sys_status'] is Map ? json['sys_status'] : json['sys'];
-    final sysStatusMap = extractGroupData(sysStatusRaw);
+    final sysStatusRaw =
+        json['sys_status'] is Map ? json['sys_status'] : json['sys'];
+    final sysStatusMap =
+        section(SystemStatus().toJson().keys) ?? extractGroupData(sysStatusRaw);
 
-    final acMap = extractGroupData(json['ac']);
-    final pvMap = extractGroupData(json['pv']);
+    final acMap =
+        section(ACData().toJson().keys) ?? extractGroupData(json['ac']);
+    final pvMap = section(const [
+          'pv1_voltage',
+          'pv1_current',
+          'pv1_power',
+          'pv_total_power',
+          'pv2_voltage',
+          'pv2_current',
+          'pv2_power',
+          'mppt_state',
+        ]) ??
+        extractGroupData(json['pv']);
     final engRaw = json['eng'] ?? json['energy'];
-    final engMap = extractGroupData(engRaw);
+    final engMap = section([
+      ...const EnergyData().toJson().keys,
+      'daily_load_energy', 'total_load_energy',
+    ]) ?? extractGroupData(engRaw);
 
     // V2.1 新增组：fan（双风扇转速）/ diag（诊断量）
-    final fanMap = extractGroupData(json['fan']);
+    final fanMap =
+        section(FanData().toJson().keys) ?? extractGroupData(json['fan']);
     final diagMap = extractGroupData(json['diag']);
 
     return InverterRealtime(
@@ -768,17 +827,22 @@ class InverterRealtime {
       ac: acMap != null ? ACData.fromJson(acMap) : null,
       battery: batteryMap != null ? BatteryData.fromJson(batteryMap) : null,
       pv: pvMap != null ? PVData.fromJson(pvMap) : null,
-      sysStatus: sysStatusMap != null ? SystemStatus.fromJson(sysStatusMap) : null,
+      sysStatus:
+          sysStatusMap != null ? SystemStatus.fromJson(sysStatusMap) : null,
       energy: engMap != null ? EnergyData.fromJson(engMap) : null,
       fan: fanMap != null ? FanData.fromJson(fanMap) : null,
-      workTimeTotalSec:
-          (diagMap?['work_time_total'] as num?)?.toInt() ?? 0,
+      workTimeTotalSec: (json['work_time_total'] as num?)?.toInt() ??
+          (diagMap?['work_time_total'] as num?)?.toInt() ??
+          0,
       cells: json['cells'] is Map
           ? CellsData.fromJson(json['cells'] as Map<String, dynamic>)
           : null,
       onlineStatus: json['online_status'] is Map
           ? OnlineStatus.fromJson(json['online_status'] as Map<String, dynamic>)
-          : null,
+          : json['online'] != null
+              ? OnlineStatus(
+                  online: json['online'] == true || json['online'] == 1)
+              : null,
       deviceInfo: json['device_info'] is Map
           ? DeviceInfo.fromJson(json['device_info'] as Map<String, dynamic>)
           : null,
@@ -792,8 +856,8 @@ class InverterRealtime {
           ? BmsSummary.fromJson(extractGroupData(json['bms_summary'])!)
           : null,
       loadPower: (json['load_power'] as num?)?.toDouble() ?? 0,
-      updatedAt:
-          DateTime.tryParse(json['updated_at'] as String? ?? ''),
+      updatedAt: DateTime.tryParse(json['updated_at'] as String? ?? ''),
+      telemetryFields: Map.unmodifiable(json),
     );
   }
 

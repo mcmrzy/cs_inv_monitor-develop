@@ -154,11 +154,20 @@ func (r *DeviceRepository) GetDebugSessionByTaskID(ctx context.Context, taskID s
 
 // MarkDebugSessionStopping 停止流程：记停止任务 ID 并置为 stopping。
 func (r *DeviceRepository) MarkDebugSessionStopping(ctx context.Context, id int64, stopTaskID string) error {
-	_, err := r.db.Exec(ctx, `
-		UPDATE device_debug_sessions SET stop_task_id = $2, status = 'stopping', updated_at = NOW()
-		WHERE id = $1 AND status IN ('active', 'starting')
-	`, id, stopTaskID)
+	_, err := r.BeginDebugSessionStop(ctx, id, stopTaskID)
 	return err
+}
+
+// Keep one stop task across retries so concurrent callers and late ACKs agree.
+func (r *DeviceRepository) BeginDebugSessionStop(ctx context.Context, id int64, taskID string) (*model.DeviceDebugSession, error) {
+	row := r.db.QueryRow(ctx, `UPDATE device_debug_sessions
+		SET stop_task_id=COALESCE(NULLIF(stop_task_id,''),$2),status='stopping',updated_at=NOW()
+		WHERE id=$1 AND status IN ('active','starting','stopping') RETURNING `+debugSessionColumns, id, taskID)
+	sess, err := scanDebugSession(row)
+	if err == pgx.ErrNoRows {
+		return scanDebugSession(r.db.QueryRow(ctx, `SELECT `+debugSessionColumns+` FROM device_debug_sessions WHERE id=$1`, id))
+	}
+	return sess, err
 }
 
 // DebugSessionReap 一轮收口的会话行。
@@ -196,10 +205,13 @@ func (r *DeviceRepository) ReapStaleActiveSessions(ctx context.Context, staleAft
 // 返回此前处于 active/stopping 的行，协调循环对其补发停止命令（设备侧 TTL 为最终兜底）。
 func (r *DeviceRepository) ExpireDebugSessions(ctx context.Context) ([]DebugSessionReap, error) {
 	rows, err := r.db.Query(ctx, `
-		UPDATE device_debug_sessions
-		SET status = 'expired', updated_at = NOW()
-		WHERE status IN ('starting', 'active', 'stopping') AND expires_at < NOW()
-		RETURNING id, device_sn, status
+		WITH due AS (
+			SELECT id,device_sn,status FROM device_debug_sessions
+			WHERE status IN ('starting','active','stopping') AND expires_at < NOW() FOR UPDATE
+		), changed AS (
+			UPDATE device_debug_sessions s SET status='expired',updated_at=NOW()
+			FROM due WHERE s.id=due.id RETURNING s.id
+		) SELECT due.id,due.device_sn,due.status FROM due JOIN changed USING(id)
 	`)
 	return collectDebugReaps(rows, err)
 }
@@ -216,13 +228,16 @@ func (r *DeviceRepository) RefreshDebugSampleTimes(ctx context.Context) (int, er
 		    status = CASE WHEN s.status = 'starting' THEN 'active' ELSE s.status END,
 		    updated_at = NOW()
 		FROM (
-			SELECT t.device_sn, MAX(t.event_time) AS max_time
-			FROM device_debug_sessions s2
-			JOIN device_telemetry_3min t
-			  ON t.device_sn = s2.device_sn
-			 AND t.event_time > NOW() - INTERVAL '15 minutes'
-			WHERE s2.status IN ('starting', 'active')
-			GROUP BY t.device_sn
+			SELECT device_sn,MAX(event_time) AS max_time FROM (
+				SELECT t.device_sn,t.event_time,s2.interval_seconds,
+				       LAG(t.event_time) OVER(PARTITION BY s2.id ORDER BY t.event_time) AS previous_time
+				FROM device_debug_sessions s2 JOIN device_telemetry_3min t ON t.device_sn=s2.device_sn
+				WHERE s2.status IN ('starting','active') AND t.event_time > s2.started_at
+				  AND t.event_time BETWEEN NOW()-INTERVAL '75 seconds' AND NOW()+INTERVAL '5 seconds'
+				  AND t.received_at >= GREATEST(s2.started_at,NOW()-INTERVAL '75 seconds')
+			) samples WHERE event_time>previous_time
+			  AND event_time-previous_time <= make_interval(secs=>interval_seconds*3)
+			GROUP BY device_sn
 		) t
 		WHERE s.device_sn = t.device_sn
 		  AND s.status IN ('starting', 'active')

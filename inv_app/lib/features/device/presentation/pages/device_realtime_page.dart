@@ -28,6 +28,9 @@ import 'package:inv_app/features/device/presentation/pages/device_settings_page.
 import 'package:inv_app/features/device/presentation/widgets/energy_dashboard_tabs.dart';
 import 'package:inv_app/core/entities/inverter_data.dart';
 import 'package:inv_app/core/utils/api_response.dart';
+import 'package:inv_app/core/utils/realtime_payload.dart';
+import 'package:inv_app/core/utils/device_card_data.dart';
+import 'package:inv_app/core/utils/timezone_utils.dart';
 import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
@@ -56,7 +59,9 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
   bool _online = false;
   bool _loading = true;
   String? _error;
-  StreamSubscription? _statusSub;
+  double? _recordedTotalPV;
+  bool _statisticsFetching = false;
+  String _timezone = TimezoneUtils.defaultTimezone;
   StreamSubscription? _realtimeSub;
   bool _hasMqttData = false;
   bool _apiUnavailable = false;
@@ -77,12 +82,12 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
     _subscribeMqttData();
-    _listenOnlineStatus();
     // 初始化本地模式（异步），完成后再决定是否调用云端 API
     _initLocalMode().then((_) {
       if (!mounted) return;
       if (!_isLocalMode) {
         _fetchDeviceDetail();
+        _fetchEnergyStatistics();
       } else {
         // 本地模式：等 DeviceBloc 推送数据，先显示加载态
         setState(() => _loading = true);
@@ -93,6 +98,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
       if (mounted && _dataUpdatedAt != null) {
         setState(() {});
       }
+      if (!_isLocalMode) _fetchEnergyStatistics();
     });
   }
 
@@ -113,20 +119,24 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
     }
   }
 
-  void _listenOnlineStatus() {
+  Future<void> _fetchEnergyStatistics() async {
+    if (_statisticsFetching || _isLocalMode) return;
+    _statisticsFetching = true;
     try {
-      final realtimeService = getIt<RealtimeDataService>();
-      _statusSub = realtimeService.statusStream
-          .where((status) => true) // 接收所有状态更新
-          .listen((status) {
-        if (mounted) {
-          setState(() {
-            _online = status.online;
-          });
-        }
-      });
+      final res = await getIt<Dio>()
+          .get('/devices/by-sn/${Uri.encodeComponent(widget.sn)}/statistics')
+          .timeout(const Duration(seconds: 10));
+      final data = unwrapApiResponse<Map<String, dynamic>>(res.data,
+          validate: (value) => value is Map<String, dynamic>,
+          expected: 'an object');
+      final total = deviceNumber(data['total_energy']);
+      if (mounted && total != null && total >= 0) {
+        setState(() => _recordedTotalPV = total);
+      }
     } catch (_) {
-      // MQTT 服务未初始化时忽略
+      // Realtime measurements remain usable if aggregate statistics are unavailable.
+    } finally {
+      _statisticsFetching = false;
     }
   }
 
@@ -142,7 +152,6 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
         bloc?.add(const DeviceStopLocalPoll());
       } catch (_) {}
     }
-    _statusSub?.cancel();
     _realtimeSub?.cancel();
     _staleRefreshTimer?.cancel();
     try {
@@ -155,63 +164,53 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
     try {
       final dio = getIt<Dio>();
       if (kDebugMode) {
-        debugPrint('[DeviceRealtimePage] Fetching device detail for ${widget.sn}');
+        debugPrint(
+            '[DeviceRealtimePage] Fetching device detail for ${widget.sn}');
       }
       // API 路径: /devices/by-sn/:sn
       final res = await dio
           .get('/devices/by-sn/${widget.sn}')
           .timeout(const Duration(seconds: 10));
       if (kDebugMode) {
-        debugPrint('[DeviceRealtimePage] API response status: ${res.statusCode}');
+        debugPrint(
+            '[DeviceRealtimePage] API response status: ${res.statusCode}');
       }
       if (res.statusCode == 200 && mounted) {
         final data = unwrapApiResponse<Map<String, dynamic>>(
           res.data,
           validate: (value) {
             if (kDebugMode) {
-              debugPrint('[DeviceRealtimePage] Validating data type: ${value.runtimeType}, isMap: ${value is Map<String, dynamic>}');
+              debugPrint(
+                  '[DeviceRealtimePage] Validating data type: ${value.runtimeType}, isMap: ${value is Map<String, dynamic>}');
             }
             return value is Map<String, dynamic>;
           },
           expected: 'an object',
         );
         if (kDebugMode) {
-          debugPrint('[DeviceRealtimePage] API data keys: ${data.keys.toList()}');
-          debugPrint('[DeviceRealtimePage] has realtime_data: ${data.containsKey('realtime_data')}, value: ${data['realtime_data'] != null}');
-          debugPrint('[DeviceRealtimePage] has online_status: ${data.containsKey('online_status')}, value: ${data['online_status']}');
+          debugPrint(
+              '[DeviceRealtimePage] API data keys: ${data.keys.toList()}');
+          debugPrint(
+              '[DeviceRealtimePage] has realtime_data: ${data.containsKey('realtime_data')}, value: ${data['realtime_data'] != null}');
+          debugPrint(
+              '[DeviceRealtimePage] has online_status: ${data.containsKey('online_status')}, value: ${data['online_status']}');
         }
 
         // 解析 realtime_data
         final realtimeRaw =
             data['realtime_data'] as Map<String, dynamic>? ?? {};
         if (kDebugMode) {
-          debugPrint('[DeviceRealtimePage] realtimeRaw keys: ${realtimeRaw.keys.toList()}');
+          debugPrint(
+              '[DeviceRealtimePage] realtimeRaw keys: ${realtimeRaw.keys.toList()}');
         }
-        Map<String, dynamic> flatData = {};
-
-        // realtime_data 可能是嵌套结构（ac/pv/energy 对象），展平它
-        realtimeRaw.forEach((key, value) {
-          if (value is Map<String, dynamic>) {
-            if (value.containsKey('data') &&
-                value['data'] is Map<String, dynamic>) {
-              final innerData = value['data'] as Map<String, dynamic>;
-              innerData.forEach((subKey, subValue) {
-                final flatKey = '${key}_$subKey';
-                flatData[flatKey] = subValue;
-              });
-            } else {
-              value.forEach((subKey, subValue) {
-                final flatKey = '${key}_$subKey';
-                flatData[flatKey] = subValue;
-              });
-            }
-          } else {
-            flatData[key] = value;
-          }
-        });
+        final flatData = normalizeRealtimePayload(realtimeRaw);
 
         // 尝试将 realtime_data 解析为结构化遥测
-        final structured = InverterRealtime.fromJson(realtimeRaw);
+        final structured = InverterRealtime.fromJson({
+          ...realtimeRaw,
+          'device_sn': widget.sn,
+          'updated_at': realtimeRaw['updated_at'] ?? data['data_time'],
+        });
         final hasSection = structured.ac != null ||
             structured.pv != null ||
             structured.battery != null ||
@@ -220,43 +219,47 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
             structured.bmsSummary != null;
 
         if (kDebugMode) {
-          debugPrint('[DeviceRealtimePage] structured: ac=${structured.ac != null}, pv=${structured.pv != null}, batt=${structured.battery != null}, sys=${structured.sysStatus != null}, energy=${structured.energy != null}');
+          debugPrint(
+              '[DeviceRealtimePage] structured: ac=${structured.ac != null}, pv=${structured.pv != null}, batt=${structured.battery != null}, sys=${structured.sysStatus != null}, energy=${structured.energy != null}');
           if (structured.ac != null) {
-            debugPrint('[DeviceRealtimePage] ac: voltage=${structured.ac!.voltage}, power=${structured.ac!.power}, current=${structured.ac!.current}');
+            debugPrint(
+                '[DeviceRealtimePage] ac: voltage=${structured.ac!.voltage}, power=${structured.ac!.power}, current=${structured.ac!.current}');
           }
           if (structured.pv != null) {
-            debugPrint('[DeviceRealtimePage] pv: power=${structured.pv!.pvPower}, pv1V=${structured.pv!.pvVoltage}');
+            debugPrint(
+                '[DeviceRealtimePage] pv: power=${structured.pv!.pvPower}, pv1V=${structured.pv!.pvVoltage}');
           }
           if (structured.battery != null) {
-            debugPrint('[DeviceRealtimePage] batt: soc=${structured.battery!.soc}, voltage=${structured.battery!.voltage}, power=${structured.battery!.power}');
+            debugPrint(
+                '[DeviceRealtimePage] batt: soc=${structured.battery!.soc}, voltage=${structured.battery!.voltage}, power=${structured.battery!.power}');
           }
           if (structured.energy != null) {
-            debugPrint('[DeviceRealtimePage] energy: dailyPv=${structured.energy!.dailyPV}, dailyCharge=${structured.energy!.dailyCharge}, dailyLoad=${structured.energy!.dailyLoad}');
+            debugPrint(
+                '[DeviceRealtimePage] energy: dailyPv=${structured.energy!.dailyPV}, dailyCharge=${structured.energy!.dailyCharge}, dailyLoad=${structured.energy!.dailyLoad}');
           }
-          debugPrint('[DeviceRealtimePage] hasSection=$hasSection, flatData keys: ${flatData.keys.toList()}');
+          debugPrint(
+              '[DeviceRealtimePage] hasSection=$hasSection, flatData keys: ${flatData.keys.toList()}');
         }
 
         setState(() {
-          _realtimeData.addAll(flatData);
-          if (_latest == null && hasSection) {
+          if (hasSection &&
+              canReplaceTelemetry(_latest?.updatedAt, structured.updatedAt)) {
+            _realtimeData
+              ..clear()
+              ..addAll(flatData);
             _latest = structured;
+            _dataUpdatedAt = structured.updatedAt;
           }
-          final updatedAtStr = (data['updated_at'] ??
-                  data['data_time'] ??
-                  realtimeRaw['updated_at'])
-              as String?;
-          final parsed =
-              updatedAtStr == null ? null : DateTime.tryParse(updatedAtStr);
-          if (parsed != null) {
-            _dataUpdatedAt = parsed;
+          if (canReplaceTelemetry(_latest?.updatedAt, structured.updatedAt)) {
+            _online = deviceCloudOnline(data);
           }
-          _online = data['online_status']?['online'] == true ||
-              data['device']?['status'] == 1;
+          _timezone = data['device']?['timezone'] as String? ?? _timezone;
           _loading = false;
           _error = null;
           _apiUnavailable = false;
           if (kDebugMode) {
-            debugPrint('[DeviceRealtimePage] setState complete: _loading=$_loading, _error=$_error, _online=$_online');
+            debugPrint(
+                '[DeviceRealtimePage] setState complete: _loading=$_loading, _error=$_error, _online=$_online');
           }
         });
       }
@@ -287,7 +290,9 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
         setState(() {
           _latest = cached;
           final newMqttData = _inverterToFlatMap(cached);
-          _realtimeData.addAll(newMqttData);
+          _realtimeData
+            ..clear()
+            ..addAll(newMqttData);
           _hasMqttData = true;
           if (cached.updatedAt != null) {
             _dataUpdatedAt = cached.updatedAt;
@@ -305,13 +310,15 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
       _realtimeSub = realtimeService.realtimeDataStream
           .where((rt) => rt.deviceSN == widget.sn)
           .listen((rt) {
-        if (mounted) {
+        if (mounted &&
+            !_isLocalMode &&
+            canReplaceTelemetry(_latest?.updatedAt, rt.updatedAt)) {
           setState(() {
             _latest = rt;
-            // 合并 MQTT 新数据到现有数据，而非完全替换
-            // 这样 API 返回的字段不会因 MQTT 数据缺失而丢失
             final newMqttData = _inverterToFlatMap(rt);
-            _realtimeData.addAll(newMqttData);
+            _realtimeData
+              ..clear()
+              ..addAll(newMqttData);
             _hasMqttData = true;
             if (rt.updatedAt != null) {
               _dataUpdatedAt = rt.updatedAt;
@@ -337,8 +344,11 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
 
   /// 将 InverterRealtime 转为与云端 API 一致的扁平 Map（V2.1 键，
   /// 与服务端 normalizeRealtimeData 展平后的顶层键一致），
-  /// 保持 derived 字段合并机制与原实现一致
+  /// 保留当前快照的 derived 字段，不沿用上一快照的缺失字段。
   Map<String, dynamic> _inverterToFlatMap(InverterRealtime rt) {
+    if (rt.telemetryFields.isNotEmpty) {
+      return normalizeRealtimePayload(rt.telemetryFields);
+    }
     final map = <String, dynamic>{};
     // AC
     if (rt.ac != null) {
@@ -426,16 +436,23 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
         if (state is DeviceLocalDisconnected) {
           // 逆变器无响应，已自动断开设备热点并切回家用 WiFi
           final l10n = AppLocalizations.of(context)!;
-          AppToast.show(context, l10n.inverterNoResponse, type: ToastType.error);
+          AppToast.show(context, l10n.inverterNoResponse,
+              type: ToastType.error);
           context.pop();
         }
         // 本地直连模式：接收 DeviceBloc 的本地实时数据
-        if (state is DeviceDetailLoaded && state.realtimeData != null) {
+        if (_isLocalMode &&
+            state is DeviceDetailLoaded &&
+            state.realtimeData != null &&
+            (state.realtimeData!.deviceSN.isEmpty ||
+                state.realtimeData!.deviceSN == widget.sn)) {
           final rt = state.realtimeData!;
           setState(() {
             _latest = rt;
             final newMqttData = _inverterToFlatMap(rt);
-            _realtimeData.addAll(newMqttData);
+            _realtimeData
+              ..clear()
+              ..addAll(newMqttData);
             _hasMqttData = true;
             _apiUnavailable = false;
             _error = null;
@@ -462,6 +479,13 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
           backgroundColor: AppColor.surfaceContainer(context),
           foregroundColor: AppColor.textPrimary(context),
           actions: [
+            if (!_isLocalMode)
+              IconButton(
+                icon: const Icon(Icons.history_rounded),
+                tooltip: AppLocalizations.of(context)!.str('telemetry_history'),
+                onPressed: () => context.push(
+                    '/device/${widget.sn}/history?tz=${Uri.encodeComponent(_timezone)}'),
+              ),
             IconButton(
               icon: const Icon(Icons.battery_charging_full_rounded),
               tooltip: AppLocalizations.of(context)!.str('storage_title'),
@@ -536,7 +560,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
                 data: _latest,
                 footer: _buildProtocolEntry(),
               ),
-              EnergyStatsTab(data: _latest),
+              EnergyStatsTab(data: _latest, recordedTotalPV: _recordedTotalPV),
               RemoteSettingsTab(sn: widget.sn),
               DeviceHealthTab(
                 data: _latest,
@@ -575,8 +599,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
           border: Border.all(color: AppColor.border(context)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black
-                  .withValues(alpha: isDark ? 0.3 : 0.08),
+              color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
               blurRadius: 18,
               offset: Offset(0, 4.h),
             ),
@@ -640,11 +663,11 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
             Icon(
               icon,
               size: 17.sp,
-              color:
-                  selected ? Colors.white : AppColor.textSecondary(context),
+              color: selected ? Colors.white : AppColor.textSecondary(context),
             ),
             SizedBox(width: 5.w),
-            Text(
+            Expanded(
+                child: Text(
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -654,7 +677,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
                 color:
                     selected ? Colors.white : AppColor.textSecondary(context),
               ),
-            ),
+            )),
           ],
         ),
       ),
@@ -666,8 +689,8 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
   Widget _buildStaleDataBanner() {
     final updatedAt = _dataUpdatedAt;
     if (updatedAt == null) return const SizedBox.shrink();
-    final stale = DateTime.now().difference(updatedAt.toLocal()) >
-        _staleThreshold;
+    final stale =
+        DateTime.now().difference(updatedAt.toLocal()) > _staleThreshold;
     if (!stale) return const SizedBox.shrink();
 
     final l10n = AppLocalizations.of(context)!;
@@ -765,8 +788,8 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
                   SizedBox(height: 2.h),
                   Text(
                     AppLocalizations.of(context)!.protocolTelemetryDesc,
-                    style:
-                        TextStyle(fontSize: 12.sp, color: AppColor.textHint(context)),
+                    style: TextStyle(
+                        fontSize: 12.sp, color: AppColor.textHint(context)),
                   ),
                 ],
               ),

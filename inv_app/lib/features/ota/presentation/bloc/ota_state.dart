@@ -45,18 +45,81 @@ class OTATriggered extends OtaState {
 }
 
 class OTAProgress extends OtaState {
+  /// Compatibility primary value; only [stageProgress] proves a phase percent.
   final double progress;
   final String status;
   final Map<String, dynamic> detail;
+  final String stage;
+  final String targetChip;
+  final double? stageProgress;
+  final double? overallProgress;
 
   const OTAProgress({
     required this.progress,
     required this.status,
     required this.detail,
+    this.stage = '',
+    this.targetChip = '',
+    this.stageProgress,
+    this.overallProgress,
   });
 
+  factory OTAProgress.fromDetail(Map<String, dynamic> data) {
+    Map<String, dynamic> active = data;
+    final items = data['items'];
+    if (items is List) {
+      final records = items
+          .whereType<Map>()
+          .map(
+            (item) => Map<String, dynamic>.from(item),
+          )
+          .toList();
+      for (final statuses in const [
+        ['downloading', 'upgrading', 'transferring', 'verifying', 'installing'],
+        ['pending'],
+        ['failed', 'cancelled', 'success'],
+      ]) {
+        final matching =
+            records.where((item) => statuses.contains(item['status']));
+        if (matching.isNotEmpty) {
+          active = matching.first;
+          break;
+        }
+      }
+    }
+    final rawStage = (active['stage'] ?? '').toString();
+    final stage = switch (rawStage) {
+      'receiving' => 'transferring',
+      'writing' || 'upgrading' => 'installing',
+      '' => (active['status'] ?? data['status'] ?? '').toString(),
+      _ => rawStage,
+    };
+    double? percent(dynamic value) => value is num && value.isFinite
+        ? value.toDouble().clamp(0.0, 100.0)
+        : null;
+    return OTAProgress(
+      progress:
+          percent(active['stage_progress']) ?? percent(active['progress']) ?? 0,
+      status: (data['status'] ?? '').toString(),
+      detail: data,
+      stage: stage,
+      targetChip: (active['target_chip'] ?? active['target'] ?? '').toString(),
+      stageProgress: percent(active['stage_progress']),
+      overallProgress:
+          percent(data['overall_progress']) ?? percent(data['progress']),
+    );
+  }
+
   @override
-  List<Object?> get props => [progress, status, detail];
+  List<Object?> get props => [
+        progress,
+        status,
+        detail,
+        stage,
+        targetChip,
+        stageProgress,
+        overallProgress,
+      ];
 }
 
 class OTAComplete extends OtaState {}

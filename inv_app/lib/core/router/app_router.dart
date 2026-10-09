@@ -65,7 +65,7 @@ import 'package:inv_app/features/profile/presentation/pages/notify_settings_page
 
 import 'package:inv_app/features/device/presentation/pages/device_edit_page.dart';
 
-import 'package:inv_app/features/device/presentation/pages/history_chart_page.dart';
+import 'package:inv_app/features/device/presentation/pages/device_telemetry_history_page.dart';
 
 import 'package:inv_app/features/device/presentation/pages/local_mode_page.dart';
 
@@ -82,7 +82,6 @@ import 'package:inv_app/features/ota/presentation/pages/ota_tab_page.dart';
 import 'package:inv_app/features/ota/presentation/pages/local_upgrade_page.dart';
 
 import 'package:inv_app/features/ota/presentation/pages/upgrade_history_page.dart';
-
 
 import 'package:inv_app/features/ota/presentation/pages/ota_check_all_page.dart';
 
@@ -173,18 +172,17 @@ class AppRouter {
       GoRoute(
         path: '/login',
         name: 'login',
-        pageBuilder: (context, state) =>
-            _fadePage(
-              state,
-              AuthPage(
-                initialMode: AuthMode.login,
-                bindSn: state.uri.queryParameters['bind_sn'],
-                bindPin: state.uri.queryParameters['bind_pin'],
-                bindStationId: parsePositiveRouteInt(
-                  state.uri.queryParameters['station_id'],
-                ),
-              ),
+        pageBuilder: (context, state) => _fadePage(
+          state,
+          AuthPage(
+            initialMode: AuthMode.login,
+            bindSn: state.uri.queryParameters['bind_sn'],
+            bindPin: state.uri.queryParameters['bind_pin'],
+            bindStationId: parsePositiveRouteInt(
+              state.uri.queryParameters['station_id'],
             ),
+          ),
+        ),
       ),
       GoRoute(
         path: '/jverify-login',
@@ -333,7 +331,12 @@ class AppRouter {
         pageBuilder: (context, state) {
           final sn = state.pathParameters['sn']!;
 
-          return _slidePage(state, HistoryChartPage(deviceSN: sn));
+          return _slidePage(
+              state,
+              DeviceTelemetryHistoryPage(
+                  sn: sn,
+                  timezone:
+                      state.uri.queryParameters['tz'] ?? 'Asia/Shanghai'));
         },
       ),
       // 储能 BMS 页（必须在 /device/:sn 之后声明，路径更具体者先匹配的规则见 :264 注释）

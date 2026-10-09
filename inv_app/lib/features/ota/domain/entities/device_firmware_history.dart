@@ -10,6 +10,8 @@ class DeviceFirmwareHistory {
     required this.status,
     this.progress = 0,
     this.stage = '',
+    this.stageProgress,
+    this.overallProgress,
     this.changelog = '',
     this.createdAt,
     this.updatedAt,
@@ -37,6 +39,8 @@ class DeviceFirmwareHistory {
   /// 设备上报的原始阶段(accepted/downloading/verifying/installing/rebooting/
   /// succeeded/failed)，比 status 细，用于把「升级中」拆成分阶段展示。空=未知。
   final String stage;
+  final int? stageProgress;
+  final int? overallProgress;
   final String changelog;
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -47,26 +51,27 @@ class DeviceFirmwareHistory {
   String get newVersion => firmwareVersion;
 
   /// 成功且服务端明确给出旧版本固件 ID 的记录才可回退。
-  bool get canRollback =>
-      status == 'success' && rollbackFirmwareId > 0;
+  bool get canRollback => status == 'success' && rollbackFirmwareId > 0;
 
   factory DeviceFirmwareHistory.fromJson(Map<String, dynamic> json) {
     return DeviceFirmwareHistory(
       id: (json['id'] as num?)?.toInt() ?? 0,
       deviceSn: json['device_sn']?.toString() ?? '',
       firmwareId: (json['firmware_id'] as num?)?.toInt() ?? 0,
-      rollbackFirmwareId:
-          (json['rollback_firmware_id'] as num?)?.toInt() ?? 0,
+      rollbackFirmwareId: (json['rollback_firmware_id'] as num?)?.toInt() ?? 0,
       target: json['target_chip']?.toString() ?? '',
       oldVersion: json['old_version']?.toString() ?? '',
       firmwareVersion: json['firmware_version']?.toString() ?? '',
       status: json['status']?.toString() ?? '',
       progress: (json['progress'] as num?)?.toInt() ?? 0,
       stage: json['stage']?.toString() ?? '',
+      stageProgress: (json['stage_progress'] as num?)?.toInt(),
+      overallProgress: (json['overall_progress'] as num?)?.toInt(),
       changelog: json['changelog']?.toString() ?? '',
       createdAt: DateTime.tryParse(json['created_at']?.toString() ?? ''),
       updatedAt: DateTime.tryParse(
-          (json['updated_at'] ?? json['created_at'])?.toString() ?? ''),
+        (json['updated_at'] ?? json['created_at'])?.toString() ?? '',
+      ),
       completedAt: DateTime.tryParse(json['completed_at']?.toString() ?? ''),
       errorMessage: json['error_message']?.toString() ?? '',
     );

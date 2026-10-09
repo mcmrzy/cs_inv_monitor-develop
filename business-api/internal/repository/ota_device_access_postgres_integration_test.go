@@ -51,8 +51,10 @@ func TestCheckDeviceOwnershipUsesManagementScope(t *testing.T) {
 			(9223, 9210, 9213, 9202, 'active', 1),
 			(9224, 9210, 9214, 9203, 'active', 1);
 
-		INSERT INTO devices(sn, model, user_id) VALUES ($1, 'CS-INV-TEST', 9203);
-	`, deviceSN)
+	`)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx,
+		`INSERT INTO devices(sn, model, user_id) VALUES ($1, 'CS-INV-TEST', 9203)`, deviceSN)
 	require.NoError(t, err)
 
 	repo := NewOTARepository(pool)

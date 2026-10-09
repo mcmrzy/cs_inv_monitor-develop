@@ -30,11 +30,10 @@ class DeviceFirmwareHistoryTile extends StatelessWidget {
     final statusLabel = knownStatuses.contains(item.status)
         ? l10n.str('upgrade_history_status_${item.status}')
         : l10n.unknown;
-    // 设备上报的原始阶段(比 status 细): 进行中时用它替代笼统的「升级中」，
-    // 让用户看清是在下载 / 校验 / 写入设备 / 重启生效。receiving 与 downloading 同义。
     const knownStages = {
       'accepted',
       'downloading',
+      'transferring',
       'verifying',
       'installing',
       'rebooting',
@@ -42,10 +41,16 @@ class DeviceFirmwareHistoryTile extends StatelessWidget {
       'failed',
       'rolled_back',
     };
-    final stageKey =
-        item.stage == 'receiving' ? 'downloading' : item.stage;
-    final stageLabel =
-        knownStages.contains(stageKey) ? l10n.str('upgrade_stage_$stageKey') : '';
+    final stageKey = switch (item.stage) {
+      'receiving' => 'transferring',
+      'writing' || 'upgrading' => 'installing',
+      _ => item.stage,
+    };
+    final stageLabel = stageKey == 'transferring'
+        ? l10n.transferring
+        : knownStages.contains(stageKey)
+            ? l10n.str('upgrade_stage_$stageKey')
+            : '';
     final label = stageLabel.isNotEmpty ? stageLabel : statusLabel;
     final time = item.updatedAt == null
         ? '—'
@@ -57,134 +62,199 @@ class DeviceFirmwareHistoryTile extends StatelessWidget {
       _ => AppColors.blue,
     };
     return IntrinsicHeight(
-      child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        SizedBox(
-          width: 28,
-          child: Stack(alignment: Alignment.topCenter, children: [
-            if (!isFirst && !isLast)
-              Positioned(
-                  top: 0,
-                  bottom: 0,
-                  child: Container(width: 2, color: AppColor.border(context)))
-            else if (!isLast)
-              Positioned(
-                  top: 18,
-                  bottom: 0,
-                  child: Container(width: 2, color: AppColor.border(context))),
-            if (isLast && !isFirst)
-              Positioned(
-                  top: 0,
-                  height: 18,
-                  child: Container(width: 2, color: AppColor.border(context))),
-            Positioned(
-              top: 11,
-              child: Container(
-                width: 14,
-                height: 14,
-                decoration: BoxDecoration(
-                  color: statusColor,
-                  shape: BoxShape.circle,
-                  border:
-                      Border.all(color: AppColor.surface(context), width: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: 28,
+            child: Stack(
+              alignment: Alignment.topCenter,
+              children: [
+                if (!isFirst && !isLast)
+                  Positioned(
+                    top: 0,
+                    bottom: 0,
+                    child: Container(width: 2, color: AppColor.border(context)),
+                  )
+                else if (!isLast)
+                  Positioned(
+                    top: 18,
+                    bottom: 0,
+                    child: Container(width: 2, color: AppColor.border(context)),
+                  ),
+                if (isLast && !isFirst)
+                  Positioned(
+                    top: 0,
+                    height: 18,
+                    child: Container(width: 2, color: AppColor.border(context)),
+                  ),
+                Positioned(
+                  top: 11,
+                  child: Container(
+                    width: 14,
+                    height: 14,
+                    decoration: BoxDecoration(
+                      color: statusColor,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: AppColor.surface(context),
+                        width: 3,
+                      ),
+                    ),
+                  ),
                 ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(15),
+              decoration: BoxDecoration(
+                color: AppColor.surfaceContainer(context),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColor.border(context)),
               ),
-            ),
-          ]),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(15),
-            decoration: BoxDecoration(
-              color: AppColor.surfaceContainer(context),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColor.border(context)),
-            ),
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: AppColor.primarySoft(context),
-                    borderRadius: BorderRadius.circular(10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: AppColor.primarySoft(context),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          module.icon,
+                          size: 18,
+                          color: AppColor.primary(context),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          module.displayLabel(l10n),
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: statusColor.withValues(alpha: .10),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          label,
+                          style: TextStyle(
+                            color: statusColor,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  child: Icon(module.icon,
-                      size: 18, color: AppColor.primary(context)),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                    child: Text(module.displayLabel(l10n),
-                        style: const TextStyle(fontWeight: FontWeight.w700))),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: .10),
-                    borderRadius: BorderRadius.circular(8),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      _VersionLabel(
+                        value: item.oldVersion.isEmpty ? '—' : item.oldVersion,
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Icon(
+                          Icons.arrow_forward_rounded,
+                          size: 16,
+                          color: AppColor.textHint(context),
+                        ),
+                      ),
+                      _VersionLabel(
+                        value: item.newVersion.isEmpty ? '—' : item.newVersion,
+                        emphasized: true,
+                      ),
+                    ],
                   ),
-                  child: Text(label,
-                      style: TextStyle(
-                          color: statusColor,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600)),
-                ),
-              ]),
-              const SizedBox(height: 12),
-              Row(children: [
-                _VersionLabel(
-                    value: item.oldVersion.isEmpty ? '—' : item.oldVersion),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Icon(Icons.arrow_forward_rounded,
-                      size: 16, color: AppColor.textHint(context)),
-                ),
-                _VersionLabel(
-                    value: item.newVersion.isEmpty ? '—' : item.newVersion,
-                    emphasized: true),
-              ]),
-              const SizedBox(height: 8),
-              Row(children: [
-                Icon(Icons.schedule_rounded,
-                    size: 14, color: AppColor.textHint(context)),
-                const SizedBox(width: 5),
-                Expanded(
-                  child: Text(time,
-                      style: TextStyle(
-                          fontSize: 12,
-                          color: AppColor.textSecondary(context))),
-                ),
-              ]),
-              if (item.changelog.trim().isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(11),
-                  decoration: BoxDecoration(
-                    color: AppColor.surfaceHover(context),
-                    borderRadius: BorderRadius.circular(10),
+                  const SizedBox(height: 8),
+                  Text(
+                    '$label ${item.stageProgress == null ? '--' : '${item.stageProgress!.clamp(0, 100)}%'}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColor.textSecondary(context),
+                    ),
                   ),
-                  child: Text(
-                      FirmwareModulePresentation.sanitizeCustomerCopy(
-                          item.changelog, l10n),
-                      style: TextStyle(
+                  const SizedBox(height: 4),
+                  Text(
+                    '${l10n.str('ota_overall_progress')} ${(item.overallProgress ?? item.progress).clamp(0, 100)}%',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColor.textSecondary(context),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.schedule_rounded,
+                        size: 14,
+                        color: AppColor.textHint(context),
+                      ),
+                      const SizedBox(width: 5),
+                      Expanded(
+                        child: Text(
+                          time,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColor.textSecondary(context),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (item.changelog.trim().isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(11),
+                      decoration: BoxDecoration(
+                        color: AppColor.surfaceHover(context),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        FirmwareModulePresentation.sanitizeCustomerCopy(
+                          item.changelog,
+                          l10n,
+                        ),
+                        style: TextStyle(
                           height: 1.4,
                           fontSize: 13,
-                          color: AppColor.textSecondary(context))),
-                ),
-              ],
-              if (item.errorMessage.trim().isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(FirmwareModulePresentation.sanitizeCustomerCopy(
-                    item.errorMessage, l10n),
-                    style: const TextStyle(color: AppColors.errorLight)),
-              ],
-            ]),
+                          color: AppColor.textSecondary(context),
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (item.errorMessage.trim().isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      FirmwareModulePresentation.sanitizeCustomerCopy(
+                        item.errorMessage,
+                        l10n,
+                      ),
+                      style: const TextStyle(color: AppColors.errorLight),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ),
-        ),
-      ]),
+        ],
+      ),
     );
   }
 }
@@ -202,12 +272,15 @@ class _VersionLabel extends StatelessWidget {
               : AppColor.surfaceHover(context),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Text(value,
-            style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: emphasized
-                    ? AppColor.primary(context)
-                    : AppColor.textSecondary(context))),
+        child: Text(
+          value,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: emphasized
+                ? AppColor.primary(context)
+                : AppColor.textSecondary(context),
+          ),
+        ),
       );
 }

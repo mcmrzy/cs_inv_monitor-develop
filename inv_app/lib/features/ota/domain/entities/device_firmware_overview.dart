@@ -149,6 +149,13 @@ class FirmwareResource {
   final String releaseSignature;
   final List<String>? supportedChannels;
 
+  bool get canRemoteUpgrade {
+    final target = targetChip.trim().toLowerCase();
+    if (!const {'esp','arm','dsp','bms'}.contains(target)) return false;
+    final channels = supportedChannels;
+    return channels == null ? target != 'bms' : channels.any((c) => const {'remote','cloud'}.contains(c.trim().toLowerCase()));
+  }
+
   bool get canLocalUpgrade {
     final target = targetChip.trim().toLowerCase();
     if (!const {'esp', 'arm', 'dsp', 'bms'}.contains(target)) return false;

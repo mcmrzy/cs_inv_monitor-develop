@@ -65,11 +65,12 @@ describe('OTA 设备明细的阶段展示', () => {
     expect(screen.getAllByText('写入设备')).toHaveLength(1)
   })
 
-  it('ARM 下载阶段 stage=receiving 归一为「下载固件」', { timeout: 30_000 }, async () => {
+  it('ARM stage=receiving 显示传输阶段，旧百分比标为整体进度', { timeout: 30_000 }, async () => {
     mockTaskDevices([taskDevice({ stage: 'receiving', progress: 40 })])
     await openTaskDeviceDrawer()
 
-    expect(await screen.findByText('下载固件')).toBeInTheDocument()
+    expect(await screen.findByText('传输固件')).toBeInTheDocument()
+    expect(screen.getByText('整体进度 40%')).toBeInTheDocument()
   })
 
   it('旧数据没有 stage 时回退显示 status 文案', { timeout: 30_000 }, async () => {

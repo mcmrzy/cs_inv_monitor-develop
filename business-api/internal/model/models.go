@@ -71,23 +71,25 @@ type Device struct {
 	BatteryType    string  `json:"battery_type"`
 	CellCount      int     `json:"cell_count"`
 	// V2.1 只读信息扩展（096 迁移列）
-	Phase             string     `json:"phase"`
-	InverterModule    string     `json:"inverter_module"`
-	HardwareVersion   string     `json:"hardware_version"`
-	BootloaderVersion string     `json:"bootloader_version"`
-	InfoReportedAt    *time.Time `json:"info_reported_at"`
-	StationID         *int64     `json:"station_id"`
-	StationName       string     `json:"station_name"`
-	Alias             string     `json:"alias"`
-	Remark            string     `json:"remark"`
-	UserID            int64      `json:"user_id"`
-	Timezone          string     `json:"timezone"`
-	Status            int        `json:"status"`
-	CurrentPower      float64    `json:"current_power"`
-	DailyEnergy       float64    `json:"daily_energy"`
-	LastOnlineAt      *time.Time `json:"last_online_at"`
-	CreatedAt         time.Time  `json:"created_at"`
-	UpdatedAt         time.Time  `json:"updated_at"`
+	Phase              string                 `json:"phase"`
+	InverterModule     string                 `json:"inverter_module"`
+	HardwareVersion    string                 `json:"hardware_version"`
+	BootloaderVersion  string                 `json:"bootloader_version"`
+	InfoReportedAt     *time.Time             `json:"info_reported_at"`
+	StationID          *int64                 `json:"station_id"`
+	StationName        string                 `json:"station_name"`
+	Alias              string                 `json:"alias"`
+	Remark             string                 `json:"remark"`
+	UserID             int64                  `json:"user_id"`
+	Timezone           string                 `json:"timezone"`
+	Status             int                    `json:"status"`
+	CurrentPower       float64                `json:"current_power"`
+	DailyEnergy        float64                `json:"daily_energy"`
+	TelemetryUpdatedAt *time.Time             `json:"telemetry_updated_at,omitempty"`
+	BMSSummary         map[string]interface{} `json:"bms_summary,omitempty"`
+	LastOnlineAt       *time.Time             `json:"last_online_at"`
+	CreatedAt          time.Time              `json:"created_at"`
+	UpdatedAt          time.Time              `json:"updated_at"`
 }
 
 // OfflineOpLog represents one local operation log uploaded by the App
@@ -534,6 +536,8 @@ type DeviceUpgrade struct {
 	Status             string     `json:"status"` // pending/downloading/upgrading/success/failed/cancelled
 	Stage              string     `json:"stage"`  // 设备上报的原始阶段(比 status 细, 供前端分阶段展示)
 	Progress           int        `json:"progress"`
+	StageProgress      *int       `json:"stage_progress,omitempty"`
+	OverallProgress    *int       `json:"overall_progress,omitempty"`
 	ErrorMessage       string     `json:"error_message"`
 	RetryCount         int        `json:"retry_count"`
 	PushedBy           *int64     `json:"pushed_by"`

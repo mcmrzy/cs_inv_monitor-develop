@@ -237,7 +237,7 @@ func (r *OTARepository) DeleteFirmware(ctx context.Context, id int64) error {
 	return err
 }
 
-// UpsertDeviceUpgrade UPSERT: 同设备+同固件+同升级包=一条记录
+// UpsertDeviceUpgrade creates a fresh attempt; migration 118 preserves history.
 func (r *OTARepository) UpsertDeviceUpgrade(ctx context.Context, du *model.DeviceUpgrade) error {
 	return r.db.QueryRow(ctx, `
 		INSERT INTO device_upgrades (device_sn, firmware_id, firmware_version, target_chip,
@@ -255,7 +255,7 @@ func (r *OTARepository) GetPendingUpgradeForDevice(ctx context.Context, sn strin
 	var fw model.Firmware
 	err := r.db.QueryRow(ctx, `
 		SELECT du.id, du.device_sn, du.firmware_id, du.firmware_version, COALESCE(du.target_chip,''),
-		       COALESCE(du.old_version,''), du.status, COALESCE(du.progress,0), COALESCE(du.error_message,''),
+		       COALESCE(du.old_version,''), du.status, COALESCE(du.stage,''), du.stage_progress, du.overall_progress, COALESCE(du.progress,0), COALESCE(du.error_message,''),
 		       COALESCE(du.retry_count,0), du.pushed_by, du.started_at, du.completed_at, du.created_at, du.updated_at,
 		       f.id, f.model, f.version, f.file_url, COALESCE(f.file_size,0), COALESCE(f.file_md5,''),
 		       COALESCE(f.file_sha256,''), COALESCE(f.security_version,0), COALESCE(f.release_signature,''), COALESCE(f.changelog,''), f.is_force, COALESCE(f.target_chip,''), COALESCE(f.main_version,'')
@@ -266,7 +266,7 @@ func (r *OTARepository) GetPendingUpgradeForDevice(ctx context.Context, sn strin
 		LIMIT 1
 	`, sn).Scan(
 		&du.ID, &du.DeviceSN, &du.FirmwareID, &du.FirmwareVersion, &du.TargetChip,
-		&du.OldVersion, &du.Status, &du.Progress, &du.ErrorMessage,
+		&du.OldVersion, &du.Status, &du.Stage, &du.StageProgress, &du.OverallProgress, &du.Progress, &du.ErrorMessage,
 		&du.RetryCount, &du.PushedBy, &du.StartedAt, &du.CompletedAt, &du.CreatedAt, &du.UpdatedAt,
 		&fw.ID, &fw.Model, &fw.Version, &fw.FileURL, &fw.FileSize, &fw.FileMD5,
 		&fw.FileSHA256, &fw.SecurityVersion, &fw.ReleaseSignature, &fw.Changelog, &fw.IsForce, &fw.TargetChip, &fw.MainVersion,
@@ -282,12 +282,12 @@ func (r *OTARepository) GetActiveUpgradeBySN(ctx context.Context, deviceSN strin
 	var du model.DeviceUpgrade
 	err := r.db.QueryRow(ctx, `
 		SELECT id, device_sn, firmware_id, firmware_version, target_chip, old_version,
-		       status, progress, COALESCE(error_message,''), retry_count
+		       status, COALESCE(stage,''), stage_progress, overall_progress, progress, COALESCE(error_message,''), retry_count
 		FROM device_upgrades
 		WHERE device_sn = $1 AND status IN ('pending', 'upgrading')
 		ORDER BY updated_at DESC LIMIT 1
 	`, deviceSN).Scan(&du.ID, &du.DeviceSN, &du.FirmwareID, &du.FirmwareVersion,
-		&du.TargetChip, &du.OldVersion, &du.Status, &du.Progress, &du.ErrorMessage, &du.RetryCount)
+		&du.TargetChip, &du.OldVersion, &du.Status, &du.Stage, &du.StageProgress, &du.OverallProgress, &du.Progress, &du.ErrorMessage, &du.RetryCount)
 	if err != nil {
 		return nil, err
 	}
@@ -334,10 +334,13 @@ func (r *OTARepository) ReconcileUpgradeStatusByID(ctx context.Context, id int64
 	var taskID int64
 	err := r.db.QueryRow(ctx, `
 		UPDATE device_upgrades SET
-			status = $2,
+			status = $2::varchar,
 			progress = $3,
+			stage = CASE WHEN $2::varchar = 'success' THEN 'succeeded' ELSE stage END,
+			stage_progress = CASE WHEN $2::varchar = 'success' AND stage_progress IS NOT NULL THEN 100 ELSE stage_progress END,
+			overall_progress = CASE WHEN $2::varchar = 'success' AND overall_progress IS NOT NULL THEN 100 ELSE overall_progress END,
 			error_message = $4,
-			completed_at = CASE WHEN $2 IN ('success','failed') THEN NOW() ELSE completed_at END,
+			completed_at = CASE WHEN $2::varchar IN ('success','failed') THEN NOW() ELSE completed_at END,
 			updated_at = NOW()
 		WHERE id = $1 AND status = 'upgrading'
 		RETURNING COALESCE(task_id, 0)
@@ -389,7 +392,7 @@ func (r *OTARepository) ListUpgradesByFirmware(ctx context.Context, page, pageSi
 func (r *OTARepository) ListUpgradesByFirmwareID(ctx context.Context, firmwareID int64) ([]model.DeviceUpgrade, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT du.id, du.device_sn, du.firmware_id, du.firmware_version, COALESCE(du.target_chip,''),
-		       COALESCE(du.old_version,''), du.status, COALESCE(du.stage,''), COALESCE(du.progress,0), COALESCE(du.error_message,''),
+		       COALESCE(du.old_version,''), du.status, COALESCE(du.stage,''), du.stage_progress, du.overall_progress, COALESCE(du.progress,0), COALESCE(du.error_message,''),
 		       COALESCE(du.retry_count,0), du.pushed_by, du.started_at, du.completed_at, du.created_at, du.updated_at,
 		       COALESCE(dev.firmware_arm,'') AS current_arm_version,
 		       COALESCE(dev.firmware_esp,'') AS current_esp_version,
@@ -409,7 +412,7 @@ func (r *OTARepository) ListUpgradesByFirmwareID(ctx context.Context, firmwareID
 	for rows.Next() {
 		var du model.DeviceUpgrade
 		if err := rows.Scan(&du.ID, &du.DeviceSN, &du.FirmwareID, &du.FirmwareVersion, &du.TargetChip,
-			&du.OldVersion, &du.Status, &du.Stage, &du.Progress, &du.ErrorMessage,
+			&du.OldVersion, &du.Status, &du.Stage, &du.StageProgress, &du.OverallProgress, &du.Progress, &du.ErrorMessage,
 			&du.RetryCount, &du.PushedBy, &du.StartedAt, &du.CompletedAt, &du.CreatedAt, &du.UpdatedAt,
 			&du.CurrentArmVersion, &du.CurrentEspVersion, &du.CurrentDspVersion, &du.CurrentBmsVersion); err != nil {
 			continue
@@ -432,7 +435,7 @@ func (r *OTARepository) GetDeviceUpgradeHistory(ctx context.Context, deviceSN st
 
 	rows, err := r.db.Query(ctx, `
 		SELECT du.id, du.device_sn, du.firmware_id, du.firmware_version, COALESCE(du.target_chip,''),
-		       COALESCE(du.old_version,''), du.status, COALESCE(du.stage,''), COALESCE(du.progress,0), COALESCE(du.error_message,''),
+		       COALESCE(du.old_version,''), du.status, COALESCE(du.stage,''), du.stage_progress, du.overall_progress, COALESCE(du.progress,0), COALESCE(du.error_message,''),
 		       COALESCE(du.retry_count,0), du.pushed_by, du.started_at, du.completed_at,
 		       du.created_at, du.updated_at, COALESCE(f.changelog,'')
 		FROM device_upgrades du
@@ -450,7 +453,7 @@ func (r *OTARepository) GetDeviceUpgradeHistory(ctx context.Context, deviceSN st
 	for rows.Next() {
 		var du model.DeviceUpgrade
 		if err := rows.Scan(&du.ID, &du.DeviceSN, &du.FirmwareID, &du.FirmwareVersion, &du.TargetChip,
-			&du.OldVersion, &du.Status, &du.Stage, &du.Progress, &du.ErrorMessage,
+			&du.OldVersion, &du.Status, &du.Stage, &du.StageProgress, &du.OverallProgress, &du.Progress, &du.ErrorMessage,
 			&du.RetryCount, &du.PushedBy, &du.StartedAt, &du.CompletedAt, &du.CreatedAt,
 			&du.UpdatedAt, &du.Changelog); err != nil {
 			continue
@@ -471,7 +474,7 @@ func (r *OTARepository) GetAllUpgradeHistory(ctx context.Context, sns []string, 
 	countQuery := "SELECT COUNT(*) FROM device_upgrades"
 	query := `
 		SELECT id, device_sn, firmware_id, firmware_version, COALESCE(target_chip,''),
-		       COALESCE(old_version,''), status, COALESCE(stage,''), COALESCE(progress,0), COALESCE(error_message,''),
+		       COALESCE(old_version,''), status, COALESCE(stage,''), stage_progress, overall_progress, COALESCE(progress,0), COALESCE(error_message,''),
 		       COALESCE(retry_count,0), pushed_by, started_at, completed_at, created_at, updated_at,
 		       COALESCE(source,''), upgrade_package_id, COALESCE(task_id, 0)
 		FROM device_upgrades
@@ -501,7 +504,7 @@ func (r *OTARepository) GetAllUpgradeHistory(ctx context.Context, sns []string, 
 		var pkgID *int64
 		var taskID int64
 		if err := rows.Scan(&du.ID, &du.DeviceSN, &du.FirmwareID, &du.FirmwareVersion, &du.TargetChip,
-			&du.OldVersion, &du.Status, &du.Stage, &du.Progress, &du.ErrorMessage,
+			&du.OldVersion, &du.Status, &du.Stage, &du.StageProgress, &du.OverallProgress, &du.Progress, &du.ErrorMessage,
 			&du.RetryCount, &du.PushedBy, &du.StartedAt, &du.CompletedAt, &du.CreatedAt, &du.UpdatedAt,
 			&du.Source, &pkgID, &taskID); err != nil {
 			continue
@@ -521,6 +524,7 @@ func (r *OTARepository) RetryFailedUpgrades(ctx context.Context, firmwareID int6
 		UPDATE device_upgrades SET
 		    status = 'pending',
 		    progress = 0,
+		    stage = '', stage_progress = NULL, overall_progress = NULL,
 		    error_message = '',
 		    retry_count = retry_count + 1,
 		    started_at = NULL,
@@ -545,13 +549,13 @@ func (r *OTARepository) GetDeviceUpgrade(ctx context.Context, deviceSN string, f
 	var du model.DeviceUpgrade
 	err := r.db.QueryRow(ctx, `
 		SELECT id, device_sn, firmware_id, firmware_version, COALESCE(target_chip,''),
-		       COALESCE(old_version,''), status, COALESCE(progress,0), COALESCE(error_message,''),
+		       COALESCE(old_version,''), status, COALESCE(stage,''), stage_progress, overall_progress, COALESCE(progress,0), COALESCE(error_message,''),
 		       COALESCE(retry_count,0), pushed_by, started_at, completed_at, created_at, updated_at
 		FROM device_upgrades
 		WHERE device_sn = $1 AND firmware_id = $2
 	`, deviceSN, firmwareID).Scan(
 		&du.ID, &du.DeviceSN, &du.FirmwareID, &du.FirmwareVersion, &du.TargetChip,
-		&du.OldVersion, &du.Status, &du.Progress, &du.ErrorMessage,
+		&du.OldVersion, &du.Status, &du.Stage, &du.StageProgress, &du.OverallProgress, &du.Progress, &du.ErrorMessage,
 		&du.RetryCount, &du.PushedBy, &du.StartedAt, &du.CompletedAt, &du.CreatedAt, &du.UpdatedAt)
 	if err != nil {
 		return nil, err
@@ -570,7 +574,7 @@ func (r *OTARepository) GetDeviceUpgradeBySN(ctx context.Context, sn string) (*m
 	var taskID, pkgID int64
 	err := r.db.QueryRow(ctx, `
 		SELECT id, device_sn, firmware_id, firmware_version, COALESCE(target_chip,''),
-		       COALESCE(old_version,''), status, COALESCE(progress,0), COALESCE(error_message,''),
+		       COALESCE(old_version,''), status, COALESCE(stage,''), stage_progress, overall_progress, COALESCE(progress,0), COALESCE(error_message,''),
 		       COALESCE(retry_count,0), pushed_by, COALESCE(source,'admin'), started_at, completed_at, created_at, updated_at,
 		       COALESCE(task_id, 0), COALESCE(upgrade_package_id, 0)
 		FROM device_upgrades
@@ -578,7 +582,7 @@ func (r *OTARepository) GetDeviceUpgradeBySN(ctx context.Context, sn string) (*m
 		ORDER BY updated_at DESC
 		LIMIT 1
 	`, sn).Scan(&du.ID, &du.DeviceSN, &du.FirmwareID, &du.FirmwareVersion, &du.TargetChip,
-		&du.OldVersion, &du.Status, &du.Progress, &du.ErrorMessage,
+		&du.OldVersion, &du.Status, &du.Stage, &du.StageProgress, &du.OverallProgress, &du.Progress, &du.ErrorMessage,
 		&du.RetryCount, &du.PushedBy, &du.Source, &du.StartedAt, &du.CompletedAt, &du.CreatedAt, &du.UpdatedAt,
 		&taskID, &pkgID)
 	if err != nil {
@@ -598,7 +602,7 @@ func (r *OTARepository) GetDeviceUpgradeBySN(ctx context.Context, sn string) (*m
 func (r *OTARepository) ListDeviceUpgradesBySNAndTaskID(ctx context.Context, sn string, taskID int64) ([]model.DeviceUpgrade, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT id, device_sn, firmware_id, firmware_version, COALESCE(target_chip,''),
-		       COALESCE(old_version,''), status, COALESCE(progress,0), COALESCE(error_message,''),
+		       COALESCE(old_version,''), status, COALESCE(stage,''), stage_progress, overall_progress, COALESCE(progress,0), COALESCE(error_message,''),
 		       COALESCE(retry_count,0), pushed_by, COALESCE(source,'admin'), started_at, completed_at, created_at, updated_at,
 		       COALESCE(task_id, 0), COALESCE(upgrade_package_id, 0)
 		FROM device_upgrades
@@ -615,7 +619,7 @@ func (r *OTARepository) ListDeviceUpgradesBySNAndTaskID(ctx context.Context, sn 
 		var du model.DeviceUpgrade
 		var storedTaskID, pkgID int64
 		if err := rows.Scan(&du.ID, &du.DeviceSN, &du.FirmwareID, &du.FirmwareVersion, &du.TargetChip,
-			&du.OldVersion, &du.Status, &du.Progress, &du.ErrorMessage,
+			&du.OldVersion, &du.Status, &du.Stage, &du.StageProgress, &du.OverallProgress, &du.Progress, &du.ErrorMessage,
 			&du.RetryCount, &du.PushedBy, &du.Source, &du.StartedAt, &du.CompletedAt, &du.CreatedAt, &du.UpdatedAt,
 			&storedTaskID, &pkgID); err != nil {
 			return nil, err
@@ -1297,7 +1301,7 @@ func (r *OTARepository) UpsertPackageUpgrade(ctx context.Context, du *model.Devi
 func (r *OTARepository) GetPendingPackageUpgradeForDevice(ctx context.Context, sn string) ([]model.DeviceUpgrade, *model.UpgradePackage, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT du.id, du.device_sn, du.firmware_id, du.firmware_version, COALESCE(du.target_chip,''),
-		       COALESCE(du.old_version,''), du.status, COALESCE(du.progress,0), COALESCE(du.error_message,''),
+		       COALESCE(du.old_version,''), du.status, COALESCE(du.stage,''), du.stage_progress, du.overall_progress, COALESCE(du.progress,0), COALESCE(du.error_message,''),
 		       COALESCE(du.retry_count,0), du.pushed_by, du.started_at, du.completed_at, du.created_at, du.updated_at,
 		       COALESCE(du.upgrade_package_id, 0),
 		       COALESCE(up.main_version,''), COALESCE(up.changelog,''), COALESCE(up.is_force,FALSE)
@@ -1319,7 +1323,7 @@ func (r *OTARepository) GetPendingPackageUpgradeForDevice(ctx context.Context, s
 		var mainVer, changelog string
 		var isForce bool
 		if err := rows.Scan(&du.ID, &du.DeviceSN, &du.FirmwareID, &du.FirmwareVersion, &du.TargetChip,
-			&du.OldVersion, &du.Status, &du.Progress, &du.ErrorMessage,
+			&du.OldVersion, &du.Status, &du.Stage, &du.StageProgress, &du.OverallProgress, &du.Progress, &du.ErrorMessage,
 			&du.RetryCount, &du.PushedBy, &du.StartedAt, &du.CompletedAt, &du.CreatedAt, &du.UpdatedAt,
 			&pkgID, &mainVer, &changelog, &isForce); err != nil {
 			continue
@@ -1348,7 +1352,7 @@ func (r *OTARepository) UpdateDeviceMainVersion(ctx context.Context, sn string, 
 func (r *OTARepository) GetSuccessfulUpgradesByPackage(ctx context.Context, packageID int64) ([]model.DeviceUpgrade, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT du.id, du.device_sn, du.firmware_id, du.firmware_version, COALESCE(du.target_chip,''),
-		       COALESCE(du.old_version,''), du.status, COALESCE(du.progress,0), COALESCE(du.error_message,''),
+		       COALESCE(du.old_version,''), du.status, COALESCE(du.stage,''), du.stage_progress, du.overall_progress, COALESCE(du.progress,0), COALESCE(du.error_message,''),
 		       COALESCE(du.retry_count,0), du.pushed_by, du.started_at, du.completed_at, du.created_at, du.updated_at,
 		       COALESCE(du.upgrade_package_id, 0)
 		FROM device_upgrades du
@@ -1365,7 +1369,7 @@ func (r *OTARepository) GetSuccessfulUpgradesByPackage(ctx context.Context, pack
 		var du model.DeviceUpgrade
 		var pkgID int64
 		if err := rows.Scan(&du.ID, &du.DeviceSN, &du.FirmwareID, &du.FirmwareVersion, &du.TargetChip,
-			&du.OldVersion, &du.Status, &du.Progress, &du.ErrorMessage,
+			&du.OldVersion, &du.Status, &du.Stage, &du.StageProgress, &du.OverallProgress, &du.Progress, &du.ErrorMessage,
 			&du.RetryCount, &du.PushedBy, &du.StartedAt, &du.CompletedAt, &du.CreatedAt, &du.UpdatedAt,
 			&pkgID); err != nil {
 			continue
@@ -1399,7 +1403,7 @@ func (r *OTARepository) FindFirmwareByVersion(ctx context.Context, deviceModel, 
 func (r *OTARepository) GetPackageUpgradesByPackageID(ctx context.Context, packageID int64) ([]model.DeviceUpgrade, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT du.id, du.device_sn, du.firmware_id, du.firmware_version, COALESCE(du.target_chip,''),
-		       COALESCE(du.old_version,''), du.status, COALESCE(du.progress,0), COALESCE(du.error_message,''),
+		       COALESCE(du.old_version,''), du.status, COALESCE(du.stage,''), du.stage_progress, du.overall_progress, COALESCE(du.progress,0), COALESCE(du.error_message,''),
 		       COALESCE(du.retry_count,0), du.pushed_by, du.started_at, du.completed_at, du.created_at, du.updated_at,
 		       COALESCE(du.upgrade_package_id, 0)
 		FROM device_upgrades du
@@ -1416,7 +1420,7 @@ func (r *OTARepository) GetPackageUpgradesByPackageID(ctx context.Context, packa
 		var du model.DeviceUpgrade
 		var pkgID int64
 		if err := rows.Scan(&du.ID, &du.DeviceSN, &du.FirmwareID, &du.FirmwareVersion, &du.TargetChip,
-			&du.OldVersion, &du.Status, &du.Progress, &du.ErrorMessage,
+			&du.OldVersion, &du.Status, &du.Stage, &du.StageProgress, &du.OverallProgress, &du.Progress, &du.ErrorMessage,
 			&du.RetryCount, &du.PushedBy, &du.StartedAt, &du.CompletedAt, &du.CreatedAt, &du.UpdatedAt,
 			&pkgID); err != nil {
 			continue
@@ -1431,7 +1435,7 @@ func (r *OTARepository) GetPackageUpgradesByPackageID(ctx context.Context, packa
 func (r *OTARepository) GetUpgradeBySNAndPackage(ctx context.Context, sn string, packageID int64) ([]model.DeviceUpgrade, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT du.id, du.device_sn, du.firmware_id, du.firmware_version, COALESCE(du.target_chip,''),
-		       COALESCE(du.old_version,''), du.status, COALESCE(du.progress,0), COALESCE(du.error_message,''),
+		       COALESCE(du.old_version,''), du.status, COALESCE(du.stage,''), du.stage_progress, du.overall_progress, COALESCE(du.progress,0), COALESCE(du.error_message,''),
 		       COALESCE(du.retry_count,0), du.pushed_by, du.started_at, du.completed_at, du.created_at, du.updated_at,
 		       COALESCE(du.upgrade_package_id, 0)
 		FROM device_upgrades du
@@ -1448,7 +1452,7 @@ func (r *OTARepository) GetUpgradeBySNAndPackage(ctx context.Context, sn string,
 		var du model.DeviceUpgrade
 		var pkgID int64
 		if err := rows.Scan(&du.ID, &du.DeviceSN, &du.FirmwareID, &du.FirmwareVersion, &du.TargetChip,
-			&du.OldVersion, &du.Status, &du.Progress, &du.ErrorMessage,
+			&du.OldVersion, &du.Status, &du.Stage, &du.StageProgress, &du.OverallProgress, &du.Progress, &du.ErrorMessage,
 			&du.RetryCount, &du.PushedBy, &du.StartedAt, &du.CompletedAt, &du.CreatedAt, &du.UpdatedAt,
 			&pkgID); err != nil {
 			continue
@@ -1464,12 +1468,12 @@ func (r *OTARepository) GetUpgradeByID(ctx context.Context, id int64) (*model.De
 	var du model.DeviceUpgrade
 	err := r.db.QueryRow(ctx, `
 		SELECT id, device_sn, firmware_id, firmware_version, COALESCE(target_chip,''),
-		       COALESCE(old_version,''), status, COALESCE(progress,0), COALESCE(error_message,''),
+		       COALESCE(old_version,''), status, COALESCE(stage,''), stage_progress, overall_progress, COALESCE(progress,0), COALESCE(error_message,''),
 		       COALESCE(retry_count,0), pushed_by, started_at, completed_at, created_at, updated_at,
 		       COALESCE(upgrade_package_id, 0)
 		FROM device_upgrades WHERE id = $1
 	`, id).Scan(&du.ID, &du.DeviceSN, &du.FirmwareID, &du.FirmwareVersion, &du.TargetChip,
-		&du.OldVersion, &du.Status, &du.Progress, &du.ErrorMessage,
+		&du.OldVersion, &du.Status, &du.Stage, &du.StageProgress, &du.OverallProgress, &du.Progress, &du.ErrorMessage,
 		&du.RetryCount, &du.PushedBy, &du.StartedAt, &du.CompletedAt, &du.CreatedAt, &du.UpdatedAt,
 		&du.UpgradePackageID)
 	if err != nil {
@@ -1482,7 +1486,7 @@ func (r *OTARepository) GetUpgradeByID(ctx context.Context, id int64) (*model.De
 func (r *OTARepository) GetPendingUpgradesBySN(ctx context.Context, sn string) ([]model.DeviceUpgrade, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT id, device_sn, firmware_id, firmware_version, COALESCE(target_chip,''),
-		       COALESCE(old_version,''), COALESCE(status,''), COALESCE(progress,0), COALESCE(error_message,''),
+		       COALESCE(old_version,''), COALESCE(status,''), COALESCE(stage,''), stage_progress, overall_progress, COALESCE(progress,0), COALESCE(error_message,''),
 		       COALESCE(retry_count,0), pushed_by, started_at, completed_at, created_at, updated_at,
 		       COALESCE(upgrade_package_id, 0)
 		FROM device_upgrades
@@ -1499,7 +1503,7 @@ func (r *OTARepository) GetPendingUpgradesBySN(ctx context.Context, sn string) (
 		var du model.DeviceUpgrade
 		var pkgID int64
 		if err := rows.Scan(&du.ID, &du.DeviceSN, &du.FirmwareID, &du.FirmwareVersion, &du.TargetChip,
-			&du.OldVersion, &du.Status, &du.Progress, &du.ErrorMessage,
+			&du.OldVersion, &du.Status, &du.Stage, &du.StageProgress, &du.OverallProgress, &du.Progress, &du.ErrorMessage,
 			&du.RetryCount, &du.PushedBy, &du.StartedAt, &du.CompletedAt, &du.CreatedAt, &du.UpdatedAt,
 			&pkgID); err != nil {
 			continue
@@ -1973,7 +1977,7 @@ func (r *OTARepository) DeleteUpgradeTask(ctx context.Context, id int64) error {
 func (r *OTARepository) ListUpgradeDevicesByTaskID(ctx context.Context, taskID int64) ([]model.DeviceUpgrade, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT du.id, du.device_sn, du.firmware_id, du.firmware_version, COALESCE(du.target_chip,''),
-		       COALESCE(du.old_version,''), du.status, COALESCE(du.stage,''), COALESCE(du.progress,0), COALESCE(du.error_message,''),
+		       COALESCE(du.old_version,''), du.status, COALESCE(du.stage,''), du.stage_progress, du.overall_progress, COALESCE(du.progress,0), COALESCE(du.error_message,''),
 		       COALESCE(du.retry_count,0), du.pushed_by, du.started_at, du.completed_at, du.created_at, du.updated_at,
 		       COALESCE(dev.firmware_arm,'') AS current_arm_version,
 		       COALESCE(dev.firmware_esp,'') AS current_esp_version,
@@ -1993,7 +1997,7 @@ func (r *OTARepository) ListUpgradeDevicesByTaskID(ctx context.Context, taskID i
 	for rows.Next() {
 		var du model.DeviceUpgrade
 		if err := rows.Scan(&du.ID, &du.DeviceSN, &du.FirmwareID, &du.FirmwareVersion, &du.TargetChip,
-			&du.OldVersion, &du.Status, &du.Stage, &du.Progress, &du.ErrorMessage,
+			&du.OldVersion, &du.Status, &du.Stage, &du.StageProgress, &du.OverallProgress, &du.Progress, &du.ErrorMessage,
 			&du.RetryCount, &du.PushedBy, &du.StartedAt, &du.CompletedAt, &du.CreatedAt, &du.UpdatedAt,
 			&du.CurrentArmVersion, &du.CurrentEspVersion, &du.CurrentDspVersion, &du.CurrentBmsVersion); err != nil {
 			continue
@@ -2039,6 +2043,7 @@ func (r *OTARepository) RetryFailedUpgradesByTask(ctx context.Context, taskID in
 		UPDATE device_upgrades SET
 		    status = 'pending',
 		    progress = 0,
+		    stage = '', stage_progress = NULL, overall_progress = NULL,
 		    error_message = '',
 		    retry_count = retry_count + 1,
 		    started_at = NULL,
@@ -2151,7 +2156,7 @@ func (r *OTARepository) GetDevicesByFirmwareVersion(ctx context.Context, deviceM
 func (r *OTARepository) GetDevicesByUpgradePackage(ctx context.Context, packageID int64, status string) ([]model.DeviceUpgrade, error) {
 	query := `
 		SELECT du.id, du.device_sn, du.firmware_id, du.firmware_version, COALESCE(du.target_chip,''),
-		       COALESCE(du.old_version,''), du.status, COALESCE(du.progress,0), COALESCE(du.error_message,''),
+		       COALESCE(du.old_version,''), du.status, COALESCE(du.stage,''), du.stage_progress, du.overall_progress, COALESCE(du.progress,0), COALESCE(du.error_message,''),
 		       COALESCE(du.retry_count,0), du.pushed_by, du.started_at, du.completed_at, du.created_at, du.updated_at,
 		       COALESCE(du.upgrade_package_id, 0)
 		FROM device_upgrades du
@@ -2175,7 +2180,7 @@ func (r *OTARepository) GetDevicesByUpgradePackage(ctx context.Context, packageI
 		var du model.DeviceUpgrade
 		var pkgID int64
 		if err := rows.Scan(&du.ID, &du.DeviceSN, &du.FirmwareID, &du.FirmwareVersion, &du.TargetChip,
-			&du.OldVersion, &du.Status, &du.Progress, &du.ErrorMessage,
+			&du.OldVersion, &du.Status, &du.Stage, &du.StageProgress, &du.OverallProgress, &du.Progress, &du.ErrorMessage,
 			&du.RetryCount, &du.PushedBy, &du.StartedAt, &du.CompletedAt, &du.CreatedAt, &du.UpdatedAt,
 			&pkgID); err != nil {
 			continue

@@ -21,14 +21,14 @@ import (
 
 // 调试模式运行参数（固定 5 秒采样，本期不开放任意周期配置）。
 const (
-	DebugIntervalSeconds     = 5
-	DebugDefaultDurationSec  = 3600  // 每次开启默认 60 分钟
-	DebugMinDurationSec      = 300   // 最短 5 分钟
-	DebugMaxDurationSec      = 14400 // 最长 4 小时
-	DebugMaxConcurrentDevices = 20   // 同时开启调试的设备数上限
-	debugStartAckTimeout     = 90 * time.Second
-	debugSampleStaleAfter    = 75 * time.Second
-	debugCoordinatorInterval = 30 * time.Second
+	DebugIntervalSeconds      = 5
+	DebugDefaultDurationSec   = 3600  // 每次开启默认 60 分钟
+	DebugMinDurationSec       = 300   // 最短 5 分钟
+	DebugMaxDurationSec       = 14400 // 最长 4 小时
+	DebugMaxConcurrentDevices = 20    // 同时开启调试的设备数上限
+	debugStartAckTimeout      = 90 * time.Second
+	debugSampleStaleAfter     = 75 * time.Second
+	debugCoordinatorInterval  = 30 * time.Second
 )
 
 // DebugCommandSetDebugTelemetry 设备命令：切换心跳采样周期（V2 协议，args=[enabled, interval, duration]，interval=5 秒）。
@@ -194,17 +194,20 @@ func (s *DeviceDebugService) StopSession(ctx context.Context, userID int64, isAd
 	}
 
 	// 与开启同理：先持久化停止 task_id 再发送，保证回执可达会话。
-	stopTaskID := generateTaskID()
-	if err := s.repo.MarkDebugSessionStopping(ctx, sess.ID, stopTaskID); err != nil {
+	sess, err = s.repo.BeginDebugSessionStop(ctx, sess.ID, generateTaskID())
+	if err != nil {
 		return nil, fmt.Errorf("mark stopping: %w", err)
 	}
-	sess.Status = model.DebugSessionStopping
-	sess.StopTaskID = stopTaskID
+	if model.IsDebugSessionTerminal(sess.Status) {
+		return sess, nil
+	}
+	stopTaskID := sess.StopTaskID
 
 	if _, serr := s.sendDebugCommand(ctx, sn, 0, DebugIntervalSeconds, 0, stopTaskID); serr != nil {
 		// 停止命令失败不回滚：会话保持 stopping，协调循环在 expires_at 兜底置 expired；
 		// 设备侧 TTL 同样会自行恢复默认周期。
 		logger.Warn("debug stop command failed", zap.String("sn", sn), zap.Error(serr))
+		return nil, fmt.Errorf("send debug stop (retry is safe): %w", serr)
 	}
 	return sess, nil
 }
@@ -368,13 +371,13 @@ func (s *DeviceDebugService) sendDebugCommand(ctx context.Context, sn string, en
 	}
 
 	body, err := json.Marshal(map[string]interface{}{
-		"command": DebugCommandSetDebugTelemetry,
-		"params":  map[string]interface{}{},
-		"task_id": taskID,
-		"v":       2,
-		"t":       time.Now().Unix(),
-		"cmd":     DebugCommandSetDebugTelemetry,
-		"args":    []int{enabled, intervalSeconds, durationSeconds},
+		"command":    DebugCommandSetDebugTelemetry,
+		"params":     map[string]interface{}{},
+		"task_id":    taskID,
+		"v":          2,
+		"t":          time.Now().Unix(),
+		"cmd":        DebugCommandSetDebugTelemetry,
+		"args":       []int{enabled, intervalSeconds, durationSeconds},
 		"expires_at": time.Now().Add(5 * time.Minute).Unix(),
 	})
 	if err != nil {

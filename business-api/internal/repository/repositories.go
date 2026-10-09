@@ -836,7 +836,7 @@ const deviceListSelectColumns = `d.id, d.sn, COALESCE(d.model, ''), COALESCE(d.m
 	d.station_id, d.user_id, d.status, COALESCE(d.timezone,'Asia/Shanghai'),
 	COALESCE(rd.total_active_power, 0), COALESCE(rd.daily_energy, 0),
 	d.last_online_at, d.created_at, d.updated_at, COALESCE(s.name, '') as station_name,
-	COALESCE(d.alias, ''), COALESCE(d.remark, '')`
+	COALESCE(d.alias, ''), COALESCE(d.remark, ''), COALESCE(d.rated_power_w,0), rd.updated_at`
 
 func NewDeviceRepository(db *pgxpool.Pool, cache *redis.Client) *DeviceRepository {
 	return &DeviceRepository{db: db, cache: cache}
@@ -1123,6 +1123,7 @@ func (r *DeviceRepository) List(ctx context.Context, params DeviceListParams) ([
 			&device.CreatedAt, &device.UpdatedAt,
 			&device.StationName,
 			&device.Alias, &device.Remark,
+			&device.RatedPowerW, &device.TelemetryUpdatedAt,
 		); err != nil {
 			return nil, 0, err
 		}
@@ -1135,6 +1136,9 @@ func (r *DeviceRepository) List(ctx context.Context, params DeviceListParams) ([
 		devices = append(devices, &device)
 	}
 
+	if err := rows.Err(); err != nil { return nil, 0, err }
+	rows.Close()
+	r.attachDeviceListBMS(ctx, devices)
 	return devices, total, nil
 }
 
@@ -1194,6 +1198,7 @@ func (r *DeviceRepository) GetByStationID(ctx context.Context, stationID int64) 
 			&device.CreatedAt, &device.UpdatedAt,
 			&device.StationName,
 			&device.Alias, &device.Remark,
+			&device.RatedPowerW, &device.TelemetryUpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1206,6 +1211,9 @@ func (r *DeviceRepository) GetByStationID(ctx context.Context, stationID int64) 
 		devices = append(devices, &device)
 	}
 
+	if err := rows.Err(); err != nil { return nil, err }
+	rows.Close()
+	r.attachDeviceListBMS(ctx, devices)
 	return devices, nil
 }
 

@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"inv-api-server/internal/middleware"
+	"inv-api-server/internal/model"
+	"inv-api-server/internal/repository"
 	"inv-api-server/pkg/response"
 	"inv-api-server/pkg/timezone"
 
@@ -30,15 +32,6 @@ func NewDashboardHandler(db *pgxpool.Pool, rdb *redis.Client) *DashboardHandler 
 	return &DashboardHandler{db: db, rdb: rdb}
 }
 
-func (h *DashboardHandler) isSuperAdmin(ctx context.Context, userID int64) bool {
-	var role int
-	err := h.db.QueryRow(ctx, "SELECT role FROM users WHERE id = $1", userID).Scan(&role)
-	if err != nil {
-		return false
-	}
-	return role == 0
-}
-
 // getUserTimezone 获取用户账号的时区配置（包级共享函数）
 func getUserTimezone(ctx context.Context, db *pgxpool.Pool, userID int64) string {
 	var tz string
@@ -52,105 +45,28 @@ func getUserTimezone(ctx context.Context, db *pgxpool.Pool, userID int64) string
 	return tz
 }
 
-// getUserRole 获取用户角色
-// 0=超级管理员, 1=代理商, 2=经销商, 5=普通用户
-func (h *DashboardHandler) getUserRole(ctx context.Context, userID int64) int {
-	var role int
-	err := h.db.QueryRow(ctx, "SELECT role FROM users WHERE id = $1", userID).Scan(&role)
-	if err != nil {
-		return 5 // 默认普通用户
-	}
-	return role
-}
-
-// getDescendantUserIDs 获取用户及其所有子孙用户的ID列表（递归CTE）
-// 用于代理商/经销商查看下属用户的设备
-func (h *DashboardHandler) getDescendantUserIDs(ctx context.Context, userID int64) ([]int64, error) {
-	query := `
-		WITH RECURSIVE descendants AS (
-			SELECT id FROM users WHERE id = $1 AND deleted_at IS NULL
-			UNION ALL
-			SELECT u.id FROM users u
-			JOIN descendants d ON u.parent_id = d.id
-			WHERE u.deleted_at IS NULL
-		)
-		SELECT id FROM descendants
-	`
-	rows, err := h.db.Query(ctx, query, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var userIDs []int64
-	for rows.Next() {
-		var uid int64
-		if err := rows.Scan(&uid); err == nil {
-			userIDs = append(userIDs, uid)
-		}
-	}
-	if len(userIDs) == 0 {
-		userIDs = []int64{userID}
-	}
-	return userIDs, nil
-}
-
-// buildDeviceUserFilter 构建设备查询的用户过滤条件
-// 返回: whereClause, args
-// role==0: 无过滤 ("1=1", nil)
-// role==1||2: 子孙用户 ("user_id = ANY($N)", userIDs)
-// role==5: 自己 ("user_id = $N", userID)
-func (h *DashboardHandler) buildDeviceUserFilter(ctx context.Context, userID int64, role int, argOffset int) (string, []interface{}) {
-	switch {
-	case role == 0:
-		return "1=1", nil
-	case role == 1 || role == 2:
-		userIDs, err := h.getDescendantUserIDs(ctx, userID)
-		if err != nil || len(userIDs) == 0 {
-			return fmt.Sprintf("user_id = $%d", argOffset), []interface{}{userID}
-		}
-		return fmt.Sprintf("user_id = ANY($%d)", argOffset), []interface{}{userIDs}
-	default:
-		return fmt.Sprintf("user_id = $%d", argOffset), []interface{}{userID}
-	}
-}
-
-// buildStationUserFilter 构建电站查询的用户过滤条件
-func (h *DashboardHandler) buildStationUserFilter(ctx context.Context, userID int64, role int, argOffset int) (string, []interface{}) {
-	switch {
-	case role == 0:
-		return "1=1", nil
-	case role == 1 || role == 2:
-		userIDs, err := h.getDescendantUserIDs(ctx, userID)
-		if err != nil || len(userIDs) == 0 {
-			return fmt.Sprintf("s.user_id = $%d", argOffset), []interface{}{userID}
-		}
-		return fmt.Sprintf("s.user_id = ANY($%d)", argOffset), []interface{}{userIDs}
-	default:
-		return fmt.Sprintf("s.user_id = $%d", argOffset), []interface{}{userID}
-	}
-}
-
-// buildAlarmUserJoin 构建告警查询的用户过滤（JOIN devices）
-func (h *DashboardHandler) buildAlarmUserJoin(ctx context.Context, userID int64, role int, argOffset int) (string, []interface{}) {
-	switch {
-	case role == 0:
-		return "1=1", nil
-	case role == 1 || role == 2:
-		userIDs, err := h.getDescendantUserIDs(ctx, userID)
-		if err != nil || len(userIDs) == 0 {
-			return fmt.Sprintf("d.user_id = $%d", argOffset), []interface{}{userID}
-		}
-		return fmt.Sprintf("d.user_id = ANY($%d)", argOffset), []interface{}{userIDs}
-	default:
-		return fmt.Sprintf("d.user_id = $%d", argOffset), []interface{}{userID}
-	}
-}
+// One row per device: absolute counters are never accumulated across reports.
+const dashboardTotalEnergySQL = `
+	WITH per_device AS (
+		SELECT sn,
+			COALESCE((SELECT l.total_pv_energy FROM device_latest_state l WHERE l.device_sn=sn
+				AND l.total_pv_energy>=0 AND l.total_pv_energy<'Infinity'::float8),0) AS counter,
+			COALESCE((SELECT SUM(e.pv_energy) FROM device_energy_day e WHERE e.device_sn=sn
+				AND e.pv_energy>=0 AND e.pv_energy<'Infinity'::float8),0) AS recorded,
+			COALESCE((SELECT MAX(e.total_pv_energy) FROM device_energy_day e WHERE e.device_sn=sn
+				AND e.total_pv_energy>=0 AND e.total_pv_energy<'Infinity'::float8),0) AS recorded_counter
+		FROM unnest($1::text[]) AS devices(sn)
+	)
+	SELECT ROUND(COALESCE(SUM(GREATEST(counter,recorded_counter,recorded)),0)::numeric,2)::float8 FROM per_device
+`
 
 func (h *DashboardHandler) GetStatistics(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	ctx := c.Request.Context()
-	role := h.getUserRole(ctx, userID)
+	plan, systemAdmin, allowed := overviewScope(c, h.db, "device")
+	if !allowed {
+		return
+	}
 	tz := getUserTimezone(ctx, h.db, userID)
 
 	type DeviceStats struct {
@@ -161,14 +77,14 @@ func (h *DashboardHandler) GetStatistics(c *gin.Context) {
 	}
 
 	var deviceStats DeviceStats
-	userFilter, filterArgs := h.buildDeviceUserFilter(ctx, userID, role, 1)
+	userFilter, filterArgs := repository.OverviewScopeFilter(plan, systemAdmin, "d", 1)
 	deviceQuery := fmt.Sprintf(`
 		SELECT 
 			COUNT(*) as total,
 			COUNT(*) FILTER (WHERE status = 1) as online,
 			COUNT(*) FILTER (WHERE status = 0) as offline,
 			COUNT(*) FILTER (WHERE status = 2) as fault
-		FROM devices 
+		FROM devices d
 		WHERE deleted_at IS NULL AND %s
 	`, userFilter)
 
@@ -184,8 +100,8 @@ func (h *DashboardHandler) GetStatistics(c *gin.Context) {
 	var totalEnergy float64
 
 	var deviceSNs []string
-	snFilter, snFilterArgs := h.buildDeviceUserFilter(ctx, userID, role, 1)
-	snQuery := fmt.Sprintf(`SELECT sn FROM devices WHERE deleted_at IS NULL AND %s`, snFilter)
+	snFilter, snFilterArgs := repository.OverviewScopeFilter(plan, systemAdmin, "d", 1)
+	snQuery := fmt.Sprintf(`SELECT sn FROM devices d WHERE deleted_at IS NULL AND %s`, snFilter)
 
 	snRows, err := h.db.Query(ctx, snQuery, snFilterArgs...)
 	if err == nil {
@@ -203,8 +119,10 @@ func (h *DashboardHandler) GetStatistics(c *gin.Context) {
 		h.db.QueryRow(ctx, `SELECT ROUND(COALESCE(SUM(e.pv_energy),0)::numeric,2)::float8
 			FROM device_energy_day e WHERE e.device_sn=ANY($1) AND e.stat_date=$2::date`,
 			deviceSNs, todayStr).Scan(&todayEnergy)
-		h.db.QueryRow(ctx, `SELECT ROUND(COALESCE(SUM(l.total_pv_energy),0)::numeric,2)::float8
-			FROM device_latest_state l WHERE l.device_sn=ANY($1)`, deviceSNs).Scan(&totalEnergy)
+		if err := h.db.QueryRow(ctx, dashboardTotalEnergySQL, deviceSNs).Scan(&totalEnergy); err != nil {
+			response.InternalError(c, "get total energy failed")
+			return
+		}
 	}
 
 	type RecentAlarm struct {
@@ -216,28 +134,13 @@ func (h *DashboardHandler) GetStatistics(c *gin.Context) {
 		OccurredAt   time.Time `json:"occurred_at"`
 	}
 
-	var alarmQuery string
-	var alarmArgs []interface{}
-
-	if role == 0 {
-		alarmQuery = `
-			SELECT id, device_sn, alarm_level, fault_code, fault_message, occurred_at
-			FROM alarms
-			ORDER BY occurred_at DESC
-			LIMIT 5
-		`
-	} else {
-		alarmJoin, alarmJoinArgs := h.buildAlarmUserJoin(ctx, userID, role, 1)
-		alarmQuery = fmt.Sprintf(`
-			SELECT a.id, a.device_sn, a.alarm_level, a.fault_code, a.fault_message, a.occurred_at
-			FROM alarms a
-			JOIN devices d ON d.sn = a.device_sn
-			WHERE %s
-			ORDER BY a.occurred_at DESC
-			LIMIT 5
-		`, alarmJoin)
-		alarmArgs = alarmJoinArgs
-	}
+	alarmFilter, alarmArgs := repository.OverviewScopeFilter(plan, systemAdmin, "d", 1)
+	alarmQuery := fmt.Sprintf(`
+		SELECT a.id, a.device_sn, a.alarm_level, a.fault_code, a.fault_message, a.occurred_at
+		FROM alarms a JOIN devices d ON d.sn=a.device_sn
+		WHERE d.deleted_at IS NULL AND %s
+		ORDER BY a.occurred_at DESC LIMIT 5
+	`, alarmFilter)
 
 	rows, err := h.db.Query(ctx, alarmQuery, alarmArgs...)
 	var recentAlarms []RecentAlarm
@@ -255,26 +158,29 @@ func (h *DashboardHandler) GetStatistics(c *gin.Context) {
 	}
 
 	response.Success(c, gin.H{
-		"deviceStats":  deviceStats,
-		"todayEnergy":  math.Round(todayEnergy*10) / 10,
-		"totalEnergy":  math.Round(totalEnergy*10) / 10,
-		"recentAlarms": recentAlarms,
+		"deviceStats":           deviceStats,
+		"todayEnergy":           math.Round(todayEnergy*10) / 10,
+		"totalEnergy":           math.Round(totalEnergy*10) / 10,
+		"totalEnergyProvenance": "per_device_max_latest_counter_recorded_counter_recorded_daily",
+		"recentAlarms":          recentAlarms,
 	})
 }
 
 func (h *DashboardHandler) GetDeviceDistribution(c *gin.Context) {
-	userID := middleware.GetUserID(c)
 	ctx := c.Request.Context()
-	role := h.getUserRole(ctx, userID)
+	plan, systemAdmin, allowed := overviewScope(c, h.db, "device")
+	if !allowed {
+		return
+	}
 
 	var online, offline, fault int64
-	userFilter, filterArgs := h.buildDeviceUserFilter(ctx, userID, role, 1)
+	userFilter, filterArgs := repository.OverviewScopeFilter(plan, systemAdmin, "d", 1)
 	query := fmt.Sprintf(`
 		SELECT 
 			COUNT(*) FILTER (WHERE status = 1) as online,
 			COUNT(*) FILTER (WHERE status = 0) as offline,
 			COUNT(*) FILTER (WHERE status = 2) as fault
-		FROM devices 
+		FROM devices d
 		WHERE deleted_at IS NULL AND %s
 	`, userFilter)
 
@@ -294,7 +200,10 @@ func (h *DashboardHandler) GetDeviceDistribution(c *gin.Context) {
 func (h *DashboardHandler) GetTrend(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	ctx := c.Request.Context()
-	role := h.getUserRole(ctx, userID)
+	plan, systemAdmin, allowed := overviewScope(c, h.db, "device")
+	if !allowed {
+		return
+	}
 	tz := getUserTimezone(ctx, h.db, userID)
 
 	trendType := c.DefaultQuery("type", "day")
@@ -329,7 +238,7 @@ func (h *DashboardHandler) GetTrend(c *gin.Context) {
 		endDate = now.Format("2006-01-02")
 	}
 
-	log.Printf("[GetTrend] user_id=%d, role=%d, trend_type=%s, start_date=%s, end_date=%s", userID, role, trendType, startDate, endDate)
+	log.Printf("[GetTrend] user_id=%d, trend_type=%s, start_date=%s, end_date=%s", userID, trendType, startDate, endDate)
 
 	type TrendData struct {
 		Date       string  `json:"date"`
@@ -348,7 +257,7 @@ func (h *DashboardHandler) GetTrend(c *gin.Context) {
 	startUTCTime := startLocal.UTC()
 	endUTCTime := endLocal.AddDate(0, 0, 1).UTC()
 
-	userFilter, filterArgs := h.buildDeviceUserFilter(ctx, userID, role, 4)
+	userFilter, filterArgs := repository.OverviewScopeFilter(plan, systemAdmin, "d", 4)
 
 	// 构建可选 station 过滤条件
 	stationFilter := ""
@@ -427,7 +336,10 @@ func (h *DashboardHandler) GetBigScreen(c *gin.Context) {
 }
 
 func (h *DashboardHandler) CompareDevices(c *gin.Context) {
-	userID := middleware.GetUserID(c)
+	plan, systemAdmin, allowed := overviewScope(c, h.db, "device")
+	if !allowed {
+		return
+	}
 
 	devicesParam := c.Query("devices")
 	metric := c.DefaultQuery("metric", "total_active_power")
@@ -443,11 +355,13 @@ func (h *DashboardHandler) CompareDevices(c *gin.Context) {
 
 	ctx := c.Request.Context()
 
+	filter, filterArgs := repository.OverviewScopeFilter(plan, systemAdmin, "d", 2)
 	for _, sn := range deviceSNs {
 		var count int
+		args := append([]any{sn}, filterArgs...)
 		err := h.db.QueryRow(ctx,
-			"SELECT COUNT(*) FROM devices WHERE sn = $1 AND user_id = $2 AND deleted_at IS NULL",
-			sn, userID).Scan(&count)
+			"SELECT COUNT(*) FROM devices d WHERE d.sn=$1 AND d.deleted_at IS NULL AND "+filter,
+			args...).Scan(&count)
 		if err != nil || count == 0 {
 			response.Error(c, 403, "permission denied for device: "+sn)
 			return
@@ -539,7 +453,10 @@ func (h *DashboardHandler) CompareDevices(c *gin.Context) {
 func (h *DashboardHandler) GetEnergyStats(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	ctx := c.Request.Context()
-	role := h.getUserRole(ctx, userID)
+	plan, systemAdmin, allowed := overviewScope(c, h.db, "device")
+	if !allowed {
+		return
+	}
 	tz := getUserTimezone(ctx, h.db, userID)
 
 	statType := c.DefaultQuery("type", "day")
@@ -564,7 +481,7 @@ func (h *DashboardHandler) GetEnergyStats(c *gin.Context) {
 	var query string
 	var args []interface{}
 
-	userFilter, filterArgs := h.buildDeviceUserFilter(ctx, userID, role, 3)
+	userFilter, filterArgs := repository.OverviewScopeFilter(plan, systemAdmin, "d", 3)
 
 	if stationIDStr != "" {
 		sid, err := strconv.ParseInt(stationIDStr, 10, 64)
@@ -572,6 +489,7 @@ func (h *DashboardHandler) GetEnergyStats(c *gin.Context) {
 			response.Error(c, 400, "invalid stationId")
 			return
 		}
+		userFilter, filterArgs = repository.OverviewScopeFilter(plan, systemAdmin, "d", 4)
 
 		query = fmt.Sprintf(`
 			SELECT dd.stat_date,
@@ -652,7 +570,10 @@ func (h *DashboardHandler) GetEnergyStats(c *gin.Context) {
 func (h *DashboardHandler) GetStationRanking(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	ctx := c.Request.Context()
-	role := h.getUserRole(ctx, userID)
+	plan, systemAdmin, allowed := overviewScope(c, h.db, "station")
+	if !allowed {
+		return
+	}
 	tz := getUserTimezone(ctx, h.db, userID)
 
 	period := c.DefaultQuery("period", "today")
@@ -688,7 +609,7 @@ func (h *DashboardHandler) GetStationRanking(c *gin.Context) {
 		DeviceCount int     `json:"deviceCount"`
 	}
 
-	stationFilter, stationFilterArgs := h.buildStationUserFilter(ctx, userID, role, 3)
+	stationFilter, stationFilterArgs := repository.OverviewScopeFilter(plan, systemAdmin, "s", 3)
 	query := fmt.Sprintf(`
 		SELECT s.id, s.name,
 			COALESCE(SUM(dd.pv_energy), 0) as energy,
@@ -730,7 +651,10 @@ func (h *DashboardHandler) GetStationRanking(c *gin.Context) {
 func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	ctx := c.Request.Context()
-	role := h.getUserRole(ctx, userID)
+	plan, systemAdmin, allowed := overviewScope(c, h.db, "device")
+	if !allowed {
+		return
+	}
 	tz := getUserTimezone(ctx, h.db, userID)
 
 	dateStr := c.DefaultQuery("date", timezone.TodayInTimezone(tz))
@@ -771,7 +695,7 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 	}
 
 	// 构建用户过滤条件
-	userFilter, userFilterArgs := h.buildDeviceUserFilter(ctx, userID, role, 3)
+	userFilter, userFilterArgs := repository.OverviewScopeFilter(plan, systemAdmin, "d", 3)
 
 	// 查询 PV 功率（time_bucket 做分钟级聚合）— 返回 UTC 时间，前端负责时区转换
 	// 仅统计在线 (status=1) 或告警 (status=2) 的设备
@@ -926,7 +850,11 @@ func toFloat64Dashboard(v interface{}) (float64, bool) {
 // SSE 实现 Server-Sent Events 端点，实时推送 Dashboard 数据更新
 // 优化：使用 Redis Pub/Sub 订阅事件驱动推送 + 30s 轮询回退
 func (h *DashboardHandler) SSE(c *gin.Context) {
-	userID := middleware.GetUserID(c)
+	if _, _, allowed := overviewScope(c, h.db, "device"); !allowed {
+		return
+	}
+	actor := middleware.GetActorContext(c)
+	adminFlag := middleware.GetIsSystemAdmin(c)
 	ctx := c.Request.Context()
 
 	// 设置 SSE 响应头
@@ -967,24 +895,32 @@ func (h *DashboardHandler) SSE(c *gin.Context) {
 	// 防抖：避免短时间内重复推送（最小间隔 2 秒）
 	const debounceInterval = 2 * time.Second
 
-	pushUpdate := func() {
+	pushUpdate := func() bool {
 		// 防抖：距离上次推送不足 2 秒则跳过
 		if time.Since(lastPush) < debounceInterval {
-			return
+			return true
 		}
 		lastPush = time.Now()
 
 		eventID++
-		data := h.collectDashboardSSEData(ctx, userID)
+		plan, systemAdmin, err := loadOverviewScope(ctx, h.db, actor, adminFlag, "device")
+		if err != nil {
+			return false
+		}
+		data, err := h.collectDashboardSSEData(ctx, plan, systemAdmin)
+		if err != nil {
+			return false
+		}
 		data["event_id"] = eventID
 
 		jsonData, err := json.Marshal(data)
 		if err != nil {
-			return
+			return false
 		}
 
 		fmt.Fprintf(c.Writer, "event: dashboard_update\nid: %d\ndata: %s\n\n", eventID, jsonData)
 		flusher.Flush()
+		return true
 	}
 
 	for {
@@ -1000,117 +936,38 @@ func (h *DashboardHandler) SSE(c *gin.Context) {
 			flusher.Flush()
 		case <-ticker.C:
 			// 回退轮询：定期推送 Dashboard 数据更新
-			pushUpdate()
+			if !pushUpdate() {
+				return
+			}
 		case msg := <-pubsubCh:
 			// 事件驱动：收到 Redis Pub/Sub 事件时立即推送
 			_ = msg
-			pushUpdate()
-		}
-	}
-}
-
-// collectDashboardData 收集 Dashboard 所需的统计数据
-func (h *DashboardHandler) collectDashboardData(ctx context.Context, userID int64) map[string]interface{} {
-	role := h.getUserRole(ctx, userID)
-
-	// 设备统计
-	type DeviceStats struct {
-		Total   int64 `json:"total"`
-		Online  int64 `json:"online"`
-		Offline int64 `json:"offline"`
-		Fault   int64 `json:"fault"`
-	}
-
-	var deviceStats DeviceStats
-	userFilter, filterArgs := h.buildDeviceUserFilter(ctx, userID, role, 1)
-	deviceQuery := fmt.Sprintf(`
-		SELECT 
-			COUNT(*) as total,
-			COUNT(*) FILTER (WHERE status = 1) as online,
-			COUNT(*) FILTER (WHERE status = 0) as offline,
-			COUNT(*) FILTER (WHERE status = 2) as fault
-		FROM devices 
-		WHERE deleted_at IS NULL AND %s
-	`, userFilter)
-
-	h.db.QueryRow(ctx, deviceQuery, filterArgs...).Scan(
-		&deviceStats.Total, &deviceStats.Online, &deviceStats.Offline, &deviceStats.Fault,
-	)
-
-	// 最近告警
-	type RecentAlarm struct {
-		ID           int64     `json:"id"`
-		DeviceSN     string    `json:"device_sn"`
-		AlarmLevel   int       `json:"alarm_level"`
-		FaultCode    string    `json:"fault_code"`
-		FaultMessage string    `json:"fault_message"`
-		OccurredAt   time.Time `json:"occurred_at"`
-	}
-
-	var alarmQuery string
-	var alarmArgs []interface{}
-
-	if role == 0 {
-		alarmQuery = `
-			SELECT id, device_sn, alarm_level, fault_code, fault_message, occurred_at
-			FROM alarms
-			ORDER BY occurred_at DESC
-			LIMIT 5
-		`
-	} else {
-		alarmJoin, alarmJoinArgs := h.buildAlarmUserJoin(ctx, userID, role, 1)
-		alarmQuery = fmt.Sprintf(`
-			SELECT a.id, a.device_sn, a.alarm_level, a.fault_code, a.fault_message, a.occurred_at
-			FROM alarms a
-			JOIN devices d ON d.sn = a.device_sn
-			WHERE %s
-			ORDER BY a.occurred_at DESC
-			LIMIT 5
-		`, alarmJoin)
-		alarmArgs = alarmJoinArgs
-	}
-
-	rows, err := h.db.Query(ctx, alarmQuery, alarmArgs...)
-	var recentAlarms []RecentAlarm
-	if err == nil {
-		defer rows.Close()
-		for rows.Next() {
-			var alarm RecentAlarm
-			if err := rows.Scan(&alarm.ID, &alarm.DeviceSN, &alarm.AlarmLevel, &alarm.FaultCode, &alarm.FaultMessage, &alarm.OccurredAt); err == nil {
-				recentAlarms = append(recentAlarms, alarm)
+			if !pushUpdate() {
+				return
 			}
 		}
-	}
-	if recentAlarms == nil {
-		recentAlarms = []RecentAlarm{}
-	}
-
-	return map[string]interface{}{
-		"deviceStats":  deviceStats,
-		"recentAlarms": recentAlarms,
-		"timestamp":    time.Now().UTC().Format(time.RFC3339),
-		"type":         "dashboard_update",
 	}
 }
 
 // collectDashboardSSEData 收集 Dashboard SSE 推送数据（匹配前端期望的格式）
-func (h *DashboardHandler) collectDashboardSSEData(ctx context.Context, userID int64) map[string]interface{} {
-	role := h.getUserRole(ctx, userID)
+func (h *DashboardHandler) collectDashboardSSEData(ctx context.Context, plan model.ScopePlan, systemAdmin bool) (map[string]interface{}, error) {
 
 	// 设备统计
 	var total, online, offline, fault int64
-	userFilter, filterArgs := h.buildDeviceUserFilter(ctx, userID, role, 1)
+	userFilter, filterArgs := repository.OverviewScopeFilter(plan, systemAdmin, "d", 1)
 	deviceQuery := fmt.Sprintf(`
 		SELECT 
 			COUNT(*) as total,
 			COUNT(*) FILTER (WHERE status = 1) as online,
 			COUNT(*) FILTER (WHERE status = 0) as offline,
 			COUNT(*) FILTER (WHERE status = 2) as fault
-		FROM devices 
+		FROM devices d
 		WHERE deleted_at IS NULL AND %s
 	`, userFilter)
 
-	h.db.QueryRow(ctx, deviceQuery, filterArgs...).Scan(&total, &online, &offline, &fault)
+	if err := h.db.QueryRow(ctx, deviceQuery, filterArgs...).Scan(&total, &online, &offline, &fault); err != nil {
+		return nil, err
+	}
 
 	// 最近告警
 	type RecentAlarm struct {
@@ -1122,28 +979,13 @@ func (h *DashboardHandler) collectDashboardSSEData(ctx context.Context, userID i
 		OccurredAt   time.Time `json:"occurred_at"`
 	}
 
-	var alarmQuery string
-	var alarmArgs []interface{}
-
-	if role == 0 {
-		alarmQuery = `
-			SELECT id, device_sn, alarm_level, fault_code, fault_message, occurred_at
-			FROM alarms
-			ORDER BY occurred_at DESC
-			LIMIT 5
-		`
-	} else {
-		alarmJoin, alarmJoinArgs := h.buildAlarmUserJoin(ctx, userID, role, 1)
-		alarmQuery = fmt.Sprintf(`
-			SELECT a.id, a.device_sn, a.alarm_level, a.fault_code, a.fault_message, a.occurred_at
-			FROM alarms a
-			JOIN devices d ON d.sn = a.device_sn
-			WHERE %s
-			ORDER BY a.occurred_at DESC
-			LIMIT 5
-		`, alarmJoin)
-		alarmArgs = alarmJoinArgs
-	}
+	alarmFilter, alarmArgs := repository.OverviewScopeFilter(plan, systemAdmin, "d", 1)
+	alarmQuery := fmt.Sprintf(`
+		SELECT a.id, a.device_sn, a.alarm_level, a.fault_code, a.fault_message, a.occurred_at
+		FROM alarms a JOIN devices d ON d.sn=a.device_sn
+		WHERE d.deleted_at IS NULL AND %s
+		ORDER BY a.occurred_at DESC LIMIT 5
+	`, alarmFilter)
 
 	rows, err := h.db.Query(ctx, alarmQuery, alarmArgs...)
 	var recentAlarms []RecentAlarm
@@ -1171,5 +1013,5 @@ func (h *DashboardHandler) collectDashboardSSEData(ctx context.Context, userID i
 		},
 		"recentAlarms": recentAlarms,
 		"timestamp":    time.Now().UTC().Format(time.RFC3339),
-	}
+	}, nil
 }

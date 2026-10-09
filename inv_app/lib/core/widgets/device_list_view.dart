@@ -9,6 +9,8 @@ import 'package:inv_app/core/widgets/pressable_gesture_detector.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
+import 'package:inv_app/core/utils/device_card_data.dart';
+import 'package:intl/intl.dart';
 
 // 搜索栏组件
 class DeviceSearchBar extends StatefulWidget {
@@ -188,11 +190,6 @@ class _DeviceCardState extends State<DeviceCard>
     context.push('/device/$sn');
   }
 
-  double _extractNum(String key) {
-    final val = widget.device[key];
-    return val is num ? val.toDouble() : 0.0;
-  }
-
   String _extractString(List<String> keys) {
     for (final key in keys) {
       final val = widget.device[key];
@@ -204,12 +201,9 @@ class _DeviceCardState extends State<DeviceCard>
   }
 
   String _getDeviceTypeLabel(AppLocalizations l10n) {
-    final model =
-        (widget.device['model'] ?? '').toString().toLowerCase();
-    if (model.contains('battery') || model.contains('bms') ||
-        model.contains('储能')) return l10n.deviceTypeStorage;
-    if (model.contains('collect') || model.contains('采集'))
-      return l10n.collector;
+    final category = deviceCategory(widget.device);
+    if (category == 'battery') return l10n.deviceTypeStorage;
+    if (category == 'collector') return l10n.collector;
     return l10n.inverter;
   }
 
@@ -219,7 +213,7 @@ class _DeviceCardState extends State<DeviceCard>
     final sn = widget.device['sn'] ?? '';
     final alias = (widget.device['alias'] ?? '').toString();
     final status = widget.device['status'] ?? 0;
-    final isOnline = status == 1;
+    final isOnline = status == 1 || status == 2;
     final isFault = status == 2;
     final badgeText = isFault
         ? l10n.fault
@@ -233,7 +227,13 @@ class _DeviceCardState extends State<DeviceCard>
 
     final model = _extractString(['model', 'model_name']);
     final firmwareArm = _extractString(['firmware_arm', 'fw_version']);
-    final ratedPower = _extractNum('rated_power');
+    final ratedPower = deviceRatedWatts(widget.device);
+    final battery = deviceBattery(widget.device);
+    final batteryLive = isOnline && battery?.onlineAt(DateTime.now()) == true;
+    final updated = DateTime.tryParse('${widget.device['telemetry_updated_at'] ?? ''}');
+    final fresh = isOnline && updated != null &&
+        DateTime.now().difference(updated).inSeconds >= 0 &&
+        DateTime.now().difference(updated).inMinutes < 5;
 
     Widget cardContent = Padding(
       // margin 放在缩放外层：与电站卡片结构一致，按下时只缩放卡片本体
@@ -284,9 +284,10 @@ class _DeviceCardState extends State<DeviceCard>
                   ),
                   SizedBox(width: 6.w),
                   // 设备名称：优先别名，回退 SN
-                  Text(alias.isNotEmpty ? alias : sn,
-                      style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w700, color: AppColor.textPrimary(context))),
-                  Spacer(),
+                  Expanded(child: Text(alias.isNotEmpty ? alias : sn,
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w700, color: AppColor.textPrimary(context)))),
+                  SizedBox(width: 8.w),
                   Container(
                     padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 3.h),
                     decoration: BoxDecoration(color: badgeBg, borderRadius: BorderRadius.circular(6.r)),
@@ -295,15 +296,47 @@ class _DeviceCardState extends State<DeviceCard>
                   ),
                 ],
               ),
-              if (model != '--') ...[SizedBox(height: 4.h), Text(model, style: TextStyle(fontSize: 13.sp, color: AppColor.textSecondary(context)))],
+              SizedBox(height: 6.h),
+              Text('SN $sn', maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 11.sp, color: AppColor.textHint(context))),
+              if (model != '--') ...[SizedBox(height: 4.h), Text(model, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13.sp, color: AppColor.textSecondary(context)))],
               SizedBox(height: 12.h),
               Row(children: [Text(l10n.deviceTypeLabelKey, style: TextStyle(fontSize: 13.sp, color: AppColor.textHint(context))), SizedBox(width: 12.w), Expanded(child: Text(_getDeviceTypeLabel(l10n), style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600), textAlign: TextAlign.right))]),
-              if (ratedPower > 0)
+              if (ratedPower != null)
                 // 信息行统一为“标签左、值右”
                 Padding(
                   padding: EdgeInsets.only(top: 4.h),
-                  child: Row(children: [Text(l10n.ratedPowerLabel, style: TextStyle(fontSize: 13.sp, color: AppColor.textHint(context))), SizedBox(width: 12.w), Expanded(child: Text('${ratedPower.toStringAsFixed(0)} W', style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600), textAlign: TextAlign.right))]),
+                  child: Row(children: [Text(l10n.ratedPowerLabel, style: TextStyle(fontSize: 13.sp, color: AppColor.textHint(context))), SizedBox(width: 12.w), Expanded(child: Text(devicePowerLabel(ratedPower), style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600), textAlign: TextAlign.right))]),
                 ),
+              SizedBox(height: 12.h),
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(child: _metric(l10n.currentPower, fresh ? devicePowerLabel(deviceNumber(widget.device['current_power'])) : '--')),
+                SizedBox(width: 12.w),
+                Expanded(child: _metric(l10n.todayGeneration, deviceNumber(widget.device['daily_energy']) == null ? '--' : '${deviceNumber(widget.device['daily_energy'])!.toStringAsFixed(2)} kWh')),
+              ]),
+              if (_extractString(['station_name']) != '--') ...[
+                SizedBox(height: 10.h),
+                Row(children: [Icon(Icons.location_on_outlined, size: 14, color: AppColor.textHint(context)), const SizedBox(width: 4),
+                  Expanded(child: Text(_extractString(['station_name']), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.sp, color: AppColor.textSecondary(context))))]),
+              ],
+              if (updated != null) ...[SizedBox(height: 6.h), Text(DateFormat('MM-dd HH:mm:ss').format(updated.toLocal()), style: TextStyle(fontSize: 11.sp, color: AppColor.textHint(context)))],
+              if (battery != null) ...[
+                SizedBox(height: 12.h),
+                Divider(height: 1, color: AppColor.border(context)),
+                InkWell(
+                  key: ValueKey('battery-$sn'),
+                  onTap: widget.sortMode ? null : () => context.push('/device/$sn/storage'),
+                  child: Padding(padding: EdgeInsets.only(top: 12.h), child: Row(children: [
+                    Icon(Icons.battery_charging_full_rounded, size: 26, color: batteryLive ? AppColors.primary : AppColor.textHint(context)),
+                    SizedBox(width: 8.w),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(l10n.deviceTypeStorage, style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600)),
+                      Text(batteryLive ? '${battery.soc?.toStringAsFixed(1) ?? '--'}% SOC  |  ${devicePowerLabel(battery.voltage == null || battery.current == null ? null : battery.voltage! * battery.current!)}' : l10n.str('storage_summary_offline'), style: TextStyle(fontSize: 12.sp, color: AppColor.textSecondary(context))),
+                    ])),
+                    Icon(Icons.chevron_right, size: 20, color: AppColor.textHint(context)),
+                  ])),
+                ),
+              ],
               if (firmwareArm != '--')
                 Padding(
                   padding: EdgeInsets.only(top: 8.h),
@@ -328,6 +361,12 @@ class _DeviceCardState extends State<DeviceCard>
     final isFault = status == 2;
     return (isOnline || isFault) && alarmCode != 0 && alarmCode != '0' && alarmCode != '';
   }
+
+  Widget _metric(String label, String value) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [Text(label, style: TextStyle(fontSize: 11.sp, color: AppColor.textHint(context))),
+      const SizedBox(height: 4), Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 17.sp, fontWeight: FontWeight.w600, color: AppColor.textPrimary(context)))],
+  );
 }
 
 class DeviceListView extends StatefulWidget {
@@ -398,6 +437,9 @@ class _DeviceListViewState extends State<DeviceListView> {
       _ordered = List.of(widget.devices);
       // 设备集合变化（新增/删除/刷新）时重置回第一页
       _currentPage = 1;
+    } else {
+      final latest = {for (final d in widget.devices) d['sn']: d};
+      _ordered = _ordered.map((d) => latest[d['sn']] ?? d).toList();
     }
   }
 
@@ -446,7 +488,7 @@ class _DeviceListViewState extends State<DeviceListView> {
           case 2:
             return t == 'collector';
           case 3:
-            return t == 'battery';
+            return t == 'battery' || deviceBattery(Map<String, dynamic>.from(d)) != null;
           default:
             return true;
         }
@@ -456,11 +498,7 @@ class _DeviceListViewState extends State<DeviceListView> {
   }
 
   String _deviceType(dynamic d) {
-    final model = (d['model'] ?? '').toString().toLowerCase();
-    final sn = (d['sn'] ?? '').toString().toLowerCase();
-    if (model.contains('battery') || model.contains('bms') || model.contains('储能') || sn.contains('batt')) return 'battery';
-    if (model.contains('collect') || model.contains('采集') || model.contains('daq') || sn.contains('col')) return 'collector';
-    return 'inv';
+    return deviceCategory(Map<String, dynamic>.from(d));
   }
 
   // 非排序列表：分页卡片移入列表末尾 item，透明背景

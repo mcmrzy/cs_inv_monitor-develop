@@ -11,6 +11,7 @@ import { formatInTimezone } from '@/utils/timezone'
 import useTimezoneStore from '@/stores/timezoneStore'
 import { firmwareModuleLabel } from '@/pages/ota/firmwarePresentation'
 import type { DeviceFirmwareOverview, DeviceUpgrade, FirmwareResource } from '@/types'
+import OTAProgressCell from '@/pages/ota/components/OTAProgressCell'
 
 const { Text } = Typography
 
@@ -134,7 +135,7 @@ const FirmwareUpgradeTab: React.FC<FirmwareUpgradeTabProps> = ({ sn }) => {
       key: 'status',
       render: (status: string) => <Tag color={STATUS_COLOR_MAP[status] || 'default'}>{status}</Tag>,
     },
-    { title: t('dev.progress'), dataIndex: 'progress', key: 'progress', render: (v: number) => `${v ?? 0}%` },
+    { title: t('dev.progress'), dataIndex: 'progress', key: 'progress', width: 180, render: (_: number, record: DeviceUpgrade) => <OTAProgressCell record={record} /> },
     { title: t('dev.errorInfo'), dataIndex: 'error_message', key: 'error_message', render: (v: string) => v || '-' },
     {
       title: t('common.startTime'),

@@ -5,6 +5,7 @@ import { server } from '@/test/mocks/server'
 import { renderAsAdmin } from '@/test/test-utils'
 import { API_BASE } from '@/utils/urls'
 import { stationHistoryPrefsKey } from '@/utils/stationHistoryPrefs'
+import { ConfigProvider, theme } from 'antd'
 import StationHistoryTab from './StationHistoryTab'
 
 // jsdom 无 canvas：echarts 封装以占位 div 呈现
@@ -120,6 +121,34 @@ describe('StationHistoryTab', () => {
 
     await waitFor(() => expect(hasColumn('电池SOC (%)')).toBe(true))
     expect(screen.queryByText('尚未选择显示字段')).not.toBeInTheDocument()
+  })
+
+  it.each(['light', 'dark'] as const)('keeps history headings sticky below the app header in %s mode', async (mode) => {
+    localStorage.setItem(stationHistoryPrefsKey('default'), JSON.stringify({
+      fields: ['dc_bus_voltage', 'mppt_state', 'pv1_voltage', 'pv2_voltage'],
+    }))
+    useTelemetryHandler()
+    const { container } = renderAsAdmin(
+      <ConfigProvider theme={{ algorithm: mode === 'dark' ? theme.darkAlgorithm : theme.defaultAlgorithm }}>
+        <StationHistoryTab stationId={1} timezone="Asia/Shanghai" />
+      </ConfigProvider>,
+    )
+
+    await waitFor(() => expect(hasColumn('PV1')).toBe(true))
+    const stickyHeader = container.querySelector('.ant-table-sticky-holder')
+    expect(stickyHeader).toBeInTheDocument()
+    expect(stickyHeader).toHaveStyle({ top: '56px' })
+    expect(stickyHeader?.querySelectorAll('th.ant-table-cell')).toHaveLength(5)
+    expect(stickyHeader?.querySelector('th')).toHaveClass('ant-table-cell-fix-left')
+    expect(stickyHeader?.querySelector('th')).toHaveTextContent('时间')
+
+    const body = container.querySelector('.ant-table-body')
+    expect(body).toHaveStyle({ overflowX: 'auto' })
+    await waitFor(() => expect(body?.querySelectorAll('tr.ant-table-row')).toHaveLength(sampleRows.length))
+    expect(body?.querySelector('td.ant-table-cell-fix-left')).toHaveTextContent('2026-09-19 16:00')
+
+    fireEvent.scroll(body!, { target: { scrollLeft: 140 } })
+    expect(stickyHeader).toHaveProperty('scrollLeft', 140)
   })
 
   it('切换数据粒度会带新粒度重新请求并回到第一页', async () => {

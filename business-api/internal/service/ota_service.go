@@ -733,12 +733,16 @@ func (s *OTAService) GetLatestTaskDevice(ctx context.Context, sn string) (*model
 // DeviceTaskOTAStatus 是设备在一个升级任务中的聚合状态。
 // package 任务可能包含多个芯片记录，只有全部成功时才返回 success。
 type DeviceTaskOTAStatus struct {
-	DeviceSN     string                `json:"device_sn"`
-	TaskID       int64                 `json:"task_id"`
-	Status       string                `json:"status"`
-	Progress     int                   `json:"progress"`
-	ErrorMessage string                `json:"error_message"`
-	Items        []model.DeviceUpgrade `json:"items"`
+	DeviceSN        string                `json:"device_sn"`
+	TaskID          int64                 `json:"task_id"`
+	Status          string                `json:"status"`
+	Progress        int                   `json:"progress"`
+	Stage           string                `json:"stage"`
+	TargetChip      string                `json:"target_chip"`
+	StageProgress   *int                  `json:"stage_progress,omitempty"`
+	OverallProgress *int                  `json:"overall_progress,omitempty"`
+	ErrorMessage    string                `json:"error_message"`
+	Items           []model.DeviceUpgrade `json:"items"`
 }
 
 // GetTaskDeviceStatus 获取设备在指定升级任务中的聚合状态，供任务详情页精确轮询。
@@ -766,9 +770,21 @@ func aggregateDeviceTaskOTAStatus(sn string, taskID int64, items []model.DeviceU
 	anyFailed := false
 	anyCancelled := false
 	errorMessage := ""
+	var active *model.DeviceUpgrade
+	hasOverall := false
 
-	for _, item := range items {
+	for i := range items {
+		item := items[i]
+		if active == nil || (active.Status != "upgrading" && active.Status != "downloading" &&
+			(item.Status == "upgrading" || item.Status == "downloading")) ||
+			(active.Status != "upgrading" && active.Status != "downloading" && active.Status != "pending" && item.Status == "pending") {
+			active = &items[i]
+		}
 		progress := item.Progress
+		if item.OverallProgress != nil {
+			progress = *item.OverallProgress
+			hasOverall = true
+		}
 		if progress < 0 {
 			progress = 0
 		} else if progress > 100 {
@@ -816,7 +832,7 @@ func aggregateDeviceTaskOTAStatus(sn string, taskID int64, items []model.DeviceU
 		status = model.UpgradeStatusUpgrading
 	}
 
-	return &DeviceTaskOTAStatus{
+	result := &DeviceTaskOTAStatus{
 		DeviceSN:     sn,
 		TaskID:       taskID,
 		Status:       status,
@@ -824,6 +840,13 @@ func aggregateDeviceTaskOTAStatus(sn string, taskID int64, items []model.DeviceU
 		ErrorMessage: errorMessage,
 		Items:        items,
 	}
+	result.Stage = active.Stage
+	result.TargetChip = active.TargetChip
+	result.StageProgress = active.StageProgress
+	if hasOverall {
+		result.OverallProgress = &result.Progress
+	}
+	return result
 }
 
 // GetDeviceOTAHistory 兼容旧接口
