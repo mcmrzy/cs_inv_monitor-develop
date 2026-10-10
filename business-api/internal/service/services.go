@@ -746,6 +746,17 @@ func (s *DeviceService) AddToStation(ctx context.Context, sn string, stationID i
 	return s.repo.AddToStation(ctx, sn, stationID)
 }
 
+func (s *DeviceService) AssignUnassignedToStation(ctx context.Context, sn string, stationID, userID int64) error {
+	assigned, err := s.repo.AssignUnassignedToStation(ctx, sn, stationID, userID)
+	if err != nil {
+		return apperr.Internal("add to station failed", err)
+	}
+	if !assigned {
+		return apperr.Conflict("device or station assignment changed; refresh and try again")
+	}
+	return nil
+}
+
 func (s *DeviceService) RemoveFromStation(ctx context.Context, sn string) error {
 	return s.repo.RemoveFromStation(ctx, sn)
 }

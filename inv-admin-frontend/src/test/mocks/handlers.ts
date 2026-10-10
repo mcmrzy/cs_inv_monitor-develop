@@ -471,8 +471,10 @@ export const handlers = [
   }),
 
   /** 仪表盘能量流 */
-  http.get(`${API_BASE}/dashboard/energy-flow`, () => {
-    return HttpResponse.json({ code: 0, message: 'success', data: [] })
+  http.get(`${API_BASE}/dashboard/energy-flow`, ({ request }) => {
+    return HttpResponse.json({ code: 0, message: 'success', data: {
+      date: new URL(request.url).searchParams.get('date'), data: [],
+    } })
   }),
 
   /** 仪表盘电量统计 */

@@ -19,6 +19,8 @@ class StationRepositoryImpl implements StationRepository {
         return const ForbiddenFailure('Access denied');
       case 404:
         return const NotFoundFailure('Not found');
+      case 409:
+        return const ValidationFailure('Device assignment changed');
       case 422:
         return ValidationFailure(message);
       case null:

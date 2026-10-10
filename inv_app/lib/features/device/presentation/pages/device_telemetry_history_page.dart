@@ -7,6 +7,8 @@ import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/device/data/device_telemetry_api.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 import 'package:inv_app/core/utils/timezone_utils.dart';
+import 'package:inv_app/features/device/presentation/widgets/telemetry_history_fields.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 class DeviceTelemetryHistoryPage extends StatefulWidget {
@@ -34,6 +36,10 @@ class _HistoryState extends State<DeviceTelemetryHistoryPage> {
   bool _chart = false;
   String _metric = 'pv_total_power';
   DeviceTelemetryPage? _data;
+  Set<String> _fields = {...commonHistoryFields};
+  SharedPreferences? _preferences;
+  bool _fieldsChanged = false;
+  static const _fieldsKey = 'telemetry_history_fields_v1';
 
   @override
   void initState() {
@@ -42,6 +48,42 @@ class _HistoryState extends State<DeviceTelemetryHistoryPage> {
         DeviceTelemetryApi(getIt<Dio>(), timezone: widget.timezone);
     _day = tz.TZDateTime.now(_api.location);
     _fetch();
+    _loadFields();
+  }
+
+  Future<void> _loadFields() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!mounted) return;
+      _preferences = prefs;
+      if (!_fieldsChanged) {
+        final stored = prefs.get(_fieldsKey);
+        setState(() => _fields =
+            validHistoryFields(stored is List<String> ? stored : null));
+      }
+    } catch (_) {
+      // Display preferences must not block cloud history.
+    }
+  }
+
+  Future<void> _selectFields() async {
+    final selected = await showModalBottomSheet<Set<String>>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => TelemetryHistoryFieldPicker(selected: _fields),
+    );
+    if (!mounted || selected == null) return;
+    setState(() {
+      _fieldsChanged = true;
+      _fields = validHistoryFields(selected);
+    });
+    try {
+      final prefs = _preferences ?? await SharedPreferences.getInstance();
+      await prefs.setStringList(_fieldsKey, _fields.toList());
+    } catch (_) {
+      // Keep the current-session selection if local preferences are unavailable.
+    }
   }
 
   Future<void> _fetch() async {
@@ -83,21 +125,31 @@ class _HistoryState extends State<DeviceTelemetryHistoryPage> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.str('telemetry_history')), actions: [
-        IconButton(
-            tooltip: _chart ? l10n.str('telemetry_samples') : l10n.historyCurve,
-            onPressed: () {
-              _chart = !_chart;
-              _page = 1;
-              _fetch();
-            },
-            icon: Icon(
-                _chart ? Icons.list_alt_rounded : Icons.show_chart_rounded)),
-        IconButton(
-            tooltip: l10n.refreshLabel,
-            onPressed: _loading ? null : _fetch,
-            icon: const Icon(Icons.refresh_rounded)),
-      ]),
+      appBar: AppBar(
+          title: Text(l10n.str('telemetry_history'),
+              maxLines: 2, style: const TextStyle(fontSize: 16, height: 1.1)),
+          actions: [
+            if (!_chart)
+              IconButton(
+                  tooltip: l10n.str('history_fields_label'),
+                  onPressed: _selectFields,
+                  icon: const Icon(Icons.tune_rounded)),
+            IconButton(
+                tooltip:
+                    _chart ? l10n.str('telemetry_samples') : l10n.historyCurve,
+                onPressed: () {
+                  _chart = !_chart;
+                  _page = 1;
+                  _fetch();
+                },
+                icon: Icon(_chart
+                    ? Icons.list_alt_rounded
+                    : Icons.show_chart_rounded)),
+            IconButton(
+                tooltip: l10n.refreshLabel,
+                onPressed: _loading ? null : _fetch,
+                icon: const Icon(Icons.refresh_rounded)),
+          ]),
       body: Column(children: [
         Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
@@ -288,37 +340,16 @@ class _HistoryState extends State<DeviceTelemetryHistoryPage> {
         ));
   }
 
-  static const _fields = <(String, String, String)>[
-    ('pv1_voltage', 'energy_pv1_voltage', 'V'),
-    ('pv1_current', 'energy_pv1_current', 'A'),
-    ('pv1_power', 'energy_pv1_power', 'W'),
-    ('pv2_voltage', 'energy_pv2_voltage', 'V'),
-    ('pv2_current', 'energy_pv2_current', 'A'),
-    ('pv2_power', 'energy_pv2_power', 'W'),
-    ('pv_total_power', 'telemetry_pv_total_power', 'W'),
-    ('mppt_state', 'energy_mppt_state', ''),
-    ('battery_soc', 'telemetry_soc', '%'),
-    ('battery_voltage', 'telemetry_battery_voltage', 'V'),
-    ('battery_current', 'telemetry_battery_current', 'A'),
-    ('battery_power', 'telemetry_battery_power', 'W'),
-    ('battery_temperature', 'telemetry_battery_temp', 'C'),
-    ('output_power', 'ac_output_power', 'W'),
-    ('ac_output_voltage', 'telemetry_ac_voltage', 'V'),
-    ('output_current', 'telemetry_ac_current', 'A'),
-    ('ac_output_frequency', 'frequency', 'Hz'),
-    ('inverter_temperature', 'inverter_temp', 'C'),
-    ('dc_bus_voltage', 'energy_dc_bus_voltage', 'V'),
-    ('work_state', 'telemetry_work_state', ''),
-    ('daily_pv_energy', 'telemetry_daily_pv', 'kWh'),
-    ('total_pv_energy', 'telemetry_total_pv', 'kWh'),
-    ('fault_code', 'telemetry_fault', ''),
-    ('alarm_code', 'telemetry_alarm', ''),
-  ];
-
   String _value(dynamic value, String unit) {
     if (value == null) return '--';
     final number = value is num ? value.toDouble() : double.tryParse('$value');
-    return '${number?.toStringAsFixed(1) ?? value}${unit.isEmpty ? '' : ' $unit'}';
+    if (number == null || !number.isFinite) return '--';
+    final precision = unit.isEmpty
+        ? 0
+        : ['A', 'Hz', 'kWh'].contains(unit)
+            ? 2
+            : 1;
+    return '${number.toStringAsFixed(precision)}${unit.isEmpty ? '' : ' $unit'}';
   }
 
   Widget _sample(Map<String, dynamic> row, AppLocalizations l10n) {
@@ -343,20 +374,35 @@ class _HistoryState extends State<DeviceTelemetryHistoryPage> {
               Text('SOC ${_value(row['battery_soc'], '%')}'),
             ],
           )),
-      children: _fields
-          .map((field) => Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-                child: Row(children: [
-                  Expanded(
-                      child: Text(l10n.str(field.$2),
-                          style: TextStyle(
-                              color: AppColor.textSecondary(context)))),
-                  const SizedBox(width: 12),
-                  Text(_value(row[field.$1], field.$3)),
-                ]),
-              ))
-          .toList(growable: false),
+      children: [
+        for (final group in historyFieldGroups.entries)
+          if (group.value.any((field) => _fields.contains(field.$1))) ...[
+            Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(l10n.str('history_group_${group.key}'),
+                        style: Theme.of(context).textTheme.titleSmall))),
+            ...group.value
+                .where((field) => _fields.contains(field.$1))
+                .map((field) => Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 7),
+                      child: Row(children: [
+                        Expanded(
+                            child: Text(l10n.str(field.$2),
+                                style: TextStyle(
+                                    color: AppColor.textSecondary(context)))),
+                        const SizedBox(width: 12),
+                        Flexible(
+                            child: Align(
+                                alignment: Alignment.centerRight,
+                                child: Text(_value(row[field.$1], field.$3),
+                                    textAlign: TextAlign.right))),
+                      ]),
+                    ))
+          ],
+      ],
     );
   }
 }

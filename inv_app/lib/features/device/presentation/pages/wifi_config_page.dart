@@ -550,6 +550,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       });
     } catch (e) {
       // 确保切回 WiFi 模式（失败也不能阻塞状态复位，避免扫描状态卡死）
+      if (!_isWifiOperationActive(operationId)) return;
       try {
         await _setForcedWifiRoute(true);
       } catch (_) {}

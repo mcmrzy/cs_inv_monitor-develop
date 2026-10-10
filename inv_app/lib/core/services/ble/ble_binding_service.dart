@@ -42,6 +42,7 @@ String generateDeviceKey() {
 ///
 /// 核心语义：绑定无需登录/联网——本地生成 key → 写设备 → 存 secure_storage
 /// → 记本地日志 → 联网补登记（尽力而为，失败不影响绑定结果）。
+/// Current v2 firmware has no local bind protocol; it requires cloud PIN validation.
 class BleBindingService {
   final BleDeviceManager manager;
   final BleDeviceKeyStore keyStore;
@@ -64,6 +65,7 @@ class BleBindingService {
     required String macAddress,
     String? knownSn,
     String? pin,
+    int? stationId,
   }) async {
     // 1. 连接设备获取 session
     final BleDeviceSession session;
@@ -85,15 +87,21 @@ class BleBindingService {
       return BindOutcome.failed;
     }
 
-    // 3. 本地已有 key → 已绑定，直接跳过
-    final existingKey = await keyStore.read(sn);
-    if (existingKey != null) {
-      return BindOutcome.alreadyBound;
-    }
-
-    // 4. 读 INFO：设备端已绑定 → 已绑定；抛异常/字段缺失 → 视为未绑定继续
+    // Current firmware's body.bound means no local binding restriction, not ownership.
     try {
       final info = await session.readInfo();
+      final body = info['body'];
+      if (info['v'] == 2 &&
+          info['type'] == 'info' &&
+          body is Map &&
+          body['bound'] == true) {
+        final deviceSn = body['device_sn'];
+        return _bindToCloud(
+          deviceSn is String && deviceSn.trim().isNotEmpty ? deviceSn.trim() : sn,
+          pin,
+          stationId,
+        );
+      }
       if (info['bound'] == true) {
         return BindOutcome.alreadyBound;
       }
@@ -102,6 +110,12 @@ class BleBindingService {
       if (kDebugMode) {
         debugPrint('BleBindingService: readInfo failed (ignored): $e');
       }
+    }
+
+    // Legacy firmware still supports local AUTH binding and offline registration.
+    final existingKey = await keyStore.read(sn);
+    if (existingKey != null) {
+      return BindOutcome.alreadyBound;
     }
 
     // 5. 本地生成 device_key
@@ -144,17 +158,52 @@ class BleBindingService {
     );
 
     // 8. 联网补登记（尽力而为：失败不影响绑定结果，重试由 Task 15 负责）
-    return _registerToCloud(sn, deviceKey, pin);
+    return _registerToCloud(sn, deviceKey, pin, stationId);
+  }
+
+  Future<BindOutcome> _bindToCloud(String sn, String? pin, int? stationId) async {
+    if (pin == null || !RegExp(r'^[0-9]{6}$').hasMatch(pin)) {
+      return BindOutcome.invalidPin;
+    }
+    try {
+      final response = await dio.post(
+        '/devices/bind',
+        data: {'sn': sn, 'pin': pin, if (stationId != null) 'station_id': stationId},
+      );
+      final body = response.data;
+      if (body is Map) {
+        if (body['code'] == 0) return BindOutcome.bound;
+        if (body['code'] == 5010) return BindOutcome.invalidPin;
+      }
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 401) return BindOutcome.needLoginForSync;
+      final body = e.response?.data;
+      if (body is Map && body['code'] == 5010) {
+        return BindOutcome.invalidPin;
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('BleBindingService: cloud binding failed: $e');
+      }
+    }
+    // No local bind occurred. Conflicts, missing login and outages cannot be deferred.
+    return BindOutcome.failed;
   }
 
   /// 联网补登记 POST /devices/bind，仅返回是否需登录，其余结果归并为成功。
   /// pin 可空：旧流程未持 PIN 时登记会被后端拒绝（严格模式），
   /// 本地绑定不受影响，按现有“其余 code 不视为失败”语义归并。
-  Future<BindOutcome> _registerToCloud(String sn, String deviceKey, String? pin) async {
+  Future<BindOutcome> _registerToCloud(
+      String sn, String deviceKey, String? pin, int? stationId) async {
     try {
       final resp = await dio.post(
         '/devices/bind',
-        data: {'sn': sn, 'device_key': deviceKey, 'pin': pin},
+        data: {
+          'sn': sn,
+          'device_key': deviceKey,
+          'pin': pin,
+          if (stationId != null) 'station_id': stationId,
+        },
       );
       final body = resp.data;
       if (body is Map) {

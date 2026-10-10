@@ -58,11 +58,11 @@ class _HomePageState extends State<HomePage> {
   // 改为实例 getter：textHint 需 context 语义取色（支持暗色模式），
   // static 字段无法访问 context
   List<Color> get _filterColors => [
-    AppColors.primary,
-    AppColors.successLight,
-    AppColors.errorLight,
-    AppColor.textHint(context),
-  ];
+        AppColors.primary,
+        AppColors.successLight,
+        AppColors.errorLight,
+        AppColor.textHint(context),
+      ];
 
   @override
   void initState() {
@@ -201,7 +201,9 @@ class _HomePageState extends State<HomePage> {
       body: BlocConsumer<StationBloc, StationState>(
         listener: (context, state) {
           if (state is StationReorderSuccess) {
-            AppToast.show(context, AppLocalizations.of(context)!.stationOrderSaved, type: ToastType.success);
+            AppToast.show(
+                context, AppLocalizations.of(context)!.stationOrderSaved,
+                type: ToastType.success);
             context.read<StationBloc>().add(StationSummaryRequested());
           }
           // 统计刷新：将聚合数据推送到桌面小组件（统计 + 能量流）
@@ -236,9 +238,8 @@ class _HomePageState extends State<HomePage> {
 
           final filtered = _filterStations(ds.stations);
           // 分页：每页 10 条；不足一页时整页展示（分页栏仅在多页时渲染）
-          final stationPageCount = filtered.isEmpty
-              ? 1
-              : (filtered.length / 10).ceil();
+          final stationPageCount =
+              filtered.isEmpty ? 1 : (filtered.length / 10).ceil();
           final safeStationPage = _stationPage.clamp(1, stationPageCount);
           final stationPageEnd = safeStationPage * 10 < filtered.length
               ? safeStationPage * 10
@@ -278,8 +279,7 @@ class _HomePageState extends State<HomePage> {
                       if (_stationSortMode)
                         SliverToBoxAdapter(
                           child: Padding(
-                            padding:
-                                EdgeInsets.fromLTRB(20.w, 12.h, 20.w, 8.h),
+                            padding: EdgeInsets.fromLTRB(20.w, 12.h, 20.w, 8.h),
                             child: Row(
                               children: [
                                 Icon(
@@ -315,8 +315,7 @@ class _HomePageState extends State<HomePage> {
                       else
                         SliverToBoxAdapter(
                           child: Padding(
-                            padding:
-                                EdgeInsets.fromLTRB(20.w, 12.h, 20.w, 8.h),
+                            padding: EdgeInsets.fromLTRB(20.w, 12.h, 20.w, 8.h),
                             child: Row(
                               children: [
                                 Text(
@@ -370,8 +369,7 @@ class _HomePageState extends State<HomePage> {
                                         context,
                                       ),
                                       elevation: 6 * curved.value,
-                                      borderRadius:
-                                          BorderRadius.circular(16.r),
+                                      borderRadius: BorderRadius.circular(16.r),
                                       shadowColor: AppColors.primary
                                           .withValues(alpha: 0.4),
                                       child: child,
@@ -390,8 +388,7 @@ class _HomePageState extends State<HomePage> {
                               itemCount: _sortStations?.length ?? 0,
                               itemBuilder: (_, i) {
                                 final s = _sortStations![i];
-                                final id =
-                                    s['station_id'] ?? s['id'] ?? i;
+                                final id = s['station_id'] ?? s['id'] ?? i;
                                 return ReorderableDragStartListener(
                                   // key 必须挂在 itemBuilder 返回的顶层 widget 上（SDK 断言）
                                   key: ValueKey(id),
@@ -478,7 +475,8 @@ class _HomePageState extends State<HomePage> {
                 SizedBox(height: 2.h),
                 Text(
                   l10n.pvInverterMonitor,
-                  style: TextStyle(fontSize: 11.sp, color: AppColor.textHint(context)),
+                  style: TextStyle(
+                      fontSize: 11.sp, color: AppColor.textHint(context)),
                 ),
               ],
             ),
@@ -543,10 +541,12 @@ class _HomePageState extends State<HomePage> {
           autofocus: true,
           onChanged: (_) => setState(() => _stationPage = 1),
           cursorColor: AppColors.primary,
-          style: TextStyle(fontSize: 14.sp, color: AppColor.textPrimary(context)),
+          style:
+              TextStyle(fontSize: 14.sp, color: AppColor.textPrimary(context)),
           decoration: InputDecoration(
             hintText: l10n.searchStation,
-            hintStyle: TextStyle(fontSize: 14.sp, color: AppColor.textHint(context)),
+            hintStyle:
+                TextStyle(fontSize: 14.sp, color: AppColor.textHint(context)),
             prefixIcon: Icon(
               Icons.search_rounded,
               size: 20,
@@ -639,8 +639,9 @@ class _HomePageState extends State<HomePage> {
                           style: TextStyle(
                             fontSize: 11.sp,
                             fontWeight: FontWeight.w600,
-                            color:
-                                active ? _filterColors[i] : AppColor.textHint(context),
+                            color: active
+                                ? _filterColors[i]
+                                : AppColor.textHint(context),
                           ),
                         ),
                       ],
@@ -685,8 +686,7 @@ class _HomePageState extends State<HomePage> {
       badgeColor: badgeColor,
       badgeBg: badgeBg,
       onTap: sortMode ? () {} : () => context.push('/station/$id'),
-      onLongPress:
-          sortMode ? () {} : () => _showStationMenu(context, station),
+      onLongPress: sortMode ? () {} : () => _showStationMenu(context, station),
     );
   }
 
@@ -753,9 +753,8 @@ class _HomePageState extends State<HomePage> {
       children: [
         Expanded(
           child: StyledRefreshIndicator(
-            onRefresh: () async => context
-                .read<StationBloc>()
-                .add(StationSummaryRequested()),
+            onRefresh: () async =>
+                context.read<StationBloc>().add(StationSummaryRequested()),
             child: CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
@@ -886,8 +885,7 @@ class _HomeOfflineNoticeState extends State<_HomeOfflineNotice> {
             GestureDetector(
               onTap: widget.onRetry,
               child: Container(
-                padding:
-                    EdgeInsets.symmetric(horizontal: 10.w, vertical: 5.h),
+                padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 5.h),
                 decoration: BoxDecoration(
                   color: AppColors.warning.withValues(alpha: 0.25),
                   borderRadius: BorderRadius.circular(8.r),
@@ -961,7 +959,8 @@ class _AnimatedHdrBtnState extends State<_AnimatedHdrBtn>
             color: AppColor.surfaceHover(context),
             borderRadius: BorderRadius.circular(12.r),
           ),
-          child: Icon(widget.icon, size: 20.sp, color: AppColor.textSecondary(context)),
+          child: Icon(widget.icon,
+              size: 20.sp, color: AppColor.textSecondary(context)),
         ),
       ),
     );
@@ -1042,33 +1041,19 @@ class _StationActionSheetState extends State<_StationActionSheet>
         borderRadius: BorderRadius.circular(12.r),
         onTap: onTap,
         child: Padding(
-          padding: EdgeInsets.symmetric(vertical: 10.h, horizontal: 4.w),
+          padding: const EdgeInsets.symmetric(vertical: 10),
           child: Row(
             children: [
               Container(
-                width: 44.w,
-                height: 44.w,
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12.r),
-                  gradient: LinearGradient(
-                    colors: [
-                      color.withValues(alpha: 0.08),
-                      color.withValues(alpha: 0.18),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.04),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
+                  borderRadius: BorderRadius.circular(8),
+                  color: color.withValues(alpha: 0.12),
                 ),
-                child: Icon(icon, color: color, size: 22.sp),
+                child: Icon(icon, color: color, size: 22),
               ),
-              SizedBox(width: 14.w),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1117,7 +1102,7 @@ class _StationActionSheetState extends State<_StationActionSheet>
         child: SingleChildScrollView(
           child: ConstrainedBox(
             constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.8,
+              minHeight: 0,
             ),
             child: Padding(
               padding: EdgeInsets.fromLTRB(20.w, 8.h, 20.w, 20.h),
@@ -1125,130 +1110,123 @@ class _StationActionSheetState extends State<_StationActionSheet>
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-              // 电站信息头
-              Row(
-                children: [
-                  Container(
-                    width: 48.w,
-                    height: 48.w,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(14.r),
-                      gradient: LinearGradient(
-                        colors: [
-                          AppColors.primary.withValues(alpha: 0.08),
-                          AppColors.primary.withValues(alpha: 0.18),
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
+                  // 电站信息头
+                  Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          color: AppColors.primary.withValues(alpha: 0.12),
+                        ),
+                        child: Icon(
+                          Icons.solar_power,
+                          size: 22,
+                          color: AppColors.primary,
+                        ),
                       ),
-                    ),
-                    child: Icon(
-                      Icons.solar_power,
-                      size: 24.sp,
-                      color: AppColors.primary,
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.name,
+                              style: TextStyle(
+                                fontSize: 16.sp,
+                                fontWeight: FontWeight.w700,
+                                color: AppColor.textPrimary(context),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            SizedBox(height: 2.h),
+                            Text(
+                              widget.addressText,
+                              style: TextStyle(
+                                fontSize: 12.sp,
+                                color: AppColor.textHint(context),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 16.h),
+                  Divider(height: 1, color: AppColor.divider(context)),
+                  SizedBox(height: 6.h),
+                  _animatedItem(
+                    0,
+                    _buildActionItem(
+                      icon: Icons.edit_outlined,
+                      color: const Color(0xFF2563EB),
+                      title: l10n.editStation,
+                      subtitle: l10n.editStationHint,
+                      onTap: widget.onEdit,
                     ),
                   ),
-                  SizedBox(width: 12.w),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.name,
-                          style: TextStyle(
-                            fontSize: 16.sp,
-                            fontWeight: FontWeight.w700,
-                            color: AppColor.textPrimary(context),
+                  _animatedItem(
+                    1,
+                    _buildActionItem(
+                      icon: Icons.add_circle_outline,
+                      color: AppColors.successLight,
+                      title: l10n.addDevice,
+                      subtitle: l10n.scanOrManualAdd,
+                      onTap: widget.onAddDevice,
+                    ),
+                  ),
+                  _animatedItem(
+                    2,
+                    _buildActionItem(
+                      icon: Icons.swap_vert_rounded,
+                      color: const Color(0xFFB45309),
+                      title: l10n.sortStations,
+                      subtitle: l10n.sortModeHint,
+                      onTap: widget.onSort,
+                    ),
+                  ),
+                  _animatedItem(
+                    3,
+                    _buildActionItem(
+                      icon: Icons.devices_rounded,
+                      color: const Color(0xFF7C3AED),
+                      title: l10n.deviceManagement,
+                      subtitle: l10n.str('device_management_hint'),
+                      onTap: widget.onManageDevices,
+                    ),
+                  ),
+                  SizedBox(height: 14.h),
+                  _animatedItem(
+                    4,
+                    Material(
+                      color: AppColor.surfaceHover(context),
+                      borderRadius: BorderRadius.circular(14.r),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(14.r),
+                        onTap: () => Navigator.pop(context),
+                        child: Container(
+                          height: 48.h,
+                          alignment: Alignment.center,
+                          child: Text(
+                            l10n.cancel,
+                            style: TextStyle(
+                              fontSize: 16.sp,
+                              fontWeight: FontWeight.w600,
+                              color: AppColor.textSecondary(context),
+                            ),
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
-                        SizedBox(height: 2.h),
-                        Text(
-                          widget.addressText,
-                          style: TextStyle(
-                            fontSize: 12.sp,
-                            color: AppColor.textHint(context),
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ],
               ),
-              SizedBox(height: 16.h),
-              Divider(height: 1, color: AppColor.divider(context)),
-              SizedBox(height: 6.h),
-              _animatedItem(
-                0,
-                _buildActionItem(
-                  icon: Icons.edit_outlined,
-                  color: AppColors.primary,
-                  title: l10n.editStation,
-                  subtitle: l10n.editStationHint,
-                  onTap: widget.onEdit,
-                ),
-              ),
-              _animatedItem(
-                1,
-                _buildActionItem(
-                  icon: Icons.add_circle_outline,
-                  color: AppColors.successLight,
-                  title: l10n.addDevice,
-                  subtitle: l10n.scanOrManualAdd,
-                  onTap: widget.onAddDevice,
-                ),
-              ),
-              _animatedItem(
-                2,
-                _buildActionItem(
-                  icon: Icons.swap_vert_rounded,
-                  color: AppColors.primary,
-                  title: l10n.sortStations,
-                  subtitle: l10n.sortModeHint,
-                  onTap: widget.onSort,
-                ),
-              ),
-              _animatedItem(
-                3,
-                _buildActionItem(
-                  icon: Icons.devices_rounded,
-                  color: AppColors.primary,
-                  title: l10n.deviceManagement,
-                  subtitle: l10n.str('device_management_hint'),
-                  onTap: widget.onManageDevices,
-                ),
-              ),
-              SizedBox(height: 14.h),
-              _animatedItem(
-                4,
-                Material(
-                  color: AppColor.surfaceHover(context),
-                  borderRadius: BorderRadius.circular(14.r),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(14.r),
-                    onTap: () => Navigator.pop(context),
-                    child: Container(
-                      height: 48.h,
-                      alignment: Alignment.center,
-                      child: Text(
-                        l10n.cancel,
-                        style: TextStyle(
-                          fontSize: 16.sp,
-                          fontWeight: FontWeight.w600,
-                          color: AppColor.textSecondary(context),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
-        ),
         ),
       ),
     );

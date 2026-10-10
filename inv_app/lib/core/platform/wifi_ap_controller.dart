@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:wifi_iot/wifi_iot.dart' as wifi_iot;
 
 import 'package:inv_app/core/platform/app_platform.dart';
@@ -63,6 +64,8 @@ abstract class WifiApController {
 
 /// Android：委托 wifi_iot（third_party 打补丁版本）
 class AndroidWifiApController implements WifiApController {
+  static const _routeChannel = MethodChannel('csergy/wifi_scan');
+
   @override
   bool get isSupported => true;
 
@@ -155,7 +158,12 @@ class AndroidWifiApController implements WifiApController {
   @override
   Future<void> forceWifiUsage(bool force) async {
     try {
-      await wifi_iot.WiFiForIoTPlugin.forceWifiUsage(force);
+      // Bind an existing network only; wifi_iot's requestNetwork fallback can
+      // wait forever and bind later, even after the caller has cancelled.
+      await _routeChannel.invokeMethod<bool>(
+        'forceWifiUsage',
+        {'useWifi': force},
+      ).timeout(const Duration(seconds: 8));
     } catch (_) {
       // 与历史行为一致：失败不阻断业务
     }

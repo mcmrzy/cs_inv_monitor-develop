@@ -3,3 +3,92 @@
 .station-history-table.ant-pro-table .ant-table {
   overflow: visible;
 }
+
+.station-history-table .ant-table-thead > tr:first-child > th {
+  background: var(--history-fill, #f5f5f5);
+  color: var(--history-text, #333);
+}
+
+.station-history-table .ant-table-thead > tr > th {
+  white-space: normal;
+  line-height: 1.4;
+  font-size: 12px;
+}
+
+.station-history-table .history-number-cell {
+  font-variant-numeric: tabular-nums;
+  font-family: Consolas, monospace;
+}
+
+.station-history-table .ant-table-tbody > tr:nth-child(even) > td {
+  background: var(--history-fill, #fafafa);
+}
+
+.history-field-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 160px auto;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.history-field-layout {
+  display: grid;
+  grid-template-columns: 152px minmax(0, 1fr);
+  border-top: 1px solid var(--history-border, #e5e7eb);
+}
+
+.history-field-groups.ant-menu {
+  min-width: 0;
+}
+
+.history-field-groups .ant-menu-item {
+  padding-inline: 12px !important;
+}
+
+.history-field-groups .ant-tag {
+  margin-inline: 3px 0;
+  padding-inline: 4px;
+}
+
+.history-field-list {
+  padding-left: 12px;
+  min-width: 0;
+}
+
+.history-field-list-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--history-border, #e5e7eb);
+}
+
+.history-field-row {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--history-border, #edf0f3);
+  cursor: pointer;
+}
+
+.history-field-row.selected { background: var(--history-selected, #eff8ff); }
+.history-field-row:hover { background: var(--history-hover, #f0f7ff); }
+.history-field-row.drag-over { outline: 1px dashed #1677ff; }
+.history-field-label { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 13px; }
+.history-field-category { font-size: 11px; flex-shrink: 0; }
+.history-field-order { flex-shrink: 0; }
+
+@media (max-width: 600px) {
+  .history-field-toolbar { grid-template-columns: minmax(0, 1fr) auto; }
+  .history-field-toolbar > .ant-input-affix-wrapper { grid-column: 1 / -1; }
+  .history-field-layout { grid-template-columns: 110px minmax(0, 1fr); }
+  .history-field-list { padding-left: 8px; }
+  .history-field-category { display: none; }
+  .history-field-order .anticon-holder { display: none; }
+  .history-field-groups .ant-menu-item { padding-inline: 6px !important; }
+}

@@ -64,7 +64,7 @@ const DiagnosticsTab: React.FC<DiagnosticsTabProps> = ({ sn }) => {
   const { data: envelope } = useQuery({
     queryKey: queryKeys.devices.realtime(sn),
     queryFn: () => deviceApi.getRealtime(sn).then((r) => toRtEnvelope(r.data?.data ?? r.data)),
-    refetchInterval: () => (document.visibilityState === 'visible' ? 10_000 : false),
+    refetchInterval: 10_000,
   })
 
   const { data: commandsRes, isLoading: cmdLoading, error: commandsError, refetch: refetchCommands } = useQuery({

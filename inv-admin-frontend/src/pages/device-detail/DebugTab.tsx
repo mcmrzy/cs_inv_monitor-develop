@@ -147,7 +147,7 @@ const DebugTab: React.FC<DebugTabProps> = ({ sn }) => {
   const { data: sessionEnvelope, isLoading: sessionLoading } = useQuery({
     queryKey: queryKeys.devices.debugSession(sn),
     queryFn: () => deviceApi.getDebugSession(sn).then((r) => r.data?.data ?? null),
-    refetchInterval: () => (document.visibilityState === 'visible' ? 10_000 : false),
+    refetchInterval: 10_000,
   })
 
   const polledSession = sessionEnvelope?.session ?? null

@@ -154,13 +154,13 @@ const AlertsPage: React.FC = () => {
   })
 
   // 告警统计
-  const { data: stats, error: statsError } = useQuery({
+  const { data: stats, error: statsError, refetch: refetchStats } = useQuery({
     queryKey: queryKeys.alerts.stats(),
     queryFn: () => alertApi.getStats().then((r) => r.data?.data ?? { total: 0, unhandled: 0, handled: 0, critical: 0 }),
   })
 
   // 通知统计
-  const { data: notifyStats, error: notifyStatsError } = useQuery({
+  const { data: notifyStats, error: notifyStatsError, refetch: refetchNotifyStats } = useQuery({
     queryKey: ['notifications', 'stats'],
     queryFn: () => notificationApi.getStats().then((r) => r.data?.data ?? { total: 0, unread: 0 }),
   })
@@ -169,6 +169,12 @@ const AlertsPage: React.FC = () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.alerts.all })
     queryClient.invalidateQueries({ queryKey: ['notifications'] })
   }
+
+  const refreshPage = () => Promise.all([
+    ...(activeTab !== 'notification' ? [refetch()] : []),
+    ...(activeTab !== 'alarm' ? [refetchNotify()] : []),
+    refetchStats(), refetchNotifyStats(),
+  ])
 
   const handleMutation = useMutation({
     mutationFn: (id: number) => alertApi.handle(id),
@@ -613,7 +619,7 @@ const AlertsPage: React.FC = () => {
             <RangePicker value={dateRange as any} onChange={(vals) => { setDateRange(vals as any); setPage(1) }} />
           </Col>
           <Col>
-            <Button icon={<ReloadOutlined />} onClick={() => { refetch(); refetchNotify() }}>{t('common.refresh')}</Button>
+            <Button icon={<ReloadOutlined />} onClick={() => { void refreshPage() }}>{t('common.refresh')}</Button>
           </Col>
           <Col>
             <Button danger icon={<ClearOutlined />}
@@ -662,7 +668,7 @@ const AlertsPage: React.FC = () => {
           loading={isLoadingData}
           size="small"
           persistenceKey="alerts-list"
-          onReload={() => { refetch(); refetchNotify() }}
+          onReload={refreshPage}
           locale={{ emptyText: <Empty description={t('common.noData')} /> }}
           pagination={{
             current: page, pageSize, total, showSizeChanger: true,

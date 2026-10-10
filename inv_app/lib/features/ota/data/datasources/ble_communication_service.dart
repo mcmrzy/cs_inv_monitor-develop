@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
@@ -310,28 +311,32 @@ class BleCommunicationService implements LocalCommunicationRepository {
               const {'accepted', 'receiving', 'verifying', 'installing'}
                   .contains(_stageOf(s)));
     };
+    final controlMessage = <String, dynamic>{
+      'v': 2,
+      'type': 'ota.ctrl',
+      'session_id': sessionId,
+      'body': {
+        'transfer_id': transferId,
+        'task_id': manifest.taskId,
+        'target': _wireTarget(manifest.target),
+        'version': manifest.version,
+        'size': bytes.length,
+        'sha256': firmwareSha,
+        'signature': manifest.signature,
+        'security_version': manifest.securityVersion,
+        'timeout_seconds': max(manifest.timeoutSeconds, 1200),
+      },
+    };
+    if (utf8.encode(jsonEncode(controlMessage)).length >= 512) {
+      throw const BleCommandException(
+        'OTA_CONTROL_TOO_LARGE',
+        '固件升级控制参数过长，设备最多接收 511 字节',
+      );
+    }
     await _writeOtaMessage(
       control: true,
       what: 'ota.ctrl',
-      message: {
-        'v': 2,
-        'type': 'ota.ctrl',
-        'message_id': _messageId(),
-        'session_id': sessionId,
-        'body': {
-          'transfer_id': transferId,
-          'task_id': manifest.taskId,
-          'manifest_version': 1,
-          'target': _wireTarget(manifest.target),
-          'model': infoBody['model'] ?? '',
-          'version': manifest.version,
-          'size': bytes.length,
-          'sha256': firmwareSha,
-          'signature': manifest.signature,
-          'security_version': manifest.securityVersion,
-          'timeout_seconds': max(manifest.timeoutSeconds, 1200),
-        },
-      },
+      message: controlMessage,
       alreadyLanded: () => _statusLog.any(ctrlAccepted),
     );
 

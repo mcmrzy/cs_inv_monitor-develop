@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Row, Col, Select, DatePicker, Button, Space, Alert, Popover, Input, Empty, Tooltip, Typography, Segmented } from 'antd'
+import { Row, Col, Select, DatePicker, Button, Space, Alert, Drawer, Input, Empty, Tooltip, Typography, Segmented, Checkbox, Menu, Tag, theme } from 'antd'
 import { ProTable, ProCard } from '@ant-design/pro-components'
 import type { ProColumns } from '@ant-design/pro-components'
-import { ReloadOutlined, DownloadOutlined, SettingOutlined, UpOutlined, DownOutlined, CheckOutlined, SearchOutlined, HolderOutlined, LineChartOutlined } from '@ant-design/icons'
+import { ReloadOutlined, DownloadOutlined, SettingOutlined, UpOutlined, DownOutlined, SearchOutlined, HolderOutlined, LineChartOutlined } from '@ant-design/icons'
 
 import dayjs from 'dayjs'
 import { deviceApi } from '@/services/deviceApi'
@@ -12,6 +12,7 @@ import { safeNum } from '@/utils/format'
 import { formatInTimezone } from '@/utils/timezone'
 import { humanizeFieldKey } from '@/utils/fieldI18n'
 import { loadStationHistoryPrefs, saveStationHistoryPrefs } from '@/utils/stationHistoryPrefs'
+import { HISTORY_GROUPS, historyFieldGroup, formatHistoryValue } from '@/utils/stationHistoryFields'
 import ReactECharts from '@/lib/echarts'
 import useTranslation from '@/hooks/useTranslation'
 import './StationHistoryTab.css'
@@ -122,6 +123,14 @@ const FIELD_LABEL_KEYS: Record<string, string> = {
   cell_voltage_diff: 'station.field_cell_voltage_diff',
   battery_state: 'station.field_battery_state',
   battery_protect_status: 'station.field_battery_protect_status',
+  capacity_remain: 'station.field_battery_capacity_remain',
+  capacity_full: 'station.field_battery_capacity_total',
+  cycle_count: 'station.field_battery_cycle_count',
+  protection_flag: 'station.field_battery_protect_status',
+  battery_status: 'station.field_battery_state',
+  cell_delta_voltage: 'station.field_cell_voltage_diff',
+  max_cell_voltage: 'station.field_cell_voltage_max',
+  min_cell_voltage: 'station.field_cell_voltage_min',
   bms_fault_code: 'station.field_bms_fault_code',
   max_charge_current: 'station.field_max_charge_current',
   max_discharge_current: 'station.field_max_discharge_current',
@@ -233,11 +242,18 @@ const FIELD_LABEL_KEYS: Record<string, string> = {
 
 const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezone }) => {
   const { t } = useTranslation()
+  const { token } = theme.useToken()
+  const historyTheme = {
+    '--history-fill': token.colorFillAlter,
+    '--history-border': token.colorBorderSecondary,
+    '--history-text': token.colorText,
+    '--history-selected': token.controlItemBgActive,
+    '--history-hover': token.controlItemBgHover,
+  } as React.CSSProperties
   const [selectedSn, setSelectedSn] = useState<string | undefined>(undefined)
-  const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
-    dayjs().subtract(1, 'day'),
-    dayjs(),
-  ])
+  const [fixedRange, setFixedRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null)
+  const dateRange: [dayjs.Dayjs, dayjs.Dayjs] = fixedRange ?? [dayjs().subtract(1, 'day'), dayjs()]
+  const [fieldGroup, setFieldGroup] = useState('all')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [granularity, setGranularity] = useState<Granularity>('raw')
@@ -248,7 +264,6 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
   const [dragKey, setDragKey] = useState<string | null>(null)
   const [overKey, setOverKey] = useState<string | null>(null)
   const [showCurve, setShowCurve] = useState(false)
-  const [refreshToken, setRefreshToken] = useState(0)
   const prefsScopeRef = useRef<string | number | undefined>(undefined)
 
   // 获取电站下设备列表
@@ -264,8 +279,14 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
 
   // 自动选中第一台设备
   useEffect(() => {
-    if (devices && devices.length > 0 && !selectedSn) {
+    if (devices && devices.length === 0 && selectedSn) {
+      setSelectedSn(undefined)
+      setPage(1)
+      return
+    }
+    if (devices && devices.length > 0 && !devices.some((d: DeviceItem) => d.sn === selectedSn)) {
       setSelectedSn((devices[0] as any).sn)
+      setPage(1)
     }
   }, [devices, selectedSn])
 
@@ -295,9 +316,13 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
     if (cap) {
       const nameKey = cap.display_name_key || `fields.${cap.field_key}`
       const name = t(nameKey)
-      const label = name !== nameKey ? name : humanizeFieldKey(key)
+      const standardKey = `fields.${key}`
+      const standardName = t(standardKey)
+      const legacyKey = FIELD_LABEL_KEYS[key]
+      const label = name !== nameKey ? name : standardName !== standardKey ? standardName
+        : legacyKey ? t(legacyKey) : humanizeFieldKey(key)
       const unit = cap.display_unit || cap.base_unit
-      return unit ? `${label} (${unit})` : label
+      return unit && !label.endsWith(`(${unit})`) ? `${label} (${unit})` : label
     }
     const legacyKey = FIELD_LABEL_KEYS[key]
     if (legacyKey) return t(legacyKey)
@@ -327,18 +352,24 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
   const endIso = dateRange[1]?.toISOString()
 
   // 获取历史遥测数据（分页与聚合都在服务端完成，total 是区间内的真实条数/桶数）
-  const { data: historyRes, isLoading } = useQuery({
-    queryKey: ['station-history', selectedSn, page, pageSize, granularity, startIso, endIso, refreshToken],
+  const queryRangeKey = fixedRange ? [startIso, endIso] : ['live-24h']
+  const requestRange = () => {
+    const end = fixedRange?.[1] ?? dayjs()
+    const start = fixedRange?.[0] ?? end.subtract(1, 'day')
+    return { startTime: start.toISOString(), endTime: end.toISOString() }
+  }
+  const { data: historyRes, isLoading, isFetching, error: historyError, refetch: refetchHistory } = useQuery({
+    queryKey: ['station-history', selectedSn, page, pageSize, granularity, ...queryRangeKey, timezone],
     queryFn: () => deviceApi.getTelemetry(selectedSn!, {
       page,
       page_size: pageSize,
-      startTime: startIso,
-      endTime: endIso,
+      ...requestRange(),
       granularity,
       tz: timezone,
       sort: 'desc',
     }).then(unwrapPage),
     enabled: !!selectedSn && !!startIso && !!endIso,
+    refetchInterval: fixedRange ? false : 15_000,
   })
 
   const items = useMemo(() => historyRes?.items ?? [], [historyRes])
@@ -365,17 +396,18 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
     for (const item of items) {
       Object.keys(item as Record<string, unknown>).forEach(push)
     }
+    visibleFields.forEach(push)
     return keys
-  }, [fieldCaps, items])
+  }, [fieldCaps, items, visibleFields])
 
   // 「常用字段」一键候选：型号配置里标记 show_history 的字段，否则退回基础默认
   const recommendedFields = useMemo(() => {
     const fromCaps = (fieldCaps ?? [])
       .filter((f) => f.show_history && f.is_supported !== false && f.is_visible !== false)
       .map((f) => f.field_key)
-    const source = fromCaps.length > 0 ? fromCaps : DEFAULT_VISIBLE_FIELDS
+    const source = [...new Set([...DEFAULT_VISIBLE_FIELDS, ...fromCaps])]
     const available = new Set(availableFields)
-    return source.filter((key) => available.has(key))
+    return source.filter((key) => available.has(key)).slice(0, 8)
   }, [fieldCaps, availableFields])
 
   // 构建表格列
@@ -388,39 +420,45 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
       fixed: 'left' as const,
       render: (_: any, record: any) => formatInTimezone(record.time, timezone, 'YYYY-MM-DD HH:mm'),
     }
-    const dataCols = visibleFields.map(field => ({
+    const dataCols: ProColumns<any>[] = visibleFields.map(field => ({
       title: resolveFieldLabel(field),
       dataIndex: field,
       key: field,
-      width: 140,
-      render: (_: any, record: any) => {
-        const v = record[field]
-        if (v === null || v === undefined || v === '') return '--'
-        const n = safeNum(v)
-        if (!Number.isFinite(n)) return '--'
-        return n !== 0 ? n.toFixed(2) : '0.00'
-      },
+      width: 132,
+      align: 'right',
+      className: 'history-number-cell',
+      render: (_: any, record: any) => formatHistoryValue(record[field], capByKey.get(field)),
     }))
-    return [timeCol, ...dataCols]
-  }, [visibleFields, resolveFieldLabel, t, timezone])
+    const groups: ProColumns<any>[] = []
+    let previousGroup = ''
+    for (const column of dataCols) {
+      const gid = historyFieldGroup(String(column.key), capByKey.get(String(column.key)))
+      const last = groups[groups.length - 1]
+      // Preserve the chosen column order while grouping adjacent related fields.
+      if (last && previousGroup === gid) last.children!.push(column)
+      else groups.push({ title: t(HISTORY_GROUPS.find(g => g.id === gid)!.labelKey), key: `${gid}-${groups.length}`, children: [column] })
+      previousGroup = gid
+    }
+    return [timeCol, ...groups]
+  }, [visibleFields, resolveFieldLabel, capByKey, t, timezone])
 
   // ── 运行数据曲线 ──
   const curveFields = useMemo(() => visibleFields.slice(0, MAX_CURVE_SERIES), [visibleFields])
   const curveGranularity = useMemo(() => curveGranularityFor(dateRange[0], dateRange[1]), [dateRange])
 
-  const { data: curveRes, isLoading: curveLoading } = useQuery({
-    queryKey: ['station-history-curve', selectedSn, curveGranularity, startIso, endIso, curveFields.join(','), refreshToken],
+  const { data: curveRes, isLoading: curveLoading, error: curveError, refetch: refetchCurve } = useQuery({
+    queryKey: ['station-history-curve', selectedSn, curveGranularity, ...queryRangeKey, curveFields.join(','), timezone],
     queryFn: () => deviceApi.getTelemetry(selectedSn!, {
       page: 1,
       page_size: MAX_CURVE_POINTS,
-      startTime: startIso,
-      endTime: endIso,
+      ...requestRange(),
       granularity: curveGranularity,
       tz: timezone,
       fields: curveFields.join(','),
       sort: 'asc',
     }).then(unwrapPage),
     enabled: showCurve && !!selectedSn && !!startIso && !!endIso && curveFields.length > 0,
+    refetchInterval: fixedRange ? false : 15_000,
   })
 
   const curveRows = useMemo(() => curveRes?.items ?? [], [curveRes])
@@ -488,32 +526,8 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
     })
   }, [])
 
-  // ── 分组定义：小标题复用已有 station.* 双语 key ──
-  const GROUP_META: { id: string; labelKey: string; test: (k: string) => boolean }[] = [
-    { id: 'pv', labelKey: 'station.pvParams', test: (k) => /^(pv|mppt)/i.test(k) },
-    { id: 'bat', labelKey: 'station.batteryParams', test: (k) => /^(batt|bat|bms|cell|soc|soh|overcharge)/i.test(k) || /^battery_/i.test(k) },
-    { id: 'ac', labelKey: 'station.acParams', test: (k) => /^(ac|grid|meter|load|output|feed|charge|bypass)/i.test(k) },
-    { id: 'sys', labelKey: 'station.systemStatus', test: (k) => /^(work_|inv_|fan_|temp_|effic|runtime|fault|alarm|sys|boost|transform|transform|buck|paired|online_socket|on_socket|dc_bus|mos_|ambient|parallel_charge)/i.test(k) },
-    { id: 'eng', labelKey: 'station.energyStats', test: (k) => /(energy|daily_|total_|gen_)/i.test(k) },
-    { id: 'other', labelKey: 'mon.other', test: () => true },
-  ]
-  const fieldGroupOf = (key: string): string => {
-    const cap = capByKey.get(key)
-    if (cap?.group_code) {
-      const g = cap.group_code.toLowerCase()
-      if (['pv', 'mppt'].includes(g)) return 'pv'
-      if (['bat', 'battery'].includes(g)) return 'bat'
-      if (['ac'].includes(g)) return 'ac'
-      if (['sys', 'diag', 'system'].includes(g)) return 'sys'
-      if (['eng', 'energy'].includes(g)) return 'eng'
-    }
-    for (const m of GROUP_META) {
-      if (m.id !== 'other' && m.test(key)) return m.id
-    }
-    return 'other'
-  }
-  const GROUP_ORDER = ['pv', 'bat', 'ac', 'sys', 'eng', 'other']
-  const groupLabel = (id: string) => t(GROUP_META.find((g) => g.id === id)!.labelKey)
+  const fieldGroupOf = (key: string) => historyFieldGroup(key, capByKey.get(key))
+  const groupLabel = (id: string) => t(HISTORY_GROUPS.find((g) => g.id === id)!.labelKey)
 
   // 拖拽排序：把 fromKey 移动到 toKey 所在位置（drop 到目标卡片前）
   const reorderField = (fromKey: string, toKey: string) => {
@@ -529,112 +543,91 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
     })
   }
 
-  // 卡片式字段选择面板：搜索 + 已选列表（可调顺序）+ 未选卡片网格
   const renderFieldPicker = () => {
-    const kw = fieldSearch.trim().toLowerCase()
-    const filtered = kw
-      ? availableFields.filter(k => resolveFieldLabel(k).toLowerCase().includes(kw) || k.toLowerCase().includes(kw))
-      : availableFields
-    const selectedKeys = filtered.filter(k => visibleFields.includes(k))
-    const unselectedKeys = filtered.filter(k => !visibleFields.includes(k))
+    const keyword = fieldSearch.trim().toLowerCase()
+    const matching = availableFields.filter(key =>
+      !keyword || resolveFieldLabel(key).toLowerCase().includes(keyword) || key.toLowerCase().includes(keyword))
+    const filtered = matching.filter(key => fieldGroup === 'all'
+      || (fieldGroup === 'selected' ? visibleFields.includes(key) : fieldGroupOf(key) === fieldGroup))
+    const ordered = [...visibleFields.filter(key => filtered.includes(key)),
+      ...filtered.filter(key => !visibleFields.includes(key))]
+    const allChecked = filtered.length > 0 && filtered.every(key => visibleFields.includes(key))
+    const someChecked = filtered.some(key => visibleFields.includes(key))
+    const addGroup = () => setVisibleFields(previous => [...new Set([...previous, ...filtered])])
     return (
-      <div style={{ width: 520, padding: 4 }}>
-        <Input
-          allowClear
-          prefix={<SearchOutlined />}
-          placeholder={t('station.fieldSearchPlaceholder')}
-          value={fieldSearch}
-          onChange={(e) => setFieldSearch(e.target.value)}
-          style={{ marginBottom: 12 }}
-        />
-        <Space style={{ marginBottom: 12 }}>
-          <Button
-            size="small"
-            disabled={recommendedFields.length === 0}
-            onClick={() => setVisibleFields(recommendedFields)}
-          >
-            {t('station.addRecommendedFields')}
-          </Button>
+      <div className="history-field-picker" style={historyTheme}>
+        <div className="history-field-toolbar">
+          <Input allowClear prefix={<SearchOutlined />} placeholder={t('station.fieldSearchPlaceholder')}
+            value={fieldSearch} onChange={event => setFieldSearch(event.target.value)} />
+          <Select aria-label={t('station.fieldPreset')} placeholder={t('station.fieldPreset')} value={null}
+            options={[
+              { value: 'common', label: t('station.addRecommendedFields') },
+              ...HISTORY_GROUPS.filter(group => group.id !== 'other').map(group => ({
+                value: group.id, label: t(group.labelKey),
+              })),
+            ]}
+            onChange={value => {
+              const keys = value === 'common' ? recommendedFields
+                : availableFields.filter(key => fieldGroupOf(key) === value)
+              setVisibleFields(keys)
+            }} />
           <Button size="small" disabled={visibleFields.length === 0} onClick={() => setVisibleFields([])}>
             {t('station.clearFields')}
           </Button>
-        </Space>
-        <div style={{ maxHeight: 400, overflowY: 'auto', paddingRight: 4 }}>
-          {selectedKeys.length > 0 && (
-            <div style={{ marginBottom: 12 }}>
-              <Text style={{ fontSize: 12, fontWeight: 600, color: '#666' }}>{t('station.fieldSelected', { count: visibleFields.length })}</Text>
-              <div style={{ marginTop: 8 }}>
-                {selectedKeys.map((key) => {
-                  const vIdx = visibleFields.indexOf(key)
-                  const isOver = overKey === key
-                  return (
-                    <div
-                      key={key}
-                      draggable
-                      data-field-key={key}
-                      onDragStart={(e) => { setDragKey(key); e.dataTransfer.effectAllowed = 'move' }}
-                      onDragOver={(e) => { e.preventDefault(); setOverKey(key) }}
-                      onDrop={(e) => { e.preventDefault(); setOverKey(null); reorderField(dragKey!, key) }}
-                      onDragEnd={() => { setDragKey(null); setOverKey(null) }}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, padding: '5px 8px',
-                        border: isOver ? '1px dashed #1677ff' : '1px solid #1677ff',
-                        borderRadius: 8, background: isOver ? '#f0f7ff' : '#e6f4ff',
-                        cursor: dragKey === key ? 'grabbing' : 'pointer',
-                      }}
-                      onClick={() => toggleField(key)}
-                    >
-                      <HolderOutlined style={{ color: '#91caff', cursor: 'grab' }} onClick={(e) => e.stopPropagation()} />
-                      <Tooltip title={t('station.fieldMoveUp')}>
-                        <Button size="small" type="text" icon={<UpOutlined />} disabled={vIdx === 0} onClick={(e) => { e.stopPropagation(); moveField(vIdx, -1) }} />
-                      </Tooltip>
-                      <Tooltip title={t('station.fieldMoveDown')}>
-                        <Button size="small" type="text" icon={<DownOutlined />} disabled={vIdx === visibleFields.length - 1} onClick={(e) => { e.stopPropagation(); moveField(vIdx, 1) }} />
-                      </Tooltip>
-                      <CheckOutlined style={{ color: '#1677ff' }} onClick={(e) => e.stopPropagation()} />
-                      <Text style={{ flex: 1, fontSize: 13 }}>{resolveFieldLabel(key)}</Text>
-                    </div>
-                  )
-                })}              </div>
+        </div>
+        <div className="history-field-layout">
+          <Menu className="history-field-groups" mode="inline" selectedKeys={[fieldGroup]}
+            onClick={({ key }) => setFieldGroup(key)}
+            items={[
+              { key: 'all', label: <span>{t('common.all')} <Tag>{matching.length}</Tag></span> },
+              { key: 'selected', label: <span>{t('station.fieldSelected', { count: visibleFields.length })}</span> },
+              ...HISTORY_GROUPS.map(group => ({
+                key: group.id,
+                label: <span>{t(group.labelKey)} <Tag>{matching.filter(key => fieldGroupOf(key) === group.id).length}</Tag></span>,
+              })),
+            ]} />
+          <div className="history-field-list">
+            <div className="history-field-list-header">
+              <Checkbox checked={allChecked} indeterminate={!allChecked && someChecked}
+                disabled={filtered.length === 0}
+                onChange={event => event.target.checked ? addGroup()
+                  : setVisibleFields(previous => previous.filter(key => !filtered.includes(key)))}>
+                {t('station.selectGroup')}
+              </Checkbox>
+              <Text type="secondary">{t('station.fieldSelected', { count: visibleFields.length })}</Text>
             </div>
-          )}
-          {unselectedKeys.length > 0 && (
-            <div>
-              <Text style={{ fontSize: 12, fontWeight: 600, color: '#666' }}>{t('station.fieldUnselected')}</Text>
-              <div style={{ marginTop: 8 }}>
-                {GROUP_ORDER.map((gid) => {
-                  const gFields = unselectedKeys.filter((k) => fieldGroupOf(k) === gid)
-                  if (gFields.length === 0) return null
-                  return (
-                    <div key={gid} style={{ marginBottom: 14 }}>
-                      <Text style={{ fontSize: 12, color: '#8c8c8c', fontWeight: 600, display: 'block', marginBottom: 6 }}>
-                        {groupLabel(gid)}
-                      </Text>
-                      <Row gutter={[8, 8]}>
-                        {gFields.map((key) => (
-                          <Col span={12} key={key}>
-                            <div
-                              data-field-key={key}
-                              style={{
-                                padding: '8px 10px', border: '1px solid #d9d9d9', borderRadius: 8, cursor: 'pointer',
-                                background: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                              }}
-                              onClick={() => toggleField(key)}
-                            >
-                              <Text style={{ fontSize: 13 }}>{resolveFieldLabel(key)}</Text>
-                            </div>
-                          </Col>
-                        ))}
-                      </Row>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-          {filtered.length === 0 && (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('common.noData')} style={{ padding: '16px 0' }} />
-          )}
+            {ordered.map(key => {
+              const index = visibleFields.indexOf(key)
+              const selected = index >= 0
+              return (
+                <div key={key} data-field-key={key}
+                  className={`history-field-row${selected ? ' selected' : ''}${overKey === key ? ' drag-over' : ''}`}
+                  draggable={selected}
+                  onDragStart={event => { setDragKey(key); event.dataTransfer.effectAllowed = 'move' }}
+                  onDragOver={event => { if (selected) { event.preventDefault(); setOverKey(key) } }}
+                  onDrop={event => { event.preventDefault(); setOverKey(null); if (dragKey) reorderField(dragKey, key) }}
+                  onDragEnd={() => { setDragKey(null); setOverKey(null) }}
+                  onClick={() => toggleField(key)}>
+                  <Checkbox checked={selected} aria-label={resolveFieldLabel(key)}
+                    onClick={event => event.stopPropagation()} onChange={() => toggleField(key)} />
+                  <span className="history-field-label">{resolveFieldLabel(key)}</span>
+                  <Text className="history-field-category" type="secondary">{groupLabel(fieldGroupOf(key))}</Text>
+                  {selected && <Space size={0} className="history-field-order">
+                    <HolderOutlined />
+                    <Tooltip title={t('station.fieldMoveUp')}>
+                      <Button size="small" type="text" icon={<UpOutlined />} disabled={index === 0}
+                        onClick={event => { event.stopPropagation(); moveField(index, -1) }} />
+                    </Tooltip>
+                    <Tooltip title={t('station.fieldMoveDown')}>
+                      <Button size="small" type="text" icon={<DownOutlined />} disabled={index === visibleFields.length - 1}
+                        onClick={event => { event.stopPropagation(); moveField(index, 1) }} />
+                    </Tooltip>
+                  </Space>}
+                </div>
+              )
+            })}
+            {filtered.length === 0 && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('common.noData')} />}
+          </div>
         </div>
       </div>
     )
@@ -664,7 +657,7 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
   }
 
   return (
-    <>
+    <div className="station-history-workspace" style={historyTheme}>
       {/* 工具栏 */}
       <ProCard style={{ borderRadius: 12, marginBottom: 16 }}>
         <Row gutter={[12, 12]} align="middle">
@@ -685,7 +678,10 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
               value={dateRange}
               onChange={(dates) => {
                 if (dates && dates[0] && dates[1]) {
-                  setDateRange([dates[0], dates[1]])
+                  setFixedRange([dates[0], dates[1]])
+                  setPage(1)
+                } else {
+                  setFixedRange(null)
                   setPage(1)
                 }
               }}
@@ -696,8 +692,16 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
             />
           </Col>
           <Col>
-            <Button icon={<ReloadOutlined />} onClick={() => { setPage(1); setRefreshToken(n => n + 1) }}>
+            <Button icon={<ReloadOutlined />} loading={isFetching} onClick={() => {
+              void refetchHistory()
+              if (showCurve && curveFields.length > 0) void refetchCurve()
+            }}>
               {t('station.query')}
+            </Button>
+          </Col>
+          <Col>
+            <Button type={fixedRange ? 'default' : 'primary'} onClick={() => { setFixedRange(null); setPage(1) }}>
+              {t('station.live24Hours')}
             </Button>
           </Col>
           <Col>
@@ -757,25 +761,23 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
         {availableFields.length > 0 && (
           <Row style={{ marginTop: 12 }} align="middle">
             <Col>
-              <Popover
-                trigger="click"
-                open={fieldPickerOpen}
-                onOpenChange={setFieldPickerOpen}
-                placement="bottomLeft"
-                content={renderFieldPicker}
-                destroyTooltipOnHide
-              >
-                <Button icon={<SettingOutlined />}>
-                  {t('station.selectFields')} ({visibleFields.length})
-                </Button>
-              </Popover>
+              <Button icon={<SettingOutlined />} onClick={() => setFieldPickerOpen(true)}>
+                {t('station.selectFields')} ({visibleFields.length})
+              </Button>
             </Col>
             <Col style={{ marginLeft: 12 }}>
-              <Text type="secondary" style={{ fontSize: 12 }}>{t('station.fieldPickerHint')}</Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>{fixedRange ? t('station.fixedRange') : t('station.liveRange')}</Text>
             </Col>
           </Row>
         )}
       </ProCard>
+      <Drawer title={t('station.selectFields')} open={fieldPickerOpen} onClose={() => setFieldPickerOpen(false)}
+        width="min(780px, 100vw)" styles={{ body: { padding: 16 } }}>
+        {renderFieldPicker()}
+      </Drawer>
+      {(historyError || curveError) && <Alert type="error" showIcon message={t('station.historyLoadFailed')}
+        action={<Button size="small" onClick={() => { void refetchHistory(); if (showCurve) void refetchCurve() }}>{t('common.refresh')}</Button>}
+        style={{ marginBottom: 12 }} />}
 
       {/* 运行数据曲线 */}
       {showCurve && (
@@ -863,7 +865,7 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
               loading={isLoading}
               rowKey={(r: any) => `${r.time ?? ''}|${r.data_hash ?? ''}`}
               search={false}
-              options={{ density: true, reload: false, setting: true }}
+              options={{ density: true, reload: () => refetchHistory(), setting: false }}
               pagination={{
                 current: page,
                 pageSize,
@@ -872,7 +874,7 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
                 pageSizeOptions: ['10', '20', '50', '100'],
                 onChange: (p, ps) => { setPage(p); setPageSize(ps) },
               }}
-              scroll={{ x: 1200 }}
+              scroll={{ x: Math.max(800, 180 + visibleFields.length * 132), y: 'min(65vh, 600px)' }}
               // MainLayout uses ProLayout's default 56px fixed header.
               sticky={{ offsetHeader: 56 }}
               size="small"
@@ -880,7 +882,7 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
           </>
         )}
       </ProCard>
-    </>
+    </div>
   )
 }
 

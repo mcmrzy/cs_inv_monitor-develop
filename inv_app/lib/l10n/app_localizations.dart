@@ -1450,6 +1450,7 @@ class AppLocalizations {
       'No internet connection': 'err_no_internet',
       'Unauthorized': 'err_unauthorized',
       'Forbidden': 'err_forbidden',
+      'Device assignment changed': 'err_device_assignment_changed',
       'Not found': 'err_not_found',
       'Network error': 'err_network_error',
       'Request failed': 'err_request_failed',

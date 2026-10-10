@@ -166,7 +166,7 @@ const StationDetailPage: React.FC = () => {
   })
 
   // 设备列表（用于实时数据汇总）
-  const { data: devices = [] } = useQuery({
+  const { data: devices = [], refetch: refetchDevices } = useQuery({
     queryKey: ['station-devices-overview', id],
     queryFn: () => api.get('/devices', { params: { station_id: id, page_size: 999 }, expectedDataShape: 'page' }).then(extractList),
     enabled: !!id,
@@ -174,7 +174,7 @@ const StationDetailPage: React.FC = () => {
 
   // 实时数据批量获取（用于概览Tab功率/能量展示）
   const { data: realtimeData } = useQuery({
-    queryKey: ['station-rt-overview', id],
+    queryKey: ['station-rt-overview', id, devices.map((dev: any) => dev.sn).sort()],
     queryFn: async () => {
       const results: Record<string, RtEnvelope> = {}
       await Promise.allSettled(
@@ -194,7 +194,7 @@ const StationDetailPage: React.FC = () => {
       return results
     },
     enabled: !!devices?.length,
-    refetchInterval: () => document.visibilityState === 'visible' ? 15000 : false,
+    refetchInterval: 15000,
   })
 
   // 告警数据（概览Tab显示最近5条）
@@ -788,7 +788,15 @@ const StationDetailPage: React.FC = () => {
             <Button icon={<EditOutlined />} size="small" onClick={openEditModal}>
               {t('common.edit')}
             </Button>
-            <Button icon={<ReloadOutlined />} size="small" onClick={() => refetchStation()}>
+            <Button icon={<ReloadOutlined />} size="small" onClick={async () => {
+              await Promise.all([refetchStation(), refetchDevices()])
+              const sns = new Set(devices.map((dev: any) => dev.sn))
+              await queryClient.invalidateQueries({ predicate: ({ queryKey }) => {
+                const scope = String(queryKey[0])
+                return (scope.startsWith('station-') || scope === 'history-devices')
+                  && (String(queryKey[1]) === id || sns.has(queryKey[1]))
+              } })
+            }}>
               {t('common.refresh')}
             </Button>
           </Space>

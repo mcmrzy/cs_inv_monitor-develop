@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Row, Col, Input, Typography, Space, Spin, Empty, Grid, Segmented, Statistic } from 'antd'
+import { Row, Col, Input, Typography, Space, Spin, Empty, Grid, Segmented, Statistic, Button, Tooltip } from 'antd'
 import { ProCard } from '@ant-design/pro-components'
 import {
   SearchOutlined, ReloadOutlined, ApartmentOutlined,
@@ -67,7 +67,7 @@ const MonitoringPage: React.FC = () => {
 
   /* ---------- 自动跳转上次电站 ---------- */
 
-  const { data: stations = [], isLoading, isError, error, refetch } = useQuery({
+  const { data: stations = [], isLoading, isFetching, isError, error, refetch } = useQuery({
     queryKey: ['stations'],
     queryFn: () => api.get('/stations', { params: { all: true }, expectedDataShape: 'page' }).then(extractList),
   })
@@ -87,7 +87,7 @@ const MonitoringPage: React.FC = () => {
     }
   }, [isLoading, stations, navigate])
 
-  const { data: summary } = useQuery({
+  const { data: summary, isFetching: summaryFetching, refetch: refetchSummary } = useQuery({
     queryKey: ['stations', 'summary'],
     queryFn: () => api.get('/stations/summary', { params: { all: true }, expectedDataShape: 'object' }).then(extractData),
   })
@@ -226,11 +226,11 @@ const MonitoringPage: React.FC = () => {
             onChange={(e) => setKeyword(e.target.value)}
             style={{ width: screens.sm ? 260 : 180 }}
           />
-          <ReloadOutlined
-            spin={isLoading}
-            style={{ fontSize: 18, cursor: 'pointer', color: '#1677ff' }}
-            onClick={() => refetch()}
-          />
+          <Tooltip title={t('common.refresh')}>
+            <Button aria-label={t('common.refresh')} type="text" icon={<ReloadOutlined />}
+              loading={isFetching || summaryFetching}
+              onClick={() => { void Promise.all([refetch(), refetchSummary()]) }} />
+          </Tooltip>
         </Space>
       </div>
 

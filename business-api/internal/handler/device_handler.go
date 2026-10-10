@@ -441,8 +441,9 @@ func (h *DeviceHandler) DeleteDevice(c *gin.Context) {
 }
 
 type AddDeviceRequest struct {
-	SN        string `json:"sn" binding:"required"`
-	StationID int64  `json:"station_id"`
+	SN             string `json:"sn" binding:"required"`
+	StationID      int64  `json:"station_id"`
+	OnlyUnassigned bool   `json:"only_unassigned"`
 }
 
 func (h *DeviceHandler) AddToStation(c *gin.Context) {
@@ -484,7 +485,12 @@ func (h *DeviceHandler) AddToStation(c *gin.Context) {
 		}
 	}
 
-	if err := h.deviceService.AddToStation(c.Request.Context(), req.SN, req.StationID); err != nil {
+	if req.OnlyUnassigned {
+		if err := h.deviceService.AssignUnassignedToStation(c.Request.Context(), req.SN, req.StationID, userID); err != nil {
+			response.HandleError(c, err)
+			return
+		}
+	} else if err := h.deviceService.AddToStation(c.Request.Context(), req.SN, req.StationID); err != nil {
 		response.Error(c, 500, "add to station failed")
 		return
 	}

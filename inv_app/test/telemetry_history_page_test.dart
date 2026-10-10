@@ -1,17 +1,51 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+
 import 'package:dio/dio.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inv_app/core/entities/inverter_data.dart';
+import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/device/data/device_telemetry_api.dart';
 import 'package:inv_app/features/device/presentation/pages/device_telemetry_history_page.dart';
+import 'package:inv_app/features/device/presentation/widgets/telemetry_history_fields.dart';
 import 'package:inv_app/features/device/presentation/widgets/energy_dashboard_tabs.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 import 'helpers/pump_app.dart';
+import 'helpers/golden_fonts.dart';
 
 class _Dio extends Mock implements Dio {}
+
+ThemeData _previewTheme(bool dark) {
+  final base = dark ? AppTheme.dark : AppTheme.light;
+  final label =
+      base.textTheme.labelLarge!.copyWith(fontFamily: kGoldenFontFamily);
+  return base.copyWith(
+    textTheme: base.textTheme.apply(fontFamily: kGoldenFontFamily),
+    primaryTextTheme:
+        base.primaryTextTheme.apply(fontFamily: kGoldenFontFamily),
+    appBarTheme: base.appBarTheme.copyWith(
+      titleTextStyle: base.appBarTheme.titleTextStyle
+          ?.copyWith(fontFamily: kGoldenFontFamily),
+    ),
+    chipTheme: base.chipTheme.copyWith(
+      labelStyle:
+          base.chipTheme.labelStyle?.copyWith(fontFamily: kGoldenFontFamily),
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+        style: (base.filledButtonTheme.style ?? const ButtonStyle())
+            .copyWith(textStyle: WidgetStatePropertyAll(label))),
+  );
+}
 
 class _HistoryApi extends DeviceTelemetryApi {
   _HistoryApi() : super(Dio());
@@ -36,6 +70,131 @@ class _HistoryApi extends DeviceTelemetryApi {
 }
 
 void main() {
+  setUpAll(() async {
+    await loadGoldenFonts();
+    final bytes = await File('assets/fonts/NotoSansSC-VF.ttf').readAsBytes();
+    final loader = FontLoader('Roboto')
+      ..addFont(Future.value(ByteData.view(bytes.buffer)));
+    await loader.load();
+  });
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  test('saved history fields discard unknown keys and use safe defaults', () {
+    expect(validHistoryFields(['obsolete']), commonHistoryFields);
+    expect(validHistoryFields(['mppt_state', 'mppt_state', 'obsolete']),
+        {'mppt_state'});
+  });
+
+  for (final locale in [const Locale('zh'), const Locale('en')]) {
+    for (final dark in [false, true]) {
+      testWidgets(
+          'history field layouts 320px large ${locale.languageCode} dark=$dark',
+          (tester) async {
+        tester.view.physicalSize = const Size(320, 844);
+        tester.view.devicePixelRatio = 1;
+        tester.platformDispatcher.textScaleFactorTestValue = 1.5;
+        addTearDown(tester.view.reset);
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        final boundary = GlobalKey();
+        await tester.pumpWidget(RepaintBoundary(
+          key: boundary,
+          child: ScreenUtilInit(
+            designSize: const Size(375, 812),
+            minTextAdapt: true,
+            builder: (_, child) => MaterialApp(
+              debugShowCheckedModeBanner: false,
+              locale: locale,
+              theme: _previewTheme(dark),
+              localizationsDelegates: const [
+                AppLocalizations.delegate,
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate
+              ],
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: DeviceTelemetryHistoryPage(
+                  sn: 'H1ZZX0013900002H', api: _HistoryApi()),
+            ),
+          ),
+        ));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byType(ExpansionTile));
+        await tester.pumpAndSettle();
+        Future<void> capture(String state) async {
+          expect(tester.takeException(), isNull);
+          await tester.runAsync(() async {
+            final render = boundary.currentContext!.findRenderObject()!
+                as RenderRepaintBoundary;
+            final image = await render.toImage();
+            final bytes =
+                await image.toByteData(format: ui.ImageByteFormat.png);
+            final file = File(
+                'build/history_previews/${locale.languageCode}-${dark ? 'dark' : 'light'}-$state.png');
+            await file.parent.create(recursive: true);
+            await file.writeAsBytes(bytes!.buffer.asUint8List());
+            image.dispose();
+          });
+        }
+
+        await capture('samples');
+        await tester.tap(find.byIcon(Icons.tune_rounded));
+        await tester.pumpAndSettle();
+        await capture('fields');
+        await tester.tap(find.byIcon(Icons.close));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byIcon(Icons.show_chart_rounded));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+
+  testWidgets('history defaults stay compact and selected fields persist',
+      (tester) async {
+    final api = _HistoryApi();
+    await pumpApp(tester, DeviceTelemetryHistoryPage(sn: 'SN', api: api));
+    await tester.tap(find.byType(ExpansionTile));
+    await tester.pumpAndSettle();
+    expect(find.text('MPPT 状态'), findsNothing);
+    await tester.tap(find.byIcon(Icons.tune_rounded));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('光伏').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'MPPT');
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(CheckboxListTile));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('应用'));
+    await tester.pumpAndSettle();
+    expect(find.text('MPPT 状态'), findsOneWidget);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getStringList('telemetry_history_fields_v1'),
+        contains('mppt_state'));
+    await pumpApp(tester, const SizedBox());
+    await pumpApp(tester, DeviceTelemetryHistoryPage(sn: 'SN', api: api));
+    await tester.tap(find.byType(ExpansionTile));
+    await tester.pumpAndSettle();
+    expect(find.text('MPPT 状态'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('canceling field changes preserves saved selection',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'telemetry_history_fields_v1': ['mppt_state']
+    });
+    await pumpApp(
+        tester, DeviceTelemetryHistoryPage(sn: 'SN', api: _HistoryApi()));
+    await tester.tap(find.byIcon(Icons.tune_rounded));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.restart_alt));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.close));
+    await tester.pumpAndSettle();
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getStringList('telemetry_history_fields_v1'), ['mppt_state']);
+  });
+
   testWidgets(
       'history chart uses actual telemetry power and preserves zero SOC',
       (tester) async {

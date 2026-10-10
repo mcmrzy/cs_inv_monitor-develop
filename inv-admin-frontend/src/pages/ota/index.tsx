@@ -674,7 +674,7 @@ const UpgradeTasksTab: React.FC = () => {
               ]}
             />
           </Col>
-          <Col><Button icon={<ReloadOutlined />} onClick={() => refetch()}>{t('common.refresh')}</Button></Col>
+          <Col><Button icon={<ReloadOutlined />} onClick={() => { void Promise.all([refetch(), refetchStats()]) }}>{t('common.refresh')}</Button></Col>
         </Row>
       </ProCard>
 
@@ -685,7 +685,7 @@ const UpgradeTasksTab: React.FC = () => {
         loading={isLoading}
         size="small"
         search={false}
-        options={{ density: true, reload: () => refetch(), setting: true }}
+        options={{ density: true, reload: () => Promise.all([refetch(), refetchStats()]), setting: true }}
         scroll={{ x: 1600 }}
         pagination={{
           current: page, pageSize, total: tasksTotal, showSizeChanger: true,

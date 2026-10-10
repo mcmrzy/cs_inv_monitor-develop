@@ -55,7 +55,7 @@ const EnergyStatsTab: React.FC<EnergyStatsTabProps> = ({ sn }) => {
   const { data: envelope } = useQuery({
     queryKey: queryKeys.devices.realtime(sn),
     queryFn: () => deviceApi.getRealtime(sn).then((r) => toRtEnvelope(r.data?.data ?? r.data)),
-    refetchInterval: () => (document.visibilityState === 'visible' ? 10_000 : false),
+    refetchInterval: 10_000,
   })
   const m = extractEnergyMetrics(freshRealtime(envelope))
   const todayFresh = freshRealtime(envelope) != null

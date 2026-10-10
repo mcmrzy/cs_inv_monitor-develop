@@ -213,7 +213,7 @@ const LegacyBmsTab: React.FC<BmsTabProps> = ({ sn }) => {
   const { data: envelope, isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.devices.realtime(sn),
     queryFn: () => deviceApi.getRealtime(sn).then((r) => toRtEnvelope(r.data?.data ?? r.data)),
-    refetchInterval: () => (document.visibilityState === 'visible' ? 10_000 : false),
+    refetchInterval: 10_000,
   })
 
   const fresh = isRealtimeFresh(envelope)
@@ -690,7 +690,7 @@ const BmsTab: React.FC<BmsTabProps> = ({ sn }) => {
   const query = useQuery({
     queryKey: queryKeys.devices.realtime(sn),
     queryFn: () => deviceApi.getRealtime(sn).then((r) => toRtEnvelope(r.data?.data ?? r.data)),
-    refetchInterval: () => (document.visibilityState === 'visible' ? 10_000 : false),
+    refetchInterval: 10_000,
   })
   const summary = parseBmsSummary(query.data?.realtime)
   if (summary) return <BmsSummaryView summary={summary} loading={query.isFetching}

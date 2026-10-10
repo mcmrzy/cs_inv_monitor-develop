@@ -56,7 +56,7 @@ const EnergyCenterTab: React.FC<EnergyCenterTabProps> = ({ sn }) => {
   const { data: envelope, isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.devices.realtime(sn),
     queryFn: () => deviceApi.getRealtime(sn).then((r) => toRtEnvelope(r.data?.data ?? r.data)),
-    refetchInterval: () => (document.visibilityState === 'visible' ? 10_000 : false),
+    refetchInterval: 10_000,
   })
 
   const fresh = isRealtimeFresh(envelope)

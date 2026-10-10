@@ -26,6 +26,10 @@ import 'package:inv_app/core/widgets/station_selector_sheet.dart';
 import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/core/widgets/ble_pin_bind_dialog.dart';
 import 'package:inv_app/features/device/presentation/widgets/add_device_pin_dialog.dart';
+import 'package:inv_app/features/device/presentation/widgets/add_device_tabs.dart';
+import 'package:inv_app/features/device/presentation/widgets/owned_device_selection.dart';
+import 'package:inv_app/features/device/presentation/pages/owned_device_selection_service.dart';
+import 'package:inv_app/features/station/domain/repositories/station_repository.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 class AddDevicePage extends StatefulWidget {
@@ -37,12 +41,11 @@ class AddDevicePage extends StatefulWidget {
   State<AddDevicePage> createState() => _AddDevicePageState();
 }
 
-class _AddDevicePageState extends State<AddDevicePage>
-    with SingleTickerProviderStateMixin {
+class _AddDevicePageState extends State<AddDevicePage> {
   final _snController = TextEditingController();
   final _pinController = TextEditingController();
 
-  late TabController _tabController;
+  bool _scanVisible = true;
   bool _scanning = false;
   MobileScannerController? _cameraController;
   final _qrScanGuard = QrScanGuard();
@@ -105,7 +108,6 @@ class _AddDevicePageState extends State<AddDevicePage>
   void initState() {
     super.initState();
     _selectedStationId = widget.stationId;
-    _tabController = TabController(length: 2, vsync: this);
     // 注意：不在构造期传 torchEnabled——此时相机尚未就绪，
     // 部分机型不生效；改为相机初始化完成后按 _autoTorch 点亮
     _cameraController = MobileScannerController();
@@ -116,11 +118,12 @@ class _AddDevicePageState extends State<AddDevicePage>
   }
 
   Future<void> _loadStationName() async {
-    if (_selectedStationId == null) return;
+    final stationId = _selectedStationId;
+    if (stationId == null) return;
     try {
       final dio = getIt<Dio>();
-      final res = await dio.get('/stations/$_selectedStationId');
-      if (res.statusCode == 200 && mounted) {
+      final res = await dio.get('/stations/$stationId');
+      if (res.statusCode == 200 && mounted && _selectedStationId == stationId) {
         final data = unwrapApiResponse<Map<String, dynamic>>(
           res.data,
           validate: (value) => value is Map<String, dynamic>,
@@ -150,7 +153,7 @@ class _AddDevicePageState extends State<AddDevicePage>
         value.torchState == TorchState.auto;
 
     // 相机就绪后启动暗光检测（持续扫不到码才自动点灯）
-    if (value.isInitialized) {
+    if (value.isInitialized && _scanVisible) {
       _startLowLightWatch();
     }
 
@@ -189,7 +192,7 @@ class _AddDevicePageState extends State<AddDevicePage>
   /// 优先按环境光传感器的真实照度判断（lux 太低点灯、恢复后熄灯）；
   /// 无传感器时回退「连续扫不到码达阈值即点灯」启发式
   void _startLowLightWatch() {
-    if (_lowLightTimer != null) return;
+    if (_lowLightTimer != null || !_scanVisible) return;
     _lastDetectAt = DateTime.now();
     // 真实亮度信号（Android 环境光传感器）
     AmbientLightService.start();
@@ -248,14 +251,13 @@ class _AddDevicePageState extends State<AddDevicePage>
     _standaloneScanSub?.cancel();
     _snController.dispose();
     _pinController.dispose();
-    _tabController.dispose();
     _cameraController?.removeListener(_onCameraStateChanged);
     _cameraController?.dispose();
     super.dispose();
   }
 
   Future<void> _onDetect(BarcodeCapture capture) async {
-    if (_scanning) return;
+    if (_scanning || !_scanVisible) return;
     final barcode = capture.barcodes.firstOrNull;
     if (barcode == null || barcode.rawValue == null) return;
     // 识别到二维码即说明光线足够，重置暗光计时并熄灭自动补光
@@ -383,7 +385,7 @@ class _AddDevicePageState extends State<AddDevicePage>
 
     try {
       await context.push(
-        '/device/qr-bind?sn=${Uri.encodeQueryComponent(sn)}&pin=${Uri.encodeQueryComponent(pin)}',
+        '/device/qr-bind?sn=${Uri.encodeQueryComponent(sn)}&pin=${Uri.encodeQueryComponent(pin)}${_selectedStationId == null ? '' : '&station_id=$_selectedStationId'}',
       );
     } finally {
       // finally 中禁止 return（会吞掉 try 块的异常）：
@@ -396,7 +398,7 @@ class _AddDevicePageState extends State<AddDevicePage>
           _scannedPin = '';
         });
       }
-      if (mounted) {
+      if (mounted && _scanVisible) {
         try {
           await _cameraController?.start();
         } catch (_) {
@@ -407,18 +409,9 @@ class _AddDevicePageState extends State<AddDevicePage>
   }
 
   Future<(int, String)?> _showStationSelector() async {
-    final completer = Completer<(int, String)?>();
-    if (!mounted) {
-      completer.complete(null);
-      return completer.future;
-    }
+    if (!mounted) return null;
     context.read<StationBloc>().add(StationSummaryRequested());
-
-    if (!mounted) {
-      completer.complete(null);
-      return completer.future;
-    }
-    await showModalBottomSheet(
+    return showModalBottomSheet<(int, String)>(
       context: context,
       isScrollControlled: true,
       shape: RoundedRectangleBorder(
@@ -426,16 +419,45 @@ class _AddDevicePageState extends State<AddDevicePage>
       ),
       builder: (ctx) => StationSelectorSheet(
         onSelected: (id, name) {
-          Navigator.pop(ctx);
-          completer.complete((id, name));
+          Navigator.pop(ctx, (id, name));
         },
         onCancel: () {
           Navigator.pop(ctx);
-          completer.complete(null);
         },
       ),
     );
-    return completer.future;
+  }
+
+  Future<int?> _selectStation() async {
+    final result = await _showStationSelector();
+    if (!mounted || result == null) return null;
+    setState(() {
+      _selectedStationId = result.$1;
+      _selectedStationName = result.$2;
+    });
+    return result.$1;
+  }
+
+  Future<void> _setScanVisibility(bool visible) async {
+    _scanVisible = visible;
+    if (!visible) {
+      _lowLightTimer?.cancel();
+      _lowLightTimer = null;
+      await _luxSub?.cancel();
+      _luxSub = null;
+      AmbientLightService.stop();
+      _autoTorchLit = false;
+    }
+    if (visible != _scanVisible || !mounted) return;
+    try {
+      if (visible) {
+        await _cameraController?.start();
+      } else {
+        await _cameraController?.pause();
+      }
+    } catch (_) {
+      // The scanner may already have detached during the tab transition.
+    }
   }
 
   Future<void> _manualBind() async {
@@ -513,73 +535,6 @@ class _AddDevicePageState extends State<AddDevicePage>
     return Scaffold(
       appBar: AppBar(
         title: Text(AppLocalizations.of(context)!.addDevice),
-        actions: [
-          if (_selectedStationId != null && _selectedStationName != null)
-            Padding(
-              padding: EdgeInsets.only(right: 12.w),
-              child: Center(
-                child: Container(
-                  padding:
-                      EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12.r),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.solar_power,
-                        size: 16,
-                        color: AppColors.primary,
-                      ),
-                      SizedBox(width: 4.w),
-                      Text(
-                        _selectedStationName!,
-                        style: TextStyle(
-                          fontSize: 12.sp,
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            )
-          else
-            TextButton.icon(
-              onPressed: () async {
-                final result = await _showStationSelector();
-                if (result != null) {
-                  _selectedStationId = result.$1;
-                  _selectedStationName = result.$2;
-                  setState(() {});
-                }
-              },
-              icon: const Icon(Icons.home_work, size: 18),
-              label: Text(
-                AppLocalizations.of(context)!.selectStation,
-                style: TextStyle(fontSize: 13.sp),
-              ),
-            ),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: AppColors.primary,
-          unselectedLabelColor: AppColor.textHint(context),
-          indicatorColor: AppColors.primary,
-          tabs: [
-            Tab(
-              text: AppLocalizations.of(context)!.scanCode,
-              icon: const Icon(Icons.qr_code_scanner, size: 20),
-            ),
-            Tab(
-              text: AppLocalizations.of(context)!.manualInput,
-              icon: const Icon(Icons.bluetooth_searching_rounded, size: 20),
-            ),
-          ],
-        ),
       ),
       body: BlocConsumer<DeviceBloc, DeviceState>(
         listener: (context, state) {
@@ -611,12 +566,31 @@ class _AddDevicePageState extends State<AddDevicePage>
           }
         },
         builder: (context, state) {
-          return TabBarView(
-            controller: _tabController,
-            children: [
-              _buildScanTab(state),
-              _buildManualTab(state),
-            ],
+          return AddDeviceTabs(
+            stationId: _selectedStationId,
+            stationName: _selectedStationName,
+            onSelectStation: _selectStation,
+            onScanVisibilityChanged: _setScanVisibility,
+            scan: _buildScanTab(state),
+            manual: _buildManualTab(state),
+            nearby: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [_buildBleSection()],
+            ),
+            owned: OwnedDeviceSelection(
+              service: OwnedDeviceSelectionService(
+                dio: getIt<Dio>(),
+                storage: getIt<StorageService>(),
+                stations: getIt<StationRepository>(),
+              ),
+              stationId: _selectedStationId,
+              selectStation: _selectStation,
+              onAdded: (stationId) {
+                context.read<StationBloc>().add(
+                      StationDetailRequested(stationId: stationId),
+                    );
+              },
+            ),
           );
         },
       ),
@@ -624,255 +598,261 @@ class _AddDevicePageState extends State<AddDevicePage>
   }
 
   Widget _buildScanTab(DeviceState state) {
-    return Column(
-      children: [
-        if (_sessionBoundCount > 0)
-          Container(
-            width: double.infinity,
-            padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
-            color: AppColors.badgeNormalBg,
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.check_circle,
-                  color: AppColors.successLight,
-                  size: 18,
-                ),
-                SizedBox(width: 6.w),
-                Text(
-                  AppLocalizations.of(context)!
-                      .alreadyBoundNDevices('$_sessionBoundCount'),
-                  style: TextStyle(
-                    fontSize: 13.sp,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.badgeNormalText,
+    return LayoutBuilder(builder: (context, constraints) {
+      return SingleChildScrollView(
+          child: Column(
+        children: [
+          if (_sessionBoundCount > 0)
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+              color: AppColors.badgeNormalBg,
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.check_circle,
+                    color: AppColors.successLight,
+                    size: 18,
                   ),
+                  SizedBox(width: 6.w),
+                  Expanded(
+                      child: Text(
+                    AppLocalizations.of(context)!
+                        .alreadyBoundNDevices('$_sessionBoundCount'),
+                    style: TextStyle(
+                      fontSize: 13.sp,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.badgeNormalText,
+                    ),
+                  )),
+                ],
+              ),
+            ),
+          SizedBox(
+            height: (constraints.maxHeight * 0.45).clamp(180.0, 320.0),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                MobileScanner(
+                    controller: _cameraController, onDetect: _onDetect),
+                Center(
+                  child: Container(
+                    width: 220.w,
+                    height: 220.w,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.primary, width: 2),
+                      borderRadius: BorderRadius.circular(16.r),
+                    ),
+                  ),
+                ),
+                if (_scanning || state is DeviceLoading)
+                  Container(
+                    color: Colors.black54,
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const CircularProgressIndicator(color: Colors.white),
+                          const SizedBox(height: 16),
+                          Text(
+                            AppLocalizations.of(context)!.addingDevice,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          Container(
+            padding: EdgeInsets.all(16.w),
+            color: AppColor.surfaceContainer(context),
+            child: Column(
+              children: [
+                if (_bindSuccess) ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: _continueScanning,
+                          icon: const Icon(Icons.qr_code_scanner, size: 20),
+                          label: Text(
+                            AppLocalizations.of(context)!.continueScan,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12.r),
+                            ),
+                            padding: EdgeInsets.symmetric(vertical: 12.h),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 12.w),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () => context.pop(),
+                          icon:
+                              const Icon(Icons.check_circle_outline, size: 20),
+                          label: Text(
+                            AppLocalizations.of(context)!.finish,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.successLight,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12.r),
+                            ),
+                            padding: EdgeInsets.symmetric(vertical: 12.h),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 12.h),
+                ] else ...[
+                  if (_lastScanned.isNotEmpty) ...[
+                    Text(
+                      'SN: ${formatSNForDisplay(_lastScanned)}',
+                      style: TextStyle(
+                        fontSize: 13.sp,
+                        fontWeight: FontWeight.w600,
+                        color: AppColor.textPrimary(context),
+                      ),
+                    ),
+                    if (_scannedPin.isNotEmpty)
+                      Padding(
+                        padding: EdgeInsets.only(top: 4.h),
+                        child: Text(
+                          'PIN: $_scannedPin',
+                          style: TextStyle(
+                            fontSize: 12.sp,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.successLight,
+                          ),
+                        ),
+                      ),
+                  ] else
+                    Text(
+                      AppLocalizations.of(context)!.pointSnAtScan,
+                      style: TextStyle(
+                        fontSize: 14.sp,
+                        color: AppColor.textSecondary(context),
+                      ),
+                    ),
+                ],
+                SizedBox(height: 8.h),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // 补光灯：仅设备支持时显示，高亮反映真实点亮状态
+                    if (_torchAvailable)
+                      _toggleChip(
+                        _torchOn ? Icons.flashlight_on : Icons.flashlight_off,
+                        AppLocalizations.of(context)!.flashLight,
+                        _torchOn,
+                        () {
+                          // 手动操作覆盖暗光自动补光状态
+                          _autoTorchLit = false;
+                          _setTorch(!_torchOn);
+                        },
+                      ),
+                    if (_torchAvailable) SizedBox(width: 12.w),
+                    _actionChip(
+                      Icons.flip_camera_android,
+                      AppLocalizations.of(context)!.flipCamera,
+                      () => _cameraController?.switchCamera(),
+                    ),
+                    SizedBox(width: 12.w),
+                    _toggleChip(
+                      Icons.brightness_low,
+                      AppLocalizations.of(context)!.autoFlash,
+                      _autoTorch,
+                      _toggleAutoTorch,
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
-        Expanded(
-          flex: 3,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              MobileScanner(controller: _cameraController, onDetect: _onDetect),
-              Center(
-                child: Container(
-                  width: 220.w,
-                  height: 220.w,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: AppColors.primary, width: 2),
-                    borderRadius: BorderRadius.circular(16.r),
-                  ),
-                ),
-              ),
-              if (_scanning || state is DeviceLoading)
-                Container(
-                  color: Colors.black54,
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const CircularProgressIndicator(color: Colors.white),
-                        const SizedBox(height: 16),
-                        Text(
-                          AppLocalizations.of(context)!.addingDevice,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-        Container(
-          padding: EdgeInsets.all(16.w),
-          color: AppColor.surfaceContainer(context),
-          child: Column(
-            children: [
-              if (_bindSuccess) ...[
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: _continueScanning,
-                        icon: const Icon(Icons.qr_code_scanner, size: 20),
-                        label: Text(
-                          AppLocalizations.of(context)!.continueScan,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12.r),
-                          ),
-                          padding: EdgeInsets.symmetric(vertical: 12.h),
-                        ),
-                      ),
-                    ),
-                    SizedBox(width: 12.w),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () => context.pop(),
-                        icon: const Icon(Icons.check_circle_outline, size: 20),
-                        label: Text(
-                          AppLocalizations.of(context)!.finish,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.successLight,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12.r),
-                          ),
-                          padding: EdgeInsets.symmetric(vertical: 12.h),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 12.h),
-              ] else ...[
-                if (_lastScanned.isNotEmpty) ...[
-                  Text(
-                    'SN: ${formatSNForDisplay(_lastScanned)}',
-                    style: TextStyle(
-                      fontSize: 13.sp,
-                      fontWeight: FontWeight.w600,
-                      color: AppColor.textPrimary(context),
-                    ),
-                  ),
-                  if (_scannedPin.isNotEmpty)
-                    Padding(
-                      padding: EdgeInsets.only(top: 4.h),
-                      child: Text(
-                        'PIN: $_scannedPin',
-                        style: TextStyle(
-                          fontSize: 12.sp,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.successLight,
-                        ),
-                      ),
-                    ),
-                ] else
-                  Text(
-                    AppLocalizations.of(context)!.pointSnAtScan,
-                    style: TextStyle(
-                      fontSize: 14.sp,
-                      color: AppColor.textSecondary(context),
-                    ),
-                  ),
-              ],
-              SizedBox(height: 8.h),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+          if (_scanHistory.isNotEmpty)
+            Container(
+              constraints: BoxConstraints(maxHeight: 160.h),
+              color: AppColor.surfaceHover(context),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 补光灯：仅设备支持时显示，高亮反映真实点亮状态
-                  if (_torchAvailable)
-                    _toggleChip(
-                      _torchOn ? Icons.flashlight_on : Icons.flashlight_off,
-                      AppLocalizations.of(context)!.flashLight,
-                      _torchOn,
-                      () {
-                        // 手动操作覆盖暗光自动补光状态
-                        _autoTorchLit = false;
-                        _setTorch(!_torchOn);
-                      },
-                    ),
-                  if (_torchAvailable) SizedBox(width: 12.w),
-                  _actionChip(
-                    Icons.flip_camera_android,
-                    AppLocalizations.of(context)!.flipCamera,
-                    () => _cameraController?.switchCamera(),
-                  ),
-                  SizedBox(width: 12.w),
-                  _toggleChip(
-                    Icons.brightness_low,
-                    AppLocalizations.of(context)!.autoFlash,
-                    _autoTorch,
-                    _toggleAutoTorch,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        if (_scanHistory.isNotEmpty)
-          Container(
-            constraints: BoxConstraints(maxHeight: 160.h),
-            color: AppColor.surfaceHover(context),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: EdgeInsets.fromLTRB(16.w, 8.h, 16.w, 4.h),
-                  child: Text(
-                    AppLocalizations.of(context)!.scanRecords,
-                    style: TextStyle(
-                      fontSize: 12.sp,
-                      fontWeight: FontWeight.w600,
-                      color: AppColor.textSecondary(context),
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(16.w, 8.h, 16.w, 4.h),
+                    child: Text(
+                      AppLocalizations.of(context)!.scanRecords,
+                      style: TextStyle(
+                        fontSize: 12.sp,
+                        fontWeight: FontWeight.w600,
+                        color: AppColor.textSecondary(context),
+                      ),
                     ),
                   ),
-                ),
-                Expanded(
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    padding: EdgeInsets.symmetric(horizontal: 16.w),
-                    itemCount: _scanHistory.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (_, i) {
-                      final entry = _scanHistory[i];
-                      return ListTile(
-                        dense: true,
-                        contentPadding: EdgeInsets.symmetric(vertical: 2.h),
-                        leading: Icon(
-                          entry.success ? Icons.check_circle : Icons.error,
-                          size: 18,
-                          color: entry.success
-                              ? AppColors.successLight
-                              : AppColors.errorLight,
-                        ),
-                        title: Text(
-                          formatSNForDisplay(entry.sn),
-                          style: TextStyle(
-                            fontSize: 12.sp,
-                            fontWeight: FontWeight.w500,
-                            color: AppColor.textPrimary(context),
-                          ),
-                        ),
-                        trailing: Text(
-                          entry.success
-                              ? AppLocalizations.of(context)!.bindSuccess
-                              : AppLocalizations.of(context)!.bindFailed,
-                          style: TextStyle(
-                            fontSize: 11.sp,
+                  Expanded(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      padding: EdgeInsets.symmetric(horizontal: 16.w),
+                      itemCount: _scanHistory.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (_, i) {
+                        final entry = _scanHistory[i];
+                        return ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.symmetric(vertical: 2.h),
+                          leading: Icon(
+                            entry.success ? Icons.check_circle : Icons.error,
+                            size: 18,
                             color: entry.success
                                 ? AppColors.successLight
                                 : AppColors.errorLight,
                           ),
-                        ),
-                      );
-                    },
+                          title: Text(
+                            formatSNForDisplay(entry.sn),
+                            style: TextStyle(
+                              fontSize: 12.sp,
+                              fontWeight: FontWeight.w500,
+                              color: AppColor.textPrimary(context),
+                            ),
+                          ),
+                          subtitle: Text(
+                            entry.success
+                                ? AppLocalizations.of(context)!.bindSuccess
+                                : AppLocalizations.of(context)!.bindFailed,
+                            style: TextStyle(
+                              fontSize: 11.sp,
+                              color: entry.success
+                                  ? AppColors.successLight
+                                  : AppColors.errorLight,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-      ],
-    );
+        ],
+      ));
+    });
   }
 
   Widget _actionChip(IconData icon, String label, VoidCallback onTap) {
@@ -888,42 +868,12 @@ class _AddDevicePageState extends State<AddDevicePage>
     bool highlightWhenActive = true,
   }) {
     final highlighted = highlightWhenActive && active;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
-        decoration: BoxDecoration(
-          color: highlighted
-              ? AppColors.primary.withValues(alpha: 0.1)
-              : AppColor.surfaceHover(context),
-          borderRadius: BorderRadius.circular(20.r),
-          border: highlighted
-              ? Border.all(color: AppColors.primary.withValues(alpha: 0.3))
-              : null,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 16.sp,
-              color: highlighted
-                  ? AppColors.primary
-                  : AppColor.textSecondary(context),
-            ),
-            SizedBox(width: 4.w),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12.sp,
-                color: highlighted
-                    ? AppColors.primary
-                    : AppColor.textSecondary(context),
-              ),
-            ),
-          ],
-        ),
-      ),
+    return IconButton(
+      onPressed: onTap,
+      tooltip: label,
+      isSelected: highlighted,
+      icon: Icon(icon),
+      selectedIcon: Icon(icon, color: AppColors.primary),
     );
   }
 
@@ -931,11 +881,6 @@ class _AddDevicePageState extends State<AddDevicePage>
     return ListView(
       padding: EdgeInsets.all(20.w),
       children: [
-        // BLE 蓝牙设备列表区域（优先展示）
-        _buildBleSection(),
-        SizedBox(height: 24.h),
-        Divider(height: 1, color: AppColor.outline(context)),
-        SizedBox(height: 16.h),
         // 手动输入区域
         Text(
           AppLocalizations.of(context)!.manualInputSn,
@@ -1000,7 +945,6 @@ class _AddDevicePageState extends State<AddDevicePage>
         SizedBox(height: 20.h),
         SizedBox(
           width: double.infinity,
-          height: 48.h,
           child: ElevatedButton(
             onPressed: state is DeviceLoading ? null : _manualBind,
             style: ElevatedButton.styleFrom(
@@ -1081,10 +1025,12 @@ class _AddDevicePageState extends State<AddDevicePage>
     final seen = <String, BleDiscoveredDevice>{
       for (final d in _bleDevices) d.macAddress: d,
     };
-    _standaloneScanSub = getIt<BleAdapter>().scan(
+    _standaloneScanSub = getIt<BleAdapter>()
+        .scan(
       serviceUuids: BleCtProtocol.scanServiceUuids,
       timeout: const Duration(seconds: 15),
-    ).listen(
+    )
+        .listen(
       (result) {
         if (!mounted) return;
         final device = BleDiscoveredDevice(
@@ -1184,9 +1130,13 @@ class _AddDevicePageState extends State<AddDevicePage>
       );
       if (enteredPin == null || !mounted) return;
 
+      final advertisedSn = _displaySnOf(device).trim().toUpperCase();
+      final stationId = _selectedStationId;
       final outcome = await getIt<BleBindingService>().bindAfterProvision(
         macAddress: device.macAddress,
         pin: enteredPin,
+        knownSn: validateSN(advertisedSn) ? advertisedSn : null,
+        stationId: stationId,
       );
       if (!mounted) return;
 
@@ -1218,6 +1168,11 @@ class _AddDevicePageState extends State<AddDevicePage>
       AppToast.show(context, text, type: type);
       // 绑定成功：更新状态并刷新列表
       if (outcome == BindOutcome.bound || outcome == BindOutcome.alreadyBound) {
+        if (stationId != null) {
+          context.read<StationBloc>().add(
+                StationDetailRequested(stationId: stationId),
+              );
+        }
         _bleBoundByMac = {..._bleBoundByMac, device.macAddress: true};
         _sessionBoundCount++;
         _addToScanHistory(_displaySnOf(device), true);
@@ -1351,11 +1306,13 @@ class _AddDevicePageState extends State<AddDevicePage>
           children: [
             Icon(Icons.bluetooth_rounded, size: 20.sp, color: AppColors.blue),
             SizedBox(width: 8.w),
-            Text(
-              l10n.str('ble_found_devices'),
-              style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600),
+            Expanded(
+              child: Text(
+                l10n.str('ble_found_devices'),
+                style:
+                    const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              ),
             ),
-            const Spacer(),
             // 刷新按钮
             IconButton(
               icon: Icon(Icons.refresh_rounded, size: 20.sp),
@@ -1387,19 +1344,13 @@ class _AddDevicePageState extends State<AddDevicePage>
         SizedBox(height: 12.h),
         // 设备列表 / 空状态
         if (_bleDevices.isNotEmpty)
-          Container(
-            decoration: BoxDecoration(
-              color: AppColor.surfaceContainer(context),
-              borderRadius: BorderRadius.circular(14.r),
-            ),
-            child: Column(
-              children: [
-                for (int i = 0; i < _bleDevices.length; i++) ...[
-                  if (i > 0) Divider(height: 1, indent: 62.w),
-                  _buildBleDeviceTile(_bleDevices[i]),
-                ],
+          Column(
+            children: [
+              for (int i = 0; i < _bleDevices.length; i++) ...[
+                if (i > 0) Divider(height: 1, indent: 62.w),
+                _buildBleDeviceTile(_bleDevices[i]),
               ],
-            ),
+            ],
           )
         else if (_bleScanning)
           Padding(

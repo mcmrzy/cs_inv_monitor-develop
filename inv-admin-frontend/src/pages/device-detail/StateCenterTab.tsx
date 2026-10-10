@@ -56,7 +56,7 @@ const StateCenterTab: React.FC<StateCenterTabProps> = ({ sn }) => {
   const { data: envelope, error: rtError, refetch: refetchRt } = useQuery({
     queryKey: queryKeys.devices.realtime(sn),
     queryFn: () => deviceApi.getRealtime(sn).then((r) => toRtEnvelope(r.data?.data ?? r.data)),
-    refetchInterval: () => (document.visibilityState === 'visible' ? 10_000 : false),
+    refetchInterval: 10_000,
   })
 
   const { data: detail } = useQuery({

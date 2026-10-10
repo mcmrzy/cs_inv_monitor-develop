@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:inv_app/core/entities/inverter_data.dart';
 import 'package:inv_app/core/entities/bms_summary.dart';
@@ -11,6 +12,7 @@ import 'package:inv_app/core/utils/realtime_payload.dart';
 import 'package:inv_app/core/utils/device_card_data.dart';
 import 'package:inv_app/features/device/presentation/widgets/bms_summary_view.dart';
 import 'package:inv_app/core/services/service_locator.dart';
+import 'package:inv_app/core/services/connection_mode_service.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
@@ -36,6 +38,7 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
   bool _loading = true;
   String? _error;
   Timer? _timer;
+  int _tab = 0;
 
   @override
   void initState() {
@@ -54,7 +57,7 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
     try {
       final dio = getIt<Dio>();
       final res = await dio
-          .get('/devices/by-sn/${widget.sn}/realtime')
+          .get('/devices/by-sn/${Uri.encodeComponent(widget.sn)}/realtime')
           .timeout(const Duration(seconds: 10));
       final body = res.data is Map ? res.data as Map : const {};
       final payload = body['data'] is Map ? body['data'] as Map : body;
@@ -102,6 +105,8 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
 
   @override
   Widget build(BuildContext context) {
+    final cloud = !getIt.isRegistered<ConnectionModeService>() ||
+        !getIt<ConnectionModeService>().isLocal;
     return Scaffold(
       backgroundColor: AppColor.surfaceContainer(context),
       appBar: AppBar(
@@ -122,11 +127,28 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
           ),
         ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null && _summary == null
-              ? _buildEmpty(_t('storage_load_failed'))
-              : _buildBody(),
+      body: Column(children: [
+        if (cloud)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              key: const ValueKey('storage-history'),
+              icon: const Icon(Icons.history_rounded),
+              label: Text(_t('telemetry_history')),
+              onPressed: () {
+                final timezone = GoRouterState.of(context).uri.queryParameters['tz'];
+                context.push('/device/${Uri.encodeComponent(widget.sn)}/history'
+                    '${timezone == null ? '' : '?tz=${Uri.encodeComponent(timezone)}'}');
+              },
+            ),
+          ),
+        Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null && _summary == null
+                    ? _buildEmpty(_t('storage_load_failed'))
+                    : _buildBody()),
+      ]),
     );
   }
 
@@ -170,36 +192,51 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
       return _buildEmpty(_t('storage_bms_offline'));
     }
 
-    return RefreshIndicator(
-      onRefresh: _fetch,
-      child: ListView(
-        padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 12.h),
-        children: [
-          Text('SN ${widget.sn}',
-              style: TextStyle(
-                  fontSize: 12.sp, color: AppColor.textSecondary(context))),
-          SizedBox(height: 16.h),
-          _statusHeader(bms),
-          SizedBox(height: 12.h),
-          _metricsRow(bms),
-          SizedBox(height: 12.h),
-          _switchAndAlarmCard(bms),
-          SizedBox(height: 20.h),
-          _cellChartCard(bms),
-          ExpansionTile(
-              tilePadding: EdgeInsets.zero,
-              title: Text(_t('storage_summary_technical'),
-                  style:
-                      TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600)),
-              children: [
-                _capacityCard(bms),
-                SizedBox(height: 20.h),
-                _tempCard(bms)
-              ]),
-          SizedBox(height: 24.h),
-        ],
-      ),
-    );
+    return Column(children: [
+      BmsStorageTabs(
+          selected: _tab, onSelected: (value) => setState(() => _tab = value)),
+      Expanded(
+          child: RefreshIndicator(
+        onRefresh: _fetch,
+        child: ListView(
+          key: ValueKey('legacy-storage-$_tab'),
+          padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 12.h),
+          children: [
+            Text('SN ${widget.sn}',
+                style: TextStyle(
+                    fontSize: 12.sp, color: AppColor.textSecondary(context))),
+            SizedBox(height: 16.h),
+            if (_error != null) Text(_t('storage_bms_refresh_failed')),
+            if (_tab == 0) ...[
+              _statusHeader(bms),
+              SizedBox(height: 12.h),
+              _metricsRow(bms),
+              SizedBox(height: 12.h),
+              _capacityCard(bms),
+            ],
+            if (_tab == 1) ...[
+              _cellChartCard(bms),
+              SizedBox(height: 20.h),
+              _tempCard(bms),
+            ],
+            if (_tab == 2) ...[
+              _switchAndAlarmCard(bms),
+              ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  title: Text(_t('storage_summary_technical'),
+                      style: TextStyle(
+                          fontSize: 14.sp, fontWeight: FontWeight.w600)),
+                  children: [
+                    _capacityCard(bms),
+                    SizedBox(height: 20.h),
+                    _tempCard(bms)
+                  ]),
+            ],
+            SizedBox(height: 24.h),
+          ],
+        ),
+      ))
+    ]);
   }
 
   /* ── 状态头：SOC 仪表盘 + 工作模式 ── */
