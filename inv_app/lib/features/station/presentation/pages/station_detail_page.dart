@@ -1443,6 +1443,9 @@ class _StationDetailPageState extends State<StationDetailPage>
               SizedBox(height: 2.h),
               Text(
                 label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 10.sp,
                   fontWeight: active ? FontWeight.w600 : FontWeight.w400,
