@@ -1,5 +1,16 @@
 import type { ModelFieldCapability } from '@/services/modelApi'
 
+export const BMS_HISTORY_FIELDS: Record<string, { labelKey: string; unit: string }> = Object.fromEntries([
+  ['soc', 'soc', '%'], ['soh', 'soh', '%'], ['voltage', 'voltage', 'V'], ['current', 'current', 'A'],
+  ['capacity_remain', 'capacity_remain', 'Ah'], ['capacity_full', 'capacity_full', 'Ah'], ['capacity_design', 'capacity_design', 'Ah'],
+  ['cycle_count', 'cycle_count', ''], ['temp_max', 'max_cell_temp', '°C'], ['temp_min', 'min_cell_temp', '°C'],
+  ['mos_temp', 'mos_temp', '°C'], ['pcb_temp', 'pcb_temp', '°C'], ['env_temp', 'env_temp', '°C'],
+  ['cell_voltage_max', 'max_cell_voltage', 'mV'], ['cell_voltage_min', 'min_cell_voltage', 'mV'],
+  ['charging_voltage', 'charging_voltage', 'V'], ['charge_request_current', 'chg_request_current', 'A'],
+  ['charge_request_voltage', 'chg_request_voltage', 'V'], ['total_charge_capacity', 'total_chg_capacity', 'Ah'],
+  ['total_discharge_capacity', 'total_dsg_capacity', 'Ah'],
+].map(([key, field, unit]) => [`bms_${key}`, { labelKey: `deviceDetail.summary.field.${field}`, unit }]))
+
 export const HISTORY_GROUPS = [
   { id: 'pv', labelKey: 'station.pvParams' },
   { id: 'bat', labelKey: 'station.batteryParams' },
