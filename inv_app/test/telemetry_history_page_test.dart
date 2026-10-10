@@ -75,10 +75,13 @@ class _HistoryApi extends DeviceTelemetryApi {
 void main() {
   setUpAll(() async {
     await loadGoldenFonts();
-    final bytes = await File('assets/fonts/NotoSansSC-VF.ttf').readAsBytes();
-    final loader = FontLoader('Roboto')
-      ..addFont(Future.value(ByteData.view(bytes.buffer)));
-    await loader.load();
+    final previewFont = File('assets/fonts/NotoSansSC-VF.ttf');
+    if (await previewFont.exists()) {
+      final bytes = await previewFont.readAsBytes();
+      final loader = FontLoader('Roboto')
+        ..addFont(Future.value(ByteData.view(bytes.buffer)));
+      await loader.load();
+    }
   });
   setUp(() => SharedPreferences.setMockInitialValues({}));
 

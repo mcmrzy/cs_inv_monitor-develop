@@ -12,7 +12,7 @@ import { safeNum } from '@/utils/format'
 import { formatInTimezone } from '@/utils/timezone'
 import { humanizeFieldKey } from '@/utils/fieldI18n'
 import { loadStationHistoryPrefs, saveStationHistoryPrefs } from '@/utils/stationHistoryPrefs'
-import { HISTORY_GROUPS, historyFieldGroup, formatHistoryValue } from '@/utils/stationHistoryFields'
+import { BMS_HISTORY_FIELDS, HISTORY_GROUPS, historyFieldGroup, formatHistoryValue } from '@/utils/stationHistoryFields'
 import ReactECharts from '@/lib/echarts'
 import useTranslation from '@/hooks/useTranslation'
 import './StationHistoryTab.css'
@@ -319,6 +319,8 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
   // 优先级：field_capabilities(display_name_key→fields.* → humanize) > 旧 legacy映射 > fields.* > humanize
   const resolveFieldLabel = React.useCallback((key: string): string => {
     const cap = capByKey.get(key)
+    const bmsField = BMS_HISTORY_FIELDS[key]
+    const bmsLabel = bmsField ? `BMS ${t(bmsField.labelKey)}` : undefined
     if (cap) {
       const nameKey = cap.display_name_key || `fields.${cap.field_key}`
       const name = t(nameKey)
@@ -326,10 +328,11 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
       const standardName = t(standardKey)
       const legacyKey = FIELD_LABEL_KEYS[key]
       const label = name !== nameKey ? name : standardName !== standardKey ? standardName
-        : legacyKey ? t(legacyKey) : humanizeFieldKey(key)
-      const unit = cap.display_unit || cap.base_unit
+        : bmsLabel ?? (legacyKey ? t(legacyKey) : humanizeFieldKey(key))
+      const unit = cap.display_unit || cap.base_unit || bmsField?.unit
       return unit && !label.endsWith(`(${unit})`) ? `${label} (${unit})` : label
     }
+    if (bmsLabel) return bmsField.unit ? `${bmsLabel} (${bmsField.unit})` : bmsLabel
     const legacyKey = FIELD_LABEL_KEYS[key]
     if (legacyKey) return t(legacyKey)
     const fieldsKey = `fields.${key}`

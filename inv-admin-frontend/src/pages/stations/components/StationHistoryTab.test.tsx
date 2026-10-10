@@ -82,6 +82,25 @@ describe('StationHistoryTab', () => {
 
   afterEach(() => vi.useRealTimers())
 
+  it('新增 BMS 历史字段在缺少型号元数据时保留中文标签和工程单位', async () => {
+    localStorage.setItem(stationHistoryPrefsKey('default'), JSON.stringify({
+      fields: ['bms_soc', 'bms_capacity_remain', 'bms_temp_min', 'bms_charging_voltage', 'bms_charge_request_current', 'bms_total_charge_capacity'],
+    }))
+    server.use(http.get(`${API_BASE}/devices/by-sn/:sn/telemetry`, () => HttpResponse.json({
+      code: 0,
+      data: { items: [{ time: sampleRows[0].time, bms_soc: 0, bms_capacity_remain: 125, bms_temp_min: -5,
+        bms_charging_voltage: 56, bms_charge_request_current: 12.3, bms_total_charge_capacity: 2400 }], total: 1 },
+    })))
+    renderAsAdmin(<StationHistoryTab stationId={1} timezone="Asia/Shanghai" />)
+    await waitFor(() => expect(hasColumn('BMS 剩余容量 (Ah)')).toBe(true))
+    expect(hasColumn('BMS 最低采样温度 (°C)')).toBe(true)
+    expect(hasColumn('BMS 充电电压 (V)')).toBe(true)
+    expect(hasColumn('BMS 请求充电电流 (A)')).toBe(true)
+    expect(hasColumn('BMS 累计充电容量 (Ah)')).toBe(true)
+    expect(tableHeaders().join(' ')).not.toContain('Charge Request Current')
+    expect((await screen.findAllByText('-5')).length).toBeGreaterThan(0)
+  })
+
   it('刷新默认区间时包含页面打开后上报的数据', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2026-10-09T08:00:00Z'))
