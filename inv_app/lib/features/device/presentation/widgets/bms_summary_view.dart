@@ -19,9 +19,7 @@ class BmsStorageTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final green = Theme.of(context).brightness == Brightness.dark
-        ? const Color(0xFF72CBB0)
-        : bmsGreen;
+    final primary = AppColor.primary(context);
     final large = MediaQuery.textScalerOf(context).scale(13) > 18;
     return Row(children: [
       for (var i = 0; i < 3; i++)
@@ -34,7 +32,7 @@ class BmsStorageTabs extends StatelessWidget {
                     bottom: BorderSide(
               width: 2,
               color: selected == i
-                  ? green
+                  ? primary
                   : AppColor.outline(context).withValues(alpha: .3),
             ))),
             child: TextButton(
@@ -42,7 +40,7 @@ class BmsStorageTabs extends StatelessWidget {
               onPressed: () => onSelected(i),
               style: TextButton.styleFrom(
                 foregroundColor:
-                    selected == i ? green : AppColor.textSecondary(context),
+                    selected == i ? primary : AppColor.textSecondary(context),
                 padding:
                     const EdgeInsets.symmetric(vertical: 14, horizontal: 4),
                 shape: const RoundedRectangleBorder(),
@@ -110,6 +108,7 @@ class _BmsSummaryViewState extends State<BmsSummaryView>
   DateTime get now => widget.clock?.call() ?? DateTime.now();
   bool? get online => b.onlineAt(now);
   bool get live => online == true;
+  Color get primary => AppColor.primary(context);
   Color get green => Theme.of(context).brightness == Brightness.dark
       ? const Color(0xFF72CBB0)
       : bmsGreen;
@@ -430,8 +429,8 @@ class _BmsSummaryViewState extends State<BmsSummaryView>
             value: live && b.soc != null ? (b.soc! / 100).clamp(0, 1) : 0,
             minHeight: 8,
             borderRadius: BorderRadius.circular(2),
-            color: green,
-            backgroundColor: AppColor.surfaceHover(context),
+            color: primary,
+            backgroundColor: AppColor.primarySoft(context),
           ),
         ),
         const SizedBox(height: 14),
@@ -610,7 +609,7 @@ class _BmsSummaryViewState extends State<BmsSummaryView>
           ? bmsAmber
           : value == cellMin
               ? bmsBlue
-              : green.withValues(alpha: .58);
+              : primary.withValues(alpha: .58);
 
   List<Widget> cells() => [
         BmsSection(
@@ -707,7 +706,7 @@ class _BmsSummaryViewState extends State<BmsSummaryView>
                         onPressed: () => setState(() => _selected = i),
                         style: OutlinedButton.styleFrom(
                           backgroundColor: _selected == i
-                              ? green.withValues(alpha: .08)
+                              ? AppColor.primarySoft(context)
                               : AppColor.surfaceHover(context),
                           foregroundColor: AppColor.textPrimary(context),
                           padding: const EdgeInsets.symmetric(
@@ -718,7 +717,7 @@ class _BmsSummaryViewState extends State<BmsSummaryView>
                             borderRadius: BorderRadius.circular(4),
                           ),
                           side: BorderSide(
-                            color: _selected == i ? green : Colors.transparent,
+                            color: _selected == i ? primary : Colors.transparent,
                           ),
                         ),
                         child: Column(
@@ -767,7 +766,7 @@ class _BmsSummaryViewState extends State<BmsSummaryView>
                   Text(
                     'C${(_selected + 1).toString().padLeft(2, '0')}',
                     style: TextStyle(
-                      color: green,
+                      color: primary,
                       fontWeight: FontWeight.w600,
                     ),
                   ),

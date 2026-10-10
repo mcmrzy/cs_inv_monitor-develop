@@ -56,7 +56,7 @@ api.defaults.adapter = async config => {
 function Review() {
   const [scenario, setScenario] = useState<Scenario>('normal')
   const [lang, setLang] = useState<'zh' | 'en'>('zh')
-  return <ConfigProvider theme={{ token: { colorPrimary: '#19795e', borderRadius: 6 } }}><App>
+  return <ConfigProvider theme={{ token: { colorPrimary: '#1677ff', borderRadius: 6 } }}><App>
     <header className="component-review-toolbar"><div><strong>BMS 正式组件验收</strong><span>隔离模拟接口 · 不连接真实设备</span></div>
       <Segmented value={scenario} options={[{ label: '正常', value: 'normal' }, { label: '告警', value: 'alarm' }, { label: '过期', value: 'expired' }, { label: '未接入', value: 'absent' }, { label: '未知', value: 'unknown' }]}
         onChange={value => { state = value as Scenario; setScenario(state); void queryClient.invalidateQueries() }} />

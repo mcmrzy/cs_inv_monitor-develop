@@ -89,7 +89,7 @@ export default function BmsSummaryView({ summary, loading = false, error, onRefr
       yAxis: { type: 'value', min: extent.min === null ? undefined : Math.max(0, extent.min - padding),
         max: extent.max === null ? undefined : extent.max + padding, axisLabel: { fontSize: 10, color: '#5d7079' }, splitLine: { lineStyle: { color: '#edf0f2' } } },
       series: [{ type: 'bar', barMaxWidth: 23, data: summary.cells.map((value, i) => ({ value,
-        itemStyle: { color: value === extent.max ? '#dca342' : value === extent.min ? '#5c90c8' : '#88b6aa',
+        itemStyle: { color: value === extent.max ? '#dca342' : value === extent.min ? '#5c90c8' : '#69b1ff',
           borderColor: balanceWord !== null && (balanceWord & (1 << i)) ? '#16795b' : 'transparent',
           borderWidth: balanceWord !== null && (balanceWord & (1 << i)) ? 2 : 0, borderRadius: [2, 2, 0, 0] } })) }],
     }
