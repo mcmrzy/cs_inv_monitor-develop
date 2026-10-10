@@ -8,6 +8,7 @@ export const SUMMARY_FIELDS = [
   'battery_mode', 'battery_status', 'total_chg_capacity_raw', 'total_dsg_capacity_raw',
   'chg_request_current_raw', 'chg_request_voltage_raw', 'system_mode',
   'charging_voltage', 'raw_bytes',
+  'decoder_revision', 'total_chg_capacity', 'total_dsg_capacity', 'chg_request_current', 'chg_request_voltage',
 ] as const
 
 type SummaryField = typeof SUMMARY_FIELDS[number]

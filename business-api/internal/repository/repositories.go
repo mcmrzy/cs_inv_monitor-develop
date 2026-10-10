@@ -210,8 +210,6 @@ func (r *UserRepository) CreateWithTx(ctx context.Context, tx pgx.Tx, user *mode
 	).Scan(&user.ID, &user.CreatedAt, &user.UpdatedAt)
 }
 
-
-
 // GetByEmail 根据邮箱查询用户
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*model.User, error) {
 	query := `
@@ -1554,6 +1552,16 @@ func normalizeRealtimeData(data map[string]interface{}) map[string]interface{} {
 		}
 	}
 
+	for target, source := range map[string]string{"daily_load_energy": "output_energy_daily", "total_load_energy": "output_energy_total", "alarm_code": "warning"} {
+		if data[target] == nil && data[source] != nil {
+			data[target] = data[source]
+		}
+	}
+	if data["runtime_hours"] == nil {
+		if seconds, ok := data["work_time_total"].(float64); ok {
+			data["runtime_hours"] = seconds / 3600
+		}
+	}
 	return data
 }
 

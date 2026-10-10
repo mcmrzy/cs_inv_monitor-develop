@@ -1132,13 +1132,19 @@ class _StationDetailPageState extends State<StationDetailPage>
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text(
-                      val,
-                      style: TextStyle(
-                        fontSize: 22.sp,
-                        fontWeight: FontWeight.w800,
-                        color: AppColor.textPrimary(context),
-                        height: 1,
+                    Flexible(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          val,
+                          style: TextStyle(
+                            fontSize: 22.sp,
+                            fontWeight: FontWeight.w800,
+                            color: AppColor.textPrimary(context),
+                            height: 1,
+                          ),
+                        ),
                       ),
                     ),
                     SizedBox(width: 4.w),
@@ -1204,13 +1210,18 @@ class _StationDetailPageState extends State<StationDetailPage>
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(
-                val,
-                style: TextStyle(
-                  fontSize: 19.sp,
-                  fontWeight: FontWeight.w800,
-                  color: AppColor.textPrimary(context),
-                  height: 1,
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    val,
+                    style: TextStyle(
+                      fontSize: 19.sp,
+                      fontWeight: FontWeight.w800,
+                      color: AppColor.textPrimary(context),
+                      height: 1,
+                    ),
+                  ),
                 ),
               ),
               SizedBox(width: 3.w),

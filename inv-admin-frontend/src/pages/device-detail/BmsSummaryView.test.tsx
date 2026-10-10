@@ -31,6 +31,13 @@ beforeEach(() => { vi.spyOn(Date, 'now').mockReturnValue(NOW); useLocaleStore.se
 afterEach(() => { cleanup(); vi.restoreAllMocks(); useLocaleStore.setState({ lang: 'zh' }) })
 
 describe('Production CMD08 BMS presentation', () => {
+  it('shows populated layout 0 temperatures and charging voltage', () => {
+    const { container } = view({ cell_temperatures: [-5, 0, 25, 30], max_cell_temp: 30, min_cell_temp: -5, charging_voltage: 56 })
+    expect(container.querySelector('.cmd08-temperatures')).toHaveTextContent('-5')
+    fireEvent.click(screen.getByRole('button', { name: '诊断详情' }))
+    expect(container.querySelector('.cmd08-diagnostics')).toHaveTextContent('56 V')
+    expect(container.querySelector('.cmd08-diagnostics')).toHaveTextContent('[-5,0,25,30]')
+  })
   it('shows engineering values without re-scaling, all cells and keyboard selection', () => {
     view()
     expect(screen.getByTestId('cmd08-bms')).toHaveAttribute('data-availability', 'live')
@@ -78,7 +85,7 @@ describe('Production CMD08 BMS presentation', () => {
     expect(details.querySelectorAll('dl > div')).toHaveLength(SUMMARY_FIELDS.length - 1)
     expect(details).toHaveTextContent('4294967295')
     expect(details).toHaveTextContent('-5600')
-    expect(details).toHaveTextContent('单位未确认')
+    expect(details).toHaveTextContent('0.1 A')
     expect(details).toHaveTextContent('上报极值与当前有效电芯计算结果不同')
     expect(details.querySelector('pre')!.textContent!.trim().split(' ')).toHaveLength(100)
     expect(details.querySelector('pre')).toHaveTextContent('60 61 62 63')

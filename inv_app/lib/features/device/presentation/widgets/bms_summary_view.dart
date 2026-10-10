@@ -983,8 +983,8 @@ class _BmsSummaryViewState extends State<BmsSummaryView>
                 'storage_bms_reported_min',
                 number(b.minCellVoltage, 'mV', 0),
               ),
-              read('storage_cell_temp_max', number(b.maxCellTemp, '°C')),
-              read('storage_cell_temp_min', number(b.minCellTemp, '°C')),
+              read('storage_summary_temp_max', number(b.maxCellTemp, '°C')),
+              read('storage_summary_temp_min', number(b.minCellTemp, '°C')),
               read('storage_mos_temp', number(b.mosTemp, '°C')),
               read('storage_pcb_temp', number(b.pcbTemp, '°C')),
               read('storage_env_temp', number(b.envTemp, '°C')),
@@ -1001,16 +1001,14 @@ class _BmsSummaryViewState extends State<BmsSummaryView>
                   ),
                   value: number(b.cellTemperatures[i], '°C'),
                 ),
-              read('storage_summary_charging_voltage', '--'),
+              read('storage_summary_charging_voltage',
+                  number(b.chargingVoltage, 'V')),
+              read('storage_summary_total_charge', number(b.totalChgCapacity, 'Ah', 0)),
+              read('storage_summary_total_discharge', number(b.totalDsgCapacity, 'Ah', 0)),
+              read('storage_summary_request_current', number(b.chgRequestCurrent, 'A')),
+              read('storage_summary_request_voltage', number(b.chgRequestVoltage, 'V')),
             ]),
             expansion('storage_summary_raw_quantities', [
-              Text(
-                t('storage_bms_units_unknown'),
-                style: TextStyle(
-                  fontSize: 12,
-                  color: AppColor.textSecondary(context),
-                ),
-              ),
               if (!live) Text(t('storage_summary_historical_raw')),
               read(
                 'storage_summary_total_charge',

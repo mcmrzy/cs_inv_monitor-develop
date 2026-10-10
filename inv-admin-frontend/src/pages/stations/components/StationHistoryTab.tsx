@@ -96,6 +96,12 @@ const EXCLUDE_FIELDS = new Set([
  * 标签由 display_name_key + fields.* 字典动态解析，无需在此维护。
  */
 const FIELD_LABEL_KEYS: Record<string, string> = {
+  bms_summary: 'deviceDetail.summary.title',
+  bms_voltage: 'deviceDetail.bms.packVoltage',
+  bms_current: 'deviceDetail.bms.current',
+  bms_charging_voltage: 'deviceDetail.summary.field.charging_voltage',
+  bms_temp_max: 'deviceDetail.summary.field.max_cell_temp',
+  bms_temp_min: 'deviceDetail.summary.field.min_cell_temp',
   // ── AC 侧 ──
   ac_voltage: 'station.field_ac_voltage',
   ac_current: 'station.field_ac_current',
@@ -394,7 +400,9 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
       push(cap.field_key)
     }
     for (const item of items) {
-      Object.keys(item as Record<string, unknown>).forEach(push)
+      Object.entries(item as Record<string, unknown>).forEach(([key, value]) => {
+        if (value !== null && value !== undefined) push(key)
+      })
     }
     visibleFields.forEach(push)
     return keys

@@ -3,6 +3,10 @@ import type { ModelFieldCapability } from '@/services/modelApi'
 import { formatHistoryValue, historyFieldGroup } from './stationHistoryFields'
 
 describe('history field presentation', () => {
+  it('renders a stored BMS snapshot instead of claiming it is missing', () => {
+    expect(formatHistoryValue({ layout: 0, bms_online: 1, soc: 0, voltage: 53.9 })).toBe('SOC 0% · 53.9 V')
+    expect(formatHistoryValue({ layout: 0, bms_online: 0, soc: null, voltage: null })).toBe('--')
+  })
   it('keeps missing readings distinct from zero and preserves state values', () => {
     expect(formatHistoryValue(null)).toBe('--')
     expect(formatHistoryValue(0)).toBe('0')

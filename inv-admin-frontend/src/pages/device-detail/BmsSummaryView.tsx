@@ -105,8 +105,8 @@ export default function BmsSummaryView({ summary, loading = false, error, onRefr
     <div className="cmd08-three"><Metric label="MOS" value={display(n('mos_temp'), 1)} unit="°C" />
       <Metric label="PCB" value={display(n('pcb_temp'), 1)} unit="°C" />
       <Metric label={b('tempEnv')} value={display(n('env_temp'), 1)} unit="°C" /></div>
-    <div className="cmd08-unavailable"><span>{s('cellTemps')}</span><span>{s('unavailable')}</span></div>
-    <div className="cmd08-unavailable"><span>{s('extremeTemps')}</span><span>{s('unavailable')}</span></div>
+    {['T1', 'T2', 'T3', 'T4'].map((label, i) => <div className="cmd08-unavailable" key={label}><span>{label}</span><span>{display(live && Array.isArray(v.cell_temperatures) ? summaryNumber(v.cell_temperatures[i]) : null, 1)} °C</span></div>)}
+    <div className="cmd08-unavailable"><span>{s('extremeTemps')}</span><span>{display(n('min_cell_temp'), 1)} / {display(n('max_cell_temp'), 1)} °C</span></div>
   </section>
   const status = <section className="cmd08-flags">
     <Heading title={`${historical}${s('flags')}`} right={<span className={live && flags.allKnown && !flags.activeCount ? 'cmd08-good' : 'cmd08-muted'}>
@@ -145,11 +145,10 @@ export default function BmsSummaryView({ summary, loading = false, error, onRefr
     (summaryNumber(v.min_cell_voltage) !== null && extremes.min !== summaryNumber(v.min_cell_voltage)))
   const diagnosticValue = (key: typeof SUMMARY_FIELDS[number]) => {
     const value = v[key]
-    if (v.layout === 0 && ['cell_temperatures', 'max_cell_temp', 'min_cell_temp', 'charging_voltage'].includes(key)) return key === 'cell_temperatures' ? '[null,null,null,null]' : '--'
     if (['updated_at', 'reported_at', 'expires_at'].includes(key)) return date(value)
     if (value === null || value === undefined) return '--'
     if (typeof value === 'number') {
-      const units: Record<string, string> = { voltage: 'V', current: 'A', soc: '%', soh: '%', capacity_remain: 'Ah', capacity_full: 'Ah', capacity_design: 'Ah', max_cell_voltage: 'mV', min_cell_voltage: 'mV', mos_temp: '°C', pcb_temp: '°C', env_temp: '°C', age_ms: 'ms' }
+      const units: Record<string, string> = { voltage: 'V', current: 'A', soc: '%', soh: '%', capacity_remain: 'Ah', capacity_full: 'Ah', capacity_design: 'Ah', max_cell_voltage: 'mV', min_cell_voltage: 'mV', max_cell_temp: '°C', min_cell_temp: '°C', mos_temp: '°C', pcb_temp: '°C', env_temp: '°C', age_ms: 'ms', charging_voltage: 'V', total_chg_capacity: 'Ah', total_dsg_capacity: 'Ah', chg_request_current: 'A', chg_request_voltage: 'V', total_chg_capacity_raw: 'Ah', total_dsg_capacity_raw: 'Ah', chg_request_current_raw: '0.1 A', chg_request_voltage_raw: '0.1 V' }
       return `${value}${units[key] ? ` ${units[key]}` : ''}`
     }
     return JSON.stringify(value)
@@ -162,7 +161,7 @@ export default function BmsSummaryView({ summary, loading = false, error, onRefr
     <details><summary>{s('reportedValues')}<span>{s('snapshot')}</span></summary>
       {reportedMismatch && <div className="cmd08-historical">{s('extremaMismatch')}</div>}
       <dl>{SUMMARY_FIELDS.filter(key => !['raw_bytes', 'updated_at', 'reported_at', 'expires_at', 'age_ms', 'battery_count', 'bms_online'].includes(key)).map(key =>
-        <div key={key}><dt>{s(`field.${key}`)}<code>{key}</code></dt><dd>{diagnosticValue(key)}{key.endsWith('_raw') && key !== 'soc_raw' && key !== 'soh_raw' && <small>{s('unitUnconfirmed')}</small>}</dd></div>)}</dl>
+        <div key={key}><dt>{s(`field.${key}`)}<code>{key}</code></dt><dd>{diagnosticValue(key)}</dd></div>)}</dl>
     </details>
     <details><summary>{s('rawPayload')}<span>{summary.rawBytes ? '100 bytes' : s('unavailable')}</span></summary>
       <pre className="cmd08-raw">{summary.rawBytes ? summary.rawBytes.map(value => value.toString(16).padStart(2, '0').toUpperCase()).join(' ') : s('invalidPayload')}</pre>

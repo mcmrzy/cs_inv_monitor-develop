@@ -593,7 +593,7 @@ func (p *ProtocolParser) handleHeartbeat(ctx context.Context, raw *RawMessage) e
 		// 将完整遥测数据写入 realtime:latest:{sn}，供前端实时展示
 		eventTimeUnix := sample.EventTime.Unix()
 		var realtime map[string]interface{}
-		if sample.ProtocolVersion == 2 {
+		if sample.ProtocolVersion == 2 || sample.ProtocolVersion == 3 {
 			// 型号诊断规格（含 unsupported_fields）：供 derived.parallel_role/health 做字段能力门控
 			// （CS-L10-6K2 ARM 未实现 paired_socket/online_socket/on_socket，垃圾值不得解读为并机状态）
 			realtime = buildRealtimeV2(sample, raw.SN, eventTimeUnix,
@@ -704,14 +704,24 @@ func deriveV2BatteryPower(s *telemetryv2.Sample) {
 // 组内 key 与 device_protocol_fields.field_key 一致（096 迁移后的文档键名），便于前端按字段能力配置动态取值。
 // fan/diag/sock 为 V2.1 新增组；derived 组承载派生字段（parallel_role/parallel_health，见 V2.1 文档 6.3/12.4）。
 // specs 仅用于派生字段的字段能力门控（型号未实现字段不参与解读），不影响各遥测组原值写入。
+func runtimeHours(seconds *float64) *float64 {
+	if seconds == nil {
+		return nil
+	}
+	hours := *seconds / 3600
+	return &hours
+}
+
 func buildRealtimeV2(s *telemetryv2.Sample, sn string, eventTimeUnix int64, specs model.DiagnosticSpecs) map[string]interface{} {
 	realtime := map[string]interface{}{
 		"sys": map[string]interface{}{
 			"data": map[string]interface{}{
 				"sys_status": s.System.SysStatus, "fault_code": s.System.FaultCode,
 				"warning": s.System.Warning, "bms_warning": s.System.BmsWarning,
-				"inverter_temperature": s.System.InverterTemperature,
-				"boost_temperature":    s.System.BoostTemperature,
+				"alarm_code":              s.System.Warning,
+				"inverter_temperature":    s.System.InverterTemperature,
+				"boost_temperature":       s.System.BoostTemperature,
+				"mos_temperature":         s.System.MOSTemperature,
 				"transformer_temperature": s.System.TransformerTemperature,
 				"pv_temperature":          s.System.PVTemperature,
 				"dc_bus_voltage":          s.System.DCBusVoltage, "load_percent": s.AC.LoadPercent,
@@ -724,6 +734,8 @@ func buildRealtimeV2(s *telemetryv2.Sample, sn string, eventTimeUnix int64, spec
 				"pv1_voltage": s.PV.PV1Voltage, "buck1_current": s.PV.Buck1Current,
 				"pv2_voltage": s.PV.PV2Voltage, "buck2_current": s.PV.Buck2Current,
 				"pv_total_power": s.PV.TotalPower,
+				"pv1_current":    s.PV.PV1Current, "pv2_current": s.PV.PV2Current,
+				"pv1_power": s.PV.PV1Power, "pv2_power": s.PV.PV2Power,
 			},
 			"timestamp": eventTimeUnix,
 		},
@@ -763,6 +775,7 @@ func buildRealtimeV2(s *telemetryv2.Sample, sn string, eventTimeUnix int64, spec
 				"daily_charge_energy": s.Energy.DailyCharge, "total_charge_energy": s.Energy.TotalCharge,
 				"ac_bypass_energy_daily": s.Energy.ACBypassDaily, "ac_bypass_energy_total": s.Energy.ACBypassTotal,
 				"output_energy_daily": s.Energy.OutputDaily, "output_energy_total": s.Energy.OutputTotal,
+				"daily_load_energy": s.Energy.DailyLoad, "total_load_energy": s.Energy.TotalLoad,
 			},
 			"timestamp": eventTimeUnix,
 		},
@@ -781,6 +794,7 @@ func buildRealtimeV2(s *telemetryv2.Sample, sn string, eventTimeUnix int64, spec
 			"data": map[string]interface{}{
 				"inv_current": s.Diag.InvCurrent, "parallel_charge_current": s.Diag.ParallelChargeCurrent,
 				"work_time_total": s.Diag.WorkTimeTotal,
+				"runtime_hours":   runtimeHours(s.Diag.WorkTimeTotal),
 			},
 			"timestamp": eventTimeUnix,
 		}

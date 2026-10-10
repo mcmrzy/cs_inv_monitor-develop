@@ -77,6 +77,9 @@ void main() {
     expect(summary.current, -12.34);
     expect(summary.capacityRemain, 18.123);
     expect(summary.chgRequestVoltageRaw, -32768);
+    expect(summary.chgRequestVoltage, -3276.8);
+    expect(summary.chgRequestCurrent, 50);
+    expect(summary.totalChgCapacity, 4294967295);
     expect(summary.mosTemp, -5.5);
     expect(summary.pcbTemp, 0);
     expect(summary.cellVoltages[3], isNull);
@@ -123,7 +126,8 @@ void main() {
     }
   });
 
-  test('missing fields and documented unused slots stay unavailable', () {
+  test('missing values stay null but layout 0 preserves populated zero slots',
+      () {
     final missing = BmsSummary.fromJson({});
     expect(missing.online, isNull);
     expect(missing.soc, isNull);
@@ -133,17 +137,17 @@ void main() {
     final zeroSlots = BmsSummary.fromJson({
       'layout': 0,
       'cell_voltages': [0, 3300],
-      'cell_temperatures': [0, 0, 0, 0],
+      'cell_temperatures': [-5, 0, 25, 30],
       'max_cell_temp': 0,
       'min_cell_temp': 0,
       'charging_voltage': 0,
     });
     expect(zeroSlots.cellVoltages[0], isNull);
     expect(zeroSlots.cellVoltages[1], 3300);
-    expect(zeroSlots.maxCellTemp, isNull);
-    expect(zeroSlots.minCellTemp, isNull);
-    expect(zeroSlots.chargingVoltage, isNull);
-    expect(zeroSlots.cellTemperatures, List<double?>.filled(4, null));
+    expect(zeroSlots.maxCellTemp, 0);
+    expect(zeroSlots.minCellTemp, 0);
+    expect(zeroSlots.chargingVoltage, 0);
+    expect(zeroSlots.cellTemperatures, [-5, 0, 25, 30]);
   });
 
   test('summary and legacy groups coexist in both supported envelopes', () {

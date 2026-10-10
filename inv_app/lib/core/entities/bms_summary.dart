@@ -36,17 +36,12 @@ class BmsSummary extends Equatable {
         statusFaultFlag = _int(json['status_fault_flag']),
         balanceStatus = _int(json['balance_status']),
         cellVoltages = _slots(json['cell_voltages'], 16, zeroMissing: true),
-        // ARM does not populate these slots in layout 0.
-        cellTemperatures = _int(json['layout']) == 0
-            ? List<double?>.unmodifiable(List<double?>.filled(4, null))
-            : _slots(json['cell_temperatures'], 4),
+        cellTemperatures = _slots(json['cell_temperatures'], 4),
         cycleCount = _int(json['cycle_count']),
         maxCellVoltage = _positive(json['max_cell_voltage']),
         minCellVoltage = _positive(json['min_cell_voltage']),
-        maxCellTemp =
-            _int(json['layout']) == 0 ? null : _double(json['max_cell_temp']),
-        minCellTemp =
-            _int(json['layout']) == 0 ? null : _double(json['min_cell_temp']),
+        maxCellTemp = _double(json['max_cell_temp']),
+        minCellTemp = _double(json['min_cell_temp']),
         mosTemp = _double(json['mos_temp']),
         pcbTemp = _double(json['pcb_temp']),
         envTemp = _double(json['env_temp']),
@@ -57,9 +52,7 @@ class BmsSummary extends Equatable {
         totalDsgCapacityRaw = _int(json['total_dsg_capacity_raw']),
         chgRequestCurrentRaw = _int(json['chg_request_current_raw']),
         chgRequestVoltageRaw = _int(json['chg_request_voltage_raw']),
-        chargingVoltage = _int(json['layout']) == 0
-            ? null
-            : _double(json['charging_voltage']),
+        chargingVoltage = _double(json['charging_voltage']),
         socRaw = _int(json['soc_raw']),
         sohRaw = _int(json['soh_raw']),
         rawBytes = _bytes(json['raw_bytes']),
@@ -73,6 +66,13 @@ class BmsSummary extends Equatable {
     final parsed = DateTime.tryParse(value);
     return parsed != null && parsed.isUtc ? parsed.toUtc() : null;
   }
+
+  double? get totalChgCapacity => totalChgCapacityRaw?.toDouble();
+  double? get totalDsgCapacity => totalDsgCapacityRaw?.toDouble();
+  double? get chgRequestCurrent =>
+      chgRequestCurrentRaw == null ? null : chgRequestCurrentRaw! / 10;
+  double? get chgRequestVoltage =>
+      chgRequestVoltageRaw == null ? null : chgRequestVoltageRaw! / 10;
 
   static double? _double(dynamic value) =>
       value is num && value.isFinite ? value.toDouble() : null;

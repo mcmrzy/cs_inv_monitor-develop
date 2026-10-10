@@ -63,7 +63,10 @@ class _HistoryApi extends DeviceTelemetryApi {
         'pv_total_power': 620,
         'output_power': 510,
         'battery_soc': 0,
-        'pv1_voltage': 138.6
+        'pv1_voltage': 138.6,
+        'bms_soc': 78,
+        'bms_capacity_remain': 125,
+        'bms_mos_temp': -5,
       },
     ]);
   }
@@ -83,6 +86,28 @@ void main() {
     expect(validHistoryFields(['obsolete']), commonHistoryFields);
     expect(validHistoryFields(['mppt_state', 'mppt_state', 'obsolete']),
         {'mppt_state'});
+  });
+
+  testWidgets(
+      'selected BMS history shows engineering units independently of DSP SOC',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'telemetry_history_fields_v1': [
+        'battery_soc',
+        'bms_soc',
+        'bms_capacity_remain',
+        'bms_mos_temp'
+      ]
+    });
+    await pumpApp(
+        tester, DeviceTelemetryHistoryPage(sn: 'SN', api: _HistoryApi()));
+    await tester.tap(find.byType(ExpansionTile));
+    await tester.pumpAndSettle();
+    expect(find.text('78.0 %'), findsOneWidget);
+    expect(find.text('125.0 Ah'), findsOneWidget);
+    expect(find.text('-5.0 C'), findsOneWidget);
+    expect(find.text('0.0 %'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   for (final locale in [const Locale('zh'), const Locale('en')]) {

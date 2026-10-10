@@ -22,7 +22,7 @@ describe('CMD08 summary normalization', () => {
   it('preserves all engineering values, raw quantities, bytes and fixed slots', () => {
     const v = sample(), parsed = parse(v)
     expect(Object.keys(parsed.values)).toEqual([...SUMMARY_FIELDS])
-    for (const key of SUMMARY_FIELDS) expect(parsed.values[key]).toEqual(v[key as keyof typeof v])
+    for (const key of SUMMARY_FIELDS) expect(parsed.values[key]).toEqual(v[key as keyof typeof v] ?? null)
     expect(parsed.values.current).toBe(-8.4)
     expect(parsed.values.chg_request_voltage_raw).toBe(-5600)
     expect(parsed.rawBytes).toHaveLength(100)
