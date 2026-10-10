@@ -16,6 +16,7 @@ func (r *DeviceRepository) GetRealtimeData(ctx context.Context, sn string) (map[
 		return nil, err
 	}
 	if cached, ok := result["bms_summary"].(map[string]interface{}); ok {
+		normalizeLegacyBMSSummary(cached)
 		markBMSSummaryFreshness(cached, time.Now())
 	}
 	var raw []byte
@@ -23,6 +24,9 @@ func (r *DeviceRepository) GetRealtimeData(ctx context.Context, sn string) (map[
 		WHERE device_sn=$1 AND bms_summary IS NOT NULL
 		ORDER BY received_at DESC, event_time DESC LIMIT 1`, sn).Scan(&raw)
 	if err == pgx.ErrNoRows {
+		if cached, ok := result["bms_summary"].(map[string]interface{}); ok {
+			attachBMSSummaryMetrics(result, cached)
+		}
 		return result, nil
 	}
 	if err != nil {
@@ -33,8 +37,10 @@ func (r *DeviceRepository) GetRealtimeData(ctx context.Context, sn string) (map[
 	if err := json.Unmarshal(raw, &summary); err != nil {
 		return result, nil
 	}
+	normalizeLegacyBMSSummary(summary)
 	markBMSSummaryFreshness(summary, time.Now())
 	result["bms_summary"] = summary
+	attachBMSSummaryMetrics(result, summary)
 	return result, nil
 }
 
@@ -77,6 +83,7 @@ func (r *DeviceRepository) batchBMSSummaries(ctx context.Context, sns []string) 
 		if json.Unmarshal(raw, &summary) != nil {
 			continue
 		}
+		normalizeLegacyBMSSummary(summary)
 		markBMSSummaryFreshness(summary, now)
 		result[sn] = summary
 	}
@@ -88,9 +95,10 @@ func markBMSSummaryFreshness(summary map[string]interface{}, now time.Time) {
 	deadline, err := time.Parse(time.RFC3339Nano, expires)
 	if err != nil || now.After(deadline) || deadline.After(now.Add(215*time.Second)) {
 		summary["bms_online"] = 0
-		for _, key := range []string{"soc", "soh", "voltage", "current", "capacity_remain", "capacity_full", "capacity_design", "cycle_count", "max_cell_voltage", "min_cell_voltage", "mos_temp", "pcb_temp", "env_temp"} {
+		for _, key := range []string{"soc", "soh", "voltage", "current", "capacity_remain", "capacity_full", "capacity_design", "cycle_count", "max_cell_voltage", "min_cell_voltage", "mos_temp", "pcb_temp", "env_temp", "max_cell_temp", "min_cell_temp", "charging_voltage", "total_chg_capacity", "total_dsg_capacity", "chg_request_current", "chg_request_voltage"} {
 			summary[key] = nil
 		}
 		summary["cell_voltages"] = make([]*float64, 16)
+		summary["cell_temperatures"] = make([]*float64, 4)
 	}
 }

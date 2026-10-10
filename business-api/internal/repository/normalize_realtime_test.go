@@ -6,6 +6,19 @@ import (
 )
 
 // V1 协议：扁平字段 + 嵌套 energy/pv/ac/batt/sys 分组
+func TestNormalizeRealtimeLoadAndRuntimeAliases(t *testing.T) {
+	data := normalizeRealtimeData(map[string]interface{}{
+		"eng":  map[string]interface{}{"output_energy_daily": 0.4, "output_energy_total": 12.5},
+		"diag": map[string]interface{}{"work_time_total": 5400.0},
+		"sys":  map[string]interface{}{"warning": 4294967296.0},
+	})
+	for key, want := range map[string]float64{"daily_load_energy": 0.4, "total_load_energy": 12.5, "runtime_hours": 1.5, "alarm_code": 4294967296} {
+		if data[key] != want {
+			t.Errorf("%s = %v; want %v", key, data[key], want)
+		}
+	}
+}
+
 func TestNormalizeRealtimeData_V1FlatFields(t *testing.T) {
 	input := map[string]interface{}{
 		"pv1_voltage":  370.0,

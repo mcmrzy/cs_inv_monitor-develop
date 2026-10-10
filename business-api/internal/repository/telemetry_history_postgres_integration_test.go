@@ -4,13 +4,75 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestTelemetryHistoryRepairsOmittedMappingsBeforeAggregation(t *testing.T) {
+	pool, cleanup := setupCommandTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	_, err := pool.Exec(ctx, `ALTER TABLE device_telemetry_3min ADD COLUMN IF NOT EXISTS buck1_current REAL, ADD COLUMN IF NOT EXISTS buck2_current REAL, ADD COLUMN IF NOT EXISTS boost_temperature REAL, ADD COLUMN IF NOT EXISTS warning NUMERIC, ADD COLUMN IF NOT EXISTS work_time_total BIGINT, ADD COLUMN IF NOT EXISTS output_energy_daily DOUBLE PRECISION, ADD COLUMN IF NOT EXISTS output_energy_total DOUBLE PRECISION`)
+	require.NoError(t, err)
+	words := make([]interface{}, 87)
+	for i := range words {
+		words[i] = 0
+	}
+	words[3], words[4] = 900, 250
+	raw, err := json.Marshal(map[string]interface{}{"v": 3, "data": map[string]interface{}{"run": words}})
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO device_telemetry_3min (device_sn,protocol_version,sequence_no,event_time,data_hash,topic,raw_envelope,buck1_current,buck2_current,boost_temperature,warning,work_time_total,output_energy_daily,output_energy_total,bms_summary)
+		VALUES ('MAP-SN',3,0,'2026-10-10T00:00:00Z','map-test','heartbeat',$1::jsonb,8.45,0,41,4294967296,5400,0.4,12.5,'{"layout":0,"bms_online":1,"capacity_remain":1.25,"soc":0,"mos_temp":3.5}'::jsonb)`, raw)
+	require.NoError(t, err)
+	repo := NewDeviceRepository(pool, nil)
+	for _, granularity := range []string{"raw", "hour"} {
+		rows, err := repo.GetTelemetryPage(ctx, "MAP-SN", "2026-10-10T00:00:00Z", "2026-10-10T01:00:00Z", granularity, "UTC", false, 0, 10, nil)
+		require.NoError(t, err)
+		require.Len(t, rows, 1)
+		for key, want := range map[string]float64{"pv1_power": 900, "pv2_power": 250, "pv1_current": 8.45, "pv2_current": 0, "mos_temperature": 41, "runtime_hours": 1.5, "daily_load_energy": 0.4, "total_load_energy": 12.5, "alarm_code": 4294967296, "bms_capacity_remain": 125, "bms_soc": 0, "bms_mos_temp": 35} {
+			require.InDelta(t, want, rows[0][key], 1e-5, "%s %s", granularity, key)
+		}
+		require.Nil(t, rows[0]["ac_power_factor"])
+	}
+}
+
+func TestL10MappedFieldVisibilityMigration(t *testing.T) {
+	pool, cleanup := setupCommandTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	_, err := pool.Exec(ctx, `INSERT INTO device_models (model_code,model_name) VALUES ('CS-L10-6K2','L10 mapping fixture') ON CONFLICT (model_code) DO NOTHING;
+		INSERT INTO device_model_fields (model_id,field_key,group_code,is_supported,is_visible,show_realtime,show_history)
+		SELECT m.id,c.field_key,c.category,false,false,false,false FROM device_models m CROSS JOIN telemetry_field_catalog c
+		WHERE m.model_code='CS-L10-6K2' AND c.field_key IN ('pv1_power','pv2_power','pv1_current','pv2_current','mos_temperature','alarm_code','runtime_hours','ac_power_factor','efficiency','pv1_voltage_max')
+		ON CONFLICT (model_id,field_key) DO UPDATE SET is_supported=false,is_visible=false,show_realtime=false,show_history=false`)
+	require.NoError(t, err)
+	read := func(suffix string) []byte {
+		sql, err := os.ReadFile(filepath.Join("..", "..", "..", "database", "migrations", "128_l10_v3_mapped_fields."+suffix+".sql"))
+		require.NoError(t, err)
+		return sql
+	}
+	_, err = pool.Exec(ctx, string(read("up")))
+	require.NoError(t, err)
+	var enabled int
+	err = pool.QueryRow(ctx, `SELECT count(*) FROM device_model_fields f JOIN device_models m ON m.id=f.model_id WHERE m.model_code='CS-L10-6K2' AND f.field_key IN ('pv1_power','pv2_power','pv1_current','pv2_current','mos_temperature','alarm_code','runtime_hours') AND is_supported AND is_visible AND show_realtime AND show_history`).Scan(&enabled)
+	require.NoError(t, err)
+	require.Equal(t, 7, enabled)
+	var unsupported int
+	err = pool.QueryRow(ctx, `SELECT count(*) FROM device_model_fields f JOIN device_models m ON m.id=f.model_id WHERE m.model_code='CS-L10-6K2' AND f.field_key IN ('ac_power_factor','efficiency','pv1_voltage_max') AND is_supported`).Scan(&unsupported)
+	require.NoError(t, err)
+	require.Zero(t, unsupported)
+	_, err = pool.Exec(ctx, string(read("down")))
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, string(read("up")))
+	require.NoError(t, err)
+}
 
 // TestTelemetryHistoryPagingAndAggregation 覆盖历史数据读取的两条路径：
 // raw 分页必须覆盖全部行且翻页不重不漏（同一 event_time 多行时也不能错位）；

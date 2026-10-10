@@ -323,6 +323,8 @@ func ParseHeartbeatV3(deviceSN string, payload []byte, receivedAt time.Time) (*S
 
 	// ---- pv（Vpv 1V、Ipv 0.01A、Ppv 1W；PV 电压 <60V 视为无输入归 0）----
 	s.PV = PV{
+		PV1Power:     boundedValue(u16At(wordPpv1), 0, 7500, &s.QualityFlags),
+		PV2Power:     boundedValue(u16At(wordPpv2), 0, 7500, &s.QualityFlags),
 		PV1Voltage:   pvVoltageNormalized(u16At(wordVpv1), &s.QualityFlags),
 		Buck1Current: boundedValue(scale(u16At(wordBuck1Curr), 0.01), 0, 30, &s.QualityFlags),
 		PV2Voltage:   pvVoltageNormalized(u16At(wordVpv2), &s.QualityFlags),
@@ -409,6 +411,10 @@ func ParseHeartbeatV3(deviceSN string, payload []byte, receivedAt time.Time) (*S
 	}
 	// 插座三值：ARM App(10) 未赋值（memset 恒 0），无测量意义 → null
 	s.Sock = Sock{PairedSocket: nil, OnlineSocket: nil, OnSocket: nil}
+	// These aliases describe the same measurements, not estimated replacements.
+	s.PV.PV1Current, s.PV.PV2Current = s.PV.Buck1Current, s.PV.Buck2Current
+	s.System.MOSTemperature = s.System.BoostTemperature
+	s.Energy.DailyLoad, s.Energy.TotalLoad = s.Energy.OutputDaily, s.Energy.OutputTotal
 
 	if raw.Data.BMSSummary != nil {
 		summary, err := DecodeBatterySummary(raw.Data.BMSSummary, s.ReceivedAt)

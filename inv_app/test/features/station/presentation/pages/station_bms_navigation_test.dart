@@ -152,6 +152,12 @@ void main() {
   });
   tearDown(() async => getIt.reset());
 
+  testWidgets('station energy metrics fit 320px at large system text scale', (tester) async {
+    await pump(tester, const StationDetailPage(stationId: 7), width: 320, scale: 1.8);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('aggregate batteries require explicit owner selection and history preserves owner/timezone', (tester) async {
     final router = await pump(tester, const StationDetailPage(stationId: 7));
     await tester.tap(find.byKey(const ValueKey('station-energy-battery')));

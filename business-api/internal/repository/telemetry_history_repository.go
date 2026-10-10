@@ -22,7 +22,7 @@ const (
 
 // telemetryCounterFieldPattern 匹配累计型计数器（日/总电量、运行时长、循环次数）。
 // 聚合时计数器取桶内最大值（即桶结束时的表底），瞬时量取平均值。
-const telemetryCounterFieldPattern = `(^daily_|^total_|_energy$|_energy_daily$|_energy_total$|^runtime_hours$|^battery_cycle_count$|_time$|_time_total$)`
+const telemetryCounterFieldPattern = `(^daily_|^total_|^bms_total_|_energy$|_energy_daily$|_energy_total$|^runtime_hours$|^battery_cycle_count$|^bms_cycle_count$|_time$|_time_total$)`
 
 // telemetryNumericLiteralPattern 判断 jsonb 文本值能否安全转 numeric。
 // 直接 ::numeric 遇到 "charging" 这类字符串会让整条查询报错，所以先用正则筛掉。
@@ -100,11 +100,11 @@ func (r *DeviceRepository) getTelemetryRawPage(ctx context.Context, sn, startTim
 	}
 	// protocol_version / quality_flags 保留在 JSON 契约里：客户端用它们解释解析器版本与降级样本。
 	rows, err := r.db.Query(ctx, fmt.Sprintf(`
-		SELECT to_jsonb(t) - 'device_sn' - 'received_at' || jsonb_build_object('time', t.event_time)
+		SELECT (%s) - 'device_sn' - 'received_at' || jsonb_build_object('time', t.event_time)
 		FROM device_telemetry_3min t
 		WHERE t.device_sn=$1 AND t.event_time >= $2::timestamptz AND t.event_time <= $3::timestamptz
 		ORDER BY t.event_time %s, t.data_hash
-		LIMIT $4 OFFSET $5`, direction), sn, startTime, endTime, limit, offset)
+		LIMIT $4 OFFSET $5`, telemetryProjectionSQL(), direction), sn, startTime, endTime, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -118,6 +118,10 @@ func (r *DeviceRepository) getTelemetryRawPage(ctx context.Context, sn, startTim
 		var item map[string]interface{}
 		if err := json.Unmarshal(raw, &item); err != nil {
 			return nil, err
+		}
+		if summary, ok := item["bms_summary"].(map[string]interface{}); ok {
+			normalizeLegacyBMSSummary(summary)
+			attachBMSSummaryMetrics(item, summary)
 		}
 		result = append(result, item)
 	}
@@ -151,12 +155,12 @@ func (r *DeviceRepository) getTelemetryBucketPage(ctx context.Context, sn, start
 		 AND %s = b.bucket
 		 AND t.event_time >= $2::timestamptz AND t.event_time <= $3::timestamptz
 		CROSS JOIN LATERAL jsonb_each_text(
-			to_jsonb(t) - 'device_sn' - 'received_at' - 'raw_envelope' - 'data_hash' - 'sequence_no') AS kv(key, value)
+			(%s) - 'device_sn' - 'received_at' - 'raw_envelope' - 'data_hash' - 'sequence_no') AS kv(key, value)
 		WHERE kv.key NOT IN %s
 		  AND kv.value ~ '%s'
 		  AND ($9::text[] IS NULL OR kv.key = ANY($9::text[]))
 		GROUP BY b.bucket, kv.key
-		ORDER BY b.bucket %s, kv.key`, bucketExpr, direction, bucketExpr, telemetryNonMetricKeys,
+		ORDER BY b.bucket %s, kv.key`, bucketExpr, direction, bucketExpr, telemetryProjectionSQL(), telemetryNonMetricKeys,
 		telemetryNumericLiteralPattern, direction)
 
 	var fieldFilter interface{}

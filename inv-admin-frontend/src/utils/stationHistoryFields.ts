@@ -27,7 +27,12 @@ export function historyFieldGroup(key: string, capability?: ModelFieldCapability
 export function formatHistoryValue(value: unknown, capability?: ModelFieldCapability): string {
   if (value == null || value === '') return '--'
   if (typeof value === 'boolean') return value ? '1' : '0'
-  if (typeof value === 'object') return '--'
+  if (typeof value === 'object') {
+    const snapshot = value as Record<string, unknown>
+    if (snapshot.layout !== 0 || snapshot.bms_online !== 1) return '--'
+    return [typeof snapshot.soc === 'number' && Number.isFinite(snapshot.soc) ? `SOC ${snapshot.soc}%` : null,
+      typeof snapshot.voltage === 'number' && Number.isFinite(snapshot.voltage) ? `${snapshot.voltage} V` : null].filter(Boolean).join(' · ') || '--'
+  }
   const number = Number(value)
   if (!Number.isFinite(number)) return String(value)
   if (capability?.field_type === 'bitmask') return `0x${number.toString(16).toUpperCase()}`

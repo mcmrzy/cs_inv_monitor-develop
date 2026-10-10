@@ -353,7 +353,7 @@ void main() {
       expect(find.text(value), findsOneWidget);
     }
     expect(find.text('Cell 16'), findsOneWidget);
-    expect(find.text('Cell temperature 4'), findsOneWidget);
+    expect(find.text('Temperature T4'), findsOneWidget);
     await expand(tester, 'Status words & protocol codes');
     expect(find.text('2 raw'), findsOneWidget);
     expect(find.text('7 raw'), findsOneWidget);
@@ -379,6 +379,27 @@ void main() {
         (i) => i.toRadixString(16).padLeft(2, '0').toUpperCase(),
       ),
     );
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('CMD08 populated temperatures and charging voltage are visible',
+      (tester) async {
+    await surface(tester, {
+      ...fixture(),
+      'cell_temperatures': [-5, 0, 25, 30],
+      'max_cell_temp': 30,
+      'min_cell_temp': -5,
+      'charging_voltage': 56,
+    });
+    await tab(tester, 1);
+    expect(find.text('-5.0 °C'), findsWidgets);
+    expect(find.text('0.0 °C'), findsWidgets);
+    expect(find.text('30.0 °C'), findsWidgets);
+    await tab(tester, 2);
+    await expand(tester, 'All measurements');
+    expect(find.text('56.0 V'), findsOneWidget);
+    expect(find.text('50.0 A'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });

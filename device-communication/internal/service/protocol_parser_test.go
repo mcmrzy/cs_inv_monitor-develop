@@ -18,6 +18,29 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestBuildRealtimeV3PreservesExtendedMappings(t *testing.T) {
+	words := make([]int, 87)
+	words[1], words[3], words[4], words[5], words[6] = 136, 900, 250, 1150, 845
+	words[8], words[39], words[77] = 41, 5400, 4
+	now := time.Now().Truncate(time.Second)
+	payload, err := json.Marshal(map[string]interface{}{"v": 3, "t": now.Unix(), "data": map[string]interface{}{"run": words}})
+	require.NoError(t, err)
+	s, err := telemetryv2.ParseHeartbeatV3("TEST", payload, now)
+	require.NoError(t, err)
+	rt := buildRealtimeV2(s, "TEST", now.Unix(), l10Specs())
+	encoded, err := json.Marshal(rt)
+	require.NoError(t, err)
+	var decoded map[string]interface{}
+	require.NoError(t, json.Unmarshal(encoded, &decoded))
+	for group, wants := range map[string]map[string]float64{"pv": {"pv1_power": 900, "pv2_power": 250, "pv1_current": 8.45, "pv_total_power": 1150}, "sys": {"mos_temperature": 41, "alarm_code": 0}, "diag": {"runtime_hours": 1.5}, "eng": {"daily_load_energy": 0.4}} {
+		values, ok := realtimeGroupData(t, decoded, group)
+		require.True(t, ok)
+		for key, want := range wants {
+			require.InDelta(t, want, values[key], 1e-9, key)
+		}
+	}
+}
+
 func TestRawMessageParsing(t *testing.T) {
 	tests := []struct {
 		name    string
