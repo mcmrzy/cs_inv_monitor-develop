@@ -25,6 +25,7 @@ part 'station_detail_widgets.dart';
 
 class StationDetailPage extends StatefulWidget {
   final int stationId;
+
   /// 初始 Tab（0 总览 / 1 统计 / 2 设备），支持路由直达设备管理
   final int initialTab;
 
@@ -170,7 +171,8 @@ class _StationDetailPageState extends State<StationDetailPage>
   void _loadCachedDetailIfAvailable() {
     try {
       final dataCacheService = getIt<DataCacheService>();
-      final cached = dataCacheService.load(DataCacheService.stationDetail(widget.stationId));
+      final cached = dataCacheService
+          .load(DataCacheService.stationDetail(widget.stationId));
       if (cached != null && cached is Map<String, dynamic>) {
         final station = cached['station'] as Map<String, dynamic>?;
         final devices = (cached['devices'] as List?) ?? [];
@@ -216,30 +218,39 @@ class _StationDetailPageState extends State<StationDetailPage>
         return BlocListener<StationBloc, StationState>(
           listener: (context, state) {
             if (state is DeviceUnbindSuccess) {
-              AppToast.show(context, '${l10n.str('device_unbound', {})} - ${state.sn}', type: ToastType.success);
+              AppToast.show(
+                  context, '${l10n.str('device_unbound', {})} - ${state.sn}',
+                  type: ToastType.success);
               context.read<StationBloc>().add(
-                StationDetailRequested(stationId: widget.stationId),
-              );
+                    StationDetailRequested(stationId: widget.stationId),
+                  );
             } else if (state is DeviceDeleteSuccess) {
-              AppToast.show(context, '${l10n.str('device_deleted', {})} - ${state.sn}', type: ToastType.success);
+              AppToast.show(
+                  context, '${l10n.str('device_deleted', {})} - ${state.sn}',
+                  type: ToastType.success);
               context.read<StationBloc>().add(
-                StationDetailRequested(stationId: widget.stationId),
-              );
+                    StationDetailRequested(stationId: widget.stationId),
+                  );
             } else if (state is DeviceRebindSuccess) {
-              AppToast.show(context, '${l10n.str('device_rebound', {})} - ${state.sn}', type: ToastType.success);
+              AppToast.show(
+                  context, '${l10n.str('device_rebound', {})} - ${state.sn}',
+                  type: ToastType.success);
               context.read<StationBloc>().add(
-                StationDetailRequested(stationId: widget.stationId),
-              );
+                    StationDetailRequested(stationId: widget.stationId),
+                  );
             } else if (state is DeviceBindSuccess) {
-              AppToast.show(context, '${l10n.str('device_bound', {})} - ${state.sn}', type: ToastType.success);
+              AppToast.show(
+                  context, '${l10n.str('device_bound', {})} - ${state.sn}',
+                  type: ToastType.success);
               context.read<StationBloc>().add(
-                StationDetailRequested(stationId: widget.stationId),
-              );
+                    StationDetailRequested(stationId: widget.stationId),
+                  );
             } else if (state is DeviceReorderSuccess) {
-              AppToast.show(context, l10n.str('device_order_saved', {}), type: ToastType.success);
-            } else if (state is StationError &&
-                state is! StationActionError) {
-              AppToast.show(context, l10n.translateError(state.message), type: ToastType.error);
+              AppToast.show(context, l10n.str('device_order_saved', {}),
+                  type: ToastType.success);
+            } else if (state is StationError && state is! StationActionError) {
+              AppToast.show(context, l10n.translateError(state.message),
+                  type: ToastType.error);
             }
           },
           child: Scaffold(
@@ -289,11 +300,19 @@ class _StationDetailPageState extends State<StationDetailPage>
       final rt = getIt<RealtimeDataService>().getLatestData(_selectedDeviceSn);
       pvW = rt?.pv?.pvPower ?? 0;
       loadW = rt?.ac?.power ?? 0;
-      final device = (_cachedState?.devices ?? []).whereType<Map>().where((d) => d['sn'] == _selectedDeviceSn).firstOrNull;
-      final summary = rt?.bmsSummary ?? (device == null ? null : deviceBattery(Map<String, dynamic>.from(device)));
+      final device = (_cachedState?.devices ?? [])
+          .whereType<Map>()
+          .where((d) => d['sn'] == _selectedDeviceSn)
+          .firstOrNull;
+      final summary = rt?.bmsSummary ??
+          (device == null
+              ? null
+              : deviceBattery(Map<String, dynamic>.from(device)));
       if (summary != null) {
         final live = summary.onlineAt(DateTime.now()) == true;
-        battW = live && summary.voltage != null && summary.current != null ? summary.voltage! * summary.current! : 0;
+        battW = live && summary.voltage != null && summary.current != null
+            ? summary.voltage! * summary.current!
+            : 0;
         soc = live ? summary.soc ?? 0 : 0;
       } else if (rt?.battery != null) {
         battW = rt!.battery!.voltage * rt.battery!.current;
@@ -480,7 +499,7 @@ class _StationDetailPageState extends State<StationDetailPage>
               ),
               const Spacer(),
               // 设备选择器（仅在多个设备时显示）
-              if ((_cachedState?.devices ?? []).length > 1) 
+              if ((_cachedState?.devices ?? []).length > 1)
                 _buildDeviceSelector(),
             ],
           ),
@@ -492,7 +511,7 @@ class _StationDetailPageState extends State<StationDetailPage>
   Widget _buildDeviceSelector() {
     final l10n = AppLocalizations.of(context)!;
     final devices = _cachedState?.devices ?? [];
-    
+
     // 获取当前选中的设备名称
     String getSelectedDeviceName() {
       if (_selectedDeviceSn == 'all') {
@@ -507,7 +526,7 @@ class _StationDetailPageState extends State<StationDetailPage>
       if (alias.isNotEmpty) return alias;
       return device['sn'] as String? ?? l10n.allDevices;
     }
-    
+
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
       decoration: BoxDecoration(
@@ -526,7 +545,8 @@ class _StationDetailPageState extends State<StationDetailPage>
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.devices_other, size: 16.sp, color: AppColor.textSecondary(context)),
+            Icon(Icons.devices_other,
+                size: 16.sp, color: AppColor.textSecondary(context)),
             SizedBox(width: 6.w),
             Text(
               getSelectedDeviceName(),
@@ -560,6 +580,79 @@ class _StationDetailPageState extends State<StationDetailPage>
     );
     if (selected == null || !mounted) return;
     setState(() => _selectedDeviceSn = selected);
+  }
+
+  Future<void> _openBatteryStorage() async {
+    final devices = _mergeFaultStatus(_cachedState?.devices ?? []);
+    final selected =
+        devices.where((d) => '${d['sn']}' == _selectedDeviceSn).firstOrNull;
+    if (_selectedDeviceSn != 'all') {
+      if (selected != null && deviceCategory(selected) == 'inv') {
+        _pushStorage(_selectedDeviceSn);
+      } else {
+        AppToast.show(context,
+            AppLocalizations.of(context)!.str('storage_not_connected'));
+      }
+      return;
+    }
+    final candidates = <String, Map<String, dynamic>>{};
+    for (final device in devices) {
+      final sn = '${device['sn'] ?? ''}';
+      if (sn.isEmpty || deviceCategory(device) != 'inv') continue;
+      final rt = getIt<RealtimeDataService>().getLatestData(sn);
+      final summary = rt?.bmsSummary ?? deviceBattery(device);
+      final installed = summary != null
+          ? summary.layout == 0 && (summary.batteryCount ?? 0) > 0
+          : rt?.bms?.online == true;
+      if (installed) candidates[sn] = device;
+    }
+    if (candidates.isEmpty) {
+      AppToast.show(
+          context, AppLocalizations.of(context)!.str('storage_not_connected'));
+      return;
+    }
+    var sn = candidates.keys.singleOrNull;
+    if (sn == null) {
+      sn = await showModalBottomSheet<String>(
+        context: context,
+        isScrollControlled: true,
+        builder: (ctx) => SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(ctx).height * .7,
+            ),
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Text(AppLocalizations.of(ctx)!.deviceTypeStorage,
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                ),
+                for (final entry in candidates.entries)
+                  ListTile(
+                    key: ValueKey('storage-choice-${entry.key}'),
+                    leading: const Icon(Icons.battery_charging_full_rounded),
+                    title: Text('${entry.value['alias'] ?? ''}'.isEmpty
+                        ? entry.key : '${entry.value['alias']}'),
+                    subtitle: Text(entry.key),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.pop(ctx, entry.key),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    if (sn != null && mounted) {
+      _pushStorage(sn);
+    }
+  }
+
+  void _pushStorage(String sn) {
+    final timezone = TimezoneUtils.getTimezoneFromStation(_cachedState?.station);
+    context.push('/device/${Uri.encodeComponent(sn)}/storage?tz=${Uri.encodeComponent(timezone)}');
   }
 
   Widget _flowArea(
@@ -867,26 +960,31 @@ class _StationDetailPageState extends State<StationDetailPage>
     );
     return Align(
       alignment: align,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12.sp,
-              fontWeight: FontWeight.w600,
-              color: AppColor.textPrimary(context),
+      child: InkWell(
+        key: const ValueKey('station-energy-battery'),
+        onTap: _openBatteryStorage,
+        borderRadius: BorderRadius.circular(8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12.sp,
+                fontWeight: FontWeight.w600,
+                color: AppColor.textPrimary(context),
+              ),
             ),
-          ),
-          SizedBox(height: 4.h),
-          if (active)
-            Stack(
-              alignment: Alignment.center,
-              children: [_buildGlow(color), circle],
-            )
-          else
-            circle,
-        ],
+            SizedBox(height: 4.h),
+            if (active)
+              Stack(
+                alignment: Alignment.center,
+                children: [_buildGlow(color), circle],
+              )
+            else
+              circle,
+          ],
+        ),
       ),
     );
   }
@@ -1059,7 +1157,8 @@ class _StationDetailPageState extends State<StationDetailPage>
                 SizedBox(height: 2.h),
                 Text(
                   label,
-                  style: TextStyle(fontSize: 10.sp, color: AppColor.textHint(context)),
+                  style: TextStyle(
+                      fontSize: 10.sp, color: AppColor.textHint(context)),
                 ),
               ],
             ),
@@ -1130,7 +1229,8 @@ class _StationDetailPageState extends State<StationDetailPage>
           SizedBox(height: 4.h),
           Text(
             label,
-            style: TextStyle(fontSize: 10.sp, color: AppColor.textHint(context)),
+            style:
+                TextStyle(fontSize: 10.sp, color: AppColor.textHint(context)),
           ),
         ],
       ),
@@ -1220,7 +1320,8 @@ class _StationDetailPageState extends State<StationDetailPage>
             SizedBox(height: 2.h),
             Text(
               label,
-              style: TextStyle(fontSize: 9.sp, color: AppColor.textHint(context)),
+              style:
+                  TextStyle(fontSize: 9.sp, color: AppColor.textHint(context)),
             ),
           ],
         ),
@@ -1334,7 +1435,8 @@ class _StationDetailPageState extends State<StationDetailPage>
                 style: TextStyle(
                   fontSize: 10.sp,
                   fontWeight: active ? FontWeight.w600 : FontWeight.w400,
-                  color: active ? AppColors.primary : AppColor.textHint(context),
+                  color:
+                      active ? AppColors.primary : AppColor.textHint(context),
                 ),
               ),
             ],
@@ -1350,7 +1452,10 @@ class _StationDetailPageState extends State<StationDetailPage>
     final name = station != null
         ? (station['station_name'] ?? station['name'] ?? '')
         : '';
-    final devices = _mergeFaultStatus((ds.devices as List?) ?? []);
+    final devices = <String, Map<String, dynamic>>{
+      for (final device in _mergeFaultStatus((ds.devices as List?) ?? []))
+        '${device['sn'] ?? ''}': device,
+    }.values.toList();
 
     return Stack(
       children: [
@@ -1383,8 +1488,7 @@ class _StationDetailPageState extends State<StationDetailPage>
                       ),
                     ),
                     GestureDetector(
-                      onTap: () =>
-                          setState(() => _deviceSortMode = false),
+                      onTap: () => setState(() => _deviceSortMode = false),
                       child: Text(
                         l10n.finishSorting,
                         style: TextStyle(
@@ -1406,9 +1510,7 @@ class _StationDetailPageState extends State<StationDetailPage>
                 sortMode: _deviceSortMode,
                 onDeviceChanged: (order) {
                   // 保存新的排序顺序到数据库（order 为拖动后的 SN 顺序）
-                  context
-                      .read<StationBloc>()
-                      .add(
+                  context.read<StationBloc>().add(
                         DeviceReorderRequested(
                           stationId: widget.stationId,
                           deviceOrder: order,
@@ -1468,6 +1570,11 @@ class _StationDetailPageState extends State<StationDetailPage>
       final sn = device['sn'] as String?;
       if (sn == null || sn.isEmpty) return device;
       final rt = realtimeService.getLatestData(sn);
+      if (deviceCategory(device) != 'inv') {
+        device.remove('bms_summary');
+      } else if (rt?.bmsSummary != null) {
+        device['bms_summary'] = rt!.bmsSummary!.toJson();
+      }
       if (rt == null) return device;
       final sys = rt.sysStatus;
       if (sys != null && (sys.hasFault || sys.state == 'fault')) {

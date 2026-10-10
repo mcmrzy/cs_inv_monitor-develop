@@ -10,6 +10,78 @@ import 'package:inv_app/l10n/app_localizations.dart';
 
 import 'bms_summary_components.dart';
 
+class BmsStorageTabs extends StatelessWidget {
+  final int selected;
+  final ValueChanged<int> onSelected;
+
+  const BmsStorageTabs(
+      {super.key, required this.selected, required this.onSelected});
+
+  @override
+  Widget build(BuildContext context) {
+    final green = Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFF72CBB0)
+        : bmsGreen;
+    final large = MediaQuery.textScalerOf(context).scale(13) > 18;
+    return Row(children: [
+      for (var i = 0; i < 3; i++)
+        Expanded(
+            child: Semantics(
+          selected: selected == i,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+                border: Border(
+                    bottom: BorderSide(
+              width: 2,
+              color: selected == i
+                  ? green
+                  : AppColor.outline(context).withValues(alpha: .3),
+            ))),
+            child: TextButton(
+              key: ValueKey('bms-tab-$i'),
+              onPressed: () => onSelected(i),
+              style: TextButton.styleFrom(
+                foregroundColor:
+                    selected == i ? green : AppColor.textSecondary(context),
+                padding:
+                    const EdgeInsets.symmetric(vertical: 14, horizontal: 4),
+                shape: const RoundedRectangleBorder(),
+              ),
+              child: SizedBox(
+                height: large ? 52 : 22,
+                child: Flex(
+                  direction: large ? Axis.vertical : Axis.horizontal,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                        [
+                          Icons.speed,
+                          Icons.grid_view_outlined,
+                          Icons.shield_outlined
+                        ][i],
+                        size: 17),
+                    SizedBox(width: large ? 0 : 6, height: large ? 5 : 0),
+                    Flexible(
+                        child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                          AppLocalizations.of(context)!.str([
+                            'storage_bms_overview',
+                            'storage_bms_cells',
+                            'storage_bms_diagnostics'
+                          ][i]),
+                          style: const TextStyle(fontSize: 13)),
+                    )),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        )),
+    ]);
+  }
+}
+
 class BmsSummaryView extends StatefulWidget {
   final BmsSummary summary;
   final Future<void> Function() onRefresh;
@@ -205,44 +277,7 @@ class _BmsSummaryViewState extends State<BmsSummaryView>
               ),
             ),
           ),
-          Row(
-            children: [
-              for (var i = 0; i < 3; i++)
-                Expanded(
-                  child: Semantics(
-                    selected: _tab == i,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        border: Border(
-                          bottom: BorderSide(
-                            width: 2,
-                            color: _tab == i
-                                ? green
-                                : AppColor.outline(context)
-                                    .withValues(alpha: .3),
-                          ),
-                        ),
-                      ),
-                      child: TextButton(
-                        key: ValueKey('bms-tab-$i'),
-                        onPressed: () => selectTab(i),
-                        style: TextButton.styleFrom(
-                          foregroundColor: _tab == i
-                              ? green
-                              : AppColor.textSecondary(context),
-                          padding: const EdgeInsets.symmetric(
-                            vertical: 14,
-                            horizontal: 4,
-                          ),
-                          shape: const RoundedRectangleBorder(),
-                        ),
-                        child: navigationLabel(i),
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
+          BmsStorageTabs(selected: _tab, onSelected: selectTab),
           Expanded(
             child: RefreshIndicator(
               onRefresh: widget.onRefresh,
@@ -356,47 +391,6 @@ class _BmsSummaryViewState extends State<BmsSummaryView>
           child: const Icon(Icons.info_outline, size: 16),
         ),
       );
-
-  Widget navigationLabel(int i) {
-    final icon = Icon(
-      [Icons.speed, Icons.grid_view_outlined, Icons.shield_outlined][i],
-      size: 17,
-    );
-    final label = FittedBox(
-      fit: BoxFit.scaleDown,
-      child: Text(
-        t(
-          [
-            'storage_bms_overview',
-            'storage_bms_cells',
-            'storage_bms_diagnostics',
-          ][i],
-        ),
-        style: const TextStyle(fontSize: 13),
-      ),
-    );
-    final large = MediaQuery.textScalerOf(context).scale(13) > 18;
-    return SizedBox(
-      height: large ? 52 : 22,
-      child: large
-          ? Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                icon,
-                const SizedBox(height: 5),
-                Expanded(child: label),
-              ],
-            )
-          : Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                icon,
-                const SizedBox(width: 6),
-                Flexible(child: label),
-              ],
-            ),
-    );
-  }
 
   List<Widget> overview() => [
         Row(

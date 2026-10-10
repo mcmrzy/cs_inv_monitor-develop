@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { MutationObserver, QueryObserver } from '@tanstack/react-query'
+import { focusManager, MutationObserver, QueryObserver } from '@tanstack/react-query'
 import { autoRefreshInterval } from './autoRefresh'
 import { createAppQueryClient } from './createAppQueryClient'
 
@@ -9,6 +9,10 @@ describe('automatic data refresh', () => {
   it('polls changing task and device state faster than ordinary settings', () => {
     expect(autoRefreshInterval(['ota', 'tasks', { page: 1 }])).toBe(10_000)
     expect(autoRefreshInterval(['devices', 'realtime', 'SN001'])).toBe(15_000)
+    expect(autoRefreshInterval(['devices', 'realtime-batch'])).toBe(15_000)
+    expect(autoRefreshInterval(['station-rt-overview', '1'])).toBe(15_000)
+    expect(autoRefreshInterval(['station-devices-rt', 1])).toBe(15_000)
+    expect(autoRefreshInterval(['ota', 'upgrades', { page: 1 }])).toBe(10_000)
     expect(autoRefreshInterval(['stations', 'summary'])).toBe(30_000)
     expect(autoRefreshInterval(['system-config', 'domains'])).toBe(120_000)
   })
@@ -32,6 +36,33 @@ describe('automatic data refresh', () => {
     } finally {
       unsubscribe()
       client.clear()
+    }
+  })
+
+  it('resumes polling after a hidden page returns, even when data did not change', async () => {
+    vi.useFakeTimers()
+    const client = createAppQueryClient()
+    client.mount()
+    const fetcher = vi.fn().mockResolvedValue({ power: 100 })
+    const observer = new QueryObserver(client, { queryKey: ['station-devices-rt', 1], queryFn: fetcher })
+    const unsubscribe = observer.subscribe(() => {})
+    try {
+      await vi.advanceTimersByTimeAsync(1)
+      expect(fetcher).toHaveBeenCalledTimes(1)
+      focusManager.setFocused(false)
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(fetcher).toHaveBeenCalledTimes(1)
+      focusManager.setFocused(true)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(fetcher).toHaveBeenCalledTimes(2)
+      await vi.advanceTimersByTimeAsync(15_000)
+      expect(fetcher).toHaveBeenCalledTimes(3)
+    } finally {
+      unsubscribe()
+      client.unmount()
+      client.clear()
+      focusManager.setFocused(undefined)
+      vi.useRealTimers()
     }
   })
 })

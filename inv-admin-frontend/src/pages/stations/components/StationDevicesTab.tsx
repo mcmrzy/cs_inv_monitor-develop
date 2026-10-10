@@ -6,7 +6,7 @@ import { ProCard } from '@ant-design/pro-components'
 import { SearchOutlined, ReloadOutlined, DesktopOutlined, ThunderboltOutlined, RightOutlined } from '@ant-design/icons'
 import { deviceApi } from '@/services/deviceApi'
 import { DEVICE_STATUS_MAP } from '@/utils/constants'
-import { safeNum } from '@/utils/format'
+import { freshRealtime, toRtEnvelope } from '@/pages/device-detail/energyUtils'
 import { formatInTimezone } from '@/utils/timezone'
 import useTranslation from '@/hooks/useTranslation'
 import DeviceRealtimeModal from './DeviceRealtimeModal'
@@ -41,7 +41,7 @@ const StationDevicesTab: React.FC<StationDevicesTabProps> = ({ stationId, timezo
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined)
   const [modalSn, setModalSn] = useState<string | null>(null)
 
-  const { data: devices, isLoading, refetch } = useQuery({
+  const { data: devices, isLoading, isFetching: devicesFetching, refetch } = useQuery({
     queryKey: ['station-devices-list', stationId],
     queryFn: () => deviceApi.getDevices({ station_id: stationId, page_size: 200 }).then(r => {
       const d = r.data?.data ?? r.data
@@ -50,8 +50,8 @@ const StationDevicesTab: React.FC<StationDevicesTabProps> = ({ stationId, timezo
     enabled: !!stationId,
   })
 
-  const { data: realtimeData } = useQuery({
-    queryKey: ['station-devices-rt', stationId],
+  const { data: realtimeData, isFetching: realtimeFetching, refetch: refetchRealtime } = useQuery({
+    queryKey: ['station-devices-rt', stationId, (devices ?? []).map(d => d.sn).sort()],
     queryFn: async () => {
       const results: Record<string, any> = {}
       await Promise.allSettled(
@@ -83,21 +83,24 @@ const StationDevicesTab: React.FC<StationDevicesTabProps> = ({ stationId, timezo
   const getRealtimePower = (sn: string): number | null => {
     const env = realtimeData?.[sn]
     // 设备离线时 Redis 会回退到陈旧缓存，不得作为实时功率展示
-    if (!env || env.online !== true) return null
-    const rt = env?.realtime ?? env
+    const rt = freshRealtime(toRtEnvelope(env))
+    if (!rt) return null
     // 尝试多种字段路径（V2 使用 output_power，V1 使用 ac_power）
-    const acPower = rt?.ac?.data?.power ?? rt?.output_power ?? rt?.ac_power ?? rt?.power
+    const acPower = rt?.ac_active_power ?? rt?.output_power ?? rt?.ac_power
+      ?? rt?.ac?.data?.ac_active_power ?? rt?.ac?.data?.power ?? rt?.power
     const pvPower = rt?.pv?.data?.pv_total_power ?? rt?.pv_total_power
-    return safeNum(acPower || pvPower) || null
+    const value = acPower ?? pvPower
+    return value != null && value !== '' && Number.isFinite(Number(value)) ? Number(value) : null
   }
 
   const getDailyEnergy = (sn: string): number | null => {
     const env = realtimeData?.[sn]
-    if (!env || env.online !== true) return null
-    const rt = env?.realtime ?? env
+    const rt = freshRealtime(toRtEnvelope(env))
+    if (!rt) return null
     // V2 使用 daily_pv_energy，V1 使用 daily_pv / daily_energy / today_energy
-    const dailyPV = safeNum(rt?.daily_pv_energy ?? rt?.daily_pv ?? rt?.daily_energy ?? rt?.today_energy ?? 0)
-    return dailyPV > 0 ? dailyPV : null
+    const value = rt?.daily_pv_energy ?? rt?.daily_pv ?? rt?.daily_energy ?? rt?.today_energy
+      ?? rt?.energy?.data?.daily_pv_energy ?? rt?.energy?.data?.daily_pv
+    return value != null && value !== '' && Number.isFinite(Number(value)) ? Number(value) : null
   }
 
   const getCategoryType = (category: string): 'inv' | 'collector' | 'battery' => {
@@ -148,7 +151,8 @@ const StationDevicesTab: React.FC<StationDevicesTabProps> = ({ stationId, timezo
           </Space>
         </Col>
         <Col>
-          <Button icon={<ReloadOutlined />} size="small" onClick={() => refetch()}>{t('station.refresh')}</Button>
+          <Button icon={<ReloadOutlined />} size="small" loading={devicesFetching || realtimeFetching}
+            onClick={async () => { await refetch(); await refetchRealtime() }}>{t('station.refresh')}</Button>
         </Col>
       </Row>
 
@@ -206,7 +210,7 @@ const StationDevicesTab: React.FC<StationDevicesTabProps> = ({ stationId, timezo
                           <div style={{ fontSize: 11, color: '#999' }}>{t('station.realtimePower')}</div>
                           <div style={{ fontSize: 14, fontWeight: 600, color: isOnline ? '#1677ff' : '#bbb' }}>
                             <ThunderboltOutlined style={{ marginRight: 4, fontSize: 12 }} />
-                            {isOnline ? (rtPower !== null ? `${rtPower.toFixed(0)} W` : '0 W') : '--'}
+                            {isOnline && rtPower !== null ? `${rtPower.toFixed(0)} W` : '--'}
                           </div>
                         </Col>
                         {devType === 'inv' && (

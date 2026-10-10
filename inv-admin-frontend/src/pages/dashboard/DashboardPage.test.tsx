@@ -1,8 +1,9 @@
 import { describe, it, expect, vi } from 'vitest'
-import { screen, waitFor } from '@testing-library/react'
+import { act, screen, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { server } from '@/test/mocks/server'
-import { renderAsAdmin } from '@/test/test-utils'
+import { createTestQueryClient, renderAsAdmin } from '@/test/test-utils'
+import useTimezoneStore from '@/stores/timezoneStore'
 import DashboardPage from './index'
 
 // jsdom 无 canvas：echarts 封装以占位 div 呈现，只断言图表实例数量与布局
@@ -14,6 +15,31 @@ vi.mock('@/lib/echarts', () => ({
 // mock 掉会让页面内 dayjs().tz() 因缺 utc 插件而崩溃
 
 describe('DashboardPage', () => {
+  it('requests the new current day after midnight without reopening the page', async () => {
+    const previousTimezone = useTimezoneStore.getState().timezone
+    useTimezoneStore.setState({ timezone: 'UTC' })
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-08T23:59:50Z'))
+    const client = createTestQueryClient()
+    const dates: string[] = []
+    server.use(http.get('/api/v1/dashboard/energy-flow', ({ request }) => {
+      dates.push(new URL(request.url).searchParams.get('date') ?? '')
+      return HttpResponse.json({ code: 0, data: { date: dates[dates.length - 1], data: [] } })
+    }))
+    const page = renderAsAdmin(<DashboardPage />, { queryClient: client })
+    try {
+      await waitFor(() => expect(dates).toContain('2026-10-08'))
+      vi.setSystemTime(new Date('2026-10-09T00:00:10Z'))
+      await act(async () => { await client.invalidateQueries({ queryKey: ['dashboard', 'energyFlow'] }) })
+      await waitFor(() => expect(dates[dates.length - 1]).toBe('2026-10-09'))
+    } finally {
+      page.unmount()
+      client.clear()
+      vi.useRealTimers()
+      useTimezoneStore.setState({ timezone: previousTimezone })
+    }
+  })
+
   it('renders hero statistic cards with mock statistics values', async () => {
     renderAsAdmin(<DashboardPage />)
 

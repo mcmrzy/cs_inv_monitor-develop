@@ -501,6 +501,7 @@ void main() {
       }
       final technical =
           find.text(language == 'zh' ? '技术详情' : 'Technical details');
+      await tab(tester, 2);
       await tester.scrollUntilVisible(technical, 200);
       await Scrollable.ensureVisible(tester.element(technical), alignment: 0.5);
       await tester.pumpAndSettle();

@@ -4,6 +4,9 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.LocationManager
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import android.os.Build
 import androidx.core.content.ContextCompat
@@ -48,12 +51,37 @@ class WifiScanPlugin : FlutterPlugin, MethodCallHandler {
             "startScan" -> result.success(startScan())
             "canGetScannedResults" -> result.success(canGetScannedResults())
             "getScannedResults" -> result.success(getScannedResults())
+            "forceWifiUsage" -> result.success(forceWifiUsage(call.argument<Boolean>("useWifi") == true))
             else -> result.notImplemented()
         }
     }
 
     private val wifi: WifiManager?
         get() = context.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+
+    private fun forceWifiUsage(force: Boolean): Boolean {
+        val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE)
+            as? ConnectivityManager ?: return false
+        if (!force) return manager.bindProcessToNetwork(null)
+
+        fun isWifi(network: Network): Boolean =
+            manager.getNetworkCapabilities(network)
+                ?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+
+        // A scan needs no association. Do not request a future network here:
+        // an outstanding onAvailable callback could rebind after cancellation.
+        val networks = manager.allNetworks.filter(::isWifi)
+        val network = manager.boundNetworkForProcess?.takeIf(::isWifi)
+            // Prefer the local-only IoT network over a concurrent Internet WiFi.
+            ?: networks.firstOrNull {
+                manager.getNetworkCapabilities(it)
+                    ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == false
+            }
+            ?: manager.activeNetwork?.takeIf(::isWifi)
+            ?: networks.firstOrNull()
+            ?: return false
+        return manager.bindProcessToNetwork(network)
+    }
 
     private fun hasLocationPermission(): Boolean {
         val fine = ContextCompat.checkSelfPermission(

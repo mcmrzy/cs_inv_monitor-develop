@@ -54,6 +54,9 @@ void main() {
   /// 数据帧被设备以 ATT 14 (GATT_UNLIKELY) 拒绝的次数（每次消耗一次）。
   int deviceRefuseDataWrites = 0;
 
+  /// 固件队列满，返回可恢复的 ATT 9。
+  int queueFullDataWrites = 0;
+
   /// 数据帧写入尝试总次数（含被拒的），用于断言"未重试"。
   int dataWriteAttempts = 0;
 
@@ -127,6 +130,7 @@ void main() {
     transientFailDataWrites = 0;
     transientFailAfterLanding = false;
     deviceRefuseDataWrites = 0;
+    queueFullDataWrites = 0;
     dataWriteAttempts = 0;
     authNotify = StreamController<List<int>>.broadcast();
     commandNotify = StreamController<List<int>>.broadcast();
@@ -308,6 +312,11 @@ void main() {
         throw FlutterBlueUltraException(
             ErrorPlatform.android, 'writeCharacteristic', 14, 'GATT_UNLIKELY');
       }
+      if (queueFullDataWrites > 0) {
+        queueFullDataWrites--;
+        throw FlutterBlueUltraException(ErrorPlatform.android,
+            'writeCharacteristic', 9, 'PREPARE_QUEUE_FULL');
+      }
       if (transientFailDataWrites > 0) {
         transientFailDataWrites--;
         throw FlutterBlueUltraException(ErrorPlatform.android,
@@ -476,6 +485,72 @@ void main() {
     expect(otaRawFrames, isEmpty);
   });
 
+  test('MTU below 256 is rejected before OTA control or data writes', () async {
+    when(() => connection.mtuNow).thenReturn(247);
+    final service = BleCommunicationService(adapter: adapter, manager: manager);
+    await service.connectToDevice(deviceSN: sn, deviceIP: '192.168.4.1');
+    await expectLater(
+      service.uploadFirmware(
+        deviceIP: '192.168.4.1',
+        filePath: firmwarePath,
+        manifest: manifest(),
+      ),
+      throwsA(isA<BleCommandException>().having(
+        (e) => e.code,
+        'code',
+        'BLE_MTU_TOO_SMALL',
+      )),
+    );
+    expect(otaCtrlWrites, isEmpty);
+    expect(otaRawFrames, isEmpty);
+  });
+
+  test('signed OTA control fits the firmware 512-byte JSON buffer', () async {
+    final service = BleCommunicationService(adapter: adapter, manager: manager);
+    await service.connectToDevice(deviceSN: sn, deviceIP: '192.168.4.1');
+    await service.uploadFirmware(
+      deviceIP: '192.168.4.1',
+      filePath: firmwarePath,
+      manifest: LocalOtaManifest(
+        target: 'esp',
+        taskId: List.filled(63, 't').join(),
+        version: List.filled(31, 'v').join(),
+        sha256: List.filled(64, 'a').join(),
+        signature: base64Encode(List<int>.filled(64, 1)),
+        securityVersion: 1,
+      ),
+    );
+    final control = otaCtrlWrites.single;
+    expect(utf8.encode(jsonEncode(control)).length, lessThan(512));
+  });
+
+  test('oversized OTA control fails locally before any control write',
+      () async {
+    final service = BleCommunicationService(adapter: adapter, manager: manager);
+    await service.connectToDevice(deviceSN: sn, deviceIP: '192.168.4.1');
+    await expectLater(
+      service.uploadFirmware(
+        deviceIP: '192.168.4.1',
+        filePath: firmwarePath,
+        manifest: LocalOtaManifest(
+          target: 'esp',
+          taskId: List.filled(63, '\\').join(),
+          version: List.filled(31, 'v').join(),
+          sha256: List.filled(64, 'a').join(),
+          signature: base64Encode(List<int>.filled(64, 1)),
+          securityVersion: 0xffffffff,
+          timeoutSeconds: 3600,
+        ),
+      ),
+      throwsA(isA<BleCommandException>().having(
+        (e) => e.code,
+        'code',
+        'OTA_CONTROL_TOO_LARGE',
+      )),
+    );
+    expect(otaCtrlWrites, isEmpty);
+  });
+
   test('sends 1024 firmware bytes as MTU-bounded binary writes', () async {
     firmwareBytes = List<int>.generate(1024, (i) => i & 0xff);
     await File(firmwarePath).writeAsBytes(firmwareBytes);
@@ -529,6 +604,7 @@ void main() {
     expect(accepted, firmwareBytes.length);
     expect(rawFrames.length, 3);
     expect(rawFrames.map((frame) => frame.length - 10), [496, 496, 32]);
+    expect((otaCtrlWrites.single['body'] as Map)['timeout_seconds'], 1200);
   });
 
   test('MTU 256 reads batch status without waiting for absent notification',
@@ -748,6 +824,21 @@ void main() {
     expect(offsets.length, offsets.toSet().length, reason: '不允许重复 offset');
 
     await service.disconnect();
+  });
+
+  test('ATT queue-full reads accepted offset and retries unaccepted frame',
+      () async {
+    queueFullDataWrites = 1;
+    final service = BleCommunicationService(adapter: adapter, manager: manager);
+    await service.connectToDevice(deviceSN: sn, deviceIP: '192.168.4.1');
+    await service.uploadFirmware(
+      deviceIP: '192.168.4.1',
+      filePath: firmwarePath,
+      manifest: manifest(),
+    );
+    expect(dataWriteAttempts, 2);
+    expect(otaRawFrames.length, 1);
+    expect(((otaDataWrites.single['body'] as Map)['offset'] as num).toInt(), 0);
   });
 
   test('only AOSP transient GATT statuses are retryable', () {

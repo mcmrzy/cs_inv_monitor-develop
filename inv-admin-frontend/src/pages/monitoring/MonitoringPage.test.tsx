@@ -98,3 +98,29 @@ describe('MonitoringPage', () => {
     expect(screen.queryByText('测试电站A')).not.toBeInTheDocument()
   })
 })
+
+describe('monitoring refresh', () => {
+  it('refreshes both station cards and summary counters', async () => {
+    localStorage.removeItem('last_selected_station')
+    let listRequests = 0
+    let summaryRequests = 0
+    server.use(
+      http.get('/api/v1/stations', () => {
+        listRequests++
+        return HttpResponse.json({ code: 0, data: { items: [{ id: 1, name: 'Refresh Station', status: 1 }], total: 1 } })
+      }),
+      http.get('/api/v1/stations/summary', () => {
+        summaryRequests++
+        return HttpResponse.json({ code: 0, data: { totalStations: 1, totalDevices: 1, onlineDevices: 1, todayGeneration: summaryRequests } })
+      }),
+    )
+    renderAsAdmin(<MonitoringPage />)
+    await waitFor(() => expect(summaryRequests).toBe(1))
+    await screen.findByText('Refresh Station')
+    fireEvent.click(screen.getByRole('button', { name: '刷新' }))
+    await waitFor(() => {
+      expect(listRequests).toBe(2)
+      expect(summaryRequests).toBe(2)
+    })
+  })
+})

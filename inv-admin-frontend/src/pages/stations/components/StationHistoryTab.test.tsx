@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { fireEvent, waitFor, screen } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { server } from '@/test/mocks/server'
@@ -80,6 +80,36 @@ describe('StationHistoryTab', () => {
     localStorage.clear()
   })
 
+  afterEach(() => vi.useRealTimers())
+
+  it('刷新默认区间时包含页面打开后上报的数据', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-09T08:00:00Z'))
+    useTelemetryHandler()
+    renderAsAdmin(<StationHistoryTab stationId={1} timezone="Asia/Shanghai" />)
+    await screen.findByText(/共 2 条/)
+    const queryButton = screen.getByRole('button', { name: /查询/ })
+    await waitFor(() => expect(queryButton).not.toHaveClass('ant-btn-loading'), { timeout: 5000 })
+    const firstEnd = lastTelemetryParams().get('endTime')
+    vi.setSystemTime(new Date('2026-10-09T09:00:00Z'))
+    fireEvent.click(queryButton)
+    await waitFor(() => expect(lastTelemetryParams().get('endTime')).not.toBe(firstEnd), { timeout: 5000 })
+    expect(lastTelemetryParams().get('endTime')).toBe('2026-10-09T09:00:00.000Z')
+  })
+
+  it('字段抽屉按组过滤并支持本组勾选', async () => {
+    useTelemetryHandler()
+    renderAsAdmin(<StationHistoryTab stationId={1} timezone="Asia/Shanghai" />)
+    await screen.findByText(/共 2 条/)
+    await openFieldPicker()
+    fireEvent.click(screen.getByRole('menuitem', { name: /电池参数/ }))
+    expect(document.querySelector('[data-field-key="battery_soc"]')).toBeTruthy()
+    expect(document.querySelector('[data-field-key="pv_total_power"]')).toBeNull()
+    fireEvent.click(screen.getByRole('checkbox', { name: /本组全选/ }))
+    await waitFor(() => expect(hasColumn('电池SOC (%)')).toBe(true))
+    expect(hasColumn('PV总功率 (W)')).toBe(false)
+  })
+
   it('默认不选择任何字段，提示用户先添加字段', async () => {
     useTelemetryHandler()
     renderAsAdmin(<StationHistoryTab stationId={1} timezone="Asia/Shanghai" />)
@@ -138,7 +168,10 @@ describe('StationHistoryTab', () => {
     const stickyHeader = container.querySelector('.ant-table-sticky-holder')
     expect(stickyHeader).toBeInTheDocument()
     expect(stickyHeader).toHaveStyle({ top: '56px' })
-    expect(stickyHeader?.querySelectorAll('th.ant-table-cell')).toHaveLength(5)
+    expect(stickyHeader?.querySelectorAll('thead tr')).toHaveLength(2)
+    expect(stickyHeader?.querySelectorAll('thead tr:last-child th')).toHaveLength(4)
+    expect(stickyHeader?.textContent).toContain('系统状态')
+    expect(stickyHeader?.textContent).toContain('光伏参数')
     expect(stickyHeader?.querySelector('th')).toHaveClass('ant-table-cell-fix-left')
     expect(stickyHeader?.querySelector('th')).toHaveTextContent('时间')
 

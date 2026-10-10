@@ -115,7 +115,7 @@ const StatusTab: React.FC<StatusTabProps> = ({ sn }) => {
   const { data: envelope, isLoading: rtLoading, error: realtimeError, refetch: refetchRealtime } = useQuery({
     queryKey: queryKeys.devices.realtime(sn),
     queryFn: () => deviceApi.getRealtime(sn).then((r) => toRtEnvelope(r.data?.data ?? r.data)),
-    refetchInterval: () => (document.visibilityState === 'visible' ? 10_000 : false),
+    refetchInterval: 10_000,
   })
 
   const { data: deviceInfo, error: deviceError, refetch: refetchDevice } = useQuery({

@@ -3,19 +3,20 @@ export function autoRefreshInterval(queryKey: readonly unknown[]): number | fals
   const [scope, resource] = queryKey
 
   if (scope === 'ota') {
-    if (['tasks', 'task-devices', 'task-detail', 'task-stats'].includes(String(resource))) return 10_000
+    if (['tasks', 'task-devices', 'task-detail', 'task-stats', 'upgrades', 'upgrade-details'].includes(String(resource))) return 10_000
     if (['history', 'device-history', 'firmware-overview'].includes(String(resource))) return 15_000
     return 120_000
   }
 
   if (scope === 'devices') {
-    if (['realtime', 'control-state', 'commands', 'debug-session'].includes(String(resource))) return 15_000
+    if (['realtime', 'realtime-batch', 'control-state', 'commands', 'command-history', 'debug-session', 'debug-samples', 'unbind-requests'].includes(String(resource))) return 15_000
     if (resource == null || typeof resource === 'object' || ['list', 'all', 'detail', 'by-station'].includes(String(resource))) return 30_000
     return 120_000
   }
 
   if (scope === 'stations') return resource === 'all' ? 60_000 : 30_000
   if (scope === 'station' || scope === 'station-devices' || scope === 'station-devices-overview' || scope === 'station-devices-list') return 30_000
+  if (scope === 'station-rt-overview' || scope === 'station-devices-rt' || scope === 'station-devices-realtime' || scope === 'history-devices') return 15_000
   if (scope === 'station-alarms' || scope === 'station-alarms-overview' || scope === 'device-alarms') return 15_000
   if (scope === 'station-statistics' || scope === 'station-stats-summary' || scope === 'station-energy-overview') return 60_000
   if (scope === 'station-trend-30d' || scope === 'station-power-flow') return 60_000

@@ -322,7 +322,7 @@ const WorkOrdersPage: React.FC = () => {
           <Col><Select allowClear placeholder={t('wo.slaStatus')} style={{ width: 130 }} value={slaFilter} onChange={(val) => { setSlaFilter(val); setPage(1) }} options={Object.entries(SLA_STATUS_MAP).map(([k, v]) => ({ label: v.label, value: k }))} /></Col>
           <Col><Select allowClear placeholder={t('wo.status')} style={{ width: 120 }} value={statusFilter} onChange={(val) => { setStatusFilter(val); setPage(1) }} options={Object.entries(WO_STATUS_MAP).map(([k, v]) => ({ label: v.label, value: k }))} /></Col>
           <Col><Select allowClear placeholder={t('wo.templateHint')} style={{ width: 120 }} value={priorityFilter} onChange={(val) => { setPriorityFilter(val); setPage(1) }} options={Object.entries(WO_PRIORITY_MAP).map(([k, v]) => ({ label: v.label, value: k }))} /></Col>
-          <Col><Button icon={<ReloadOutlined />} onClick={() => refetch()}>{t('common.refresh')}</Button></Col>
+          <Col><Button icon={<ReloadOutlined />} onClick={() => { void Promise.all([refetch(), refetchStats()]) }}>{t('common.refresh')}</Button></Col>
           <Col flex="auto" style={{ textAlign: 'right' }}>
             <Radio.Group value={viewMode} onChange={(e) => setViewMode(e.target.value)}>
               <Radio.Button value="table"><UnorderedListOutlined /> {t('wo.viewModeTable')}</Radio.Button>

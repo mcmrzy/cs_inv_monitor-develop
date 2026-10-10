@@ -486,11 +486,13 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
                 onPressed: () => context.push(
                     '/device/${widget.sn}/history?tz=${Uri.encodeComponent(_timezone)}'),
               ),
-            IconButton(
-              icon: const Icon(Icons.battery_charging_full_rounded),
-              tooltip: AppLocalizations.of(context)!.str('storage_title'),
-              onPressed: () => context.push('/device/${widget.sn}/storage'),
-            ),
+            if (!_isLocalMode)
+              IconButton(
+                icon: const Icon(Icons.battery_charging_full_rounded),
+                tooltip: AppLocalizations.of(context)!.str('storage_title'),
+                onPressed: () => context.push(
+                    '/device/${Uri.encodeComponent(widget.sn)}/storage?tz=${Uri.encodeComponent(_timezone)}'),
+              ),
             // 云端调试入口（区别于局域网直连的本地模式）
             IconButton(
               icon: const Icon(Icons.bug_report_outlined),
@@ -540,6 +542,18 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
   Widget _buildContent() {
     return Column(
       children: [
+        if (!_isLocalMode)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              key: const ValueKey('device-detail-history'),
+              icon: const Icon(Icons.history_rounded),
+              label:
+                  Text(AppLocalizations.of(context)!.str('telemetry_history')),
+              onPressed: () => context.push(
+                  '/device/${Uri.encodeComponent(widget.sn)}/history?tz=${Uri.encodeComponent(_timezone)}'),
+            ),
+          ),
         // ── 横幅区（位于 TabBarView 上方）──
         if (_apiUnavailable && _hasMqttData)
           Padding(

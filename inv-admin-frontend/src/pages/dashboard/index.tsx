@@ -83,11 +83,15 @@ const DashboardPage: React.FC = () => {
   const { timezone } = useTimezoneStore()
   const user = useAuthStore((s) => s.user)
   const userTimezone = timezone
-  const [flowDate, setFlowDate] = useState(dayjs().tz(timezone).format('YYYY-MM-DD'))
+  const [selectedFlowDate, setFlowDate] = useState<string | null>(null)
+  const flowDate = selectedFlowDate ?? dayjs().tz(timezone).format('YYYY-MM-DD')
 
   const { data: flowRes, isLoading: flowLoading, error: flowError, refetch: refetchFlow } = useQuery({
     queryKey: ['dashboard', 'energyFlow', flowDate, userTimezone],
-    queryFn: () => dashboardApi.getEnergyFlow({ date: flowDate }).then((r) => r.data?.data ?? r.data ?? []),
+    queryFn: () => dashboardApi.getEnergyFlow({
+      date: selectedFlowDate ?? dayjs().tz(timezone).format('YYYY-MM-DD'),
+    }).then((r) => r.data?.data ?? r.data ?? []),
+    refetchInterval: selectedFlowDate ? false : 15_000,
     staleTime: 0,
     refetchOnMount: true,
   })
@@ -416,9 +420,9 @@ const DashboardPage: React.FC = () => {
         title={<Space><LineChartOutlined style={{ color: '#1677ff' }} /><span>{t('dash.powerTrend')}</span></Space>}
         extra={
           <Space>
-            <DatePicker value={dayjs(flowDate)} onChange={(d) => d && setFlowDate(dayjs(d).tz(timezone).format('YYYY-MM-DD'))} allowClear={false} style={{ width: 150 }} />
+            <DatePicker value={dayjs(flowDate)} onChange={(d) => d && setFlowDate(d.format('YYYY-MM-DD'))} allowClear={false} style={{ width: 150 }} />
             <Button size="small" onClick={() => setFlowDate(dayjs().tz(timezone).subtract(1, 'day').format('YYYY-MM-DD'))}>{t('dash.yesterday')}</Button>
-            <Button size="small" onClick={() => setFlowDate(dayjs().tz(timezone).format('YYYY-MM-DD'))}>{t('dash.today')}</Button>
+            <Button size="small" onClick={() => setFlowDate(null)}>{t('dash.today')}</Button>
           </Space>
         }
       >

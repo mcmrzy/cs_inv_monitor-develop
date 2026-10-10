@@ -232,7 +232,7 @@ const StationsPage: React.FC = () => {
 
   /* 实时数据批量获取 - 15秒刷新 */
   const { data: realtimeData, error: realtimeError, refetch: refetchRealtime } = useQuery({
-    queryKey: ['station-devices-realtime', currentStation?.id],
+    queryKey: ['station-devices-realtime', currentStation?.id, stationDevices.map((dev: any) => dev.sn).sort()],
     queryFn: async () => {
       const devices = stationDevices ?? []
       const results: Record<string, any> = {}
@@ -876,7 +876,7 @@ const StationsPage: React.FC = () => {
             { value: 2, label: t('station.deviceFault') },
           ]}
         />
-        <Button icon={<ReloadOutlined />} onClick={() => queryClient.invalidateQueries({ queryKey: ['station-devices', currentStation?.id] })}>
+        <Button icon={<ReloadOutlined />} onClick={async () => { await refetchStationDevices(); await refetchRealtime() }}>
           {t('common.refresh')}
         </Button>
         {(isSuperAdmin || currentStation?.user_id === user?.id) && (
@@ -896,7 +896,7 @@ const StationsPage: React.FC = () => {
         loading={devicesLoading}
         size="small"
         search={false}
-        options={{ density: true, setting: true }}
+        options={{ density: true, reload: async () => { await refetchStationDevices(); await refetchRealtime() }, setting: true }}
         pagination={{ pageSize: 10, showTotal: (total) => t('common.total', { total }) }}
         scroll={{ x: 800 }}
       />
@@ -993,7 +993,7 @@ const StationsPage: React.FC = () => {
         loading={alarmsLoading}
         size="small"
         search={false}
-        options={{ density: true, setting: true }}
+        options={{ density: true, reload: () => queryClient.invalidateQueries({ queryKey: ['station-alarms', currentStation?.id] }), setting: true }}
         pagination={{ pageSize: 10, showTotal: (total) => t('common.total', { total }) }}
         scroll={{ x: 700 }}
       />
@@ -1040,7 +1040,7 @@ const StationsPage: React.FC = () => {
             </Button>
           )}
 
-          <Button icon={<ReloadOutlined />} onClick={() => refetch()}>{t('common.refresh')}</Button>
+          <Button icon={<ReloadOutlined />} onClick={() => { void Promise.all([refetch(), refetchSummary()]) }}>{t('common.refresh')}</Button>
         </Space>
       </Space>
 
@@ -1153,7 +1153,7 @@ const StationsPage: React.FC = () => {
               loading={isLoading}
               size="small"
               search={false}
-              options={{ density: true, reload: () => refetch(), setting: true }}
+              options={{ density: true, reload: () => Promise.all([refetch(), refetchSummary()]), setting: true }}
               pagination={{ pageSize: 20, showSizeChanger: true, showTotal: (total) => t('common.total', { total }) }}
               scroll={{ x: 1200 }}
             />
