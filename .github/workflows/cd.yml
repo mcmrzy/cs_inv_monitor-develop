@@ -307,6 +307,22 @@ jobs:
             # Sync 步骤保留 .env.prod，因此这里读到的是候选部署前的镜像版本。
             PREV_IMAGE_TAG=$(grep '^IMAGE_TAG=' .env.prod 2>/dev/null | cut -d= -f2 || true)
 
+            # 在修改镜像版本和启动迁移之前备份；失败直接终止，保留运行中的旧服务。
+            case " ${{ env.CHANGED_SERVICES }} " in
+              *" business-api "*)
+                umask 077
+                DATABASE_BACKUP_DIR=/opt/inv-mqtt/data-backup/database
+                mkdir -p "$DATABASE_BACKUP_DIR"
+                DATABASE_BACKUP="$DATABASE_BACKUP_DIR/$(date -u +%Y%m%dT%H%M%SZ)-${{ env.DEPLOY_SHA }}.dump"
+                docker exec inv-postgres sh -c 'export PGPASSWORD="$POSTGRES_PASSWORD"; exec pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "$DATABASE_BACKUP.partial"
+                test -s "$DATABASE_BACKUP.partial"
+                docker exec -i inv-postgres pg_restore --list < "$DATABASE_BACKUP.partial" > /dev/null
+                mv "$DATABASE_BACKUP.partial" "$DATABASE_BACKUP"
+                sha256sum "$DATABASE_BACKUP" > "$DATABASE_BACKUP.sha256"
+                echo "✅ 数据库迁移前备份已校验：$DATABASE_BACKUP ($(stat -c %s "$DATABASE_BACKUP") bytes)"
+                ;;
+            esac
+
             # ---------- 失败诊断 ----------
             capture_diagnostics() {
               echo "=== 部署失败诊断：Compose 状态 ==="
@@ -615,6 +631,13 @@ jobs:
 
             # ---------- 执行健康检查 ----------
             if [ "$deploy_up_failed" = "0" ] && health_check; then
+              # 本次发布要求硬件兼容迁移实际落库，不能只依据容器 healthy。
+              if [ -f /opt/inv-mqtt/database/migrations/129_hardware_compatible_ota.up.sql ]; then
+                DEPLOY_PHASE=verify_hardware_ota_migration
+                MIGRATION_129=$(docker exec inv-postgres sh -c 'export PGPASSWORD="$POSTGRES_PASSWORD"; exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT count(*) FROM schema_migrations WHERE version=129"')
+                test "$MIGRATION_129" = "1"
+                docker exec inv-postgres sh -c 'export PGPASSWORD="$POSTGRES_PASSWORD"; exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT json_build_object('\''migration'\'',129,'\''hardware_catalog_entries'\'',(SELECT count(*) FROM device_hardware_versions),'\''assigned_firmware'\'',(SELECT count(DISTINCT firmware_id) FROM firmware_hardware_versions),'\''unassigned_published_firmware'\'',(SELECT count(*) FROM firmware_versions f WHERE f.is_published=true AND NOT EXISTS (SELECT 1 FROM firmware_hardware_versions h WHERE h.firmware_id=f.id)))"'
+              fi
               report_external_readiness
               cleanup_old_images
               echo "🎉 部署成功完成！"
