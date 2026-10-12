@@ -54,7 +54,7 @@ func (r *OTARepository) CreateFirmware(ctx context.Context, f *model.Firmware) e
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	// 上传默认 draft，不生成 main_version；需显式 publish 后用户侧才可见
 	err = tx.QueryRow(ctx, `
 		INSERT INTO firmware_versions (model, target_chip, version, file_url, file_size, file_md5, file_sha256, security_version, release_signature, changelog, is_force, uploaded_by, status, release_status, created_at)
@@ -78,7 +78,7 @@ func (r *OTARepository) PublishFirmware(ctx context.Context, id int64, actorID i
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err = validateFirmwareRollbackTx(ctx, tx, id, opts.RollbackToFirmwareID); err != nil {
 		return err
 	}
@@ -117,7 +117,7 @@ func (r *OTARepository) UpdateFirmwareRollout(ctx context.Context, id int64, opt
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err = validateFirmwareRollbackTx(ctx, tx, id, opts.RollbackToFirmwareID); err != nil {
 		return err
 	}
