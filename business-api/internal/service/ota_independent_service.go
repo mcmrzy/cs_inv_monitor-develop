@@ -30,14 +30,37 @@ func (s *OTAService) GetDeviceFirmwareOverview(ctx context.Context, sn string) (
 	for _, target := range targets {
 		current, _ := CurrentModuleVersion(device.Model, device.FirmwareArm, device.FirmwareEsp, device.FirmwareDSP, device.FirmwareBMS, target)
 		latest, _ := s.repo.GetLatestFirmware(ctx, sn, device.Model, target)
-		modules = append(modules, FirmwareModuleOverview(target, current, device.IsOnline, latest))
+		module := FirmwareModuleOverview(target, current, device.IsOnline, latest)
+		applyModuleHardwareCompatibility(&module, device.HardwareKnown, latest != nil)
+		modules = append(modules, module)
 	}
 	return &model.DeviceFirmwareOverview{
+		HardwareVersion: device.HardwareVersion,
+		HardwareState: func() string {
+			if device.HardwareKnown {
+				return "known"
+			}
+			return "unknown"
+		}(),
 		DeviceSN:    device.SN,
 		DeviceModel: device.Model,
 		IsOnline:    device.IsOnline,
 		Modules:     modules,
 	}, nil
+}
+
+func applyModuleHardwareCompatibility(module *model.FirmwareModuleOverview, hardwareKnown, hasCompatibleFirmware bool) {
+	if !module.Supported {
+		return
+	}
+	if !hardwareKnown {
+		module.CompatibilityReason = "hardware_version_unknown"
+		module.Eligible = false
+		module.UpdateAvailable = false
+	} else if !hasCompatibleFirmware {
+		module.CompatibilityReason = "no_compatible_firmware"
+		module.Eligible = false
+	}
 }
 
 // GetPublishedFirmwareResources 设备可安装已发布固件

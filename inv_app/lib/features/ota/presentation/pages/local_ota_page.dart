@@ -49,6 +49,7 @@ class LocalOTAPage extends StatefulWidget {
   final String? fileSha256;
   final int? securityVersion;
   final String? releaseSignature;
+  final List<String>? hardwareVersions;
   final LocalCommunicationChannel channel;
 
   /// BLE 通道目标设备 MAC（扫描页连接时带入）。
@@ -73,6 +74,7 @@ class LocalOTAPage extends StatefulWidget {
     this.fileSha256,
     this.securityVersion,
     this.releaseSignature,
+    this.hardwareVersions,
     this.channel = LocalCommunicationChannel.wifiAp,
     this.deviceMac,
     this.embedded = false,
@@ -120,39 +122,66 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   /// 本地 OTA 执行引擎（上传→触发→轮询→上报的状态机下沉层）
   LocalOTAController? _otaController;
 
-  /// 按固件 ID 从服务端拉取的元数据（路由仅传 firmware_id 时的链路）；
-  /// 与路由参数兼容：路由参数优先，缺失时用拉取结果兜底
+  /// Metadata fetched by ID is one canonical record. Route fields must never
+  /// override its bytes, hash or hardware range independently.
   Map<String, dynamic>? _firmwareMeta;
+  bool _loadingFirmwareMeta = false;
 
-  // 固件元数据有效值：路由参数优先，其次服务端拉取结果
+  bool get _needsCanonicalMetadata =>
+      (widget.firmwareId ?? 0) > 0 &&
+      ((widget.firmwareUrl?.trim().isEmpty ?? true) ||
+          !(widget.hardwareVersions?.any((value) => value.trim().isNotEmpty) ?? false));
+
+  bool get _metadataReadyForDownload =>
+      (widget.firmwareId ?? 0) > 0 &&
+      !_loadingFirmwareMeta &&
+      (!_needsCanonicalMetadata || _firmwareMeta != null);
+
+  String? _metadataString(List<String> keys, String? routeValue) {
+    final meta = _firmwareMeta;
+    if (meta == null) return routeValue;
+    for (final key in keys) {
+      final value = meta[key];
+      if (value is String) return value;
+    }
+    return null;
+  }
+
   String? get _metaFirmwareUrl =>
-      widget.firmwareUrl ?? (_firmwareMeta?['download_url'] as String?);
+      _metadataString(const ['download_url', 'file_url'], widget.firmwareUrl);
   String? get _metaFileName =>
-      widget.firmwareFileName ?? (_firmwareMeta?['file_name'] as String?);
+      _metadataString(const ['file_name'], widget.firmwareFileName);
   String? get _metaDeviceModel =>
-      widget.deviceModel ??
-      (_firmwareMeta?['device_model'] as String?) ??
-      (_firmwareMeta?['model'] as String?);
-  int? get _metaFileSize =>
-      widget.fileSize ?? (_firmwareMeta?['file_size'] as num?)?.toInt();
+      _metadataString(const ['device_model', 'model'], widget.deviceModel);
+  int? get _metaFileSize => _firmwareMeta == null
+      ? widget.fileSize
+      : (_firmwareMeta!['file_size'] as num?)?.toInt();
   String? get _metaTargetChip =>
-      widget.targetChip ?? (_firmwareMeta?['target_chip'] as String?);
+      _metadataString(const ['target_chip'], widget.targetChip);
   String? get _metaFirmwareVersion =>
-      widget.firmwareVersion ?? (_firmwareMeta?['firmware_version'] as String?);
+      _metadataString(const ['firmware_version', 'version'], widget.firmwareVersion);
   String? get _metaFileSha256 =>
-      widget.fileSha256 ?? (_firmwareMeta?['file_sha256'] as String?);
-  int? get _metaSecurityVersion =>
-      widget.securityVersion ??
-      (_firmwareMeta?['security_version'] as num?)?.toInt();
+      _metadataString(const ['file_sha256'], widget.fileSha256);
+  int? get _metaSecurityVersion => _firmwareMeta == null
+      ? widget.securityVersion
+      : (_firmwareMeta!['security_version'] as num?)?.toInt();
   List<String>? get _metaSupportedChannels {
     final value = _firmwareMeta?['supported_channels'];
     if (value is! List) return null;
-    return value.map((entry) => entry.toString()).toList(growable: false);
+    return value.whereType<String>().toList(growable: false);
+  }
+  List<String> get _metaHardwareVersions {
+    if (_firmwareMeta == null) return widget.hardwareVersions ?? const [];
+    final value = _firmwareMeta!['hardware_versions'];
+    return value is List ? value.whereType<String>().toList() : const [];
   }
   String? get _metaReleaseSignature =>
-      widget.releaseSignature ??
-      (_firmwareMeta?['release_signature'] as String?);
+      _metadataString(const ['release_signature'], widget.releaseSignature);
 
+  bool get _canProceedWithSelection => _selectedFilePath != null &&
+      (_selectedDownloaded != null
+          ? _selectedDownloaded!.hardwareVersions.any((value) => value.trim().isNotEmpty)
+          : _metadataReadyForDownload && _metaHardwareVersions.any((value) => value.trim().isNotEmpty));
   @override
   void initState() {
     super.initState();
@@ -186,52 +215,45 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       }
     });
 
+    _loadingFirmwareMeta = _needsCanonicalMetadata;
     _initFirmware();
     _loadDownloadedFirmwares();
   }
 
   Future<void> _initFirmware() async {
-    if (widget.firmwareId != null) {
-      final isDownloaded =
-          await _downloadService.isFirmwareDownloaded(widget.firmwareId!);
-      if (isDownloaded) {
-        final path = await _downloadService
-            .getDownloadedFirmwarePath(widget.firmwareId!);
-        if (path != null && mounted) {
-          setState(() {
-            _selectedFilePath = path;
-          });
-        }
-      }
-    }
-
-    // 路由仅传 firmware_id 时，按 ID 拉取升级元数据
-    // （替代旧版 9 个 query 参数传复杂元数据）
-    if (widget.firmwareUrl == null && widget.firmwareId != null) {
-      try {
-        final result =
-            await getIt<OtaRepository>().getFirmwareInfo(widget.firmwareId!);
-        result.fold(
-          (failure) {
-            if (mounted) {
-              setState(() {
-                _errorMessage = AppLocalizations.of(context)!
-                    .str('download_failed', {'error': failure.message});
-              });
-            }
-          },
-          (meta) {
-            if (mounted) {
-              setState(() => _firmwareMeta = meta);
-            }
-          },
+    // A cached file can only be selected together with its own persisted
+    // metadata by _loadDownloadedFirmwares, never from a path alone.
+    if (!_needsCanonicalMetadata) return;
+    try {
+      final result = await getIt<OtaRepository>().getFirmwareInfo(widget.firmwareId!);
+      result.fold(
+        (failure) {
+          if (mounted) {
+            setState(
+              () => _errorMessage = AppLocalizations.of(context)!
+                  .str('download_failed', {'error': failure.message}),
+            );
+          }
+        },
+        (meta) {
+          final resolvedId = (meta['firmware_id'] as num?)?.toInt();
+          if (resolvedId != widget.firmwareId) {
+            throw const FormatException('Firmware metadata ID does not match requested firmware');
+          }
+          if (mounted) setState(() => _firmwareMeta = meta);
+        },
+      );
+    } catch (error) {
+      if (mounted) {
+        setState(
+          () => _errorMessage = AppLocalizations.of(context)!
+              .str('download_failed', {'error': '$error'}),
         );
-      } catch (_) {
-        // 拉取失败时保留离线选择链路兜底
       }
+    } finally {
+      if (mounted) setState(() => _loadingFirmwareMeta = false);
     }
   }
-
   /// 加载本地已下载固件列表（无网时也可选择已预下载的固件）
   Future<void> _loadDownloadedFirmwares() async {
     final items = await _downloadService.listDownloadedFirmwares();
@@ -564,7 +586,8 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
 
 
   Future<void> _startDownload() async {
-    if (_metaFirmwareUrl == null ||
+    if (!_metadataReadyForDownload ||
+        _metaFirmwareUrl == null ||
         _metaFileName == null ||
         widget.firmwareId == null) {
       return;
@@ -590,6 +613,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         signature: _metaReleaseSignature,
         securityVersion: _metaSecurityVersion,
         supportedChannels: _metaSupportedChannels,
+        hardwareVersions: _metaHardwareVersions,
       );
       if (mounted) {
         setState(() {
@@ -746,28 +770,27 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       _errorMessage = null;
     });
 
-    // 升级元数据：优先取选中的已下载固件（离线升级链路），
-    // 缺失时回退路由参数（双 Tab 入口不传固件参数时，
-    // 仅靠路由参数会导致校验必败，故必须支持离线元数据）。
+    // Use one record for all upgrade fields. A selected cache entry must not
+    // borrow bytes/hash/version metadata from an unrelated route firmware.
     // 2026-09-21：签名/安全版本/SHA-256 改为可选（服务端固件记录可能未签名，
     // 设备端对空签名跳过验签），预检只拦截协议必需字段：目标芯片/通道/大小/版本。
     final offline = _selectedDownloaded;
-    final target = ((offline?.targetChip ?? _metaTargetChip) ?? 'esp')
+    final target = ((offline != null ? offline.targetChip : _metaTargetChip) ?? '')
         .trim()
         .toLowerCase();
-    final version = (offline?.version ?? _metaFirmwareVersion)?.trim() ?? '';
+    final version = (offline != null ? offline.version : _metaFirmwareVersion)?.trim() ?? '';
     final sha256 =
-        (offline?.sha256 ?? _metaFileSha256)?.trim().toLowerCase() ?? '';
+        (offline != null ? offline.sha256 : _metaFileSha256)?.trim().toLowerCase() ?? '';
     final signature =
-        (offline?.signature ?? _metaReleaseSignature)?.trim() ?? '';
+        (offline != null ? offline.signature : _metaReleaseSignature)?.trim() ?? '';
     final securityVersion =
-        offline?.securityVersion ?? _metaSecurityVersion ?? 0;
+        (offline != null ? offline.securityVersion : _metaSecurityVersion) ?? 0;
     final firmwareModel =
-        (offline?.deviceModel ?? _metaDeviceModel)?.trim() ?? '';
+        (offline != null ? offline.deviceModel : _metaDeviceModel)?.trim() ?? '';
     final fileSize = offline?.fileSize ?? _metaFileSize ?? 0;
 
     final supportedChannels =
-        offline?.supportedChannels ?? _metaSupportedChannels;
+        offline != null ? offline.supportedChannels : _metaSupportedChannels;
     final selectedChannel = widget.channel == LocalCommunicationChannel.ble
         ? 'ble'
         : 'wifi_ap';
@@ -824,8 +847,10 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     await controller.execute(
       filePath: _selectedFilePath!,
       manifest: manifest,
-      fallbackVersion: _metaFirmwareVersion ?? '',
+      fallbackVersion: version,
       firmwareModel: firmwareModel,
+      firmwareHardwareVersions: offline?.hardwareVersions ?? _metaHardwareVersions,
+      firmwareId: offline?.firmwareId ?? widget.firmwareId,
     );
   }
 
@@ -1251,7 +1276,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
             width: double.infinity,
             height: 48.h,
             child: ElevatedButton(
-              onPressed: _startDownload,
+              onPressed: _metadataReadyForDownload ? _startDownload : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
@@ -1271,7 +1296,9 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
             width: double.infinity,
             height: 48.h,
             child: ElevatedButton(
-              onPressed: () => _goToStep(LocalOTAStep.connectDevice),
+              onPressed: _canProceedWithSelection
+                  ? () => _goToStep(LocalOTAStep.connectDevice)
+                  : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
@@ -1473,6 +1500,12 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                         fontSize: 11.sp,
                         color: AppColor.textHint(context),
                       ),
+                    ),
+                    Text(
+                      item.hardwareVersions.isEmpty
+                          ? l10n.str('ota_err_firmware_hardware_unknown')
+                          : '${l10n.str('firmware_hardware_range')}: ${item.hardwareVersions.join(', ')}',
+                      style: TextStyle(fontSize: 11.sp, color: AppColor.textHint(context)),
                     ),
                   ],
                 ),

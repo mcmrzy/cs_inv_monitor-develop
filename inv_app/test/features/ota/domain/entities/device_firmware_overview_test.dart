@@ -2,6 +2,37 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:inv_app/features/ota/domain/entities/device_firmware_overview.dart';
 
 void main() {
+  test('parses raw device hardware and each module compatibility reason', () {
+    final overview = DeviceFirmwareOverview.fromJson({
+      'device_sn': 'SN1',
+      'device_model': 'L10',
+      'is_online': true,
+      'hardware_version': ' hw-2 ',
+      'hardware_state': 'known',
+      'modules': [
+        {
+          'target': 'esp',
+          'latest_firmware_id': 12,
+          'update_available': true,
+          'version_state': 'outdated',
+          'compatibility_reason': 'no_compatible_firmware',
+        }
+      ],
+    });
+    expect(overview.hardwareVersion, ' hw-2 ');
+    expect(overview.hardwareState, 'known');
+    expect(
+        overview.modules.single.compatibilityReason, 'no_compatible_firmware');
+    expect(overview.modules.single.canRemoteUpgrade, isFalse);
+    expect(DeviceFirmwareOverview.fromJson({}).hardwareState, 'unknown');
+    final resource = FirmwareResource.fromJson({
+      'hardware_versions': ['HW-1', 'HW-2'],
+    });
+    expect(resource.hardwareVersions, ['HW-1', 'HW-2']);
+    expect(FirmwareResource.fromJson({}).hardwareVersions, isEmpty);
+    expect(FirmwareResource.fromJson({}).canLocalUpgrade, isFalse);
+    expect(FirmwareResource.fromJson({}).canRemoteUpgrade, isFalse);
+  });
   test('parses backend module eligibility and channel support', () {
     final module = FirmwareModuleOverview.fromJson({
       'target': 'bms',
@@ -68,6 +99,7 @@ void main() {
     FirmwareResource resource(String target, {Object? channels}) =>
         FirmwareResource.fromJson({
           'id': 1,
+          'hardware_versions': ['HW-1'],
           'target_chip': target,
           if (channels != null) 'supported_channels': channels,
         });
@@ -76,10 +108,10 @@ void main() {
     expect(resource('arm').canLocalUpgrade, isTrue);
     expect(resource('dsp').canLocalUpgrade, isFalse);
     expect(resource('bms').canLocalUpgrade, isFalse);
-    expect(resource('dsp', channels: ['remote', 'ble']).canLocalUpgrade,
-        isTrue);
-    expect(resource('bms', channels: ['remote', 'ble']).canLocalUpgrade,
-        isTrue);
+    expect(
+        resource('dsp', channels: ['remote', 'ble']).canLocalUpgrade, isTrue);
+    expect(
+        resource('bms', channels: ['remote', 'ble']).canLocalUpgrade, isTrue);
     expect(resource('bms', channels: ['remote', 'wifi_ap']).canLocalUpgrade,
         isFalse);
     expect(resource('arm', channels: ['remote']).canLocalUpgrade, isFalse);

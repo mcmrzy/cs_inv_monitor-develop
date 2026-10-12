@@ -207,7 +207,7 @@ func (h *OTAHandler) PublishFirmware(c *gin.Context) {
 	}
 	actorID := middleware.GetUserID(c)
 	if err := h.otaService.PublishFirmware(c.Request.Context(), id, actorID, req); err != nil {
-		response.Error(c, 500, "发布失败: "+err.Error())
+		respondHardwareError(c, err)
 		return
 	}
 	detail := fmt.Sprintf(`{"rollout_percent":%d,"rollout_type":%q,"rollout_targets":%q}`,
@@ -217,11 +217,11 @@ func (h *OTAHandler) PublishFirmware(c *gin.Context) {
 	}
 	h.logOTAAudit(c, "firmware_publish", strconv.FormatInt(id, 10), detail)
 	response.Success(c, gin.H{
-		"id":                 id,
-		"release_status":     "published",
-		"rollout_percent":    req.RolloutPercent,
-		"rollout_type":       req.RolloutType,
-		"rollout_targets":    req.RolloutTargets,
+		"id":                      id,
+		"release_status":          "published",
+		"rollout_percent":         req.RolloutPercent,
+		"rollout_type":            req.RolloutType,
+		"rollout_targets":         req.RolloutTargets,
 		"rollback_to_firmware_id": req.RollbackToFirmwareID,
 	})
 }
@@ -250,7 +250,7 @@ func (h *OTAHandler) UpdateFirmwareRollout(c *gin.Context) {
 		req.RollbackToFirmwareID = nil
 	}
 	if err := h.otaService.UpdateFirmwareRollout(c.Request.Context(), id, req); err != nil {
-		response.Error(c, 500, "更新灰度失败: "+err.Error())
+		respondHardwareError(c, err)
 		return
 	}
 	h.logOTAAudit(c, "firmware_rollout_update", strconv.FormatInt(id, 10),
@@ -314,7 +314,7 @@ func (h *OTAHandler) TriggerIndependentOTA(c *gin.Context) {
 			response.Error(c, 409, "idempotency_key 与已有请求不一致")
 			return
 		}
-		if errors.Is(err, service.ErrFirmwareNotPublished) || errors.Is(err, service.ErrDuplicateTarget) || errors.Is(err, service.ErrDeviceNotFound) || errors.Is(err, repository.ErrDeviceOffline) || errors.Is(err, service.ErrCurrentVersionUnknown) {
+		if errors.Is(err, model.ErrHardwareVersionUnknown) || errors.Is(err, model.ErrHardwareIncompatible) || errors.Is(err, model.ErrFirmwareHardwareUnspecified) || errors.Is(err, service.ErrFirmwareNotPublished) || errors.Is(err, service.ErrDuplicateTarget) || errors.Is(err, service.ErrDeviceNotFound) || errors.Is(err, repository.ErrDeviceOffline) || errors.Is(err, service.ErrCurrentVersionUnknown) {
 			response.Error(c, 409, err.Error())
 			return
 		}
@@ -347,6 +347,10 @@ func (h *OTAHandler) RollbackIndependentFirmware(c *gin.Context) {
 	if err != nil {
 		if errors.Is(err, service.ErrCurrentVersionUnknown) || errors.Is(err, repository.ErrDeviceOffline) {
 			response.Error(c, 409, "当前模块版本未上报，无法回滚")
+			return
+		}
+		if errors.Is(err, model.ErrHardwareVersionUnknown) || errors.Is(err, model.ErrHardwareIncompatible) || errors.Is(err, model.ErrFirmwareHardwareUnspecified) {
+			response.Error(c, 409, err.Error())
 			return
 		}
 		if errors.Is(err, service.ErrIdempotencyConflict) {

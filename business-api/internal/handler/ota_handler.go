@@ -26,6 +26,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 )
@@ -131,17 +132,18 @@ func (h *OTAHandler) logOTAAuditTyped(c *gin.Context, action, resourceType, reso
 }
 
 type CreateFirmwareRequest struct {
-	Model            string `json:"model" binding:"required"`
-	TargetChip       string `json:"target_chip" binding:"required"`
-	Version          string `json:"version"`
-	FileURL          string `json:"file_url" binding:"required"`
-	FileSize         int64  `json:"file_size"`
-	FileMD5          string `json:"file_md5"`
-	FileSHA256       string `json:"file_sha256"`
-	SecurityVersion  uint32 `json:"security_version"`
-	ReleaseSignature string `json:"release_signature"`
-	Changelog        string `json:"changelog"`
-	IsForce          bool   `json:"is_force"`
+	HardwareVersions []string `json:"hardware_versions"`
+	Model            string   `json:"model" binding:"required"`
+	TargetChip       string   `json:"target_chip" binding:"required"`
+	Version          string   `json:"version"`
+	FileURL          string   `json:"file_url" binding:"required"`
+	FileSize         int64    `json:"file_size"`
+	FileMD5          string   `json:"file_md5"`
+	FileSHA256       string   `json:"file_sha256"`
+	SecurityVersion  uint32   `json:"security_version"`
+	ReleaseSignature string   `json:"release_signature"`
+	Changelog        string   `json:"changelog"`
+	IsForce          bool     `json:"is_force"`
 }
 
 // 上传物料的存储与命名约定。
@@ -238,6 +240,15 @@ func respondFirmwareCreateError(c *gin.Context, model, targetChip, version strin
 	// 114 创建了旧索引名，118 为独立模块发布重建为新索引名。
 	// 兼容处于不同迁移阶段的环境，避免把可修正的版本重复误报为 500。
 	errText := err.Error()
+	if strings.Contains(errText, "uq_firmware_hardware_software") {
+		response.Error(c, 409, "所选硬件已存在该模块的软件版本，请调整硬件范围或版本号")
+		return
+	}
+	var pgError *pgconn.PgError
+	if errors.As(err, &pgError) && pgError.Code == "23503" {
+		response.Error(c, 400, "请先在对应型号下登记所选硬件版本")
+		return
+	}
 	if strings.Contains(errText, "uq_firmware_versions_model_chip_version") ||
 		strings.Contains(errText, "uq_firmware_model_target_version") {
 		response.Error(c, 400, fmt.Sprintf("该型号的 %s 固件已有版本 %s，请更换版本号后重新上传",
@@ -286,6 +297,11 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 			return
 		}
 		releaseSignature := strings.TrimSpace(c.PostForm("release_signature"))
+		hardwareVersions, hardwareErr := parseHardwareVersionsForm(c.PostForm("hardware_versions"))
+		if hardwareErr != nil {
+			response.Error(c, 400, hardwareErr.Error())
+			return
+		}
 
 		if model == "" || targetChip == "" {
 			response.Error(c, 400, "型号和目标芯片必填")
@@ -367,6 +383,7 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 		fileURL := fmt.Sprintf("/firmware/%s", filename)
 
 		fw := &service.CreateFirmwareReq{
+			HardwareVersions: hardwareVersions,
 			Model:            model,
 			TargetChip:       targetChip,
 			Version:          version,
@@ -392,19 +409,19 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 
 		h.logOTAAuditTyped(c, "firmware_upload", "firmware",
 			fmt.Sprintf("%d", created.ID),
-			fmt.Sprintf(`{"model":%q,"version":%q,"target_chip":%q,"file_size":%d}`,
-				model, version, targetChip, fileSize))
+			firmwareUploadAuditDetail(created))
 
 		// 回显服务端识别/计算的元数据（版本号、大小、摘要），
 		// 管理端据此提示「自动识别出了什么」，无需再翻列表核对。
 		response.SuccessWithMessage(c, "固件上传成功", gin.H{
-			"id":          created.ID,
-			"model":       created.Model,
-			"target_chip": created.TargetChip,
-			"version":     created.Version,
-			"file_url":    created.FileURL,
-			"file_size":   created.FileSize,
-			"file_sha256": created.FileSHA256,
+			"hardware_versions": created.HardwareVersions,
+			"id":                created.ID,
+			"model":             created.Model,
+			"target_chip":       created.TargetChip,
+			"version":           created.Version,
+			"file_url":          created.FileURL,
+			"file_size":         created.FileSize,
+			"file_sha256":       created.FileSHA256,
 		})
 		return
 	}
@@ -417,6 +434,7 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 	}
 
 	fw := &service.CreateFirmwareReq{
+		HardwareVersions: req.HardwareVersions,
 		Model:            req.Model,
 		TargetChip:       req.TargetChip,
 		Version:          req.Version,
@@ -429,6 +447,12 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 		Changelog:        req.Changelog,
 		IsForce:          req.IsForce,
 		UploadedBy:       c.GetInt64("user_id"),
+	}
+	if versions, err := model.NormalizeHardwareVersions(fw.HardwareVersions); err != nil {
+		response.Error(c, 400, err.Error())
+		return
+	} else {
+		fw.HardwareVersions = versions
 	}
 	if err := service.ValidateFirmwareRequest(fw); err != nil {
 		response.Error(c, 400, err.Error())
@@ -443,7 +467,7 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 	// 记录审计日志
 	h.logOTAAuditTyped(c, "firmware_upload", "firmware",
 		fmt.Sprintf("%d", created.ID),
-		fmt.Sprintf(`{"model":%q,"version":%q,"target_chip":%q,"file_size":%d}`, req.Model, req.Version, req.TargetChip, req.FileSize))
+		firmwareUploadAuditDetail(created))
 
 	response.SuccessWithMessage(c, "固件创建成功", gin.H{
 		"id":           created.ID,
@@ -452,13 +476,25 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 }
 
 func (h *OTAHandler) ListFirmware(c *gin.Context) {
-	model := c.Query("model")
-	list, err := h.otaService.ListFirmware(c.Request.Context(), model)
+	modelFilter := c.Query("model")
+	list, err := h.otaService.ListFirmware(c.Request.Context(), modelFilter)
 	if err != nil {
 		response.Error(c, 500, "查询固件列表失败")
 		return
 	}
-	response.Success(c, list)
+	filtered := []model.Firmware{}
+	for _, fw := range list {
+		if chip := c.Query("target_chip"); chip != "" && fw.TargetChip != chip {
+			continue
+		}
+		if hardware := c.Query("hardware_version"); hardware != "" {
+			if model.CheckFirmwareHardware(&fw, fw.Model, hardware) != nil {
+				continue
+			}
+		}
+		filtered = append(filtered, fw)
+	}
+	response.Success(c, filtered)
 }
 
 func (h *OTAHandler) GetFirmware(c *gin.Context) {
@@ -490,8 +526,13 @@ func (h *OTAHandler) GetFirmwareInfoForApp(c *gin.Context) {
 		response.Error(c, 404, "固件不存在")
 		return
 	}
+	if fw.ReleaseStatus != model.FirmwareReleasePublished || len(fw.HardwareVersions) == 0 {
+		response.Error(c, 409, "固件未发布或尚未确认适用硬件")
+		return
+	}
 	response.Success(c, gin.H{
 		"firmware_id":        fw.ID,
+		"hardware_versions":  fw.HardwareVersions,
 		"model":              fw.Model,
 		"target_chip":        fw.TargetChip,
 		"firmware_version":   fw.Version,
@@ -653,6 +694,10 @@ func (h *OTAHandler) CheckUpdate(c *gin.Context) {
 		response.Error(c, 404, "设备不存在")
 		return
 	}
+	if !device.HardwareKnown {
+		response.Success(c, gin.H{"has_update": false, "device_model": device.Model, "hardware_version": device.HardwareVersion, "hardware_state": "unknown", "message": "硬件版本未确认，无法升级"})
+		return
+	}
 
 	// 优先检查升级包模式的待执行升级
 	pkgUpgrades, pkg, _ := h.otaService.CheckPendingPackageUpgrade(c.Request.Context(), sn)
@@ -669,6 +714,7 @@ func (h *OTAHandler) CheckUpdate(c *gin.Context) {
 				"current":           du.OldVersion,
 				"target":            du.FirmwareVersion,
 				"firmware_id":       fw.ID,
+				"hardware_versions": fw.HardwareVersions,
 				"download_url":      h.otaService.BuildDownloadURL(fw.FileURL),
 				"file_size":         fw.FileSize,
 				"file_md5":          fw.FileMD5,
@@ -724,6 +770,7 @@ func (h *OTAHandler) CheckUpdate(c *gin.Context) {
 			"device_model":         device.Model,
 			"current_main_version": device.MainVersion,
 			"firmware_id":          fw.ID,
+			"hardware_versions":    fw.HardwareVersions,
 			"main_version":         fw.MainVersion,
 			"version":              fw.Version,
 			"target_chip":          fw.TargetChip,
@@ -777,6 +824,7 @@ func (h *OTAHandler) CheckUpdate(c *gin.Context) {
 				releaseSignature = fw.ReleaseSignature
 			}
 			chipsToUpgrade = append(chipsToUpgrade, map[string]interface{}{
+				"hardware_versions": fw.HardwareVersions,
 				"chip":              item.TargetChip,
 				"current":           chipVersions[item.TargetChip],
 				"target":            item.FirmwareVersion,
@@ -1772,7 +1820,8 @@ func (h *OTAHandler) ReportLocalOTAResult(c *gin.Context) {
 	}
 
 	var req struct {
-		Status      string `json:"status" binding:"required"`      // "success" or "failed"
+		Status      string `json:"status" binding:"required"` // "success" or "failed"
+		FirmwareID  int64  `json:"firmware_id"`
 		TargetChip  string `json:"target_chip" binding:"required"` // "esp", "arm", "dsp", "bms"
 		NewVersion  string `json:"new_version"`
 		MainVersion string `json:"main_version"`
@@ -1792,11 +1841,10 @@ func (h *OTAHandler) ReportLocalOTAResult(c *gin.Context) {
 
 	if req.Status == "success" && req.NewVersion != "" {
 		userID := c.GetInt64("user_id")
-		taskID, err := h.otaService.ReportLocalOTAResult(ctx, userID, sn, req.TargetChip, req.NewVersion, req.MainVersion)
+		taskID, err := h.otaService.ReportLocalOTAResult(ctx, userID, sn, req.TargetChip, req.NewVersion, req.MainVersion, req.FirmwareID)
 		if err != nil {
-			log.Printf("[ReportLocalOTAResult] error: sn=%s, chip=%s, err=%v", sn, req.TargetChip, err)
-			// 不返回错误给客户端，避免阻断 App 流程
-			response.Success(c, gin.H{"status": "ok"})
+			logger.Warn("local OTA result rejected", zap.String("sn", sn), zap.String("chip", req.TargetChip), zap.Error(err))
+			response.Error(c, 409, "本地升级结果未同步: "+err.Error())
 			return
 		}
 		response.Success(c, gin.H{"status": "ok", "task_id": taskID})
@@ -1839,6 +1887,7 @@ func buildAppUpgradePackagesPayload(list []model.UpgradePackage, buildURL func(s
 		// App 预下载时持久化，近场升级据此做通道门控；
 		// 未知目标省略该字段，App 侧对 ESP/ARM 维持旧兼容语义
 		SupportedChannels []string `json:"supported_channels,omitempty"`
+		HardwareVersions  []string `json:"hardware_versions"`
 	}
 	type safePackage struct {
 		ID            int64      `json:"id"`
@@ -1872,6 +1921,7 @@ func buildAppUpgradePackagesPayload(list []model.UpgradePackage, buildURL func(s
 				SecurityVersion:   item.SecurityVersion,
 				ReleaseSignature:  item.ReleaseSignature,
 				SupportedChannels: supportedChannelsForTarget(item.TargetChip),
+				HardwareVersions:  append([]string{}, item.HardwareVersions...),
 			})
 		}
 		packages = append(packages, safePackage{
@@ -1974,7 +2024,7 @@ func (h *OTAHandler) ListDeviceUpgradePackages(c *gin.Context) {
 		return
 	}
 
-	list, err := h.otaService.ListUpgradePackages(c.Request.Context(), device.Model)
+	list, err := h.otaService.GetAvailablePackagesForDevice(c.Request.Context(), sn, middleware.GetUserID(c))
 	if err != nil {
 		response.Error(c, 500, "查询升级包列表失败")
 		return
@@ -2034,6 +2084,21 @@ func (h *OTAHandler) GetDevicesByFirmware(c *gin.Context) {
 	deviceModel := c.Query("model")
 	targetChip := c.Query("target_chip")
 	version := c.Query("version")
+	var firmware *model.Firmware
+	if rawID := c.Query("firmware_id"); rawID != "" {
+		id, parseErr := strconv.ParseInt(rawID, 10, 64)
+		if parseErr != nil || id <= 0 {
+			response.Error(c, 400, "固件 ID 无效")
+			return
+		}
+		var loadErr error
+		firmware, loadErr = h.otaService.GetFirmware(c.Request.Context(), id)
+		if loadErr != nil {
+			response.Error(c, 404, "固件不存在")
+			return
+		}
+		deviceModel, targetChip, version = firmware.Model, firmware.TargetChip, firmware.Version
+	}
 	if deviceModel == "" || targetChip == "" || version == "" {
 		response.Error(c, 400, "model, target_chip, version 均为必填参数")
 		return
@@ -2049,6 +2114,15 @@ func (h *OTAHandler) GetDevicesByFirmware(c *gin.Context) {
 	if err != nil {
 		response.Error(c, 500, "查询设备列表失败")
 		return
+	}
+	if firmware != nil {
+		matched := []repository.DeviceInfo{}
+		for _, d := range devices {
+			if model.CheckFirmwareHardware(firmware, d.Model, d.HardwareVersion) == nil {
+				matched = append(matched, d)
+			}
+		}
+		devices = matched
 	}
 	response.Success(c, gin.H{"devices": devices, "total": len(devices)})
 }

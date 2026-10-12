@@ -283,12 +283,14 @@ class OtaRepositoryImpl implements OtaRepository {
     required String sn,
     required String targetChip,
     required String newVersion,
+    int? firmwareId,
   }) async {
     try {
       final response = await remoteDataSource.reportLocalOTAResult(
         sn: sn,
         targetChip: targetChip,
         newVersion: newVersion,
+        firmwareId: firmwareId,
       );
       return _parseData(response);
     } on DioException catch (e) {

@@ -188,6 +188,7 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
         signature: r.releaseSignature,
         securityVersion: r.securityVersion,
         supportedChannels: r.supportedChannels,
+        hardwareVersions: r.hardwareVersions,
       );
       if (!mounted || request != _resourceRequest) return;
       setState(() {
@@ -553,6 +554,13 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
                   ),
                 ),
             ],
+          ),
+          SizedBox(height: 8.h),
+          Text(
+            r.hardwareVersions.isEmpty
+                ? l10n.str('ota_err_firmware_hardware_unknown')
+                : '${l10n.str('firmware_hardware_range')}: ${r.hardwareVersions.join(', ')}',
+            style: TextStyle(fontSize: 12.sp, color: AppColor.textSecondary(context)),
           ),
           if (r.changelog.isNotEmpty) ...[
             SizedBox(height: 8.h),

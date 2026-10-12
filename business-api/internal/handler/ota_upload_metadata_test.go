@@ -164,7 +164,7 @@ func TestDetectFirmwareVersion_无法识别时返回空(t *testing.T) {
 // 版本号既没有内嵌也不能从文件名识别时，必须在落库前拒绝，且不留下暂存文件。
 func TestCreateFirmware_无法识别版本号时拒绝且不留残file(t *testing.T) {
 	req := multipartRequest(t, "/api/v1/ota/firmware",
-		map[string]string{"model": "CS-INV-6K2", "target_chip": "arm", "version": ""},
+		map[string]string{"model": "CS-INV-6K2", "target_chip": "arm", "version": "", "hardware_versions": `["HW-1"]`},
 		"firmware.bin", []byte("arm-image"))
 	c, w := newUploadTestContext(t, req)
 	// otaService 为 nil：若守卫未提前返回，会在此处 panic，用例即失败。
@@ -189,7 +189,7 @@ func TestCreateFirmware_无法识别版本号时拒绝且不留残file(t *testin
 // ESP 镜像内嵌版本与操作员填写版本不一致时必须拒绝（防止把固件挂到错误的版本号上）。
 func TestCreateFirmware_ESP内嵌版本与填写版本不一致时拒绝(t *testing.T) {
 	req := multipartRequest(t, "/api/v1/ota/firmware",
-		map[string]string{"model": "CS-INV-6K2", "target_chip": "esp", "version": "9.9.9"},
+		map[string]string{"model": "CS-INV-6K2", "target_chip": "esp", "version": "9.9.9", "hardware_versions": `["HW-1"]`},
 		"esp.bin", buildESPImage(t, "1.5.1"))
 	c, w := newUploadTestContext(t, req)
 	h := &OTAHandler{}

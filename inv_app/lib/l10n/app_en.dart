@@ -1,4 +1,10 @@
 const Map<String, String> en = {
+  'ota_err_firmware_hardware_unknown': 'Firmware hardware compatibility is missing. Delete the old cache and download compatible firmware again.',
+  'ota_err_device_hardware_unknown': 'The device did not report its hardware version. Upgrade stopped because compatibility cannot be verified.',
+  'ota_err_hardware_mismatch': 'Firmware is incompatible with the connected device hardware. Upgrade stopped.',
+  'firmware_hardware_unknown': 'Hardware version unconfirmed',
+  'firmware_no_compatible_firmware': 'No firmware available for this hardware version',
+  'firmware_hardware_range': 'Compatible hardware versions',
   'add_device_new': 'Add new device',
   'add_device_manual': 'Manual entry',
   'add_device_nearby': 'Nearby devices',

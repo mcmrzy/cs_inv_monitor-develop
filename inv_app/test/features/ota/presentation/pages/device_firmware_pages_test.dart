@@ -42,6 +42,18 @@ void main() {
       );
   Widget app(Widget child) => localizedApp(child);
 
+  testWidgets('unknown hardware remains blocked despite an update flag', (tester) async {
+    await tester.pumpWidget(app(DeviceFirmwareDetailPage(
+      deviceSN: 'INV-001', deviceRepository: _DeviceRepo(),
+      otaRepository: _HardwareUnknownOtaRepo(),
+    )));
+    await tester.pumpAndSettle();
+    expect(find.text('硬件版本未确认'), findsWidgets);
+    expect(find.text('暂无适用此硬件版本的固件'), findsNothing);
+    expect(find.text('升级'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('firmware hub leads with devices and keeps secondary tools',
       (tester) async {
     tester.view.physicalSize = const Size(780, 1688);
@@ -592,6 +604,8 @@ class _OtaRepo implements OtaRepository {
       Right(DeviceFirmwareOverview(
         deviceSn: sn,
         deviceModel: 'CS-10K',
+        hardwareVersion: 'HW-1',
+        hardwareState: 'known',
         isOnline: true,
         modules: const [
           FirmwareModuleOverview(
@@ -652,6 +666,18 @@ class _OtaRepo implements OtaRepository {
 }
 
 /// 第二次起 getFirmwareOverview 挂起，用于断言检查更新按钮的 loading 态
+class _HardwareUnknownOtaRepo extends _OtaRepo {
+  @override
+  Future<Either<Failure, DeviceFirmwareOverview>> getFirmwareOverview(String sn) async =>
+      Right(DeviceFirmwareOverview(
+        deviceSn: sn, deviceModel: 'CS-10K', isOnline: true,
+        modules: const [FirmwareModuleOverview(
+          target: 'esp', currentVersion: '1.0.0', latestFirmwareId: 42,
+          latestVersion: '1.1.0', versionState: 'outdated', updateAvailable: true,
+        )],
+      ));
+}
+
 class _PendingOverviewOtaRepo extends _OtaRepo {
   final overviewResult = Completer<Either<Failure, DeviceFirmwareOverview>>();
   int overviewCalls = 0;

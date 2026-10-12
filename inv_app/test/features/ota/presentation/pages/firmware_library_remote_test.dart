@@ -27,6 +27,7 @@ void main() {
       version: '1.0.18',
       fileUrl: '/firmware.bin',
       targetChip: 'esp',
+      hardwareVersions: const ['HW-1'],
       publishedAt: DateTime(2026, 10, 9),
       supportedChannels: const ['remote', 'ble']);
   const local = FirmwareResource(
@@ -35,6 +36,7 @@ void main() {
       version: '2.0',
       fileUrl: '/arm.bin',
       targetChip: 'arm',
+      hardwareVersions: ['HW-1'],
       supportedChannels: ['ble']);
 
   setUp(() {
@@ -68,6 +70,8 @@ void main() {
     await pumpMinimalApp(tester, const FirmwareLibraryPage(initialSn: 'SN'));
     expect(find.byKey(const ValueKey('remote-upgrade-7')), findsOneWidget);
     expect(find.byKey(const ValueKey('remote-upgrade-8')), findsNothing);
+    await tester.ensureVisible(find.byKey(const ValueKey('remote-upgrade-7')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('remote-upgrade-7')));
     await tester.pumpAndSettle();
     verifyNever(() => ota.triggerFirmware(any(), any(),
@@ -110,6 +114,9 @@ void main() {
     });
     await pumpMinimalApp(tester, const FirmwareLibraryPage());
     for (var i = 0; i < 2; i++) {
+      await tester
+          .ensureVisible(find.byKey(const ValueKey('remote-upgrade-7')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('remote-upgrade-7')));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(FilledButton, '确认'));

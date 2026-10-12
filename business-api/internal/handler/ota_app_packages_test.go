@@ -39,6 +39,7 @@ func TestBuildAppUpgradePackagesPayload(t *testing.T) {
 					FileSHA256:       "sha256hash",
 					SecurityVersion:  3,
 					ReleaseSignature: "sig-base64",
+					HardwareVersions: []string{"HW-1.0", "HW-2.0"},
 				},
 				{
 					ID:              12,
@@ -90,6 +91,7 @@ func TestBuildAppUpgradePackagesPayload(t *testing.T) {
 				SecurityVersion   uint32   `json:"security_version"`
 				ReleaseSignature  string   `json:"release_signature"`
 				SupportedChannels []string `json:"supported_channels"`
+				HardwareVersions  []string `json:"hardware_versions"`
 			} `json:"items"`
 		} `json:"packages"`
 	}
@@ -108,6 +110,7 @@ func TestBuildAppUpgradePackagesPayload(t *testing.T) {
 		t.Fatalf("expected 2 items, got %d", len(pkg.Items))
 	}
 	item := pkg.Items[0]
+	assert.Equal(t, []string{"HW-1.0", "HW-2.0"}, item.HardwareVersions)
 	if item.FirmwareID != 101 {
 		t.Errorf("firmware_id = %d, want 101", item.FirmwareID)
 	}

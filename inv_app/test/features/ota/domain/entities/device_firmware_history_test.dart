@@ -7,6 +7,7 @@ void main() {
       'id': 9,
       'device_sn': 'INV-001',
       'firmware_id': 42,
+      'hardware_version': 'HW-2',
       'rollback_firmware_id': 21,
       'target_chip': 'arm',
       'old_version': '1.0.0',
@@ -19,6 +20,7 @@ void main() {
 
     expect(item.changelog, isEmpty);
     expect(item.firmwareId, 42);
+    expect(item.hardwareVersion, 'HW-2');
     expect(item.rollbackFirmwareId, 21);
     expect(item.target, 'arm');
     expect(item.firmwareVersion, '1.1.0');

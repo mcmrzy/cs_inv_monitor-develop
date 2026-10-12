@@ -21,6 +21,7 @@ enum _CheckResult {
   updating,
   upToDate,
   failed,
+  blocked,
   offline,
 }
 
@@ -50,6 +51,7 @@ class _ModuleTaskRow {
   /// success=已最新 / failed=检查失败 / blocked=离线 / skipped=未上报
   /// updating=有更新可升级
   final String taskStatus;
+  final String compatibilityReason;
 
   _ModuleTaskRow({
     required this.target,
@@ -57,6 +59,7 @@ class _ModuleTaskRow {
     required this.latestVersion,
     required this.latestFirmwareId,
     required this.taskStatus,
+    this.compatibilityReason = '',
   });
 }
 
@@ -164,17 +167,29 @@ class _OtaCheckAllPageState extends State<OtaCheckAllPage> {
                     currentVersion: m.currentVersion,
                     latestVersion: m.latestVersion,
                     latestFirmwareId: m.latestFirmwareId,
-                    taskStatus: m.isUnreported
-                        ? 'skipped'
-                        : m.canRemoteUpgrade
-                            ? 'updating'
-                            : 'success',
+                    compatibilityReason: overview.hasKnownHardware
+                        ? m.compatibilityReason
+                        : 'hardware_version_unknown',
+                    taskStatus: !overview.hasKnownHardware ||
+                            m.compatibilityReason.isNotEmpty
+                        ? 'blocked'
+                        : m.isUnreported
+                            ? 'skipped'
+                            : m.canRemoteUpgrade
+                                ? 'updating'
+                                : 'success',
                   )));
             final hasUpdate =
+                overview.hasKnownHardware &&
                 overview.modules.any((m) => m.canRemoteUpgrade);
             _mark(
               entry,
-              hasUpdate ? _CheckResult.updating : _CheckResult.upToDate,
+              hasUpdate
+                  ? _CheckResult.updating
+                  : !overview.hasKnownHardware ||
+                          overview.modules.any((m) => m.compatibilityReason.isNotEmpty)
+                      ? _CheckResult.blocked
+                      : _CheckResult.upToDate,
             );
           },
         );
@@ -199,7 +214,7 @@ class _OtaCheckAllPageState extends State<OtaCheckAllPage> {
       _entries.where((e) => e.result == _CheckResult.upToDate).toList();
   List<_CheckEntry> get _unavailable => _entries
       .where((e) =>
-          e.result == _CheckResult.offline || e.result == _CheckResult.failed)
+          e.result == _CheckResult.offline || e.result == _CheckResult.failed || e.result == _CheckResult.blocked)
       .toList();
 
   int get _checkedCount => _entries
@@ -207,6 +222,7 @@ class _OtaCheckAllPageState extends State<OtaCheckAllPage> {
           e.result == _CheckResult.updating ||
           e.result == _CheckResult.upToDate ||
           e.result == _CheckResult.failed ||
+          e.result == _CheckResult.blocked ||
           e.result == _CheckResult.offline)
       .length;
 
@@ -497,7 +513,11 @@ class _OtaCheckAllPageState extends State<OtaCheckAllPage> {
                     SizedBox(width: 8.w),
                     Expanded(
                       child: Text(
-                        row.currentVersion.isEmpty
+                        row.compatibilityReason.isNotEmpty
+                            ? l10n.str(row.compatibilityReason == 'hardware_version_unknown'
+                                ? 'firmware_hardware_unknown'
+                                : 'firmware_no_compatible_firmware')
+                            : row.currentVersion.isEmpty
                             ? row.latestVersion
                             : '${row.currentVersion} → ${row.latestVersion}',
                         maxLines: 1,
@@ -593,7 +613,11 @@ class _OtaCheckAllPageState extends State<OtaCheckAllPage> {
         borderRadius: BorderRadius.circular(6.r),
       ),
       child: Text(
-        '${module.displayLabel(l10n)} · ${_taskStatusLabel(row.taskStatus, l10n)}',
+        '${module.displayLabel(l10n)} · ${row.compatibilityReason.isNotEmpty
+            ? l10n.str(row.compatibilityReason == 'hardware_version_unknown'
+                ? 'firmware_hardware_unknown'
+                : 'firmware_no_compatible_firmware')
+            : _taskStatusLabel(row.taskStatus, l10n)}',
         style: TextStyle(
           fontSize: 10.sp,
           fontWeight: FontWeight.w600,
