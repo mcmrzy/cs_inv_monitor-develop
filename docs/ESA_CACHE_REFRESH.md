@@ -18,7 +18,7 @@ ESA `2024-09-10` **没有** 旧 CDN 的 `RefreshESAObjectCaches` / `ListSitesESA
 
 | 用途 | Action |
 |------|--------|
-| 刷新缓存 | `PurgeCaches`（`Type=ignoreParams` + `Content.IgnoreParams=[...]`） |
+| 刷新缓存 | `PurgeCaches`（`Type=file` + `Content.Files=[...]`，包含裸路径及 `?platform=android`） |
 | 列站点 | `ListSites` |
 | 缓存规则 | `CreateCacheRule` / `UpdateCacheRule` / `ListCacheRules` |
 
@@ -30,9 +30,11 @@ ESA `2024-09-10` **没有** 旧 CDN 的 `RefreshESAObjectCaches` / `ListSitesESA
 
 1. **启动时 `EnsureCacheRules`**：向 ESA 写入缓存规则  
    - `/api/*`、`/app-release-info` → `EdgeCacheMode=no_cache`  
-   - `/`、`/download` → `follow_origin_bypass`  
+   - `/`、`/download`、`/download.html` → `no_cache`
    同名规则存在则更新，不存在则创建。
-2. **发布/回滚/恢复/删除 App 版本后** 异步 `PurgeCaches` 兜底（`ignoreParams` 覆盖 `?platform=android`）。
+2. **发布/回滚/恢复/删除 App 版本后** 异步 `PurgeCaches` 兜底，使用普通 URL 刷新，覆盖裸路径及 `?platform=android`。
+
+`ignoreparams` 在免费、基础、标准套餐中不支持，可能直接返回 `QuotaExceeded`，导致旧 HTML 长期残留并引用已移除脚本。普通 `file` 刷新不依赖该高级套餐能力。下载域 `/download` 与 `/download.html` 均代理到前端独立 `download.html`，并返回 `no-store`。
 
 ## 配置
 
@@ -112,8 +114,9 @@ Site ID 通常是数字串（例如 `172343211966680`）。
 
 默认刷新 `https://download.jiuxiaoyw.online` 下的：
 
-- `/app-release-info`（含 `?platform=android`，ignoreParams 覆盖）
+- `/app-release-info`（同时提交裸路径与 `?platform=android`）
 - `/api/v1/ota/app/latest`（同上）
+- `/`、`/download`、`/download.html`
 
 若你的下载域不同，设置 `ESA_REFRESH_HOST`。
 
