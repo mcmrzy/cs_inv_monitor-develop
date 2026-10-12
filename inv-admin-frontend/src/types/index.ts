@@ -60,6 +60,7 @@ export interface Device {
 export interface Firmware {
   id: string
   model: string
+  hardware_versions?: string[]
   version: string
   /** @deprecated Read-only compatibility with historical API records. */
   main_version?: string
@@ -105,12 +106,15 @@ export interface FirmwareModuleOverview {
   connected?: boolean
   eligible?: boolean
   supported_channels?: string[]
+  compatibility_reason?: 'hardware_version_unknown' | 'no_compatible_firmware' | string
 }
 
 /** 设备固件总览 */
 export interface DeviceFirmwareOverview {
   device_sn: string
   device_model: string
+  hardware_version?: string
+  hardware_state?: 'known' | 'unknown'
   is_online: boolean
   modules: FirmwareModuleOverview[]
 }
@@ -119,6 +123,7 @@ export interface DeviceFirmwareOverview {
 export interface FirmwareResource {
   id: number | string
   model: string
+  hardware_versions?: string[]
   version: string
   main_version?: string
   target_chip: string

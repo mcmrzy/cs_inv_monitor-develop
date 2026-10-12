@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/jackc/pgx/v5"
 	"strings"
 	"time"
 
@@ -53,13 +54,25 @@ func (r *OTARepository) UpdateDeviceFirmwareVersion(ctx context.Context, sn, tar
 // 在线口径与 device_handler 保持一致：status=1(在线)、status=2(故障) 均视为在线，
 // 仅 status=0 判离线；否则故障态设备会被固件页误判离线而隐藏升级入口。
 func (r *OTARepository) GetDeviceInfoForOTA(ctx context.Context, sn string) (*DeviceInfo, error) {
+	return queryDeviceInfoForOTA(ctx, r.db, sn, false)
+}
+
+func queryDeviceInfoForOTA(ctx context.Context, q interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}, sn string, lock bool) (*DeviceInfo, error) {
 	var d DeviceInfo
 	var online bool
-	err := r.db.QueryRow(ctx, `
+	query := `
 		SELECT sn, COALESCE(model,''), COALESCE(firmware_arm,''), COALESCE(firmware_esp,''),
-		       COALESCE(firmware_dsp,''), COALESCE(firmware_bms,''), COALESCE(main_version,''), COALESCE(status,0) IN (1,2)
+		       COALESCE(firmware_dsp,''), COALESCE(firmware_bms,''), COALESCE(main_version,''), COALESCE(status,0) IN (1,2),
+		       COALESCE(hardware_version,''), EXISTS(SELECT 1 FROM device_hardware_versions h
+		        WHERE h.model=devices.model AND h.version=upper(btrim(devices.hardware_version)))
 		FROM devices WHERE sn = $1 AND deleted_at IS NULL
-	`, sn).Scan(&d.SN, &d.Model, &d.FirmwareArm, &d.FirmwareEsp, &d.FirmwareDSP, &d.FirmwareBMS, &d.MainVersion, &online)
+	`
+	if lock {
+		query += " FOR UPDATE"
+	}
+	err := q.QueryRow(ctx, query, sn).Scan(&d.SN, &d.Model, &d.FirmwareArm, &d.FirmwareEsp, &d.FirmwareDSP, &d.FirmwareBMS, &d.MainVersion, &online, &d.HardwareVersion, &d.HardwareKnown)
 	if err != nil {
 		return nil, err
 	}
@@ -193,14 +206,19 @@ func (r *OTARepository) CreateIndependentFirmwareTasks(ctx context.Context, user
 	var device DeviceInfo
 	err = tx.QueryRow(ctx, `
 		SELECT sn, COALESCE(model,''), COALESCE(firmware_arm,''), COALESCE(firmware_esp,''),
-		       COALESCE(firmware_dsp,''), COALESCE(firmware_bms,''), COALESCE(status,0) IN (1,2)
+		       COALESCE(firmware_dsp,''), COALESCE(firmware_bms,''), COALESCE(status,0) IN (1,2),
+		       COALESCE(hardware_version,''), EXISTS(SELECT 1 FROM device_hardware_versions h
+		        WHERE h.model=devices.model AND h.version=upper(btrim(devices.hardware_version)))
 		FROM devices WHERE sn = $1 AND deleted_at IS NULL FOR UPDATE
-	`, deviceSN).Scan(&device.SN, &device.Model, &device.FirmwareArm, &device.FirmwareEsp, &device.FirmwareDSP, &device.FirmwareBMS, &device.IsOnline)
+	`, deviceSN).Scan(&device.SN, &device.Model, &device.FirmwareArm, &device.FirmwareEsp, &device.FirmwareDSP, &device.FirmwareBMS, &device.IsOnline, &device.HardwareVersion, &device.HardwareKnown)
 	if err != nil {
 		return nil, ErrDeviceNotFound
 	}
 	if !device.IsOnline {
 		return nil, ErrDeviceOffline
+	}
+	if !device.HardwareKnown {
+		return nil, model.ErrHardwareVersionUnknown
 	}
 
 	// 固件元数据
@@ -215,10 +233,7 @@ func (r *OTARepository) CreateIndependentFirmwareTasks(ctx context.Context, user
 	seenTarget := map[string]bool{}
 	for _, fid := range firmwareIDs {
 		var f model.Firmware
-		err = tx.QueryRow(ctx, `
-			SELECT id, model, version, COALESCE(target_chip,''), release_status
-			FROM firmware_versions WHERE id = $1
-		`, fid).Scan(&f.ID, &f.Model, &f.Version, &f.TargetChip, &f.ReleaseStatus)
+		err = scanFirmware(tx.QueryRow(ctx, `SELECT `+firmwareSelectCols("f")+` FROM firmware_versions f WHERE f.id=$1 FOR SHARE`, fid), &f)
 		if err != nil {
 			return nil, fmt.Errorf("firmware %d not found", fid)
 		}
@@ -227,6 +242,12 @@ func (r *OTARepository) CreateIndependentFirmwareTasks(ctx context.Context, user
 		}
 		if f.Model != device.Model {
 			return nil, fmt.Errorf("firmware model mismatch: %s != %s", f.Model, device.Model)
+		}
+		if err = model.CheckFirmwareHardware(&f, device.Model, device.HardwareVersion); err != nil {
+			return nil, err
+		}
+		if !firmwareEligibleForDevice(&f, deviceSN) {
+			return nil, fmt.Errorf("设备不在固件发布范围或灰度内")
 		}
 		target := strings.ToLower(strings.TrimSpace(f.TargetChip))
 		if seenTarget[target] {
@@ -435,7 +456,8 @@ func (r *OTARepository) ListUpgradeHistoryFiltered(ctx context.Context, f model.
 		       COALESCE((SELECT f2.id FROM firmware_versions f2
 		          WHERE f2.model=d.model AND f2.target_chip=du.target_chip
 		            AND f2.version=du.old_version AND f2.release_status='published'
-		          ORDER BY f2.id DESC LIMIT 1),0)
+		            AND EXISTS (SELECT 1 FROM firmware_hardware_versions h WHERE h.firmware_id=f2.id AND h.hardware_version=upper(btrim(d.hardware_version)))
+		          ORDER BY f2.id DESC LIMIT 1),0), COALESCE(du.hardware_version,'')
 		FROM device_upgrades du
 		LEFT JOIN firmware_versions f ON f.id=du.firmware_id
 		LEFT JOIN devices d ON d.sn=du.device_sn
@@ -457,8 +479,8 @@ func (r *OTARepository) ListUpgradeHistoryFiltered(ctx context.Context, f model.
 		if err := rows.Scan(&du.ID, &du.DeviceSN, &du.FirmwareID, &du.FirmwareVersion, &du.TargetChip,
 			&du.OldVersion, &du.Status, &du.Stage, &du.StageProgress, &du.OverallProgress, &du.Progress, &du.ErrorMessage, &du.RetryCount,
 			&du.PushedBy, &du.StartedAt, &du.CompletedAt, &du.CreatedAt, &du.UpdatedAt, &taskID,
-			&du.Changelog, &rollbackID); err != nil {
-			continue
+			&du.Changelog, &rollbackID, &du.HardwareVersion); err != nil {
+			return nil, 0, err
 		}
 		du.RollbackFirmwareID = rollbackID
 		if taskID > 0 {

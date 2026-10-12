@@ -60,8 +60,9 @@ func TestSendUpgradeCommandRejectsDeviceUnsafeURL(t *testing.T) {
 	defer server.Close()
 
 	s := &OTAService{
-		deviceServer: server.URL,
-		httpClient:   server.Client(),
+		deviceServer:      server.URL,
+		httpClient:        server.Client(),
+		firmwareValidator: fixedFirmwareValidator{firmware: &model.Firmware{ID: 42, TargetChip: "esp", Version: "1.7.13", FileURL: "https://download.example.com/firmware/CS L10-6K2_1.7.13_1.bin"}},
 	}
 	s.SendUpgradeCommand(context.Background(),
 		&model.DeviceUpgrade{ID: 123, DeviceSN: "SN001"},
@@ -81,7 +82,7 @@ func TestSendUpgradeCommandStillDispatchesValidURL(t *testing.T) {
 	defer server.Close()
 
 	const url = "https://download.jiuxiaoyw.online/firmware/CS-L10-6K2_1.7.13_1790046134000000000.bin"
-	s := &OTAService{deviceServer: server.URL, httpClient: server.Client()}
+	s := &OTAService{deviceServer: server.URL, httpClient: server.Client(), firmwareValidator: fixedFirmwareValidator{firmware: &model.Firmware{ID: 42, TargetChip: "esp", Version: "1.7.13", FileURL: url}}}
 	s.SendUpgradeCommand(context.Background(),
 		&model.DeviceUpgrade{ID: 123, DeviceSN: "SN001"},
 		&model.Firmware{ID: 42, TargetChip: "esp", Version: "1.7.13"},

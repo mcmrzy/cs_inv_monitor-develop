@@ -17,6 +17,7 @@ class DeviceFirmwareHistory {
     this.updatedAt,
     this.completedAt,
     this.errorMessage = '',
+    this.hardwareVersion = '',
   });
 
   final int id;
@@ -46,6 +47,7 @@ class DeviceFirmwareHistory {
   final DateTime? updatedAt;
   final DateTime? completedAt;
   final String errorMessage;
+  final String hardwareVersion;
 
   /// 兼容旧命名：升级目标版本
   String get newVersion => firmwareVersion;
@@ -74,6 +76,7 @@ class DeviceFirmwareHistory {
       ),
       completedAt: DateTime.tryParse(json['completed_at']?.toString() ?? ''),
       errorMessage: json['error_message']?.toString() ?? '',
+      hardwareVersion: json['hardware_version']?.toString() ?? '',
     );
   }
 }

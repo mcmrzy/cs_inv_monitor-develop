@@ -1,4 +1,6 @@
 import React, { useMemo, useState } from 'react'
+import OTAProgressCell from './components/OTAProgressCell'
+import { hardwareCompatibilityLabel } from './hardwareCompatibility'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   App,
@@ -467,7 +469,7 @@ const DeviceFirmwareUpgradeTab: React.FC = () => {
                   <Col xs={12} sm={6}>
                     <Statistic
                       title={t('dev.hardwareVersion')}
-                      value={selectedDevice?.hardware_version || selectedDevice?.hardwareVersion || '-'}
+                      value={overview?.hardware_version || selectedDevice?.hardware_version || selectedDevice?.hardwareVersion || t('ota.hardwareUnknown')}
                       valueStyle={{ fontSize: 16 }}
                     />
                   </Col>
@@ -497,6 +499,7 @@ const DeviceFirmwareUpgradeTab: React.FC = () => {
                 loading={overviewLoading}
                 styles={{ body: { padding: 12 } }}
               >
+                {overview?.hardware_state === 'unknown' && <Alert type="warning" showIcon message={t('ota.hardwareUnknown')} style={{ marginBottom: 12 }} />}
                 {modules.length === 0 ? (
                   <Empty description={t('ota.noFirmwareResources')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
                 ) : (
@@ -519,8 +522,8 @@ const DeviceFirmwareUpgradeTab: React.FC = () => {
                             <Flex vertical gap={8}>
                               <Flex justify="space-between" align="center">
                                 <Text strong>{firmwareModuleLabel(mod.target, t)}</Text>
-                                <Tag color={state?.color || 'default'} style={{ marginRight: 0 }}>
-                                  {state ? t(state.i18nKey) : mod.version_state}
+                                <Tag color={mod.compatibility_reason ? 'warning' : state?.color || 'default'} style={{ marginRight: 0 }}>
+                                  {hardwareCompatibilityLabel(mod.compatibility_reason, t) || (state ? t(state.i18nKey) : mod.version_state)}
                                 </Tag>
                               </Flex>
                               <Flex vertical gap={2}>
@@ -718,4 +721,3 @@ const DeviceFirmwareUpgradeTab: React.FC = () => {
 
 export default DeviceFirmwareUpgradeTab
 export { normalizeFirmwareTarget }
-import OTAProgressCell from './components/OTAProgressCell'

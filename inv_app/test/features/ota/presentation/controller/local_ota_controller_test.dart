@@ -15,7 +15,10 @@ class _MockOtaRepository extends Mock implements OtaRepository {}
 class _FakeLocalCommunication implements LocalCommunicationRepository {
   final List<String> calls = [];
   Object? triggerError;
-  Map<String, dynamic> deviceInfo = const {'device_model': 'INV-10K'};
+  Map<String, dynamic> deviceInfo = const {
+    'device_model': 'INV-10K',
+    'hardware_version': 'HW-1'
+  };
   Map<String, dynamic> progress = const {
     'status': 'failed',
     'progress': 0,
@@ -136,6 +139,7 @@ void main() {
         manifest: manifest,
         fallbackVersion: manifest.version,
         firmwareModel: 'INV-10K',
+        firmwareHardwareVersions: const ['HW-1'],
       );
 
   test('uploads, triggers, then polls in strict order', () async {
@@ -143,6 +147,82 @@ void main() {
 
     expect(communication.calls, ['info', 'upload', 'trigger', 'progress']);
   });
+
+  test('unknown hardware stops local OTA before any upload bytes', () async {
+    communication.deviceInfo = const {'device_model': 'INV-10K'};
+    await execute();
+    expect(communication.calls, ['info']);
+    expect(controller.state.phase, LocalOTAPhase.failed);
+    expect(controller.state.error, isA<LocalOtaHardwareException>());
+    expect(OtaErrorMapper.l10nKeyOf(controller.state.error!),
+        'ota_err_device_hardware_unknown');
+  });
+
+  for (final channel in LocalCommunicationChannel.values) {
+    test('${channel.name} hardware mismatch prevents upload and trigger',
+        () async {
+      controller.dispose();
+      controller = LocalOTAController(
+        communication: communication,
+        repository: _MockOtaRepository(),
+        channel: channel,
+        deviceSN: 'SN001',
+        deviceIP: '192.168.4.1',
+      );
+      communication.deviceInfo = const {
+        'device_model': 'INV-10K',
+        'hardware_version': 'HW-2',
+      };
+      await execute();
+      expect(communication.calls, ['info']);
+      expect(controller.state.error, isA<LocalOtaHardwareException>());
+      expect(OtaErrorMapper.l10nKeyOf(controller.state.error!),
+          'ota_err_hardware_mismatch');
+    });
+  }
+
+  test('legacy cached firmware without scope cannot upload', () async {
+    await controller.execute(
+      filePath: '/tmp/old.bin',
+      manifest: manifest,
+      fallbackVersion: manifest.version,
+      firmwareModel: 'INV-10K',
+      firmwareHardwareVersions: const [],
+    );
+    expect(communication.calls, ['info']);
+    expect(OtaErrorMapper.l10nKeyOf(controller.state.error!),
+        'ota_err_firmware_hardware_unknown');
+  });
+
+  test('hw_version trim and uppercase supports explicitly shared image',
+      () async {
+    communication.deviceInfo = const {
+      'device_model': 'INV-10K',
+      'hw_version': ' hw-2 ',
+    };
+    await controller.execute(
+      filePath: '/tmp/shared.bin',
+      manifest: manifest,
+      fallbackVersion: manifest.version,
+      firmwareModel: 'INV-10K',
+      firmwareHardwareVersions: const ['HW-1', 'HW-2'],
+    );
+    expect(communication.calls, ['info', 'upload', 'trigger', 'progress']);
+  });
+
+  for (final reported in ['1', 'V1', 'HW1']) {
+    test('hardware prefixes are distinct: $reported cannot match HW-1',
+        () async {
+      communication.deviceInfo = {
+        'device_model': 'INV-10K',
+        'hardware_version': reported
+      };
+      await execute();
+      expect(communication.calls, ['info']);
+      expect(OtaErrorMapper.l10nKeyOf(controller.state.error!),
+          'ota_err_hardware_mismatch');
+    });
+  }
 
   test(
     'trigger failure ends as failed without polling and releases connection',
@@ -185,7 +265,8 @@ void main() {
     expect(terminateCount, 1);
   });
 
-  test('BMS is rejected before upload when BLE INFO omits the module', () async {
+  test('BMS is rejected before upload when BLE INFO omits the module',
+      () async {
     communication.deviceInfo = const {
       'device_model': 'INV-10K',
       'supported_upgrade_modules': [
@@ -206,6 +287,7 @@ void main() {
       ),
       fallbackVersion: '1.2.3',
       firmwareModel: 'INV-10K',
+      firmwareHardwareVersions: const ['HW-1'],
     );
 
     expect(communication.calls, ['info']);
@@ -233,20 +315,22 @@ void main() {
     expect(terminateCount, 1);
   });
 
-  test('reports a module version recovered after reboot to the cloud', () async {
+  test('reports a module version recovered after reboot to the cloud',
+      () async {
     final repository = _MockOtaRepository();
     when(
       () => repository.reportLocalOTAResult(
         sn: any(named: 'sn'),
         targetChip: any(named: 'targetChip'),
         newVersion: any(named: 'newVersion'),
+        firmwareId: any(named: 'firmwareId'),
       ),
     ).thenAnswer((_) async => const Right(<String, dynamic>{}));
     controller.dispose();
     communication
       ..progress = const {'status': 'done', 'progress': 100}
       ..deviceInfoSequence.addAll(const [
-        {'device_model': 'INV-10K'},
+        {'device_model': 'INV-10K', 'hardware_version': 'HW-1'},
         {'device_model': 'INV-10K', 'firmware_arm': '2.0.0'},
       ]);
     controller = LocalOTAController(
@@ -263,6 +347,8 @@ void main() {
       manifest: manifest,
       fallbackVersion: '',
       firmwareModel: 'INV-10K',
+      firmwareHardwareVersions: const ['HW-1'],
+      firmwareId: 42,
     );
 
     expect(controller.state.newVersion, '2.0.0');
@@ -271,11 +357,13 @@ void main() {
         sn: 'SN001',
         targetChip: 'arm',
         newVersion: '2.0.0',
+        firmwareId: 42,
       ),
     ).called(1);
   });
 
-  test('BMS success reports its target version rather than ARM metadata', () async {
+  test('BMS success reports its target version rather than ARM metadata',
+      () async {
     final repository = _MockOtaRepository();
     when(
       () => repository.reportLocalOTAResult(
@@ -288,6 +376,7 @@ void main() {
     communication
       ..deviceInfo = const {
         'device_model': 'INV-10K',
+        'hardware_version': 'HW-1',
         'supported_upgrade_modules': ['communication_module', 'bms'],
       }
       ..progress = const {
@@ -316,6 +405,7 @@ void main() {
       ),
       fallbackVersion: '',
       firmwareModel: 'INV-10K',
+      firmwareHardwareVersions: const ['HW-1'],
     );
 
     expect(controller.state.newVersion, '2.3.4');

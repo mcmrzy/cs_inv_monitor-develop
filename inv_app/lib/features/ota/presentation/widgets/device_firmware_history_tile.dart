@@ -182,6 +182,13 @@ class DeviceFirmwareHistoryTile extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 8),
+                  if (item.hardwareVersion.isNotEmpty) ...[
+                    Text(
+                      '${l10n.str('firmware_hardware_version')}: ${item.hardwareVersion}',
+                      style: TextStyle(fontSize: 12, color: AppColor.textSecondary(context)),
+                    ),
+                    const SizedBox(height: 4),
+                  ],
                   Text(
                     '$label ${item.stageProgress == null ? '--' : '${item.stageProgress!.clamp(0, 100)}%'}',
                     style: TextStyle(

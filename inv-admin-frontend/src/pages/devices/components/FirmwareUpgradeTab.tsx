@@ -1,6 +1,6 @@
 import React from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Card, Descriptions, Button, Table, Tag, Space, message, Empty, Spin, Typography, Select } from 'antd'
+import { Alert, Card, Descriptions, Button, Table, Tag, Space, message, Empty, Spin, Typography, Select } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { ReloadOutlined, CloudDownloadOutlined } from '@ant-design/icons'
 import { deviceApi } from '@/services/deviceApi'
@@ -12,6 +12,7 @@ import useTimezoneStore from '@/stores/timezoneStore'
 import { firmwareModuleLabel } from '@/pages/ota/firmwarePresentation'
 import type { DeviceFirmwareOverview, DeviceUpgrade, FirmwareResource } from '@/types'
 import OTAProgressCell from '@/pages/ota/components/OTAProgressCell'
+import { hardwareCompatibilityLabel } from '@/pages/ota/hardwareCompatibility'
 
 const { Text } = Typography
 
@@ -111,14 +112,14 @@ const FirmwareUpgradeTab: React.FC<FirmwareUpgradeTabProps> = ({ sn }) => {
       { label: t('dev.deviceName'), children: deviceData.alias || deviceData.model || deviceData.sn || sn },
       { label: t('common.model'), children: deviceData.model || '-' },
       { label: t('dev.deviceSN'), children: deviceData.sn || sn },
-      { label: t('dev.hardwareVersion'), children: deviceData.hardware_version || deviceData.hardwareVersion || '-' },
+      { label: t('dev.hardwareVersion'), children: overview?.hardware_version || deviceData.hardware_version || deviceData.hardwareVersion || t('ota.hardwareUnknown') },
       { label: firmwareModuleLabel('arm', t), children: deviceData.firmware_arm || '-' },
       { label: firmwareModuleLabel('esp', t), children: deviceData.firmware_esp || '-' },
       { label: firmwareModuleLabel('dsp', t), children: deviceData.firmware_dsp || '-' },
       { label: firmwareModuleLabel('bms', t), children: deviceData.firmware_bms || '-' },
       { label: t('dev.bootloaderVersion'), children: deviceData.bootloader_version || '-' },
     ]
-  }, [deviceData, sn, t])
+  }, [deviceData, overview?.hardware_version, sn, t])
 
   const historyColumns: ColumnsType<DeviceUpgrade> = [
     {
@@ -151,7 +152,7 @@ const FirmwareUpgradeTab: React.FC<FirmwareUpgradeTabProps> = ({ sn }) => {
     },
   ]
 
-  const updatable = (overview?.modules ?? []).filter((m) => m.update_available)
+  const updatable = (overview?.modules ?? []).filter((m) => m.update_available && !m.compatibility_reason)
 
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
@@ -178,6 +179,7 @@ const FirmwareUpgradeTab: React.FC<FirmwareUpgradeTabProps> = ({ sn }) => {
           </Button>
         }
       >
+        {overview?.hardware_state === 'unknown' && <Alert type="warning" showIcon message={t('ota.hardwareUnknown')} style={{ marginBottom: 12 }} />}
         {overviewLoading ? (
           <Spin />
         ) : (overview?.modules?.length ?? 0) === 0 ? (
@@ -207,8 +209,8 @@ const FirmwareUpgradeTab: React.FC<FirmwareUpgradeTabProps> = ({ sn }) => {
               {
                 title: t('common.status'),
                 dataIndex: 'update_available',
-                render: (available: boolean) =>
-                  available ? (
+                render: (available: boolean, module) =>
+                  module.compatibility_reason ? <Tag color="warning">{hardwareCompatibilityLabel(module.compatibility_reason, t)}</Tag> : available ? (
                     <Tag color="warning">{t('ota.moduleUpdateAvailable')}</Tag>
                   ) : (
                     <Tag color="success">{t('ota.moduleNoUpdate')}</Tag>

@@ -5,6 +5,7 @@ import 'package:inv_app/core/services/local_communication_service.dart';
 void main() {
   group('DownloadedFirmwareInfo', () {
     const complete = DownloadedFirmwareInfo(
+      hardwareVersions: ['HW-1'],
       firmwareId: 7,
       filePath: '/tmp/fw.bin',
       fileName: 'fw.bin',

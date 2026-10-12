@@ -1,4 +1,10 @@
 const Map<String, String> zh = {
+  'ota_err_firmware_hardware_unknown': '固件未声明适用硬件版本，请删除旧缓存并重新下载适用固件',
+  'ota_err_device_hardware_unknown': '设备未上报硬件版本，无法确认兼容性，升级已停止',
+  'ota_err_hardware_mismatch': '固件与当前连接设备的硬件版本不兼容，升级已停止',
+  'firmware_hardware_unknown': '硬件版本未确认',
+  'firmware_no_compatible_firmware': '暂无适用此硬件版本的固件',
+  'firmware_hardware_range': '适用硬件版本',
   'add_device_new': '添加新设备',
   'add_device_manual': '手动输入',
   'add_device_nearby': '附近设备',

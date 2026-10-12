@@ -43,7 +43,7 @@ jobs:
         if: github.event_name == 'pull_request'
         uses: golangci/golangci-lint-action@v7
         with:
-          version: v2.1
+          version: v2.14.0
           working-directory: ${{ matrix.module }}
           # 只报告相对目标分支新增的问题；存量债务不阻塞合并
           only-new-issues: true

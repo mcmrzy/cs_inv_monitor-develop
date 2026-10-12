@@ -2,6 +2,7 @@ export interface FirmwareUploadInput {
   file: File
   model: string
   targetChip: string
+  hardwareVersions: string[]
   changelog?: string
 }
 
@@ -9,10 +10,13 @@ export interface FirmwareUploadInput {
  * 固件技术元数据以服务端识别结果为准，前端只提交业务选择与文件本体。
  */
 export function buildFirmwareUploadFormData(input: FirmwareUploadInput): FormData {
+  const hardwareVersions = [...new Set((input.hardwareVersions ?? []).map((v) => v.trim().toUpperCase()).filter(Boolean))]
+  if (hardwareVersions.length === 0) throw new Error('Explicit hardware compatibility is required')
   const formData = new FormData()
   formData.append('file', input.file)
   formData.append('model', input.model)
   formData.append('target_chip', input.targetChip)
+  formData.append('hardware_versions', JSON.stringify(hardwareVersions))
   formData.append('changelog', input.changelog || '')
   return formData
 }

@@ -147,6 +147,8 @@ class LocalOTAController extends ChangeNotifier {
     required LocalOtaManifest manifest,
     required String fallbackVersion,
     required String firmwareModel,
+    required List<String> firmwareHardwareVersions,
+    int? firmwareId,
   }) async {
     final isEsp = manifest.target.toLowerCase() == 'esp';
 
@@ -171,10 +173,18 @@ class LocalOTAController extends ChangeNotifier {
           )) {
         throw LocalOtaUnsupportedTargetException(manifest.target);
       }
+      final hardwareCompatibility = checkLocalOtaHardwareCompatibility(
+        firmwareHardwareVersions: firmwareHardwareVersions,
+        deviceInfo: deviceInfo,
+      );
+      if (hardwareCompatibility != LocalOtaHardwareCompatibility.compatible) {
+        throw LocalOtaHardwareException(hardwareCompatibility.name);
+      }
     } catch (e) {
       _emit(_state.copyWith(
         phase: LocalOTAPhase.failed,
         error: () => e is LocalOtaDeviceModelException ||
+                e is LocalOtaHardwareException ||
                 e is LocalOtaUnsupportedTargetException
             ? e
             : LocalOtaDeviceModelException(
@@ -239,10 +249,12 @@ class LocalOTAController extends ChangeNotifier {
     // ---- 4. 轮询升级进度 ----
     await _pollProgress(
       isEsp: isEsp,
-      fallbackVersion: const {'dsp', 'bms'}.contains(manifest.target.toLowerCase())
-          ? manifest.version
-          : fallbackVersion,
+      fallbackVersion:
+          const {'dsp', 'bms'}.contains(manifest.target.toLowerCase())
+              ? manifest.version
+              : fallbackVersion,
       targetChip: manifest.target,
+      firmwareId: firmwareId,
     );
   }
 
@@ -251,6 +263,7 @@ class LocalOTAController extends ChangeNotifier {
     required bool isEsp,
     required String fallbackVersion,
     required String targetChip,
+    int? firmwareId,
   }) async {
     final normalizedTarget = targetChip.toLowerCase();
     final versionKey = '${normalizedTarget}_version';
@@ -311,8 +324,7 @@ class LocalOTAController extends ChangeNotifier {
         final chipVer = (progress['version'] as String? ?? '').isNotEmpty
             ? (progress['version'] as String)
             : (progress[versionKey] as String? ?? '');
-        final displayVersion =
-            chipVer.isNotEmpty ? chipVer : fallbackVersion;
+        final displayVersion = chipVer.isNotEmpty ? chipVer : fallbackVersion;
 
         _emit(_state.copyWith(
           upgradeProgress: percent / 100.0,
@@ -338,7 +350,9 @@ class LocalOTAController extends ChangeNotifier {
                       ? (info[firmwareKey] as String)
                       : (info[versionKey] as String? ?? '').isNotEmpty
                           ? (info[versionKey] as String)
-                  : isEsp ? (info['version'] as String? ?? '') : '';
+                          : isEsp
+                              ? (info['version'] as String? ?? '')
+                              : '';
               newVersion = infoChipVer.isNotEmpty ? infoChipVer : null;
               if (infoChipVer.isNotEmpty) chipNewVersion = infoChipVer;
             } catch (e) {
@@ -357,6 +371,7 @@ class LocalOTAController extends ChangeNotifier {
             await _reportResult(
               targetChip: targetChip,
               chipNewVersion: chipNewVersion,
+              firmwareId: firmwareId,
             );
           }
           return;
@@ -395,6 +410,7 @@ class LocalOTAController extends ChangeNotifier {
   Future<void> _reportResult({
     required String targetChip,
     required String chipNewVersion,
+    int? firmwareId,
   }) async {
     // 等待网络恢复（断开热点后需要几秒切回移动网络/普通 WiFi）
     await Future.delayed(const Duration(seconds: 3));
@@ -408,6 +424,7 @@ class LocalOTAController extends ChangeNotifier {
         sn: _deviceSN,
         targetChip: targetChip,
         newVersion: chipNewVersion,
+        firmwareId: firmwareId,
       );
       return;
     }
@@ -417,6 +434,7 @@ class LocalOTAController extends ChangeNotifier {
         sn: _deviceSN,
         targetChip: targetChip,
         newVersion: chipNewVersion,
+        firmwareId: firmwareId,
       );
     } catch (e) {
       debugPrint('[LocalOTA] report result failed: $e');

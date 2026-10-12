@@ -24,6 +24,47 @@ enum LocalOtaDeviceCompatibility {
   mismatch,
 }
 
+enum LocalOtaHardwareCompatibility {
+  compatible,
+  missingFirmwareHardware,
+  missingDeviceHardware,
+  mismatch,
+}
+
+/// The connected device INFO is authoritative. Only trim and case normalization
+/// are allowed: HW-1, V1 and 1 are different hardware identities.
+LocalOtaHardwareCompatibility checkLocalOtaHardwareCompatibility({
+  required List<String> firmwareHardwareVersions,
+  required Map<String, dynamic> deviceInfo,
+}) {
+  final versions = firmwareHardwareVersions
+      .map((value) => value.trim().toUpperCase())
+      .where((value) => value.isNotEmpty)
+      .toSet();
+  if (versions.isEmpty) {
+    return LocalOtaHardwareCompatibility.missingFirmwareHardware;
+  }
+  String read(Map<dynamic, dynamic> info) {
+    for (final key in const ['hardware_version', 'hw_version']) {
+      final value = info[key];
+      if (value is String && value.trim().isNotEmpty) {
+        return value.trim().toUpperCase();
+      }
+    }
+    return '';
+  }
+
+  var actual = read(deviceInfo);
+  final nested = deviceInfo['device'];
+  if (actual.isEmpty && nested is Map) actual = read(nested);
+  if (actual.isEmpty) {
+    return LocalOtaHardwareCompatibility.missingDeviceHardware;
+  }
+  return versions.contains(actual)
+      ? LocalOtaHardwareCompatibility.compatible
+      : LocalOtaHardwareCompatibility.mismatch;
+}
+
 /// Resource metadata gates which local transport can carry a module image.
 /// Legacy ESP/ARM records may omit the list; DSP/BMS must opt in to BLE.
 bool supportsLocalOtaResourceChannel({
@@ -38,7 +79,8 @@ bool supportsLocalOtaResourceChannel({
     return false;
   }
   if (supportedChannels == null) return module == 'esp' || module == 'arm';
-  return supportedChannels.any((value) => value.trim().toLowerCase() == transport);
+  return supportedChannels
+      .any((value) => value.trim().toLowerCase() == transport);
 }
 
 /// INFO is the on-device authority for new module support. Older ESP/ARM
@@ -58,8 +100,8 @@ bool supportsLocalOtaDeviceTarget({
   if (wireTarget == null) return false;
   final supported = deviceInfo['supported_upgrade_modules'];
   if (supported is! List) return module == 'esp' || module == 'arm';
-  return supported.any((entry) =>
-      entry is String && entry.trim().toLowerCase() == wireTarget);
+  return supported.any(
+      (entry) => entry is String && entry.trim().toLowerCase() == wireTarget);
 }
 
 String? _readDeviceModel(Map<String, dynamic> info) {
