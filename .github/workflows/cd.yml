@@ -311,7 +311,7 @@ jobs:
             case " ${{ env.CHANGED_SERVICES }} " in
               *" business-api "*)
                 umask 077
-                DATABASE_BACKUP_DIR=/opt/inv-mqtt/data-backup/database
+                DATABASE_BACKUP_DIR=/opt/inv-mqtt/database-backups
                 mkdir -p "$DATABASE_BACKUP_DIR"
                 DATABASE_BACKUP="$DATABASE_BACKUP_DIR/$(date -u +%Y%m%dT%H%M%SZ)-${{ env.DEPLOY_SHA }}.dump"
                 docker exec inv-postgres sh -c 'export PGPASSWORD="$POSTGRES_PASSWORD"; exec pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "$DATABASE_BACKUP.partial"
@@ -636,7 +636,14 @@ jobs:
                 DEPLOY_PHASE=verify_hardware_ota_migration
                 MIGRATION_129=$(docker exec inv-postgres sh -c 'export PGPASSWORD="$POSTGRES_PASSWORD"; exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT count(*) FROM schema_migrations WHERE version=129"')
                 test "$MIGRATION_129" = "1"
-                docker exec inv-postgres sh -c 'export PGPASSWORD="$POSTGRES_PASSWORD"; exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT json_build_object('\''migration'\'',129,'\''hardware_catalog_entries'\'',(SELECT count(*) FROM device_hardware_versions),'\''assigned_firmware'\'',(SELECT count(DISTINCT firmware_id) FROM firmware_hardware_versions),'\''unassigned_published_firmware'\'',(SELECT count(*) FROM firmware_versions f WHERE f.is_published=true AND NOT EXISTS (SELECT 1 FROM firmware_hardware_versions h WHERE h.firmware_id=f.id)))"'
+                docker exec -i inv-postgres sh -c 'export PGPASSWORD="$POSTGRES_PASSWORD"; exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At' <<'HARDWARE_OTA_SQL'
+            SELECT json_build_object(
+              'migration',129,
+              'hardware_catalog_entries',(SELECT count(*) FROM device_hardware_versions),
+              'assigned_firmware',(SELECT count(DISTINCT firmware_id) FROM firmware_hardware_versions),
+              'unassigned_published_firmware',(SELECT count(*) FROM firmware_versions f WHERE f.release_status='published' AND NOT EXISTS (SELECT 1 FROM firmware_hardware_versions h WHERE h.firmware_id=f.id))
+            );
+            HARDWARE_OTA_SQL
               fi
               report_external_readiness
               cleanup_old_images
