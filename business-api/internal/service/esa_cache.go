@@ -43,7 +43,7 @@ const (
 )
 
 // defaultAppReleaseCachePaths 下载页读取最新版本的公开路径。
-// 页面实际请求带 ?platform=android，因此刷新时用 ignoreParams 覆盖任意 query。
+// 页面实际请求带 ?platform=android，因此普通 URL 刷新同时覆盖裸路径与该参数。
 var defaultAppReleaseCachePaths = []string{
 	"/app-release-info",
 	"/api/v1/ota/app/latest",
@@ -58,6 +58,7 @@ var defaultAppReleaseCachePaths = []string{
 var defaultDownloadEntryPaths = []string{
 	"/",
 	"/download",
+	"/download.html",
 }
 
 // ESACachePurger 调用阿里云 ESA OpenAPI 刷新指定 URL 的边缘缓存。
@@ -146,8 +147,8 @@ func (p *ESACachePurger) RefreshPaths() []string {
 
 // Refresh 同步刷新边缘缓存。未启用时直接返回 nil。
 //
-// 使用 PurgeCaches 的 ignoreParams 类型：去掉 query 后匹配，确保
-// /app-release-info?platform=android 与裸路径一并失效。
+// 使用普通 file 刷新：低等级套餐不支持 ignoreparams（配额为零）。
+// refreshURLs 同时包含裸路径和页面实际使用的 platform=android 参数。
 func (p *ESACachePurger) Refresh() error {
 	if !p.Enabled() {
 		return nil
@@ -156,25 +157,15 @@ func (p *ESACachePurger) Refresh() error {
 		return err
 	}
 
-	// ignoreParams 列表使用「去参数」后的 URL，覆盖下载域别名、SPA 入口与 api 域权威端点。
-	ignore := make([]string, 0, len(defaultAppReleaseCachePaths)+len(defaultDownloadEntryPaths)+1)
-	for _, path := range defaultAppReleaseCachePaths {
-		ignore = append(ignore, "https://"+p.downloadHost+path)
-	}
-	for _, path := range defaultDownloadEntryPaths {
-		ignore = append(ignore, "https://"+p.downloadHost+path)
-	}
-	ignore = append(ignore, "https://"+p.apiHost+apiReleaseCachePath)
 	content, err := json.Marshal(map[string]interface{}{
-		"IgnoreParams": ignore,
+		"Files": p.refreshURLs,
 	})
 	if err != nil {
 		return fmt.Errorf("marshal purge content: %w", err)
 	}
 
 	result, err := p.callESA("PurgeCaches", map[string]*string{
-		// ESA 枚举全小写；驼峰 ignoreParams 会被拒（InvalidType，2026-09-18 实测）。
-		"Type":    tea.String("ignoreparams"),
+		"Type":    tea.String("file"),
 		"Content": tea.String(string(content)),
 		"SiteId":  tea.String(p.siteID),
 		"Force":   tea.String("true"),
@@ -191,7 +182,6 @@ func (p *ESACachePurger) Refresh() error {
 	logger.Info("ESA cache refresh submitted",
 		zap.String("site_id", p.siteID),
 		zap.Strings("urls", p.refreshURLs),
-		zap.Strings("ignore_params", ignore),
 		zap.String("task_id", taskID),
 	)
 	return nil
@@ -286,7 +276,7 @@ type esaCacheRuleSpec struct {
 }
 
 // desiredESACacheRules 与 deploy/CACHE_POLICY.md 对齐：
-// 动态接口与最新版本元数据禁止边缘缓存，SPA 入口 follow_origin。
+// 动态接口、最新版本元数据与下载 HTML 都禁止边缘缓存。
 //
 // 注意：ESA EdgeCacheMode 枚举是 no_cache（不是旧 CDN 的 off）。
 func desiredESACacheRules() []esaCacheRuleSpec {
@@ -299,15 +289,15 @@ func desiredESACacheRules() []esaCacheRuleSpec {
 		},
 		{
 			Name:             "cs-app-release-info-no-store",
-			Rule:             `eq(http.request.uri.path, "/app-release-info")`,
+			Rule:             `(http.request.uri.path eq "/app-release-info")`,
 			EdgeCacheMode:    "no_cache",
 			BrowserCacheMode: "no_cache",
 		},
 		{
 			Name:             "cs-spa-follow-origin",
-			Rule:             `eq(http.request.uri.path, "/download") or eq(http.request.uri.path, "/")`,
-			EdgeCacheMode:    "follow_origin_bypass",
-			BrowserCacheMode: "follow_origin",
+			Rule:             `(http.request.uri.path eq "/download") or (http.request.uri.path eq "/download.html") or (http.request.uri.path eq "/")`,
+			EdgeCacheMode:    "no_cache",
+			BrowserCacheMode: "no_cache",
 		},
 	}
 }

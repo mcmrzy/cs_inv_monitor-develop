@@ -32,10 +32,13 @@ ENDPOINT = os.environ.get("ESA_ENDPOINT", "https://esa.cn-hangzhou.aliyuncs.com"
 VERSION = "2024-09-10"
 DEFAULT_PATHS = (
     "/app-release-info",
+    "/app-release-info?platform=android",
     "/api/v1/ota/app/latest",
+    "/api/v1/ota/app/latest?platform=android",
     # SPA 入口：边缘曾把 / 缓存成指向自身的 301（ERR_TOO_MANY_REDIRECTS）。
     "/",
     "/download",
+    "/download.html",
 )
 
 
@@ -125,20 +128,20 @@ def main() -> None:
 
     host = os.environ.get("ESA_REFRESH_HOST", "download.jiuxiaoyw.online").strip()
     host = host.removeprefix("https://").removeprefix("http://").split("/")[0]
-    # ignoreParams：去掉 query 后匹配，覆盖 ?platform=android 等变体。
-    ignore_urls = [f"https://{host}{p}" for p in DEFAULT_PATHS]
-    content = json.dumps({"IgnoreParams": ignore_urls}, ensure_ascii=False)
+    # 普通 URL 刷新适用于基础套餐；ignoreparams 在低等级套餐中配额为零。
+    # 显式覆盖页面使用的 query，入口禁缓存后不再积累未知参数变体。
+    file_urls = [f"https://{host}{p}" for p in DEFAULT_PATHS]
+    content = json.dumps({"Files": file_urls}, ensure_ascii=False)
 
     print(f"SiteId={site_id}")
-    print("刷新目标（ignoreParams，去参数后匹配）:")
-    for line in ignore_urls:
+    print("刷新目标（file，包含已知参数）:")
+    for line in file_urls:
         print(f"  {line}")
 
     result = call_esa(
         "PurgeCaches",
         {
-            # ESA 枚举全小写；驼峰 ignoreParams 会被拒（InvalidType，2026-09-18 实测）。
-            "Type": "ignoreparams",
+            "Type": "file",
             "Content": content,
             "SiteId": site_id,
             "Force": "true",

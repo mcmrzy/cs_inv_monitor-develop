@@ -1,8 +1,59 @@
 package service
 
 import (
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 )
+
+// 基础套餐不支持 ignoreparams，发布必须使用普通 URL 刷新并覆盖已知参数。
+func TestESACachePurger_RefreshUsesFileQuota(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			t.Fatal(err)
+		}
+		if got := r.Form.Get("Type"); got != "file" {
+			t.Errorf("purge type=%q, want file", got)
+		}
+		var content struct {
+			Files []string `json:"Files"`
+		}
+		if err := json.Unmarshal([]byte(r.Form.Get("Content")), &content); err != nil {
+			t.Fatal(err)
+		}
+		for _, want := range []string{"https://download.jiuxiaoyw.online/download", "https://download.jiuxiaoyw.online/download.html", "https://download.jiuxiaoyw.online/app-release-info?platform=android"} {
+			if !strings.Contains(strings.Join(content.Files, "\n"), want) {
+				t.Errorf("missing URL %s", want)
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"TaskId":"test-task"}`)
+	}))
+	defer server.Close()
+	p := NewESACachePurger("ak", "sk", "999", "", "")
+	p.endpoint = server.URL
+	if err := p.Refresh(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDesiredESACacheRules_DownloadHTMLBypassesCache(t *testing.T) {
+	for _, rule := range desiredESACacheRules() {
+		if rule.Name == "cs-spa-follow-origin" {
+			if rule.EdgeCacheMode != "no_cache" || rule.BrowserCacheMode != "no_cache" {
+				t.Errorf("HTML must bypass cache: %+v", rule)
+			}
+			if !strings.Contains(rule.Rule, `"/download.html"`) {
+				t.Error("independent download HTML missing from cache rule")
+			}
+			return
+		}
+	}
+	t.Fatal("download HTML rule missing")
+}
 
 func TestESACachePurger_EnabledRequiresKeysAndSiteID(t *testing.T) {
 	if NewESACachePurger("", "", "1", "", "").Enabled() {
@@ -39,6 +90,7 @@ func TestESACachePurger_BuildRefreshPaths(t *testing.T) {
 		// SPA 入口：边缘毒 301 会让手机输裸域名时报重定向过多。
 		"https://download.jiuxiaoyw.online/",
 		"https://download.jiuxiaoyw.online/download",
+		"https://download.jiuxiaoyw.online/download.html",
 		// api 域权威端点：下载页优先请求它，发布后必须一并刷新。
 		"https://api.jiuxiaoyw.online/api/v1/ota/app/latest",
 		"https://api.jiuxiaoyw.online/api/v1/ota/app/latest?platform=android",
@@ -98,6 +150,9 @@ func TestDesiredESACacheRules(t *testing.T) {
 	}
 	foundAPI := false
 	for _, r := range rules {
+		if strings.Contains(r.Rule, "eq(") {
+			t.Errorf("rule %s uses a function instead of ESA's eq operator: %s", r.Name, r.Rule)
+		}
 		if r.Name == "cs-api-no-store" {
 			foundAPI = true
 			// ESA 2024-09-10 枚举是 no_cache，旧 CDN 的 off 会被拒绝。
