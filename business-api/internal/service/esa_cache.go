@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 
 	openapi "github.com/alibabacloud-go/darabonba-openapi/v2/client"
@@ -221,18 +222,31 @@ func (p *ESACachePurger) callESA(action string, query map[string]*string) (map[s
 	if err := p.ensureClient(); err != nil {
 		return nil, err
 	}
+	method := "POST"
+	if action == "ListCacheRules" || action == "ListSites" {
+		method = "GET"
+	}
 	params := &openapi.Params{
 		Action:      tea.String(action),
 		Version:     tea.String(esaAPIVersion),
 		Protocol:    tea.String("HTTPS"),
-		Method:      tea.String("POST"),
+		Method:      tea.String(method),
 		AuthType:    tea.String("AK"),
 		Style:       tea.String("RPC"),
 		Pathname:    tea.String("/"),
 		ReqBodyType: tea.String("form"),
 		BodyType:    tea.String("json"),
 	}
-	return p.client.CallApi(params, &openapi.OpenApiRequest{Query: query}, &dara.RuntimeOptions{})
+	result, err := p.client.CallApi(params, &openapi.OpenApiRequest{Query: query}, &dara.RuntimeOptions{})
+	if err != nil {
+		return nil, err
+	}
+	// 通用 SDK 把业务 JSON 包在 body 中，外层还有 headers/statusCode。
+	body, ok := result["body"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("ESA %s returned an invalid response body", action)
+	}
+	return body, nil
 }
 
 func (p *ESACachePurger) ensureClient() error {
@@ -362,7 +376,7 @@ func (p *ESACachePurger) listCacheRulesByName() (map[string]string, error) {
 	if result == nil {
 		return out, nil
 	}
-	list, _ := result["CacheRules"].([]interface{})
+	list, _ := result["Configs"].([]interface{})
 	for _, raw := range list {
 		m, ok := raw.(map[string]interface{})
 		if !ok {
@@ -425,6 +439,10 @@ func firstNonEmpty(vals ...interface{}) string {
 			continue
 		}
 		s := strings.TrimSpace(fmt.Sprint(v))
+		// JSON 解码后的长整型配置 ID 不能以科学计数法传回 OpenAPI。
+		if number, ok := v.(float64); ok {
+			s = strconv.FormatFloat(number, 'f', -1, 64)
+		}
 		if s != "" && s != "<nil>" {
 			return s
 		}

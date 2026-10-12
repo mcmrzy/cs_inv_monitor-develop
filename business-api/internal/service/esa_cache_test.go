@@ -55,6 +55,32 @@ func TestDesiredESACacheRules_DownloadHTMLBypassesCache(t *testing.T) {
 	t.Fatal("download HTML rule missing")
 }
 
+func TestESACachePurger_ReadOperationsUseGET(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("ESA read operation method=%s, want GET", r.Method)
+			w.WriteHeader(http.StatusForbidden)
+			io.WriteString(w, `{"Code":"UnsupportedHTTPMethod","Message":"GET required"}`)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"Configs":[{"RuleName":"cs-spa-follow-origin","ConfigId":395386449776640}],"Sites":[]}`)
+	}))
+	defer server.Close()
+	p := NewESACachePurger("ak", "sk", "999", "", "")
+	p.endpoint = server.URL
+	if _, err := p.ListSites(); err != nil {
+		t.Error(err)
+	}
+	rules, err := p.listCacheRulesByName()
+	if err != nil {
+		t.Error(err)
+	}
+	if rules["cs-spa-follow-origin"] != "395386449776640" {
+		t.Errorf("existing rule ID not parsed correctly: %v", rules)
+	}
+}
+
 func TestESACachePurger_EnabledRequiresKeysAndSiteID(t *testing.T) {
 	if NewESACachePurger("", "", "1", "", "").Enabled() {
 		t.Fatal("empty ak should disable")
