@@ -38,6 +38,7 @@ abstract class OtaRepository {
     required String sn,
     required String targetChip,
     required String newVersion,
+    int? firmwareId,
   });
 
   Future<Either<Failure, Map<String, dynamic>>> resendUpgradeCommand(String sn);

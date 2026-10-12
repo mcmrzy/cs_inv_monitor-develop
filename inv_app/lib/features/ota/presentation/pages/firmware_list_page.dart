@@ -169,6 +169,8 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                 expectedSize: (chip['file_size'] as num?)?.toInt(),
                 expectedSha256: chip['file_sha256'] as String?,
                 deviceModel: widget.deviceModel,
+                hardwareVersions: (chip['hardware_versions'] as List?)
+                    ?.whereType<String>().toList() ?? const [],
                 // 持久化离线升级元数据，支持无网时从已下载列表直接本地升级
                 targetChip: chip['target_chip'] as String?,
                 version: chip['firmware_version'] as String?,
@@ -476,6 +478,8 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                           'file_sha256': r.fileSha256,
                           'release_signature': r.releaseSignature,
                           'security_version': r.securityVersion,
+                          'hardware_versions': r.hardwareVersions,
+                          'supported_channels': r.supportedChannels,
                         }
                       ],
                     })

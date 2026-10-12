@@ -158,11 +158,13 @@ class _DeviceFirmwareDetailPageState extends State<DeviceFirmwareDetailPage> {
       _deviceError == null &&
       _device != null &&
       _online &&
+      (_overview?.hasKnownHardware ?? false) &&
       !_triggering;
 
   List<FirmwareModuleOverview> get _updatableModules =>
-      _overview?.modules.where((m) => m.canRemoteUpgrade).toList() ??
-      const [];
+      _overview?.hasKnownHardware == true
+          ? _overview!.modules.where((m) => m.canRemoteUpgrade).toList()
+          : const [];
 
   Future<void> _triggerSingle(FirmwareModuleOverview module) async {
     final l10n = AppLocalizations.of(context)!;
@@ -322,7 +324,9 @@ class _DeviceFirmwareDetailPageState extends State<DeviceFirmwareDetailPage> {
                           value: widget.deviceSN),
                       _InfoCell(
                           label: l10n.str('firmware_hardware_version'),
-                          value: _value('hardware_version')),
+                          value: _overview?.hardwareState == 'known'
+                              ? _overview!.hardwareVersion
+                              : l10n.str('firmware_hardware_unknown')),
                     ][index],
                   ),
                 ),
@@ -492,12 +496,15 @@ class _DeviceFirmwareDetailPageState extends State<DeviceFirmwareDetailPage> {
                   ? l10n.str('firmware_version_not_reported')
                   : m.currentVersion),
           latestVersion: m.latestVersion,
+          compatibilityReason: overview!.hasKnownHardware
+              ? m.compatibilityReason
+              : 'hardware_version_unknown',
           changelog: FirmwareModulePresentation.sanitizeCustomerCopy(
             m.changelog,
             l10n,
           ),
-          updateAvailable: m.updateAvailable,
-          canUpgrade: online && m.canRemoteUpgrade,
+          updateAvailable: m.updateAvailable && overview.hasKnownHardware && m.compatibilityReason.isEmpty,
+          canUpgrade: online && overview.hasKnownHardware && m.canRemoteUpgrade,
           onUpgrade: () => _triggerSingle(m),
         );
       },
@@ -655,6 +662,7 @@ class _FirmwareCard extends StatelessWidget {
     required this.currentVersion,
     this.latestVersion,
     this.changelog,
+    this.compatibilityReason = '',
     this.updateAvailable = false,
     this.canUpgrade = false,
     this.onUpgrade,
@@ -663,6 +671,7 @@ class _FirmwareCard extends StatelessWidget {
   final String currentVersion;
   final String? latestVersion;
   final String? changelog;
+  final String compatibilityReason;
   final bool updateAvailable;
   final bool canUpgrade;
   final VoidCallback? onUpgrade;
@@ -747,7 +756,19 @@ class _FirmwareCard extends StatelessWidget {
             ),
           ),
         ],
-        if (changelog != null && changelog!.isNotEmpty) ...[
+        if (compatibilityReason.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Expanded(
+            child: Text(
+              l10n.str(compatibilityReason == 'hardware_version_unknown'
+                  ? 'firmware_hardware_unknown'
+                  : 'firmware_no_compatible_firmware'),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 11, color: AppColor.textSecondary(context)),
+            ),
+          ),
+        ] else if (changelog != null && changelog!.isNotEmpty) ...[
           const SizedBox(height: 4),
           Expanded(
             child: Text(

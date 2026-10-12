@@ -8,6 +8,99 @@ import { API_BASE } from '@/utils/urls'
 import OtaPage from './index'
 
 describe('OtaPage', () => {
+  it('uploads a file with multiple selected standard hardware versions', async () => {
+    let body = ''
+    server.use(
+      http.get(`${API_BASE}/ota/firmware`, () => HttpResponse.json({ code: 0, data: [{
+        id: '901', model: 'L10', target_chip: 'esp', version: '1.0', release_status: 'published', file_size: 123,
+        hardware_versions: ['HW-1'],
+      }] })),
+      http.get(`${API_BASE}/ota/hardware-versions`, () => HttpResponse.json({ code: 0, data: [
+        { model: 'L10', version: 'HW-1' }, { model: 'L10', version: 'HW-2' },
+      ] })),
+      http.post(`${API_BASE}/ota/firmware`, async ({ request }) => {
+        body = await request.text()
+        return HttpResponse.json({ code: 0, data: { version: '2.0', target_chip: 'esp' } })
+      }),
+    )
+    renderAsAdmin(<OtaPage />, { routerProps: { initialEntries: ['/ota?tab=firmware'] } })
+    fireEvent.click(await screen.findByRole('button', { name: /上传固件/ }))
+    const dialog = await screen.findByRole('dialog')
+    let combos = dialog.querySelectorAll('[role="combobox"]')
+    fireEvent.mouseDown(combos[0])
+    fireEvent.click(await screen.findByText('L10', { selector: '.ant-select-item-option-content' }))
+    fireEvent.mouseDown(combos[1])
+    fireEvent.click(await screen.findByText('通信采集（ESP）', { selector: '.ant-select-item-option-content' }))
+    combos = dialog.querySelectorAll('[role="combobox"]')
+    fireEvent.mouseDown(combos[2])
+    fireEvent.click(await screen.findByText('HW-1', { selector: '.ant-select-item-option-content' }))
+    fireEvent.click(await screen.findByText('HW-2', { selector: '.ant-select-item-option-content' }))
+    fireEvent.change(dialog.querySelector('input[type="file"]')!, { target: { files: [new File(['bytes'], 'fw.bin')] } })
+    await screen.findByText('fw.bin')
+    fireEvent.click(screen.getByRole('button', { name: /确.*定/ }))
+    await waitFor(() => expect(body).toContain('name="hardware_versions"'))
+    expect(body).toContain('["HW-1","HW-2"]')
+    expect(body).toContain('name="model"')
+  })
+  it('limits batch selection and select-all to the explicit hardware range', async () => {
+    server.use(
+      http.get(`${API_BASE}/ota/firmware`, () => HttpResponse.json({ code: 0, data: [{
+        id: '901', model: 'L10', target_chip: 'esp', version: '1.0', release_status: 'published',
+        hardware_versions: ['HW-1'],
+      }] })),
+      http.get(`${API_BASE}/devices`, () => HttpResponse.json({ code: 0, data: { items: [
+        { id: '1', sn: 'COMPATIBLE', model: 'L10', hardware_version: 'HW-1' },
+        { id: '2', sn: 'OTHER-HARDWARE', model: 'L10', hardware_version: 'HW-2' },
+        { id: '3', sn: 'UNKNOWN-HARDWARE', model: 'L10', hardware_version: '' },
+      ], total: 3 } })),
+    )
+    renderAsAdmin(<OtaPage />, { routerProps: { initialEntries: ['/ota?tab=tasks'] } })
+    fireEvent.click(await screen.findByRole('button', { name: /创建升级任务/ }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.mouseDown(dialog.querySelector('[role="combobox"]')!)
+    fireEvent.click(await screen.findByText('L10 · 通信采集 · 1.0 · HW-1', { selector: '.ant-select-item-option-content' }))
+    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
+    expect(await screen.findByText('COMPATIBLE')).toBeInTheDocument()
+    expect(screen.queryByText('OTHER-HARDWARE')).not.toBeInTheDocument()
+    expect(screen.queryByText('UNKNOWN-HARDWARE')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('checkbox', { name: '全选' }))
+    expect(await screen.findByText('已选择 1 台设备')).toBeInTheDocument()
+  })
+  it('shows unconfirmed hardware and does not claim no updates when compatibility is unknown', async () => {
+    server.use(http.get(`${API_BASE}/ota/devices/:sn/firmware-overview`, ({ params }) => HttpResponse.json({
+      code: 0, data: {
+        device_sn: params.sn, device_model: 'SG-5K-D', hardware_version: '', hardware_state: 'unknown', is_online: true,
+        modules: [{ target: 'arm', current_version: '1.0', latest_version: '', latest_firmware_id: 0,
+          version_state: 'current', update_available: false, compatibility_reason: 'hardware_version_unknown' }],
+      },
+    })))
+    renderAsAdmin(<OtaPage />)
+    fireEvent.click((await screen.findAllByText('INV20250001'))[0])
+    expect((await screen.findAllByText('硬件版本未确认')).length).toBeGreaterThan(0)
+    expect(screen.queryByRole('button', { name: '升级' })).not.toBeInTheDocument()
+  })
+
+  it('lets an administrator supplement a legacy firmware range from the hardware directory', async () => {
+    let submitted: any
+    server.use(
+      http.get(`${API_BASE}/ota/firmware`, () => HttpResponse.json({ code: 0, data: [{
+        id: '901', model: 'L10', target_chip: 'esp', version: '1.0', release_status: 'published', file_size: 123,
+        hardware_versions: [], created_at: '2026-10-01T00:00:00Z',
+      }] })),
+      http.get(`${API_BASE}/ota/hardware-versions`, () => HttpResponse.json({ code: 0, data: [{ model: 'L10', version: 'HW-2' }] })),
+      http.put(`${API_BASE}/ota/firmware/901/hardware-versions`, async ({ request }) => {
+        submitted = await request.json()
+        return HttpResponse.json({ code: 0, data: {} })
+      }),
+    )
+    renderAsAdmin(<OtaPage />, { routerProps: { initialEntries: ['/ota?tab=firmware'] } })
+    fireEvent.click(await screen.findByRole('button', { name: '设置适用硬件' }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.mouseDown(dialog.querySelector('[role="combobox"]')!)
+    fireEvent.click(await screen.findByText('HW-2', { selector: '.ant-select-item-option-content' }))
+    fireEvent.click(screen.getByRole('button', { name: /确.*定/ }))
+    await waitFor(() => expect(submitted).toEqual({ hardware_versions: ['HW-2'] }))
+  })
   it('renders five tabs for an admin', async () => {
     renderAsAdmin(<OtaPage />)
 

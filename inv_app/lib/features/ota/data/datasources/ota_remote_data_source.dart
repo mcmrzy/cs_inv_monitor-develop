@@ -65,12 +65,14 @@ class OtaRemoteDataSource {
     required String sn,
     required String targetChip,
     required String newVersion,
+    int? firmwareId,
   }) async =>
       dio.post(
         '/ota/devices/$sn/local-ota-result',
         data: {
           'target_chip': targetChip,
           'new_version': newVersion,
+          if (firmwareId != null && firmwareId > 0) 'firmware_id': firmwareId,
         },
       );
 

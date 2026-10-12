@@ -23,13 +23,15 @@ func TestSendUpgradeCommandIncludesStableUpgradeID(t *testing.T) {
 	defer server.Close()
 
 	s := &OTAService{
-		deviceServer: server.URL,
-		internalKey:  "test-key",
-		httpClient:   server.Client(),
+		deviceServer:      server.URL,
+		internalKey:       "test-key",
+		httpClient:        server.Client(),
+		firmwareValidator: fixedFirmwareValidator{firmware: &model.Firmware{ID: 42, TargetChip: "arm", Version: "V1.2.3", FileURL: "https://example.test/fw.bin", HardwareVersions: []string{"HW-1"}}},
 	}
 	s.SendUpgradeCommand(context.Background(), &model.DeviceUpgrade{
-		ID:       123,
-		DeviceSN: "SN001",
+		ID:         123,
+		DeviceSN:   "SN001",
+		FirmwareID: 42,
 	}, &model.Firmware{
 		ID:         42,
 		TargetChip: "arm",
@@ -40,4 +42,5 @@ func TestSendUpgradeCommandIncludesStableUpgradeID(t *testing.T) {
 	require.Equal(t, "123", payload["task_id"])
 	require.Equal(t, float64(123), payload["upgrade_id"])
 	require.Equal(t, "arm", payload["target"])
+	require.Equal(t, "V1.2.3", payload["version"])
 }

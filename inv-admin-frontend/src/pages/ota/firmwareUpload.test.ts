@@ -7,14 +7,21 @@ describe('buildFirmwareUploadFormData', () => {
       file: new File(['firmware'], 'CSL10_6.2K_arm_1.2.3.bin'),
       model: 'CSL10-6K2',
       targetChip: 'arm',
+      hardwareVersions: ['HW-1', 'HW-2'],
       changelog: '稳定性优化',
     })
 
     expect(body.get('file')).toBeInstanceOf(File)
     expect(body.get('model')).toBe('CSL10-6K2')
     expect(body.get('target_chip')).toBe('arm')
+    expect(JSON.parse(String(body.get('hardware_versions')))).toEqual(['HW-1', 'HW-2'])
     for (const field of ['version', 'file_size', 'file_sha256', 'file_md5']) {
       expect(body.has(field)).toBe(false)
     }
+  })
+  it('rejects missing explicit compatibility rather than treating it as all hardware', () => {
+    expect(() => buildFirmwareUploadFormData({
+      file: new File(['x'], 'x.bin'), model: 'L10', targetChip: 'esp', hardwareVersions: [],
+    })).toThrow()
   })
 })

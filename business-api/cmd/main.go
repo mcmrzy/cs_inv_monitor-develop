@@ -1285,6 +1285,9 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 
 		otaGroup := api.Group("/ota").Use(middleware.Auth(deps.JWTService, deps.AuthorizationContextValidator))
 		{
+			otaGroup.GET("/hardware-versions", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.ListHardwareVersions)
+			otaGroup.POST("/hardware-versions", middleware.RequirePermission(deps.PermChecker, "ota", "create"), deps.OTAHandler.CreateHardwareVersion)
+			otaGroup.PUT("/firmware/:id/hardware-versions", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.UpdateFirmwareHardwareVersions)
 			// 闇€瑕佹潈闄愮殑绠＄悊鎺ュ彛
 			otaGroup.GET("/firmware", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.ListFirmware)
 			otaGroup.GET("/firmware/:id", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetFirmware)

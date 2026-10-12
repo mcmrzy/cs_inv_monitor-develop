@@ -29,6 +29,13 @@ class LocalOtaDeviceModelException implements Exception {
   String toString() => message;
 }
 
+class LocalOtaHardwareException implements Exception {
+  final String reason;
+  const LocalOtaHardwareException(this.reason);
+  @override
+  String toString() => 'Local OTA hardware validation failed: $reason';
+}
+
 /// The connected BLE device does not advertise this module for local OTA.
 class LocalOtaUnsupportedTargetException implements Exception {
   final String target;
@@ -92,6 +99,13 @@ class OtaErrorMapper {
     if (error is OtaVerificationException) return 'ota_err_verify';
     if (error is LocalFirmwareException) return 'ota_err_firmware';
     if (error is LocalOtaDeviceModelException) return 'ota_err_device_model';
+    if (error is LocalOtaHardwareException) {
+      return switch (error.reason) {
+        'missingFirmwareHardware' => 'ota_err_firmware_hardware_unknown',
+        'missingDeviceHardware' => 'ota_err_device_hardware_unknown',
+        _ => 'ota_err_hardware_mismatch',
+      };
+    }
     if (error is LocalOtaUnsupportedTargetException) {
       return 'ota_err_unsupported_target';
     }

@@ -14,18 +14,21 @@ class PendingLocalOtaResult {
   final String targetChip;
   final String newVersion;
   final DateTime enqueuedAt;
+  final int? firmwareId;
 
   const PendingLocalOtaResult({
     required this.sn,
     required this.targetChip,
     required this.newVersion,
     required this.enqueuedAt,
+    this.firmwareId,
   });
 
   Map<String, dynamic> toJson() => {
         'sn': sn,
         'target_chip': targetChip,
         'new_version': newVersion,
+        if (firmwareId != null) 'firmware_id': firmwareId,
         'enqueued_at': enqueuedAt.toIso8601String(),
       };
 
@@ -40,6 +43,7 @@ class PendingLocalOtaResult {
       sn: sn,
       targetChip: chip,
       newVersion: version,
+      firmwareId: (json['firmware_id'] as num?)?.toInt(),
       enqueuedAt: DateTime.tryParse(json['enqueued_at'] as String? ?? '') ??
           DateTime.now(),
     );
@@ -107,11 +111,13 @@ class LocalOtaResultSyncQueue {
     required String sn,
     required String targetChip,
     required String newVersion,
+    int? firmwareId,
   }) async {
     final item = PendingLocalOtaResult(
       sn: sn,
       targetChip: targetChip,
       newVersion: newVersion,
+      firmwareId: firmwareId,
       enqueuedAt: DateTime.now(),
     );
 
@@ -142,6 +148,7 @@ class LocalOtaResultSyncQueue {
             sn: item.sn,
             targetChip: item.targetChip,
             newVersion: item.newVersion,
+            firmwareId: item.firmwareId,
           );
           result.fold(
             (failure) {
@@ -175,8 +182,8 @@ class LocalOtaResultSyncQueue {
       if (decoded is! List) return [];
       return decoded
           .whereType<Map>()
-          .map((e) => PendingLocalOtaResult.fromJson(
-              Map<String, dynamic>.from(e)))
+          .map((e) =>
+              PendingLocalOtaResult.fromJson(Map<String, dynamic>.from(e)))
           .whereType<PendingLocalOtaResult>()
           .toList();
     } catch (e) {

@@ -41,6 +41,7 @@ class DownloadedFirmwareInfo {
   /// Backend-advertised delivery channels. Null keeps compatible ESP/ARM
   /// records usable; an explicit list is enforced exactly.
   final List<String>? supportedChannels;
+  final List<String> hardwareVersions;
 
   const DownloadedFirmwareInfo({
     required this.firmwareId,
@@ -54,10 +55,12 @@ class DownloadedFirmwareInfo {
     this.signature,
     this.securityVersion,
     this.supportedChannels,
+    this.hardwareVersions = const [],
   });
 
   /// 是否具备本地升级所需的完整元数据
   bool get hasUpgradeMetadata =>
+      hardwareVersions.any((value) => value.trim().isNotEmpty) &&
       fileSize > 0 &&
       (deviceModel?.isNotEmpty ?? false) &&
       (targetChip?.isNotEmpty ?? false) &&
@@ -93,6 +96,7 @@ class DownloadProgressEvent {
 
 class FirmwareDownloadService {
   final SharedPreferences _sharedPreferences;
+
   /// 固件 bin 走独立下载 Dio，避免主 API Dio 的 baseUrl 拼接、
   /// Bearer 头、JSON 解析与 401 刷新链路干扰 CDN/直链下载。
   final Dio _downloadDio = Dio(
@@ -171,6 +175,7 @@ class FirmwareDownloadService {
     String? signature,
     int? securityVersion,
     List<String>? supportedChannels,
+    List<String> hardwareVersions = const [],
     CancelToken? cancelToken,
     void Function(int received, int total)? onProgress,
   }) async {
@@ -189,7 +194,9 @@ class FirmwareDownloadService {
     _activeCancelToken = serviceToken;
 
     final dir = await _getFirmwareDir();
-    final filePath = '${dir.path}/$fileName';
+    // Different hardware builds may share a version and original filename.
+    // Keep their bytes and compatibility metadata under distinct firmware IDs.
+    final filePath = '${dir.path}/${firmwareId}_$fileName';
     final file = File(filePath);
     final partFile = File('$filePath$_partSuffix');
 
@@ -209,6 +216,7 @@ class FirmwareDownloadService {
             signature: signature,
             securityVersion: securityVersion,
             supportedChannels: supportedChannels,
+            hardwareVersions: hardwareVersions,
           );
           _emit(firmwareId, 1.0);
           return filePath;
@@ -305,6 +313,7 @@ class FirmwareDownloadService {
           signature: signature,
           securityVersion: securityVersion,
           supportedChannels: supportedChannels,
+          hardwareVersions: hardwareVersions,
         );
 
         _emit(firmwareId, 1.0);
@@ -354,6 +363,7 @@ class FirmwareDownloadService {
     String? signature,
     int? securityVersion,
     List<String>? supportedChannels,
+    List<String> hardwareVersions = const [],
   }) async {
     final fileSize = await file.length();
     await _sharedPreferences.setString('$_keyPrefix$firmwareId', filePath);
@@ -374,6 +384,7 @@ class FirmwareDownloadService {
       signature: signature,
       securityVersion: securityVersion,
       supportedChannels: supportedChannels,
+      hardwareVersions: hardwareVersions,
     );
   }
 
@@ -388,6 +399,7 @@ class FirmwareDownloadService {
     String? signature,
     int? securityVersion,
     List<String>? supportedChannels,
+    List<String> hardwareVersions = const [],
   }) async {
     if ((deviceModel?.isEmpty ?? true) &&
         (fileSize ?? 0) <= 0 &&
@@ -399,6 +411,7 @@ class FirmwareDownloadService {
       return;
     }
     final meta = <String, dynamic>{
+      'hardware_versions': hardwareVersions,
       if (deviceModel != null && deviceModel.isNotEmpty)
         'device_model': deviceModel,
       if (fileSize != null && fileSize > 0) 'file_size': fileSize,
@@ -408,8 +421,7 @@ class FirmwareDownloadService {
       if (signature != null && signature.isNotEmpty) 'signature': signature,
       if (securityVersion != null && securityVersion > 0)
         'security_version': securityVersion,
-      if (supportedChannels != null)
-        'supported_channels': supportedChannels,
+      if (supportedChannels != null) 'supported_channels': supportedChannels,
     };
     await _sharedPreferences.setString(
       '$_keyMetaPrefix$firmwareId',
@@ -466,6 +478,11 @@ class FirmwareDownloadService {
             sha256: _sharedPreferences.getString('$_keySHA256Prefix$id'),
             signature: meta['signature'] as String?,
             securityVersion: (meta['security_version'] as num?)?.toInt(),
+            hardwareVersions: meta['hardware_versions'] is List
+                ? (meta['hardware_versions'] as List)
+                    .whereType<String>()
+                    .toList(growable: false)
+                : const [],
             supportedChannels: meta['supported_channels'] is List
                 ? (meta['supported_channels'] as List)
                     .map((value) => value.toString())

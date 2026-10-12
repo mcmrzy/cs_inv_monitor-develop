@@ -9,6 +9,22 @@ import {
 import { mockFirmwares, mockUpgradeTasks } from '@/test/mocks/data'
 
 describe('otaApi', () => {
+  it('reads the hardware directory and writes explicit firmware compatibility', async () => {
+    let range: unknown
+    server.use(
+      http.get('/api/v1/ota/hardware-versions', ({ request }) => {
+        expect(new URL(request.url).searchParams.get('model')).toBe('L10')
+        return HttpResponse.json({ code: 0, data: [{ model: 'L10', version: 'HW-1' }] })
+      }),
+      http.put('/api/v1/ota/firmware/301/hardware-versions', async ({ request }) => {
+        range = await request.json()
+        return HttpResponse.json({ code: 0, data: {} })
+      }),
+    )
+    expect((await otaApi.listHardwareVersions('L10')).data.data[0].version).toBe('HW-1')
+    await otaApi.updateFirmwareHardwareVersions(301, ['HW-1', 'HW-2'])
+    expect(range).toEqual({ hardware_versions: ['HW-1', 'HW-2'] })
+  })
   describe('Firmware Management', () => {
     it('listFirmware should return firmware list', async () => {
       const res = await otaApi.listFirmware({ page: 1 })

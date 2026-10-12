@@ -34,20 +34,21 @@ var (
 )
 
 type OTAService struct {
-	repo           *repository.OTARepository
-	rdb            *redis.Client
-	db             *pgxpool.Pool
-	jpushService   *JPushService
-	deviceServer   string
-	internalKey    string
-	uploadDir      string         // 固件上传存储目录
-	serverURL      string         // 外部访问地址，用于构造ESP32下载URL
-	downloadURL    string         // 固件下载域（环境变量默认值），可被运行时域名配置动态覆盖
-	appDownloadURL string         // App 安装包下载域（APP_DOWNLOAD_URL），仅用于手机端版本下载 URL；为空回退 downloadURL
-	cfgSvc         *ConfigService // 运行时配置服务（域名配置动态覆盖），可空
-	httpClient     *http.Client
-	concurrency    int
-	taskTimeout    time.Duration // 升级任务超时阈值，pending/running 任务超过该时长无更新自动置为 failed；<=0 表示禁用
+	firmwareValidator otaFirmwareValidator
+	repo              *repository.OTARepository
+	rdb               *redis.Client
+	db                *pgxpool.Pool
+	jpushService      *JPushService
+	deviceServer      string
+	internalKey       string
+	uploadDir         string         // 固件上传存储目录
+	serverURL         string         // 外部访问地址，用于构造ESP32下载URL
+	downloadURL       string         // 固件下载域（环境变量默认值），可被运行时域名配置动态覆盖
+	appDownloadURL    string         // App 安装包下载域（APP_DOWNLOAD_URL），仅用于手机端版本下载 URL；为空回退 downloadURL
+	cfgSvc            *ConfigService // 运行时配置服务（域名配置动态覆盖），可空
+	httpClient        *http.Client
+	concurrency       int
+	taskTimeout       time.Duration // 升级任务超时阈值，pending/running 任务超过该时长无更新自动置为 failed；<=0 表示禁用
 
 	dataPermission *DataPermission // 数据权限：普通用户按可见设备 SN 过滤
 }
@@ -78,6 +79,7 @@ func NewOTAService(repo *repository.OTARepository, rdb *redis.Client, deviceServ
 }
 
 type CreateFirmwareReq struct {
+	HardwareVersions []string
 	Model            string
 	TargetChip       string
 	Version          string
@@ -97,8 +99,14 @@ func (s *OTAService) CreateFirmware(ctx context.Context, req *CreateFirmwareReq)
 	if err := ValidateFirmwareRequest(req); err != nil {
 		return nil, err
 	}
+	versions, err := model.NormalizeHardwareVersions(req.HardwareVersions)
+	if err != nil {
+		return nil, err
+	}
+	req.HardwareVersions = versions
 
 	fw := &model.Firmware{
+		HardwareVersions: req.HardwareVersions,
 		Model:            req.Model,
 		TargetChip:       req.TargetChip,
 		Version:          req.Version,
@@ -215,6 +223,9 @@ type PushUpgradeReq struct {
 // PushUpgrade 管理员推送升级到设备（支持批量）
 // 替代原 CreateTask + DispatchTask + NotifyDevices
 func (s *OTAService) PushUpgrade(ctx context.Context, req *PushUpgradeReq) error {
+	if err := s.validateFirmwareTargets(ctx, req.FirmwareID, req.DeviceSNs); err != nil {
+		return err
+	}
 	// 1. 一次性查询固件信息
 	fw, err := s.repo.GetFirmware(ctx, req.FirmwareID)
 	if err != nil || fw == nil {
@@ -314,6 +325,16 @@ func (s *OTAService) PushUpgrade(ctx context.Context, req *PushUpgradeReq) error
 
 // SendUpgradeCommand 发送MQTT升级命令到设备
 func (s *OTAService) SendUpgradeCommand(ctx context.Context, du *model.DeviceUpgrade, fw *model.Firmware, downloadURL string) {
+	current, _, compatibilityErr := s.validateFirmwareForDevice(ctx, du.DeviceSN, du.FirmwareID)
+	if compatibilityErr != nil {
+		logger.Warn("OTA compatibility rejected before dispatch", zap.String("sn", du.DeviceSN), zap.Error(compatibilityErr))
+		if s.markUpgradeFailedBeforeDispatch(ctx, du, compatibilityErr) {
+			s.dispatchHeadPending(ctx, du.DeviceSN)
+		}
+		return
+	}
+	fw = current
+	downloadURL = s.BuildDownloadURL(fw.FileURL)
 	// 下发前先校验地址：设备端解析不了时它只会回报一句 "HTTP client init failed"
 	// （进度 0%、无 trace），云端无从定位。拦在这里，原因进日志与升级记录。
 	if err := ValidateDeviceDownloadURL(downloadURL); err != nil {
@@ -392,15 +413,15 @@ func (s *OTAService) SendUpgradeCommand(ctx context.Context, du *model.DeviceUpg
 // markUpgradeFailedBeforeDispatch 把"地址非法、命令根本没发出去"如实写回升级记录。
 // 不写的话记录会一直停在 pending，重推/对账还会继续推一条设备必然拒绝的命令；
 // 写进去的 message 就是管理后台「错误信息」列看到的那句话。
-func (s *OTAService) markUpgradeFailedBeforeDispatch(ctx context.Context, du *model.DeviceUpgrade, cause error) {
+func (s *OTAService) markUpgradeFailedBeforeDispatch(ctx context.Context, du *model.DeviceUpgrade, cause error) bool {
 	if s.repo == nil || du == nil || du.ID <= 0 {
-		return
+		return false
 	}
-	msg := fmt.Sprintf("下载地址非法，命令未下发：%v", cause)
+	msg := fmt.Sprintf("升级检查未通过，命令未下发：%v", cause)
 	if err := s.repo.UpdateUpgradeStatusByID(ctx, du.ID, "failed", 0, msg); err != nil {
 		logger.Error("mark upgrade failed (invalid download URL) failed",
 			zap.Int64("upgrade_id", du.ID), zap.Error(err))
-		return
+		return false
 	}
 	if du.TaskID != nil && *du.TaskID > 0 {
 		// 与设备回报 failed 走同一条收尾：重算任务计数，全部终态时把任务置为
@@ -412,11 +433,20 @@ func (s *OTAService) markUpgradeFailedBeforeDispatch(ctx context.Context, du *mo
 			}
 		}(*du.TaskID)
 	}
+	return true
 }
 
 // CheckPendingUpgrade 设备CheckUpdate时调用
 func (s *OTAService) CheckPendingUpgrade(ctx context.Context, sn string) (*model.DeviceUpgrade, *model.Firmware, error) {
-	return s.repo.GetPendingUpgradeForDevice(ctx, sn)
+	du, _, err := s.repo.GetPendingUpgradeForDevice(ctx, sn)
+	if err != nil {
+		return nil, nil, err
+	}
+	fw, _, err := s.repo.ValidateFirmwareForDevice(ctx, sn, du.FirmwareID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return du, fw, nil
 }
 
 // UpdateDeviceUpgradeStatus 设备上报OTA状态时调用
@@ -522,6 +552,9 @@ func upgradeTaskTerminalStatus(devices []model.DeviceUpgrade) string {
 
 // RetryUpgrade 重试失败的升级
 func (s *OTAService) RetryUpgrade(ctx context.Context, firmwareID int64, deviceSNs []string) error {
+	if err := s.validateFirmwareTargets(ctx, firmwareID, deviceSNs); err != nil {
+		return err
+	}
 	fw, err := s.repo.GetFirmware(ctx, firmwareID)
 	if err != nil || fw == nil {
 		return fmt.Errorf("固件不存在")
@@ -1386,7 +1419,11 @@ func (s *OTAService) RollbackPackageUpgrade(ctx context.Context, packageID int64
 			}
 
 			// 查找旧固件（按型号+版本+芯片）
-			oldFW, err := s.repo.FindFirmwareByVersion(ctx, pkg.Model, origDU.OldVersion, origDU.TargetChip)
+			device, err := s.repo.GetDeviceInfoForOTA(ctx, origDU.DeviceSN)
+			if err != nil || !device.HardwareKnown {
+				return
+			}
+			oldFW, err := s.repo.FindFirmwareByVersion(ctx, pkg.Model, origDU.OldVersion, origDU.TargetChip, device.HardwareVersion)
 			if err != nil || oldFW == nil {
 				logger.Error("RollbackPackageUpgrade: old firmware not found",
 					zap.String("model", pkg.Model),
@@ -1463,7 +1500,16 @@ func (s *OTAService) OnChipUpgradeComplete(ctx context.Context, deviceSN string,
 
 // CheckPendingPackageUpgrade 设备CheckUpdate时检查升级包模式
 func (s *OTAService) CheckPendingPackageUpgrade(ctx context.Context, sn string) ([]model.DeviceUpgrade, *model.UpgradePackage, error) {
-	return s.repo.GetPendingPackageUpgradeForDevice(ctx, sn)
+	items, pkg, err := s.repo.GetPendingPackageUpgradeForDevice(ctx, sn)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, du := range items {
+		if _, _, err := s.repo.ValidateFirmwareForDevice(ctx, sn, du.FirmwareID); err != nil {
+			return nil, nil, err
+		}
+	}
+	return items, pkg, nil
 }
 
 // GetPackageUpgradesByPackageID 获取升级包的所有升级记录
@@ -1573,11 +1619,11 @@ func (s *OTAService) ResendPendingUpgradeCommand(ctx context.Context, sn string)
 		return fmt.Errorf("没有待执行的升级任务")
 	}
 	for _, du := range upgrades {
-		fw, err := s.repo.GetFirmware(ctx, du.FirmwareID)
+		fw, _, err := s.repo.ValidateFirmwareForDevice(ctx, sn, du.FirmwareID)
 		if err != nil || fw == nil {
 			logger.Error("ResendPendingUpgradeCommand: firmware not found",
 				zap.Int64("firmware_id", du.FirmwareID))
-			continue
+			return err
 		}
 		go s.SendUpgradeCommand(context.Background(), &du, fw, s.BuildDownloadURL(fw.FileURL))
 		break
@@ -1611,6 +1657,9 @@ func (s *OTAService) CreateUpgradeTask(ctx context.Context, req *CreateUpgradeTa
 	// 确定目标版本
 	targetVersion := ""
 	if req.TaskType == "single" && req.FirmwareID != nil {
+		if err := s.validateFirmwareTargets(ctx, *req.FirmwareID, req.DeviceSNs); err != nil {
+			return nil, err
+		}
 		fw, err := s.repo.GetFirmware(ctx, *req.FirmwareID)
 		if err != nil || fw == nil {
 			return nil, fmt.Errorf("固件不存在")
@@ -1919,6 +1968,17 @@ func (s *OTAService) RetryTaskFailed(ctx context.Context, taskID int64) error {
 	if err != nil || task == nil {
 		return fmt.Errorf("任务不存在")
 	}
+	before, err := s.repo.ListUpgradeDevicesByTaskID(ctx, taskID)
+	if err != nil {
+		return err
+	}
+	for _, du := range before {
+		if du.Status == "failed" {
+			if err := s.validateFirmwareTargets(ctx, du.FirmwareID, []string{du.DeviceSN}); err != nil {
+				return err
+			}
+		}
+	}
 
 	// 重置失败记录
 	if err := s.repo.RetryFailedUpgradesByTask(ctx, taskID); err != nil {
@@ -1988,8 +2048,8 @@ func (s *OTAService) GetTaskStats(ctx context.Context, tz string) (pending, runn
 }
 
 // ReportLocalOTAResult 本地OTA完成后，更新设备固件版本并记录升级历史
-func (s *OTAService) ReportLocalOTAResult(ctx context.Context, userID int64, sn, targetChip, newVersion, mainVersion string) (int64, error) {
-	taskID, err := s.repo.CreateTaskFromLocalOTA(ctx, userID, sn, targetChip, newVersion, mainVersion)
+func (s *OTAService) ReportLocalOTAResult(ctx context.Context, userID int64, sn, targetChip, newVersion, mainVersion string, firmwareIDs ...int64) (int64, error) {
+	taskID, err := s.repo.CreateTaskFromLocalOTA(ctx, userID, sn, targetChip, newVersion, mainVersion, firmwareIDs...)
 	if err != nil {
 		logger.Error("ReportLocalOTAResult: CreateTaskFromLocalOTA failed",
 			zap.String("sn", sn), zap.String("chip", targetChip), zap.Error(err))
@@ -2158,7 +2218,24 @@ func (s *OTAService) RollbackToPublishedVersion(ctx context.Context, sn string) 
 
 // GetAvailablePackagesForDevice 查询设备可见的已发布升级包
 func (s *OTAService) GetAvailablePackagesForDevice(ctx context.Context, sn string, userID int64) ([]model.UpgradePackage, error) {
-	return s.repo.GetPublishedPackagesForDevice(ctx, sn, userID)
+	packages, err := s.repo.GetPublishedPackagesForDevice(ctx, sn, userID)
+	if err != nil {
+		return nil, err
+	}
+	compatible := []model.UpgradePackage{}
+	for _, pkg := range packages {
+		ok := len(pkg.Items) > 0
+		for _, item := range pkg.Items {
+			if _, _, err := s.repo.ValidateFirmwareForDevice(ctx, sn, item.FirmwareID); err != nil {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			compatible = append(compatible, pkg)
+		}
+	}
+	return compatible, nil
 }
 
 // GetAllUserIDs 查询所有未删除的用户ID

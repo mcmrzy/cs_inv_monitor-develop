@@ -8,12 +8,18 @@ class DeviceFirmwareOverview {
     required this.deviceModel,
     required this.isOnline,
     required this.modules,
+    this.hardwareVersion = '',
+    this.hardwareState = 'unknown',
   });
 
   final String deviceSn;
   final String deviceModel;
   final bool isOnline;
   final List<FirmwareModuleOverview> modules;
+  final String hardwareVersion;
+  final String hardwareState;
+  bool get hasKnownHardware =>
+      hardwareState == 'known' && hardwareVersion.trim().isNotEmpty;
 
   factory DeviceFirmwareOverview.fromJson(Map<String, dynamic> json) {
     final rawModules = json['modules'];
@@ -21,6 +27,8 @@ class DeviceFirmwareOverview {
       deviceSn: json['device_sn']?.toString() ?? '',
       deviceModel: json['device_model']?.toString() ?? '',
       isOnline: json['is_online'] == true,
+      hardwareVersion: json['hardware_version']?.toString() ?? '',
+      hardwareState: json['hardware_state']?.toString() ?? 'unknown',
       modules: rawModules is List
           ? rawModules
               .whereType<Map>()
@@ -45,6 +53,7 @@ class FirmwareModuleOverview {
     this.isSupported,
     this.isConnected,
     this.isEligible,
+    this.compatibilityReason = '',
     this.supportedChannels,
     this.changelog = '',
     this.publishedAt,
@@ -64,6 +73,7 @@ class FirmwareModuleOverview {
   final bool? isSupported;
   final bool? isConnected;
   final bool? isEligible;
+  final String compatibilityReason;
   final List<String>? supportedChannels;
   final String changelog;
   final DateTime? publishedAt;
@@ -73,22 +83,21 @@ class FirmwareModuleOverview {
   bool get isOutdated => versionState == 'outdated';
 
   bool get canRemoteUpgrade {
+    if (compatibilityReason.isNotEmpty) return false;
     if (!updateAvailable || latestFirmwareId <= 0 || isUnreported) return false;
     if (isSupported == false || isConnected == false || isEligible == false) {
       return false;
     }
     final channels = supportedChannels;
     if (channels != null &&
-        !channels.any((channel) => const {'remote', 'cloud'}
-            .contains(channel.trim().toLowerCase()))) {
+        !channels.any((channel) =>
+            const {'remote', 'cloud'}.contains(channel.trim().toLowerCase()))) {
       return false;
     }
     final normalizedTarget = target.trim().toLowerCase();
     if (normalizedTarget == 'bms' ||
         !const {'esp', 'arm', 'dsp', 'bms'}.contains(normalizedTarget)) {
-      return isSupported == true &&
-          isConnected == true &&
-          isEligible == true;
+      return isSupported == true && isConnected == true && isEligible == true;
     }
     return true;
   }
@@ -104,13 +113,13 @@ class FirmwareModuleOverview {
       isSupported: _readOptionalBool(json, const ['supported', 'is_supported']),
       isConnected: _readOptionalBool(json, const ['connected', 'is_connected']),
       isEligible: _readOptionalBool(json, const ['eligible', 'is_eligible']),
+      compatibilityReason: json['compatibility_reason']?.toString() ?? '',
       supportedChannels: _readOptionalStringList(
         json,
         const ['supported_channels', 'channels'],
       ),
       changelog: json['changelog']?.toString() ?? '',
-      publishedAt:
-          DateTime.tryParse(json['published_at']?.toString() ?? ''),
+      publishedAt: DateTime.tryParse(json['published_at']?.toString() ?? ''),
     );
   }
 }
@@ -131,6 +140,7 @@ class FirmwareResource {
     this.fileSha256 = '',
     this.securityVersion,
     this.releaseSignature = '',
+    this.hardwareVersions = const [],
     this.supportedChannels,
   });
 
@@ -147,16 +157,22 @@ class FirmwareResource {
   final String fileSha256;
   final int? securityVersion;
   final String releaseSignature;
+  final List<String> hardwareVersions;
   final List<String>? supportedChannels;
 
   bool get canRemoteUpgrade {
+    if (!hardwareVersions.any((value) => value.trim().isNotEmpty)) return false;
     final target = targetChip.trim().toLowerCase();
-    if (!const {'esp','arm','dsp','bms'}.contains(target)) return false;
+    if (!const {'esp', 'arm', 'dsp', 'bms'}.contains(target)) return false;
     final channels = supportedChannels;
-    return channels == null ? target != 'bms' : channels.any((c) => const {'remote','cloud'}.contains(c.trim().toLowerCase()));
+    return channels == null
+        ? target != 'bms'
+        : channels.any(
+            (c) => const {'remote', 'cloud'}.contains(c.trim().toLowerCase()));
   }
 
   bool get canLocalUpgrade {
+    if (!hardwareVersions.any((value) => value.trim().isNotEmpty)) return false;
     final target = targetChip.trim().toLowerCase();
     if (!const {'esp', 'arm', 'dsp', 'bms'}.contains(target)) return false;
     final channels = supportedChannels;
@@ -176,14 +192,16 @@ class FirmwareResource {
       fileUrl: (json['file_url'] ?? json['download_url'] ?? '').toString(),
       targetChip: json['target_chip']?.toString() ?? '',
       changelog: json['changelog']?.toString() ?? '',
-      publishedAt:
-          DateTime.tryParse(json['published_at']?.toString() ?? ''),
+      publishedAt: DateTime.tryParse(json['published_at']?.toString() ?? ''),
       releaseStatus: json['release_status']?.toString() ?? '',
       fileName: json['file_name']?.toString() ?? '',
       fileSize: (json['file_size'] as num?)?.toInt(),
       fileSha256: json['file_sha256']?.toString() ?? '',
       securityVersion: (json['security_version'] as num?)?.toInt(),
       releaseSignature: json['release_signature']?.toString() ?? '',
+      hardwareVersions: json['hardware_versions'] is List
+          ? (json['hardware_versions'] as List).whereType<String>().toList()
+          : const [],
       supportedChannels: _readOptionalStringList(
         json,
         const ['supported_channels', 'channels'],
@@ -282,8 +300,7 @@ class FirmwareHistoryFilter {
       if (targetChip != null && targetChip!.isNotEmpty)
         'target_chip': targetChip,
       if (status != null && status!.isNotEmpty) 'status': status,
-      if (startTime != null)
-        'start_time': startTime!.toUtc().toIso8601String(),
+      if (startTime != null) 'start_time': startTime!.toUtc().toIso8601String(),
       if (endTime != null) 'end_time': endTime!.toUtc().toIso8601String(),
       'page': page,
       'page_size': pageSize,

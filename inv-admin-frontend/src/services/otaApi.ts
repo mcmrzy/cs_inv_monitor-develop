@@ -36,6 +36,12 @@ export function createOtaIdempotencyKey(prefix: string): string {
 }
 
 export const otaApi = {
+  listHardwareVersions: (model: string) =>
+    api.get('/ota/hardware-versions', { params: { model }, expectedDataShape: 'array' }),
+  createHardwareVersion: (data: { model: string; version: string; description?: string }) =>
+    api.post('/ota/hardware-versions', data),
+  updateFirmwareHardwareVersions: (id: string | number, hardwareVersions: string[]) =>
+    api.put(`/ota/firmware/${id}/hardware-versions`, { hardware_versions: hardwareVersions }),
   // ── 固件管理 ──
   listFirmware: (params?: any) => api.get('/ota/firmware', { params, expectedDataShape: 'array' }),
   getFirmwares: (params?: any) => api.get('/ota/firmware', { params, expectedDataShape: 'array' }),
@@ -131,8 +137,8 @@ export const otaApi = {
   getTaskStats: () => api.get('/ota/task-stats', { expectedDataShape: 'object' }),
 
   // ── 固件-设备关联查询 ──
-  getDevicesByFirmware: (model: string, targetChip: string, version: string) =>
-    api.get('/ota/firmware/by-device', { params: { model, target_chip: targetChip, version }, expectedDataShape: 'object' }),
+  getDevicesByFirmware: (model: string, targetChip: string, version: string, firmwareId?: string | number) =>
+    api.get('/ota/firmware/by-device', { params: { model, target_chip: targetChip, version, firmware_id: firmwareId }, expectedDataShape: 'object' }),
 }
 
 export type OtaApi = typeof otaApi
