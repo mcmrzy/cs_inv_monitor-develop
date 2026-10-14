@@ -325,9 +325,9 @@ void main() {
 
     await tester.tap(find.byKey(const Key('open-edit-station')));
     await tester.pumpAndSettle();
-    final detailState = StationDetailLoaded(
+    final detailState = const StationDetailLoaded(
       stationId: 7,
-      station: const {
+      station: {
         'id': 7,
         'name': '原电站',
         'country': '中国',
@@ -338,7 +338,7 @@ void main() {
         'latitude': 0.0,
         'longitude': 0.0,
       },
-      devices: const [],
+      devices: [],
     );
     when(() => stationBloc.state).thenReturn(detailState);
     stationStates.add(detailState);

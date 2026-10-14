@@ -221,7 +221,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
     });
     try {
       final granted = await _requestWifiPermissions();
-      if (!_isWifiOperationActive(operationId)) return;
+      if (!mounted || !_isWifiOperationActive(operationId)) return;
       if (!granted) {
         setState(() => _wifiScanning = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -235,7 +235,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
 
       // 请求打开位置服务（Android 11及以下必须开启定位才能扫描WiFi）
       final serviceEnabled = await Permission.location.serviceStatus.isEnabled;
-      if (!_isWifiOperationActive(operationId)) return;
+      if (!mounted || !_isWifiOperationActive(operationId)) return;
       if (!serviceEnabled) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -298,7 +298,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         _wifiScanning = false;
       });
     } catch (e) {
-      if (!_isWifiOperationActive(operationId)) return;
+      if (!mounted || !_isWifiOperationActive(operationId)) return;
       setState(() => _wifiScanning = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -457,7 +457,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
     try {
       // 扫描前检查位置权限（Android 6+ 扫描 WiFi 列表必须有位置权限，系统限制）
       final granted = await _requestWifiPermissions();
-      if (!_isWifiOperationActive(operationId)) return;
+      if (!mounted || !_isWifiOperationActive(operationId)) return;
       if (!granted) {
         setState(() => _scanningNearbyWifi = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -471,7 +471,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
   
       // 请求打开位置服务（Android 11 及以下必须开启定位才能扫描 WiFi）
       final serviceEnabled = await Permission.location.serviceStatus.isEnabled;
-      if (!_isWifiOperationActive(operationId)) return;
+      if (!mounted || !_isWifiOperationActive(operationId)) return;
       if (!serviceEnabled) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -653,7 +653,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
   Future<void> _onSoftApProvisionSuccess(int operationId) async {
     await Future.delayed(const Duration(seconds: 2));
 
-    if (!_isWifiOperationActive(operationId)) return;
+    if (!mounted || !_isWifiOperationActive(operationId)) return;
 
     final shouldSwitch =
         await showWifiSwitchDialog(context, originalSsid: _originalSsid);

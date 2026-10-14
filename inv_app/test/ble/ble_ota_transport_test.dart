@@ -158,16 +158,16 @@ void main() {
     when(() => connection.read(
           BleCtProtocol.provisioningServiceUuid,
           BleCtProtocol.provisioningSnCharUuid,
-        )).thenAnswer((_) async => utf8.encode(sn));
+        ),).thenAnswer((_) async => utf8.encode(sn));
     when(() => connection.read(
           BleCtProtocol.serviceUuid,
           BleCtProtocol.infoCharUuid,
-        )).thenAnswer((_) async => utf8.encode(jsonEncode(v2Info())));
+        ),).thenAnswer((_) async => utf8.encode(jsonEncode(v2Info())));
     when(() => connection.read(
           BleCtProtocol.provisioningServiceUuid,
           BleCtProtocol.otaStatusCharUuid,
           timeout: 5,
-        )).thenAnswer((_) async {
+        ),).thenAnswer((_) async {
       final ctrl = otaCtrlWrites.lastWhere((e) => e['type'] == 'ota.ctrl');
       final transferId = ((ctrl['body'] as Map)['transfer_id']) as String;
       final accepted = otaDataWrites.fold<int>(0, (sum, frame) {
@@ -178,29 +178,29 @@ void main() {
         stage: accepted == firmwareBytes.length ? 'verifying' : 'receiving',
         transferId: transferId,
         acceptedOffset: accepted,
-      )));
+      ),),);
     });
     when(() => connection.subscribe(
           BleCtProtocol.serviceUuid,
           BleCtProtocol.authCharUuid,
-        )).thenAnswer((_) => authNotify.stream);
+        ),).thenAnswer((_) => authNotify.stream);
     when(() => connection.subscribe(
           BleCtProtocol.serviceUuid,
           BleCtProtocol.cmdResultCharUuid,
-        )).thenAnswer((_) => commandNotify.stream);
+        ),).thenAnswer((_) => commandNotify.stream);
     when(() => connection.subscribe(
           BleCtProtocol.serviceUuid,
           BleCtProtocol.telemetryCharUuid,
-        )).thenAnswer((_) => const Stream.empty());
+        ),).thenAnswer((_) => const Stream.empty());
     when(() => connection.subscribe(
           BleCtProtocol.provisioningServiceUuid,
           BleCtProtocol.otaStatusCharUuid,
-        )).thenAnswer((_) => otaStatusNotify.stream);
+        ),).thenAnswer((_) => otaStatusNotify.stream);
     when(() => connection.write(
           BleCtProtocol.serviceUuid,
           BleCtProtocol.authCharUuid,
           any(),
-        )).thenAnswer((invocation) async {
+        ),).thenAnswer((invocation) async {
       final bytes = invocation.positionalArguments[2] as List<int>;
       final json =
           (jsonDecode(utf8.decode(bytes)) as Map).cast<String, dynamic>();
@@ -218,7 +218,7 @@ void main() {
             'device_nonce': 'EBESExQVFhcYGRobHB0eHw==',
             'device_ts': 1789459200,
           },
-        })));
+        }),),);
       } else if (json['type'] == 'auth.proof') {
         if (rejectAuth) {
           authNotify.add(utf8.encode(jsonEncode({
@@ -228,7 +228,7 @@ void main() {
             'in_reply_to': json['message_id'],
             'session_id': sessionId,
             'body': const {'result': 'rejected', 'reason': 'not_bound'},
-          })));
+          }),),);
           return;
         }
         final phoneNonce = lastPhoneNonce!;
@@ -250,7 +250,7 @@ void main() {
             'result': 'ok',
             'device_proof': base64Encode(expected),
           },
-        })));
+        }),),);
       }
     });
     when(() => connection.write(
@@ -258,7 +258,7 @@ void main() {
           BleCtProtocol.otaControlCharUuid,
           any(),
           allowLongWrite: true,
-        )).thenAnswer((invocation) async {
+        ),).thenAnswer((invocation) async {
       final bytes = invocation.positionalArguments[2] as List<int>;
       final json =
           (jsonDecode(utf8.decode(bytes)) as Map).cast<String, dynamic>();
@@ -271,7 +271,7 @@ void main() {
           stage: rejectCtrlResultCode == null ? 'accepted' : 'failed',
           transferId: transferId,
           resultCode: rejectCtrlResultCode ?? 'OK',
-        ))));
+        ),),),);
       } else if (type == 'ota.query') {
         final last = otaCtrlWrites.reversed
             .where((e) => e['type'] == 'ota.ctrl')
@@ -292,7 +292,7 @@ void main() {
           progress: received >= firmwareBytes.length
               ? 100
               : (received * 100) ~/ firmwareBytes.length,
-        ))));
+        ),),),);
       }
     });
     when(() => connection.write(
@@ -301,7 +301,7 @@ void main() {
           any(),
           allowLongWrite: false,
           timeout: 5,
-        )).thenAnswer((invocation) async {
+        ),).thenAnswer((invocation) async {
       final frame = invocation.positionalArguments[2] as List<int>;
       final header = ByteData.sublistView(Uint8List.fromList(frame));
       final offset = header.getUint32(6, Endian.little);
@@ -310,17 +310,17 @@ void main() {
       if (deviceRefuseDataWrites > 0) {
         deviceRefuseDataWrites--;
         throw FlutterBlueUltraException(
-            ErrorPlatform.android, 'writeCharacteristic', 14, 'GATT_UNLIKELY');
+            ErrorPlatform.android, 'writeCharacteristic', 14, 'GATT_UNLIKELY',);
       }
       if (queueFullDataWrites > 0) {
         queueFullDataWrites--;
         throw FlutterBlueUltraException(ErrorPlatform.android,
-            'writeCharacteristic', 9, 'PREPARE_QUEUE_FULL');
+            'writeCharacteristic', 9, 'PREPARE_QUEUE_FULL',);
       }
       if (transientFailDataWrites > 0) {
         transientFailDataWrites--;
         throw FlutterBlueUltraException(ErrorPlatform.android,
-            'writeCharacteristic', 134, 'GATT_CMD_STARTED');
+            'writeCharacteristic', 134, 'GATT_CMD_STARTED',);
       }
       otaRawFrames.add(frame);
       final transferId =
@@ -333,7 +333,7 @@ void main() {
           acceptedOffset: offset,
           resultCode: 'CHUNK_REJECTED',
           message: 'chunk rejected',
-        ))));
+        ),),),);
         return;
       }
       otaDataWrites.add({
@@ -349,10 +349,10 @@ void main() {
         transferId: transferId,
         acceptedOffset: end,
         progress: (end * 100) ~/ firmwareBytes.length,
-      ))));
+      ),),),);
       if (transientFailAfterLanding && otaDataWrites.length == 1) {
         throw FlutterBlueUltraException(ErrorPlatform.android,
-            'writeCharacteristic', 134, 'GATT_CMD_STARTED');
+            'writeCharacteristic', 134, 'GATT_CMD_STARTED',);
       }
     });
     when(() => keyStore.read(any())).thenAnswer((_) async => deviceKeyBase64);
@@ -441,7 +441,7 @@ void main() {
 
     final progress = await service.getProgress('192.168.4.1');
     expect(progress['status'],
-        anyOf('uploading', 'verifying', 'installing', 'done'));
+        anyOf('uploading', 'verifying', 'installing', 'done'),);
     expect((progress['progress'] as num) >= 0, isTrue);
 
     await service.disconnect();
@@ -456,7 +456,7 @@ void main() {
     when(() => connection.read(
           BleCtProtocol.serviceUuid,
           BleCtProtocol.infoCharUuid,
-        )).thenAnswer((_) async => utf8.encode(jsonEncode(v2Info(
+        ),).thenAnswer((_) async => utf8.encode(jsonEncode(v2Info(
           firmwareVersion: '1.0.11',
           binaryOta: false,
           supportedUpgradeModules: [
@@ -465,7 +465,7 @@ void main() {
             'dsp_controller',
             'bms',
           ],
-        ))));
+        ),),),);
     final service = BleCommunicationService(adapter: adapter, manager: manager);
     await service.connectToDevice(deviceSN: sn, deviceIP: '192.168.4.1');
 
@@ -479,7 +479,7 @@ void main() {
         (e) => e.code,
         'code',
         'OTA_BINARY_UNSUPPORTED',
-      )),
+      ),),
     );
     expect(otaCtrlWrites, isEmpty);
     expect(otaRawFrames, isEmpty);
@@ -499,7 +499,7 @@ void main() {
         (e) => e.code,
         'code',
         'BLE_MTU_TOO_SMALL',
-      )),
+      ),),
     );
     expect(otaCtrlWrites, isEmpty);
     expect(otaRawFrames, isEmpty);
@@ -546,7 +546,7 @@ void main() {
         (e) => e.code,
         'code',
         'OTA_CONTROL_TOO_LARGE',
-      )),
+      ),),
     );
     expect(otaCtrlWrites, isEmpty);
   });
@@ -557,10 +557,10 @@ void main() {
     when(() => connection.read(
           BleCtProtocol.serviceUuid,
           BleCtProtocol.infoCharUuid,
-        )).thenAnswer((_) async => utf8.encode(jsonEncode(v2Info(
+        ),).thenAnswer((_) async => utf8.encode(jsonEncode(v2Info(
           firmwareVersion: '1.0.12',
           binaryOta: true,
-        ))));
+        ),),),);
 
     final rawFrames = <List<int>>[];
     var accepted = 0;
@@ -570,7 +570,7 @@ void main() {
           any(),
           allowLongWrite: false,
           timeout: 5,
-        )).thenAnswer((invocation) async {
+        ),).thenAnswer((invocation) async {
       final frame = invocation.positionalArguments[2] as List<int>;
       rawFrames.add(frame);
       expect(frame.length, lessThanOrEqualTo(509));
@@ -580,7 +580,7 @@ void main() {
       final transferId =
           ((otaCtrlWrites.last['body'] as Map)['transfer_id']) as String;
       expect(data.getUint32(2, Endian.little),
-          int.parse(transferId.substring(0, 8), radix: 16));
+          int.parse(transferId.substring(0, 8), radix: 16),);
       expect(data.getUint32(6, Endian.little), accepted);
       accepted += frame.length - 10;
       if (accepted == firmwareBytes.length) {
@@ -589,7 +589,7 @@ void main() {
           transferId: transferId,
           acceptedOffset: accepted,
           progress: 100,
-        ))));
+        ),),),);
       }
     });
 
@@ -618,7 +618,7 @@ void main() {
           any(),
           allowLongWrite: false,
           timeout: 5,
-        )).thenAnswer((invocation) async {
+        ),).thenAnswer((invocation) async {
       final frame = invocation.positionalArguments[2] as List<int>;
       expect(frame.length, lessThanOrEqualTo(253));
       final data = ByteData.sublistView(Uint8List.fromList(frame));
@@ -646,17 +646,17 @@ void main() {
     when(() => connection.read(
           BleCtProtocol.serviceUuid,
           BleCtProtocol.infoCharUuid,
-        )).thenAnswer((_) async => utf8.encode(jsonEncode(v2Info(
+        ),).thenAnswer((_) async => utf8.encode(jsonEncode(v2Info(
           firmwareVersion: '1.0.11',
           binaryOta: true,
-        ))));
+        ),),),);
     final service = BleCommunicationService(adapter: adapter, manager: manager);
     await service.connectToDevice(deviceSN: sn, deviceIP: '192.168.4.1');
 
     await service.uploadFirmware(
       deviceIP: '192.168.4.1',
       filePath: firmwarePath,
-      manifest: LocalOtaManifest(
+      manifest: const LocalOtaManifest(
         target: 'esp',
         taskId: 'task-1',
         version: '1.5.12',
@@ -757,7 +757,7 @@ void main() {
         (e) => e.code,
         'code',
         'CHUNK_REJECTED',
-      )),
+      ),),
     );
     await service.disconnect();
     expect(manager.sessionOf(mac)!.isOtaInProgress, isFalse);
@@ -842,11 +842,11 @@ void main() {
   });
 
   test('only AOSP transient GATT statuses are retryable', () {
-    final transient = (int? code,
+    bool transient(int? code,
             {ErrorPlatform platform = ErrorPlatform.android,
-            String? description}) =>
+            String? description,}) =>
         isTransientBleWriteError(FlutterBlueUltraException(
-            platform, 'writeCharacteristic', code, description));
+            platform, 'writeCharacteristic', code, description,),);
     expect(transient(132), isTrue, reason: 'GATT_BUSY');
     expect(transient(133), isTrue, reason: 'GATT_ERROR');
     expect(transient(134), isTrue, reason: 'GATT_CMD_STARTED');
@@ -855,41 +855,41 @@ void main() {
     expect(transient(null), isFalse);
     expect(
       isTransientBleWriteError(
-          const BleCommandException('OTA_NOT_ACTIVE', 'x')),
+          const BleCommandException('OTA_NOT_ACTIVE', 'x'),),
       isFalse,
     );
 
     // 插件等待超时：完成回调没来，写是否落地未知，可重试（先查状态再重发）。
     expect(
       transient(FbuErrorCode.timeout.index,
-          platform: ErrorPlatform.fbu, description: 'Timed out after 15s'),
+          platform: ErrorPlatform.fbu, description: 'Timed out after 15s',),
       isTrue,
     );
     expect(
       transient(null,
-          platform: ErrorPlatform.fbu, description: 'Timed out after 15s'),
+          platform: ErrorPlatform.fbu, description: 'Timed out after 15s',),
       isTrue,
       reason: '消息兜底也能识别',
     );
     expect(transient(1, platform: ErrorPlatform.fbu), isTrue,
-        reason: 'fbu 平台 code=1 即 FbuErrorCode.timeout');
+        reason: 'fbu 平台 code=1 即 FbuErrorCode.timeout',);
     expect(transient(2, platform: ErrorPlatform.fbu), isFalse,
-        reason: 'fbu 其它错误码（androidOnly 等）不算超时');
+        reason: 'fbu 其它错误码（androidOnly 等）不算超时',);
 
     expect(
         deviceAttErrorCodeOf(FlutterBlueUltraException(
-            ErrorPlatform.android, 'writeCharacteristic', 14, 'GATT_UNLIKELY')),
-        14);
+            ErrorPlatform.android, 'writeCharacteristic', 14, 'GATT_UNLIKELY',),),
+        14,);
     expect(
         deviceAttErrorCodeOf(FlutterBlueUltraException(ErrorPlatform.android,
-            'writeCharacteristic', 134, 'GATT_CMD_STARTED')),
+            'writeCharacteristic', 134, 'GATT_CMD_STARTED',),),
         isNull,
-        reason: '134 属本地栈瞬时拒绝，不是设备侧 ATT 错误');
+        reason: '134 属本地栈瞬时拒绝，不是设备侧 ATT 错误',);
     expect(
         deviceAttErrorCodeOf(FlutterBlueUltraException(ErrorPlatform.fbu,
-            'writeCharacteristic', 1, 'Timed out after 15s')),
+            'writeCharacteristic', 1, 'Timed out after 15s',),),
         isNull,
-        reason: '插件超时不是设备侧 ATT 错误');
+        reason: '插件超时不是设备侧 ATT 错误',);
     expect(deviceAttErrorCodeOf(const BleCommandException('X', 'y')), isNull);
   });
 
@@ -908,7 +908,7 @@ void main() {
         (e) => e.code,
         'code',
         'DEVICE_REFUSED',
-      )),
+      ),),
     );
     // 只尝试了一次：设备侧拒绝不可重试。
     expect(dataWriteAttempts, 1);
@@ -953,7 +953,7 @@ void main() {
       acceptedOffset: firmwareBytes.length,
       resultCode: 'SIGNATURE_INVALID',
       message: 'bad signature',
-    ))));
+    ),),),);
     await Future<void>.delayed(Duration.zero);
 
     final progress = await service.getProgress('192.168.4.1');
@@ -980,7 +980,7 @@ void main() {
     verifyNever(() => adapter.scan(
           serviceUuids: any(named: 'serviceUuids'),
           timeout: any(named: 'timeout'),
-        ));
+        ),);
   }
 
   test('connect reuses the live ready session without scanning', () async {
@@ -1120,7 +1120,7 @@ void main() {
     when(() => connection.read(
           BleCtProtocol.serviceUuid,
           BleCtProtocol.infoCharUuid,
-        )).thenAnswer((_) async => utf8.encode(jsonEncode({
+        ),).thenAnswer((_) async => utf8.encode(jsonEncode({
           'v': 2,
           'type': 'info',
           'session_id': sessionId,
@@ -1130,7 +1130,7 @@ void main() {
             'model': 'CS-L10-6K2',
             'capabilities': ['info', 'telemetry'],
           },
-        })));
+        }),),);
 
     final legacyManager =
         BleDeviceManager(adapter: adapter, keyStore: keyStore);

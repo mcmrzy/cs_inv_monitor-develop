@@ -106,7 +106,7 @@ class _DeviceEditPageState extends State<DeviceEditPage> {
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(l10n.unbind,
-                style: const TextStyle(color: AppColors.error)),
+                style: const TextStyle(color: AppColors.error),),
           ),
         ],
       ),
@@ -134,7 +134,7 @@ class _DeviceEditPageState extends State<DeviceEditPage> {
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(l10n.delete,
-                style: const TextStyle(color: AppColors.error)),
+                style: const TextStyle(color: AppColors.error),),
           ),
         ],
       ),

@@ -175,14 +175,14 @@ class InlineLocationPickerState extends State<InlineLocationPicker> {
   }
 
   Future<void> _reverseGeocode(double lat, double lng,
-      {bool updateAddress = true}) async {
+      {bool updateAddress = true,}) async {
     setState(() => _loadingNearby = true);
     try {
       final dio = getIt<Dio>();
       final res = await dio.get('/geocode/reverse', queryParameters: {
         'lat': lat,
         'lng': lng,
-      }).timeout(const Duration(seconds: 8));
+      },).timeout(const Duration(seconds: 8));
       if (mounted && res.data is Map) {
         final d = res.data['data'];
         if (d != null) {
@@ -245,7 +245,7 @@ class InlineLocationPickerState extends State<InlineLocationPicker> {
       final dio = getIt<Dio>();
       final res = await dio.get('/geocode', queryParameters: {
         'address': address.trim(),
-      }).timeout(const Duration(seconds: 8));
+      },).timeout(const Duration(seconds: 8));
       if (mounted && res.data is Map) {
         final d = res.data['data'];
         if (d != null) {
@@ -334,7 +334,7 @@ class InlineLocationPickerState extends State<InlineLocationPicker> {
                     right: 8.w,
                     child: Container(
                       padding: EdgeInsets.symmetric(
-                          horizontal: 10.w, vertical: 5.h),
+                          horizontal: 10.w, vertical: 5.h,),
                       decoration: BoxDecoration(
                         color: AppColor.surfaceContainer(context)
                             .withValues(alpha: 0.92),
@@ -393,13 +393,13 @@ class InlineLocationPickerState extends State<InlineLocationPicker> {
                   child: Row(
                     children: [
                       Icon(Icons.near_me,
-                          size: 14.sp, color: AppColor.primary(context)),
+                          size: 14.sp, color: AppColor.primary(context),),
                       SizedBox(width: 6.w),
                       Text(l10n.str('location_nearby_addresses'),
                           style: TextStyle(
                               fontSize: 12.sp,
                               color: AppColor.textSecondary(context),
-                              fontWeight: FontWeight.w500)),
+                              fontWeight: FontWeight.w500,),),
                     ],
                   ),
                 ),
@@ -409,7 +409,7 @@ class InlineLocationPickerState extends State<InlineLocationPicker> {
                   padding: EdgeInsets.zero,
                   itemCount: _nearbyList.length,
                   separatorBuilder: (_, __) => Divider(
-                      height: 1, indent: 38.w, color: AppColor.border(context)),
+                      height: 1, indent: 38.w, color: AppColor.border(context),),
                   itemBuilder: (context, idx) {
                     final item = _nearbyList[idx];
                     final name = item['name'] as String? ?? '';
@@ -419,12 +419,12 @@ class InlineLocationPickerState extends State<InlineLocationPicker> {
                       borderRadius: BorderRadius.circular(8.r),
                       child: Padding(
                         padding: EdgeInsets.symmetric(
-                            horizontal: 12.w, vertical: 8.h),
+                            horizontal: 12.w, vertical: 8.h,),
                         child: Row(
                           children: [
                             Icon(Icons.location_on_outlined,
                                 size: 16.sp,
-                                color: AppColor.primary(context)),
+                                color: AppColor.primary(context),),
                             SizedBox(width: 8.w),
                             Expanded(
                               child: Column(
@@ -433,7 +433,7 @@ class InlineLocationPickerState extends State<InlineLocationPicker> {
                                   Text(name,
                                       style: TextStyle(
                                           fontSize: 13.sp,
-                                          fontWeight: FontWeight.w500)),
+                                          fontWeight: FontWeight.w500,),),
                                   if (detail.isNotEmpty && detail != name)
                                     Text(detail,
                                         style: TextStyle(

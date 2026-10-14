@@ -16,7 +16,7 @@ void main() {
     expect(item('dsp', ['remote', 'ble']).supportsLocalChannel('ble'), isTrue);
     expect(item('bms', ['remote', 'ble']).supportsLocalChannel('ble'), isTrue);
     expect(item('dsp', ['remote', 'ble']).supportsLocalChannel('wifi_ap'),
-        isFalse);
+        isFalse,);
     expect(item('bms', null).supportsLocalChannel('ble'), isFalse);
     expect(item('arm', null).supportsLocalChannel('ble'), isTrue);
   });

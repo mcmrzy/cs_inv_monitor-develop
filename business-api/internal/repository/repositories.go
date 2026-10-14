@@ -987,6 +987,7 @@ func (r *DeviceRepository) GetBySN(ctx context.Context, sn string) (*model.Devic
 // DeviceListParams 设备列表查询参数（DeviceRepository.List / DeviceService.List 共用）。
 // Status < 0 表示不过滤状态；LastOnlineStart/LastOnlineEnd 为可选的最后在线时间范围。
 type DeviceListParams struct {
+	ScopePlan       *model.ScopePlan
 	UserID          int64
 	StationID       int64
 	Status          int
@@ -1048,7 +1049,7 @@ func appendDeviceListFilters(baseQuery string, args []interface{}, argIdx int, s
 // deviceListFromClauses 返回设备列表查询的 FROM/WHERE 骨架。
 // 分页查询含 v_device_latest 关联以取实时字段，COUNT 查询无需该关联。
 func deviceListFromClauses() (listFrom, countFrom string) {
-	listFrom = ` FROM devices d LEFT JOIN device_models dm ON d.model_id = dm.id LEFT JOIN v_device_latest rd ON rd.device_sn = d.sn LEFT JOIN stations s ON s.id = d.station_id WHERE d.deleted_at IS NULL`
+	listFrom = ` FROM devices d LEFT JOIN device_models dm ON d.model_id = dm.id LEFT JOIN v_device_latest rd ON rd.device_sn = d.sn LEFT JOIN stations s ON s.id = d.station_id LEFT JOIN users owner ON owner.id = d.user_id AND owner.deleted_at IS NULL WHERE d.deleted_at IS NULL`
 	countFrom = ` FROM devices d LEFT JOIN device_models dm ON d.model_id = dm.id LEFT JOIN stations s ON s.id = d.station_id WHERE d.deleted_at IS NULL`
 	return
 }
@@ -1067,16 +1068,18 @@ func (r *DeviceRepository) List(ctx context.Context, params DeviceListParams) ([
 
 	listFrom, countFrom := deviceListFromClauses()
 	scope := deviceListScopeClause(params.IsSystemAdmin)
+	scopeArgs := []interface{}{}
+	if params.ScopePlan != nil {
+		filter, args := OverviewScopeFilter(*params.ScopePlan, params.IsSystemAdmin, "d", 1)
+		scope, scopeArgs = " AND "+filter, args
+	} else if !params.IsSystemAdmin {
+		scopeArgs = append(scopeArgs, params.UserID)
+	}
 	listFrom += scope
 	countFrom += scope
 
-	// 数据范围参数：管理员无额外参数（过滤从 $1 起），普通用户 userID 占用 $1（过滤从 $2 起）
-	scopeArgs := []interface{}{}
-	argStart := 1
-	if !params.IsSystemAdmin {
-		scopeArgs = append(scopeArgs, params.UserID)
-		argStart = 2
-	}
+	// Filters start after the selected authorization scope's parameters.
+	argStart := len(scopeArgs) + 1
 
 	baseQuery, args, argIdx := appendDeviceListFilters(listFrom, append([]interface{}{}, scopeArgs...), argStart,
 		params.StationID, params.Status, params.Keyword, params.Model, params.LastOnlineStart, params.LastOnlineEnd)
@@ -1093,7 +1096,7 @@ func (r *DeviceRepository) List(ctx context.Context, params DeviceListParams) ([
 	if !params.IsSystemAdmin {
 		orderClause = ` ORDER BY d.global_sort_order, d.created_at DESC, d.id`
 	}
-	query := `SELECT ` + deviceListSelectColumns + baseQuery + orderClause + ` LIMIT $` + fmt.Sprintf("%d", argIdx) + ` OFFSET $` + fmt.Sprintf("%d", argIdx+1)
+	query := `SELECT ` + deviceListSelectColumns + `, COALESCE(owner.nickname, ''), COALESCE(owner.phone, '')` + baseQuery + orderClause + ` LIMIT $` + fmt.Sprintf("%d", argIdx) + ` OFFSET $` + fmt.Sprintf("%d", argIdx+1)
 
 	args = append(args, params.PageSize, offset)
 
@@ -1106,6 +1109,7 @@ func (r *DeviceRepository) List(ctx context.Context, params DeviceListParams) ([
 	devices := make([]*model.Device, 0)
 	for rows.Next() {
 		var device model.Device
+		var owner model.DeviceOwner
 		var stationID sql.NullInt64
 		var lastOnlineAt sql.NullTime
 		if err := rows.Scan(
@@ -1122,11 +1126,15 @@ func (r *DeviceRepository) List(ctx context.Context, params DeviceListParams) ([
 			&device.StationName,
 			&device.Alias, &device.Remark,
 			&device.RatedPowerW, &device.TelemetryUpdatedAt,
+			&owner.Nickname, &owner.Phone,
 		); err != nil {
 			return nil, 0, err
 		}
 		if stationID.Valid {
 			device.StationID = &stationID.Int64
+		}
+		if device.UserID > 0 {
+			device.Owner = &owner
 		}
 		if lastOnlineAt.Valid {
 			device.LastOnlineAt = &lastOnlineAt.Time

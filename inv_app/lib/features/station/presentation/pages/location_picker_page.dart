@@ -50,7 +50,7 @@ class _Gcj02 {
 }
 
 /// 地图选点页面：用户拖动地图选择精确位置
-/// 返回 Map<String, double> 包含 lat 和 lng
+/// 返回 `Map<String, double>` 包含 lat 和 lng
 class LocationPickerPage extends StatefulWidget {
   final double? initialLat;
   final double? initialLng;
@@ -167,7 +167,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       final res = await dio.get('/geocode/reverse', queryParameters: {
         'lat': lat,
         'lng': lng,
-      }).timeout(const Duration(seconds: 8));
+      },).timeout(const Duration(seconds: 8));
       if (mounted && res.data is Map) {
         final d = res.data['data'];
         if (d != null) {
@@ -332,7 +332,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(Icons.location_on_outlined,
-                        size: 16.sp, color: AppColors.errorLight),
+                        size: 16.sp, color: AppColors.errorLight,),
                     SizedBox(width: 6.w),
                     Flexible(
                       child: Text(
@@ -413,10 +413,10 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                             return ListTile(
                               dense: true,
                               leading: Icon(Icons.location_on_outlined,
-                                  color: AppColor.primary(context), size: 20.sp),
+                                  color: AppColor.primary(context), size: 20.sp,),
                               title: Text(name,
                                   style: TextStyle(
-                                      fontSize: 14.sp, fontWeight: FontWeight.w500)),
+                                      fontSize: 14.sp, fontWeight: FontWeight.w500,),),
                               subtitle: detail.isNotEmpty && detail != name
                                   ? Text(detail,
                                       style: TextStyle(

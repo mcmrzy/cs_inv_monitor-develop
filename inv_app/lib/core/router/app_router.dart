@@ -336,7 +336,7 @@ class AppRouter {
               DeviceTelemetryHistoryPage(
                   sn: sn,
                   timezone:
-                      state.uri.queryParameters['tz'] ?? 'Asia/Shanghai'));
+                      state.uri.queryParameters['tz'] ?? 'Asia/Shanghai',),);
         },
       ),
       // 储能 BMS 页（必须在 /device/:sn 之后声明，路径更具体者先匹配的规则见 :264 注释）

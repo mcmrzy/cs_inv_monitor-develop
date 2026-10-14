@@ -46,9 +46,9 @@ void main() {
       for (final stage in deviceStages) {
         final key = 'upgrade_stage_${stage == 'receiving' ? 'downloading' : stage}';
         expect(zh_catalog.zh.containsKey(key), isTrue,
-            reason: '缺少中文文案: $key');
+            reason: '缺少中文文案: $key',);
         expect(en_catalog.en.containsKey(key), isTrue,
-            reason: '缺少英文文案: $key');
+            reason: '缺少英文文案: $key',);
       }
     });
   });

@@ -12,7 +12,7 @@ void main() {
   test('declared category wins over a misleading model name', () {
     expect(
         deviceCategory({'model_category': 'inverter', 'model': 'BMS series'}),
-        'inv');
+        'inv',);
   });
   test('legacy localized models retain their battery and collector categories', () {
     expect(deviceCategory({'model': '\u50a8\u80fd\u7535\u6c60'}), 'battery');
@@ -21,16 +21,16 @@ void main() {
   test('only actual CMD08 battery evidence creates a battery child', () {
     expect(
         deviceBattery({
-          'bms_summary': {'layout': 0, 'battery_count': 0}
+          'bms_summary': {'layout': 0, 'battery_count': 0},
         }),
-        isNull);
+        isNull,);
     expect(
         deviceBattery({
-          'bms_summary': {'layout': 9, 'battery_count': 1}
+          'bms_summary': {'layout': 9, 'battery_count': 1},
         }),
-        isNull);
+        isNull,);
     final offline = deviceBattery({
-      'bms_summary': {'layout': 0, 'battery_count': 1, 'bms_online': 0}
+      'bms_summary': {'layout': 0, 'battery_count': 1, 'bms_online': 0},
     });
     expect(offline, isNotNull);
     expect(offline!.online, false);

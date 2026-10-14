@@ -87,7 +87,7 @@ class DioOfflineLogApi implements OfflineLogApi {
             .whereType<Map>()
             .map((item) => OfflineLogItemResult.fromJson(
                   item.cast<String, dynamic>(),
-                ))
+                ),)
             .whereType<OfflineLogItemResult>()
             .toList(growable: false)
         : const <OfflineLogItemResult>[];

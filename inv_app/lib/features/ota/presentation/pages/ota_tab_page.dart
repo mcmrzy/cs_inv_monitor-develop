@@ -77,30 +77,30 @@ class _OtaTabPageState extends State<OtaTabPage> {
                 style: Theme.of(context)
                     .textTheme
                     .titleLarge
-                    ?.copyWith(fontWeight: FontWeight.w700)),
+                    ?.copyWith(fontWeight: FontWeight.w700),),
             const SizedBox(height: 4),
             Text(l10n.str('firmware_my_devices_hint'),
-                style: TextStyle(color: AppColor.textSecondary(context))),
+                style: TextStyle(color: AppColor.textSecondary(context)),),
             const SizedBox(height: 14),
             if (_loading && _devices.isEmpty)
               const Center(
                   child: Padding(
                       padding: EdgeInsets.all(32),
-                      child: CircularProgressIndicator()))
+                      child: CircularProgressIndicator(),),)
             else if (_error != null && _devices.isEmpty)
               _MessageCard(
                   icon: Icons.cloud_off_rounded,
                   text: l10n.str('firmware_devices_load_failed'),
                   action: l10n.retry,
-                  onTap: () => _load(reset: true))
+                  onTap: () => _load(reset: true),)
             else if (_devices.isEmpty)
               _MessageCard(
                   icon: Icons.devices_other_rounded,
-                  text: l10n.str('ota_picker_empty'))
+                  text: l10n.str('ota_picker_empty'),)
             else
               ..._devices.map((device) => Padding(
                   padding: const EdgeInsets.only(bottom: 10),
-                  child: _DeviceCard(device: device))),
+                  child: _DeviceCard(device: device),),),
             if (_error != null && _devices.isNotEmpty)
               Text(
                 l10n.str('firmware_devices_load_failed'),
@@ -128,7 +128,7 @@ class _OtaTabPageState extends State<OtaTabPage> {
                 style: Theme.of(context)
                     .textTheme
                     .titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w700)),
+                    ?.copyWith(fontWeight: FontWeight.w700),),
             const SizedBox(height: 10),
             GridView.count(
               crossAxisCount: 2,
@@ -143,25 +143,25 @@ class _OtaTabPageState extends State<OtaTabPage> {
                     color: AppColors.blue,
                     title: l10n.str('ota_check_update'),
                     subtitle: l10n.str('ota_check_update_hint'),
-                    onTap: () => context.push('/ota/check-all')),
+                    onTap: () => context.push('/ota/check-all'),),
                 _ToolCard(
                     icon: Icons.wifi_tethering_rounded,
                     color: AppColors.teal,
                     title: l10n.str('ota_local_upgrade'),
                     subtitle: l10n.str('ota_local_upgrade_hint'),
-                    onTap: () => context.push('/local-upgrade')),
+                    onTap: () => context.push('/local-upgrade'),),
                 _ToolCard(
                     icon: Icons.inventory_2_outlined,
                     color: AppColors.orange,
                     title: l10n.str('ota_firmware_library'),
                     subtitle: l10n.str('ota_firmware_library_hint'),
-                    onTap: () => context.push('/firmware-library')),
+                    onTap: () => context.push('/firmware-library'),),
                 _ToolCard(
                     icon: Icons.history_rounded,
                     color: AppColors.purple,
                     title: l10n.str('ota_upgrade_history'),
                     subtitle: l10n.str('ota_upgrade_history_hint'),
-                    onTap: () => context.push('/upgrade-history')),
+                    onTap: () => context.push('/upgrade-history'),),
               ],
             ),
           ],
@@ -235,7 +235,7 @@ class _OverviewCard extends StatelessWidget {
                         ),
                       ),
                       TextSpan(text: l10n.str('firmware_device_count')),
-                    ]),
+                    ],),
                     key: const Key('firmwareDeviceTotal'),
                     maxLines: 2,
                     style: TextStyle(
@@ -267,7 +267,7 @@ class _OverviewCard extends StatelessWidget {
               ),
             ),
           ),
-        ]),
+        ],),
       ),
     );
   }
@@ -313,7 +313,7 @@ class _DeviceCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Icon(Icons.solar_power_rounded,
-                  color: AppColor.primary(context)),
+                  color: AppColor.primary(context),),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -326,29 +326,29 @@ class _DeviceCard extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.w700)),
+                                fontSize: 16, fontWeight: FontWeight.w700,),),
                       ),
                       _StatusPill(
                           online: online,
-                          label: l10n.str(online ? 'online' : 'offline')),
-                    ]),
+                          label: l10n.str(online ? 'online' : 'offline'),),
+                    ],),
                     const SizedBox(height: 7),
                     Text(model.isEmpty ? sn : model,
                         style: TextStyle(
                             color: AppColor.textSecondary(context),
-                            fontWeight: FontWeight.w500)),
+                            fontWeight: FontWeight.w500,),),
                     if (model.isNotEmpty && sn.isNotEmpty) ...[
                       const SizedBox(height: 3),
                       Text(sn,
                           style: TextStyle(
-                              fontSize: 12, color: AppColor.textHint(context))),
+                              fontSize: 12, color: AppColor.textHint(context),),),
                     ],
-                  ]),
+                  ],),
             ),
             const SizedBox(width: 8),
             Icon(Icons.chevron_right_rounded,
-                color: AppColor.textHint(context)),
-          ]),
+                color: AppColor.textHint(context),),
+          ],),
         ),
       ),
     );
@@ -373,7 +373,7 @@ class _StatusPill extends StatelessWidget {
               height: 6,
               decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: online ? AppColors.successLight : AppColors.offline)),
+                  color: online ? AppColors.successLight : AppColors.offline,),),
           const SizedBox(width: 5),
           Text(label,
               style: TextStyle(
@@ -381,8 +381,8 @@ class _StatusPill extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                   color: online
                       ? AppColors.badgeNormalText
-                      : AppColor.textSecondary(context))),
-        ]),
+                      : AppColor.textSecondary(context),),),
+        ],),
       );
 }
 
@@ -392,7 +392,7 @@ class _ToolCard extends StatelessWidget {
       required this.color,
       required this.title,
       required this.subtitle,
-      required this.onTap});
+      required this.onTap,});
   final IconData icon;
   final Color color;
   final String title;
@@ -425,14 +425,14 @@ class _ToolCard extends StatelessWidget {
               Text(title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w700)),
+                  style: const TextStyle(fontWeight: FontWeight.w700),),
               const SizedBox(height: 3),
               Text(subtitle,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                      fontSize: 12, color: AppColor.textSecondary(context))),
-            ]),
+                      fontSize: 12, color: AppColor.textSecondary(context),),),
+            ],),
           ),
         ),
       );
@@ -440,7 +440,7 @@ class _ToolCard extends StatelessWidget {
 
 class _MessageCard extends StatelessWidget {
   const _MessageCard(
-      {required this.icon, required this.text, this.action, this.onTap});
+      {required this.icon, required this.text, this.action, this.onTap,});
   final IconData icon;
   final String text;
   final String? action;
@@ -453,7 +453,7 @@ class _MessageCard extends StatelessWidget {
           Icon(icon, size: 38, color: AppColor.textHint(context)),
           const SizedBox(height: 10),
           Text(text),
-          if (action != null) TextButton(onPressed: onTap, child: Text(action!))
-        ]),
-      ));
+          if (action != null) TextButton(onPressed: onTap, child: Text(action!)),
+        ],),
+      ),);
 }

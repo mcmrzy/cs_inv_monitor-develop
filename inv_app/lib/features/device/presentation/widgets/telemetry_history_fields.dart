@@ -95,7 +95,7 @@ class _FieldPickerState extends State<TelemetryHistoryFieldPicker> {
             : historyFieldGroups[_group]!)
         .where((f) => '${l10n.str(f.$2)} ${f.$1} ${f.$3}'
             .toLowerCase()
-            .contains(_search.toLowerCase()))
+            .contains(_search.toLowerCase()),)
         .toList();
     return SafeArea(
       child: SizedBox(
@@ -107,18 +107,18 @@ class _FieldPickerState extends State<TelemetryHistoryFieldPicker> {
               Expanded(
                   child: Text(
                       l10n.str('history_fields_title',
-                          {'count': '${_selected.length}'}),
-                      style: Theme.of(context).textTheme.titleMedium)),
+                          {'count': '${_selected.length}'},),
+                      style: Theme.of(context).textTheme.titleMedium,),),
               IconButton(
                   tooltip: l10n.str('history_fields_reset'),
                   onPressed: () =>
                       setState(() => _selected = {...commonHistoryFields}),
-                  icon: const Icon(Icons.restart_alt)),
+                  icon: const Icon(Icons.restart_alt),),
               IconButton(
                   tooltip: l10n.cancel,
                   onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close)),
-            ]),
+                  icon: const Icon(Icons.close),),
+            ],),
           ),
           Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -127,7 +127,7 @@ class _FieldPickerState extends State<TelemetryHistoryFieldPicker> {
                   decoration: InputDecoration(
                       labelText: l10n.str('history_fields_search'),
                       prefixIcon: const Icon(Icons.search),
-                      border: const OutlineInputBorder()))),
+                      border: const OutlineInputBorder(),),),),
           SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -139,9 +139,9 @@ class _FieldPickerState extends State<TelemetryHistoryFieldPicker> {
                                 label: Text(l10n.str('history_group_$group')),
                                 selected: _group == group,
                                 onSelected: (_) =>
-                                    setState(() => _group = group)),
-                          ))
-                      .toList())),
+                                    setState(() => _group = group),),
+                          ),)
+                      .toList(),),),
           const SizedBox(height: 8),
           const Divider(height: 1),
           Expanded(
@@ -163,8 +163,8 @@ class _FieldPickerState extends State<TelemetryHistoryFieldPicker> {
                                     _selected.remove(field.$1);
                                   }
                                 }),
-                              ))
-                          .toList())),
+                              ),)
+                          .toList(),),),
           Padding(
               padding: const EdgeInsets.all(16),
               child: SizedBox(
@@ -174,8 +174,8 @@ class _FieldPickerState extends State<TelemetryHistoryFieldPicker> {
                           ? null
                           : () => Navigator.pop(context, _selected),
                       icon: const Icon(Icons.check),
-                      label: Text(l10n.str('history_fields_apply'))))),
-        ]),
+                      label: Text(l10n.str('history_fields_apply')),),),),
+        ],),
       ),
     );
   }

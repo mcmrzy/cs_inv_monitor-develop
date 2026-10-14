@@ -35,7 +35,7 @@ void main() {
           'voltage': 51.2,
           'current': -12.0,
           'age_ms': 100,
-          'expires_at': now.add(const Duration(seconds: 200)).toIso8601String()
+          'expires_at': now.add(const Duration(seconds: 200)).toIso8601String(),
         },
       };
 
@@ -63,13 +63,13 @@ void main() {
         Scaffold(
             body: RepaintBoundary(
                 key: boundary,
-                child: ListView(children: [DeviceCard(device: fixture())]))));
+                child: ListView(children: [DeviceCard(device: fixture())]),),),);
     expect(find.text('10.00 kW'), findsOneWidget);
     expect(find.text('1.23 kW'), findsOneWidget);
     expect(find.text('12.56 kWh'), findsOneWidget);
     expect(find.text('SN H1ZZX0013900002H'), findsOneWidget);
     expect(
-        find.byKey(const ValueKey('battery-H1ZZX0013900002H')), findsOneWidget);
+        find.byKey(const ValueKey('battery-H1ZZX0013900002H')), findsOneWidget,);
     expect(tester.takeException(), isNull);
     final path = Platform.environment['DEVICE_CARD_PREVIEW'];
     if (path != null) {
@@ -89,14 +89,14 @@ void main() {
       (tester) async {
     final device = fixture();
     await pumpMinimalApp(tester,
-        Scaffold(body: DeviceListView(devices: [device], showSearch: false)));
+        Scaffold(body: DeviceListView(devices: [device], showSearch: false)),);
     expect(find.text('1.23 kW'), findsOneWidget);
     await pumpMinimalApp(
         tester,
         Scaffold(
             body: DeviceListView(devices: [
-          {...device, 'status': 0, 'daily_energy': 20}
-        ], showSearch: false)));
+          {...device, 'status': 0, 'daily_energy': 20},
+        ], showSearch: false,),),);
     expect(find.text('20.00 kWh'), findsOneWidget);
     expect(find.text('1.23 kW'), findsNothing);
     expect(tester.takeException(), isNull);
@@ -109,17 +109,17 @@ void main() {
       GoRoute(
           path: '/',
           builder: (_, __) => Scaffold(
-              body: ListView(children: [DeviceCard(device: fixture())]))),
+              body: ListView(children: [DeviceCard(device: fixture())]),),),
       GoRoute(
           path: '/device/:sn',
           builder: (_, __) {
             parentOpened++;
             return const Scaffold(body: Text('Parent'));
-          }),
+          },),
       GoRoute(
           path: '/device/:sn/storage',
-          builder: (_, __) => const Scaffold(body: Text('Battery detail'))),
-    ]);
+          builder: (_, __) => const Scaffold(body: Text('Battery detail')),),
+    ],);
     addTearDown(router.dispose);
     await tester.pumpWidget(ScreenUtilInit(
         designSize: const Size(375, 812),
@@ -131,8 +131,8 @@ void main() {
                   AppLocalizations.delegate,
                   GlobalMaterialLocalizations.delegate,
                   GlobalWidgetsLocalizations.delegate,
-                  GlobalCupertinoLocalizations.delegate
-                ])));
+                  GlobalCupertinoLocalizations.delegate,
+                ],),),);
     await tester.pumpAndSettle();
     await tester
         .ensureVisible(find.byKey(const ValueKey('battery-H1ZZX0013900002H')));

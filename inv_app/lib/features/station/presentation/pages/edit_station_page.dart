@@ -668,7 +668,7 @@ class _EditStationPageState extends State<EditStationPage> {
                 ),
               ),
             child: _uploadingImage
-                ? Center(
+                ? const Center(
                     child: CircularProgressIndicator(
                       strokeWidth: 2.5,
                       color: AppColors.primary,
@@ -700,7 +700,7 @@ class _EditStationPageState extends State<EditStationPage> {
                                       },
                                 child: Container(
                                   padding: EdgeInsets.all(4.w),
-                                  decoration: BoxDecoration(
+                                  decoration: const BoxDecoration(
                                     color: Colors.black54,
                                     shape: BoxShape.circle,
                                   ),
@@ -747,7 +747,7 @@ class _EditStationPageState extends State<EditStationPage> {
                                           },
                                     child: Container(
                                       padding: EdgeInsets.all(4.w),
-                                      decoration: BoxDecoration(
+                                      decoration: const BoxDecoration(
                                         color: Colors.black54,
                                         shape: BoxShape.circle,
                                       ),

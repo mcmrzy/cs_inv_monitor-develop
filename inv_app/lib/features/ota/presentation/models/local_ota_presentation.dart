@@ -101,7 +101,7 @@ bool supportsLocalOtaDeviceTarget({
   final supported = deviceInfo['supported_upgrade_modules'];
   if (supported is! List) return module == 'esp' || module == 'arm';
   return supported.any(
-      (entry) => entry is String && entry.trim().toLowerCase() == wireTarget);
+      (entry) => entry is String && entry.trim().toLowerCase() == wireTarget,);
 }
 
 String? _readDeviceModel(Map<String, dynamic> info) {

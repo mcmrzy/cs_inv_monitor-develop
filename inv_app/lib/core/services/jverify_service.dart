@@ -116,7 +116,7 @@ class JVerifyService {
       // 超时后同时复位时间戳，防止 20s 窗口内旧时间戳干扰
       _preLoginAt = null;
       return false;
-    });
+    },);
     // 失败不缓存，延迟 1.5s 自动重试 1 次；成功缓存 20s
     _preLoginFuture = future.then<bool>((ok) async {
       if (!ok) {

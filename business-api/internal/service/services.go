@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -748,6 +749,24 @@ func (s *DeviceService) AddToStation(ctx context.Context, sn string, stationID i
 
 func (s *DeviceService) AssignUnassignedToStation(ctx context.Context, sn string, stationID, userID int64) error {
 	assigned, err := s.repo.AssignUnassignedToStation(ctx, sn, stationID, userID)
+	if err != nil {
+		return apperr.Internal("add to station failed", err)
+	}
+	if !assigned {
+		return apperr.Conflict("device or station assignment changed; refresh and try again")
+	}
+	return nil
+}
+
+func (s *DeviceService) HasScopedAccess(ctx context.Context, sn string, plan model.ScopePlan, systemAdmin bool) (bool, error) {
+	return s.repo.HasScopedAccess(ctx, sn, plan, systemAdmin)
+}
+
+func (s *DeviceService) AssignToStationScoped(ctx context.Context, sn string, stationID int64, devicePlan, stationPlan model.ScopePlan, systemAdmin, onlyUnassigned bool) error {
+	assigned, err := s.repo.AssignToStationScoped(ctx, sn, stationID, devicePlan, stationPlan, systemAdmin, onlyUnassigned)
+	if errors.Is(err, repository.ErrAssignmentOutOfScope) {
+		return apperr.Forbidden("permission denied")
+	}
 	if err != nil {
 		return apperr.Internal("add to station failed", err)
 	}

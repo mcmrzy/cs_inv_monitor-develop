@@ -49,12 +49,13 @@ interface DeviceRecord {
   status: number
   lastOnlineAt: string
   userId: string
+  user_id?: number
   installerId: string
   timezone?: string
   station_id?: number
   station_name?: string
   user_phone?: string
-  owner?: { phone: string; nickname: string }
+  owner?: { phone: string; nickname: string } | null
   installer?: { nickname: string; phone: string }
 }
 
@@ -858,12 +859,13 @@ const DevicesPage: React.FC = () => {
       render: (v: string) => v || '-',
     },
     {
-      title: t('common.owner'),
+      title: t('dev.currentOwner'),
       key: 'owner',
       width: 130,
-      render: (_: any, record: any) => {
-        if (!record.owner) return '-'
-        return <Text>{record.owner.nickname || record.owner.phone || '-'}</Text>
+      render: (_: unknown, record: DeviceRecord) => {
+        const ownerId = record.user_id ?? record.userId
+        if (!ownerId || Number(ownerId) <= 0) return <Text type="secondary">{t('dev.unbound')}</Text>
+        return <Text>{record.owner?.nickname?.trim() || record.owner?.phone || t('dev.ownerId', { id: ownerId })}</Text>
       },
     },
     {

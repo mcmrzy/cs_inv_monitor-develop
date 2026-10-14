@@ -220,37 +220,37 @@ class _StationDetailPageState extends State<StationDetailPage>
             if (state is DeviceUnbindSuccess) {
               AppToast.show(
                   context, '${l10n.str('device_unbound', {})} - ${state.sn}',
-                  type: ToastType.success);
+                  type: ToastType.success,);
               context.read<StationBloc>().add(
                     StationDetailRequested(stationId: widget.stationId),
                   );
             } else if (state is DeviceDeleteSuccess) {
               AppToast.show(
                   context, '${l10n.str('device_deleted', {})} - ${state.sn}',
-                  type: ToastType.success);
+                  type: ToastType.success,);
               context.read<StationBloc>().add(
                     StationDetailRequested(stationId: widget.stationId),
                   );
             } else if (state is DeviceRebindSuccess) {
               AppToast.show(
                   context, '${l10n.str('device_rebound', {})} - ${state.sn}',
-                  type: ToastType.success);
+                  type: ToastType.success,);
               context.read<StationBloc>().add(
                     StationDetailRequested(stationId: widget.stationId),
                   );
             } else if (state is DeviceBindSuccess) {
               AppToast.show(
                   context, '${l10n.str('device_bound', {})} - ${state.sn}',
-                  type: ToastType.success);
+                  type: ToastType.success,);
               context.read<StationBloc>().add(
                     StationDetailRequested(stationId: widget.stationId),
                   );
             } else if (state is DeviceReorderSuccess) {
               AppToast.show(context, l10n.str('device_order_saved', {}),
-                  type: ToastType.success);
+                  type: ToastType.success,);
             } else if (state is StationError && state is! StationActionError) {
               AppToast.show(context, l10n.translateError(state.message),
-                  type: ToastType.error);
+                  type: ToastType.error,);
             }
           },
           child: Scaffold(
@@ -546,7 +546,7 @@ class _StationDetailPageState extends State<StationDetailPage>
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(Icons.devices_other,
-                size: 16.sp, color: AppColor.textSecondary(context)),
+                size: 16.sp, color: AppColor.textSecondary(context),),
             SizedBox(width: 6.w),
             Text(
               getSelectedDeviceName(),
@@ -591,7 +591,7 @@ class _StationDetailPageState extends State<StationDetailPage>
         _pushStorage(_selectedDeviceSn);
       } else {
         AppToast.show(context,
-            AppLocalizations.of(context)!.str('storage_not_connected'));
+            AppLocalizations.of(context)!.str('storage_not_connected'),);
       }
       return;
     }
@@ -608,12 +608,11 @@ class _StationDetailPageState extends State<StationDetailPage>
     }
     if (candidates.isEmpty) {
       AppToast.show(
-          context, AppLocalizations.of(context)!.str('storage_not_connected'));
+          context, AppLocalizations.of(context)!.str('storage_not_connected'),);
       return;
     }
     var sn = candidates.keys.singleOrNull;
-    if (sn == null) {
-      sn = await showModalBottomSheet<String>(
+    sn ??= await showModalBottomSheet<String>(
         context: context,
         isScrollControlled: true,
         builder: (ctx) => SafeArea(
@@ -627,14 +626,14 @@ class _StationDetailPageState extends State<StationDetailPage>
                 Padding(
                   padding: const EdgeInsets.all(20),
                   child: Text(AppLocalizations.of(ctx)!.deviceTypeStorage,
-                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                      style: const TextStyle(fontWeight: FontWeight.w600),),
                 ),
                 for (final entry in candidates.entries)
                   ListTile(
                     key: ValueKey('storage-choice-${entry.key}'),
                     leading: const Icon(Icons.battery_charging_full_rounded),
                     title: Text('${entry.value['alias'] ?? ''}'.isEmpty
-                        ? entry.key : '${entry.value['alias']}'),
+                        ? entry.key : '${entry.value['alias']}',),
                     subtitle: Text(entry.key),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => Navigator.pop(ctx, entry.key),
@@ -644,7 +643,6 @@ class _StationDetailPageState extends State<StationDetailPage>
           ),
         ),
       );
-    }
     if (sn != null && mounted) {
       _pushStorage(sn);
     }
@@ -1164,7 +1162,7 @@ class _StationDetailPageState extends State<StationDetailPage>
                 Text(
                   label,
                   style: TextStyle(
-                      fontSize: 10.sp, color: AppColor.textHint(context)),
+                      fontSize: 10.sp, color: AppColor.textHint(context),),
                 ),
               ],
             ),

@@ -357,7 +357,7 @@ class _DashboardPageState extends State<DashboardPage> {
           .where((f) =>
               f.isShow &&
               (groups.contains(f.groupName) ||
-                  prefixes.any((p) => f.fieldKey.startsWith(p))))
+                  prefixes.any((p) => f.fieldKey.startsWith(p))),)
           .toList()
         ..sort((a, b) => a.sort.compareTo(b.sort));
 

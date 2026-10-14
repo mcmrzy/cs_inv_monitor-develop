@@ -312,16 +312,16 @@ void main() {
         .thenAnswer((_) async => Response(
           requestOptions: RequestOptions(path: '/devices/bind'),
           data: {'code': 0},
-        ));
+        ),);
 
     expect(await service.bindAfterProvision(
       macAddress: 'AA:BB:CC:DD:EE:FF',
       knownSn: 'H1CNA00135000014',
       pin: '123456',
       stationId: 42,
-    ), BindOutcome.bound);
+    ), BindOutcome.bound,);
     expect(verify(() => dio.post('/devices/bind', data: captureAny(named: 'data')))
-        .captured.single, {'sn': 'H1CNA00135000014', 'pin': '123456', 'station_id': 42});
+        .captured.single, {'sn': 'H1CNA00135000014', 'pin': '123456', 'station_id': 42},);
     verifyNever(() => keyStore.write(any(), any()));
     expect(await logStore.pendingCount(), 0);
   });

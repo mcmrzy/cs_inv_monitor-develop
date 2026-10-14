@@ -281,7 +281,7 @@ class BleProvisioningService {
         }
       }, onError: (Object e) {
         debugPrint('[BLE] Provisioning scan error: $e');
-      });
+      },);
 
       // 设置扫描超时
       _scanTimer = Timer(scanTimeout, () {

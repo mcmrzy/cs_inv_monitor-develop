@@ -134,6 +134,37 @@ func TestAuthorizationServiceBuildScopePreservesGrantPairing(t *testing.T) {
 	assert.Equal(t, model.ScopeOrganization, plan.Grants[0].Scope)
 }
 
+func TestAuthorizationServiceBuildAssignmentScopes(t *testing.T) {
+	for _, resource := range []string{"device", "station"} {
+		t.Run(resource, func(t *testing.T) {
+			permission := resource + "s:edit"
+			viewPermission := resource + "s:view"
+			repo := &fakeAuthorizationRepository{active: true, grants: []model.PermissionGrant{
+				{ID: 1, RoleAssignmentID: 11, PermissionCode: permission, Scope: model.ScopeSelf},
+				{ID: 2, RoleAssignmentID: 12, PermissionCode: viewPermission, Scope: model.ScopeOrganizationAndDescendants},
+			}}
+			svc := NewAuthorizationService(repo)
+			plan, err := svc.BuildScope(context.Background(), activeActor(), permission, resource)
+			require.NoError(t, err)
+			require.Empty(t, plan.DenyReason)
+			require.Len(t, plan.Grants, 1)
+			assert.Equal(t, int64(1), plan.Grants[0].ID)
+			assert.Equal(t, model.ScopeSelf, plan.Grants[0].Scope)
+
+			repo.grants = repo.grants[1:]
+			plan, err = svc.BuildScope(context.Background(), activeActor(), permission, resource)
+			require.NoError(t, err)
+			assert.Equal(t, model.DenyPermissionNotGranted, plan.DenyReason)
+			assert.Empty(t, plan.Grants, "view access must not grant assignment access")
+
+			repo.active = false
+			plan, err = svc.BuildScope(context.Background(), activeActor(), permission, resource)
+			require.NoError(t, err)
+			assert.Equal(t, model.DenyContextInactive, plan.DenyReason)
+		})
+	}
+}
+
 func TestAuthorizationServiceUnknownPermissionAndResourceMismatchFailClosed(t *testing.T) {
 	repo := &fakeAuthorizationRepository{active: true, grants: []model.PermissionGrant{
 		{ID: 9, PermissionCode: "device:super_control", Scope: model.ScopeOrganizationAndDescendants},

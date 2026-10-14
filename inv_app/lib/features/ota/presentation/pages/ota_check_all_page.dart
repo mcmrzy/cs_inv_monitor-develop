@@ -107,7 +107,7 @@ class _OtaCheckAllPageState extends State<OtaCheckAllPage> {
         sn: sn,
         name: name.isEmpty ? sn : name,
         result: online ? _CheckResult.pending : _CheckResult.offline,
-      ));
+      ),);
       if (!online) {
         // 离线设备：所有模块标记为 blocked
         for (final target in const ['arm', 'dsp', 'bms', 'esp']) {
@@ -117,7 +117,7 @@ class _OtaCheckAllPageState extends State<OtaCheckAllPage> {
             latestVersion: '',
             latestFirmwareId: 0,
             taskStatus: 'blocked',
-          ));
+          ),);
         }
       }
     }
@@ -155,7 +155,7 @@ class _OtaCheckAllPageState extends State<OtaCheckAllPage> {
                   latestFirmwareId: 0,
                   taskStatus: 'failed',
                 ),
-              ));
+              ),);
             _mark(entry, _CheckResult.failed);
           },
           (overview) {
@@ -178,7 +178,7 @@ class _OtaCheckAllPageState extends State<OtaCheckAllPage> {
                             : m.canRemoteUpgrade
                                 ? 'updating'
                                 : 'success',
-                  )));
+                  ),),);
             final hasUpdate =
                 overview.hasKnownHardware &&
                 overview.modules.any((m) => m.canRemoteUpgrade);
@@ -214,7 +214,7 @@ class _OtaCheckAllPageState extends State<OtaCheckAllPage> {
       _entries.where((e) => e.result == _CheckResult.upToDate).toList();
   List<_CheckEntry> get _unavailable => _entries
       .where((e) =>
-          e.result == _CheckResult.offline || e.result == _CheckResult.failed || e.result == _CheckResult.blocked)
+          e.result == _CheckResult.offline || e.result == _CheckResult.failed || e.result == _CheckResult.blocked,)
       .toList();
 
   int get _checkedCount => _entries
@@ -223,7 +223,7 @@ class _OtaCheckAllPageState extends State<OtaCheckAllPage> {
           e.result == _CheckResult.upToDate ||
           e.result == _CheckResult.failed ||
           e.result == _CheckResult.blocked ||
-          e.result == _CheckResult.offline)
+          e.result == _CheckResult.offline,)
       .length;
 
   @override
@@ -301,7 +301,7 @@ class _OtaCheckAllPageState extends State<OtaCheckAllPage> {
                 ),
                 for (final e in _upToDate)
                   _deviceCard(e, Icons.check_circle_rounded, AppColors.success,
-                      l10n),
+                      l10n,),
               ],
               if (_unavailable.isNotEmpty) ...[
                 _groupTitle(
@@ -516,7 +516,7 @@ class _OtaCheckAllPageState extends State<OtaCheckAllPage> {
                         row.compatibilityReason.isNotEmpty
                             ? l10n.str(row.compatibilityReason == 'hardware_version_unknown'
                                 ? 'firmware_hardware_unknown'
-                                : 'firmware_no_compatible_firmware')
+                                : 'firmware_no_compatible_firmware',)
                             : row.currentVersion.isEmpty
                             ? row.latestVersion
                             : '${row.currentVersion} → ${row.latestVersion}',
@@ -616,7 +616,7 @@ class _OtaCheckAllPageState extends State<OtaCheckAllPage> {
         '${module.displayLabel(l10n)} · ${row.compatibilityReason.isNotEmpty
             ? l10n.str(row.compatibilityReason == 'hardware_version_unknown'
                 ? 'firmware_hardware_unknown'
-                : 'firmware_no_compatible_firmware')
+                : 'firmware_no_compatible_firmware',)
             : _taskStatusLabel(row.taskStatus, l10n)}',
         style: TextStyle(
           fontSize: 10.sp,

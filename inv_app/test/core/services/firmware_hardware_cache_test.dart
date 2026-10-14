@@ -50,7 +50,7 @@ void main() {
     final items = await restarted.listDownloadedFirmwares();
     expect(items.single.hardwareVersions, ['HW-1', 'HW-2']);
     expect(jsonDecode(prefs.getString('firmware_meta_7')!)['hardware_versions'],
-        ['HW-1', 'HW-2']);
+        ['HW-1', 'HW-2'],);
     restarted.dispose();
   });
 
@@ -70,7 +70,7 @@ void main() {
     }
     final items = await download.listDownloadedFirmwares();
     expect(
-        items.map((item) => item.filePath).toSet(), {first.path, second.path});
+        items.map((item) => item.filePath).toSet(), {first.path, second.path},);
     expect(items.map((item) => item.hardwareVersions.single), ['HW-1', 'HW-2']);
     download.dispose();
   });
@@ -89,7 +89,7 @@ void main() {
           'version': '1.2.0',
           'signature': 'signature',
           'security_version': 1,
-        }));
+        }),);
     final download = FirmwareDownloadService(prefs);
     final items = await download.listDownloadedFirmwares();
     expect(items.single.hardwareVersions, isEmpty);

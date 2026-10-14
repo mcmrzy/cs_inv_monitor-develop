@@ -15,7 +15,7 @@ class BmsStorageTabs extends StatelessWidget {
   final ValueChanged<int> onSelected;
 
   const BmsStorageTabs(
-      {super.key, required this.selected, required this.onSelected});
+      {super.key, required this.selected, required this.onSelected,});
 
   @override
   Widget build(BuildContext context) {
@@ -34,7 +34,7 @@ class BmsStorageTabs extends StatelessWidget {
               color: selected == i
                   ? primary
                   : AppColor.outline(context).withValues(alpha: .3),
-            ))),
+            ),),),
             child: TextButton(
               key: ValueKey('bms-tab-$i'),
               onPressed: () => onSelected(i),
@@ -55,9 +55,9 @@ class BmsStorageTabs extends StatelessWidget {
                         [
                           Icons.speed,
                           Icons.grid_view_outlined,
-                          Icons.shield_outlined
+                          Icons.shield_outlined,
                         ][i],
-                        size: 17),
+                        size: 17,),
                     SizedBox(width: large ? 0 : 6, height: large ? 5 : 0),
                     Flexible(
                         child: FittedBox(
@@ -66,17 +66,17 @@ class BmsStorageTabs extends StatelessWidget {
                           AppLocalizations.of(context)!.str([
                             'storage_bms_overview',
                             'storage_bms_cells',
-                            'storage_bms_diagnostics'
-                          ][i]),
-                          style: const TextStyle(fontSize: 13)),
-                    )),
+                            'storage_bms_diagnostics',
+                          ][i],),
+                          style: const TextStyle(fontSize: 13),),
+                    ),),
                   ],
                 ),
               ),
             ),
           ),
-        )),
-    ]);
+        ),),
+    ],);
   }
 }
 
@@ -1001,7 +1001,7 @@ class _BmsSummaryViewState extends State<BmsSummaryView>
                   value: number(b.cellTemperatures[i], '°C'),
                 ),
               read('storage_summary_charging_voltage',
-                  number(b.chargingVoltage, 'V')),
+                  number(b.chargingVoltage, 'V'),),
               read('storage_summary_total_charge', number(b.totalChgCapacity, 'Ah', 0)),
               read('storage_summary_total_discharge', number(b.totalDsgCapacity, 'Ah', 0)),
               read('storage_summary_request_current', number(b.chgRequestCurrent, 'A')),

@@ -190,7 +190,7 @@ class LocalOTAController extends ChangeNotifier {
             : LocalOtaDeviceModelException(
                 'local OTA device model unavailable: $e',
               ),
-      ));
+      ),);
       _onTerminateConnection?.call();
       return;
     }
@@ -200,7 +200,7 @@ class LocalOTAController extends ChangeNotifier {
       phase: LocalOTAPhase.uploading,
       uploadProgress: 0,
       error: () => null,
-    ));
+    ),);
     try {
       await _communication.uploadFirmware(
         deviceIP: _deviceIP,
@@ -217,7 +217,7 @@ class LocalOTAController extends ChangeNotifier {
         phase: LocalOTAPhase.failed,
         uploadProgress: _state.uploadProgress,
         error: () => e,
-      ));
+      ),);
       _onTerminateConnection?.call();
       return;
     }
@@ -230,7 +230,7 @@ class LocalOTAController extends ChangeNotifier {
         phase: LocalOTAPhase.failed,
         uploadProgress: 1.0,
         error: () => e,
-      ));
+      ),);
       _onTerminateConnection?.call();
       return;
     }
@@ -240,7 +240,7 @@ class LocalOTAController extends ChangeNotifier {
       phase: LocalOTAPhase.upgrading,
       uploadProgress: 1.0,
       statusOverrideKey: () => isEsp ? 'push_complete_wait_reboot' : null,
-    ));
+    ),);
     if (isEsp) {
       // ESP 自升级：传完固件 → 写 Flash → 立即重启（~500ms）
       await Future.delayed(const Duration(milliseconds: 500));
@@ -293,13 +293,13 @@ class LocalOTAController extends ChangeNotifier {
             statusOverrideParams: {
               'seconds': '${stopwatch.elapsed.inSeconds}',
             },
-          ));
+          ),);
           if (offlineCount % 2 == 0 && _reconnectHotspot != null) {
             final reconnected = await _reconnectHotspot();
             if (reconnected && !_disposed) {
               _emit(_state.copyWith(
                 statusOverrideKey: () => 'hotspot_reconnected',
-              ));
+              ),);
               offlineCount = 0;
             } else {
               continue;
@@ -331,7 +331,7 @@ class LocalOTAController extends ChangeNotifier {
           deviceStatus: status,
           deviceMessage: message,
           statusOverrideKey: () => null,
-        ));
+        ),);
 
         if (status == 'done' || status == 'succeeded') {
           String? newVersion =
@@ -363,7 +363,7 @@ class LocalOTAController extends ChangeNotifier {
           _emit(_state.copyWith(
             phase: LocalOTAPhase.success,
             newVersion: () => newVersion,
-          ));
+          ),);
           _onTerminateConnection?.call();
           // 成功后经 Repository 上报（不再由页面直连 Dio 绕过分层）
           // 本地 OTA 完成只上报 target/new_version，不再产生 main_version
@@ -393,7 +393,7 @@ class LocalOTAController extends ChangeNotifier {
           statusOverrideParams: {
             'seconds': '${stopwatch.elapsed.inSeconds}',
           },
-        ));
+        ),);
         continue;
       } catch (e) {
         debugPrint('[LocalOTA] poll progress error: $e');

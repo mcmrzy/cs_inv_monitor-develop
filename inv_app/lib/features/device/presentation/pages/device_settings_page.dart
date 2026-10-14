@@ -433,7 +433,7 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
                 ? SizedBox(
                     width: 14.w,
                     height: 14.w,
-                    child: CircularProgressIndicator(
+                    child: const CircularProgressIndicator(
                       strokeWidth: 1.5,
                       color: AppColors.primary,
                     ),
@@ -514,8 +514,8 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
                 SizedBox(
                   width: 16.w,
                   height: 16.w,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: AppColors.primary),
+                  child: const CircularProgressIndicator(
+                      strokeWidth: 2, color: AppColors.primary,),
                 ),
                 SizedBox(width: 10.w),
                 Text(
@@ -523,7 +523,7 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
                   style: TextStyle(
                       fontSize: 13.sp,
                       color: AppColors.primary,
-                      fontWeight: FontWeight.w500),
+                      fontWeight: FontWeight.w500,),
                 ),
               ],
             ),
@@ -537,7 +537,7 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
             child: Row(
               children: [
                 Icon(Icons.warning_amber_rounded,
-                    size: 16.sp, color: AppColors.warning),
+                    size: 16.sp, color: AppColors.warning,),
                 SizedBox(width: 8.w),
                 Expanded(
                   child: Text(
@@ -545,7 +545,7 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
                     style: TextStyle(
                         fontSize: 12.sp,
                         color: AppColors.warning,
-                        fontWeight: FontWeight.w500),
+                        fontWeight: FontWeight.w500,),
                   ),
                 ),
               ],
@@ -564,7 +564,7 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
                     '${l10n.str("settings_last_read")}: ${_formatTime(_lastReadAt!)}',
                     style: TextStyle(
                         fontSize: 11.sp,
-                        color: AppColor.textSecondary(context)),
+                        color: AppColor.textSecondary(context),),
                   ),
                 ),
               // 8 大功能分类：点击原地展开参数控件（手风琴）

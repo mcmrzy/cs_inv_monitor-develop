@@ -43,7 +43,7 @@ ThemeData _previewTheme(bool dark) {
     ),
     filledButtonTheme: FilledButtonThemeData(
         style: (base.filledButtonTheme.style ?? const ButtonStyle())
-            .copyWith(textStyle: WidgetStatePropertyAll(label))),
+            .copyWith(textStyle: WidgetStatePropertyAll(label)),),
   );
 }
 
@@ -54,10 +54,10 @@ class _HistoryApi extends DeviceTelemetryApi {
 
   @override
   Future<DeviceTelemetryPage> getHistory(String sn, DateTime day,
-      {int page = 1, int pageSize = 20, String granularity = 'raw'}) async {
+      {int page = 1, int pageSize = 20, String granularity = 'raw',}) async {
     requests.add((page, granularity));
     if (fail) throw Exception('unavailable');
-    return DeviceTelemetryPage(total: 21, items: [
+    return const DeviceTelemetryPage(total: 21, items: [
       {
         'time': '2026-10-09T02:00:00Z',
         'pv_total_power': 620,
@@ -68,7 +68,7 @@ class _HistoryApi extends DeviceTelemetryApi {
         'bms_capacity_remain': 125,
         'bms_mos_temp': -5,
       },
-    ]);
+    ],);
   }
 }
 
@@ -88,7 +88,7 @@ void main() {
   test('saved history fields discard unknown keys and use safe defaults', () {
     expect(validHistoryFields(['obsolete']), commonHistoryFields);
     expect(validHistoryFields(['mppt_state', 'mppt_state', 'obsolete']),
-        {'mppt_state'});
+        {'mppt_state'},);
   });
 
   testWidgets(
@@ -99,11 +99,11 @@ void main() {
         'battery_soc',
         'bms_soc',
         'bms_capacity_remain',
-        'bms_mos_temp'
-      ]
+        'bms_mos_temp',
+      ],
     });
     await pumpApp(
-        tester, DeviceTelemetryHistoryPage(sn: 'SN', api: _HistoryApi()));
+        tester, DeviceTelemetryHistoryPage(sn: 'SN', api: _HistoryApi()),);
     await tester.tap(find.byType(ExpansionTile));
     await tester.pumpAndSettle();
     expect(find.text('78.0 %'), findsOneWidget);
@@ -137,14 +137,14 @@ void main() {
                 AppLocalizations.delegate,
                 GlobalMaterialLocalizations.delegate,
                 GlobalWidgetsLocalizations.delegate,
-                GlobalCupertinoLocalizations.delegate
+                GlobalCupertinoLocalizations.delegate,
               ],
               supportedLocales: AppLocalizations.supportedLocales,
               home: DeviceTelemetryHistoryPage(
-                  sn: 'H1ZZX0013900002H', api: _HistoryApi()),
+                  sn: 'H1ZZX0013900002H', api: _HistoryApi(),),
             ),
           ),
-        ));
+        ),);
         await tester.pumpAndSettle();
         await tester.tap(find.byType(ExpansionTile));
         await tester.pumpAndSettle();
@@ -157,7 +157,7 @@ void main() {
             final bytes =
                 await image.toByteData(format: ui.ImageByteFormat.png);
             final file = File(
-                'build/history_previews/${locale.languageCode}-${dark ? 'dark' : 'light'}-$state.png');
+                'build/history_previews/${locale.languageCode}-${dark ? 'dark' : 'light'}-$state.png',);
             await file.parent.create(recursive: true);
             await file.writeAsBytes(bytes!.buffer.asUint8List());
             image.dispose();
@@ -197,7 +197,7 @@ void main() {
     expect(find.text('MPPT 状态'), findsOneWidget);
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getStringList('telemetry_history_fields_v1'),
-        contains('mppt_state'));
+        contains('mppt_state'),);
     await pumpApp(tester, const SizedBox());
     await pumpApp(tester, DeviceTelemetryHistoryPage(sn: 'SN', api: api));
     await tester.tap(find.byType(ExpansionTile));
@@ -209,10 +209,10 @@ void main() {
   testWidgets('canceling field changes preserves saved selection',
       (tester) async {
     SharedPreferences.setMockInitialValues({
-      'telemetry_history_fields_v1': ['mppt_state']
+      'telemetry_history_fields_v1': ['mppt_state'],
     });
     await pumpApp(
-        tester, DeviceTelemetryHistoryPage(sn: 'SN', api: _HistoryApi()));
+        tester, DeviceTelemetryHistoryPage(sn: 'SN', api: _HistoryApi()),);
     await tester.tap(find.byIcon(Icons.tune_rounded));
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.restart_alt));
@@ -246,7 +246,7 @@ void main() {
             .spots
             .single
             .y,
-        510);
+        510,);
     await tester.tap(find.text('SOC (%)'));
     await tester.pumpAndSettle();
     expect(
@@ -258,7 +258,7 @@ void main() {
             .spots
             .single
             .y,
-        0);
+        0,);
     expect(tester.takeException(), isNull);
   });
   test('history API uses bounded UTC range, paging and cloud column names',
@@ -266,7 +266,7 @@ void main() {
     final dio = _Dio();
     late Map<String, dynamic> query;
     when(() => dio.get<dynamic>(any(),
-            queryParameters: any(named: 'queryParameters')))
+            queryParameters: any(named: 'queryParameters'),),)
         .thenAnswer((call) async {
       query = call.namedArguments[#queryParameters] as Map<String, dynamic>;
       return Response(
@@ -279,25 +279,25 @@ void main() {
                   'time': '2026-10-09T02:00:00Z',
                   'ac_active_power': 510,
                   'pv_total_power': 620,
-                  'battery_soc': null
+                  'battery_soc': null,
                 }
               ],
-              'total': 23
+              'total': 23,
             },
-          });
+          },);
     });
     final day = DateTime(2026, 10, 9);
     final api = DeviceTelemetryApi(dio, timezone: 'Asia/Kolkata');
     final result = await api.getHistory('H1ZZX0013900002H', day, page: 2);
     expect(query['tz'], 'Asia/Kolkata');
     expect(query['start_time'],
-        DateTime.utc(2026, 10, 8, 18, 30).toIso8601String());
+        DateTime.utc(2026, 10, 8, 18, 30).toIso8601String(),);
     expect(
         query['end_time'],
         tz.TZDateTime(api.location, 2026, 10, 10)
             .subtract(const Duration(microseconds: 1))
             .toUtc()
-            .toIso8601String());
+            .toIso8601String(),);
     expect(query['page'], 2);
     expect(query['granularity'], 'raw');
     expect(query['sort'], 'desc');
@@ -319,7 +319,7 @@ void main() {
     final data =
         InverterRealtime.fromJson({'total_pv_energy': 0, 'daily_pv_energy': 0});
     await pumpApp(tester,
-        Scaffold(body: EnergyStatsTab(data: data, recordedTotalPV: 100)));
+        Scaffold(body: EnergyStatsTab(data: data, recordedTotalPV: 100)),);
     expect(find.text('100.0 kWh'), findsOneWidget);
     expect(find.text('0.0 kWh'), findsOneWidget);
     expect(find.text('--'), findsWidgets);
@@ -329,7 +329,7 @@ void main() {
         Scaffold(
             body: EnergyStatsTab(
                 data: InverterRealtime.fromJson({'total_pv_energy': 120}),
-                recordedTotalPV: 100)));
+                recordedTotalPV: 100,),),);
     expect(find.text('120.0 kWh'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -341,7 +341,7 @@ void main() {
     addTearDown(tester.view.reset);
     final api = _HistoryApi();
     await pumpApp(
-        tester, DeviceTelemetryHistoryPage(sn: 'H1ZZX0013900002H', api: api));
+        tester, DeviceTelemetryHistoryPage(sn: 'H1ZZX0013900002H', api: api),);
     expect(find.text('PV 620.0 W'), findsOneWidget);
     expect(find.text('AC 510.0 W'), findsOneWidget);
     expect(find.text('SOC 0.0 %'), findsOneWidget);

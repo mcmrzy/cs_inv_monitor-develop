@@ -66,7 +66,7 @@ Map<String, dynamic> normalizeRealtimePayload(Map<String, dynamic> source) {
     },
   };
   void applyAliases(
-      Map<String, dynamic> target, Map<String, List<String>> names) {
+      Map<String, dynamic> target, Map<String, List<String>> names,) {
     for (final entry in names.entries) {
       if (target[entry.key] != null) continue;
       for (final alias in entry.value) {
@@ -116,7 +116,7 @@ Map<String, dynamic> normalizeRealtimePayload(Map<String, dynamic> source) {
     result['updated_at'] = source['event_time'] ??
         (timestamp is num
             ? DateTime.fromMillisecondsSinceEpoch((timestamp * 1000).toInt(),
-                    isUtc: true)
+                    isUtc: true,)
                 .toIso8601String()
             : null) ??
         source['_updated_at'];

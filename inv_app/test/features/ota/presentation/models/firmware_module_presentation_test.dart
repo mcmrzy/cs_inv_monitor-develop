@@ -128,16 +128,16 @@ void main() {
 
   test('only communication and system-control modules support local OTA', () {
     expect(FirmwareModulePresentation.fromTarget('esp').supportsLocalUpgrade,
-        isTrue);
+        isTrue,);
     expect(FirmwareModulePresentation.fromTarget('arm').supportsLocalUpgrade,
-        isTrue);
+        isTrue,);
     expect(FirmwareModulePresentation.fromTarget('dsp').supportsLocalUpgrade,
-        isFalse);
+        isFalse,);
     expect(FirmwareModulePresentation.fromTarget('bms').supportsLocalUpgrade,
-        isFalse);
+        isFalse,);
     expect(
         FirmwareModulePresentation.fromTarget('vendor_x').supportsLocalUpgrade,
-        isFalse);
+        isFalse,);
   });
 
   test('device firmware routes always target the independent flow', () {

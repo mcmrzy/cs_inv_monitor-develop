@@ -95,7 +95,7 @@ class ServiceLocator {
     }
 
     const secureStorage = FlutterSecureStorage(
-      aOptions: AndroidOptions(encryptedSharedPreferences: true),
+      aOptions: AndroidOptions(),
     );
     getIt.registerLazySingleton<FlutterSecureStorage>(() => secureStorage);
 
