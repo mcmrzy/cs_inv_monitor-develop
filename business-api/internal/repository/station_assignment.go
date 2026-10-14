@@ -30,7 +30,7 @@ func (r *DeviceRepository) AssignToStationScoped(ctx context.Context, sn string,
 	if err != nil {
 		return false, fmt.Errorf("begin scoped station assignment: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	var timezone string
 	err = tx.QueryRow(ctx, `SELECT COALESCE(timezone,'Asia/Shanghai') FROM stations WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`, stationID).Scan(&timezone)
@@ -83,7 +83,8 @@ func (r *DeviceRepository) AssignToStationScoped(ctx context.Context, sn string,
 	if previousStationID > 0 && previousStationID != stationID {
 		r.updateStationCapacity(ctx, previousStationID)
 	}
-	r.SyncStationStatus(ctx)
+	// The assignment is committed; status reconciliation is best effort.
+	_ = r.SyncStationStatus(ctx)
 	return true, nil
 }
 
@@ -93,7 +94,7 @@ func (r *DeviceRepository) AssignUnassignedToStation(ctx context.Context, sn str
 	if err != nil {
 		return false, fmt.Errorf("begin station assignment: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	// Hold the station row while checking ownership and updating the device.
 	var timezone string
@@ -118,6 +119,7 @@ func (r *DeviceRepository) AssignUnassignedToStation(ctx context.Context, sn str
 	}
 	r.invalidateDeviceCache(ctx, sn)
 	r.updateStationCapacity(ctx, stationID)
-	r.SyncStationStatus(ctx)
+	// The assignment is committed; status reconciliation is best effort.
+	_ = r.SyncStationStatus(ctx)
 	return true, nil
 }
