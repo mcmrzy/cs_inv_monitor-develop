@@ -62,14 +62,14 @@ class OtaRepositoryImpl implements OtaRepository {
           .whereType<Map>()
           .map((item) => DeviceFirmwareHistory.fromJson(
                 Map<String, dynamic>.from(item),
-              ))
+              ),)
           .toList();
       return Right(DeviceFirmwareHistoryPage(
         items: items,
         total: (data['total'] as num?)?.toInt() ?? items.length,
         page: (data['page'] as num?)?.toInt() ?? page,
         pageSize: (data['page_size'] as num?)?.toInt() ?? pageSize,
-      ));
+      ),);
     });
   }
 
@@ -124,8 +124,8 @@ class OtaRepositoryImpl implements OtaRepository {
                 .whereType<Map>()
                 .map((e) => FirmwareResource.fromJson(
                       Map<String, dynamic>.from(e),
-                    ))
-                .toList());
+                    ),)
+                .toList(),);
           }
           return const Right(<FirmwareResource>[]);
         }
@@ -161,8 +161,8 @@ class OtaRepositoryImpl implements OtaRepository {
               .whereType<Map>()
               .map((e) => OtaTriggerTask.fromJson(
                     Map<String, dynamic>.from(e),
-                  ))
-              .toList());
+                  ),)
+              .toList(),);
         }
         // 兼容单任务响应
         if (data['task_id'] != null) {

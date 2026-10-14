@@ -332,7 +332,7 @@ class _WorkOrdersPageState extends State<WorkOrdersPage> {
       formData.files.add(MapEntry(
         'files',
         await MultipartFile.fromFile(image.path, filename: image.name),
-      ));
+      ),);
     }
     final response = await dio.post(
       '/work-orders/$orderId/attachments',
@@ -459,10 +459,10 @@ class _WorkOrdersPageState extends State<WorkOrdersPage> {
         title: Row(
           children: [
             Icon(Icons.warning_amber_rounded,
-                color: AppColors.error, size: 22.sp),
+                color: AppColors.error, size: 22.sp,),
             SizedBox(width: 8.w),
             Text(l10n.str('work_order_delete'),
-                style: TextStyle(fontSize: 16.sp)),
+                style: TextStyle(fontSize: 16.sp),),
           ],
         ),
         content: Text(
@@ -495,7 +495,7 @@ class _WorkOrdersPageState extends State<WorkOrdersPage> {
       if (data is Map<String, dynamic> && data['code'] == 0) {
         if (!mounted) return;
         AppToast.show(context, l10n.str('work_order_deleted'),
-            type: ToastType.success);
+            type: ToastType.success,);
         // 删除成功：所有 Tab 缓存失效，重载当前 Tab 与统计
         _invalidateCaches();
         await _load(reset: true);
@@ -507,7 +507,7 @@ class _WorkOrdersPageState extends State<WorkOrdersPage> {
       debugPrint('[WorkOrdersPage] delete failed: $e');
       if (!mounted) return;
       AppToast.show(context, l10n.str('work_order_delete_failed'),
-          type: ToastType.error);
+          type: ToastType.error,);
     }
   }
 
@@ -1063,7 +1063,7 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage> {
                   InkWell(
                     onTap: () async {
                       await Clipboard.setData(
-                          ClipboardData(text: detail.id));
+                          ClipboardData(text: detail.id),);
                       if (context.mounted) {
                         AppToast.show(
                           context,
@@ -1236,7 +1236,7 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage> {
                     fit: BoxFit.contain,
                     errorBuilder: (_, __, ___) => const Center(
                       child: Icon(Icons.broken_image_outlined,
-                          color: Colors.white54, size: 48),
+                          color: Colors.white54, size: 48,),
                     ),
                   ),
                 ),

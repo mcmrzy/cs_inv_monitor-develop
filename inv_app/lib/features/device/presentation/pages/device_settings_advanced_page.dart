@@ -212,7 +212,7 @@ class _DeviceSettingsAdvancedPageState
         title: Row(
           children: [
             Icon(Icons.warning_amber_rounded,
-                color: AppColors.warning, size: 24.sp),
+                color: AppColors.warning, size: 24.sp,),
             SizedBox(width: 8.w),
             Expanded(child: Text(l10n.str('config_confirm_title'))),
           ],
@@ -257,7 +257,7 @@ class _DeviceSettingsAdvancedPageState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content: Text(l10n.settingSetSuccess),
-            backgroundColor: AppColors.success),
+            backgroundColor: AppColors.success,),
       );
       setState(() {
         _original = Map.from(_pending);
@@ -302,7 +302,7 @@ class _DeviceSettingsAdvancedPageState
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
               content: Text(l10n.commandSent),
-              backgroundColor: AppColors.success),
+              backgroundColor: AppColors.success,),
         );
       }
     } catch (_) {
@@ -310,7 +310,7 @@ class _DeviceSettingsAdvancedPageState
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
               content: Text(l10n.settingSetFailed),
-              backgroundColor: AppColors.error),
+              backgroundColor: AppColors.error,),
         );
       }
     }
@@ -324,7 +324,7 @@ class _DeviceSettingsAdvancedPageState
         title: Row(
           children: [
             Icon(Icons.warning_amber_rounded,
-                color: AppColors.error, size: 24.sp),
+                color: AppColors.error, size: 24.sp,),
             SizedBox(width: 8.w),
             Expanded(child: Text(l10n.settingForceConfirmTitle)),
           ],
@@ -332,7 +332,7 @@ class _DeviceSettingsAdvancedPageState
         content: Text(l10n.str(confirmKey)),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: Text(l10n.cancel)),
+              onPressed: () => Navigator.pop(ctx), child: Text(l10n.cancel),),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: AppColors.error),
             onPressed: () {
@@ -358,7 +358,7 @@ class _DeviceSettingsAdvancedPageState
         title: Row(
           children: [
             Icon(Icons.warning_amber_rounded,
-                color: AppColors.error, size: 24.sp),
+                color: AppColors.error, size: 24.sp,),
             SizedBox(width: 8.w),
             Expanded(child: Text(l10n.settingForceConfirmTitle)),
           ],
@@ -366,7 +366,7 @@ class _DeviceSettingsAdvancedPageState
         content: Text(l10n.str(confirmKey)),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: Text(l10n.cancel)),
+              onPressed: () => Navigator.pop(ctx), child: Text(l10n.cancel),),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: AppColors.error),
             onPressed: () {
@@ -402,12 +402,12 @@ class _DeviceSettingsAdvancedPageState
                 ? SizedBox(
                     width: 20.w,
                     height: 20.w,
-                    child: CircularProgressIndicator(
+                    child: const CircularProgressIndicator(
                       strokeWidth: 2,
                       color: AppColors.primary,
                     ),
                   )
-                : Icon(Icons.download_rounded, size: 22),
+                : const Icon(Icons.download_rounded, size: 22),
             tooltip: l10n.str('settings_read_device'),
             onPressed: _reading ? null : _readDeviceConfig,
           ),
@@ -482,7 +482,7 @@ class _DeviceSettingsAdvancedPageState
       child: Row(
         children: [
           Icon(Icons.warning_amber_rounded,
-              size: 16.sp, color: AppColors.warning),
+              size: 16.sp, color: AppColors.warning,),
           SizedBox(width: 8.w),
           Expanded(
             child: Text(
@@ -490,7 +490,7 @@ class _DeviceSettingsAdvancedPageState
               style: TextStyle(
                   fontSize: 12.sp,
                   color: AppColors.warning,
-                  fontWeight: FontWeight.w500),
+                  fontWeight: FontWeight.w500,),
             ),
           ),
         ],
@@ -509,8 +509,8 @@ class _DeviceSettingsAdvancedPageState
           SizedBox(
             width: 16.w,
             height: 16.w,
-            child: CircularProgressIndicator(
-                strokeWidth: 2, color: AppColors.primary),
+            child: const CircularProgressIndicator(
+                strokeWidth: 2, color: AppColors.primary,),
           ),
           SizedBox(width: 10.w),
           Text(
@@ -518,7 +518,7 @@ class _DeviceSettingsAdvancedPageState
             style: TextStyle(
                 fontSize: 13.sp,
                 color: AppColors.primary,
-                fontWeight: FontWeight.w500),
+                fontWeight: FontWeight.w500,),
           ),
         ],
       ),
@@ -537,7 +537,7 @@ class _DeviceSettingsAdvancedPageState
       child: Row(
         children: [
           Icon(Icons.info_outline_rounded,
-              size: 18.w, color: AppColors.primary),
+              size: 18.w, color: AppColors.primary,),
           SizedBox(width: 10.w),
           Expanded(
             child: Column(
@@ -553,7 +553,7 @@ class _DeviceSettingsAdvancedPageState
                     '${l10n.str("settings_last_read")}: ${_formatTime(_lastReadAt!)}',
                     style: TextStyle(
                         fontSize: 11.sp,
-                        color: AppColor.textSecondary(context)),
+                        color: AppColor.textSecondary(context),),
                   ),
                 ],
               ],
@@ -564,7 +564,7 @@ class _DeviceSettingsAdvancedPageState
             onPressed: _reading ? null : _readDeviceConfig,
             icon: Icon(Icons.refresh_rounded, size: 16.sp),
             label: Text(l10n.str('settings_read_device'),
-                style: TextStyle(fontSize: 12.sp)),
+                style: TextStyle(fontSize: 12.sp),),
             style: TextButton.styleFrom(
               padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
               minimumSize: Size.zero,
@@ -690,12 +690,12 @@ class _DeviceSettingsAdvancedPageState
                     ? SizedBox(
                         width: 20.w,
                         height: 20.w,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white),
+                        child: const CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white,),
                       )
                     : Text(l10n.applyChanges,
                         style: TextStyle(
-                            fontSize: 15.sp, fontWeight: FontWeight.w600)),
+                            fontSize: 15.sp, fontWeight: FontWeight.w600,),),
               ),
             ),
           ],
@@ -713,7 +713,7 @@ class _DeviceSettingsAdvancedPageState
           l10n.str('settings_write_hint'),
           textAlign: TextAlign.center,
           style: TextStyle(
-              fontSize: 12.sp, color: AppColor.textSecondary(context)),
+              fontSize: 12.sp, color: AppColor.textSecondary(context),),
         ),
       ),
     );
@@ -741,14 +741,14 @@ class _DeviceSettingsAdvancedPageState
           Row(
             children: [
               Icon(Icons.warning_amber_rounded,
-                  color: AppColors.error, size: 18.sp),
+                  color: AppColors.error, size: 18.sp,),
               SizedBox(width: 6.w),
               Text(
                 l10n.str('settings_dangerous_zone'),
                 style: TextStyle(
                     fontSize: 14.sp,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.error),
+                    color: AppColors.error,),
               ),
             ],
           ),
@@ -756,7 +756,7 @@ class _DeviceSettingsAdvancedPageState
           Text(
             l10n.settingAdvancedHint,
             style: TextStyle(
-                fontSize: 12.sp, color: AppColor.textSecondary(context)),
+                fontSize: 12.sp, color: AppColor.textSecondary(context),),
           ),
           SizedBox(height: 12.h),
           _buildDangerousSwitch(
@@ -785,7 +785,7 @@ class _DeviceSettingsAdvancedPageState
                 side: BorderSide(color: AppColors.error.withValues(alpha: 0.5)),
                 padding: EdgeInsets.symmetric(vertical: 12.h),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10.r)),
+                    borderRadius: BorderRadius.circular(10.r),),
               ),
               onPressed: () =>
                   _showDangerousConfirm('setting_restart_confirm', 'restart'),
@@ -811,7 +811,7 @@ class _DeviceSettingsAdvancedPageState
             style: TextStyle(
                 fontSize: 14.sp,
                 fontWeight: FontWeight.w500,
-                color: AppColors.error),
+                color: AppColors.error,),
           ),
         ),
         Switch(

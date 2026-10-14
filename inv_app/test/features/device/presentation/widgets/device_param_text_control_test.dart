@@ -80,7 +80,7 @@ void main() {
     expect(controllerAfter.text, 'server replacement');
     expect(
       controllerAfter.selection,
-      TextSelection.collapsed(offset: 'server replacement'.length),
+      const TextSelection.collapsed(offset: 'server replacement'.length),
     );
   });
 

@@ -234,7 +234,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
 
         final l10n = AppLocalizations.of(context)!;
         AppToast.show(context, l10n.str('pre_download_failed', {'error': '$e'}),
-            type: ToastType.error);
+            type: ToastType.error,);
       }
     }
   }
@@ -482,7 +482,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                           'supported_channels': r.supportedChannels,
                         }
                       ],
-                    })
+                    },)
                 .toList();
             if (packages.isEmpty) {
               return Center(
@@ -793,7 +793,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
               Text(
                 dateStr,
                 style: TextStyle(
-                    fontSize: 12.sp, color: AppColor.textHint(context)),
+                    fontSize: 12.sp, color: AppColor.textHint(context),),
               ),
               const Spacer(),
               if (!isCurrent) ...[

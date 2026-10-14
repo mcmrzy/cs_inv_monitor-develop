@@ -66,7 +66,7 @@ void main() {
       when(() => mockDio.post(
             '/devices/by-sn/$testSn/control',
             data: any(named: 'data'),
-          )).thenAnswer(
+          ),).thenAnswer(
         (_) async => Response(
           data: {'code': 0, 'data': {}},
           statusCode: 200,
@@ -78,7 +78,7 @@ void main() {
       verify(() => mockDio.post(
             '/devices/by-sn/$testSn/control',
             data: any(named: 'data'),
-          )).called(1);
+          ),).called(1);
     });
 
     test('getStatistics should use /devices/by-sn/{sn}/statistics path',
@@ -87,7 +87,7 @@ void main() {
       when(() => mockDio.get(
             '/devices/by-sn/$testSn/statistics',
             queryParameters: any(named: 'queryParameters'),
-          )).thenAnswer(
+          ),).thenAnswer(
         (_) async => Response(
           data: {'code': 0, 'data': {}},
           statusCode: 200,
@@ -96,11 +96,11 @@ void main() {
       );
 
       await deviceDataSource.getStatistics(
-          testSn, '2026-01-01', '2026-12-31', 'day');
+          testSn, '2026-01-01', '2026-12-31', 'day',);
       verify(() => mockDio.get(
             '/devices/by-sn/$testSn/statistics',
             queryParameters: any(named: 'queryParameters'),
-          )).called(1);
+          ),).called(1);
     });
 
     test('getHistory should use /devices/by-sn/{sn}/history path', () async {
@@ -108,7 +108,7 @@ void main() {
       when(() => mockDio.get(
             '/devices/by-sn/$testSn/history',
             queryParameters: any(named: 'queryParameters'),
-          )).thenAnswer(
+          ),).thenAnswer(
         (_) async => Response(
           data: {'code': 0, 'data': {}},
           statusCode: 200,
@@ -117,11 +117,11 @@ void main() {
       );
 
       await deviceDataSource.getHistory(
-          testSn, '2026-01-01', '2026-12-31', 'day');
+          testSn, '2026-01-01', '2026-12-31', 'day',);
       verify(() => mockDio.get(
             '/devices/by-sn/$testSn/history',
             queryParameters: any(named: 'queryParameters'),
-          )).called(1);
+          ),).called(1);
     });
 
     test('getAlarms should use /devices/by-sn/{sn}/alarms path', () async {
@@ -129,7 +129,7 @@ void main() {
       when(() => mockDio.get(
             '/devices/by-sn/$testSn/alarms',
             queryParameters: any(named: 'queryParameters'),
-          )).thenAnswer(
+          ),).thenAnswer(
         (_) async => Response(
           data: {'code': 0, 'data': {}},
           statusCode: 200,
@@ -141,7 +141,7 @@ void main() {
       verify(() => mockDio.get(
             '/devices/by-sn/$testSn/alarms',
             queryParameters: any(named: 'queryParameters'),
-          )).called(1);
+          ),).called(1);
     });
 
     test('getAlarmEvents should use /devices/by-sn/{sn}/alarm-events path',
@@ -150,7 +150,7 @@ void main() {
       when(() => mockDio.get<dynamic>(
             '/devices/by-sn/$testSn/alarm-events',
             queryParameters: any(named: 'queryParameters'),
-          )).thenAnswer(
+          ),).thenAnswer(
         (_) async => Response(
           data: {'code': 0, 'data': {}},
           statusCode: 200,
@@ -162,7 +162,7 @@ void main() {
       verify(() => mockDio.get<dynamic>(
             '/devices/by-sn/$testSn/alarm-events',
             queryParameters: any(named: 'queryParameters'),
-          )).called(1);
+          ),).called(1);
     });
 
     test('getParallelState should use /devices/by-sn/{sn}/parallel-state path',
@@ -179,7 +179,7 @@ void main() {
 
       await protocolDataSource.getParallelState(testSn);
       verify(() => mockDio.get<dynamic>(
-          '/devices/by-sn/$testSn/parallel-state')).called(1);
+          '/devices/by-sn/$testSn/parallel-state',),).called(1);
     });
 
     test('getThreePhase should use /devices/by-sn/{sn}/three-phase path',
@@ -188,7 +188,7 @@ void main() {
       when(() => mockDio.get<dynamic>(
             '/devices/by-sn/$testSn/three-phase',
             queryParameters: any(named: 'queryParameters'),
-          )).thenAnswer(
+          ),).thenAnswer(
         (_) async => Response(
           data: {'code': 0, 'data': {}},
           statusCode: 200,
@@ -200,7 +200,7 @@ void main() {
       verify(() => mockDio.get<dynamic>(
             '/devices/by-sn/$testSn/three-phase',
             queryParameters: any(named: 'queryParameters'),
-          )).called(1);
+          ),).called(1);
     });
   });
 
@@ -229,7 +229,7 @@ void main() {
 
       for (final path in validPaths) {
         expect(path.startsWith('/devices/by-sn/'), isTrue,
-            reason: 'Path $path should start with /devices/by-sn/');
+            reason: 'Path $path should start with /devices/by-sn/',);
       }
     });
 
@@ -244,7 +244,7 @@ void main() {
       for (final path in invalidPaths) {
         expect(path.startsWith('/devices/by-sn/'), isFalse,
             reason:
-                'Path $path uses old format, should be /devices/by-sn/...');
+                'Path $path uses old format, should be /devices/by-sn/...',);
       }
     });
   });

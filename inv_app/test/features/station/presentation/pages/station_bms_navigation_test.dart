@@ -60,7 +60,7 @@ void main() {
 
   Future<GoRouter> pump(WidgetTester tester, Widget page,
       {int width = 390, double scale = 1, bool dark = false,
-       String location = '/source', Locale locale = const Locale('en')}) async {
+       String location = '/source', Locale locale = const Locale('en'),}) async {
     tester.view.physicalSize = Size(width.toDouble(), 844);
     tester.view.devicePixelRatio = 1;
     tester.platformDispatcher.textScaleFactorTestValue = scale;
@@ -70,10 +70,10 @@ void main() {
     final router = GoRouter(initialLocation: location, routes: [
       GoRoute(path: '/source', builder: (_, state) => page),
       GoRoute(path: '/device/:sn/storage', builder: (_, state) =>
-          DeviceStoragePage(sn: state.pathParameters['sn']!)),
+          DeviceStoragePage(sn: state.pathParameters['sn']!),),
       GoRoute(path: '/device/:sn/history', builder: (_, state) =>
-          Scaffold(body: Text('HISTORY ${state.pathParameters['sn']} ${state.uri.queryParameters['tz']}'))),
-    ]);
+          Scaffold(body: Text('HISTORY ${state.pathParameters['sn']} ${state.uri.queryParameters['tz']}')),),
+    ],);
     addTearDown(router.dispose);
     await tester.pumpWidget(RepaintBoundary(key: boundary,
       child: MultiBlocProvider(providers: [
@@ -83,14 +83,14 @@ void main() {
         builder: (_, child) => MaterialApp.router(
           routerConfig: router, locale: locale,
           theme: ThemeData(brightness: dark ? Brightness.dark : Brightness.light,
-            fontFamily: kGoldenFontFamily, useMaterial3: true),
+            fontFamily: kGoldenFontFamily, useMaterial3: true,),
           localizationsDelegates: const [AppLocalizations.delegate,
             GlobalMaterialLocalizations.delegate, GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate],
+            GlobalCupertinoLocalizations.delegate,],
           supportedLocales: AppLocalizations.supportedLocales,
         ),
-      )),
-    ));
+      ),),
+    ),);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 600));
     return router;
@@ -124,7 +124,7 @@ void main() {
     mode = MockConnectionModeService();
     final network = MockNetworkStatusService();
     when(() => stationBloc.state).thenReturn(StationDetailLoaded(
-      stationId: 7, station: station, devices: [device('A'), device('B')]));
+      stationId: 7, station: station, devices: [device('A'), device('B')],),);
     when(() => stationBloc.stream).thenAnswer((_) => const Stream.empty());
     when(() => deviceBloc.state).thenReturn(DeviceInitial());
     when(() => deviceBloc.stream).thenAnswer((_) => const Stream.empty());
@@ -143,8 +143,8 @@ void main() {
         data: {'code': 0, 'data': options.path.endsWith('/weather')
           ? {'temp_min': 20, 'temp_max': 25}
           : options.path.endsWith('/realtime') ? {'realtime': payload}
-          : {'realtime_data': payload, 'online_status': {'online': true}}}));
-    }));
+          : {'realtime_data': payload, 'online_status': {'online': true}},},),);
+    },),);
     getIt.registerSingleton<Dio>(dio);
     getIt.registerSingleton<RealtimeDataService>(realtimeService);
     getIt.registerSingleton<ConnectionModeService>(mode);
@@ -195,7 +195,7 @@ void main() {
   testWidgets('no BMS and collector placeholders never create a battery target', (tester) async {
     when(() => stationBloc.state).thenReturn(StationDetailLoaded(stationId: 7,
       station: station, devices: [device('A', hasBattery: false),
-        {...device('C'), 'model_category': 'collector'}]));
+        {...device('C'), 'model_category': 'collector'},],),);
     final router = await pump(tester, const StationDetailPage(stationId: 7));
     await tester.tap(find.byKey(const ValueKey('station-energy-battery')));
     await tester.pump(const Duration(milliseconds: 600));
@@ -208,7 +208,7 @@ void main() {
   testWidgets('station inverter children deduplicate SNs and do not nest batteries under collectors', (tester) async {
     when(() => stationBloc.state).thenReturn(StationDetailLoaded(stationId: 7,
       station: station, devices: [device('A'), device('A'),
-        {...device('C'), 'model_category': 'collector'}]));
+        {...device('C'), 'model_category': 'collector'},],),);
     await pump(tester, const StationDetailPage(stationId: 7, initialTab: 2));
     expect(find.byKey(const ValueKey('battery-A')), findsOneWidget);
     expect(find.byKey(const ValueKey('battery-C')), findsNothing);
@@ -240,15 +240,15 @@ void main() {
   for (final width in [320, 390]) {
     testWidgets('real station action sheet $width large text flat aligned icons', (tester) async {
       when(() => stationBloc.state).thenReturn(StationSummaryLoaded(
-        stations: [station], summary: const {}));
+        stations: [station], summary: const {},),);
       await pump(tester, const HomePage(), width: width, scale: 1.5,
-        locale: const Locale('zh'));
+        locale: const Locale('zh'),);
       await tester.longPress(find.text('Solar Station'));
       await tester.pump(const Duration(milliseconds: 600));
       final sheet = find.byType(BottomSheet);
       final iconBoxes = tester.widgetList<Container>(find.descendant(
-        of: sheet, matching: find.byType(Container))).where((container) =>
-          container.constraints?.maxWidth == 44 && container.constraints?.maxHeight == 44).toList();
+        of: sheet, matching: find.byType(Container),),).where((container) =>
+          container.constraints?.maxWidth == 44 && container.constraints?.maxHeight == 44,).toList();
       expect(iconBoxes, hasLength(5));
       for (final container in iconBoxes) {
         final decoration = container.decoration! as BoxDecoration;
@@ -256,17 +256,19 @@ void main() {
         expect(decoration.boxShadow, isNull);
       }
       expect(iconBoxes.map((c) => (c.decoration! as BoxDecoration).color).toSet().length,
-        greaterThanOrEqualTo(4));
+        greaterThanOrEqualTo(4),);
       await capture(tester, 'station-actions-$width-large');
       await tester.pumpWidget(const SizedBox());
     });
 
     for (final legacy in [false, true]) {
       testWidgets('real storage $width large text ${legacy ? 'legacy' : 'summary'} navigation', (tester) async {
-        if (legacy) payload = {'bms_online': 1, 'bms_soc': 80.5,
-          'bms_soh': 98, 'battery_voltage': 51.2, 'battery_current': -12};
+        if (legacy) {
+          payload = {'bms_online': 1, 'bms_soc': 80.5,
+          'bms_soh': 98, 'battery_voltage': 51.2, 'battery_current': -12,};
+        }
         await pump(tester, const DeviceStoragePage(sn: 'B'), width: width,
-          scale: 1.5, locale: const Locale('zh'));
+          scale: 1.5, locale: const Locale('zh'),);
         for (var tab = 0; tab < 3; tab++) {
           await tester.tap(find.byKey(ValueKey('bms-tab-$tab')));
           await tester.pump(const Duration(milliseconds: 300));

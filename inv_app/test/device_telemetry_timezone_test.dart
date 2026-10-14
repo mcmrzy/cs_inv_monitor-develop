@@ -30,9 +30,9 @@ void main() {
         query = options.queryParameters;
         handler.resolve(Response(requestOptions: options, data: {
           'code': 0,
-          'data': {'items': [], 'total': 0}
-        }));
-      }));
+          'data': {'items': [], 'total': 0},
+        },),);
+      },),);
       final location = tz.getLocation(entry.$1);
       final day = tz.TZDateTime(location, entry.$2, entry.$3, entry.$4);
       final next = tz.TZDateTime(location, entry.$2, entry.$3, entry.$4 + 1);
@@ -45,7 +45,7 @@ void main() {
           next
               .toUtc()
               .subtract(const Duration(microseconds: 1))
-              .toIso8601String());
+              .toIso8601String(),);
       expect(next.difference(day).inHours, entry.$5);
       expect(query['page'], 2);
       expect(query['page_size'], 20);
@@ -61,9 +61,9 @@ void main() {
       query = options.queryParameters;
       handler.resolve(Response(requestOptions: options, data: {
         'code': 0,
-        'data': {'items': [], 'total': 0}
-      }));
-    }));
+        'data': {'items': [], 'total': 0},
+      },),);
+    },),);
     final day = DateTime(2026, 10, 9);
     await DeviceTelemetryApi(dio, timezone: 'Asia/Kathmandu')
         .getHistory('SN', day);
@@ -73,6 +73,6 @@ void main() {
         query['start_time'],
         tz.TZDateTime(location, day.year, day.month, day.day)
             .toUtc()
-            .toIso8601String());
+            .toIso8601String(),);
   });
 }

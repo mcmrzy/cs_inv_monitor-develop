@@ -208,10 +208,10 @@ void main() {
   testWidgets('interrupted terminal session allows a new debug session after reconnect', (tester) async {
     final l10n = await AppLocalizations.delegate.load(const Locale('zh', 'CN'));
     final api = FakeDeviceDebugApi(
-      initialInfo: DeviceDebugSessionInfo(session: DeviceDebugSession(
+      initialInfo: const DeviceDebugSessionInfo(session: DeviceDebugSession(
         id: 'old', deviceSn: 'SN-DEBUG-1', status: 'interrupted',
-        intervalSeconds: 5, durationSeconds: 3600, source: 'app'),
-        deviceOnline: true, supported: true, intervalSeconds: 5),
+        intervalSeconds: 5, durationSeconds: 3600, source: 'app',),
+        deviceOnline: true, supported: true, intervalSeconds: 5,),
       samplesPage: const DeviceDebugSamplesPage(items: [], nextCursor: ''),
     );
     useLargeViewport(tester);

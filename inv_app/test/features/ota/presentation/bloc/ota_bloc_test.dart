@@ -1,4 +1,3 @@
-import 'dart:async';
 
 import 'package:bloc_test/bloc_test.dart';
 import 'package:fpdart/fpdart.dart';
@@ -109,7 +108,7 @@ void main() {
           ]),
         );
         when(() => mockOtaRepository.getDeviceOTAStatus(any(),
-                taskId: any(named: 'taskId')))
+                taskId: any(named: 'taskId'),),)
             .thenAnswer(
           (_) async => right<Failure, Map<String, dynamic>>({
             'status': 'in_progress',
@@ -122,7 +121,7 @@ void main() {
         sn: 'TEST_SN_1',
         firmwareIds: [7],
         idempotencyKey: 'key-1',
-      )),
+      ),),
       expect: () => [
         isA<OTATriggering>(),
         isA<OTATriggered>().having((s) => s.taskId, 'taskId', 42),
@@ -141,7 +140,7 @@ void main() {
           ),
         ).thenAnswer(
           (_) async => left<Failure, List<OtaTriggerTask>>(
-              createTestServerFailure()),
+              createTestServerFailure(),),
         );
         return otaBloc;
       },
@@ -149,7 +148,7 @@ void main() {
         sn: 'TEST_SN_1',
         firmwareIds: [7],
         idempotencyKey: 'key-1',
-      )),
+      ),),
       expect: () => [
         isA<OTATriggering>(),
         isA<OTAError>(),
@@ -178,7 +177,7 @@ void main() {
           ]),
         );
         when(() => mockOtaRepository.getDeviceOTAStatus(any(),
-                taskId: any(named: 'taskId')))
+                taskId: any(named: 'taskId'),),)
             .thenAnswer(
           (_) async => right<Failure, Map<String, dynamic>>({
             'status': 'in_progress',
@@ -232,7 +231,7 @@ void main() {
           }),
         );
         when(() => mockOtaRepository.getDeviceOTAStatus(any(),
-                taskId: any(named: 'taskId')))
+                taskId: any(named: 'taskId'),),)
             .thenAnswer(
           (_) async => right<Failure, Map<String, dynamic>>({
             'status': 'in_progress',
@@ -245,7 +244,7 @@ void main() {
         sn: 'TEST_SN_1',
         firmwareId: 3,
         idempotencyKey: 'rb-1',
-      )),
+      ),),
       expect: () => [
         isA<OTATriggering>(),
         isA<OTATriggered>().having((s) => s.taskId, 'taskId', 99),
@@ -262,7 +261,7 @@ void main() {
       build: () {
         var call = 0;
         when(() => mockOtaRepository.getDeviceOTAStatus(any(),
-                taskId: any(named: 'taskId')))
+                taskId: any(named: 'taskId'),),)
             .thenAnswer((_) async {
           call++;
           if (call == 1) {
@@ -293,7 +292,7 @@ void main() {
       'emits [OTAProgress, OTAError] when status fails',
       build: () {
         when(() => mockOtaRepository.getDeviceOTAStatus(any(),
-                taskId: any(named: 'taskId')))
+                taskId: any(named: 'taskId'),),)
             .thenAnswer(
           (_) async => right<Failure, Map<String, dynamic>>({
             'status': 'failed',
@@ -332,7 +331,7 @@ void main() {
   // OTAFirmwareOverviewRequested
   // ---------------------------------------------------------------------------
   group('OTAFirmwareOverviewRequested', () {
-    final overview = DeviceFirmwareOverview(
+    final overview = const DeviceFirmwareOverview(
       deviceSn: 'TEST_SN_1',
       deviceModel: 'CS-10K',
       isOnline: true,
@@ -391,7 +390,7 @@ void main() {
         when(() => mockOtaRepository.getFirmwareResources(
               any(),
               targetChip: any(named: 'targetChip'),
-            )).thenAnswer(
+            ),).thenAnswer(
           (_) async => right<Failure, List<FirmwareResource>>([
             const FirmwareResource(
               id: 1,
@@ -418,7 +417,7 @@ void main() {
         when(() => mockOtaRepository.getFirmwareResources(
               any(),
               targetChip: any(named: 'targetChip'),
-            )).thenAnswer(
+            ),).thenAnswer(
           (_) async =>
               left<Failure, List<FirmwareResource>>(createTestServerFailure()),
         );

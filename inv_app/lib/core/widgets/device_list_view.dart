@@ -263,7 +263,7 @@ class _DeviceCardState extends State<DeviceCard>
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.03),
                   blurRadius: 6,
-                  offset: Offset(0, 2),
+                  offset: const Offset(0, 2),
                 ),
               ],
             ),
@@ -286,19 +286,19 @@ class _DeviceCardState extends State<DeviceCard>
                   // 设备名称：优先别名，回退 SN
                   Expanded(child: Text(alias.isNotEmpty ? alias : sn,
                       maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w700, color: AppColor.textPrimary(context)))),
+                      style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w700, color: AppColor.textPrimary(context)),),),
                   SizedBox(width: 8.w),
                   Container(
                     padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 3.h),
                     decoration: BoxDecoration(color: badgeBg, borderRadius: BorderRadius.circular(6.r)),
                     child: Text(badgeText,
-                        style: TextStyle(fontSize: 11.sp, fontWeight: FontWeight.w600, color: badgeColor)),
+                        style: TextStyle(fontSize: 11.sp, fontWeight: FontWeight.w600, color: badgeColor),),
                   ),
                 ],
               ),
               SizedBox(height: 6.h),
               Text('SN $sn', maxLines: 1, overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 11.sp, color: AppColor.textHint(context))),
+                  style: TextStyle(fontSize: 11.sp, color: AppColor.textHint(context)),),
               if (model != '--') ...[SizedBox(height: 4.h), Text(model, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13.sp, color: AppColor.textSecondary(context)))],
               SizedBox(height: 12.h),
               Row(children: [Text(l10n.deviceTypeLabelKey, style: TextStyle(fontSize: 13.sp, color: AppColor.textHint(context))), SizedBox(width: 12.w), Expanded(child: Text(_getDeviceTypeLabel(l10n), style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600), textAlign: TextAlign.right))]),
@@ -313,11 +313,11 @@ class _DeviceCardState extends State<DeviceCard>
                 Expanded(child: _metric(l10n.currentPower, fresh ? devicePowerLabel(deviceNumber(widget.device['current_power'])) : '--')),
                 SizedBox(width: 12.w),
                 Expanded(child: _metric(l10n.todayGeneration, deviceNumber(widget.device['daily_energy']) == null ? '--' : '${deviceNumber(widget.device['daily_energy'])!.toStringAsFixed(2)} kWh')),
-              ]),
+              ],),
               if (_extractString(['station_name']) != '--') ...[
                 SizedBox(height: 10.h),
                 Row(children: [Icon(Icons.location_on_outlined, size: 14, color: AppColor.textHint(context)), const SizedBox(width: 4),
-                  Expanded(child: Text(_extractString(['station_name']), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.sp, color: AppColor.textSecondary(context))))]),
+                  Expanded(child: Text(_extractString(['station_name']), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.sp, color: AppColor.textSecondary(context)))),],),
               ],
               if (updated != null) ...[SizedBox(height: 6.h), Text(DateFormat('MM-dd HH:mm:ss').format(updated.toLocal()), style: TextStyle(fontSize: 11.sp, color: AppColor.textHint(context)))],
               if (battery != null) ...[
@@ -332,15 +332,15 @@ class _DeviceCardState extends State<DeviceCard>
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text(l10n.deviceTypeStorage, style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600)),
                       Text(batteryLive ? '${battery.soc?.toStringAsFixed(1) ?? '--'}% SOC  |  ${devicePowerLabel(battery.voltage == null || battery.current == null ? null : battery.voltage! * battery.current!)}' : l10n.str('storage_summary_offline'), style: TextStyle(fontSize: 12.sp, color: AppColor.textSecondary(context))),
-                    ])),
+                    ],),),
                     Icon(Icons.chevron_right, size: 20, color: AppColor.textHint(context)),
-                  ])),
+                  ],),),
                 ),
               ],
               if (firmwareArm != '--')
                 Padding(
                   padding: EdgeInsets.only(top: 8.h),
-                  child: Text('$firmwareArm', style: TextStyle(fontSize: 11.sp, color: AppColor.textHint(context))),
+                  child: Text(firmwareArm, style: TextStyle(fontSize: 11.sp, color: AppColor.textHint(context))),
                 ),
             ],
           ),
@@ -365,7 +365,7 @@ class _DeviceCardState extends State<DeviceCard>
   Widget _metric(String label, String value) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [Text(label, style: TextStyle(fontSize: 11.sp, color: AppColor.textHint(context))),
-      const SizedBox(height: 4), Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 17.sp, fontWeight: FontWeight.w600, color: AppColor.textPrimary(context)))],
+      const SizedBox(height: 4), Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 17.sp, fontWeight: FontWeight.w600, color: AppColor.textPrimary(context))),],
   );
 }
 
@@ -565,7 +565,7 @@ class _DeviceListViewState extends State<DeviceListView> {
       physics: const BouncingScrollPhysics(),
       buildDefaultDragHandles: false,
       padding: EdgeInsets.fromLTRB(
-          16.w, 4.h, 16.w, (widget.bottomPadding ?? 100).h),
+          16.w, 4.h, 16.w, (widget.bottomPadding ?? 100).h,),
       proxyDecorator: (child, index, animation) {
         final curved = CurvedAnimation(
           parent: animation,
@@ -645,7 +645,7 @@ class _DeviceListViewState extends State<DeviceListView> {
                     _currentPage = 1;
                   }),
                   filterLabels: widget.filterLabels,
-                  backgroundColor: headerChipBgColor),
+                  backgroundColor: headerChipBgColor,),
             ],
           ),
         ),

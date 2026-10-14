@@ -24,13 +24,6 @@ class OwnedDeviceSelectionService {
     required this.stations,
   });
 
-  bool _ownedBy(Map device, int userId) {
-    final owner = device.containsKey('owner_user_id')
-        ? device['owner_user_id']
-        : device['user_id'];
-    return owner == userId;
-  }
-
   Future<int> _userId() async {
     final id = await storage.getUserId();
     if (id == null || id <= 0) {
@@ -66,10 +59,8 @@ class OwnedDeviceSelectionService {
     }
     return OwnedDevicePage(
       items.whereType<Map<String, dynamic>>().where((device) {
-        // Shared and admin-visible devices are not this account's devices.
-        return _ownedBy(device, userId) &&
-            device['sn'] is String &&
-            (device['sn'] as String).isNotEmpty;
+        // The server applies the current organization and permission scope.
+        return device['sn'] is String && (device['sn'] as String).isNotEmpty;
       }).toList(),
       hasMore: page * pageSize < total && items.isNotEmpty,
     );
@@ -87,8 +78,8 @@ class OwnedDeviceSelectionService {
       expected: 'device detail',
     );
     final device = data['device'];
-    if (device is! Map || device['sn'] != sn || !_ownedBy(device, userId)) {
-      throw const ForbiddenFailure('Device is not owned by you');
+    if (device is! Map || device['sn'] != sn) {
+      throw const FormatException('Invalid device detail');
     }
     if (!device.containsKey('station_id')) {
       throw const FormatException(

@@ -710,9 +710,8 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
                       await Future.delayed(const Duration(milliseconds: 300));
 
                       await Future.microtask(() {});
-                      if (!mounted) return;
+                      if (!context.mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
-                        // ignore: use_build_context_synchronously
                         SnackBar(
                           content: Row(
                             children: [
@@ -741,9 +740,8 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
                       );
                     } catch (e) {
                       await Future.microtask(() {});
-                      if (!mounted) return;
+                      if (!context.mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
-                        // ignore: use_build_context_synchronously
                         SnackBar(
                           content: Text(l10n.translateError(e.toString())),
                           backgroundColor: AppColors.error,

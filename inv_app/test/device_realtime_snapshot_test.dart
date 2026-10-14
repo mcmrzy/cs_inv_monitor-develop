@@ -67,7 +67,7 @@ void main() {
       return Response(
           requestOptions: RequestOptions(path: path),
           statusCode: 200,
-          data: {'code': 0, 'data': data});
+          data: {'code': 0, 'data': data},);
     });
     getIt.registerSingleton<Dio>(dio);
     getIt.registerSingleton<RealtimeDataService>(realtime);
@@ -83,7 +83,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await pumpApp(tester, const DeviceRealtimePage(sn: 'SN', type: 'inv'),
-        deviceBloc: bloc, locale: const Locale('en'));
+        deviceBloc: bloc, locale: const Locale('en'),);
   }
 
   Future<DeviceHealthTab> health(WidgetTester tester) async {
@@ -98,14 +98,14 @@ void main() {
     completeDetail({
       'device': {'status': 1},
       'online_status': {'online': false},
-      'realtime_data': {'output_power': 0}
+      'realtime_data': {'output_power': 0},
     });
     await open(tester);
     expect((await health(tester)).online, false);
     await tester.pumpWidget(const SizedBox());
     completeDetail({
       'device': {'status': 2},
-      'realtime_data': {'output_power': 0}
+      'realtime_data': {'output_power': 0},
     });
     await open(tester);
     expect((await health(tester)).online, true);
@@ -121,7 +121,7 @@ void main() {
         'output_power': 400,
         'updated_at': time.toIso8601String(),
         'derived': {'health_score': 30},
-      }
+      },
     });
     await open(tester);
     expect((await health(tester)).flat['derived_health_score'], 30);
@@ -131,7 +131,7 @@ void main() {
         tester
             .widget<DeviceHealthTab>(find.byType(DeviceHealthTab))
             .flat['derived_health_score'],
-        80);
+        80,);
     samples.add(sample(2));
     await tester.pumpAndSettle();
     expect(
@@ -139,7 +139,7 @@ void main() {
             .widget<DeviceHealthTab>(find.byType(DeviceHealthTab))
             .flat
             .containsKey('derived_health_score'),
-        false);
+        false,);
     samples.add(sample(1, score: 10, power: 10));
     await tester.pumpAndSettle();
     final current =
@@ -163,8 +163,8 @@ void main() {
         'realtime_data': {
           'output_power': 10,
           if (dated) 'updated_at': time.toIso8601String(),
-          'derived': {'health_score': 10}
-        }
+          'derived': {'health_score': 10},
+        },
       });
       await tester.pumpAndSettle();
       final current = await health(tester);
@@ -180,7 +180,7 @@ void main() {
       (tester) async {
     completeDetail({
       'device': {'status': 1},
-      'realtime_data': {'total_pv_energy': 0}
+      'realtime_data': {'total_pv_energy': 0},
     });
     await open(tester);
     await tester.tap(find.byIcon(Icons.insights_outlined));

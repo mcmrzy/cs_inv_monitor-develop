@@ -194,7 +194,7 @@ class BleBindingService {
   /// pin 可空：旧流程未持 PIN 时登记会被后端拒绝（严格模式），
   /// 本地绑定不受影响，按现有“其余 code 不视为失败”语义归并。
   Future<BindOutcome> _registerToCloud(
-      String sn, String deviceKey, String? pin, int? stationId) async {
+      String sn, String deviceKey, String? pin, int? stationId,) async {
     try {
       final resp = await dio.post(
         '/devices/bind',

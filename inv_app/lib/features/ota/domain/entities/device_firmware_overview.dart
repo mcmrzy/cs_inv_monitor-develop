@@ -34,7 +34,7 @@ class DeviceFirmwareOverview {
               .whereType<Map>()
               .map((e) => FirmwareModuleOverview.fromJson(
                     Map<String, dynamic>.from(e),
-                  ))
+                  ),)
               .toList()
           : const [],
     );
@@ -91,7 +91,7 @@ class FirmwareModuleOverview {
     final channels = supportedChannels;
     if (channels != null &&
         !channels.any((channel) =>
-            const {'remote', 'cloud'}.contains(channel.trim().toLowerCase()))) {
+            const {'remote', 'cloud'}.contains(channel.trim().toLowerCase()),)) {
       return false;
     }
     final normalizedTarget = target.trim().toLowerCase();
@@ -168,7 +168,7 @@ class FirmwareResource {
     return channels == null
         ? target != 'bms'
         : channels.any(
-            (c) => const {'remote', 'cloud'}.contains(c.trim().toLowerCase()));
+            (c) => const {'remote', 'cloud'}.contains(c.trim().toLowerCase()),);
   }
 
   bool get canLocalUpgrade {
@@ -181,7 +181,7 @@ class FirmwareResource {
       return channels.any((channel) => channel.trim().toLowerCase() == 'ble');
     }
     return channels.any((channel) => const {'local', 'ble', 'wifi', 'wifi_ap'}
-        .contains(channel.trim().toLowerCase()));
+        .contains(channel.trim().toLowerCase()),);
   }
 
   factory FirmwareResource.fromJson(Map<String, dynamic> json) {

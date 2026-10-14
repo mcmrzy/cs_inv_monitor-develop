@@ -192,11 +192,11 @@ class AndroidWifiApController implements WifiApController {
   wifi_iot.NetworkSecurity _mapSecurity(AppWifiSecurity security) {
     switch (security) {
       case AppWifiSecurity.none:
-        return wifi_iot.NetworkSecurity.NONE;
+        return wifi_iot.NetworkSecurity.none;
       case AppWifiSecurity.wpa:
-        return wifi_iot.NetworkSecurity.WPA;
+        return wifi_iot.NetworkSecurity.wpa;
       case AppWifiSecurity.wep:
-        return wifi_iot.NetworkSecurity.WEP;
+        return wifi_iot.NetworkSecurity.wep;
     }
   }
 }

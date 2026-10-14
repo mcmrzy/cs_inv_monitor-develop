@@ -117,6 +117,11 @@ func (h *DeviceHandler) List(c *gin.Context) {
 		response.Error(c, 400, err.Error())
 		return
 	}
+	plan, systemAdmin, allowed := overviewScope(c, h.db, "device")
+	if !allowed {
+		return
+	}
+	params.ScopePlan, params.IsSystemAdmin = &plan, systemAdmin
 
 	devices, total, err := h.deviceService.List(c.Request.Context(), params)
 	if err != nil {
@@ -143,8 +148,10 @@ func (h *DeviceHandler) List(c *gin.Context) {
 
 func (h *DeviceHandler) GetDetail(c *gin.Context) {
 	sn := c.Param("sn")
-	userID := middleware.GetUserID(c)
-	isAdmin := middleware.GetIsSystemAdmin(c)
+	plan, systemAdmin, allowed := overviewScope(c, h.db, "device")
+	if !allowed {
+		return
+	}
 
 	device, err := h.deviceService.GetBySN(c.Request.Context(), sn)
 	if err != nil {
@@ -157,7 +164,12 @@ func (h *DeviceHandler) GetDetail(c *gin.Context) {
 		return
 	}
 
-	if !isAdmin && !h.deviceService.HasPermission(c.Request.Context(), userID, sn) {
+	allowed, err = h.deviceService.HasScopedAccess(c.Request.Context(), sn, plan, systemAdmin)
+	if err != nil {
+		response.InternalError(c, "authorization state unavailable")
+		return
+	}
+	if !allowed {
 		response.Error(c, 403, "permission denied")
 		return
 	}
@@ -447,12 +459,21 @@ type AddDeviceRequest struct {
 }
 
 func (h *DeviceHandler) AddToStation(c *gin.Context) {
-	userID := middleware.GetUserID(c)
-	isAdmin := middleware.GetIsSystemAdmin(c)
-
 	var req AddDeviceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, 400, "invalid request")
+		return
+	}
+	if req.StationID <= 0 {
+		response.Error(c, 400, "invalid station")
+		return
+	}
+	devicePlan, deviceAdmin, allowed := resourceScope(c, h.db, "devices:edit", "device")
+	if !allowed {
+		return
+	}
+	stationPlan, stationAdmin, allowed := resourceScope(c, h.db, "stations:edit", "station")
+	if !allowed {
 		return
 	}
 
@@ -467,31 +488,8 @@ func (h *DeviceHandler) AddToStation(c *gin.Context) {
 		return
 	}
 
-	if !isAdmin {
-		// Check device ownership
-		if device.UserID != userID {
-			response.Error(c, 403, "permission denied")
-			return
-		}
-		// Check station ownership
-		station, err := h.stationService.GetByID(c.Request.Context(), req.StationID)
-		if err != nil || station == nil {
-			response.Error(c, 400, "station not found")
-			return
-		}
-		if station.UserID != userID {
-			response.Error(c, 403, "station not owned by you")
-			return
-		}
-	}
-
-	if req.OnlyUnassigned {
-		if err := h.deviceService.AssignUnassignedToStation(c.Request.Context(), req.SN, req.StationID, userID); err != nil {
-			response.HandleError(c, err)
-			return
-		}
-	} else if err := h.deviceService.AddToStation(c.Request.Context(), req.SN, req.StationID); err != nil {
-		response.Error(c, 500, "add to station failed")
+	if err := h.deviceService.AssignToStationScoped(c.Request.Context(), req.SN, req.StationID, devicePlan, stationPlan, deviceAdmin && stationAdmin, req.OnlyUnassigned); err != nil {
+		response.HandleError(c, err)
 		return
 	}
 

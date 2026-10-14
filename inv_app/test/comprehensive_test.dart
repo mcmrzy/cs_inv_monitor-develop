@@ -9,7 +9,7 @@ class MockDio extends Mock implements Dio {}
 void main() {
   group('阶段 2：单元测试', () {
     test('数据模型 - ACData 创建和序列化', () {
-      final acData = ACData(
+      final acData = const ACData(
         voltage: 220.5,
         current: 10.2,
         power: 2250.0,
@@ -33,7 +33,7 @@ void main() {
     });
 
     test('数据模型 - BatteryData 创建', () {
-      final batteryData = BatteryData(
+      final batteryData = const BatteryData(
         soc: 80.0,
         soh: 95.0,
         voltage: 48.5,
@@ -58,7 +58,7 @@ void main() {
     });
 
     test('数据模型 - PVData 创建', () {
-      final pvData = PVData(
+      final pvData = const PVData(
         pvVoltage: 120.0,
         pvCurrent: 15.0,
         pvPower: 1800.0,
@@ -72,7 +72,7 @@ void main() {
     });
 
     test('数据模型 - SystemStatus 创建', () {
-      final sysStatus = SystemStatus(
+      final sysStatus = const SystemStatus(
         state: '1',
         faultCode: 0,
         alarmCode: 0,
@@ -91,12 +91,12 @@ void main() {
       expect(sysStatus.loadPercent, 75.0);
 
       // 测试故障状态
-      final faultStatus = SystemStatus(faultCode: 100);
+      final faultStatus = const SystemStatus(faultCode: 100);
       expect(faultStatus.hasFault, true);
     });
 
     test('数据模型 - EnergyData 创建', () {
-      final energyData = EnergyData(
+      final energyData = const EnergyData(
         dailyPV: 15.5,
         totalPV: 1000.0,
         dailyCharge: 3.0,
@@ -112,7 +112,7 @@ void main() {
     });
 
     test('数据模型 - OnlineStatus 创建', () {
-      final onlineStatus = OnlineStatus(
+      final onlineStatus = const OnlineStatus(
         online: true,
         rssi: -65,
         ip: '192.168.1.100',
@@ -126,14 +126,14 @@ void main() {
     test('数据模型 - InverterRealtime 完整创建', () {
       final realtime = InverterRealtime(
         deviceSN: 'CS6K2-001',
-        ac: ACData(voltage: 220, power: 2000),
-        battery: BatteryData(soc: 80, voltage: 48),
-        pv: PVData(pvPower: 1800),
-        sysStatus: SystemStatus(state: '1'),
-        energy: EnergyData(dailyPV: 15),
-        fan: FanData(mpptSpeed: 40, invSpeed: 60),
+        ac: const ACData(voltage: 220, power: 2000),
+        battery: const BatteryData(soc: 80, voltage: 48),
+        pv: const PVData(pvPower: 1800),
+        sysStatus: const SystemStatus(state: '1'),
+        energy: const EnergyData(dailyPV: 15),
+        fan: const FanData(mpptSpeed: 40, invSpeed: 60),
         workTimeTotalSec: 3600000,
-        onlineStatus: OnlineStatus(online: true),
+        onlineStatus: const OnlineStatus(online: true),
         loadPower: 1500,
         updatedAt: DateTime(2026, 7, 27, 12, 0, 0),
       );

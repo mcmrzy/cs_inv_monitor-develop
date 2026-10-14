@@ -136,20 +136,17 @@ class _DeviceListPageState extends State<DeviceListPage> {
               whiteHeader: true,
               sortMode: _sortMode,
               onRefresh: () async {
-                context
-                    .read<DeviceBloc>()
-                    .add(const DeviceListRequested());
+                final bloc = context.read<DeviceBloc>();
+                bloc.add(const DeviceListRequested());
                 // 等待 Bloc 处理完请求：监听到第一个新状态即返回，
                 // 让 RefreshIndicator 有足够时间完成动画
-                await context
-                    .read<DeviceBloc>()
-                    .stream
+                await bloc.stream
                     .firstWhere(
                       (s) => s is DeviceListLoaded || s is DeviceError,
                     )
                     .timeout(
                       const Duration(seconds: 15),
-                      onTimeout: () => context.read<DeviceBloc>().state,
+                      onTimeout: () => bloc.state,
                     );
               },
               onDeviceChanged: (order) {

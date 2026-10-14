@@ -5,7 +5,7 @@ import 'package:inv_app/core/utils/api_response.dart';
 ///
 /// Web 管理端约定：
 ///   POST /devices/by-sn/{sn}/control
-///   {"command": "<param_key>", "params": {"value": <工程单位值>}}
+///   `{"command": "<param_key>", "params": {"value": <工程单位值>}}`
 ///
 /// 旧实现把多个改动塞进 `set_params` + params 映射，在 L10 等型号上
 /// 会因「命令不在允许列表 / 空 args schema 拒绝未知参数」失败。

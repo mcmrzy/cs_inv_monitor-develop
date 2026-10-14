@@ -11,7 +11,7 @@ enum FirmwareModuleKind {
 
 final class FirmwareModulePresentation {
   const FirmwareModulePresentation(
-      {required this.kind, required this.rawTarget});
+      {required this.kind, required this.rawTarget,});
 
   final FirmwareModuleKind kind;
   final String rawTarget;
@@ -63,7 +63,7 @@ final class FirmwareModulePresentation {
       final replacement = fromTarget(target).displayLabel(l10n);
       result = result.replaceAll(
         RegExp('(?<![A-Za-z0-9_])$target(?![A-Za-z0-9_])',
-            caseSensitive: false),
+            caseSensitive: false,),
         replacement,
       );
     }

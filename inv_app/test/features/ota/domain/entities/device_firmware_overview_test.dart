@@ -22,7 +22,7 @@ void main() {
     expect(overview.hardwareVersion, ' hw-2 ');
     expect(overview.hardwareState, 'known');
     expect(
-        overview.modules.single.compatibilityReason, 'no_compatible_firmware');
+        overview.modules.single.compatibilityReason, 'no_compatible_firmware',);
     expect(overview.modules.single.canRemoteUpgrade, isFalse);
     expect(DeviceFirmwareOverview.fromJson({}).hardwareState, 'unknown');
     final resource = FirmwareResource.fromJson({
@@ -109,11 +109,11 @@ void main() {
     expect(resource('dsp').canLocalUpgrade, isFalse);
     expect(resource('bms').canLocalUpgrade, isFalse);
     expect(
-        resource('dsp', channels: ['remote', 'ble']).canLocalUpgrade, isTrue);
+        resource('dsp', channels: ['remote', 'ble']).canLocalUpgrade, isTrue,);
     expect(
-        resource('bms', channels: ['remote', 'ble']).canLocalUpgrade, isTrue);
+        resource('bms', channels: ['remote', 'ble']).canLocalUpgrade, isTrue,);
     expect(resource('bms', channels: ['remote', 'wifi_ap']).canLocalUpgrade,
-        isFalse);
+        isFalse,);
     expect(resource('arm', channels: ['remote']).canLocalUpgrade, isFalse);
     expect(resource('arm', channels: ['ble']).canLocalUpgrade, isTrue);
   });

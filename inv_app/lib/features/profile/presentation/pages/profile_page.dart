@@ -217,7 +217,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       child: SizedBox(
                         width: 24.w,
                         height: 24.w,
-                        child: CircularProgressIndicator(
+                        child: const CircularProgressIndicator(
                           strokeWidth: 2,
                           color: AppColors.primary,
                         ),

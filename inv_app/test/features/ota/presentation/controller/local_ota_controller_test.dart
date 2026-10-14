@@ -17,7 +17,7 @@ class _FakeLocalCommunication implements LocalCommunicationRepository {
   Object? triggerError;
   Map<String, dynamic> deviceInfo = const {
     'device_model': 'INV-10K',
-    'hardware_version': 'HW-1'
+    'hardware_version': 'HW-1',
   };
   Map<String, dynamic> progress = const {
     'status': 'failed',
@@ -99,11 +99,11 @@ class _FakeLocalCommunication implements LocalCommunicationRepository {
 void main() {
   test('collector DSP and BMS installation get a longer polling window', () {
     expect(LocalOTAController.pollTimeoutForTarget('esp'),
-        const Duration(seconds: 180));
+        const Duration(seconds: 180),);
     expect(LocalOTAController.pollTimeoutForTarget('dsp'),
-        const Duration(minutes: 20));
+        const Duration(minutes: 20),);
     expect(LocalOTAController.pollTimeoutForTarget('bms'),
-        const Duration(minutes: 20));
+        const Duration(minutes: 20),);
   });
 
   const manifest = LocalOtaManifest(
@@ -155,7 +155,7 @@ void main() {
     expect(controller.state.phase, LocalOTAPhase.failed);
     expect(controller.state.error, isA<LocalOtaHardwareException>());
     expect(OtaErrorMapper.l10nKeyOf(controller.state.error!),
-        'ota_err_device_hardware_unknown');
+        'ota_err_device_hardware_unknown',);
   });
 
   for (final channel in LocalCommunicationChannel.values) {
@@ -177,7 +177,7 @@ void main() {
       expect(communication.calls, ['info']);
       expect(controller.state.error, isA<LocalOtaHardwareException>());
       expect(OtaErrorMapper.l10nKeyOf(controller.state.error!),
-          'ota_err_hardware_mismatch');
+          'ota_err_hardware_mismatch',);
     });
   }
 
@@ -191,7 +191,7 @@ void main() {
     );
     expect(communication.calls, ['info']);
     expect(OtaErrorMapper.l10nKeyOf(controller.state.error!),
-        'ota_err_firmware_hardware_unknown');
+        'ota_err_firmware_hardware_unknown',);
   });
 
   test('hw_version trim and uppercase supports explicitly shared image',
@@ -215,12 +215,12 @@ void main() {
         () async {
       communication.deviceInfo = {
         'device_model': 'INV-10K',
-        'hardware_version': reported
+        'hardware_version': reported,
       };
       await execute();
       expect(communication.calls, ['info']);
       expect(OtaErrorMapper.l10nKeyOf(controller.state.error!),
-          'ota_err_hardware_mismatch');
+          'ota_err_hardware_mismatch',);
     });
   }
 
@@ -413,6 +413,6 @@ void main() {
           sn: 'SN001',
           targetChip: 'bms',
           newVersion: '2.3.4',
-        )).called(1);
+        ),).called(1);
   });
 }

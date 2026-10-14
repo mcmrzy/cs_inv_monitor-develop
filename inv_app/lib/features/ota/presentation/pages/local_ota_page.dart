@@ -1256,7 +1256,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                 Text(
                   l10n.firmwareDownloadHint,
                   style: TextStyle(
-                      fontSize: 13.sp, color: AppColor.textHint(context)),
+                      fontSize: 13.sp, color: AppColor.textHint(context),),
                 ),
               if (_errorMessage != null) ...[
                 SizedBox(height: 8.h),
@@ -2228,7 +2228,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                 Text(
                   widget.deviceSN,
                   style: TextStyle(
-                      fontSize: 12.sp, color: AppColor.textHint(context)),
+                      fontSize: 12.sp, color: AppColor.textHint(context),),
                 ),
               ],
             ),

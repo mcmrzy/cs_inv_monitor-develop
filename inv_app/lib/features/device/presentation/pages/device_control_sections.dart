@@ -848,14 +848,14 @@ extension _DeviceControlTabSections on _DeviceControlPageState {
           ),
           SizedBox(height: 8.h),
           _buildInfoRow(
-              l10n.str('control_firmware_arm'), fwVersionLabel(fwArm)),
+              l10n.str('control_firmware_arm'), fwVersionLabel(fwArm),),
           _buildInfoRow(
-              l10n.str('control_firmware_esp'), fwVersionLabel(fwEsp)),
+              l10n.str('control_firmware_esp'), fwVersionLabel(fwEsp),),
           _buildInfoRow(
-              l10n.str('control_hardware_version'), fwVersionLabel(hwVersion)),
+              l10n.str('control_hardware_version'), fwVersionLabel(hwVersion),),
           if (bootloaderVersion != null && bootloaderVersion.isNotEmpty)
             _buildInfoRow(
-                l10n.str('control_bootloader_version'), bootloaderVersion),
+                l10n.str('control_bootloader_version'), bootloaderVersion,),
         ],
       ),
     );

@@ -29,7 +29,7 @@ void main() {
       targetChip: 'esp',
       hardwareVersions: const ['HW-1'],
       publishedAt: DateTime(2026, 10, 9),
-      supportedChannels: const ['remote', 'ble']);
+      supportedChannels: const ['remote', 'ble'],);
   const local = FirmwareResource(
       id: 8,
       model: 'L10',
@@ -37,26 +37,26 @@ void main() {
       fileUrl: '/arm.bin',
       targetChip: 'arm',
       hardwareVersions: ['HW-1'],
-      supportedChannels: ['ble']);
+      supportedChannels: ['ble'],);
 
   setUp(() {
     devices = _Devices();
     ota = _Ota();
     downloads = _Downloads();
     when(() => devices.getList(
-            page: any(named: 'page'), pageSize: any(named: 'pageSize')))
+            page: any(named: 'page'), pageSize: any(named: 'pageSize'),),)
         .thenAnswer((_) async => const Right({
               'items': [
-                {'sn': 'SN', 'model': 'L10', 'status': 1}
+                {'sn': 'SN', 'model': 'L10', 'status': 1},
               ],
-              'total': 1
-            }));
+              'total': 1,
+            }),);
     when(() => ota.getFirmwareResources('SN'))
         .thenAnswer((_) async => Right([remote, local]));
     when(() => downloads.isFirmwareDownloaded(any()))
         .thenAnswer((_) async => true);
     when(() => ota.triggerFirmware(any(), any(),
-            idempotencyKey: any(named: 'idempotencyKey')))
+            idempotencyKey: any(named: 'idempotencyKey'),),)
         .thenAnswer((_) async => const Right(<OtaTriggerTask>[]));
     getIt.registerSingleton<DeviceRepository>(devices);
     getIt.registerSingleton<OtaRepository>(ota);
@@ -75,32 +75,32 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('remote-upgrade-7')));
     await tester.pumpAndSettle();
     verifyNever(() => ota.triggerFirmware(any(), any(),
-        idempotencyKey: any(named: 'idempotencyKey')));
+        idempotencyKey: any(named: 'idempotencyKey'),),);
     expect(find.textContaining('SN\n'), findsOneWidget);
     await tester.tap(find.widgetWithText(FilledButton, '确认'));
     await tester.pumpAndSettle();
     verify(() => ota.triggerFirmware('SN', [7],
-        idempotencyKey: any(named: 'idempotencyKey'))).called(1);
+        idempotencyKey: any(named: 'idempotencyKey'),),).called(1);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets('offline resources keep remote button disabled', (tester) async {
     when(() => devices.getList(
-            page: any(named: 'page'), pageSize: any(named: 'pageSize')))
+            page: any(named: 'page'), pageSize: any(named: 'pageSize'),),)
         .thenAnswer((_) async => const Right({
               'items': [
-                {'sn': 'SN', 'model': 'L10', 'status': 0}
+                {'sn': 'SN', 'model': 'L10', 'status': 0},
               ],
-              'total': 1
-            }));
+              'total': 1,
+            }),);
     await pumpMinimalApp(tester, const FirmwareLibraryPage());
     expect(
         tester
             .widget<FilledButton>(
-                find.byKey(const ValueKey('remote-upgrade-7')))
+                find.byKey(const ValueKey('remote-upgrade-7')),)
             .onPressed,
-        isNull);
+        isNull,);
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -108,7 +108,7 @@ void main() {
       (tester) async {
     final keys = <String>[];
     when(() => ota.triggerFirmware(any(), any(),
-        idempotencyKey: any(named: 'idempotencyKey'))).thenAnswer((call) async {
+        idempotencyKey: any(named: 'idempotencyKey'),),).thenAnswer((call) async {
       keys.add(call.namedArguments[#idempotencyKey] as String);
       return const Left(ServerFailure('timeout'));
     });
@@ -138,7 +138,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     await pumpMinimalApp(tester, const FirmwareLibraryPage(),
-        locale: const Locale('en'));
+        locale: const Locale('en'),);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });

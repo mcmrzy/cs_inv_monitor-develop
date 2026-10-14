@@ -5,7 +5,7 @@ void main() {
   group('完整验证测试', () {
     group('验证 RealtimeDataService 修复', () {
       test('类型修复验证 - SystemStatus.faultCode 应为 int', () {
-        final sysStatus = SystemStatus(
+        final sysStatus = const SystemStatus(
           faultCode: 0,
           alarmCode: 0,
         );
@@ -18,7 +18,7 @@ void main() {
       });
 
       test('类型修复验证 - InverterRealtime.workTimeTotalSec 应为 int', () {
-        final realtime = InverterRealtime(
+        final realtime = const InverterRealtime(
           deviceSN: 'CS6K2-001',
           workTimeTotalSec: 1800000,
         );

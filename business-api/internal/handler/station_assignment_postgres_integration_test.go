@@ -5,6 +5,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"inv-api-server/internal/model"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -18,10 +19,15 @@ import (
 )
 
 func TestStationAssignmentGuardHTTP(t *testing.T) {
-	pool := overviewTestDB(t)
+	pool := assignmentTestDB(t)
 	ctx := context.Background()
 	_, err := pool.Exec(ctx, `
 		INSERT INTO users(id,phone,password_hash,status) VALUES(99311,'assignment-http','hash',1);
+		INSERT INTO organizations(id,root_tenant_id,org_type,code,name,status) VALUES(99311,99311,'manufacturer','ASSIGN-SELF','Self','active');
+		INSERT INTO organization_memberships(id,root_tenant_id,organization_id,user_id,status,version) VALUES(99311,99311,99311,99311,'active',1);
+		INSERT INTO membership_role_assignments(id,root_tenant_id,organization_id,membership_id,role_code,status) VALUES(99311,99311,99311,99311,'org_admin','active');
+		INSERT INTO role_permission_grants(root_tenant_id,organization_id,role_assignment_id,permission_code,data_scope)
+		SELECT 99311,99311,99311,p,'self' FROM unnest(ARRAY['devices:edit','stations:edit']) p;
 		INSERT INTO stations(id,user_id,name,province,city,address,capacity) VALUES
 		(99311,99311,'First','','','',0),(99312,99311,'Second','','','',0);
 		INSERT INTO devices(sn,model,user_id,station_id) VALUES('ASSIGNMENT-HTTP','L10',99311,99311);`)
@@ -41,6 +47,9 @@ func TestStationAssignmentGuardHTTP(t *testing.T) {
 		c.Request = httptest.NewRequest("POST", "/devices/add-to-station", strings.NewReader(body))
 		c.Request.Header.Set("Content-Type", "application/json")
 		c.Set("user_id", int64(99311))
+		actor := model.ActorContext{UserID: 99311, RootTenantID: 99311, OrganizationID: 99311, MembershipID: 99311, MembershipVersion: 1}
+		require.NoError(t, pool.QueryRow(ctx, `SELECT version FROM organization_memberships WHERE id=99311`).Scan(&actor.MembershipVersion))
+		c.Set("actor_context", actor)
 		c.Set("is_system_admin", false)
 		h.AddToStation(c)
 		var response map[string]any

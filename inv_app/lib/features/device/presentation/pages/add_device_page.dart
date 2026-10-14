@@ -276,7 +276,7 @@ class _AddDevicePageState extends State<AddDevicePage> {
       if (mounted) {
         AppToast.show(
             context, '${AppLocalizations.of(context)!.qrNotRecognized}:\n$raw',
-            type: ToastType.error);
+            type: ToastType.error,);
       }
       return;
     }
@@ -292,7 +292,7 @@ class _AddDevicePageState extends State<AddDevicePage> {
       if (mounted) {
         AppToast.show(context,
             '${AppLocalizations.of(context)!.snFormatError}:\n${formatSNForDisplay(sn)}',
-            type: ToastType.error);
+            type: ToastType.error,);
       }
       return;
     }
@@ -365,7 +365,7 @@ class _AddDevicePageState extends State<AddDevicePage> {
         _qrScanGuard.release(resetPayload: true);
         setState(() => _scanning = false);
         AppToast.show(context, AppLocalizations.of(context)!.pinLengthError,
-            type: ToastType.info);
+            type: ToastType.info,);
       }
       return;
     }
@@ -464,7 +464,7 @@ class _AddDevicePageState extends State<AddDevicePage> {
     final raw = _snController.text.trim();
     if (raw.isEmpty) {
       AppToast.show(context, AppLocalizations.of(context)!.pleaseInputSn,
-          type: ToastType.info);
+          type: ToastType.info,);
       return;
     }
 
@@ -476,7 +476,7 @@ class _AddDevicePageState extends State<AddDevicePage> {
     if (!validateSNFormat(sn)) {
       AppToast.show(context,
           '${AppLocalizations.of(context)!.snFormatError}:\n${formatSNForDisplay(sn)}',
-          type: ToastType.error);
+          type: ToastType.error,);
       return;
     }
 
@@ -511,7 +511,7 @@ class _AddDevicePageState extends State<AddDevicePage> {
     if (pin.isEmpty || pin.length != 6) {
       // PIN 必填且必须为 6 位（后端严格模式：云端绑定同样强制 PIN 校验，见设计文档 §5.4）
       AppToast.show(context, AppLocalizations.of(context)!.pinLengthError,
-          type: ToastType.info);
+          type: ToastType.info,);
       return;
     }
 
@@ -554,7 +554,7 @@ class _AddDevicePageState extends State<AddDevicePage> {
                 context,
                 AppLocalizations.of(context)!
                     .alreadyBoundNDevices('$_sessionBoundCount'),
-                type: ToastType.success);
+                type: ToastType.success,);
           } else if (state is DeviceError) {
             _scanning = false;
             _lastScanned = '';
@@ -562,7 +562,7 @@ class _AddDevicePageState extends State<AddDevicePage> {
             _addToScanHistory(_lastScanned, false);
             AppToast.show(context,
                 AppLocalizations.of(context)!.translateError(state.message),
-                type: ToastType.error);
+                type: ToastType.error,);
           }
         },
         builder: (context, state) {
@@ -624,7 +624,7 @@ class _AddDevicePageState extends State<AddDevicePage> {
                       fontWeight: FontWeight.w600,
                       color: AppColors.badgeNormalText,
                     ),
-                  )),
+                  ),),
                 ],
               ),
             ),
@@ -634,7 +634,7 @@ class _AddDevicePageState extends State<AddDevicePage> {
               fit: StackFit.expand,
               children: [
                 MobileScanner(
-                    controller: _cameraController, onDetect: _onDetect),
+                    controller: _cameraController, onDetect: _onDetect,),
                 Center(
                   child: Container(
                     width: 220.w,
@@ -851,8 +851,8 @@ class _AddDevicePageState extends State<AddDevicePage> {
               ),
             ),
         ],
-      ));
-    });
+      ),);
+    },);
   }
 
   Widget _actionChip(IconData icon, String label, VoidCallback onTap) {
@@ -1041,7 +1041,7 @@ class _AddDevicePageState extends State<AddDevicePage> {
         seen[result.macAddress] = device;
         setState(() => _bleDevices = seen.values.toList()
           ..sort((a, b) => (b.lastSeen ?? DateTime(0))
-              .compareTo(a.lastSeen ?? DateTime(0))));
+              .compareTo(a.lastSeen ?? DateTime(0)),),);
       },
       onDone: () {
         if (!mounted) return;
@@ -1063,7 +1063,7 @@ class _AddDevicePageState extends State<AddDevicePage> {
     } catch (_) {
       if (!mounted) return;
       AppToast.show(context, AppLocalizations.of(context)!.bleBluetoothOff,
-          type: ToastType.error);
+          type: ToastType.error,);
       return;
     }
     await getIt<StorageService>().saveIsBleDirectEnabled(value);
@@ -1098,7 +1098,7 @@ class _AddDevicePageState extends State<AddDevicePage> {
 
   /// 批量查询发现设备的绑定状态
   Future<void> _refreshBleBoundStatuses(
-      List<BleDiscoveredDevice> devices) async {
+      List<BleDiscoveredDevice> devices,) async {
     final keyStore = getIt<BleDeviceKeyStore>();
     final result = <String, bool>{};
     for (final device in devices) {
@@ -1177,10 +1177,11 @@ class _AddDevicePageState extends State<AddDevicePage> {
         _sessionBoundCount++;
         _addToScanHistory(_displaySnOf(device), true);
       }
-      if (mounted)
+      if (mounted) {
         setState(() => _bleDevices = getIt<BleDirectService>().enabled
             ? getIt<BleDirectService>().scanResults
-            : _bleDevices);
+            : _bleDevices,);
+      }
     } finally {
       _bleBindDialogOpen = false;
     }
@@ -1227,7 +1228,7 @@ class _AddDevicePageState extends State<AddDevicePage> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                      fontSize: 11.sp, color: AppColor.textHint(context)),
+                      fontSize: 11.sp, color: AppColor.textHint(context),),
                 ),
               ],
             ),
@@ -1244,14 +1245,14 @@ class _AddDevicePageState extends State<AddDevicePage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(Icons.check_circle_rounded,
-                      size: 12.sp, color: AppColors.success),
+                      size: 12.sp, color: AppColors.success,),
                   SizedBox(width: 4.w),
                   Text(
                     AppLocalizations.of(context)!.str('ble_device_connected'),
                     style: TextStyle(
                         fontSize: 12.sp,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.success),
+                        color: AppColors.success,),
                   ),
                 ],
               ),
@@ -1273,7 +1274,7 @@ class _AddDevicePageState extends State<AddDevicePage> {
                     style: TextStyle(
                         fontSize: 12.sp,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.blue),
+                        color: AppColors.blue,),
                   ),
                 ],
               ),
@@ -1361,13 +1362,13 @@ class _AddDevicePageState extends State<AddDevicePage> {
                   SizedBox(
                     width: 24.w,
                     height: 24.w,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: AppColors.blue),
+                    child: const CircularProgressIndicator(
+                        strokeWidth: 2, color: AppColors.blue,),
                   ),
                   SizedBox(height: 8.h),
                   Text(l10n.str('ble_scanning_short'),
                       style: TextStyle(
-                          fontSize: 12.sp, color: AppColor.textHint(context))),
+                          fontSize: 12.sp, color: AppColor.textHint(context),),),
                 ],
               ),
             ),

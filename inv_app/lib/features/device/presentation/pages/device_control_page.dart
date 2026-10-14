@@ -22,7 +22,7 @@ part 'device_control_sections.dart';
 /// V2 数据嵌套在分组下（ac.output_power, bat.battery_soc 等），
 /// V1 数据是扁平的（ac_power, battery_soc 等）
 dynamic _rtPick(
-    Map<String, dynamic> rt, String flatKey, String group, String nestedKey) {
+    Map<String, dynamic> rt, String flatKey, String group, String nestedKey,) {
   // 先尝试嵌套路径：rt[group][nestedKey]
   final groupData = rt[group];
   if (groupData is Map<String, dynamic>) {
@@ -35,7 +35,7 @@ dynamic _rtPick(
 
 double _rtPickNum(
     Map<String, dynamic> rt, String flatKey, String group, String nestedKey,
-    [double fallback = 0]) {
+    [double fallback = 0,]) {
   return (_rtPick(rt, flatKey, group, nestedKey) as num?)?.toDouble() ??
       fallback;
 }
@@ -565,7 +565,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
                             : AppColors.warning.withValues(alpha: 0.12),
                         child: Padding(
                           padding: EdgeInsets.symmetric(
-                              horizontal: 16.w, vertical: 8.h),
+                              horizontal: 16.w, vertical: 8.h,),
                           child: Row(
                             children: [
                               Icon(
@@ -896,10 +896,10 @@ class _DeviceControlPageState extends State<DeviceControlPage>
         _rtPickNum(_realtimeData, 'pv_power', 'pv', 'pv_total_power');
     // V2: bat.battery_charge_power - bat.battery_discharge_power, V1: battery_power
     final chgW = (_rtPick(_realtimeData, 'battery_charge_power', 'bat',
-            'battery_charge_power') as num?)
+            'battery_charge_power',) as num?)
         ?.toDouble();
     final disW = (_rtPick(_realtimeData, 'battery_discharge_power', 'bat',
-            'battery_discharge_power') as num?)
+            'battery_discharge_power',) as num?)
         ?.toDouble();
     final battPower = (chgW != null || disW != null)
         ? (chgW ?? 0) - (disW ?? 0)
@@ -995,7 +995,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
         Text(
           label,
           style: TextStyle(
-              fontSize: 11.sp, color: AppColor.textSecondary(context)),
+              fontSize: 11.sp, color: AppColor.textSecondary(context),),
         ),
         SizedBox(height: 2.h),
         Text(

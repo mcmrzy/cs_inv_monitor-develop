@@ -101,7 +101,7 @@ void main() {
 
         expect(text, '广东省 深圳市 南山区');
         expect(text.contains('中国'), isFalse,
-            reason: 'address must not hard-code a China prefix');
+            reason: 'address must not hard-code a China prefix',);
       });
 
       test('skips empty and missing segments', () {

@@ -106,7 +106,7 @@ Widget _kvRow(
 
 /// 大号数值展示（数值 + 下方说明标签）
 Widget _bigValue(
-    BuildContext context, String value, String label, Color color) {
+    BuildContext context, String value, String label, Color color,) {
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
@@ -192,19 +192,19 @@ class RealtimeDataTab extends StatelessWidget {
           title: l10n.str('pv'),
           rows: [
             _kvRow(context, l10n.str('energy_pv1_voltage'),
-                num1(pv?.pvVoltage, 'V', 'pv1_voltage')),
+                num1(pv?.pvVoltage, 'V', 'pv1_voltage'),),
             _kvRow(context, l10n.str('energy_pv1_current'),
-                num1(pv?.pvCurrent, 'A', 'pv1_current')),
+                num1(pv?.pvCurrent, 'A', 'pv1_current'),),
             _kvRow(context, l10n.str('energy_pv1_power'),
-                num1(pv?.pv1Power, 'W', 'pv1_power')),
+                num1(pv?.pv1Power, 'W', 'pv1_power'),),
             _kvRow(context, l10n.str('telemetry_pv_total_power'),
-                num1(pv?.pvPower, 'W', 'pv_total_power')),
+                num1(pv?.pvPower, 'W', 'pv_total_power'),),
             _kvRow(context, l10n.str('energy_pv2_voltage'),
-                num1(pv?.pv2Voltage, 'V', 'pv2_voltage')),
+                num1(pv?.pv2Voltage, 'V', 'pv2_voltage'),),
             _kvRow(context, l10n.str('energy_pv2_current'),
-                num1(pv?.pv2Current, 'A', 'pv2_current')),
+                num1(pv?.pv2Current, 'A', 'pv2_current'),),
             _kvRow(context, l10n.str('energy_pv2_power'),
-                num1(pv?.pv2Power, 'W', 'pv2_power')),
+                num1(pv?.pv2Power, 'W', 'pv2_power'),),
             _kvRow(
               context,
               l10n.str('energy_mppt_state'),
@@ -220,10 +220,10 @@ class RealtimeDataTab extends StatelessWidget {
           title: l10n.str('battery_label'),
           rows: [
             _kvRow(context, l10n.str('voltage'),
-                num1(battery?.voltage, 'V', 'battery_voltage')),
+                num1(battery?.voltage, 'V', 'battery_voltage'),),
             _kvRow(context, 'SOC', num1(battery?.soc, '%', 'battery_soc')),
             _kvRow(context, l10n.str('current'),
-                num1(battery?.current, 'A', 'battery_current')),
+                num1(battery?.current, 'A', 'battery_current'),),
             _kvRow(
               context,
               l10n.str('energy_battery_temp_max'),
@@ -258,25 +258,25 @@ class RealtimeDataTab extends StatelessWidget {
           title: l10n.str('inverter'),
           rows: [
             _kvRow(context, l10n.str('inverter_temp'),
-                num1(sys?.tempInv, '℃', 'inverter_temperature')),
+                num1(sys?.tempInv, '℃', 'inverter_temperature'),),
             _kvRow(context, l10n.str('boost_temp'),
-                num1(sys?.boostTemp, '℃', 'boost_temperature')),
+                num1(sys?.boostTemp, '℃', 'boost_temperature'),),
             _kvRow(
               context,
               l10n.str('transformer_temp'),
               num1(sys?.transformerTemp, '℃', 'transformer_temperature'),
             ),
             _kvRow(context, l10n.str('pv_temp'),
-                num1(sys?.pvTemp, '℃', 'pv_temperature')),
+                num1(sys?.pvTemp, '℃', 'pv_temperature'),),
             _kvRow(
               context,
               l10n.str('energy_dc_bus_voltage'),
               num1(sys?.dcBusVoltage, 'V', 'dc_bus_voltage'),
             ),
             _kvRow(context, l10n.str('mppt_fan_speed'),
-                num1(data?.fan?.mpptSpeed, '%', 'mppt_fan_speed')),
+                num1(data?.fan?.mpptSpeed, '%', 'mppt_fan_speed'),),
             _kvRow(context, l10n.str('inv_fan_speed'),
-                num1(data?.fan?.invSpeed, '%', 'inv_fan_speed')),
+                num1(data?.fan?.invSpeed, '%', 'inv_fan_speed'),),
             _kvRow(
               context,
               l10n.str('energy_runtime_hours'),
@@ -294,15 +294,15 @@ class RealtimeDataTab extends StatelessWidget {
           title: l10n.str('ac_output'),
           rows: [
             _kvRow(context, l10n.str('voltage'),
-                num1(ac?.voltage, 'V', 'ac_output_voltage')),
+                num1(ac?.voltage, 'V', 'ac_output_voltage'),),
             _kvRow(context, l10n.str('current'),
-                num1(ac?.current, 'A', 'output_current')),
+                num1(ac?.current, 'A', 'output_current'),),
             _kvRow(context, l10n.str('ac_output_power'),
-                num1(ac?.power, 'W', 'output_power')),
+                num1(ac?.power, 'W', 'output_power'),),
             _kvRow(context, l10n.str('frequency'),
-                num1(ac?.frequency, 'Hz', 'ac_output_frequency')),
+                num1(ac?.frequency, 'Hz', 'ac_output_frequency'),),
             _kvRow(context, l10n.str('load_rate'),
-                num1(sys?.loadPercent, '%', 'load_percent')),
+                num1(sys?.loadPercent, '%', 'load_percent'),),
             _kvRow(
               context,
               l10n.str('energy_power_factor'),
@@ -368,37 +368,37 @@ class EnergyStatsTab extends StatelessWidget {
           title: l10n.str('time_today'),
           rows: [
             _kvRow(context, l10n.str('pv_generation'),
-                kwh(reading(energy?.dailyPV, ['daily_pv_energy']))),
+                kwh(reading(energy?.dailyPV, ['daily_pv_energy'])),),
             _kvRow(context, l10n.str('battery_charge'),
-                kwh(reading(energy?.dailyCharge, ['daily_charge_energy']))),
+                kwh(reading(energy?.dailyCharge, ['daily_charge_energy'])),),
             _kvRow(
                 context,
                 l10n.str('battery_discharge'),
                 kwh(reading(
-                    energy?.dailyDischarge, ['daily_discharge_energy']))),
+                    energy?.dailyDischarge, ['daily_discharge_energy'],),),),
             _kvRow(
                 context,
                 l10n.str('energy_load_usage'),
                 kwh(reading(energy?.dailyLoad,
-                    ['daily_load_energy', 'output_energy_daily']))),
+                    ['daily_load_energy', 'output_energy_daily'],),),),
             // V2 能量分项（仅在有值时显示）
             if (reading(energy?.dailyGenEnergy, ['gen_energy_daily']) != null)
               _kvRow(context, l10n.str('energy_gen_daily'),
-                  kwh(energy?.dailyGenEnergy)),
+                  kwh(energy?.dailyGenEnergy),),
             if (reading(
-                    energy?.dailyAcChargeEnergy, ['ac_charge_energy_daily']) !=
+                    energy?.dailyAcChargeEnergy, ['ac_charge_energy_daily'],) !=
                 null)
               _kvRow(context, l10n.str('energy_ac_charge_daily'),
-                  kwh(energy?.dailyAcChargeEnergy)),
+                  kwh(energy?.dailyAcChargeEnergy),),
             if (reading(
-                    energy?.dailyAcBypassEnergy, ['ac_bypass_energy_daily']) !=
+                    energy?.dailyAcBypassEnergy, ['ac_bypass_energy_daily'],) !=
                 null)
               _kvRow(context, l10n.str('energy_ac_bypass_daily'),
-                  kwh(energy?.dailyAcBypassEnergy)),
+                  kwh(energy?.dailyAcBypassEnergy),),
             if (reading(energy?.dailyOutputEnergy, ['output_energy_daily']) !=
                 null)
               _kvRow(context, l10n.str('energy_output_daily'),
-                  kwh(energy?.dailyOutputEnergy)),
+                  kwh(energy?.dailyOutputEnergy),),
           ],
         ),
         // ── 累计 ──
@@ -430,26 +430,26 @@ class EnergyStatsTab extends StatelessWidget {
                 context,
                 l10n.str('energy_total_load'),
                 kwh(reading(energy?.totalLoad,
-                    ['total_load_energy', 'output_energy_total'])),
+                    ['total_load_energy', 'output_energy_total'],),),
               ),
               // V2 累计能量分项（仅在有值时显示）
               if (reading(energy?.totalGenEnergy, ['gen_energy_total']) != null)
                 _kvRow(context, l10n.str('energy_gen_total'),
-                    kwh(energy?.totalGenEnergy)),
+                    kwh(energy?.totalGenEnergy),),
               if (reading(energy?.totalAcChargeEnergy,
-                      ['ac_charge_energy_total']) !=
+                      ['ac_charge_energy_total'],) !=
                   null)
                 _kvRow(context, l10n.str('energy_ac_charge_total'),
-                    kwh(energy?.totalAcChargeEnergy)),
+                    kwh(energy?.totalAcChargeEnergy),),
               if (reading(energy?.totalAcBypassEnergy,
-                      ['ac_bypass_energy_total']) !=
+                      ['ac_bypass_energy_total'],) !=
                   null)
                 _kvRow(context, l10n.str('energy_ac_bypass_total'),
-                    kwh(energy?.totalAcBypassEnergy)),
+                    kwh(energy?.totalAcBypassEnergy),),
               if (reading(energy?.totalOutputEnergy, ['output_energy_total']) !=
                   null)
                 _kvRow(context, l10n.str('energy_output_total'),
-                    kwh(energy?.totalOutputEnergy)),
+                    kwh(energy?.totalOutputEnergy),),
             ],
           ),
         ),
@@ -655,7 +655,7 @@ class DeviceHealthTab extends StatelessWidget {
               ),
               SizedBox(height: 8.h),
               _fanBar(
-                  context, l10n.str('mppt_fan_speed'), data?.fan?.mpptSpeed),
+                  context, l10n.str('mppt_fan_speed'), data?.fan?.mpptSpeed,),
               SizedBox(height: 10.h),
               _fanBar(context, l10n.str('inv_fan_speed'), data?.fan?.invSpeed),
               SizedBox(height: 8.h),

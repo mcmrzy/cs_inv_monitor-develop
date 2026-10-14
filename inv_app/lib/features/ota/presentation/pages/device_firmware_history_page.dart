@@ -8,7 +8,7 @@ import 'package:inv_app/l10n/app_localizations.dart';
 
 class DeviceFirmwareHistoryPage extends StatefulWidget {
   const DeviceFirmwareHistoryPage(
-      {super.key, required this.deviceSN, this.repository});
+      {super.key, required this.deviceSN, this.repository,});
   final String deviceSN;
   final OtaRepository? repository;
   @override
@@ -71,28 +71,28 @@ class _DeviceFirmwareHistoryPageState extends State<DeviceFirmwareHistoryPage> {
                 const Center(
                     child: Padding(
                         padding: EdgeInsets.all(32),
-                        child: CircularProgressIndicator()))
+                        child: CircularProgressIndicator(),),)
               else if (_items.isEmpty && _error != null)
                 Center(
                     child: Column(children: [
                   Text(l10n.str('upgrade_history_load_failed')),
                   TextButton(
                       onPressed: () => _load(reset: true),
-                      child: Text(l10n.retry))
-                ]))
+                      child: Text(l10n.retry),),
+                ],),)
               else if (_items.isEmpty)
                 Padding(
                     padding: const EdgeInsets.all(32),
                     child:
-                        Center(child: Text(l10n.str('upgrade_history_empty'))))
+                        Center(child: Text(l10n.str('upgrade_history_empty'))),)
               else
                 ..._items.indexed.map((entry) => DeviceFirmwareHistoryTile(
                     item: entry.$2,
                     isFirst: entry.$1 == 0,
-                    isLast: entry.$1 == _items.length - 1)),
+                    isLast: entry.$1 == _items.length - 1,),),
               if (_items.isNotEmpty && _error != null)
                 Text(l10n.str('upgrade_history_load_failed'),
-                    textAlign: TextAlign.center),
+                    textAlign: TextAlign.center,),
               if (_hasMore)
                 TextButton(
                     onPressed: _loading
@@ -103,9 +103,9 @@ class _DeviceFirmwareHistoryPageState extends State<DeviceFirmwareHistoryPage> {
                           },
                     child: _loading
                         ? const CircularProgressIndicator()
-                        : Text(l10n.str('load_more'))),
+                        : Text(l10n.str('load_more')),),
             ],
-          )),
+          ),),
     );
   }
 }

@@ -91,7 +91,7 @@ class DownloadProgressEvent {
   final double progress;
 
   const DownloadProgressEvent(
-      {required this.firmwareId, required this.progress});
+      {required this.firmwareId, required this.progress,});
 }
 
 class FirmwareDownloadService {

@@ -55,7 +55,7 @@ class _OtaRepo implements OtaRepository {
             updateAvailable: true,
           ),
         ],
-      ));
+      ),);
 
   @override
   Future<Either<Failure, DeviceFirmwareHistoryPage>> getDeviceHistory(
@@ -72,7 +72,7 @@ class _OtaRepo implements OtaRepository {
         total: 0,
         page: page,
         pageSize: pageSize,
-      ));
+      ),);
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -88,7 +88,7 @@ void main() {
       'current_main_version': 'V8.8.8',
       'firmware_id': 99,
       'chips_to_upgrade': <dynamic>[],
-    });
+    },);
     whenListen(
       bloc,
       Stream<OtaState>.value(legacyPackage),

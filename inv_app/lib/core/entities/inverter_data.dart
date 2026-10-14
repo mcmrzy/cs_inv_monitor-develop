@@ -796,10 +796,10 @@ class InverterRealtime {
     final sysStatusRaw =
         json['sys_status'] is Map ? json['sys_status'] : json['sys'];
     final sysStatusMap =
-        section(SystemStatus().toJson().keys) ?? extractGroupData(sysStatusRaw);
+        section(const SystemStatus().toJson().keys) ?? extractGroupData(sysStatusRaw);
 
     final acMap =
-        section(ACData().toJson().keys) ?? extractGroupData(json['ac']);
+        section(const ACData().toJson().keys) ?? extractGroupData(json['ac']);
     final pvMap = section(const [
           'pv1_voltage',
           'pv1_current',
@@ -819,7 +819,7 @@ class InverterRealtime {
 
     // V2.1 新增组：fan（双风扇转速）/ diag（诊断量）
     final fanMap =
-        section(FanData().toJson().keys) ?? extractGroupData(json['fan']);
+        section(const FanData().toJson().keys) ?? extractGroupData(json['fan']);
     final diagMap = extractGroupData(json['diag']);
 
     return InverterRealtime(
@@ -841,7 +841,7 @@ class InverterRealtime {
           ? OnlineStatus.fromJson(json['online_status'] as Map<String, dynamic>)
           : json['online'] != null
               ? OnlineStatus(
-                  online: json['online'] == true || json['online'] == 1)
+                  online: json['online'] == true || json['online'] == 1,)
               : null,
       deviceInfo: json['device_info'] is Map
           ? DeviceInfo.fromJson(json['device_info'] as Map<String, dynamic>)

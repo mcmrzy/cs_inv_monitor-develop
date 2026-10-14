@@ -161,7 +161,7 @@ Map<String, dynamic> mergeControlState(Map<String, dynamic> state) {
 /// 用于分类摘要等"设备真实值"展示（读取设备配置后不被旧 desired 遮蔽，
 /// 与 Web 端 getSummaryValue 对齐）。
 Map<String, dynamic> mergeControlStateReportedFirst(
-    Map<String, dynamic> state) {
+    Map<String, dynamic> state,) {
   final desired = state['desired'];
   final reported = state['reported'];
   return {

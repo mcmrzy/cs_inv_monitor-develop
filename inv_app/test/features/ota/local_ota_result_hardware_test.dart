@@ -27,13 +27,13 @@ void main() {
               targetChip: 'arm',
               newVersion: '1.2.0',
               firmwareId: 42,
-            ))
+            ),)
         .thenAnswer(
-            (_) async => const Left(ServerFailure('incompatible hardware')));
+            (_) async => const Left(ServerFailure('incompatible hardware')),);
     final queue = LocalOtaResultSyncQueue(
-        repository: repository, sharedPreferences: prefs);
+        repository: repository, sharedPreferences: prefs,);
     await queue.enqueue(
-        sn: 'SN', targetChip: 'arm', newVersion: '1.2.0', firmwareId: 42);
+        sn: 'SN', targetChip: 'arm', newVersion: '1.2.0', firmwareId: 42,);
     await Future<void>.delayed(Duration.zero);
     expect(queue.pendingCount, 1);
     final stored =
@@ -46,9 +46,9 @@ void main() {
           targetChip: 'arm',
           newVersion: '1.2.0',
           firmwareId: 42,
-        )).thenAnswer((_) async => const Right(<String, dynamic>{}));
+        ),).thenAnswer((_) async => const Right(<String, dynamic>{}));
     final restarted = LocalOtaResultSyncQueue(
-        repository: repository, sharedPreferences: prefs);
+        repository: repository, sharedPreferences: prefs,);
     await restarted.flush();
     expect(restarted.pendingCount, 0);
     verify(() => repository.reportLocalOTAResult(
@@ -56,7 +56,7 @@ void main() {
           targetChip: 'arm',
           newVersion: '1.2.0',
           firmwareId: 42,
-        )).called(2);
+        ),).called(2);
     await restarted.dispose();
   });
 
@@ -77,7 +77,7 @@ void main() {
         .thenAnswer((_) async => Response<dynamic>(
               requestOptions: RequestOptions(path: '/'),
               data: {'code': 0},
-            ));
+            ),);
     await OtaRemoteDataSource(dio).reportLocalOTAResult(
       sn: 'SN',
       targetChip: 'arm',
@@ -87,7 +87,7 @@ void main() {
     final sent = verify(() => dio.post<dynamic>(
           '/ota/devices/SN/local-ota-result',
           data: captureAny(named: 'data'),
-        )).captured.single as Map;
+        ),).captured.single as Map;
     expect(sent['firmware_id'], 42);
   });
 }

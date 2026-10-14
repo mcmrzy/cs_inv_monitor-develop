@@ -110,7 +110,7 @@ void main() {
     test('OTA firmware resources accepts list data', () async {
       final remote = _OtaRemote();
       when(() => remote.getFirmwareResources(any(),
-          targetChip: any(named: 'targetChip'))).thenAnswer(
+          targetChip: any(named: 'targetChip'),),).thenAnswer(
         (_) async => responseWith({
           'code': 0,
           'data': [

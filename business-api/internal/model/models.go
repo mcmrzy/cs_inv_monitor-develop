@@ -81,6 +81,7 @@ type Device struct {
 	Alias              string                 `json:"alias"`
 	Remark             string                 `json:"remark"`
 	UserID             int64                  `json:"user_id"`
+	Owner              *DeviceOwner           `json:"owner"`
 	Timezone           string                 `json:"timezone"`
 	Status             int                    `json:"status"`
 	CurrentPower       float64                `json:"current_power"`
@@ -90,6 +91,11 @@ type Device struct {
 	LastOnlineAt       *time.Time             `json:"last_online_at"`
 	CreatedAt          time.Time              `json:"created_at"`
 	UpdatedAt          time.Time              `json:"updated_at"`
+}
+
+type DeviceOwner struct {
+	Nickname string `json:"nickname"`
+	Phone    string `json:"phone"`
 }
 
 // OfflineOpLog represents one local operation log uploaded by the App

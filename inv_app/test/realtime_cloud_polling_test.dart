@@ -30,11 +30,11 @@ void main() {
               'ac_voltage': voltage,
               'ac_active_power': 510,
               'battery_soc': 80,
-              'mppt_state': 2
-            }
+              'mppt_state': 2,
+            },
           },
         }),
-        200));
+        200,),);
     try {
       await http.runWithClient(() async {
         await service.refresh('H1ZZX0013900002H');
@@ -42,7 +42,7 @@ void main() {
         voltage = 235;
         await service.refresh('H1ZZX0013900002H');
         await Future<void>.delayed(Duration.zero);
-      }, () => client);
+      }, () => client,);
       expect(values, hasLength(2));
       expect(values.first.ac?.voltage, 230);
       expect(values.last.ac?.voltage, 235);
