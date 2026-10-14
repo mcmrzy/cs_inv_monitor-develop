@@ -141,6 +141,16 @@ func main() {
 	var mqttClient *mqtt.Client
 	if cfg.MQTT.Broker != "" {
 		mqttClient = mqtt.NewClient(&cfg.MQTT, hub)
+		bindingKey, keyErr := service.BindingSigningKey(os.Getenv("BINDING_SIGNING_KEY_HEX"))
+		if keyErr != nil {
+			logger.Fatal("Invalid binding signing configuration", zap.Error(keyErr))
+		}
+		if bindingKey != nil {
+			bindingService := service.NewDeviceBindingStateService(repository.NewDeviceRepository(db), mqttClient, bindingKey)
+			bindingService.Start(ctx)
+			mqttClient.SetBindingQueryHandler(bindingService.Enqueue)
+			logger.Info("Signed binding state responder enabled", zap.Int("key_id", 1))
+		}
 		if err := mqttClient.Connect(ctx); err != nil {
 			logger.Fatal("Failed to connect MQTT", zap.Error(err))
 		}
@@ -418,38 +428,38 @@ func setupRouter(cfg *config.Config, dataService *service.DataService, stateMana
 	router.GET("/metrics", func(c *gin.Context) {
 		stats := dataService.GetMQTTStats()
 		c.Header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
-		
+
 		var builder strings.Builder
-		
+
 		// Write MQTT stats
 		builder.WriteString("# HELP inv_device_mqtt_online_clients Number of online MQTT device clients\n")
 		builder.WriteString("# TYPE inv_device_mqtt_online_clients gauge\n")
 		builder.WriteString(fmt.Sprintf("inv_device_mqtt_online_clients %d\n", stats.OnlineClients))
-		
+
 		builder.WriteString("# HELP inv_device_mqtt_cmd_sent Total MQTT commands sent\n")
 		builder.WriteString("# TYPE inv_device_mqtt_cmd_sent counter\n")
 		builder.WriteString(fmt.Sprintf("inv_device_mqtt_cmd_sent %d\n", stats.CmdSent))
-		
+
 		// Write IngestMetrics in Prometheus format
 		ingestMetrics := stateManager.GetIngestMetrics()
 		if ingestMetrics != nil {
 			builder.WriteString(ingestMetrics.PrometheusFormat())
 		}
-		
+
 		// Write Kafka consumer lag and DLQ metrics
 		healthMetrics := stateManager.GetHealthMetrics(c.Request.Context())
 		builder.WriteString("# HELP inv_kafka_consumer_lag_total Total Kafka consumer lag across all partitions\n")
 		builder.WriteString("# TYPE inv_kafka_consumer_lag_total gauge\n")
 		builder.WriteString(fmt.Sprintf("inv_kafka_consumer_lag_total %d\n", healthMetrics.KafkaLag))
-		
+
 		builder.WriteString("# HELP inv_dlq_pending_messages_total Pending messages in dead letter queue\n")
 		builder.WriteString("# TYPE inv_dlq_pending_messages_total gauge\n")
 		builder.WriteString(fmt.Sprintf("inv_dlq_pending_messages_total %d\n", healthMetrics.DLQPending))
-		
+
 		builder.WriteString("# HELP inv_service_uptime_seconds Service uptime in seconds\n")
 		builder.WriteString("# TYPE inv_service_uptime_seconds counter\n")
 		builder.WriteString(fmt.Sprintf("inv_service_uptime_seconds %.0f\n", healthMetrics.UptimeSecs))
-		
+
 		c.String(http.StatusOK, builder.String())
 	})
 

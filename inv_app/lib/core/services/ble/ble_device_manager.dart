@@ -436,7 +436,7 @@ class BleDeviceSession {
     if (resp['mode'] != 'pin_check' || resp['result'] != 'ok') {
       final err = (resp['error'] as String?) ?? 'pin rejected';
       throw BleCommandException(
-          err == 'locked' ? 'PIN_LOCKED' : 'PIN_REJECTED', err);
+          err == 'locked' ? 'PIN_LOCKED' : 'PIN_REJECTED', err,);
     }
   }
 
@@ -444,7 +444,7 @@ class BleDeviceSession {
   /// [deviceKeyBase64] App 本地生成的 32B Base64 key；[pin] 场景 B 必传（设备端校验），
   /// 场景 A 配网已验证可不传；[issuedAt] 设备时钟校准用（缺省当前时间）。
   Future<void> bind(String deviceKeyBase64,
-      {String? pin, DateTime? issuedAt}) async {
+      {String? pin, DateTime? issuedAt,}) async {
     final connection = _connection;
     if (connection == null) {
       throw const BleCommandException('UNAUTHENTICATED', 'not connected');
@@ -493,7 +493,7 @@ class BleDeviceSession {
       final key = base64Decode(deviceKeyBase64);
       if (key.length != 32) {
         throw const BleCommandException(
-            'UNAUTHENTICATED', 'invalid device key');
+            'UNAUTHENTICATED', 'invalid device key',);
       }
       final phoneNonce = List<int>.generate(16, (_) => _random.nextInt(256));
       final initId = _generateMessageId();
@@ -537,7 +537,7 @@ class BleDeviceSession {
           'message_id': proofId,
           'session_id': connectionSessionId,
           'body': {'phone_proof': base64Encode(phoneProof)},
-        })),
+        }),),
       );
       final result = await resultFuture.timeout(authTimeout);
       final body = (result['body'] as Map).cast<String, dynamic>();
@@ -552,7 +552,7 @@ class BleDeviceSession {
       if (body['result'] != 'ok' ||
           body['device_proof'] is! String ||
           !_constantTimeEquals(
-              base64Decode(body['device_proof'] as String), expected)) {
+              base64Decode(body['device_proof'] as String), expected,)) {
         throw const BleCommandException(
           'UNAUTHENTICATED',
           'digest mismatch',
@@ -564,7 +564,7 @@ class BleDeviceSession {
         _setState(BleDeviceState.connecting);
       }
       throw const BleCommandException(
-          'AUTH_TIMEOUT', 'authentication timed out');
+          'AUTH_TIMEOUT', 'authentication timed out',);
     } catch (e) {
       // 鉴权失败不断开连接，交由上层决定（可重试或走绑定）
       if (_state != BleDeviceState.disconnected) {
@@ -1079,7 +1079,7 @@ class BleDeviceManager {
     }
   }
 
-  /// 从广播名解析 SN（广播名形如 CS_INV_<SN> / CS-INV-<SN>）；
+  /// 从广播名解析 SN（广播名形如 `CS_INV_<SN>` / `CS-INV-<SN>`）；
   /// 无法解析时返回空串
   static String parseSnFromAdvName(String name) {
     return name

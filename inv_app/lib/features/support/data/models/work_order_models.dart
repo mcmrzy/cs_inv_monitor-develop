@@ -132,11 +132,11 @@ class WorkOrderDetail {
           _tryParse(json['updatedAt'] ?? json['updated_at']) ?? DateTime.now(),
       timeline: (json['timeline'] as List? ?? const [])
           .map((e) => WorkOrderTimelineEvent.fromJson(
-              Map<String, dynamic>.from(e as Map)))
+              Map<String, dynamic>.from(e as Map),),)
           .toList(),
       attachments: (json['attachments'] as List? ?? const [])
           .map((e) => WorkOrderAttachment.fromJson(
-              Map<String, dynamic>.from(e as Map)))
+              Map<String, dynamic>.from(e as Map),),)
           .toList(),
     );
   }

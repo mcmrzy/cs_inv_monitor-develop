@@ -43,7 +43,7 @@ void main() {
     expect(
       supportsLocalOtaDeviceTarget(target: 'dsp', deviceInfo: const {
         'supported_upgrade_modules': ['communication_module', 'system_controller'],
-      }),
+      },),
       isFalse,
     );
     expect(

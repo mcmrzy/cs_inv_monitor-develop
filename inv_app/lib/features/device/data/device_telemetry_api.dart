@@ -12,7 +12,7 @@ class DeviceTelemetryPage {
 
 class DeviceTelemetryApi {
   DeviceTelemetryApi(this.dio,
-      {String timezone = TimezoneUtils.defaultTimezone})
+      {String timezone = TimezoneUtils.defaultTimezone,})
       : timezone = _validatedTimezone(timezone);
   final Dio dio;
   final String timezone;
@@ -32,7 +32,7 @@ class DeviceTelemetryApi {
   }
 
   Future<DeviceTelemetryPage> getHistory(String sn, DateTime day,
-      {int page = 1, int pageSize = 20, String granularity = 'raw'}) async {
+      {int page = 1, int pageSize = 20, String granularity = 'raw',}) async {
     final start = tz.TZDateTime(location, day.year, day.month, day.day);
     final end = tz.TZDateTime(location, day.year, day.month, day.day + 1)
         .subtract(const Duration(microseconds: 1));
@@ -50,7 +50,7 @@ class DeviceTelemetryApi {
     );
     final data = unwrapApiResponse<Map<String, dynamic>>(response.data,
         validate: (value) => value is Map<String, dynamic>,
-        expected: 'an object');
+        expected: 'an object',);
     if (data['items'] is! List || data['total'] is! num) {
       throw const FormatException('Invalid telemetry history page');
     }
@@ -59,6 +59,6 @@ class DeviceTelemetryApi {
       return normalizeRealtimePayload(Map<String, dynamic>.from(row));
     }).toList(growable: false);
     return DeviceTelemetryPage(
-        items: rows, total: (data['total'] as num).toInt());
+        items: rows, total: (data['total'] as num).toInt(),);
   }
 }

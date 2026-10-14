@@ -203,7 +203,7 @@ class _HomePageState extends State<HomePage> {
           if (state is StationReorderSuccess) {
             AppToast.show(
                 context, AppLocalizations.of(context)!.stationOrderSaved,
-                type: ToastType.success);
+                type: ToastType.success,);
             context.read<StationBloc>().add(StationSummaryRequested());
           }
           // 统计刷新：将聚合数据推送到桌面小组件（统计 + 能量流）
@@ -476,7 +476,7 @@ class _HomePageState extends State<HomePage> {
                 Text(
                   l10n.pvInverterMonitor,
                   style: TextStyle(
-                      fontSize: 11.sp, color: AppColor.textHint(context)),
+                      fontSize: 11.sp, color: AppColor.textHint(context),),
                 ),
               ],
             ),
@@ -960,7 +960,7 @@ class _AnimatedHdrBtnState extends State<_AnimatedHdrBtn>
             borderRadius: BorderRadius.circular(12.r),
           ),
           child: Icon(widget.icon,
-              size: 20.sp, color: AppColor.textSecondary(context)),
+              size: 20.sp, color: AppColor.textSecondary(context),),
         ),
       ),
     );
@@ -1101,7 +1101,7 @@ class _StationActionSheetState extends State<_StationActionSheet>
         // 小屏/大字体下可滚动，避免取消按钮溢出（内容不超限时视觉不变）
         child: SingleChildScrollView(
           child: ConstrainedBox(
-            constraints: BoxConstraints(
+            constraints: const BoxConstraints(
               minHeight: 0,
             ),
             child: Padding(
@@ -1120,7 +1120,7 @@ class _StationActionSheetState extends State<_StationActionSheet>
                           borderRadius: BorderRadius.circular(8),
                           color: AppColors.primary.withValues(alpha: 0.12),
                         ),
-                        child: Icon(
+                        child: const Icon(
                           Icons.solar_power,
                           size: 22,
                           color: AppColors.primary,

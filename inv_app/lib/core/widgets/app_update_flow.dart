@@ -41,6 +41,7 @@ class AppUpdateFlow {
     final info = await updateService.checkUpdate(
       await updateService.resolveCurrentVersionCode(),
     );
+    if (!context.mounted) return false;
     if (!info.hasUpdate) {
       final l10n = AppLocalizations.of(context)!;
       showDialog<void>(

@@ -183,7 +183,7 @@ class LocalOtaResultSyncQueue {
       return decoded
           .whereType<Map>()
           .map((e) =>
-              PendingLocalOtaResult.fromJson(Map<String, dynamic>.from(e)))
+              PendingLocalOtaResult.fromJson(Map<String, dynamic>.from(e)),)
           .whereType<PendingLocalOtaResult>()
           .toList();
     } catch (e) {

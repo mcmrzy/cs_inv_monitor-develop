@@ -16,7 +16,7 @@ class DeviceFirmwareDetailPage extends StatefulWidget {
       {super.key,
       required this.deviceSN,
       this.deviceRepository,
-      this.otaRepository});
+      this.otaRepository,});
   final String deviceSN;
   final DeviceRepository? deviceRepository;
   final OtaRepository? otaRepository;
@@ -178,7 +178,7 @@ class _DeviceFirmwareDetailPageState extends State<DeviceFirmwareDetailPage> {
         content: Text(l10n.str('firmware_upgrade_confirm_single', {
           'module': moduleLabel,
           'version': module.latestVersion,
-        })),
+        }),),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -287,17 +287,17 @@ class _DeviceFirmwareDetailPageState extends State<DeviceFirmwareDetailPage> {
                 const Center(
                     child: Padding(
                         padding: EdgeInsets.all(32),
-                        child: CircularProgressIndicator()))
+                        child: CircularProgressIndicator(),),)
               else if (_deviceError != null)
                 _ErrorCard(
                     text: l10n.str('firmware_device_load_failed'),
-                    onRetry: _loadDevice)
+                    onRetry: _loadDevice,)
               else ...[
                 _DeviceHero(
                     name: name,
                     model: model,
                     serialNumber: widget.deviceSN,
-                    online: online),
+                    online: online,),
                 const SizedBox(height: 24),
                 _SectionTitle(l10n.str('firmware_device_information')),
                 Container(
@@ -318,15 +318,15 @@ class _DeviceFirmwareDetailPageState extends State<DeviceFirmwareDetailPage> {
                     itemBuilder: (context, index) => [
                       _InfoCell(label: l10n.str('device_model'), value: model),
                       _InfoCell(
-                          label: l10n.str('firmware_device_name'), value: name),
+                          label: l10n.str('firmware_device_name'), value: name,),
                       _InfoCell(
                           label: l10n.str('firmware_device_sn'),
-                          value: widget.deviceSN),
+                          value: widget.deviceSN,),
                       _InfoCell(
                           label: l10n.str('firmware_hardware_version'),
                           value: _overview?.hardwareState == 'known'
                               ? _overview!.hardwareVersion
-                              : l10n.str('firmware_hardware_unknown')),
+                              : l10n.str('firmware_hardware_unknown'),),
                     ][index],
                   ),
                 ),
@@ -336,11 +336,11 @@ class _DeviceFirmwareDetailPageState extends State<DeviceFirmwareDetailPage> {
                   const Center(
                       child: Padding(
                           padding: EdgeInsets.all(24),
-                          child: CircularProgressIndicator()))
+                          child: CircularProgressIndicator(),),)
                 else if (_overviewError != null)
                   _ErrorCard(
                       text: l10n.str('firmware_device_load_failed'),
-                      onRetry: _loadOverview)
+                      onRetry: _loadOverview,)
                 else
                   _buildModuleCards(l10n, textScale, online),
               ],
@@ -349,36 +349,36 @@ class _DeviceFirmwareDetailPageState extends State<DeviceFirmwareDetailPage> {
                 Expanded(child: _SectionTitle(l10n.str('firmware_update_log'))),
                 TextButton(
                     onPressed: () => context.push(
-                        '/ota/device/${Uri.encodeComponent(widget.deviceSN)}/history'),
-                    child: Text(l10n.str('view_all'))),
-              ]),
+                        '/ota/device/${Uri.encodeComponent(widget.deviceSN)}/history',),
+                    child: Text(l10n.str('view_all')),),
+              ],),
               if (_loadingHistory)
                 const Center(
                     child: Padding(
                         padding: EdgeInsets.all(24),
-                        child: CircularProgressIndicator()))
+                        child: CircularProgressIndicator(),),)
               else if (_historyError != null)
                 _ErrorCard(
                     text: l10n.str('upgrade_history_load_failed'),
-                    onRetry: _loadHistory)
+                    onRetry: _loadHistory,)
               else if (_history.isEmpty)
                 Card(
                     child: Padding(
                         padding: const EdgeInsets.all(24),
                         child: Center(
-                            child: Text(l10n.str('upgrade_history_empty')))))
+                            child: Text(l10n.str('upgrade_history_empty')),),),)
               else
                 ..._history.indexed.map((entry) => DeviceFirmwareHistoryTile(
                     item: entry.$2,
                     isFirst: entry.$1 == 0,
-                    isLast: entry.$1 == _history.length - 1)),
+                    isLast: entry.$1 == _history.length - 1,),),
               const SizedBox(height: 24),
               if (_device != null && !online) ...[
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Icon(Icons.cloud_off_rounded,
-                        size: 18, color: AppColor.textSecondary(context)),
+                        size: 18, color: AppColor.textSecondary(context),),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -435,7 +435,7 @@ class _DeviceFirmwareDetailPageState extends State<DeviceFirmwareDetailPage> {
                   ),
                 ),
               ),
-            ]),
+            ],),
       ),
     );
   }
@@ -553,7 +553,7 @@ class _DeviceHero extends StatelessWidget {
             borderRadius: BorderRadius.circular(18),
           ),
           child: Icon(Icons.solar_power_rounded,
-              color: AppColor.primary(context), size: 30),
+              color: AppColor.primary(context), size: 30,),
         ),
         const SizedBox(width: 16),
         Expanded(
@@ -565,19 +565,19 @@ class _DeviceHero extends StatelessWidget {
                 style: TextStyle(
                     color: AppColor.textPrimary(context),
                     fontSize: 19,
-                    fontWeight: FontWeight.w700)),
+                    fontWeight: FontWeight.w700,),),
             const SizedBox(height: 5),
             Text(model,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: AppColor.textSecondary(context))),
+                style: TextStyle(color: AppColor.textSecondary(context)),),
             const SizedBox(height: 3),
             Text(serialNumber,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                    color: AppColor.textHint(context), fontSize: 12)),
-          ]),
+                    color: AppColor.textHint(context), fontSize: 12,),),
+          ],),
         ),
         Flexible(
           child: Container(
@@ -596,7 +596,7 @@ class _DeviceHero extends StatelessWidget {
                       shape: BoxShape.circle,
                       color: online
                           ? AppColors.successLight
-                          : AppColors.offline)),
+                          : AppColors.offline,),),
               const SizedBox(width: 6),
               Flexible(
                 child: Text(l10n.str(online ? 'online' : 'offline'),
@@ -608,12 +608,12 @@ class _DeviceHero extends StatelessWidget {
                             ? onlineTextColor
                             : AppColor.textSecondary(context),
                         fontSize: 12,
-                        fontWeight: FontWeight.w600)),
+                        fontWeight: FontWeight.w600,),),
               ),
-            ]),
+            ],),
           ),
         ),
-      ]),
+      ],),
     );
   }
 }
@@ -628,7 +628,7 @@ class _SectionTitle extends StatelessWidget {
           style: Theme.of(context)
               .textTheme
               .titleMedium
-              ?.copyWith(fontWeight: FontWeight.w700)));
+              ?.copyWith(fontWeight: FontWeight.w700),),);
 }
 
 class _InfoCell extends StatelessWidget {
@@ -646,13 +646,13 @@ class _InfoCell extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                      fontSize: 12, color: AppColor.textSecondary(context))),
+                      fontSize: 12, color: AppColor.textSecondary(context),),),
               const SizedBox(height: 5),
               Text(value,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w600)),
-            ]),
+                  style: const TextStyle(fontWeight: FontWeight.w600),),
+            ],),
       );
 }
 
@@ -725,23 +725,23 @@ class _FirmwareCard extends StatelessWidget {
                   style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
-                      color: color),
+                      color: color,),
                 ),
               ),
             ),
-        ]),
+        ],),
         const SizedBox(height: 8),
         Text(module.displayLabel(l10n),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),),
         const SizedBox(height: 4),
         Text(
           '${l10n.str('firmware_current_version')}: $currentVersion',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
-              fontSize: 11, color: AppColor.textSecondary(context)),
+              fontSize: 11, color: AppColor.textSecondary(context),),
         ),
         if (latestVersion != null && latestVersion!.isNotEmpty) ...[
           const SizedBox(height: 2),
@@ -762,7 +762,7 @@ class _FirmwareCard extends StatelessWidget {
             child: Text(
               l10n.str(compatibilityReason == 'hardware_version_unknown'
                   ? 'firmware_hardware_unknown'
-                  : 'firmware_no_compatible_firmware'),
+                  : 'firmware_no_compatible_firmware',),
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(fontSize: 11, color: AppColor.textSecondary(context)),
@@ -778,7 +778,7 @@ class _FirmwareCard extends StatelessWidget {
               style: TextStyle(
                   height: 1.3,
                   fontSize: 11,
-                  color: AppColor.textSecondary(context)),
+                  color: AppColor.textSecondary(context),),
             ),
           ),
         ] else
@@ -791,13 +791,13 @@ class _FirmwareCard extends StatelessWidget {
               style: FilledButton.styleFrom(
                 padding: EdgeInsets.zero,
                 textStyle: const TextStyle(
-                    fontSize: 11, fontWeight: FontWeight.w600),
+                    fontSize: 11, fontWeight: FontWeight.w600,),
               ),
               onPressed: onUpgrade,
               child: Text(l10n.str('firmware_upgrade_this_module')),
             ),
           ),
-      ]),
+      ],),
     );
   }
 }
@@ -814,7 +814,7 @@ class _ErrorCard extends StatelessWidget {
             padding: const EdgeInsets.all(20),
             child: Column(children: [
               Text(text),
-              TextButton(onPressed: onRetry, child: Text(l10n.retry))
-            ])));
+              TextButton(onPressed: onRetry, child: Text(l10n.retry)),
+            ],),),);
   }
 }

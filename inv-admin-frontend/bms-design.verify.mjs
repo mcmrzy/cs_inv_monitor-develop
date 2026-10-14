@@ -1,3 +1,5 @@
+import console from 'node:console'
+import { URL } from 'node:url'
 import { chromium } from '@playwright/test'
 import { mkdir } from 'node:fs/promises'
 
@@ -16,9 +18,9 @@ async function render(name, width, height, view, state = 'normal') {
   await page.getByText('交互预览 · 模拟数据').waitFor()
   if (view !== 'web') await page.locator('.mobile-header').waitFor()
   if (view !== 'mobile' && state === 'normal') await page.locator('canvas').first().waitFor()
-  await page.evaluate(() => document.fonts.ready)
+  await page.evaluate(() => globalThis.document.fonts.ready)
   await page.waitForTimeout(600)
-  const overflow = await page.evaluate(() => [...document.querySelectorAll('.mobile-main, .web-main, .preview-stage, body')]
+  const overflow = await page.evaluate(() => [...globalThis.document.querySelectorAll('.mobile-main, .web-main, .preview-stage, body')]
     .filter(e => e.scrollWidth > e.clientWidth + 1).map(e => `${e.className || e.tagName}: ${e.scrollWidth}/${e.clientWidth}`))
   if (overflow.length) throw Error(`${name} overflow: ${overflow.join(', ')}`)
   await page.screenshot({ path: `${output}/${name}.png`, fullPage: true })

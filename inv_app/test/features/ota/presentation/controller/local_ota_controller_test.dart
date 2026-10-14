@@ -7,6 +7,7 @@ import 'package:inv_app/core/services/local_communication_service.dart';
 import 'package:inv_app/features/ota/domain/entities/local_channel.dart';
 import 'package:inv_app/features/ota/domain/repositories/local_communication_repository.dart';
 import 'package:inv_app/features/ota/domain/repositories/ota_repository.dart';
+import 'package:inv_app/features/ota/domain/repositories/trusted_local_ota_transport.dart';
 import 'package:inv_app/features/ota/presentation/controller/local_ota_controller.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -17,7 +18,7 @@ class _FakeLocalCommunication implements LocalCommunicationRepository {
   Object? triggerError;
   Map<String, dynamic> deviceInfo = const {
     'device_model': 'INV-10K',
-    'hardware_version': 'HW-1'
+    'hardware_version': 'HW-1',
   };
   Map<String, dynamic> progress = const {
     'status': 'failed',
@@ -96,14 +97,21 @@ class _FakeLocalCommunication implements LocalCommunicationRepository {
       const {};
 }
 
+// A test updater adapter which has completed the trusted preflight contract.
+// Production BLE/WiFi adapters must implement cryptographic validation first.
+class _TrustedCommunication extends _FakeLocalCommunication implements TrustedLocalOtaTransport {
+  @override
+  Future<TrustedLocalOtaPreflight> preflightTrustedInstall({required String deviceSN, required int firmwareId, required LocalOtaManifest manifest, required List<String> firmwareBoardCodes}) async => TrustedLocalOtaPreflight(deviceSN: deviceSN, target: manifest.target, boardCode: 'MAIN-A', boardUid: 'abcdef0123456789', identityRevision: 2, moduleRevision: 1, authorizationId: 'auth-test', firmwareId: firmwareId, sha256: manifest.sha256);
+}
+
 void main() {
   test('collector DSP and BMS installation get a longer polling window', () {
     expect(LocalOTAController.pollTimeoutForTarget('esp'),
-        const Duration(seconds: 180));
+        const Duration(seconds: 180),);
     expect(LocalOTAController.pollTimeoutForTarget('dsp'),
-        const Duration(minutes: 20));
+        const Duration(minutes: 20),);
     expect(LocalOTAController.pollTimeoutForTarget('bms'),
-        const Duration(minutes: 20));
+        const Duration(minutes: 20),);
   });
 
   const manifest = LocalOtaManifest(
@@ -134,15 +142,29 @@ void main() {
 
   tearDown(() => controller.dispose());
 
+  void enableTrusted({_MockOtaRepository? repository}) {
+    final trusted = _TrustedCommunication()
+      ..deviceInfo = communication.deviceInfo
+      ..progress = communication.progress
+      ..triggerError = communication.triggerError
+      ..deviceInfoSequence.addAll(communication.deviceInfoSequence);
+    controller.dispose();
+    communication = trusted;
+    controller = LocalOTAController(communication: trusted, repository: repository ?? _MockOtaRepository(), channel: LocalCommunicationChannel.ble, deviceSN: 'SN001', deviceIP: '192.168.4.1', onTerminateConnection: () => terminateCount++);
+  }
+
   Future<void> execute() => controller.execute(
         filePath: '/tmp/firmware.bin',
         manifest: manifest,
         fallbackVersion: manifest.version,
         firmwareModel: 'INV-10K',
         firmwareHardwareVersions: const ['HW-1'],
+        firmwareBoardCodes: const ['MAIN-A'],
+        firmwareId: 42,
       );
 
   test('uploads, triggers, then polls in strict order', () async {
+    enableTrusted();
     await execute();
 
     expect(communication.calls, ['info', 'upload', 'trigger', 'progress']);
@@ -155,7 +177,7 @@ void main() {
     expect(controller.state.phase, LocalOTAPhase.failed);
     expect(controller.state.error, isA<LocalOtaHardwareException>());
     expect(OtaErrorMapper.l10nKeyOf(controller.state.error!),
-        'ota_err_device_hardware_unknown');
+        'ota_err_device_hardware_unknown',);
   });
 
   for (final channel in LocalCommunicationChannel.values) {
@@ -177,7 +199,7 @@ void main() {
       expect(communication.calls, ['info']);
       expect(controller.state.error, isA<LocalOtaHardwareException>());
       expect(OtaErrorMapper.l10nKeyOf(controller.state.error!),
-          'ota_err_hardware_mismatch');
+          'ota_err_hardware_mismatch',);
     });
   }
 
@@ -191,10 +213,10 @@ void main() {
     );
     expect(communication.calls, ['info']);
     expect(OtaErrorMapper.l10nKeyOf(controller.state.error!),
-        'ota_err_firmware_hardware_unknown');
+        'ota_err_firmware_hardware_unknown',);
   });
 
-  test('hw_version trim and uppercase supports explicitly shared image',
+  test('matching shared legacy hardware is diagnostic and cannot authorize installation',
       () async {
     communication.deviceInfo = const {
       'device_model': 'INV-10K',
@@ -207,7 +229,8 @@ void main() {
       firmwareModel: 'INV-10K',
       firmwareHardwareVersions: const ['HW-1', 'HW-2'],
     );
-    expect(communication.calls, ['info', 'upload', 'trigger', 'progress']);
+    expect(communication.calls, ['info']);
+    expect(controller.state.error, isA<LocalOtaAuthorizationRequiredException>());
   });
 
   for (final reported in ['1', 'V1', 'HW1']) {
@@ -215,12 +238,12 @@ void main() {
         () async {
       communication.deviceInfo = {
         'device_model': 'INV-10K',
-        'hardware_version': reported
+        'hardware_version': reported,
       };
       await execute();
       expect(communication.calls, ['info']);
       expect(OtaErrorMapper.l10nKeyOf(controller.state.error!),
-          'ota_err_hardware_mismatch');
+          'ota_err_hardware_mismatch',);
     });
   }
 
@@ -229,6 +252,7 @@ void main() {
     () async {
       final error = StateError('trigger rejected');
       communication.triggerError = error;
+      enableTrusted();
 
       await execute();
 
@@ -244,6 +268,7 @@ void main() {
     () async {
       final error = TimeoutException('trigger timed out');
       communication.triggerError = error;
+      enableTrusted();
 
       await execute();
 
@@ -331,7 +356,7 @@ void main() {
       ..progress = const {'status': 'done', 'progress': 100}
       ..deviceInfoSequence.addAll(const [
         {'device_model': 'INV-10K', 'hardware_version': 'HW-1'},
-        {'device_model': 'INV-10K', 'firmware_arm': '2.0.0'},
+        {'device_model': 'INV-10K', 'firmware_arm': '1.2.3'},
       ]);
     controller = LocalOTAController(
       communication: communication,
@@ -342,27 +367,30 @@ void main() {
       onTerminateConnection: () => terminateCount++,
     );
 
+    enableTrusted(repository: repository);
+
     await controller.execute(
       filePath: '/tmp/firmware.bin',
       manifest: manifest,
       fallbackVersion: '',
       firmwareModel: 'INV-10K',
       firmwareHardwareVersions: const ['HW-1'],
+      firmwareBoardCodes: const ['MAIN-A'],
       firmwareId: 42,
     );
 
-    expect(controller.state.newVersion, '2.0.0');
+    expect(controller.state.newVersion, '1.2.3');
     verify(
       () => repository.reportLocalOTAResult(
         sn: 'SN001',
         targetChip: 'arm',
-        newVersion: '2.0.0',
+        newVersion: '1.2.3',
         firmwareId: 42,
       ),
     ).called(1);
   });
 
-  test('BMS success reports its target version rather than ARM metadata',
+  test('BMS done with only ARM metadata cannot invent the requested version',
       () async {
     final repository = _MockOtaRepository();
     when(
@@ -408,11 +436,12 @@ void main() {
       firmwareHardwareVersions: const ['HW-1'],
     );
 
-    expect(controller.state.newVersion, '2.3.4');
-    verify(() => repository.reportLocalOTAResult(
+    expect(controller.state.newVersion, isNull);
+    expect(controller.state.phase, LocalOTAPhase.failed);
+    verifyNever(() => repository.reportLocalOTAResult(
           sn: 'SN001',
           targetChip: 'bms',
           newVersion: '2.3.4',
-        )).called(1);
+        ),);
   });
 }

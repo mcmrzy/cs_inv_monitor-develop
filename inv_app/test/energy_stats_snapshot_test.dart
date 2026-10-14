@@ -25,9 +25,9 @@ void main() {
           Scaffold(
               body: EnergyStatsTab(
                   data: InverterRealtime.fromJson({'total_pv_energy': counter}),
-                  recordedTotalPV: 100)));
+                  recordedTotalPV: 100,),),);
       expect(
-          find.text('${counter > 100 ? counter : 100.0} kWh'), findsOneWidget);
+          find.text('${counter > 100 ? counter : 100.0} kWh'), findsOneWidget,);
       if (counter > 0) expect(find.text('${counter + 100} kWh'), findsNothing);
     }
   });
@@ -36,13 +36,13 @@ void main() {
       (tester) async {
     for (final invalid in [-1.0, double.nan, double.infinity]) {
       await pumpMinimalApp(tester,
-          Scaffold(body: EnergyStatsTab(data: null, recordedTotalPV: invalid)));
+          Scaffold(body: EnergyStatsTab(data: null, recordedTotalPV: invalid)),);
       expect(find.text('--'), findsWidgets);
       expect(find.textContaining('NaN'), findsNothing);
       expect(find.text('0.0 kWh'), findsNothing);
     }
     await pumpMinimalApp(tester,
-        const Scaffold(body: EnergyStatsTab(data: null, recordedTotalPV: 0)));
+        const Scaffold(body: EnergyStatsTab(data: null, recordedTotalPV: 0)),);
     expect(find.text('0.0 kWh'), findsOneWidget);
     expect(find.text('0 kg'), findsOneWidget);
   });
@@ -58,7 +58,7 @@ void main() {
           'gen_energy_daily': 0,
           'output_energy_daily': 2,
           'output_energy_total': 12,
-        }))));
+        }),),),);
     expect(find.text('0.0 kWh'), findsOneWidget);
     expect(find.text('2.0 kWh'), findsNWidgets(2));
     expect(find.text('12.0 kWh'), findsNWidgets(2));

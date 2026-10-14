@@ -1,3 +1,5 @@
 *.jpg filter=lfs diff=lfs merge=lfs -text
 *.png filter=lfs diff=lfs merge=lfs -text
 *.sh text eol=lf
+# cmd 解析 .bat 必须 CRLF；此文件 blob 存 LF， checkout 时落地为 CRLF
+inv_app/build_release.bat text eol=crlf

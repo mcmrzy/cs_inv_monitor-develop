@@ -59,32 +59,32 @@ void main() {
     when(() => connection.read(
           BleCtProtocol.provisioningServiceUuid,
           BleCtProtocol.provisioningSnCharUuid,
-        )).thenAnswer((_) async => utf8.encode('H1CNA6K20001'));
+        ),).thenAnswer((_) async => utf8.encode('H1CNA6K20001'));
     when(() => connection.read(
           BleCtProtocol.serviceUuid,
           BleCtProtocol.infoCharUuid,
-        )).thenAnswer((_) async => utf8.encode(jsonEncode(v2Info())));
+        ),).thenAnswer((_) async => utf8.encode(jsonEncode(v2Info())));
     when(() => connection.subscribe(
           BleCtProtocol.serviceUuid,
           BleCtProtocol.authCharUuid,
-        )).thenAnswer((_) => authNotify.stream);
+        ),).thenAnswer((_) => authNotify.stream);
     when(() => connection.subscribe(
           BleCtProtocol.serviceUuid,
           BleCtProtocol.cmdResultCharUuid,
-        )).thenAnswer((_) => commandNotify.stream);
+        ),).thenAnswer((_) => commandNotify.stream);
     when(() => connection.subscribe(
           BleCtProtocol.serviceUuid,
           BleCtProtocol.telemetryCharUuid,
-        )).thenAnswer((_) => const Stream.empty());
+        ),).thenAnswer((_) => const Stream.empty());
     when(() => connection.subscribe(
           BleCtProtocol.provisioningServiceUuid,
           BleCtProtocol.otaStatusCharUuid,
-        )).thenAnswer((_) => const Stream.empty());
+        ),).thenAnswer((_) => const Stream.empty());
     when(() => connection.write(
           BleCtProtocol.serviceUuid,
           BleCtProtocol.authCharUuid,
           any(),
-        )).thenAnswer((invocation) async {
+        ),).thenAnswer((invocation) async {
       final bytes = invocation.positionalArguments[2] as List<int>;
       authWrites.add(
         (jsonDecode(utf8.decode(bytes)) as Map).cast<String, dynamic>(),
@@ -94,7 +94,7 @@ void main() {
           BleCtProtocol.serviceUuid,
           BleCtProtocol.commandCharUuid,
           any(),
-        )).thenAnswer((invocation) async {
+        ),).thenAnswer((invocation) async {
       final bytes = invocation.positionalArguments[2] as List<int>;
       commandWrites.add(
         (jsonDecode(utf8.decode(bytes)) as Map).cast<String, dynamic>(),
@@ -158,7 +158,7 @@ void main() {
         'device_nonce': 'EBESExQVFhcYGRobHB0eHw==',
         'device_ts': 1789459200,
       },
-    ))));
+    ),),),);
     await waitForAuthWrites(2);
     final proof = authWrites[1];
     final phoneNonce = base64Decode(
@@ -177,7 +177,7 @@ void main() {
       messageId: 'result-command-test',
       inReplyTo: proof['message_id'] as String,
       body: {'result': 'ok', 'device_proof': base64Encode(expected)},
-    ))));
+    ),),),);
     await future;
   }
 
@@ -240,7 +240,7 @@ void main() {
     when(() => connection.subscribe(
           BleCtProtocol.serviceUuid,
           BleCtProtocol.authCharUuid,
-        )).thenThrow(StateError('AUTH characteristic not found'));
+        ),).thenThrow(StateError('AUTH characteristic not found'));
 
     final session = await connectSession();
 
@@ -254,7 +254,7 @@ void main() {
     when(() => connection.subscribe(
           BleCtProtocol.serviceUuid,
           BleCtProtocol.authCharUuid,
-        )).thenAnswer(
+        ),).thenAnswer(
       (_) => Stream<List<int>>.error(StateError('AUTH characteristic missing')),
     );
 
@@ -310,7 +310,7 @@ void main() {
       deviceTimestamp: deviceTimestamp,
     );
     expect((proof['body'] as Map)['phone_proof'],
-        base64Encode(expectedPhoneProof));
+        base64Encode(expectedPhoneProof),);
 
     final expectedDeviceProof = BleCtProtocol.computeAuthProof(
       key: base64Decode(deviceKeyBase64),
@@ -492,7 +492,7 @@ void main() {
     when(() => connection.read(
           BleCtProtocol.serviceUuid,
           BleCtProtocol.infoCharUuid,
-        )).thenAnswer(
+        ),).thenAnswer(
       (_) async => utf8.encode(
         jsonEncode({
           'sn': 'H1CNA6K20001',
@@ -523,9 +523,9 @@ void main() {
     when(() => connection.read(
           BleCtProtocol.serviceUuid,
           BleCtProtocol.infoCharUuid,
-        )).thenAnswer((_) async => utf8.encode(
+        ),).thenAnswer((_) async => utf8.encode(
           jsonEncode(v2Info()),
-        ));
+        ),);
 
     final session = await connectSession();
     final info = await session.readInfo();
@@ -538,7 +538,7 @@ void main() {
     when(() => connection.read(
           BleCtProtocol.serviceUuid,
           BleCtProtocol.telemetryCharUuid,
-        )).thenAnswer((_) async => utf8.encode('{"power_w":3000,"status":1}'));
+        ),).thenAnswer((_) async => utf8.encode('{"power_w":3000,"status":1}'));
 
     final session = await connectSession();
     final data = await session.readTelemetrySnapshot();
@@ -551,7 +551,7 @@ void main() {
           BleCtProtocol.serviceUuid,
           BleCtProtocol.authCharUuid,
           any(),
-        )).thenAnswer((_) async {});
+        ),).thenAnswer((_) async {});
 
     final session = await connectSession();
     // 2026-09-22 起连接即就绪（不再要求绑定/鉴权）
@@ -568,7 +568,7 @@ void main() {
           BleCtProtocol.serviceUuid,
           BleCtProtocol.authCharUuid,
           any(),
-        )).thenAnswer((_) async {});
+        ),).thenAnswer((_) async {});
 
     final session = await connectSession();
     final bindFuture = session.bind('a2V5LWJhc2U2NA==');
@@ -576,11 +576,11 @@ void main() {
       'mode': 'bind',
       'result': 'error',
       'error': 'already_bound',
-    })));
+    }),),);
     await expectLater(
       bindFuture,
       throwsA(isA<BleCommandException>()
-          .having((e) => e.code, 'code', 'BIND_REJECTED')),
+          .having((e) => e.code, 'code', 'BIND_REJECTED'),),
     );
   });
 
@@ -601,7 +601,7 @@ void main() {
           BleCtProtocol.serviceUuid,
           BleCtProtocol.authCharUuid,
           any(),
-        )).thenAnswer((_) async {});
+        ),).thenAnswer((_) async {});
 
     final session = await connectSession();
     final pinFuture = session.checkPin('123456');
@@ -615,16 +615,16 @@ void main() {
           BleCtProtocol.serviceUuid,
           BleCtProtocol.authCharUuid,
           any(),
-        )).thenAnswer((_) async {});
+        ),).thenAnswer((_) async {});
 
     final session = await connectSession();
     final pinFuture = session.checkPin('000000');
     authNotify.add(utf8.encode(jsonEncode(
-        {'mode': 'pin_check', 'result': 'rejected', 'error': 'invalid_pin'})));
+        {'mode': 'pin_check', 'result': 'rejected', 'error': 'invalid_pin'},),),);
     await expectLater(
       pinFuture,
       throwsA(isA<BleCommandException>()
-          .having((e) => e.code, 'code', 'PIN_REJECTED')),
+          .having((e) => e.code, 'code', 'PIN_REJECTED'),),
     );
   });
 
@@ -633,16 +633,16 @@ void main() {
           BleCtProtocol.serviceUuid,
           BleCtProtocol.authCharUuid,
           any(),
-        )).thenAnswer((_) async {});
+        ),).thenAnswer((_) async {});
 
     final session = await connectSession();
     final pinFuture = session.checkPin('000000');
     authNotify.add(utf8.encode(jsonEncode(
-        {'mode': 'pin_check', 'result': 'rejected', 'error': 'locked'})));
+        {'mode': 'pin_check', 'result': 'rejected', 'error': 'locked'},),),);
     await expectLater(
       pinFuture,
       throwsA(isA<BleCommandException>()
-          .having((e) => e.code, 'code', 'PIN_LOCKED')),
+          .having((e) => e.code, 'code', 'PIN_LOCKED'),),
     );
   });
 
@@ -713,7 +713,7 @@ void main() {
         'status': 'applied',
         'actual': {},
       },
-    })));
+    }),),);
     await Future<void>.delayed(Duration.zero);
     expect(completed, isFalse);
 
@@ -728,7 +728,7 @@ void main() {
         'status': 'applied',
         'actual': {'power': 'on'},
       },
-    })));
+    }),),);
     expect(await future, {'power': 'on'});
   });
 }

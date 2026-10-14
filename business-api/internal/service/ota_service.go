@@ -79,6 +79,7 @@ func NewOTAService(repo *repository.OTARepository, rdb *redis.Client, deviceServ
 }
 
 type CreateFirmwareReq struct {
+	BoardCodes       []string
 	HardwareVersions []string
 	Model            string
 	TargetChip       string
@@ -99,13 +100,16 @@ func (s *OTAService) CreateFirmware(ctx context.Context, req *CreateFirmwareReq)
 	if err := ValidateFirmwareRequest(req); err != nil {
 		return nil, err
 	}
-	versions, err := model.NormalizeHardwareVersions(req.HardwareVersions)
-	if err != nil {
-		return nil, err
+	if len(req.HardwareVersions) > 0 {
+		versions, err := model.NormalizeHardwareVersions(req.HardwareVersions)
+		if err != nil {
+			return nil, err
+		}
+		req.HardwareVersions = versions
 	}
-	req.HardwareVersions = versions
 
 	fw := &model.Firmware{
+		BoardCodes:       req.BoardCodes,
 		HardwareVersions: req.HardwareVersions,
 		Model:            req.Model,
 		TargetChip:       req.TargetChip,
@@ -332,6 +336,12 @@ func (s *OTAService) SendUpgradeCommand(ctx context.Context, du *model.DeviceUpg
 			s.dispatchHeadPending(ctx, du.DeviceSN)
 		}
 		return
+	}
+	if s.repo != nil {
+		if err := s.repo.ValidateUpgradeSnapshot(ctx, du.ID, du.DeviceSN, du.FirmwareID); err != nil {
+			s.markUpgradeFailedBeforeDispatch(ctx, du, err)
+			return
+		}
 	}
 	fw = current
 	downloadURL = s.BuildDownloadURL(fw.FileURL)
@@ -1974,6 +1984,9 @@ func (s *OTAService) RetryTaskFailed(ctx context.Context, taskID int64) error {
 	}
 	for _, du := range before {
 		if du.Status == "failed" {
+			if err := s.repo.ValidateUpgradeSnapshot(ctx, du.ID, du.DeviceSN, du.FirmwareID); err != nil {
+				return err
+			}
 			if err := s.validateFirmwareTargets(ctx, du.FirmwareID, []string{du.DeviceSN}); err != nil {
 				return err
 			}

@@ -1,6 +1,7 @@
+import console from 'node:console'
 import { chromium, expect } from '@playwright/test'
 import { mkdir, writeFile } from 'node:fs/promises'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, URL } from 'node:url'
 
 const output = fileURLToPath(new URL('./design-previews/production/', import.meta.url))
 await mkdir(output, { recursive: true })
@@ -43,11 +44,11 @@ page.on('console', e => {
   else errors.push(e.text())
 })
 await context.addInitScript(() => {
-  localStorage.setItem('auth-storage', JSON.stringify({ state: {
+  globalThis.localStorage.setItem('auth-storage', JSON.stringify({ state: {
     token: 'local-browser-test-not-a-real-token', refreshToken: null, permissions: [], isAuthenticated: true,
     user: { id: 'local-ui-check', nickname: '本地验证', avatar: '', phone: '', email: '', status: 1, isSystemAdmin: true, timezone: 'Asia/Shanghai' },
   }, version: 0 }))
-  localStorage.setItem('locale-storage', JSON.stringify({ state: { lang: 'zh' }, version: 0 }))
+  globalThis.localStorage.setItem('locale-storage', JSON.stringify({ state: { lang: 'zh' }, version: 0 }))
 })
 await context.route('**/api/v1/**', async route => {
   const path = new URL(route.request().url()).pathname
@@ -69,12 +70,12 @@ async function open(state, width, height, name) {
   await page.goto('http://127.0.0.1:5177/devices/CMD08-LOCAL/detail')
   await page.getByRole('tab', { name: '储能', exact: true }).click()
   if (state !== 'absent') await page.getByTestId('cmd08-bms').waitFor()
-  await page.evaluate(() => document.fonts.ready)
+  await page.evaluate(() => globalThis.document.fonts.ready)
   await page.waitForTimeout(500)
   const overflow = await page.evaluate(() => {
-    const root = document.querySelector('[data-testid="cmd08-bms"]')
+    const root = globalThis.document.querySelector('[data-testid="cmd08-bms"]')
     const bad = []
-    for (const e of [document.body, root].filter(Boolean)) if (e.scrollWidth > e.clientWidth + 1) bad.push(`${e.tagName}:${e.scrollWidth}/${e.clientWidth}`)
+    for (const e of [globalThis.document.body, root].filter(Boolean)) if (e.scrollWidth > e.clientWidth + 1) bad.push(`${e.tagName}:${e.scrollWidth}/${e.clientWidth}`)
     return bad
   })
   if (overflow.length) throw Error(`${name}: overflow ${overflow}`)
@@ -89,7 +90,7 @@ try {
   await expect(bms).toContainText('-8.40')
   await expect(bms).not.toContainText('49.00')
   const contrast = await page.locator('.cmd08-label').first().evaluate(label => {
-    const color = getComputedStyle(label).color.match(/\d+/g).slice(0, 3).map(Number)
+    const color = globalThis.getComputedStyle(label).color.match(/\d+/g).slice(0, 3).map(Number)
     const luminance = color.map(c => c / 255).map(c => c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4)
       .reduce((sum, c, i) => sum + c * [.2126, .7152, .0722][i], 0)
     return 1.05 / (luminance + .05)

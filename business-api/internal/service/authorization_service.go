@@ -34,7 +34,7 @@ var channelPermissionRegistry = staticPermissionRegistry{
 	"invitation:create": {}, "invitation:revoke": {},
 	"device:view": {}, "device:control": {}, "device:unbind": {}, "device:transfer": {},
 	"station:view": {}, "station:manage": {}, "asset:claim": {}, "asset:transfer": {},
-	"devices:view": {}, "stations:view": {},
+	"devices:view": {}, "stations:view": {}, "devices:edit": {}, "stations:edit": {},
 }
 
 type AuthorizationService struct {

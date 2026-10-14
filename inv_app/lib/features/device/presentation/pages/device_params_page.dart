@@ -413,7 +413,7 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
             height: 1,
             color: AppColor.outline(context).withValues(alpha: 0.4),
           ),
-          ...params.map((p) => _buildParamItem(p)).toList(),
+          ...params.map((p) => _buildParamItem(p)),
         ],
       ),
     );

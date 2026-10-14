@@ -16,11 +16,14 @@ import (
 var errOverviewDenied = errors.New("overview permission denied")
 
 func loadOverviewScope(ctx context.Context, db *pgxpool.Pool, actor model.ActorContext, adminFlag bool, resourceType string) (model.ScopePlan, bool, error) {
+	return loadResourceScope(ctx, db, actor, adminFlag, resourceType+"s:view", resourceType)
+}
+
+func loadResourceScope(ctx context.Context, db *pgxpool.Pool, actor model.ActorContext, adminFlag bool, permission, resourceType string) (model.ScopePlan, bool, error) {
 	if !actor.Valid() {
 		return model.ScopePlan{}, false, errOverviewDenied
 	}
 	repo := repository.NewAuthorizationRepository(db)
-	permission := resourceType + "s:view"
 	if adminFlag && repository.IsSyntheticOverviewActor(actor) && (resourceType == "device" || resourceType == "station") {
 		allowed, err := repo.ValidateSyntheticOverviewAdmin(ctx, actor)
 		if err != nil {
@@ -53,12 +56,16 @@ func loadOverviewScope(ctx context.Context, db *pgxpool.Pool, actor model.ActorC
 }
 
 func overviewScope(c *gin.Context, db *pgxpool.Pool, resourceType string) (model.ScopePlan, bool, bool) {
+	return resourceScope(c, db, resourceType+"s:view", resourceType)
+}
+
+func resourceScope(c *gin.Context, db *pgxpool.Pool, permission, resourceType string) (model.ScopePlan, bool, bool) {
 	actor := middleware.GetActorContext(c)
 	if actor.UserID != middleware.GetUserID(c) {
 		response.Forbidden(c, "permission denied")
 		return model.ScopePlan{}, false, false
 	}
-	plan, admin, err := loadOverviewScope(c.Request.Context(), db, actor, middleware.GetIsSystemAdmin(c), resourceType)
+	plan, admin, err := loadResourceScope(c.Request.Context(), db, actor, middleware.GetIsSystemAdmin(c), permission, resourceType)
 	if err != nil {
 		if errors.Is(err, errOverviewDenied) {
 			response.Forbidden(c, "permission denied")

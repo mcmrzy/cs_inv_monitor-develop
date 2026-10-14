@@ -298,7 +298,7 @@ class SettingsTimeRow extends StatelessWidget {
           ),
           SizedBox(width: 2.w),
           Icon(Icons.chevron_right,
-              size: 20, color: AppColor.textHint(context)),
+              size: 20, color: AppColor.textHint(context),),
         ],
       ),
       onTap: onTap,
@@ -338,11 +338,11 @@ class SettingsValueRow extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                  fontSize: 12.sp, color: AppColor.textSecondary(context)),
+                  fontSize: 12.sp, color: AppColor.textSecondary(context),),
             ),
       trailing: trailing ??
           Icon(Icons.chevron_right,
-              size: 20, color: AppColor.textHint(context)),
+              size: 20, color: AppColor.textHint(context),),
       onTap: onTap,
     );
   }

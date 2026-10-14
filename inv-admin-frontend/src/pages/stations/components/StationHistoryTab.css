@@ -5,7 +5,7 @@
 }
 
 .station-history-table .ant-table-thead > tr:first-child > th {
-  background: var(--history-fill, #f5f5f5);
+  background: linear-gradient(var(--history-fill, #f5f5f5), var(--history-fill, #f5f5f5)), var(--history-bg, #fff);
   color: var(--history-text, #333);
 }
 
@@ -20,8 +20,18 @@
   font-family: Consolas, monospace;
 }
 
+.station-history-table .ant-table-tbody > tr > td.ant-table-cell-fix-left {
+  background: var(--history-bg, #fff);
+}
+
+/* Theme fills contain alpha; paint them over an opaque base so fixed cells
+   cover the data scrolling underneath in both light and dark themes. */
 .station-history-table .ant-table-tbody > tr:nth-child(even) > td {
-  background: var(--history-fill, #fafafa);
+  background: linear-gradient(var(--history-fill, #fafafa), var(--history-fill, #fafafa)), var(--history-bg, #fff);
+}
+
+.station-history-table .ant-table-tbody > tr > td.ant-table-cell-row-hover {
+  background: linear-gradient(var(--history-hover, #f5f5f5), var(--history-hover, #f5f5f5)), var(--history-bg, #fff);
 }
 
 .history-field-toolbar {

@@ -7,39 +7,39 @@ void main() {
     expect(
         deviceCloudOnline({
           'online_status': {'online': false},
-          'device': {'status': 1}
+          'device': {'status': 1},
         }),
-        false);
+        false,);
     expect(
         deviceCloudOnline({
-          'device': {'status': 2}
+          'device': {'status': 2},
         }),
-        true);
+        true,);
     expect(
         deviceCloudOnline({
-          'device': {'status': 0}
+          'device': {'status': 0},
         }),
-        false);
+        false,);
     expect(
         deviceCloudOnline({
           'online_status': {'online': true},
-          'device': {'status': 0}
+          'device': {'status': 0},
         }),
-        true);
+        true,);
   });
   test('derived health score remains available to the health page', () {
     expect(
         normalizeRealtimePayload({
           'derived': {'health_score': 30},
         })['derived_health_score'],
-        30);
+        30,);
     expect(
         normalizeRealtimePayload({
           'derived': {
-            'data': {'health_score': 30}
+            'data': {'health_score': 30},
           },
         })['derived_health_score'],
-        30);
+        30,);
   });
   test('delayed or undated detail response cannot replace a newer poll', () {
     final current = DateTime.utc(2026, 10, 9, 3);
@@ -48,7 +48,7 @@ void main() {
     expect(canReplaceTelemetry(current, current), true);
     expect(
         canReplaceTelemetry(current, current.add(const Duration(seconds: 1))),
-        true);
+        true,);
     expect(canReplaceTelemetry(null, null), true);
   });
   test('actual server V1 groups and compact latest fallback preserve values',
@@ -59,14 +59,14 @@ void main() {
           'voltage': 230,
           'active_power': 510,
           'apparent_power': 600,
-          'power_factor': 0.85
-        }
+          'power_factor': 0.85,
+        },
       },
       'pv': {
-        'data': {'total_power': 650, 'pv1_power': 432}
+        'data': {'total_power': 650, 'pv1_power': 432},
       },
       'energy': {
-        'data': {'daily_pv': 3.7, 'total_pv': 1234}
+        'data': {'daily_pv': 3.7, 'total_pv': 1234},
       },
       '_timestamp': 1791511200,
       '_updated_at': '2026-10-09T02:01:00Z',
@@ -76,7 +76,7 @@ void main() {
     expect(rt.pv?.pvPower, 650);
     expect(rt.energy?.totalPV, 1234);
     expect(rt.updatedAt,
-        DateTime.fromMillisecondsSinceEpoch(1791511200000, isUtc: true));
+        DateTime.fromMillisecondsSinceEpoch(1791511200000, isUtc: true),);
     final fallback = InverterRealtime.fromJson({
       'ac_power': 510,
       'daily_pv': 3.7,
@@ -138,12 +138,12 @@ void main() {
       () {
     final rt = InverterRealtime.fromJson({
       'ac': {
-        'data': {'voltage': 220, 'power': 500}
+        'data': {'voltage': 220, 'power': 500},
       },
       'battery': {'soc': 80, 'voltage': 51, 'power': -50},
       'pv': {'pv_voltage': 120, 'pv_power': 600},
       'sys': {
-        'data': {'temp_inv': 43, 'state': 1}
+        'data': {'temp_inv': 43, 'state': 1},
       },
       'energy': {'daily_pv': 2.5},
     });

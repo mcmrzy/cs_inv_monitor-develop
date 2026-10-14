@@ -493,7 +493,7 @@ void main() {
         await tester.runAsync(() async {
           final font = FontLoader('Roboto')
             ..addFont(
-                File(previewFont).readAsBytes().then(ByteData.sublistView));
+                File(previewFont).readAsBytes().then(ByteData.sublistView),);
           await font.load();
           final icons = FontLoader('MaterialIcons')
             ..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'));
@@ -503,9 +503,9 @@ void main() {
       await pumpMinimalApp(
           tester,
           RepaintBoundary(
-              key: boundary, child: const DeviceStoragePage(sn: 'SN')),
+              key: boundary, child: const DeviceStoragePage(sn: 'SN'),),
           locale: Locale(language),
-          theme: ThemeData.dark(useMaterial3: true));
+          theme: ThemeData.dark(useMaterial3: true),);
       expect(find.text('51.20 V'), findsOneWidget);
       expect(find.text('-614 W'), findsOneWidget);
       expect(tester.takeException(), isNull);

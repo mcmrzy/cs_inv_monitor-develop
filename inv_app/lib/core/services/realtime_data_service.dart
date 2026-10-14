@@ -27,7 +27,7 @@ abstract class RealtimeDataService {
   /// 开始轮询指定设备的实时数据
   /// 默认60秒间隔，设备每180秒上报一次heartbeat
   void startPolling(String deviceSN,
-      {Duration interval = const Duration(seconds: 60)});
+      {Duration interval = const Duration(seconds: 60),});
 
   /// 停止轮询指定设备
   void stopPolling(String deviceSN);
@@ -73,7 +73,7 @@ class RealtimeDataServiceImpl implements RealtimeDataService {
 
   @override
   void startPolling(String deviceSN,
-      {Duration interval = const Duration(seconds: 60)}) {
+      {Duration interval = const Duration(seconds: 60),}) {
     // 停止已有的轮询
     stopPolling(deviceSN);
 
@@ -95,7 +95,7 @@ class RealtimeDataServiceImpl implements RealtimeDataService {
 
     if (kDebugMode) {
       debugPrint(
-          '[RealtimeDataService] Started polling for $deviceSN (delay: ${staggerDelay.inSeconds}s)');
+          '[RealtimeDataService] Started polling for $deviceSN (delay: ${staggerDelay.inSeconds}s)',);
     }
   }
 
@@ -161,7 +161,7 @@ class RealtimeDataServiceImpl implements RealtimeDataService {
 
       if (kDebugMode) {
         debugPrint(
-            '[RealtimeDataService] Response status: ${response.statusCode} for $deviceSN');
+            '[RealtimeDataService] Response status: ${response.statusCode} for $deviceSN',);
       }
 
       if (response.statusCode == 200) {
@@ -175,7 +175,7 @@ class RealtimeDataServiceImpl implements RealtimeDataService {
 
           if (kDebugMode) {
             debugPrint(
-                '[RealtimeDataService] Realtime data: ${realtime != null ? "found (${realtime.keys.length} keys)" : "null"}');
+                '[RealtimeDataService] Realtime data: ${realtime != null ? "found (${realtime.keys.length} keys)" : "null"}',);
           }
 
           if (realtime != null) {
@@ -190,7 +190,7 @@ class RealtimeDataServiceImpl implements RealtimeDataService {
               // 数据未变化，跳过更新
               if (kDebugMode) {
                 debugPrint(
-                    '[RealtimeDataService] Data unchanged for $deviceSN, skipping update');
+                    '[RealtimeDataService] Data unchanged for $deviceSN, skipping update',);
               }
               return;
             }
@@ -205,30 +205,30 @@ class RealtimeDataServiceImpl implements RealtimeDataService {
 
             if (kDebugMode) {
               debugPrint(
-                  '[RealtimeDataService] Successfully parsed data for $deviceSN, online: $online');
+                  '[RealtimeDataService] Successfully parsed data for $deviceSN, online: $online',);
             }
           } else {
             if (kDebugMode) {
               debugPrint(
-                  '[RealtimeDataService] No realtime data in response for $deviceSN');
+                  '[RealtimeDataService] No realtime data in response for $deviceSN',);
             }
           }
         } else {
           if (kDebugMode) {
             debugPrint(
-                '[RealtimeDataService] Invalid response: code=${json['code']}, message=${json['message']}');
+                '[RealtimeDataService] Invalid response: code=${json['code']}, message=${json['message']}',);
           }
         }
       } else {
         if (kDebugMode) {
           debugPrint(
-              '[RealtimeDataService] HTTP error ${response.statusCode} for $deviceSN');
+              '[RealtimeDataService] HTTP error ${response.statusCode} for $deviceSN',);
         }
       }
     } catch (e) {
       if (kDebugMode) {
         debugPrint(
-            '[RealtimeDataService] Error fetching data for $deviceSN: $e');
+            '[RealtimeDataService] Error fetching data for $deviceSN: $e',);
       }
     }
   }

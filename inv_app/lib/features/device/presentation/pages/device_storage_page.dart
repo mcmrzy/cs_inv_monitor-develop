@@ -98,7 +98,7 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
   String _t(String key) => AppLocalizations.of(context)!.str(key);
 
   String _value(Map<String, dynamic> fields, String key, String unit,
-      {int decimals = 1}) {
+      {int decimals = 1,}) {
     final value = deviceNumber(fields[key]);
     return value == null ? '--' : '${value.toStringAsFixed(decimals)} $unit';
   }
@@ -147,8 +147,8 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
                 ? const Center(child: CircularProgressIndicator())
                 : _error != null && _summary == null
                     ? _buildEmpty(_t('storage_load_failed'))
-                    : _buildBody()),
-      ]),
+                    : _buildBody(),),
+      ],),
     );
   }
 
@@ -194,7 +194,7 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
 
     return Column(children: [
       BmsStorageTabs(
-          selected: _tab, onSelected: (value) => setState(() => _tab = value)),
+          selected: _tab, onSelected: (value) => setState(() => _tab = value),),
       Expanded(
           child: RefreshIndicator(
         onRefresh: _fetch,
@@ -204,7 +204,7 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
           children: [
             Text('SN ${widget.sn}',
                 style: TextStyle(
-                    fontSize: 12.sp, color: AppColor.textSecondary(context))),
+                    fontSize: 12.sp, color: AppColor.textSecondary(context),),),
             SizedBox(height: 16.h),
             if (_error != null) Text(_t('storage_bms_refresh_failed')),
             if (_tab == 0) ...[
@@ -225,18 +225,18 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
                   tilePadding: EdgeInsets.zero,
                   title: Text(_t('storage_summary_technical'),
                       style: TextStyle(
-                          fontSize: 14.sp, fontWeight: FontWeight.w600)),
+                          fontSize: 14.sp, fontWeight: FontWeight.w600,),),
                   children: [
                     _capacityCard(bms),
                     SizedBox(height: 20.h),
-                    _tempCard(bms)
-                  ]),
+                    _tempCard(bms),
+                  ],),
             ],
             SizedBox(height: 24.h),
           ],
         ),
-      ))
-    ]);
+      ),),
+    ],);
   }
 
   /* ── 状态头：SOC 仪表盘 + 工作模式 ── */
@@ -279,7 +279,7 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
                             fontWeight: FontWeight.bold,
                             color: AppColor.textPrimary(context),
                           ),
-                        ))),
+                        ),),),
                     const Text(
                       'SOC',
                       style: TextStyle(fontSize: 11, color: Colors.grey),
@@ -375,26 +375,26 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
                 SizedBox(
                     width: (constraints.maxWidth - 16) / 2,
                     child: _metricCell(_t('storage_pack_voltage'),
-                        _value(_bat, 'battery_voltage', 'V', decimals: 2))),
+                        _value(_bat, 'battery_voltage', 'V', decimals: 2),),),
                 SizedBox(
                     width: (constraints.maxWidth - 16) / 2,
                     child: _metricCell(_t('storage_current'),
-                        _value(_bat, 'battery_current', 'A'))),
+                        _value(_bat, 'battery_current', 'A'),),),
                 SizedBox(
                     width: (constraints.maxWidth - 16) / 2,
                     child: _metricCell(
                         _t('storage_summary_power'),
                         v == null || i == null
                             ? '--'
-                            : devicePowerLabel(v * i))),
+                            : devicePowerLabel(v * i),),),
                 SizedBox(
                     width: (constraints.maxWidth - 16) / 2,
                     child: _metricCell(
                         _t('storage_diff'),
                         _value(_bmsFields, 'bms_cell_voltage_diff', 'mV',
-                            decimals: 0))),
+                            decimals: 0,),),),
               ],
-            ));
+            ),);
   }
 
   Widget _metricCell(String label, String value) {
@@ -404,7 +404,7 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
         Text(
           label,
           style: TextStyle(
-              fontSize: 12.sp, color: AppColor.textSecondary(context)),
+              fontSize: 12.sp, color: AppColor.textSecondary(context),),
         ),
         SizedBox(height: 4.h),
         Text(
@@ -442,15 +442,15 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
             runSpacing: 12,
             children: [
               _kv(_t('storage_remain_capacity'),
-                  _value(_bmsFields, 'bms_capacity_remain', 'Ah')),
+                  _value(_bmsFields, 'bms_capacity_remain', 'Ah'),),
               _kv(_t('storage_full_capacity'),
-                  _value(_bmsFields, 'bms_capacity_full', 'Ah')),
+                  _value(_bmsFields, 'bms_capacity_full', 'Ah'),),
               _kv(_t('storage_design_capacity'),
-                  _value(_bmsFields, 'bms_capacity_design', 'Ah')),
+                  _value(_bmsFields, 'bms_capacity_design', 'Ah'),),
               _kv(_t('storage_charge_power'),
-                  _value(_bat, 'battery_charge_power', 'W')),
+                  _value(_bat, 'battery_charge_power', 'W'),),
               _kv(_t('storage_discharge_power'),
-                  _value(_bat, 'battery_discharge_power', 'W')),
+                  _value(_bat, 'battery_discharge_power', 'W'),),
             ],
           ),
           SizedBox(height: 8.h),
@@ -473,7 +473,7 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
         .where((i) =>
             (bms.balanceBitmap >> i) & 1 == 1 &&
             i < cells.length &&
-            cells[i] > 0)
+            cells[i] > 0,)
         .length;
 
     return _card(
@@ -524,7 +524,7 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
                               toY: v > 0 ? v : 0,
                               width: 13.w,
                               borderRadius: BorderRadius.vertical(
-                                  top: Radius.circular(3.w)),
+                                  top: Radius.circular(3.w),),
                               color: isMax
                                   ? const Color(0xFFEF4444)
                                   : isMin
@@ -580,9 +580,9 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
         runSpacing: 16,
         children: [
           _kv(_t('storage_cell_temp_max'),
-              _value(_bmsFields, 'bms_cell_temp_max', '°C')),
+              _value(_bmsFields, 'bms_cell_temp_max', '°C'),),
           _kv(_t('storage_cell_temp_min'),
-              _value(_bmsFields, 'bms_cell_temp_min', '°C')),
+              _value(_bmsFields, 'bms_cell_temp_min', '°C'),),
           _kv('MOS', _value(_bmsFields, 'bms_mos_temp', '°C')),
           _kv(_t('storage_env_temp'), _value(_bmsFields, 'bms_env_temp', '°C')),
           _kv('PCB', _value(_bmsFields, 'bms_pcb_temp', '°C')),
@@ -667,12 +667,12 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
                   _t('storage_charge_mos'),
                   _bmsFields['bms_mos_status'] == null
                       ? null
-                      : (bms.mosStatus & 0x01) == 1),
+                      : (bms.mosStatus & 0x01) == 1,),
               _mosChip(
                   _t('storage_discharge_mos'),
                   _bmsFields['bms_mos_status'] == null
                       ? null
-                      : (bms.mosStatus & 0x02) == 1),
+                      : (bms.mosStatus & 0x02) == 1,),
             ],
           ),
           SizedBox(height: 10.h),
@@ -684,7 +684,7 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
                         'bms_fault_status',
                         'bms_alarm_w0',
                         'bms_alarm_w1',
-                        'bms_alarm_w2'
+                        'bms_alarm_w2',
                       ].every((key) => _bmsFields[key] != null)
                           ? Icons.check_circle_rounded
                           : Icons.help_outline,
@@ -698,7 +698,7 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
                         'bms_fault_status',
                         'bms_alarm_w0',
                         'bms_alarm_w1',
-                        'bms_alarm_w2'
+                        'bms_alarm_w2',
                       ].every((key) => _bmsFields[key] != null)
                           ? _t('storage_no_alarms')
                           : _t('storage_bms_flags_unknown'),
@@ -706,7 +706,7 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
                         fontSize: 13.sp,
                         color: AppColor.textSecondary(context),
                       ),
-                    )),
+                    ),),
                   ],
                 )
               : Wrap(spacing: 8.w, runSpacing: 8.h, children: alarms),
@@ -785,7 +785,7 @@ class _DeviceStoragePageState extends State<DeviceStoragePage> {
         Text(
           label,
           style: TextStyle(
-              fontSize: 11.sp, color: AppColor.textSecondary(context)),
+              fontSize: 11.sp, color: AppColor.textSecondary(context),),
         ),
         SizedBox(height: 2.h),
         Text(

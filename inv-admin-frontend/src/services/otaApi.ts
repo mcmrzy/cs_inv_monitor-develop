@@ -139,6 +139,9 @@ export const otaApi = {
   // ── 固件-设备关联查询 ──
   getDevicesByFirmware: (model: string, targetChip: string, version: string, firmwareId?: string | number) =>
     api.get('/ota/firmware/by-device', { params: { model, target_chip: targetChip, version, firmware_id: firmwareId }, expectedDataShape: 'object' }),
+  /** 升级任务可选设备（含不可升级原因，服务端按可信硬件档案判定） */
+  getTaskCandidates: (id: number | string) =>
+    api.get(`/ota/firmware/${id}/task-candidates`, { expectedDataShape: 'object' }),
 }
 
 export type OtaApi = typeof otaApi

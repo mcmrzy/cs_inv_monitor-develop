@@ -46,7 +46,7 @@ void main() {
     await tester.pumpWidget(app(DeviceFirmwareDetailPage(
       deviceSN: 'INV-001', deviceRepository: _DeviceRepo(),
       otaRepository: _HardwareUnknownOtaRepo(),
-    )));
+    ),),);
     await tester.pumpAndSettle();
     expect(find.text('硬件版本未确认'), findsWidgets);
     expect(find.text('暂无适用此硬件版本的固件'), findsNothing);
@@ -136,7 +136,7 @@ void main() {
       OtaTabPage(repository: _DeviceRepo()),
       locale: const Locale('en'),
       textScaler: const TextScaler.linear(1.5),
-    ));
+    ),);
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
@@ -158,7 +158,7 @@ void main() {
     await tester.pumpWidget(localizedApp(
       OtaTabPage(repository: _DeviceRepo()),
       textScaler: const TextScaler.linear(1.5),
-    ));
+    ),);
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
@@ -181,7 +181,7 @@ void main() {
       deviceSN: 'INV-001',
       deviceRepository: _DeviceRepo(),
       otaRepository: _OtaRepo(),
-    )));
+    ),),);
     await tester.pumpAndSettle();
 
     for (final text in [
@@ -215,7 +215,7 @@ void main() {
       deviceSN: 'INV-001',
       deviceRepository: _DeviceRepo(),
       otaRepository: _OtaRepo(),
-    )));
+    ),),);
     await tester.pumpAndSettle();
 
     final hero = tester.widget<Container>(
@@ -239,7 +239,7 @@ void main() {
         otaRepository: _OtaRepo(),
       ),
       theme: ThemeData.dark(),
-    ));
+    ),);
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('deviceFirmwareHero')), findsOneWidget);
@@ -261,7 +261,7 @@ void main() {
       deviceSN: 'INV-001',
       deviceRepository: _DeviceRepo(status: 1, realtimeOnline: false),
       otaRepository: _OtaRepo(),
-    )));
+    ),),);
     await tester.pumpAndSettle();
 
     expect(find.text('离线'), findsOneWidget);
@@ -319,7 +319,7 @@ void main() {
       ],
       supportedLocales: AppLocalizations.supportedLocales,
       routerConfig: router,
-    ));
+    ),);
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
@@ -345,7 +345,7 @@ void main() {
       deviceSN: 'INV-001',
       deviceRepository: _DeviceRepo(status: 2, realtimeOnline: null),
       otaRepository: _OtaRepo(),
-    )));
+    ),),);
     await tester.pumpAndSettle();
 
     expect(find.text('在线'), findsOneWidget);
@@ -369,7 +369,7 @@ void main() {
       deviceSN: 'INV-001',
       deviceRepository: _DeviceRepo(status: 1, realtimeOnline: true),
       otaRepository: ota,
-    )));
+    ),),);
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.text('检查固件更新'),
@@ -406,7 +406,7 @@ void main() {
       deviceSN: 'INV-001',
       deviceRepository: _DeviceRepo(),
       otaRepository: _OtaRepo(),
-    )));
+    ),),);
     await tester.pumpAndSettle();
 
     final list = tester.widget<ListView>(
@@ -440,7 +440,7 @@ void main() {
       ),
       locale: const Locale('en'),
       textScaler: const TextScaler.linear(1.5),
-    ));
+    ),);
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
 
@@ -466,7 +466,7 @@ void main() {
         otaRepository: _OtaRepo(),
       ),
       textScaler: const TextScaler.linear(1.5),
-    ));
+    ),);
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
 
@@ -595,7 +595,7 @@ class _OtaRepo implements OtaRepository {
         total: 1,
         page: page,
         pageSize: pageSize,
-      ));
+      ),);
 
   @override
   Future<Either<Failure, DeviceFirmwareOverview>> getFirmwareOverview(
@@ -642,7 +642,7 @@ class _OtaRepo implements OtaRepository {
             updateAvailable: false,
           ),
         ],
-      ));
+      ),);
 
   @override
   Future<Either<Failure, List<OtaTriggerTask>>> triggerFirmware(
@@ -674,8 +674,8 @@ class _HardwareUnknownOtaRepo extends _OtaRepo {
         modules: const [FirmwareModuleOverview(
           target: 'esp', currentVersion: '1.0.0', latestFirmwareId: 42,
           latestVersion: '1.1.0', versionState: 'outdated', updateAvailable: true,
-        )],
-      ));
+        ),],
+      ),);
 }
 
 class _PendingOverviewOtaRepo extends _OtaRepo {

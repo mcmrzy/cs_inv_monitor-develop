@@ -170,6 +170,8 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 
 	otaRepo := repository.NewOTARepository(db)
 	otaService := service.NewOTAService(otaRepo, rdb, cfg.Backends.DeviceServer, cfg.Backends.InternalKey, cfg.Backends.UploadDir, cfg.Backends.ServerURL, cfg.Backends.DownloadURL, cfg.Backends.AppDownloadURL, db, jpushService)
+	hardwareRegistryService := service.NewHardwareRegistryService(repository.NewHardwareRegistryRepository(db))
+	hardwareRegistryHandler := handler.NewHardwareRegistryHandler(hardwareRegistryService, otaService)
 	// 下载域接入运行时域名配置：管理后台「域名配置」保存后立即生效
 	otaService.AttachConfigService(configService)
 
@@ -297,6 +299,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 		PermChecker:                   permChecker,
 		AdminHandler:                  adminHandler,
 		OTAHandler:                    otaHandler,
+		HardwareRegistryHandler:       hardwareRegistryHandler,
 		OTAService:                    otaService,
 		JPushService:                  jpushService,
 		DashboardHandler:              dashboardHandler,
@@ -829,6 +832,7 @@ type RouterDeps struct {
 	PermChecker                   *service.PermChecker
 	AdminHandler                  *handler.AdminHandler
 	OTAHandler                    *handler.OTAHandler
+	HardwareRegistryHandler       *handler.HardwareRegistryHandler
 	OTAService                    *service.OTAService
 	JPushService                  *service.JPushService
 	DashboardHandler              *handler.DashboardHandler
@@ -990,6 +994,20 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		auth := api.Group("")
 		auth.Use(middleware.Auth(deps.JWTService, deps.AuthorizationContextValidator))
 		{
+			if deps.HardwareRegistryHandler != nil {
+				hardware := auth.Group("/hardware")
+				hardware.GET("/board-types", deps.HardwareRegistryHandler.ListBoardTypes)
+				hardware.POST("/board-types", deps.HardwareRegistryHandler.CreateBoardType)
+				hardware.GET("/devices/:sn", deps.HardwareRegistryHandler.Get)
+				hardware.GET("/devices/:sn/history", deps.HardwareRegistryHandler.History)
+				hardware.POST("/devices/:sn/verify", deps.HardwareRegistryHandler.Verify)
+				hardware.POST("/devices/:sn/corrections", deps.HardwareRegistryHandler.Correct)
+				hardware.POST("/devices/:sn/service-changes", deps.HardwareRegistryHandler.ServiceChange)
+				hardware.POST("/devices/:sn/freeze", deps.HardwareRegistryHandler.Freeze)
+				hardware.POST("/imports", deps.HardwareRegistryHandler.StageImport)
+				hardware.GET("/imports/:id", deps.HardwareRegistryHandler.GetImport)
+				hardware.POST("/imports/:id/commit", deps.HardwareRegistryHandler.CommitImport)
+			}
 			authInv := auth.Group("/invitations")
 			{
 				authInv.POST("/create", deps.InvitationHandler.Create)
@@ -1285,6 +1303,13 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 
 		otaGroup := api.Group("/ota").Use(middleware.Auth(deps.JWTService, deps.AuthorizationContextValidator))
 		{
+			otaGroup.GET("/devices/:sn/preflight", middleware.RequirePermission(deps.PermChecker, "devices", "view"), deps.OTAHandler.Preflight)
+			if deps.HardwareRegistryHandler != nil {
+				otaGroup.GET("/firmware/:id/board-types", deps.HardwareRegistryHandler.GetFirmwareBoards)
+				otaGroup.PUT("/firmware/:id/board-types", deps.HardwareRegistryHandler.SetFirmwareBoards)
+				otaGroup.GET("/compatibility-windows", deps.HardwareRegistryHandler.ListCompatibilityWindows)
+				otaGroup.POST("/compatibility-windows", deps.HardwareRegistryHandler.CreateCompatibilityWindow)
+			}
 			otaGroup.GET("/hardware-versions", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.ListHardwareVersions)
 			otaGroup.POST("/hardware-versions", middleware.RequirePermission(deps.PermChecker, "ota", "create"), deps.OTAHandler.CreateHardwareVersion)
 			otaGroup.PUT("/firmware/:id/hardware-versions", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.UpdateFirmwareHardwareVersions)
@@ -1335,6 +1360,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			// so device/package queries use /by-device and /by-package.
 			otaGroup.GET("/firmware/by-device", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetDevicesByFirmware)
 			otaGroup.GET("/firmware/by-package", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetUpgradePackageDevices)
+			otaGroup.GET("/firmware/:id/task-candidates", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.ListFirmwareTaskCandidates)
 
 			// APP绔帴鍙ｏ紙鎵€鏈夌櫥褰曠敤鎴峰彲璁块棶锛?
 			otaGroup.GET("/check/:sn", deps.OTAHandler.CheckUpdate)
@@ -1439,6 +1465,8 @@ func requestBodyLimit() gin.HandlerFunc {
 		path := c.Request.URL.Path
 		if c.Request.Method == http.MethodPost && path == "/api/v1/ota/firmware" {
 			limit = firmwareUploadLimit
+		} else if c.Request.Method == http.MethodPost && path == "/api/v1/hardware/imports" {
+			limit = int64(32 << 20) // JSON staging, capped independently at 10,000 rows.
 		} else if c.Request.Method == http.MethodPost && path == "/api/v1/ota/app/versions" {
 			// App 安装包上传：版本号与摘要由服务端解析，文件体积可达上百 MB。
 			limit = appPackageUploadLimit

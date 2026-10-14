@@ -164,7 +164,7 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
     final model = _selectedModel;
     if (r.fileUrl.isEmpty) {
       AppToast.show(context, l10n.str('ota_firmware_library_download_failed'),
-          type: ToastType.info);
+          type: ToastType.info,);
       return;
     }
     setState(() {
@@ -196,12 +196,12 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
         _downloadingProgress.remove(r.id);
       });
       AppToast.show(context, l10n.str('ota_firmware_library_download_done'),
-          type: ToastType.success);
+          type: ToastType.success,);
     } catch (e) {
       debugPrint('[FirmwareLibrary] download failed: $e');
       if (!mounted || request != _resourceRequest) return;
       AppToast.show(context, l10n.str('ota_firmware_library_download_failed'),
-          type: ToastType.error);
+          type: ToastType.error,);
     } finally {
       if (mounted && request == _resourceRequest) {
         setState(() {
@@ -224,14 +224,16 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
 
   bool get _selectedOnline => _devices.any((d) =>
       _str(d, ['sn', 'device_sn']) == _selectedSn &&
-      (d['online'] == true || d['status'] == 1 || d['status'] == 2));
+      (d['online'] == true || d['status'] == 1 || d['status'] == 2),);
 
   Future<void> _remoteUpgrade(FirmwareResource resource) async {
     final sn = _selectedSn;
     if (sn == null ||
         !_selectedOnline ||
         _triggeringRemote ||
-        !resource.canRemoteUpgrade) return;
+        !resource.canRemoteUpgrade) {
+      return;
+    }
     final l10n = AppLocalizations.of(context)!;
     final module = FirmwareModulePresentation.fromTarget(resource.targetChip);
     final confirmed = await showDialog<bool>(
@@ -241,43 +243,44 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
               content: Text(
                   '$sn\n${l10n.str('firmware_upgrade_confirm_single', {
                     'module': module.displayLabel(l10n),
-                    'version': resource.version
+                    'version': resource.version,
                   })}'),
               actions: [
                 TextButton(
                     onPressed: () => Navigator.pop(ctx, false),
-                    child: Text(l10n.cancel)),
+                    child: Text(l10n.cancel),),
                 FilledButton(
                     onPressed: () => Navigator.pop(ctx, true),
-                    child: Text(l10n.confirm))
+                    child: Text(l10n.confirm),),
               ],
-            ));
-    if (confirmed != true || !mounted || _selectedSn != sn || !_selectedOnline)
+            ),);
+    if (confirmed != true || !mounted || _selectedSn != sn || !_selectedOnline) {
       return;
+    }
     setState(() => _triggeringRemote = true);
     final operation = '$sn:${resource.id}';
     // Retain the key after an ambiguous transport failure to avoid duplicate tasks.
     final key = _remoteRequestKeys.putIfAbsent(
         operation,
         () =>
-            'app-resource-$sn-${resource.id}-${DateTime.now().microsecondsSinceEpoch}');
+            'app-resource-$sn-${resource.id}-${DateTime.now().microsecondsSinceEpoch}',);
     try {
       final result = await _otaRepo.triggerFirmware(sn, [resource.id],
-          idempotencyKey: key);
+          idempotencyKey: key,);
       if (!mounted) return;
       result.match(
         (failure) => AppToast.show(context,
             l10n.str('firmware_upgrade_failed', {'error': failure.message}),
-            type: ToastType.error),
+            type: ToastType.error,),
         (tasks) {
           _remoteRequestKeys.remove(operation);
           AppToast.show(context, l10n.str('firmware_upgrade_started'),
-              type: ToastType.success);
+              type: ToastType.success,);
           if (tasks.isNotEmpty && tasks.first.taskId > 0) {
             context.push(Uri(
                     path: '/ota/$sn/detail',
-                    queryParameters: {'task_id': '${tasks.first.taskId}'})
-                .toString());
+                    queryParameters: {'task_id': '${tasks.first.taskId}'},)
+                .toString(),);
           }
         },
       );
@@ -495,7 +498,7 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
               fontWeight: FontWeight.w600,
               color: AppColor.textPrimary(context),
             ),
-          )),
+          ),),
         ],
       ),
     );
@@ -543,7 +546,7 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
               if (downloaded) ...[
                 SizedBox(width: 8.w),
                 _badge(l10n.str('ota_firmware_library_downloaded'),
-                    AppColors.success),
+                    AppColors.success,),
               ],
               if (dateStr.isNotEmpty)
                 Text(
@@ -589,7 +592,7 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
                       : () => _remoteUpgrade(r),
                   icon: const Icon(Icons.cloud_upload_outlined, size: 18),
                   label: Text(l10n.str('ota_remote_upgrade')),
-                )),
+                ),),
             SizedBox(height: 8.h),
           ],
           Wrap(
@@ -605,7 +608,7 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
                         value: progress,
                         minHeight: 6.h,
                       ),
-                    )),
+                    ),),
               if (downloaded && r.canLocalUpgrade)
                 SizedBox(
                     width: double.infinity,
@@ -620,7 +623,7 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
                         l10n.str('ota_local_upgrade'),
                         style: TextStyle(fontSize: 13.sp),
                       ),
-                    ))
+                    ),)
               else if (!downloaded)
                 FilledButton.tonalIcon(
                   style: FilledButton.styleFrom(

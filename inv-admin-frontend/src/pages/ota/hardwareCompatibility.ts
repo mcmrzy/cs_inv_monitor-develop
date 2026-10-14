@@ -1,25 +1,31 @@
 import type { TranslateFn } from './firmwarePresentation'
 
-interface HardwareRange { hardware_versions?: string[] }
-const normalize = (version?: string) => (version ?? '').trim().toUpperCase()
-
-export function firmwareSupportsDevice(
-  firmware: HardwareRange & { model: string },
-  device: { model: string; hardware_version?: string },
-): boolean {
-  const hardware = normalize(device.hardware_version)
-  return !!hardware && firmware.model === device.model
-    && (firmware.hardware_versions ?? []).some((v) => normalize(v) === hardware)
-}
+interface HardwareRange { board_codes?: string[]; hardware_versions?: string[] }
 
 export function rollbackCoversHardware(firmware: HardwareRange, rollback: HardwareRange): boolean {
-  const source = (firmware.hardware_versions ?? []).map(normalize).filter(Boolean)
-  const destination = new Set((rollback.hardware_versions ?? []).map(normalize).filter(Boolean))
+  const source = (firmware.board_codes ?? []).filter(Boolean)
+  const destination = new Set((rollback.board_codes ?? []).filter(Boolean))
   return source.length > 0 && source.every((v) => destination.has(v))
 }
 
+/** Reasons come from the server verdict; unknown codes must stay visible, not blank. */
 export function hardwareCompatibilityLabel(reason: string | undefined, t: TranslateFn): string {
-  if (reason === 'hardware_version_unknown') return t('ota.hardwareUnknown')
-  if (reason === 'no_compatible_firmware') return t('ota.noCompatibleFirmware')
-  return ''
+  if (!reason) return ''
+  const keys: Record<string, string> = {
+    hardware_version_unknown: 'ota.hardwareUnknown',
+    no_compatible_firmware: 'ota.noCompatibleFirmware',
+    identity_unverified: 'hw.reasonIdentityUnverified',
+    identity_conflict: 'hw.reasonIdentityConflict',
+    module_identity_missing: 'hw.reasonModuleMissing',
+    module_absent: 'hw.reasonModuleAbsent',
+    firmware_scope_missing: 'hw.reasonScopeMissing',
+    firmware_incompatible: 'hw.reasonIncompatible',
+    device_protection_required: 'hw.reasonProtectionRequired',
+    firmware_not_published: 'hw.reasonNotPublished',
+    firmware_outside_rollout: 'hw.reasonOutsideRollout',
+    identity_changed: 'hw.reasonIdentityChanged',
+    verification_pending: 'hw.reasonVerificationPending',
+  }
+  const key = keys[reason]
+  return key ? t(key) : reason
 }

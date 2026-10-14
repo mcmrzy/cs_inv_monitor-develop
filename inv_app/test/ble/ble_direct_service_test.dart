@@ -166,7 +166,7 @@ void main() {
                 rssi: -55,
                 serviceUuids: [BleCtProtocol.serviceUuid],
               ),
-            ]));
+            ]),);
 
     final service = BleDirectService(
       adapter: adapter,

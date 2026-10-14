@@ -1,6 +1,5 @@
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inv_app/core/services/connection_mode_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
@@ -75,7 +74,7 @@ void main() {
 
       final retrySemantics = tester.getSemantics(retryButton);
       expect(retrySemantics.label, l10n.retry);
-      expect(retrySemantics.hasFlag(SemanticsFlag.isButton), isTrue);
+      expect(retrySemantics.flagsCollection.isButton, isTrue);
 
       final size = tester.getSize(retryButton);
       expect(size.width, greaterThanOrEqualTo(48));

@@ -81,17 +81,8 @@ func (r *OTARepository) ValidateFirmwareForDevice(ctx context.Context, sn string
 	if err != nil {
 		return nil, d, err
 	}
-	if !d.HardwareKnown {
-		return f, d, model.ErrHardwareVersionUnknown
-	}
-	if err = model.CheckFirmwareHardware(f, d.Model, d.HardwareVersion); err != nil {
+	if _, err = validateTrustedFirmware(ctx, r.db, sn, f, "cloud", false); err != nil {
 		return f, d, err
-	}
-	if f.ReleaseStatus != model.FirmwareReleasePublished {
-		return f, d, ErrFirmwareNotPublished
-	}
-	if !firmwareEligibleForDevice(f, sn) {
-		return f, d, fmt.Errorf("设备不在固件发布范围或灰度内")
 	}
 	return f, d, nil
 }
@@ -101,7 +92,7 @@ func (r *OTARepository) ValidateFirmwareRollback(ctx context.Context, id int64, 
 	if err != nil {
 		return err
 	}
-	if len(f.HardwareVersions) == 0 {
+	if len(f.BoardCodes) == 0 {
 		return model.ErrFirmwareHardwareUnspecified
 	}
 	if rollback == nil {
@@ -114,8 +105,8 @@ func (r *OTARepository) ValidateFirmwareRollback(ctx context.Context, id int64, 
 	if previous.ReleaseStatus != model.FirmwareReleasePublished || previous.TargetChip != f.TargetChip || previous.ID == f.ID {
 		return model.ErrHardwareIncompatible
 	}
-	for _, v := range f.HardwareVersions {
-		if err = model.CheckFirmwareHardware(previous, f.Model, v); err != nil {
+	for _, v := range f.BoardCodes {
+		if err = checkFirmwareBoard(previous, f.Model, v); err != nil {
 			return err
 		}
 	}
@@ -131,7 +122,7 @@ func validateFirmwareRollbackTx(ctx context.Context, tx pgx.Tx, id int64, rollba
 	if err := scanFirmware(tx.QueryRow(ctx, `SELECT `+firmwareSelectCols("f")+` FROM firmware_versions f WHERE f.id=$1`, id), &f); err != nil {
 		return err
 	}
-	if len(f.HardwareVersions) == 0 {
+	if len(f.BoardCodes) == 0 {
 		return model.ErrFirmwareHardwareUnspecified
 	}
 	if rollback == nil {
@@ -147,9 +138,34 @@ func validateFirmwareRollbackTx(ctx context.Context, tx pgx.Tx, id int64, rollba
 	if previous.ReleaseStatus != model.FirmwareReleasePublished || previous.TargetChip != f.TargetChip {
 		return model.ErrHardwareIncompatible
 	}
-	for _, v := range f.HardwareVersions {
-		if err := model.CheckFirmwareHardware(&previous, f.Model, v); err != nil {
+	for _, v := range f.BoardCodes {
+		if err := checkFirmwareBoard(&previous, f.Model, v); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func checkFirmwareBoard(f *model.Firmware, m, board string) error {
+	if f.Model != m {
+		return model.ErrHardwareIncompatible
+	}
+	for _, b := range f.BoardCodes {
+		if b == board {
+			return nil
+		}
+	}
+	return model.ErrHardwareIncompatible
+}
+func writeFirmwareBoards(ctx context.Context, tx pgx.Tx, f *model.Firmware) error {
+	seen := map[string]bool{}
+	for _, b := range f.BoardCodes {
+		if b == "" || seen[b] {
+			return fmt.Errorf("invalid or duplicate board_code")
+		}
+		seen[b] = true
+		if _, err := tx.Exec(ctx, `INSERT INTO firmware_board_types(firmware_id,model,target_chip,firmware_version,board_code) VALUES($1,$2,$3,$4,$5)`, f.ID, f.Model, f.TargetChip, f.Version, b); err != nil {
+			return fmt.Errorf("save firmware board scope: %w", err)
 		}
 	}
 	return nil

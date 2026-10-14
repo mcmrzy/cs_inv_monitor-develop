@@ -138,7 +138,7 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
   }) : super(NotificationInitial()) {
     on<SystemNotificationsRequested>(_onSystemNotificationsRequested);
     on<SystemNotificationsLoadMoreRequested>(
-        _onSystemNotificationsLoadMoreRequested);
+        _onSystemNotificationsLoadMoreRequested,);
     on<SystemNotificationDeleteRequested>(_onSystemNotificationDeleteRequested);
     on<SystemNotificationsClearRequested>(_onSystemNotificationsClearRequested);
     on<_MqttStatusUpdate>(_onMqttStatusUpdate);
@@ -269,7 +269,7 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
             .map(_tryParseStoredNotification)
             .whereType<SystemNotification>()
             .where(
-                (item) => item.type != SystemNotificationType.legacyAppUpdate)
+                (item) => item.type != SystemNotificationType.legacyAppUpdate,)
             .toList();
       } catch (_) {}
     }

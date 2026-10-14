@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { buildFirmwareUploadFormData } from './firmwareUpload'
 
 describe('buildFirmwareUploadFormData', () => {
+  it('uploads explicit board codes without requiring a legacy hardware range', () => {
+    const body = buildFirmwareUploadFormData({ file: new File(['x'], 'x.bin'), model: 'L10', targetChip: 'dsp', hardwareVersions: [], boardCodes: ['dsp-A', 'dsp-A'] } as any)
+    expect(JSON.parse(String(body.get('board_codes')))).toEqual(['dsp-A'])
+    expect(body.has('hardware_versions')).toBe(false)
+  })
   it('leaves version, size and hashes to the backend', () => {
     const body = buildFirmwareUploadFormData({
       file: new File(['firmware'], 'CSL10_6.2K_arm_1.2.3.bin'),

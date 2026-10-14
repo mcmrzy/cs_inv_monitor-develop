@@ -31,6 +31,8 @@ import { formatInTimezone } from '@/utils/timezone'
 import { isDeviceNameSkipped, markDeviceNameSkipped } from '@/utils/onboarding'
 import useTimezoneStore from '@/stores/timezoneStore'
 import BulkDeviceOperationModal, { type BulkFailure } from './components/BulkDeviceOperationModal'
+import HardwareRegistryDrawer from './components/HardwareRegistryDrawer'
+import HardwareImportModal from './components/HardwareImportModal'
 
 const { Text, Title } = Typography
 const { RangePicker } = DatePicker
@@ -49,12 +51,13 @@ interface DeviceRecord {
   status: number
   lastOnlineAt: string
   userId: string
+  user_id?: number
   installerId: string
   timezone?: string
   station_id?: number
   station_name?: string
   user_phone?: string
-  owner?: { phone: string; nickname: string }
+  owner?: { phone: string; nickname: string } | null
   installer?: { nickname: string; phone: string }
 }
 
@@ -121,6 +124,8 @@ const DevicesPage: React.FC = () => {
   const [batchControlExecuting, setBatchControlExecuting] = useState(false)
 
   const [addModalOpen, setAddModalOpen] = useState(false)
+  const [hardwareSn, setHardwareSn] = useState<string | null>(null)
+  const [hardwareImportOpen, setHardwareImportOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
   // 绑定成功后的一次性「设置设备名称」引导（可跳过，跳过过的设备不再弹）
   const [nameModalOpen, setNameModalOpen] = useState(false)
@@ -858,12 +863,13 @@ const DevicesPage: React.FC = () => {
       render: (v: string) => v || '-',
     },
     {
-      title: t('common.owner'),
+      title: t('dev.currentOwner'),
       key: 'owner',
       width: 130,
-      render: (_: any, record: any) => {
-        if (!record.owner) return '-'
-        return <Text>{record.owner.nickname || record.owner.phone || '-'}</Text>
+      render: (_: unknown, record: DeviceRecord) => {
+        const ownerId = record.user_id ?? record.userId
+        if (!ownerId || Number(ownerId) <= 0) return <Text type="secondary">{t('dev.unbound')}</Text>
+        return <Text>{record.owner?.nickname?.trim() || record.owner?.phone || t('dev.ownerId', { id: ownerId })}</Text>
       },
     },
     {
@@ -921,6 +927,7 @@ const DevicesPage: React.FC = () => {
               {t('dev.setName')}
             </Button>
           )}
+          <Button type="link" size="small" onClick={() => setHardwareSn(record.sn)}>{t('hw.registry')}</Button>
           {!isEndUser && (
             <>
               <Button
@@ -1106,6 +1113,8 @@ const DevicesPage: React.FC = () => {
     <div>
       {contextHolder}
       {modalContextHolder}
+      {hardwareSn && <HardwareRegistryDrawer sn={hardwareSn} onClose={() => setHardwareSn(null)} />}
+      {hardwareImportOpen && <HardwareImportModal open onClose={() => setHardwareImportOpen(false)} />}
 
       {devicesError && (
         <Alert
@@ -1259,6 +1268,7 @@ const DevicesPage: React.FC = () => {
                       {t('dev.importExcel')}
                     </Button>
                   )}
+                  {isSuperAdmin && <Button onClick={() => setHardwareImportOpen(true)}>{t('hw.import')}</Button>}
                   {!isEndUser && selectedRowKeys.length > 0 && (
                     <Dropdown menu={{ items: batchMenuItems }} placement="bottomLeft">
                       <Button icon={<SettingOutlined />}>

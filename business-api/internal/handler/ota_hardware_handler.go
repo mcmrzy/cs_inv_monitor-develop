@@ -96,3 +96,53 @@ func firmwareUploadAuditDetail(f *model.Firmware) string {
 	data, _ := json.Marshal(gin.H{"model": f.Model, "version": f.Version, "target_chip": f.TargetChip, "file_size": f.FileSize, "file_sha256": f.FileSHA256, "hardware_versions": f.HardwareVersions})
 	return string(data)
 }
+
+func parseBoardCodesForm(raw string) ([]string, error) {
+	var codes []string
+	if err := json.Unmarshal([]byte(raw), &codes); err != nil {
+		return nil, err
+	}
+	if len(codes) == 0 || len(codes) > 100 {
+		return nil, errors.New("board_codes required")
+	}
+	seen := map[string]bool{}
+	for _, code := range codes {
+		if len(code) > 50 || code == "" || seen[code] {
+			return nil, errors.New("invalid board_codes")
+		}
+		seen[code] = true
+		for i, c := range code {
+			if !(c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || i > 0 && (c == '.' || c == '_' || c == '-')) {
+				return nil, errors.New("invalid board_code")
+			}
+		}
+	}
+	return codes, nil
+}
+
+func (h *OTAHandler) Preflight(c *gin.Context) {
+	sn := c.Param("sn")
+	if !h.ensureDeviceViewScope(c, sn) {
+		return
+	}
+	id, err := strconv.ParseInt(c.Query("firmware_id"), 10, 64)
+	if err != nil || id < 1 {
+		response.Error(c, 400, "firmware_id required")
+		return
+	}
+	fw, err := h.otaService.GetFirmware(c.Request.Context(), id)
+	if err != nil {
+		response.Error(c, 404, "固件不存在")
+		return
+	}
+	if target := c.Query("target_chip"); target != "" && target != fw.TargetChip {
+		response.Error(c, 400, "target_chip mismatch")
+		return
+	}
+	result, err := h.otaService.Preflight(c.Request.Context(), sn, id, c.DefaultQuery("channel", "cloud"))
+	if err != nil {
+		response.Error(c, 500, "升级预检失败")
+		return
+	}
+	response.Success(c, result)
+}

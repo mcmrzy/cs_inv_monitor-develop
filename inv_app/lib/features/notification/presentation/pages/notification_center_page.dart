@@ -246,7 +246,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
                                 onLoadMore: () => context
                                     .read<NotificationBloc>()
                                     .add(
-                                        const SystemNotificationsLoadMoreRequested()),
+                                        const SystemNotificationsLoadMoreRequested(),),
                               );
                             }
                             return _buildItemCard(
@@ -1010,7 +1010,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage>
               ),
             ),
             Icon(Icons.chevron_right,
-                color: AppColor.textHint(context), size: 20.sp),
+                color: AppColor.textHint(context), size: 20.sp,),
           ],
         ),
       ),

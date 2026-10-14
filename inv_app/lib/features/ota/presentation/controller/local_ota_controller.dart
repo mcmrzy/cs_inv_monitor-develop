@@ -8,6 +8,7 @@ import 'package:inv_app/features/ota/data/datasources/local_ota_result_sync_queu
 import 'package:inv_app/features/ota/domain/entities/local_channel.dart';
 import 'package:inv_app/features/ota/domain/repositories/local_communication_repository.dart';
 import 'package:inv_app/features/ota/domain/repositories/ota_repository.dart';
+import 'package:inv_app/features/ota/domain/repositories/trusted_local_ota_transport.dart';
 import 'package:inv_app/features/ota/presentation/models/local_ota_presentation.dart';
 
 /// 本地 OTA 执行阶段
@@ -148,6 +149,7 @@ class LocalOTAController extends ChangeNotifier {
     required String fallbackVersion,
     required String firmwareModel,
     required List<String> firmwareHardwareVersions,
+    List<String> firmwareBoardCodes = const [],
     int? firmwareId,
   }) async {
     final isEsp = manifest.target.toLowerCase() == 'esp';
@@ -173,24 +175,50 @@ class LocalOTAController extends ChangeNotifier {
           )) {
         throw LocalOtaUnsupportedTargetException(manifest.target);
       }
-      final hardwareCompatibility = checkLocalOtaHardwareCompatibility(
-        firmwareHardwareVersions: firmwareHardwareVersions,
-        deviceInfo: deviceInfo,
+      // Legacy INFO matching is a diagnostic only. It cannot authorize writes.
+      // Current BLE/HTTP transports intentionally do not implement this contract
+      // until factory identity, signed authorization and updater enforcement
+      // have been integrated and validated on the actual target boards.
+      final communication = _communication;
+      if (communication is! TrustedLocalOtaTransport) {
+        final diagnostic = checkLocalOtaHardwareCompatibility(
+          firmwareHardwareVersions: firmwareHardwareVersions,
+          deviceInfo: deviceInfo,
+        );
+        if (diagnostic != LocalOtaHardwareCompatibility.compatible) {
+          throw LocalOtaHardwareException(diagnostic.name);
+        }
+        throw const LocalOtaAuthorizationRequiredException();
+      }
+      if (firmwareId == null || firmwareId <= 0 || firmwareBoardCodes.isEmpty) {
+        throw const LocalOtaAuthorizationRequiredException();
+      }
+      final receipt = await (communication as TrustedLocalOtaTransport).preflightTrustedInstall(
+        deviceSN: _deviceSN,
+        firmwareId: firmwareId,
+        manifest: manifest,
+        firmwareBoardCodes: firmwareBoardCodes,
       );
-      if (hardwareCompatibility != LocalOtaHardwareCompatibility.compatible) {
-        throw LocalOtaHardwareException(hardwareCompatibility.name);
+      if (!receipt.matches(
+        expectedSN: _deviceSN,
+        expectedFirmwareId: firmwareId,
+        manifest: manifest,
+        firmwareBoardCodes: firmwareBoardCodes,
+      )) {
+        throw const LocalOtaAuthorizationRequiredException();
       }
     } catch (e) {
       _emit(_state.copyWith(
         phase: LocalOTAPhase.failed,
         error: () => e is LocalOtaDeviceModelException ||
                 e is LocalOtaHardwareException ||
+                e is LocalOtaAuthorizationRequiredException ||
                 e is LocalOtaUnsupportedTargetException
             ? e
             : LocalOtaDeviceModelException(
                 'local OTA device model unavailable: $e',
               ),
-      ));
+      ),);
       _onTerminateConnection?.call();
       return;
     }
@@ -200,7 +228,7 @@ class LocalOTAController extends ChangeNotifier {
       phase: LocalOTAPhase.uploading,
       uploadProgress: 0,
       error: () => null,
-    ));
+    ),);
     try {
       await _communication.uploadFirmware(
         deviceIP: _deviceIP,
@@ -217,7 +245,7 @@ class LocalOTAController extends ChangeNotifier {
         phase: LocalOTAPhase.failed,
         uploadProgress: _state.uploadProgress,
         error: () => e,
-      ));
+      ),);
       _onTerminateConnection?.call();
       return;
     }
@@ -230,7 +258,7 @@ class LocalOTAController extends ChangeNotifier {
         phase: LocalOTAPhase.failed,
         uploadProgress: 1.0,
         error: () => e,
-      ));
+      ),);
       _onTerminateConnection?.call();
       return;
     }
@@ -240,7 +268,7 @@ class LocalOTAController extends ChangeNotifier {
       phase: LocalOTAPhase.upgrading,
       uploadProgress: 1.0,
       statusOverrideKey: () => isEsp ? 'push_complete_wait_reboot' : null,
-    ));
+    ),);
     if (isEsp) {
       // ESP 自升级：传完固件 → 写 Flash → 立即重启（~500ms）
       await Future.delayed(const Duration(milliseconds: 500));
@@ -249,10 +277,7 @@ class LocalOTAController extends ChangeNotifier {
     // ---- 4. 轮询升级进度 ----
     await _pollProgress(
       isEsp: isEsp,
-      fallbackVersion:
-          const {'dsp', 'bms'}.contains(manifest.target.toLowerCase())
-              ? manifest.version
-              : fallbackVersion,
+      expectedVersion: manifest.version,
       targetChip: manifest.target,
       firmwareId: firmwareId,
     );
@@ -261,7 +286,7 @@ class LocalOTAController extends ChangeNotifier {
   /// 统一轮询 /ota/progress（ESP：NVS 持久化结果；ARM：实时进度）
   Future<void> _pollProgress({
     required bool isEsp,
-    required String fallbackVersion,
+    required String expectedVersion,
     required String targetChip,
     int? firmwareId,
   }) async {
@@ -293,13 +318,13 @@ class LocalOTAController extends ChangeNotifier {
             statusOverrideParams: {
               'seconds': '${stopwatch.elapsed.inSeconds}',
             },
-          ));
+          ),);
           if (offlineCount % 2 == 0 && _reconnectHotspot != null) {
             final reconnected = await _reconnectHotspot();
             if (reconnected && !_disposed) {
               _emit(_state.copyWith(
                 statusOverrideKey: () => 'hotspot_reconnected',
-              ));
+              ),);
               offlineCount = 0;
             } else {
               continue;
@@ -324,25 +349,25 @@ class LocalOTAController extends ChangeNotifier {
         final chipVer = (progress['version'] as String? ?? '').isNotEmpty
             ? (progress['version'] as String)
             : (progress[versionKey] as String? ?? '');
-        final displayVersion = chipVer.isNotEmpty ? chipVer : fallbackVersion;
 
         _emit(_state.copyWith(
           upgradeProgress: percent / 100.0,
           deviceStatus: status,
           deviceMessage: message,
           statusOverrideKey: () => null,
-        ));
+        ),);
 
         if (status == 'done' || status == 'succeeded') {
-          String? newVersion =
-              displayVersion.isNotEmpty ? displayVersion : null;
+          String? newVersion = chipVer.isNotEmpty ? chipVer : null;
           var chipNewVersion =
               (progress[firmwareKey] as String? ?? '').isNotEmpty
                   ? (progress[firmwareKey] as String)
                   : chipVer.isNotEmpty
                       ? chipVer
-                      : (progress[versionKey] as String? ?? fallbackVersion);
-          if (newVersion == null) {
+                      : (progress[versionKey] as String? ?? '');
+          // Always re-read the actual module after a completion report.
+          // The requested version and a generic progress.version are not proof.
+          {
             try {
               final info = await _communication.getDeviceInfo(_deviceIP);
               final infoChipVer =
@@ -354,16 +379,30 @@ class LocalOTAController extends ChangeNotifier {
                               ? (info['version'] as String? ?? '')
                               : '';
               newVersion = infoChipVer.isNotEmpty ? infoChipVer : null;
-              if (infoChipVer.isNotEmpty) chipNewVersion = infoChipVer;
+              chipNewVersion = infoChipVer;
             } catch (e) {
+              newVersion = null;
+              chipNewVersion = '';
               debugPrint('[LocalOTA] get device info failed: $e');
             }
+          }
+
+          if (newVersion == null || newVersion != expectedVersion) {
+            _emit(
+              _state.copyWith(
+                phase: LocalOTAPhase.failed,
+                error: () => const OtaInstallationUnconfirmedException(),
+                statusOverrideKey: () => 'ota_verification_pending',
+              ),
+            );
+            _onTerminateConnection?.call();
+            return;
           }
 
           _emit(_state.copyWith(
             phase: LocalOTAPhase.success,
             newVersion: () => newVersion,
-          ));
+          ),);
           _onTerminateConnection?.call();
           // 成功后经 Repository 上报（不再由页面直连 Dio 绕过分层）
           // 本地 OTA 完成只上报 target/new_version，不再产生 main_version
@@ -393,7 +432,7 @@ class LocalOTAController extends ChangeNotifier {
           statusOverrideParams: {
             'seconds': '${stopwatch.elapsed.inSeconds}',
           },
-        ));
+        ),);
         continue;
       } catch (e) {
         debugPrint('[LocalOTA] poll progress error: $e');

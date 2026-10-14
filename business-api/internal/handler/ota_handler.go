@@ -132,6 +132,7 @@ func (h *OTAHandler) logOTAAuditTyped(c *gin.Context, action, resourceType, reso
 }
 
 type CreateFirmwareRequest struct {
+	BoardCodes       []string `json:"board_codes"`
 	HardwareVersions []string `json:"hardware_versions"`
 	Model            string   `json:"model" binding:"required"`
 	TargetChip       string   `json:"target_chip" binding:"required"`
@@ -297,7 +298,17 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 			return
 		}
 		releaseSignature := strings.TrimSpace(c.PostForm("release_signature"))
-		hardwareVersions, hardwareErr := parseHardwareVersionsForm(c.PostForm("hardware_versions"))
+		var hardwareVersions, boardCodes []string
+		var hardwareErr error
+		if raw := c.PostForm("hardware_versions"); raw != "" {
+			hardwareVersions, hardwareErr = parseHardwareVersionsForm(raw)
+		}
+		if raw := c.PostForm("board_codes"); raw != "" {
+			boardCodes, hardwareErr = parseBoardCodesForm(raw)
+		}
+		if hardwareErr == nil && len(hardwareVersions) == 0 && len(boardCodes) == 0 {
+			hardwareErr = errors.New("请指定模块硬件板卡范围 board_codes")
+		}
 		if hardwareErr != nil {
 			response.Error(c, 400, hardwareErr.Error())
 			return
@@ -384,6 +395,7 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 
 		fw := &service.CreateFirmwareReq{
 			HardwareVersions: hardwareVersions,
+			BoardCodes:       boardCodes,
 			Model:            model,
 			TargetChip:       targetChip,
 			Version:          version,
@@ -415,6 +427,7 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 		// 管理端据此提示「自动识别出了什么」，无需再翻列表核对。
 		response.SuccessWithMessage(c, "固件上传成功", gin.H{
 			"hardware_versions": created.HardwareVersions,
+			"board_codes":       created.BoardCodes,
 			"id":                created.ID,
 			"model":             created.Model,
 			"target_chip":       created.TargetChip,
@@ -433,8 +446,13 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 		return
 	}
 
+	if len(req.BoardCodes) == 0 && len(req.HardwareVersions) == 0 {
+		response.Error(c, 400, "请指定模块硬件板卡范围 board_codes")
+		return
+	}
 	fw := &service.CreateFirmwareReq{
 		HardwareVersions: req.HardwareVersions,
+		BoardCodes:       req.BoardCodes,
 		Model:            req.Model,
 		TargetChip:       req.TargetChip,
 		Version:          req.Version,
@@ -448,11 +466,13 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 		IsForce:          req.IsForce,
 		UploadedBy:       c.GetInt64("user_id"),
 	}
-	if versions, err := model.NormalizeHardwareVersions(fw.HardwareVersions); err != nil {
-		response.Error(c, 400, err.Error())
-		return
-	} else {
-		fw.HardwareVersions = versions
+	if len(fw.HardwareVersions) > 0 {
+		if versions, err := model.NormalizeHardwareVersions(fw.HardwareVersions); err != nil {
+			response.Error(c, 400, err.Error())
+			return
+		} else {
+			fw.HardwareVersions = versions
+		}
 	}
 	if err := service.ValidateFirmwareRequest(fw); err != nil {
 		response.Error(c, 400, err.Error())
@@ -526,7 +546,7 @@ func (h *OTAHandler) GetFirmwareInfoForApp(c *gin.Context) {
 		response.Error(c, 404, "固件不存在")
 		return
 	}
-	if fw.ReleaseStatus != model.FirmwareReleasePublished || len(fw.HardwareVersions) == 0 {
+	if fw.ReleaseStatus != model.FirmwareReleasePublished || len(fw.BoardCodes) == 0 {
 		response.Error(c, 409, "固件未发布或尚未确认适用硬件")
 		return
 	}
@@ -2125,6 +2145,25 @@ func (h *OTAHandler) GetDevicesByFirmware(c *gin.Context) {
 		devices = matched
 	}
 	response.Success(c, gin.H{"devices": devices, "total": len(devices)})
+}
+
+// ListFirmwareTaskCandidates 升级任务可选设备（含不可升级原因，供创建任务步骤二展示）
+func (h *OTAHandler) ListFirmwareTaskCandidates(c *gin.Context) {
+	id := parseID(c.Param("id"))
+	if id <= 0 {
+		response.Error(c, 400, "invalid id")
+		return
+	}
+	plan, systemAdmin, allowed := overviewScope(c, h.db, "device")
+	if !allowed {
+		return
+	}
+	result, err := h.otaService.ListTaskCandidates(c.Request.Context(), id, plan, systemAdmin)
+	if err != nil {
+		response.Error(c, 404, "固件不存在")
+		return
+	}
+	response.Success(c, result)
 }
 
 // GetUpgradePackageDevices 按升级包查询已安装/正在安装该升级包的设备（管理端）

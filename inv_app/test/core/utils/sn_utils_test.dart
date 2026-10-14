@@ -53,10 +53,10 @@ void main() {
     });
 
     test('旧格式回归：SN:PIN / 纯 SN 不被破坏', () {
-      final r1 = parseQRCode('SN:$validSn PIN:1234');
+      final r1 = parseQRCode('SN:$validSn PIN:123456');
       expect(r1, isNotNull);
       expect(r1!.sn, validSn);
-      expect(r1.pin, '1234');
+      expect(r1.pin, '123456');
 
       final r2 = parseQRCode(validSn.toLowerCase());
       expect(r2, isNotNull);

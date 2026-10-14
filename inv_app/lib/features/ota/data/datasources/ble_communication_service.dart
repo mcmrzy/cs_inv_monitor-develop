@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
@@ -304,13 +303,13 @@ class BleCommunicationService implements LocalCommunicationRepository {
     final transferToken = int.parse(transferId.substring(0, 8), radix: 16);
     debugPrint('[BleOTA] binary OTA mtu=$mtu payload=$maxPayload');
 
-    final ctrlAccepted = (Map<String, dynamic> s) {
+    bool ctrlAccepted(Map<String, dynamic> s) {
       final body = _normalizeStatusEnvelope(s);
       return body['transfer_id'] == transferId &&
           (_isFailed(s) ||
               const {'accepted', 'receiving', 'verifying', 'installing'}
                   .contains(_stageOf(s)));
-    };
+    }
     final controlMessage = <String, dynamic>{
       'v': 2,
       'type': 'ota.ctrl',
@@ -362,7 +361,7 @@ class BleCommunicationService implements LocalCommunicationRepository {
         header.setUint32(2, transferToken, Endian.little);
         header.setUint32(6, offset, Endian.little);
         frame.setRange(_binaryHeaderSize, frame.length,
-            bytes.getRange(offset, offset + payloadLength));
+            bytes.getRange(offset, offset + payloadLength),);
         await _writeBinaryFrameWithRecovery(
           lease: lease,
           frame: frame,
@@ -373,13 +372,13 @@ class BleCommunicationService implements LocalCommunicationRepository {
         offset += payloadLength;
       }
 
-      final chunkAcked = (Map<String, dynamic> s) {
+      bool chunkAcked(Map<String, dynamic> s) {
         final body = _normalizeStatusEnvelope(s);
         final acceptedOffset = (body['accepted_offset'] as num?)?.toInt();
         return body['transfer_id'] == transferId &&
             (_isFailed(s) ||
                 (acceptedOffset != null && acceptedOffset >= batchEnd));
-      };
+      }
       // 低 MTU 下 JSON 状态通知可能超过 ATT MTU-3，被设备栈丢弃。
       // 最后一帧的 write-with-response 返回后，直接读取状态，避免每 1 KB
       // 空等一次通知超时。
@@ -413,13 +412,13 @@ class BleCommunicationService implements LocalCommunicationRepository {
     }
 
     // 写入成功不等于设备已持久接收；等待校验/烧写进入下一阶段。
-    final afterPredicate = (Map<String, dynamic> s) {
+    bool afterPredicate(Map<String, dynamic> s) {
       final body = _normalizeStatusEnvelope(s);
       return body['transfer_id'] == transferId &&
           (_isFailed(s) ||
               const {'verifying', 'installing', 'rebooting', 'succeeded'}
                   .contains(_stageOf(s)));
-    };
+    }
     late Map<String, dynamic> after;
     if (mtu < 512) {
       // 状态通知在低 MTU 下可能完全发不出；读状态直到 worker 离开 receiving。

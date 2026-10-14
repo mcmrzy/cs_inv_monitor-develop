@@ -314,6 +314,11 @@ func (h *OTAHandler) TriggerIndependentOTA(c *gin.Context) {
 			response.Error(c, 409, "idempotency_key 与已有请求不一致")
 			return
 		}
+		var trustedErr *repository.OTAEligibilityError
+		if errors.As(err, &trustedErr) {
+			response.Error(c, 409, trustedErr.Reason)
+			return
+		}
 		if errors.Is(err, model.ErrHardwareVersionUnknown) || errors.Is(err, model.ErrHardwareIncompatible) || errors.Is(err, model.ErrFirmwareHardwareUnspecified) || errors.Is(err, service.ErrFirmwareNotPublished) || errors.Is(err, service.ErrDuplicateTarget) || errors.Is(err, service.ErrDeviceNotFound) || errors.Is(err, repository.ErrDeviceOffline) || errors.Is(err, service.ErrCurrentVersionUnknown) {
 			response.Error(c, 409, err.Error())
 			return
@@ -347,6 +352,11 @@ func (h *OTAHandler) RollbackIndependentFirmware(c *gin.Context) {
 	if err != nil {
 		if errors.Is(err, service.ErrCurrentVersionUnknown) || errors.Is(err, repository.ErrDeviceOffline) {
 			response.Error(c, 409, "当前模块版本未上报，无法回滚")
+			return
+		}
+		var trustedErr *repository.OTAEligibilityError
+		if errors.As(err, &trustedErr) {
+			response.Error(c, 409, trustedErr.Reason)
 			return
 		}
 		if errors.Is(err, model.ErrHardwareVersionUnknown) || errors.Is(err, model.ErrHardwareIncompatible) || errors.Is(err, model.ErrFirmwareHardwareUnspecified) {

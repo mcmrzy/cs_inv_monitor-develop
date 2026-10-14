@@ -81,6 +81,7 @@ type Device struct {
 	Alias              string                 `json:"alias"`
 	Remark             string                 `json:"remark"`
 	UserID             int64                  `json:"user_id"`
+	Owner              *DeviceOwner           `json:"owner"`
 	Timezone           string                 `json:"timezone"`
 	Status             int                    `json:"status"`
 	CurrentPower       float64                `json:"current_power"`
@@ -90,6 +91,11 @@ type Device struct {
 	LastOnlineAt       *time.Time             `json:"last_online_at"`
 	CreatedAt          time.Time              `json:"created_at"`
 	UpdatedAt          time.Time              `json:"updated_at"`
+}
+
+type DeviceOwner struct {
+	Nickname string `json:"nickname"`
+	Phone    string `json:"phone"`
 }
 
 // OfflineOpLog represents one local operation log uploaded by the App
@@ -424,6 +430,7 @@ type RolePermission struct {
 }
 
 type Firmware struct {
+	BoardCodes           []string   `json:"board_codes"`
 	HardwareVersions     []string   `json:"hardware_versions"`
 	ID                   int64      `json:"id"`
 	Model                string     `json:"model"`
@@ -453,6 +460,10 @@ type Firmware struct {
 
 // FirmwareModuleOverview 设备单模块固件概览（用户侧）
 type FirmwareModuleOverview struct {
+	BoardCode           string     `json:"board_code"`
+	BoardUID            string     `json:"board_uid"`
+	ModuleRevision      int64      `json:"module_revision"`
+	ProtectionLevel     string     `json:"protection_level"`
 	CompatibilityReason string     `json:"compatibility_reason"`
 	Target              string     `json:"target"`
 	CurrentVersion      string     `json:"current_version"`
@@ -480,12 +491,15 @@ type FirmwarePublishOptions struct {
 
 // DeviceFirmwareOverview 设备固件总览
 type DeviceFirmwareOverview struct {
-	HardwareVersion string                   `json:"hardware_version"`
-	HardwareState   string                   `json:"hardware_state"`
-	DeviceSN        string                   `json:"device_sn"`
-	DeviceModel     string                   `json:"device_model"`
-	IsOnline        bool                     `json:"is_online"`
-	Modules         []FirmwareModuleOverview `json:"modules"`
+	IdentityState    string                   `json:"identity_state"`
+	IdentityRevision int64                    `json:"identity_revision"`
+	ProtectionLevel  string                   `json:"protection_level"`
+	HardwareVersion  string                   `json:"hardware_version"`
+	HardwareState    string                   `json:"hardware_state"`
+	DeviceSN         string                   `json:"device_sn"`
+	DeviceModel      string                   `json:"device_model"`
+	IsOnline         bool                     `json:"is_online"`
+	Modules          []FirmwareModuleOverview `json:"modules"`
 }
 
 // TriggerFirmwareRequest 独立固件升级触发

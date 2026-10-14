@@ -16,7 +16,7 @@ class DeviceTelemetryHistoryPage extends StatefulWidget {
       {super.key,
       required this.sn,
       this.api,
-      this.timezone = TimezoneUtils.defaultTimezone});
+      this.timezone = TimezoneUtils.defaultTimezone,});
   final String sn;
   final DeviceTelemetryApi? api;
   final String timezone;
@@ -59,7 +59,7 @@ class _HistoryState extends State<DeviceTelemetryHistoryPage> {
       if (!_fieldsChanged) {
         final stored = prefs.get(_fieldsKey);
         setState(() => _fields =
-            validHistoryFields(stored is List<String> ? stored : null));
+            validHistoryFields(stored is List<String> ? stored : null),);
       }
     } catch (_) {
       // Display preferences must not block cloud history.
@@ -94,7 +94,7 @@ class _HistoryState extends State<DeviceTelemetryHistoryPage> {
     });
     try {
       final data = await _api.getHistory(widget.sn, _day,
-          page: _page, pageSize: _chart ? 500 : 20, granularity: _granularity);
+          page: _page, pageSize: _chart ? 500 : 20, granularity: _granularity,);
       if (!mounted || request != _request) return;
       setState(() {
         _data = data;
@@ -114,7 +114,7 @@ class _HistoryState extends State<DeviceTelemetryHistoryPage> {
         context: context,
         initialDate: _day,
         firstDate: DateTime(2020),
-        lastDate: tz.TZDateTime.now(_api.location));
+        lastDate: tz.TZDateTime.now(_api.location),);
     if (date == null || !mounted) return;
     _day = date;
     _page = 1;
@@ -127,13 +127,13 @@ class _HistoryState extends State<DeviceTelemetryHistoryPage> {
     return Scaffold(
       appBar: AppBar(
           title: Text(l10n.str('telemetry_history'),
-              maxLines: 2, style: const TextStyle(fontSize: 16, height: 1.1)),
+              maxLines: 2, style: const TextStyle(fontSize: 16, height: 1.1),),
           actions: [
             if (!_chart)
               IconButton(
                   tooltip: l10n.str('history_fields_label'),
                   onPressed: _selectFields,
-                  icon: const Icon(Icons.tune_rounded)),
+                  icon: const Icon(Icons.tune_rounded),),
             IconButton(
                 tooltip:
                     _chart ? l10n.str('telemetry_samples') : l10n.historyCurve,
@@ -144,19 +144,19 @@ class _HistoryState extends State<DeviceTelemetryHistoryPage> {
                 },
                 icon: Icon(_chart
                     ? Icons.list_alt_rounded
-                    : Icons.show_chart_rounded)),
+                    : Icons.show_chart_rounded,),),
             IconButton(
                 tooltip: l10n.refreshLabel,
                 onPressed: _loading ? null : _fetch,
-                icon: const Icon(Icons.refresh_rounded)),
-          ]),
+                icon: const Icon(Icons.refresh_rounded),),
+          ],),
       body: Column(children: [
         Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text('${widget.sn}  ·  ${_api.timezone}',
-                    style: Theme.of(context).textTheme.bodySmall))),
+                    style: Theme.of(context).textTheme.bodySmall,),),),
         Padding(
             padding: const EdgeInsets.all(16),
             child: Wrap(
@@ -167,15 +167,15 @@ class _HistoryState extends State<DeviceTelemetryHistoryPage> {
                 OutlinedButton.icon(
                     onPressed: _pickDate,
                     icon: const Icon(Icons.calendar_today_outlined, size: 18),
-                    label: Text(DateFormat('yyyy-MM-dd').format(_day))),
+                    label: Text(DateFormat('yyyy-MM-dd').format(_day)),),
                 SegmentedButton<String>(
                   segments: [
                     ButtonSegment(
                         value: 'raw',
-                        label: Text(l10n.str('telemetry_samples'))),
+                        label: Text(l10n.str('telemetry_samples')),),
                     ButtonSegment(
                         value: 'hour',
-                        label: Text(l10n.str('telemetry_hourly'))),
+                        label: Text(l10n.str('telemetry_hourly')),),
                   ],
                   selected: {_granularity},
                   showSelectedIcon: false,
@@ -186,7 +186,7 @@ class _HistoryState extends State<DeviceTelemetryHistoryPage> {
                   },
                 ),
               ],
-            )),
+            ),),
         const Divider(height: 1),
         if (_chart)
           Padding(
@@ -201,7 +201,7 @@ class _HistoryState extends State<DeviceTelemetryHistoryPage> {
                 showSelectedIcon: false,
                 onSelectionChanged: (selection) =>
                     setState(() => _metric = selection.single),
-              )),
+              ),),
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
@@ -212,8 +212,8 @@ class _HistoryState extends State<DeviceTelemetryHistoryPage> {
                       TextButton.icon(
                           onPressed: _fetch,
                           icon: const Icon(Icons.refresh),
-                          label: Text(l10n.retry)),
-                    ]))
+                          label: Text(l10n.retry),),
+                    ],),)
                   : (_data?.items.isEmpty ?? true)
                       ? Center(child: Text(l10n.noData))
                       : _chart
@@ -227,7 +227,7 @@ class _HistoryState extends State<DeviceTelemetryHistoryPage> {
                                     const Divider(height: 1),
                                 itemBuilder: (context, index) =>
                                     _sample(_data!.items[index], l10n),
-                              )),
+                              ),),
         ),
         SafeArea(
             top: false,
@@ -242,16 +242,16 @@ class _HistoryState extends State<DeviceTelemetryHistoryPage> {
                             _page--;
                             _fetch();
                           },
-                    icon: const Icon(Icons.chevron_left)),
+                    icon: const Icon(Icons.chevron_left),),
                 Expanded(
                     child: Text(
                         _failed || _loading
                             ? '--'
                             : l10n.str('telemetry_page', {
                                 'page': '$_page',
-                                'total': '${_data?.total ?? 0}'
+                                'total': '${_data?.total ?? 0}',
                               }),
-                        textAlign: TextAlign.center)),
+                        textAlign: TextAlign.center,),),
                 IconButton(
                     tooltip: l10n.str('telemetry_next'),
                     onPressed: _loading ||
@@ -262,10 +262,10 @@ class _HistoryState extends State<DeviceTelemetryHistoryPage> {
                             _page++;
                             _fetch();
                           },
-                    icon: const Icon(Icons.chevron_right)),
-              ]),
-            )),
-      ]),
+                    icon: const Icon(Icons.chevron_right),),
+              ],),
+            ),),
+      ],),
     );
   }
 
@@ -289,7 +289,7 @@ class _HistoryState extends State<DeviceTelemetryHistoryPage> {
     final spots = samples
         .map((sample) => sample.$2 == null
             ? FlSpot.nullSpot
-            : FlSpot(sample.$1.difference(start).inSeconds / 3600, sample.$2!))
+            : FlSpot(sample.$1.difference(start).inSeconds / 3600, sample.$2!),)
         .toList();
     return Padding(
         padding: const EdgeInsets.fromLTRB(16, 24, 24, 16),
@@ -309,7 +309,7 @@ class _HistoryState extends State<DeviceTelemetryHistoryPage> {
                         : AppColors.primary,
                 dotData: const FlDotData(show: true),
                 belowBarData: BarAreaData(show: false),
-              )
+              ),
             ],
             titlesData: FlTitlesData(
               topTitles:
@@ -322,7 +322,7 @@ class _HistoryState extends State<DeviceTelemetryHistoryPage> {
                       reservedSize: 48,
                       getTitlesWidget: (value, meta) => Text(
                           value.toStringAsFixed(0),
-                          style: const TextStyle(fontSize: 11)))),
+                          style: const TextStyle(fontSize: 11),),),),
               bottomTitles: AxisTitles(
                   sideTitles: SideTitles(
                       showTitles: true,
@@ -332,12 +332,12 @@ class _HistoryState extends State<DeviceTelemetryHistoryPage> {
                           padding: const EdgeInsets.only(top: 8),
                           child: Text(
                               '${value.toInt().toString().padLeft(2, '0')}:00',
-                              style: const TextStyle(fontSize: 11))))),
+                              style: const TextStyle(fontSize: 11),),),),),
             ),
             gridData: const FlGridData(show: true, drawVerticalLine: false),
             borderData: FlBorderData(show: false),
           ),
-        ));
+        ),);
   }
 
   String _value(dynamic value, String unit) {
@@ -356,13 +356,13 @@ class _HistoryState extends State<DeviceTelemetryHistoryPage> {
     final time = DateTime.tryParse('${row['time'] ?? row['event_time'] ?? ''}');
     return ExpansionTile(
       key: ValueKey(
-          '$_day-$_granularity-$_page-${row['time']}-${row['data_hash']}'),
+          '$_day-$_granularity-$_page-${row['time']}-${row['data_hash']}',),
       title: Text(
           time == null
               ? '--'
               : DateFormat('HH:mm:ss')
                   .format(tz.TZDateTime.from(time, _api.location)),
-          style: const TextStyle(fontWeight: FontWeight.w600)),
+          style: const TextStyle(fontWeight: FontWeight.w600),),
       subtitle: Padding(
           padding: const EdgeInsets.only(top: 6),
           child: Wrap(
@@ -373,7 +373,7 @@ class _HistoryState extends State<DeviceTelemetryHistoryPage> {
               Text('AC ${_value(row['output_power'], 'W')}'),
               Text('SOC ${_value(row['battery_soc'], '%')}'),
             ],
-          )),
+          ),),
       children: [
         for (final group in historyFieldGroups.entries)
           if (group.value.any((field) => _fields.contains(field.$1))) ...[
@@ -382,25 +382,25 @@ class _HistoryState extends State<DeviceTelemetryHistoryPage> {
                 child: Align(
                     alignment: Alignment.centerLeft,
                     child: Text(l10n.str('history_group_${group.key}'),
-                        style: Theme.of(context).textTheme.titleSmall))),
+                        style: Theme.of(context).textTheme.titleSmall,),),),
             ...group.value
                 .where((field) => _fields.contains(field.$1))
                 .map((field) => Padding(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 7),
+                          horizontal: 16, vertical: 7,),
                       child: Row(children: [
                         Expanded(
                             child: Text(l10n.str(field.$2),
                                 style: TextStyle(
-                                    color: AppColor.textSecondary(context)))),
+                                    color: AppColor.textSecondary(context),),),),
                         const SizedBox(width: 12),
                         Flexible(
                             child: Align(
                                 alignment: Alignment.centerRight,
                                 child: Text(_value(row[field.$1], field.$3),
-                                    textAlign: TextAlign.right))),
-                      ]),
-                    ))
+                                    textAlign: TextAlign.right,),),),
+                      ],),
+                    ),),
           ],
       ],
     );

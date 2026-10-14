@@ -288,7 +288,7 @@ void main() {
     }
 
     test(
-        'filters shared, hierarchical, admin-visible and missing owners; sends server pagination and search',
+        'keeps all server-authorized devices; sends server pagination and search',
         () async {
       listResponse({
         'items': [
@@ -299,7 +299,7 @@ void main() {
         'total': 61,
       });
       final page = await service.load(page: 2, keyword: ' Roof ');
-      expect(page.items.map((d) => d['sn']), ['OWNED']);
+      expect(page.items.map((d) => d['sn']), ['OWNED', 'OTHER', 'UNKNOWN']);
       expect(page.hasMore, isTrue);
       verify(
         () => dio.get(
@@ -309,18 +309,18 @@ void main() {
       ).called(1);
     });
 
-    test('filtered empty page still permits loading later owned devices',
+    test('hierarchical device page permits loading later visible devices',
         () async {
       listResponse({
         'items': [_device('SHARED', owner: 8)],
         'total': 21,
       });
       final page = await service.load();
-      expect(page.items, isEmpty);
+      expect(page.items.map((device) => device['sn']), ['SHARED']);
       expect(page.hasMore, isTrue);
     });
 
-    test('explicit owner_user_id takes precedence over a readable user_id',
+    test('owner fields do not narrow the server-authorized device list',
         () async {
       listResponse({
         'items': [
@@ -331,7 +331,10 @@ void main() {
         'total': 3,
       });
       final result = await service.load();
-      expect(result.items.map((device) => device['sn']), ['OWNED']);
+      expect(
+        result.items.map((device) => device['sn']),
+        ['SHARED', 'OWNED', 'MISSING'],
+      );
     });
 
     test('unauthenticated account never requests device list', () async {
@@ -399,14 +402,30 @@ void main() {
       });
     }
 
-    test('read access does not grant write access after owner changes',
+    test('server permits administrator to associate another owner device',
         () async {
       detailResponse(_device('OWNED', owner: 8));
+      when(() => stations.bindDevice('OWNED', 42))
+          .thenAnswer((_) async => const Right(null));
+      expect(
+        await service.associate('OWNED', 42),
+        OwnedDeviceAssociation.added,
+      );
+      verify(() => stations.bindDevice('OWNED', 42)).called(1);
+    });
+
+    test('server denial prevents a readable foreign device from being assigned',
+        () async {
+      detailResponse(_device('OWNED', owner: 8));
+      when(() => stations.bindDevice('OWNED', 42)).thenAnswer(
+        (_) async => const Left(ForbiddenFailure('Access denied')),
+      );
       await expectLater(
         service.associate('OWNED', 42),
         throwsA(isA<ForbiddenFailure>()),
       );
-      verifyZeroInteractions(stations);
+      verify(() => stations.bindDevice('OWNED', 42)).called(1);
+      verifyNever(() => stations.rebindDevice(any(), any()));
     });
 
     test('missing assignment does not treat malformed detail as unassigned',
@@ -423,35 +442,60 @@ void main() {
         storage: storage,
         stations: StationRepositoryImpl(StationRemoteDataSource(dio)),
       );
-      when(() => dio.post('/devices/add-to-station', data: {
+      when(
+        () => dio.post(
+          '/devices/add-to-station',
+          data: {
             'sn': 'OWNED',
             'station_id': 42,
             'only_unassigned': true,
-          })).thenThrow(DioException(
-        requestOptions: RequestOptions(path: '/devices/add-to-station'),
-        response: Response(
+          },
+        ),
+      ).thenThrow(
+        DioException(
+          requestOptions: RequestOptions(path: '/devices/add-to-station'),
+          response: Response(
             statusCode: 409,
-            requestOptions: RequestOptions(path: '/devices/add-to-station')),
-      ));
-      await expectLater(realService.associate('OWNED', 42),
-          throwsA(isA<ValidationFailure>()));
-      verify(() => dio.post('/devices/add-to-station', data: {
+            requestOptions: RequestOptions(path: '/devices/add-to-station'),
+          ),
+        ),
+      );
+      await expectLater(
+        realService.associate('OWNED', 42),
+        throwsA(isA<ValidationFailure>()),
+      );
+      verify(
+        () => dio.post(
+          '/devices/add-to-station',
+          data: {
             'sn': 'OWNED',
             'station_id': 42,
             'only_unassigned': true,
-          })).called(1);
+          },
+        ),
+      ).called(1);
     });
 
     test('explicit rebind does not send the unassigned guard', () async {
-      when(() => dio.post('/devices/add-to-station', data: {
+      when(
+        () => dio.post(
+          '/devices/add-to-station',
+          data: {
             'sn': 'OWNED',
             'station_id': 42,
-          })).thenAnswer((_) async => _response(null));
+          },
+        ),
+      ).thenAnswer((_) async => _response(null));
       await StationRemoteDataSource(dio).rebindDevice('OWNED', 42);
-      verify(() => dio.post('/devices/add-to-station', data: {
+      verify(
+        () => dio.post(
+          '/devices/add-to-station',
+          data: {
             'sn': 'OWNED',
             'station_id': 42,
-          })).called(1);
+          },
+        ),
+      ).called(1);
     });
 
     for (final httpDenied in [false, true]) {

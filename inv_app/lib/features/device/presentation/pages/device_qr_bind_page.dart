@@ -15,6 +15,7 @@ import 'package:inv_app/features/device/domain/repositories/device_repository.da
 import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
 import 'package:inv_app/features/device/presentation/widgets/device_name_prompt_dialog.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
+import 'wifi_config_page.dart';
 
 /// 智能链接二维码绑定页（云端优先，BLE 后备）
 ///
@@ -35,6 +36,7 @@ class DeviceQrBindPage extends StatefulWidget {
   final BleDeviceManager? manager;
   final BleBindingService? bindingService;
   final DeviceRepository? deviceRepository;
+  final Future<bool> Function(String sn)? provisionWifi;
 
   const DeviceQrBindPage({
     super.key,
@@ -45,6 +47,7 @@ class DeviceQrBindPage extends StatefulWidget {
     this.manager,
     this.bindingService,
     this.deviceRepository,
+    this.provisionWifi,
   });
 
   @override
@@ -84,7 +87,6 @@ enum _QrBindPhase {
 class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
   late final BleAdapter _adapter;
   late final BleDeviceManager _manager;
-  late final BleBindingService _bindingService;
   late final DeviceRepository _deviceRepository;
 
   /// 当前使用的 PIN（空时需用户输入，见 [_QrBindPhase.pinInput]）
@@ -113,7 +115,6 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
     _pin = widget.pin;
     _adapter = widget.adapter ?? getIt<BleAdapter>();
     _manager = widget.manager ?? getIt<BleDeviceManager>();
-    _bindingService = widget.bindingService ?? getIt<BleBindingService>();
     _deviceRepository = widget.deviceRepository ?? getIt<DeviceRepository>();
     // 延迟到首帧后启动流程：initState 阶段不能访问 InheritedWidget（Localizations）
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -138,7 +139,7 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
     });
 
     // 深链接/二维码未带 PIN：先让用户输入（6 位数字，见设计文档 §5.4）
-    if (_pin.trim().isEmpty) {
+    if (!RegExp(r'^[0-9]{6}$').hasMatch(_pin)) {
       setState(() => _phase = _QrBindPhase.pinInput);
       return;
     }
@@ -246,8 +247,8 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
       try {
         session = await _manager.connectDevice(result.macAddress);
         final info = await session.readInfo();
-        final deviceSn = (info['sn'] as String?)?.trim().toUpperCase();
-        if (deviceSn == widget.sn.trim().toUpperCase()) {
+        final deviceSn = (info['sn'] as String?)?.trim();
+        if (deviceSn == widget.sn) {
           matchedMac = result.macAddress;
           // 断开本次匹配连接：让 bindAfterProvision 重新建立绑定会话
           await _manager.disconnectDevice(result.macAddress);
@@ -270,18 +271,20 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
       return;
     }
 
-    // 4. 写入绑定信息（离网可用）
+    // Wi-Fi setup never constitutes account ownership. Only the server can bind.
     setState(() => _phase = _QrBindPhase.bleBinding);
-    final outcome = await _bindingService.bindAfterProvision(
-      macAddress: matchedMac,
-      knownSn: widget.sn,
-      pin: _pin,
-    );
+    final connected = widget.provisionWifi != null
+        ? await widget.provisionWifi!(widget.sn)
+        : await Navigator.of(context).push<bool>(MaterialPageRoute(
+              builder: (_) => WifiConfigPage(expectedSn: widget.sn),
+            ),) ==
+            true;
     if (!mounted) return;
-    setState(() {
-      _phase = _QrBindPhase.done;
-      _doneOutcome = outcome;
-    });
+    if (connected) {
+      await _cloudBind();
+    } else {
+      setState(() => _phase = _QrBindPhase.cloudFailed);
+    }
   }
 
   @override
@@ -304,7 +307,35 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
       },
       builder: (context, state) => Scaffold(
         appBar: AppBar(title: Text(l10n.str('qr_bind_title'))),
-        body: Center(child: _buildBody(l10n)),
+        body: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      Text(l10n.str('qr_stage_connect'),
+                          style: TextStyle(
+                              color: Theme.of(context).colorScheme.primary,),),
+                      const Icon(Icons.chevron_right, size: 18),
+                      Text(l10n.str('qr_stage_wifi'),
+                          style: TextStyle(
+                              color: Theme.of(context).colorScheme.primary,),),
+                      const Icon(Icons.chevron_right, size: 18),
+                      Text(l10n.str('qr_stage_account'),
+                          style: TextStyle(
+                              color: Theme.of(context).colorScheme.primary,),),
+                    ],),
+              ),
+              const SizedBox(height: 32),
+              _buildBody(l10n),
+            ],),
+          ),
+        ),
       ),
     );
   }
@@ -321,16 +352,18 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
       case _QrBindPhase.cloudFailed:
         return _cloudFailedBody(l10n);
       case _QrBindPhase.bleChecking:
-        return _progressBody(l10n.str('qr_bind_checking'), Icons.bluetooth_searching);
+        return _progressBody(
+            l10n.str('qr_bind_checking'), Icons.bluetooth_searching,);
       case _QrBindPhase.bleScanning:
-        return _progressBody(l10n.str('qr_bind_scanning'), Icons.bluetooth_searching);
+        return _progressBody(
+            l10n.str('qr_bind_scanning'), Icons.bluetooth_searching,);
       case _QrBindPhase.bleMatching:
         return _progressBody(
           l10n.str('qr_bind_matching', {'name': _matchName ?? ''}),
           Icons.bluetooth,
         );
       case _QrBindPhase.bleBinding:
-        return _progressBody(l10n.str('qr_bind_binding'), Icons.link);
+        return _progressBody(l10n.str('qr_bind_wifi_stage'), Icons.wifi);
       case _QrBindPhase.bleFailed:
         return _bleFailedBody(l10n);
       case _QrBindPhase.done:
@@ -451,7 +484,8 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
               if (widget.stationId != null) {
                 params['station_id'] = widget.stationId.toString();
               }
-              context.go(Uri(path: '/login', queryParameters: params).toString());
+              context
+                  .go(Uri(path: '/login', queryParameters: params).toString());
             },
             icon: const Icon(Icons.login),
             label: Text(l10n.str('login')),
@@ -483,9 +517,8 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
 
   /// BLE 失败：蓝牙关闭 / 未找到匹配设备
   Widget _bleFailedBody(AppLocalizations l10n) {
-    final message = _failKey == null
-        ? l10n.str('qr_bind_not_found')
-        : l10n.str(_failKey!);
+    final message =
+        _failKey == null ? l10n.str('qr_bind_not_found') : l10n.str(_failKey!);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -546,8 +579,8 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
   Widget _doneBody(AppLocalizations l10n) {
     final outcome = _doneOutcome;
     final (icon, color, text) = _outcomeInfo(l10n, outcome);
-    final canRetry = outcome != BindOutcome.bound &&
-        outcome != BindOutcome.alreadyBound;
+    final canRetry =
+        outcome != BindOutcome.bound && outcome != BindOutcome.alreadyBound;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -622,9 +655,17 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
           l10n.str('ble_binding_need_login'),
         );
       case BindOutcome.failed:
-        return (Icons.error_outline, errorColor, l10n.str('ble_binding_failed'));
+        return (
+          Icons.error_outline,
+          errorColor,
+          l10n.str('ble_binding_failed')
+        );
       case null:
-        return (Icons.error_outline, errorColor, l10n.str('ble_binding_failed'));
+        return (
+          Icons.error_outline,
+          errorColor,
+          l10n.str('ble_binding_failed')
+        );
     }
   }
 }

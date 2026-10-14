@@ -164,7 +164,7 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
   }
 
   Future<void> _toggleDeviceDirectConnection(
-      String macAddress, bool value) async {
+      String macAddress, bool value,) async {
     final updated = Set<String>.from(_directConnectedDevices);
     if (value) {
       updated.add(macAddress);
@@ -311,10 +311,10 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
   ) async {
     final cache = LocalCacheDatabase();
     final stats = await cache.getStats();
-    if (!mounted) return;
+    if (!context.mounted) return;
 
     showDialog<void>(
-      context: context, // ignore: use_build_context_synchronously
+      context: context,
       builder: (ctx) => AlertDialog(
         title: Text(l10n.str('local_cache_manage')),
         content: Column(
@@ -345,9 +345,8 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
             onPressed: () async {
               await cache.clearAll();
               if (ctx.mounted) Navigator.pop(ctx);
-              if (mounted) {
+              if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  // ignore: use_build_context_synchronously
                   SnackBar(content: Text(l10n.str('local_cache_cleared'))),
                 );
               }
@@ -570,7 +569,7 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
               Text(
                 l10n.deviceDirectToggle,
                 style: TextStyle(
-                    fontSize: 10.sp, color: AppColor.textHint(context)),
+                    fontSize: 10.sp, color: AppColor.textHint(context),),
               ),
               SizedBox(
                 height: 28.h,
