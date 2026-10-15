@@ -86,7 +86,7 @@ func (r *HardwareRegistryRepository) Get(ctx context.Context, sn string) (*model
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	v, err := getHardwareRegistry(ctx, tx, sn, false)
 	if errors.Is(err, pgx.ErrNoRows) {
 		v = &model.HardwareRegistry{SN: sn, IdentityState: "unverified", Modules: []model.HardwareModule{}, Observations: []model.HardwareObservation{}}
@@ -223,7 +223,7 @@ func (r *HardwareRegistryRepository) Mutate(ctx context.Context, sn, action stri
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	v, err := mutateHardware(ctx, tx, sn, action, req, actor)
 	if err != nil {
 		return nil, err
@@ -269,7 +269,7 @@ func (r *HardwareRegistryRepository) Observe(ctx context.Context, o model.Hardwa
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	_, err = tx.Exec(ctx, `INSERT INTO device_hardware_registry(sn) VALUES($1) ON CONFLICT DO NOTHING`, o.SN)
 	if err != nil {
 		return err
@@ -323,7 +323,7 @@ func (r *HardwareRegistryRepository) RecordIdentityConflict(ctx context.Context,
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	_, err = tx.Exec(ctx, `INSERT INTO device_hardware_registry(sn) VALUES($1) ON CONFLICT DO NOTHING`, sn)
 	if err != nil {
 		return err
@@ -376,7 +376,7 @@ func (r *HardwareRegistryRepository) StageImport(ctx context.Context, inputs []m
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	var id int64
 	err = tx.QueryRow(ctx, `INSERT INTO hardware_import_batches(actor,file_sha256) VALUES($1,$2) ON CONFLICT(actor,file_sha256) DO UPDATE SET file_sha256=EXCLUDED.file_sha256 RETURNING id`, actor, digest).Scan(&id)
 	if err != nil {
@@ -516,7 +516,7 @@ func (r *HardwareRegistryRepository) commitImportChunk(ctx context.Context, id, 
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	// Lock batch before registry keys so simultaneous selected submissions cannot deadlock.
 	var locked int64
 	if err := tx.QueryRow(ctx, `SELECT id FROM hardware_import_batches WHERE id=$1 AND actor=$2 FOR UPDATE`, id, actor).Scan(&locked); err != nil {
@@ -571,7 +571,7 @@ func (r *HardwareRegistryRepository) SetFirmwareBoards(ctx context.Context, id, 
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	var modelName, target, version, status string
 	err = tx.QueryRow(ctx, `SELECT model,target_chip,version,release_status FROM firmware_versions WHERE id=$1 FOR UPDATE`, id).Scan(&modelName, &target, &version, &status)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -645,7 +645,7 @@ func (r *HardwareRegistryRepository) CreateCompatibilityWindow(ctx context.Conte
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	identity, err := getHardwareRegistry(ctx, tx, w.SN, true)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, apperr.Conflict("identity_unverified")

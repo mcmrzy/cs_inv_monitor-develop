@@ -105,6 +105,14 @@ func parseBoardCodesForm(raw string) ([]string, error) {
 	if len(codes) == 0 || len(codes) > 100 {
 		return nil, errors.New("board_codes required")
 	}
+	// Uppercase letters and digits anywhere; separators only after the first
+	// character, matching the board_code CHECK constraint.
+	validBoardCodeChar := func(c rune, i int) bool {
+		if c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' {
+			return true
+		}
+		return i > 0 && (c == '.' || c == '_' || c == '-')
+	}
 	seen := map[string]bool{}
 	for _, code := range codes {
 		if len(code) > 50 || code == "" || seen[code] {
@@ -112,7 +120,7 @@ func parseBoardCodesForm(raw string) ([]string, error) {
 		}
 		seen[code] = true
 		for i, c := range code {
-			if !(c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || i > 0 && (c == '.' || c == '_' || c == '-')) {
+			if !validBoardCodeChar(c, i) {
 				return nil, errors.New("invalid board_code")
 			}
 		}

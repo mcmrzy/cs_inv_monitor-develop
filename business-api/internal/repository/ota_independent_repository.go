@@ -177,7 +177,7 @@ func (r *OTARepository) CreateIndependentFirmwareTasks(ctx context.Context, user
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	// 幂等：尝试读取已有请求
 	var existingPayload string
