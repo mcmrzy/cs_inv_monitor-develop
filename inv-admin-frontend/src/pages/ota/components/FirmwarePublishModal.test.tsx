@@ -9,27 +9,30 @@ const source = {
   hardware_versions: [], board_codes: ['HW-1', 'HW-2'], release_status: 'draft',
 } as unknown as Firmware
 
-describe('firmware publication hardware compatibility', () => {
-  it('shows the range and only offers rollback covering all hardware in the same model/module', async () => {
+describe('firmware publication', () => {
+  it('offers every published rollback in the same model/module regardless of board range', async () => {
     const peers = [
       { ...source, id: '2', version: 'full-range', release_status: 'published' },
       { ...source, id: '3', version: 'partial-range', board_codes: ['HW-1'], release_status: 'published' },
       { ...source, id: '4', version: 'wrong-model', model: 'L20', release_status: 'published' },
       { ...source, id: '5', version: 'disabled-file', release_status: 'disabled' },
+      { ...source, id: '6', version: 'no-range', board_codes: [], hardware_versions: [], release_status: 'published' },
+      { ...source, id: '7', version: 'wrong-module', target_chip: 'dsp', release_status: 'published' },
     ]
     renderAsAdmin(<FirmwarePublishModal open firmware={source} publishedPeers={peers} onOk={vi.fn()} onCancel={vi.fn()} />)
-    expect(await screen.findByText('HW-1, HW-2')).toBeInTheDocument()
     fireEvent.mouseDown(screen.getAllByRole('combobox')[1])
     expect(await screen.findByText(/full-range/, { selector: '.ant-select-item-option-content' })).toBeInTheDocument()
-    expect(screen.queryByText(/partial-range/)).not.toBeInTheDocument()
+    expect(screen.getByText(/partial-range/, { selector: '.ant-select-item-option-content' })).toBeInTheDocument()
+    expect(screen.getByText(/no-range/, { selector: '.ant-select-item-option-content' })).toBeInTheDocument()
     expect(screen.queryByText(/wrong-model/)).not.toBeInTheDocument()
     expect(screen.queryByText(/disabled-file/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/wrong-module/)).not.toBeInTheDocument()
   })
-  it('blocks a legacy firmware publication without a range', async () => {
+  it('publishes firmware without any hardware or board range', async () => {
     const onOk = vi.fn()
-    renderAsAdmin(<FirmwarePublishModal open firmware={{ ...source, hardware_versions: ['HW-1'], board_codes: [] }} onOk={onOk} onCancel={vi.fn()} />)
+    renderAsAdmin(<FirmwarePublishModal open firmware={{ ...source, hardware_versions: [], board_codes: [] }} onOk={onOk} onCancel={vi.fn()} />)
     fireEvent.click(await screen.findByRole('button', { name: /发.*布/ }))
-    expect(onOk).not.toHaveBeenCalled()
-    expect(screen.getAllByText('未配置板卡范围').length).toBeGreaterThan(0)
+    expect(onOk).toHaveBeenCalledWith({ rollout_percent: 100, rollout_type: 'all', rollout_targets: '', rollback_to_firmware_id: null })
+    expect(screen.queryByText('未配置板卡范围')).not.toBeInTheDocument()
   })
 })

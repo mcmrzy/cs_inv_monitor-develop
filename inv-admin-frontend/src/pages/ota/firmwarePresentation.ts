@@ -83,7 +83,6 @@ export function canRemoteUpgradeFirmwareModule(module: {
 }): boolean {
   return module.supported === true
     && !module.compatibility_reason
-    && module.connected === true
     && module.eligible === true
     && (module.supported_channels ?? []).includes('remote')
 }

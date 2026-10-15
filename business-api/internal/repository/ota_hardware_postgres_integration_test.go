@@ -53,12 +53,14 @@ func setupOTAHardwareDB(t *testing.T, migrate bool) *pgxpool.Pool {
 	require.NoError(t, err)
 	if migrate {
 		runOTAHardwareMigration(t, pool, "up")
-		paths, err := filepath.Glob(filepath.Join("..", "..", "..", "database", "migrations", "131*.up.sql"))
+		paths, err := filepath.Glob(filepath.Join("..", "..", "..", "database", "migrations", "13[12]*.up.sql"))
 		require.NoError(t, err)
-		require.Len(t, paths, 1)
-		data, err := os.ReadFile(paths[0])
-		require.NoError(t, err)
-		hardwareExec(t, pool, string(data))
+		require.Len(t, paths, 2)
+		for _, path := range paths {
+			data, err := os.ReadFile(path)
+			require.NoError(t, err)
+			hardwareExec(t, pool, string(data))
+		}
 	}
 	return pool
 }
@@ -100,7 +102,7 @@ CREATE TABLE firmware_versions (
 CREATE UNIQUE INDEX uq_firmware_model_target_version ON firmware_versions(model,target_chip,version);
 CREATE TABLE upgrade_tasks (
  id bigserial PRIMARY KEY, name text DEFAULT '', task_type text, firmware_id bigint, package_id bigint,
- model text, target_version text, status text, execute_mode text, total_devices integer DEFAULT 0,
+ model text, target_version text, status text, execute_mode text, total_devices integer DEFAULT 0, success_count integer DEFAULT 0,
  created_by bigint, source text, triggered_by bigint, notes text DEFAULT '', rollout_percent integer DEFAULT 100,
  created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now(), completed_at timestamptz
 );
@@ -168,8 +170,12 @@ func seedHardwareDevice(t *testing.T, pool *pgxpool.Pool, sn, hardware string) {
 
 func seedHardwareFirmware(t *testing.T, pool *pgxpool.Pool, chip, version string, hardware []string, published bool) *model.Firmware {
 	t.Helper()
-	boards, err := model.NormalizeHardwareVersions(hardware)
-	require.NoError(t, err)
+	var boards []string
+	if len(hardware) > 0 {
+		var err error
+		boards, err = model.NormalizeHardwareVersions(hardware)
+		require.NoError(t, err)
+	}
 	f := &model.Firmware{Model: "MODEL", TargetChip: chip, Version: version, FileURL: "/test/" + chip + version + ".bin", HardwareVersions: hardware, BoardCodes: boards, FileSHA256: strings.Repeat("a", 64)}
 	r := NewOTARepository(pool)
 	require.NoError(t, r.CreateFirmware(context.Background(), f))
@@ -232,110 +238,80 @@ func TestOTAHardwareDatabaseConstraints(t *testing.T) {
 	hardwareSQLState(t, err, "23503")
 }
 
-func TestOTAHardwareCreateFirmwareIsAtomicAndRequiresCatalog(t *testing.T) {
+func TestOTAHardwareMetadataOptionalAndCatalogWritesAtomic(t *testing.T) {
 	pool := setupOTAHardwareDB(t, true)
 	seedHardwareCatalog(t, pool)
 	repo := NewOTARepository(pool)
-	for _, hardware := range [][]string{nil, {}, {"HW-MISSING"}, {"HW-1", "HW-MISSING"}} {
-		f := &model.Firmware{Model: "MODEL", TargetChip: "arm", Version: "2.0", FileURL: "/test.bin", HardwareVersions: hardware}
-		require.Error(t, repo.CreateFirmware(context.Background(), f), "%v", hardware)
-		var count int
-		require.NoError(t, pool.QueryRow(context.Background(), `SELECT count(*) FROM firmware_versions`).Scan(&count))
-		assert.Zero(t, count, "invalid range must leave no firmware row")
+	for _, scope := range [][]string{{"HW-MISSING"}, {"HW-1", "HW-MISSING"}} {
+		f := &model.Firmware{Model: "MODEL", TargetChip: "arm", Version: "2.0", FileURL: "/test.bin", HardwareVersions: scope}
+		require.Error(t, repo.CreateFirmware(context.Background(), f))
+		var n int
+		require.NoError(t, pool.QueryRow(context.Background(), `SELECT count(*) FROM firmware_versions`).Scan(&n))
+		require.Zero(t, n)
 	}
-	f := seedHardwareFirmware(t, pool, "arm", "2.0", []string{" hw-2 ", "HW-1", "hw-1"}, false)
-	loaded, err := repo.GetFirmware(context.Background(), f.ID)
+	f := seedHardwareFirmware(t, pool, "arm", "2.0", nil, true)
+	got, err := repo.GetFirmware(context.Background(), f.ID)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"HW-1", "HW-2"}, loaded.HardwareVersions)
+	require.Empty(t, got.HardwareVersions)
+	require.Empty(t, got.BoardCodes)
+
 }
 
 func TestOTAHardwareDeviceFirmwareSelection(t *testing.T) {
 	pool := setupOTAHardwareDB(t, true)
 	seedHardwareCatalog(t, pool)
-	seedHardwareDevice(t, pool, "one", " hw-1 ")
-	seedHardwareDevice(t, pool, "two", "HW-2")
-	seedHardwareDevice(t, pool, "unknown", "")
-	seedHardwareDevice(t, pool, "unregistered", "HW-99")
-	f1 := seedHardwareFirmware(t, pool, "arm", "2.0", []string{"HW-1"}, true)
-	f2 := seedHardwareFirmware(t, pool, "arm", "2.0", []string{"HW-2"}, true)
-	seedHardwareFirmware(t, pool, "arm", "3.0", []string{"HW-1"}, false)
-	hardwareExec(t, pool, `INSERT INTO firmware_versions(model,target_chip,version,file_url,release_status,status,published_at)
- VALUES('MODEL','arm','99.0','/legacy.bin','published',1,now())`)
+	for _, pair := range [][2]string{{"one", "HW-1"}, {"two", "HW-2"}, {"unknown", ""}, {"unregistered", "HW-99"}} {
+		seedHardwareDevice(t, pool, pair[0], pair[1])
+	}
+	first := seedHardwareFirmware(t, pool, "arm", "2.0", []string{"HW-1"}, true)
+	latest := seedHardwareFirmware(t, pool, "arm", "2.0", []string{"HW-2"}, true)
+	seedHardwareFirmware(t, pool, "arm", "9.0", nil, false)
 	repo := NewOTARepository(pool)
-	for hardware, expected := range map[string]int64{" hw-1 ": f1.ID, "HW-2": f2.ID} {
-		found, err := repo.FindFirmwareByVersion(context.Background(), "MODEL", "2.0", "arm", hardware)
+	ctx := context.Background()
+	found, err := repo.FindFirmwareByVersion(ctx, "MODEL", "2.0", "arm")
+	require.NoError(t, err)
+	require.Equal(t, latest.ID, found.ID)
+	for _, sn := range []string{"one", "two", "unknown", "unregistered"} {
+		resources, err := repo.ListPublishedFirmwareForDevice(ctx, sn, "arm")
 		require.NoError(t, err)
-		assert.Equal(t, expected, found.ID, "rollback version lookup must select the hardware's exact build")
+		require.Len(t, resources, 2)
+		fw, err := repo.GetLatestFirmware(ctx, sn, "MODEL", "arm")
+		require.NoError(t, err)
+		require.Equal(t, latest.ID, fw.ID)
+		_, _, err = repo.ValidateFirmwareForDevice(ctx, sn, first.ID)
+		require.NoError(t, err)
 	}
-	_, err := repo.FindFirmwareByVersion(context.Background(), "MODEL", "2.0", "arm")
-	require.Error(t, err, "a same-version lookup without hardware must not choose an arbitrary file")
-	for sn, expected := range map[string]int64{"one": f1.ID, "two": f2.ID} {
-		resources, err := repo.ListPublishedFirmwareForDevice(context.Background(), sn, "arm")
-		require.NoError(t, err)
-		require.Len(t, resources, 1)
-		assert.Equal(t, expected, resources[0].ID)
-		latest, err := repo.GetLatestFirmware(context.Background(), sn, "MODEL", "arm")
-		require.NoError(t, err)
-		assert.Equal(t, expected, latest.ID)
-	}
-	for _, sn := range []string{"unknown", "unregistered"} {
-		resources, err := repo.ListPublishedFirmwareForDevice(context.Background(), sn, "arm")
-		require.NoError(t, err)
-		assert.Empty(t, resources)
-		_, err = repo.GetLatestFirmware(context.Background(), sn, "MODEL", "arm")
-		require.Error(t, err)
-	}
-	common := seedHardwareFirmware(t, pool, "esp", "2.0", []string{"HW-1", "HW-2"}, true)
-	for _, sn := range []string{"one", "two"} {
-		fw, _, err := repo.ValidateFirmwareForDevice(context.Background(), sn, common.ID)
-		require.NoError(t, err)
-		assert.Equal(t, common.ID, fw.ID)
-	}
-	_, _, err = repo.ValidateFirmwareForDevice(context.Background(), "one", f2.ID)
-	require.Error(t, err)
-	hardwareExec(t, pool, `UPDATE devices SET hardware_version='HW-2' WHERE sn='one'`)
-	_, _, err = repo.ValidateFirmwareForDevice(context.Background(), "one", f1.ID)
-	require.NoError(t, err, "reported hardware cannot replace verified module")
 	hardwareExec(t, pool, `UPDATE device_hardware_modules SET board_code='HW-2',module_revision=2 WHERE sn='one' AND target_chip='arm'`)
-	_, _, err = repo.ValidateFirmwareForDevice(context.Background(), "one", f1.ID)
-	require.Error(t, err, "current verified module rejects wrong board")
+	_, _, err = repo.ValidateFirmwareForDevice(ctx, "one", first.ID)
+	require.NoError(t, err)
+
 }
 
-func TestOTAHardwareTasksRejectForceAndRemainAtomic(t *testing.T) {
+func TestOTAModelTargetTasksRemainAtomicAndPreserveHistory(t *testing.T) {
 	pool := setupOTAHardwareDB(t, true)
 	seedHardwareCatalog(t, pool)
 	seedHardwareDevice(t, pool, "one", "HW-1")
-	seedHardwareDevice(t, pool, "unknown", "")
-	seedHardwareDevice(t, pool, "unregistered", "HW-99")
-	arm := seedHardwareFirmware(t, pool, "arm", "2.0", []string{"HW-1"}, true)
-	dsp := seedHardwareFirmware(t, pool, "dsp", "2.0", []string{"HW-2"}, true)
+	arm := seedHardwareFirmware(t, pool, "arm", "2.0", nil, true)
+	draft := seedHardwareFirmware(t, pool, "dsp", "2.0", nil, false)
 	repo := NewOTARepository(pool)
-	for _, test := range []struct {
-		sn  string
-		ids []int64
-	}{
-		{"unknown", []int64{arm.ID}}, {"unregistered", []int64{arm.ID}},
-		{"one", []int64{dsp.ID}}, {"one", []int64{arm.ID, dsp.ID}},
-	} {
-		for _, force := range []string{"", "administrator forced upgrade"} {
-			_, err := repo.CreateIndependentFirmwareTasks(context.Background(), 1, test.sn, test.ids, fmt.Sprintf("%s-%v-%s", test.sn, test.ids, force), "trigger", force)
-			require.Error(t, err)
-			for _, table := range []string{"upgrade_tasks", "device_upgrades", "ota_idempotency_requests"} {
-				var count int
-				require.NoError(t, pool.QueryRow(context.Background(), "SELECT count(*) FROM "+table).Scan(&count))
-				assert.Zero(t, count, "rejected batch leaves no %s", table)
-			}
-		}
+	ctx := context.Background()
+	_, err := repo.CreateIndependentFirmwareTasks(ctx, 1, "one", []int64{arm.ID, draft.ID}, "rejected", "trigger", "")
+	require.Error(t, err)
+	for _, table := range []string{"upgrade_tasks", "device_upgrades", "ota_idempotency_requests"} {
+		var n int
+		require.NoError(t, pool.QueryRow(ctx, "SELECT count(*) FROM "+table).Scan(&n))
+		require.Zero(t, n)
 	}
-	refs, err := repo.CreateIndependentFirmwareTasks(context.Background(), 1, "one", []int64{arm.ID}, "success", "trigger", "")
+	refs, err := repo.CreateIndependentFirmwareTasks(ctx, 1, "one", []int64{arm.ID}, "success", "trigger", "")
 	require.NoError(t, err)
 	require.Len(t, refs, 1)
 	var snapshot string
-	require.NoError(t, pool.QueryRow(context.Background(), `SELECT hardware_version FROM device_upgrades WHERE task_id=$1`, refs[0].TaskID).Scan(&snapshot))
-	assert.Equal(t, "HW-1", snapshot)
+	require.NoError(t, pool.QueryRow(ctx, `SELECT hardware_version FROM device_upgrades WHERE task_id=$1`, refs[0].TaskID).Scan(&snapshot))
+	require.Equal(t, "HW-1", snapshot)
 	hardwareExec(t, pool, `UPDATE devices SET hardware_version='HW-2' WHERE sn='one'`)
-	require.NoError(t, pool.QueryRow(context.Background(), `SELECT hardware_version FROM device_upgrades WHERE task_id=$1`, refs[0].TaskID).Scan(&snapshot))
-	assert.Equal(t, "HW-1", snapshot, "history records hardware at creation, independent of later identity updates")
+	require.NoError(t, pool.QueryRow(ctx, `SELECT hardware_version FROM device_upgrades WHERE task_id=$1`, refs[0].TaskID).Scan(&snapshot))
+	require.Equal(t, "HW-1", snapshot)
+
 }
 
 func TestOTAHardwareScopeLifecycle(t *testing.T) {
@@ -360,12 +336,12 @@ func TestOTAHardwareScopeLifecycle(t *testing.T) {
 	require.Error(t, repo.UpdateFirmwareHardwareVersions(ctx, legacyID, []string{"HW-2"}), "legacy empty scope permits exactly one audited backfill")
 }
 
-func TestOTAHardwareHistoryRollbackChoosesCurrentHardware(t *testing.T) {
+func TestOTARollbackSelectionUsesModelTargetAndPreservesHistory(t *testing.T) {
 	pool := setupOTAHardwareDB(t, true)
 	seedHardwareCatalog(t, pool)
 	seedHardwareDevice(t, pool, "one", "HW-1")
-	old1 := seedHardwareFirmware(t, pool, "arm", "1.0", []string{"HW-1"}, true)
-	_ = seedHardwareFirmware(t, pool, "arm", "1.0", []string{"HW-2"}, true)
+	_ = seedHardwareFirmware(t, pool, "arm", "1.0", []string{"HW-1"}, true)
+	old1 := seedHardwareFirmware(t, pool, "arm", "1.0", []string{"HW-2"}, true)
 	new1 := seedHardwareFirmware(t, pool, "arm", "2.0", []string{"HW-1"}, true)
 	hardwareExec(t, pool, `INSERT INTO device_upgrades(device_sn,firmware_id,firmware_version,target_chip,old_version,status)
  VALUES('one',$1,'2.0','arm','1.0','success')`, new1.ID)
@@ -385,7 +361,7 @@ func TestOTAHardwareHistoryRollbackChoosesCurrentHardware(t *testing.T) {
 	}
 }
 
-func TestOTAHardwarePublishRollbackCoversEntireScope(t *testing.T) {
+func TestOTARollbackPublishRequiresPublishedModelTarget(t *testing.T) {
 	pool := setupOTAHardwareDB(t, true)
 	seedHardwareCatalog(t, pool)
 	repo := NewOTARepository(pool)
@@ -395,9 +371,9 @@ func TestOTAHardwarePublishRollbackCoversEntireScope(t *testing.T) {
 	wrongModule := seedHardwareFirmware(t, pool, "dsp", "1.0", []string{"HW-1", "HW-2"}, true)
 	draft := seedHardwareFirmware(t, pool, "arm", "1.2", []string{"HW-1", "HW-2"}, false)
 	next := seedHardwareFirmware(t, pool, "arm", "2.0", []string{"HW-1", "HW-2"}, false)
-	for _, rollback := range []int64{old1.ID, wrongModule.ID, draft.ID, next.ID} {
+	for _, rollback := range []int64{wrongModule.ID, draft.ID, next.ID} {
 		err := repo.PublishFirmware(ctx, next.ID, 1, model.FirmwarePublishOptions{RolloutPercent: 100, RollbackToFirmwareID: &rollback})
-		require.Error(t, err, "rollback must be a distinct published compatible build covering every hardware")
+		require.Error(t, err, "rollback must be a distinct published build for the same model and target")
 		loaded, err := repo.GetFirmware(ctx, next.ID)
 		require.NoError(t, err)
 		assert.Equal(t, model.FirmwareReleaseDraft, loaded.ReleaseStatus)
@@ -408,14 +384,14 @@ func TestOTAHardwarePublishRollbackCoversEntireScope(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, loaded.RollbackToFirmwareID)
 	assert.Equal(t, oldCommon.ID, *loaded.RollbackToFirmwareID)
-	require.Error(t, repo.UpdateFirmwareRollout(ctx, next.ID, model.FirmwarePublishOptions{RolloutPercent: 20, RollbackToFirmwareID: &old1.ID}))
+	require.NoError(t, repo.UpdateFirmwareRollout(ctx, next.ID, model.FirmwarePublishOptions{RolloutPercent: 20, RollbackToFirmwareID: &old1.ID}))
 	loaded, err = repo.GetFirmware(ctx, next.ID)
 	require.NoError(t, err)
-	assert.Equal(t, 100, loaded.RolloutPercent, "invalid rollback must not partially change rollout")
-	assert.Equal(t, oldCommon.ID, *loaded.RollbackToFirmwareID)
+	assert.Equal(t, 20, loaded.RolloutPercent, "historical range does not block same-model/target rollback")
+	assert.Equal(t, old1.ID, *loaded.RollbackToFirmwareID)
 }
 
-func TestOTAHardwarePublishReadsScopeAfterConcurrentEdit(t *testing.T) {
+func TestOTAPublishAllowsConcurrentHistoricalScopeEdit(t *testing.T) {
 	pool := setupOTAHardwareDB(t, true)
 	seedHardwareCatalog(t, pool)
 	repo := NewOTARepository(pool)
@@ -446,30 +422,14 @@ func TestOTAHardwarePublishReadsScopeAfterConcurrentEdit(t *testing.T) {
 	require.NoError(t, tx.Commit(ctx))
 	select {
 	case publishErr := <-done:
-		require.Error(t, publishErr, "after waiting for an edit, publication must check committed HW-2 scope against HW-1 rollback")
+		require.NoError(t, publishErr, "historical scope edit does not block same-model target rollback")
 	case <-ctx.Done():
 		t.Fatal("publication did not finish after scope lock was released")
 	}
 	loaded, err := repo.GetFirmware(context.Background(), next.ID)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"HW-2"}, loaded.BoardCodes)
-	assert.Equal(t, model.FirmwareReleaseDraft, loaded.ReleaseStatus)
-}
-
-func TestOTAHardwareLocalResultRequiresInstallationReceipt(t *testing.T) {
-	pool := setupOTAHardwareDB(t, true)
-	seedHardwareCatalog(t, pool)
-	seedHardwareDevice(t, pool, "one", "HW-1")
-	f := seedHardwareFirmware(t, pool, "arm", "2.0", []string{"HW-1"}, true)
-	r := NewOTARepository(pool)
-	_, err := r.CreateTaskFromLocalOTA(context.Background(), 1, "one", "arm", "2.0", "", f.ID)
-	require.Equal(t, "verification_pending", OTAEligibilityReason(err))
-	var count int
-	require.NoError(t, pool.QueryRow(context.Background(), `SELECT COUNT(*) FROM device_upgrades`).Scan(&count))
-	require.Zero(t, count)
-	var actual string
-	require.NoError(t, pool.QueryRow(context.Background(), `SELECT firmware_arm FROM devices WHERE sn='one'`).Scan(&actual))
-	require.Equal(t, "1.0", actual)
+	assert.Equal(t, model.FirmwareReleasePublished, loaded.ReleaseStatus)
 }
 
 func TestOTAHardwareConcurrentLegacyBackfillOnlyRunsOnce(t *testing.T) {
@@ -551,8 +511,8 @@ func TestOTAHardwareTaskCandidatesReportEligibility(t *testing.T) {
 	list, err := repo.ListTaskCandidates(context.Background(), fw, plan, true)
 	require.NoError(t, err)
 	require.Equal(t, 3, list.Total, "other models stay out of the candidate list")
-	require.Equal(t, 1, list.EligibleCount)
-	require.Equal(t, 2, list.ExcludedCount)
+	require.Equal(t, 3, list.EligibleCount)
+	require.Equal(t, 0, list.ExcludedCount)
 	bySN := map[string]model.OTATaskCandidate{}
 	for _, c := range list.Items {
 		bySN[c.SN] = c
@@ -560,23 +520,29 @@ func TestOTAHardwareTaskCandidatesReportEligibility(t *testing.T) {
 	require.True(t, bySN["CAND-A"].Eligible)
 	assert.Equal(t, "HW-1", bySN["CAND-A"].BoardCode)
 	assert.Equal(t, "1.0", bySN["CAND-A"].CurrentVersion)
-	assert.Equal(t, "firmware_incompatible", bySN["CAND-B"].Reason, "board outside the firmware scope")
-	assert.Equal(t, "identity_unverified", bySN["CAND-C"].Reason, "no trusted registry")
+	assert.True(t, bySN["CAND-B"].Eligible, "board scope is historical metadata")
+	assert.True(t, bySN["CAND-C"].Eligible, "no registry is required")
 	_, listed := bySN["CAND-OTHER"]
 	assert.False(t, listed)
 
 	hardwareExec(t, pool, `UPDATE device_hardware_registry SET frozen=TRUE WHERE sn='CAND-A'`)
 	list, err = repo.ListTaskCandidates(context.Background(), fw, plan, true)
 	require.NoError(t, err)
-	require.Equal(t, 0, list.EligibleCount, "a frozen registry blocks the device without hiding it")
-	require.Equal(t, 3, list.ExcludedCount)
+	require.Equal(t, 3, list.EligibleCount, "historical registry state does not block upgrades")
+	require.Equal(t, 0, list.ExcludedCount)
 
 	// The candidate list is a projection only: verdicts follow the current row, so
 	// re-enabling the registry and reverting the firmware to draft must both show up.
 	hardwareExec(t, pool, `UPDATE device_hardware_registry SET frozen=FALSE WHERE sn='CAND-A'`)
 	list, err = repo.ListTaskCandidates(context.Background(), fw, plan, true)
 	require.NoError(t, err)
-	require.Equal(t, 1, list.EligibleCount)
+	require.Equal(t, 3, list.EligibleCount)
+
+	hardwareExec(t, pool, `UPDATE organization_memberships SET status='revoked' WHERE id=21`)
+	denied, err := repo.ListTaskCandidates(context.Background(), fw, plan, true)
+	require.NoError(t, err)
+	require.Empty(t, denied.Items, "revoked membership cannot list candidates")
+	hardwareExec(t, pool, `UPDATE organization_memberships SET status='active' WHERE id=21`)
 
 	hardwareExec(t, pool, `UPDATE firmware_versions SET release_status='draft', status=0 WHERE id=$1`, fw.ID)
 	draft, err := repo.GetFirmware(context.Background(), fw.ID)

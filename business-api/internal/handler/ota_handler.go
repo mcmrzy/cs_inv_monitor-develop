@@ -306,9 +306,6 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 		if raw := c.PostForm("board_codes"); raw != "" {
 			boardCodes, hardwareErr = parseBoardCodesForm(raw)
 		}
-		if hardwareErr == nil && len(hardwareVersions) == 0 && len(boardCodes) == 0 {
-			hardwareErr = errors.New("请指定模块硬件板卡范围 board_codes")
-		}
 		if hardwareErr != nil {
 			response.Error(c, 400, hardwareErr.Error())
 			return
@@ -316,6 +313,10 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 
 		if model == "" || targetChip == "" {
 			response.Error(c, 400, "型号和目标芯片必填")
+			return
+		}
+		if _, err := service.NormalizeFirmwareTarget(targetChip); err != nil {
+			response.Error(c, 400, "目标芯片必须是 arm、esp、dsp 或 bms")
 			return
 		}
 		if !fileTokenPattern.MatchString(model) {
@@ -446,10 +447,6 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 		return
 	}
 
-	if len(req.BoardCodes) == 0 && len(req.HardwareVersions) == 0 {
-		response.Error(c, 400, "请指定模块硬件板卡范围 board_codes")
-		return
-	}
 	fw := &service.CreateFirmwareReq{
 		HardwareVersions: req.HardwareVersions,
 		BoardCodes:       req.BoardCodes,
@@ -507,11 +504,6 @@ func (h *OTAHandler) ListFirmware(c *gin.Context) {
 		if chip := c.Query("target_chip"); chip != "" && fw.TargetChip != chip {
 			continue
 		}
-		if hardware := c.Query("hardware_version"); hardware != "" {
-			if model.CheckFirmwareHardware(&fw, fw.Model, hardware) != nil {
-				continue
-			}
-		}
 		filtered = append(filtered, fw)
 	}
 	response.Success(c, filtered)
@@ -546,8 +538,8 @@ func (h *OTAHandler) GetFirmwareInfoForApp(c *gin.Context) {
 		response.Error(c, 404, "固件不存在")
 		return
 	}
-	if fw.ReleaseStatus != model.FirmwareReleasePublished || len(fw.BoardCodes) == 0 {
-		response.Error(c, 409, "固件未发布或尚未确认适用硬件")
+	if fw.ReleaseStatus != model.FirmwareReleasePublished || fw.Status != 1 {
+		response.Error(c, 409, "固件未发布")
 		return
 	}
 	response.Success(c, gin.H{
@@ -712,10 +704,6 @@ func (h *OTAHandler) CheckUpdate(c *gin.Context) {
 	device, err := h.otaService.GetDeviceBySN(c.Request.Context(), sn)
 	if err != nil || device == nil {
 		response.Error(c, 404, "设备不存在")
-		return
-	}
-	if !device.HardwareKnown {
-		response.Success(c, gin.H{"has_update": false, "device_model": device.Model, "hardware_version": device.HardwareVersion, "hardware_state": "unknown", "message": "硬件版本未确认，无法升级"})
 		return
 	}
 
@@ -1828,6 +1816,19 @@ func (h *OTAHandler) GetTaskStats(c *gin.Context) {
 	})
 }
 
+type localOTAResultRequest struct {
+	Status      string `json:"status"`
+	FirmwareID  int64  `json:"firmware_id"`
+	TargetChip  string `json:"target_chip" binding:"required"`
+	NewVersion  string `json:"new_version"`
+	MainVersion string `json:"main_version"`
+}
+
+func (r localOTAResultRequest) succeeded() bool {
+	// Existing App versions report only target/version/id after device readback.
+	return (r.Status == "" || r.Status == "success") && strings.TrimSpace(r.NewVersion) != ""
+}
+
 // ReportLocalOTAResult 本地OTA完成后，App上报新版本号
 func (h *OTAHandler) ReportLocalOTAResult(c *gin.Context) {
 	sn := c.Param("sn")
@@ -1839,13 +1840,7 @@ func (h *OTAHandler) ReportLocalOTAResult(c *gin.Context) {
 		return
 	}
 
-	var req struct {
-		Status      string `json:"status" binding:"required"` // "success" or "failed"
-		FirmwareID  int64  `json:"firmware_id"`
-		TargetChip  string `json:"target_chip" binding:"required"` // "esp", "arm", "dsp", "bms"
-		NewVersion  string `json:"new_version"`
-		MainVersion string `json:"main_version"`
-	}
+	var req localOTAResultRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, 400, "invalid request")
 		return
@@ -1859,7 +1854,7 @@ func (h *OTAHandler) ReportLocalOTAResult(c *gin.Context) {
 
 	ctx := c.Request.Context()
 
-	if req.Status == "success" && req.NewVersion != "" {
+	if req.succeeded() {
 		userID := c.GetInt64("user_id")
 		taskID, err := h.otaService.ReportLocalOTAResult(ctx, userID, sn, req.TargetChip, req.NewVersion, req.MainVersion, req.FirmwareID)
 		if err != nil {
@@ -2134,15 +2129,6 @@ func (h *OTAHandler) GetDevicesByFirmware(c *gin.Context) {
 	if err != nil {
 		response.Error(c, 500, "查询设备列表失败")
 		return
-	}
-	if firmware != nil {
-		matched := []repository.DeviceInfo{}
-		for _, d := range devices {
-			if model.CheckFirmwareHardware(firmware, d.Model, d.HardwareVersion) == nil {
-				matched = append(matched, d)
-			}
-		}
-		devices = matched
 	}
 	response.Success(c, gin.H{"devices": devices, "total": len(devices)})
 }

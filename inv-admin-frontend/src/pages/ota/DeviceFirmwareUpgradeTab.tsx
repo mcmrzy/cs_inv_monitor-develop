@@ -469,7 +469,7 @@ const DeviceFirmwareUpgradeTab: React.FC = () => {
                   <Col xs={12} sm={6}>
                     <Statistic
                       title={t('dev.hardwareVersion')}
-                      value={overview?.hardware_version || selectedDevice?.hardware_version || selectedDevice?.hardwareVersion || t('ota.hardwareUnknown')}
+                      value={overview?.hardware_version || selectedDevice?.hardware_version || selectedDevice?.hardwareVersion || '--'}
                       valueStyle={{ fontSize: 16 }}
                     />
                   </Col>
@@ -499,7 +499,6 @@ const DeviceFirmwareUpgradeTab: React.FC = () => {
                 loading={overviewLoading}
                 styles={{ body: { padding: 12 } }}
               >
-                {overview?.hardware_state === 'unknown' && <Alert type="warning" showIcon message={t('ota.hardwareUnknown')} style={{ marginBottom: 12 }} />}
                 {modules.length === 0 ? (
                   <Empty description={t('ota.noFirmwareResources')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
                 ) : (

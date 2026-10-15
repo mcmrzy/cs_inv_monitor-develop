@@ -1,13 +1,5 @@
 import type { TranslateFn } from './firmwarePresentation'
 
-interface HardwareRange { board_codes?: string[]; hardware_versions?: string[] }
-
-export function rollbackCoversHardware(firmware: HardwareRange, rollback: HardwareRange): boolean {
-  const source = (firmware.board_codes ?? []).filter(Boolean)
-  const destination = new Set((rollback.board_codes ?? []).filter(Boolean))
-  return source.length > 0 && source.every((v) => destination.has(v))
-}
-
 /** Reasons come from the server verdict; unknown codes must stay visible, not blank. */
 export function hardwareCompatibilityLabel(reason: string | undefined, t: TranslateFn): string {
   if (!reason) return ''

@@ -62,7 +62,7 @@ func queryDeviceInfoForOTA(ctx context.Context, q interface {
 }, sn string, lock bool) (*DeviceInfo, error) {
 	var d DeviceInfo
 	var online bool
-	query := `SELECT d.sn,COALESCE(r.verified_model,''),COALESCE(d.firmware_arm,''),COALESCE(d.firmware_esp,''),
+	query := `SELECT d.sn,COALESCE(d.model,''),COALESCE(d.firmware_arm,''),COALESCE(d.firmware_esp,''),
  COALESCE(d.firmware_dsp,''),COALESCE(d.firmware_bms,''),COALESCE(d.main_version,''),COALESCE(d.status,0) IN (1,2),
  COALESCE(d.hardware_version,''),COALESCE(r.identity_state,'unverified'),COALESCE(r.identity_revision,0)
  FROM devices d LEFT JOIN device_hardware_registry r ON r.sn=d.sn WHERE d.sn=$1 AND d.deleted_at IS NULL`
@@ -227,7 +227,7 @@ func (r *OTARepository) CreateIndependentFirmwareTasks(ctx context.Context, user
 		if f.ReleaseStatus != model.FirmwareReleasePublished {
 			return nil, ErrFirmwareNotPublished
 		}
-		if _, err = validateTrustedFirmware(ctx, tx, deviceSN, &f, "cloud", true); err != nil {
+		if _, err = validateFirmwareForDevice(ctx, tx, deviceSN, &f, true); err != nil {
 			return nil, err
 		}
 		target := strings.ToLower(strings.TrimSpace(f.TargetChip))
@@ -245,9 +245,6 @@ func (r *OTARepository) CreateIndependentFirmwareTasks(ctx context.Context, user
 			old = device.FirmwareDSP
 		case "bms":
 			old = device.FirmwareBMS
-		}
-		if old == "" && strings.TrimSpace(forceReason) == "" {
-			return nil, ErrCurrentVersionUnknown
 		}
 		infos = append(infos, fwInfo{id: f.ID, model: f.Model, version: f.Version, target: target, oldVer: old})
 	}
@@ -435,10 +432,8 @@ func (r *OTARepository) ListUpgradeHistoryFiltered(ctx context.Context, f model.
 		       du.started_at, du.completed_at, du.created_at, du.updated_at,
 		       COALESCE(du.task_id,0), COALESCE(f.changelog,''),
 		       COALESCE((SELECT f2.id FROM firmware_versions f2
-		          WHERE f2.model=(SELECT verified_model FROM device_hardware_registry WHERE sn=du.device_sn AND identity_state='verified' AND NOT frozen) AND f2.target_chip=du.target_chip
-		            AND f2.version=du.old_version AND f2.release_status='published'
-		            AND EXISTS (SELECT 1 FROM firmware_board_types h JOIN device_hardware_modules m ON m.verified_model=h.model AND m.target_chip=h.target_chip AND m.board_code=h.board_code
- WHERE h.firmware_id=f2.id AND m.sn=du.device_sn AND m.state='verified')
+		          WHERE f2.model=d.model AND f2.target_chip=du.target_chip
+		            AND f2.version=du.old_version AND f2.release_status='published' AND f2.status=1
 		          ORDER BY f2.id DESC LIMIT 1),0), COALESCE(du.hardware_version,'')
 		FROM device_upgrades du
 		LEFT JOIN firmware_versions f ON f.id=du.firmware_id

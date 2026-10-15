@@ -81,7 +81,7 @@ func (r *OTARepository) ValidateFirmwareForDevice(ctx context.Context, sn string
 	if err != nil {
 		return nil, d, err
 	}
-	if _, err = validateTrustedFirmware(ctx, r.db, sn, f, "cloud", false); err != nil {
+	if _, err = validateFirmwareForDevice(ctx, r.db, sn, f, false); err != nil {
 		return f, d, err
 	}
 	return f, d, nil
@@ -92,9 +92,6 @@ func (r *OTARepository) ValidateFirmwareRollback(ctx context.Context, id int64, 
 	if err != nil {
 		return err
 	}
-	if len(f.BoardCodes) == 0 {
-		return model.ErrFirmwareHardwareUnspecified
-	}
 	if rollback == nil {
 		return nil
 	}
@@ -102,13 +99,8 @@ func (r *OTARepository) ValidateFirmwareRollback(ctx context.Context, id int64, 
 	if err != nil {
 		return err
 	}
-	if previous.ReleaseStatus != model.FirmwareReleasePublished || previous.TargetChip != f.TargetChip || previous.ID == f.ID {
+	if previous.ReleaseStatus != model.FirmwareReleasePublished || previous.Status != 1 || previous.Model != f.Model || previous.TargetChip != f.TargetChip || previous.ID == f.ID {
 		return model.ErrHardwareIncompatible
-	}
-	for _, v := range f.BoardCodes {
-		if err = checkFirmwareBoard(previous, f.Model, v); err != nil {
-			return err
-		}
 	}
 	return nil
 }
@@ -122,9 +114,6 @@ func validateFirmwareRollbackTx(ctx context.Context, tx pgx.Tx, id int64, rollba
 	if err := scanFirmware(tx.QueryRow(ctx, `SELECT `+firmwareSelectCols("f")+` FROM firmware_versions f WHERE f.id=$1`, id), &f); err != nil {
 		return err
 	}
-	if len(f.BoardCodes) == 0 {
-		return model.ErrFirmwareHardwareUnspecified
-	}
 	if rollback == nil {
 		return nil
 	}
@@ -135,28 +124,12 @@ func validateFirmwareRollbackTx(ctx context.Context, tx pgx.Tx, id int64, rollba
 	if err := scanFirmware(tx.QueryRow(ctx, `SELECT `+firmwareSelectCols("f")+` FROM firmware_versions f WHERE f.id=$1 FOR SHARE`, *rollback), &previous); err != nil {
 		return err
 	}
-	if previous.ReleaseStatus != model.FirmwareReleasePublished || previous.TargetChip != f.TargetChip {
+	if previous.ReleaseStatus != model.FirmwareReleasePublished || previous.Status != 1 || previous.Model != f.Model || previous.TargetChip != f.TargetChip {
 		return model.ErrHardwareIncompatible
-	}
-	for _, v := range f.BoardCodes {
-		if err := checkFirmwareBoard(&previous, f.Model, v); err != nil {
-			return err
-		}
 	}
 	return nil
 }
 
-func checkFirmwareBoard(f *model.Firmware, m, board string) error {
-	if f.Model != m {
-		return model.ErrHardwareIncompatible
-	}
-	for _, b := range f.BoardCodes {
-		if b == board {
-			return nil
-		}
-	}
-	return model.ErrHardwareIncompatible
-}
 func writeFirmwareBoards(ctx context.Context, tx pgx.Tx, f *model.Firmware) error {
 	seen := map[string]bool{}
 	for _, b := range f.BoardCodes {

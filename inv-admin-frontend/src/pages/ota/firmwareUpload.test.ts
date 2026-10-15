@@ -24,9 +24,13 @@ describe('buildFirmwareUploadFormData', () => {
       expect(body.has(field)).toBe(false)
     }
   })
-  it('rejects missing explicit compatibility rather than treating it as all hardware', () => {
-    expect(() => buildFirmwareUploadFormData({
-      file: new File(['x'], 'x.bin'), model: 'L10', targetChip: 'esp', hardwareVersions: [],
-    })).toThrow()
+  it('uploads without any hardware or board range', () => {
+    const body = buildFirmwareUploadFormData({
+      file: new File(['x'], 'x.bin'), model: 'L10', targetChip: 'esp',
+    })
+    expect(body.get('model')).toBe('L10')
+    expect(body.get('target_chip')).toBe('esp')
+    expect(body.has('hardware_versions')).toBe(false)
+    expect(body.has('board_codes')).toBe(false)
   })
 })

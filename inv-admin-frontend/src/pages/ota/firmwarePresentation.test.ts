@@ -91,12 +91,13 @@ describe('firmwarePresentation', () => {
       supported_channels: ['remote', 'ble', 'wifi_ap'],
     }
 
-    it('allows only eligible connected modules with the remote channel', () => {
+    it('allows eligible supported modules with the remote channel even before version reporting', () => {
       expect(canRemoteUpgradeFirmwareModule(eligible)).toBe(true)
       expect(canRemoteUpgradeFirmwareModule({ ...eligible, eligible: false })).toBe(false)
-      expect(canRemoteUpgradeFirmwareModule({ ...eligible, connected: false })).toBe(false)
+      expect(canRemoteUpgradeFirmwareModule({ ...eligible, connected: false })).toBe(true)
       expect(canRemoteUpgradeFirmwareModule({ ...eligible, supported: false })).toBe(false)
       expect(canRemoteUpgradeFirmwareModule({ ...eligible, supported_channels: ['ble'] })).toBe(false)
+      expect(canRemoteUpgradeFirmwareModule({ ...eligible, compatibility_reason: 'firmware_outside_rollout' })).toBe(false)
     })
 
     it('fails closed when canonical eligibility fields are missing', () => {
