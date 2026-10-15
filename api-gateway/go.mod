@@ -1,6 +1,6 @@
 module api-gateway
 
-go 1.26.0
+go 1.26.9
 
 require (
 	github.com/alicebob/miniredis/v2 v2.38.0

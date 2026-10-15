@@ -56,7 +56,7 @@ export default function HardwareVersionsSelect({ model, value, onChange }: Props
           <Form.Item name="version" label={t('ota.hardwareVersion')} rules={[{ required: true, whitespace: true, message: t('ota.hardwareVersionRequired') }]}>
             <Input maxLength={64} placeholder="HW-1.0" />
           </Form.Item>
-          <Form.Item name="description" label={t('common.description')}><Input.TextArea maxLength={500} /></Form.Item>
+          <Form.Item name="description" label={t('ota.hardwareDescription')}><Input.TextArea maxLength={500} /></Form.Item>
         </Form>
       </Modal>
     </Space>

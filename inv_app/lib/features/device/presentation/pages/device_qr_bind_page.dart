@@ -247,8 +247,8 @@ class _DeviceQrBindPageState extends State<DeviceQrBindPage> {
       try {
         session = await _manager.connectDevice(result.macAddress);
         final info = await session.readInfo();
-        final deviceSn = (info['sn'] as String?)?.trim();
-        if (deviceSn == widget.sn) {
+        final deviceSn = (info['sn'] as String?)?.trim().toUpperCase();
+        if (deviceSn == widget.sn.trim().toUpperCase()) {
           matchedMac = result.macAddress;
           // 断开本次匹配连接：让 bindAfterProvision 重新建立绑定会话
           await _manager.disconnectDevice(result.macAddress);

@@ -43,7 +43,7 @@ jobs:
         if: github.event_name == 'pull_request'
         uses: golangci/golangci-lint-action@v7
         with:
-          version: v2.1
+          version: v2.14.0
           working-directory: ${{ matrix.module }}
           # 只报告相对目标分支新增的问题；存量债务不阻塞合并
           only-new-issues: true
@@ -245,11 +245,16 @@ jobs:
           allow='GO-2026-6452'
           fail=0
           for module in business-api device-communication api-gateway mqtt-kafka-bridge; do
-            out="$( cd "$module" && govulncheck ./... 2>&1 )" || true
+            scan_status=0
+            out="$( cd "$module" && govulncheck ./... 2>&1 )" || scan_status=$?
             ids="$(printf '%s\n' "$out" | sed -n 's/^Vulnerability #[0-9]*: \(GO-[0-9]*-[0-9]*\).*/\1/p' | sort -u)"
             blocked="$(printf '%s\n' "$ids" | grep -vx "$allow" | sed '/^$/d' || true)"
             if [ -n "$blocked" ]; then
               echo "::error::module $module has non-allowlisted vulnerabilities: $(echo $blocked | tr '\n' ' ')"
+              printf '%s\n' "$out"
+              fail=1
+            elif [ "$scan_status" -ne 0 ] && [ -z "$ids" ]; then
+              echo "::error::govulncheck failed for $module (exit $scan_status)"
               printf '%s\n' "$out"
               fail=1
             elif [ -n "$ids" ]; then

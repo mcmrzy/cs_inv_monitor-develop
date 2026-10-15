@@ -49,7 +49,7 @@ func (r *OTARepository) UpdateFirmwareHardwareVersions(ctx context.Context, id i
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	var f model.Firmware
 	var lockedID int64
 	if err = tx.QueryRow(ctx, `SELECT id FROM firmware_versions WHERE id=$1 FOR UPDATE`, id).Scan(&lockedID); err != nil {

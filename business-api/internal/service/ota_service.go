@@ -328,7 +328,7 @@ func (s *OTAService) PushUpgrade(ctx context.Context, req *PushUpgradeReq) error
 }
 
 // SendUpgradeCommand 发送MQTT升级命令到设备
-func (s *OTAService) SendUpgradeCommand(ctx context.Context, du *model.DeviceUpgrade, fw *model.Firmware, downloadURL string) {
+func (s *OTAService) SendUpgradeCommand(ctx context.Context, du *model.DeviceUpgrade, _ *model.Firmware, _ string) {
 	current, _, compatibilityErr := s.validateFirmwareForDevice(ctx, du.DeviceSN, du.FirmwareID)
 	if compatibilityErr != nil {
 		logger.Warn("OTA compatibility rejected before dispatch", zap.String("sn", du.DeviceSN), zap.Error(compatibilityErr))
@@ -343,8 +343,8 @@ func (s *OTAService) SendUpgradeCommand(ctx context.Context, du *model.DeviceUpg
 			return
 		}
 	}
-	fw = current
-	downloadURL = s.BuildDownloadURL(fw.FileURL)
+	fw := current
+	downloadURL := s.BuildDownloadURL(fw.FileURL)
 	// 下发前先校验地址：设备端解析不了时它只会回报一句 "HTTP client init failed"
 	// （进度 0%、无 trace），云端无从定位。拦在这里，原因进日志与升级记录。
 	if err := ValidateDeviceDownloadURL(downloadURL); err != nil {
