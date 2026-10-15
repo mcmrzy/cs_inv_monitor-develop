@@ -229,6 +229,7 @@ var resourceActionMap = map[string]string{
 	"/api/v1/geocode/":             "stations",
 	"/api/v1/models":               "models",
 	"/api/v1/models/":              "models",
+	"/api/v1/hardware/devices":     "devices",
 	"/api/v1/field-catalog":        "models",
 	"/api/v1/protocol-versions":    "models",
 	"/api/v1/protocol-versions/":   "models",
@@ -531,8 +532,10 @@ func (r *RBACMiddleware) RBACGuard() gin.HandlerFunc {
 
 		// Basic user GET endpoints: any authenticated user can view their own data.
 		// Data scoping is enforced by the downstream service layer.
-		// Model field dictionaries ride the same lane (see isModelDictionaryGET).
-		if isBasicUserGET(path, c.Request.Method) || isModelDictionaryGET(path, c.Request.Method) {
+		// Model fields and the exact board catalog GET are reference reads.
+		// Hardware registry/history retain devices:view and downstream scope.
+		if isBasicUserGET(path, c.Request.Method) || isModelDictionaryGET(path, c.Request.Method) ||
+			(c.Request.Method == http.MethodGet && path == "/api/v1/hardware/board-types") {
 			if !r.isUserActive(c.Request.Context(), userID) {
 				c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "账号不可用"})
 				c.Abort()
