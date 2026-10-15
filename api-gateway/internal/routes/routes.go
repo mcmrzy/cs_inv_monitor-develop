@@ -178,6 +178,20 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 	userGroup.Any("/api/v1/alert-rules", p.Handler())
 	userGroup.Any("/api/v1/models/*action", p.Handler())
 	userGroup.Any("/api/v1/models", p.Handler())
+	// Trusted hardware registry: mirror the business API's explicit endpoints.
+	// Keep unknown paths out of the proxy, and retain downstream administrator
+	// checks for all governance writes and import reads.
+	userGroup.GET("/api/v1/hardware/board-types", p.Handler())
+	userGroup.POST("/api/v1/hardware/board-types", p.Handler())
+	userGroup.GET("/api/v1/hardware/devices/:sn", p.Handler())
+	userGroup.GET("/api/v1/hardware/devices/:sn/history", p.Handler())
+	userGroup.POST("/api/v1/hardware/devices/:sn/verify", p.Handler())
+	userGroup.POST("/api/v1/hardware/devices/:sn/corrections", p.Handler())
+	userGroup.POST("/api/v1/hardware/devices/:sn/service-changes", p.Handler())
+	userGroup.POST("/api/v1/hardware/devices/:sn/freeze", p.Handler())
+	userGroup.POST("/api/v1/hardware/imports", p.Handler())
+	userGroup.GET("/api/v1/hardware/imports/:id", p.Handler())
+	userGroup.POST("/api/v1/hardware/imports/:id/commit", p.Handler())
 	// 电池模板目录 — 设备详情「安装配置」页读取（business-api BatteryHandler，登录即可）
 	userGroup.Any("/api/v1/battery-profiles/*action", p.Handler())
 	userGroup.Any("/api/v1/battery-profiles", p.Handler())

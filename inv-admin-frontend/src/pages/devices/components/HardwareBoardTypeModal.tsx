@@ -6,7 +6,7 @@ import useAuthStore from '@/stores/authStore'
 import { hardwareApi, hardwareError } from '@/services/hardwareApi'
 import type { BoardType } from '@/types/hardware'
 
-export default function HardwareBoardTypeModal({ onClose, initialModel }: { onClose: () => void; initialModel?: string }) {
+export default function HardwareBoardTypeModal({ onClose, initialModel, initialTarget }: { onClose: () => void; initialModel?: string; initialTarget?: string }) {
   const { t } = useTranslation()
   const { message } = App.useApp()
   const client = useQueryClient()
@@ -26,7 +26,7 @@ export default function HardwareBoardTypeModal({ onClose, initialModel }: { onCl
   }
   if (!admin) return null
   return <Modal title={t('hw.boardCatalog')} open onCancel={onClose} onOk={() => void save()} confirmLoading={busy} okText={t('hw.submit')}>
-    <Form form={form} layout="vertical" initialValues={{ model: initialModel }}>
+    <Form form={form} layout="vertical" initialValues={{ model: initialModel, target_chip: initialTarget }}>
       <Form.Item name="model" label={t('hw.model')} rules={[{ required: true, whitespace: true }]}><Input maxLength={64} /></Form.Item>
       <Form.Item name="target_chip" label={t('hw.target')} rules={[{ required: true }]}><Select options={['esp', 'arm', 'dsp', 'bms'].map(value => ({ value, label: value.toUpperCase() }))} /></Form.Item>
       <Form.Item name="board_code" label={t('hw.board')} rules={[{ required: true, whitespace: true }]}><Input maxLength={128} /></Form.Item>
