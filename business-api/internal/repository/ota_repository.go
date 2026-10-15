@@ -308,18 +308,19 @@ func (r *OTARepository) GetPendingUpgradeForDevice(ctx context.Context, sn strin
 	err := r.db.QueryRow(ctx, `
 		SELECT du.id, du.device_sn, du.firmware_id, du.firmware_version, COALESCE(du.target_chip,''),
 		       COALESCE(du.old_version,''), du.status, COALESCE(du.stage,''), du.stage_progress, du.overall_progress, COALESCE(du.progress,0), COALESCE(du.error_message,''),
-		       COALESCE(du.retry_count,0), du.pushed_by, du.started_at, du.completed_at, du.created_at, du.updated_at,
+		       COALESCE(du.retry_count,0), du.pushed_by, du.started_at, du.completed_at, du.created_at, du.updated_at, du.task_id,
 		       f.id, f.model, f.version, f.file_url, COALESCE(f.file_size,0), COALESCE(f.file_md5,''),
 		       COALESCE(f.file_sha256,''), COALESCE(f.security_version,0), COALESCE(f.release_signature,''), COALESCE(f.changelog,''), f.is_force, COALESCE(f.target_chip,''), COALESCE(f.main_version,'')
 		FROM device_upgrades du
 		JOIN firmware_versions f ON du.firmware_id = f.id
-		WHERE du.device_sn = $1 AND du.status = 'pending'
+		LEFT JOIN upgrade_tasks task ON task.id = du.task_id
+		WHERE du.device_sn = $1 AND `+pendingDeliveryCondition+`
 		ORDER BY du.created_at ASC, du.id ASC
 		LIMIT 1
 	`, sn).Scan(
 		&du.ID, &du.DeviceSN, &du.FirmwareID, &du.FirmwareVersion, &du.TargetChip,
 		&du.OldVersion, &du.Status, &du.Stage, &du.StageProgress, &du.OverallProgress, &du.Progress, &du.ErrorMessage,
-		&du.RetryCount, &du.PushedBy, &du.StartedAt, &du.CompletedAt, &du.CreatedAt, &du.UpdatedAt,
+		&du.RetryCount, &du.PushedBy, &du.StartedAt, &du.CompletedAt, &du.CreatedAt, &du.UpdatedAt, &du.TaskID,
 		&fw.ID, &fw.Model, &fw.Version, &fw.FileURL, &fw.FileSize, &fw.FileMD5,
 		&fw.FileSHA256, &fw.SecurityVersion, &fw.ReleaseSignature, &fw.Changelog, &fw.IsForce, &fw.TargetChip, &fw.MainVersion,
 	)
@@ -1889,6 +1890,7 @@ func (r *OTARepository) UpdateUpgradeTaskStatus(ctx context.Context, id int64, s
 // MarkTimedOutUpgradeTasks 批量收口超时的升级任务：将处于非终态（pending/running）
 // 且 updated_at 超过 timeout 无任何更新的任务置为 failed，追加失败原因备注，
 // 并同步将这些任务下仍未终态的设备升级记录置为 failed。
+// 尚有从未下发的 pending 记录时继续等待；首次在线下发会刷新任务的超时起点。
 // 已终态任务不受影响，重复调用幂等。返回被收口的任务数量。
 func (r *OTARepository) MarkTimedOutUpgradeTasks(ctx context.Context, timeout time.Duration, reason string) (int64, error) {
 	minutes := int(timeout.Minutes())
@@ -1896,7 +1898,7 @@ func (r *OTARepository) MarkTimedOutUpgradeTasks(ctx context.Context, timeout ti
 		minutes = 1
 	}
 	rows, err := r.db.Query(ctx, `
-		UPDATE upgrade_tasks SET
+		UPDATE upgrade_tasks task SET
 		    status = 'failed',
 		    -- $2 需显式 cast：CONCAT_WS 为 variadic "any" 签名，unknown 参数
 		    -- 无法被推断类型（SQLSTATE 42P18），导致超时收口持续失败。
@@ -1905,6 +1907,10 @@ func (r *OTARepository) MarkTimedOutUpgradeTasks(ctx context.Context, timeout ti
 		    updated_at = NOW()
 		WHERE status IN ('pending', 'running')
 		  AND updated_at < NOW() - make_interval(mins => $1)
+		  AND NOT EXISTS (
+		      SELECT 1 FROM device_upgrades du
+		      WHERE du.task_id = task.id AND du.status = 'pending' AND du.last_dispatched_at IS NULL
+		  )
 		RETURNING id
 	`, minutes, reason)
 	if err != nil {

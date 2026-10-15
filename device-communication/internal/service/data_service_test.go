@@ -373,6 +373,29 @@ func TestDataService_QueueCommand_NoRedis(t *testing.T) {
 	assert.Error(t, service.QueueCommand("SN001", "ota_upgrade", []byte(`{}`)))
 }
 
+func TestFlushPendingCommandsDefersPersistedOTAToDatabase(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer rdb.Close()
+	hub := mqtt.NewHub(rdb)
+	s := NewDataService(nil, nil, hub, rdb, "", "")
+	require.NoError(t, s.QueueCommand("SN001", "start", []byte(`{"command":"start","upgrade_id":123,"target":"arm"}`)))
+	require.NoError(t, s.QueueCommand("SN001", "start", []byte(`{"command":"start","upgrade_id":124,"target":"esp"}`)))
+	require.NoError(t, s.QueueCommand("SN001", "set_control", []byte(`{"command":"set_control"}`)))
+	s.FlushPendingCommands(t.Context(), "SN001")
+	select {
+	case cmd := <-hub.GetCmdChan():
+		require.Equal(t, "set_control", cmd.CmdType)
+	default:
+		t.Fatal("ordinary offline commands must still be delivered")
+	}
+	select {
+	case cmd := <-hub.GetCmdChan():
+		t.Fatalf("managed OTA payload must be recovered from the database: %+v", cmd)
+	default:
+	}
+}
+
 func TestDataService_FlushPendingCommands_DeliversInOrder(t *testing.T) {
 	rdb, _ := newTestRedis(t)
 	hub := mqtt.NewHub(nil)

@@ -8,6 +8,10 @@ import (
 
 	"inv-api-server/internal/model"
 	"inv-api-server/internal/repository"
+	"inv-api-server/pkg/logger"
+
+	"github.com/jackc/pgx/v5"
+	"go.uber.org/zap"
 )
 
 var (
@@ -167,8 +171,27 @@ func (s *OTAService) ListAuthorizedDeviceSNs(ctx context.Context, actor model.Ac
 // dispatchHeadPending 仅下发同设备队首 pending 升级
 func (s *OTAService) dispatchHeadPending(ctx context.Context, sn string) {
 	du, fw, err := s.repo.GetPendingUpgradeForDevice(ctx, sn)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		logger.Warn("Query pending OTA delivery failed", zap.String("sn", sn), zap.Error(err))
+	}
 	if err != nil || du == nil || fw == nil {
 		return
 	}
 	s.SendUpgradeCommand(ctx, du, fw, s.BuildDownloadURL(fw.FileURL))
+}
+
+// RetryPendingUpgradeCommands is also run after startup, so missing an online
+// event or restarting either service does not lose a pending upgrade.
+func (s *OTAService) RetryPendingUpgradeCommands(ctx context.Context) error {
+	sns, err := s.repo.ListPendingDeliveryDevices(ctx)
+	if err != nil {
+		return fmt.Errorf("list pending OTA deliveries: %w", err)
+	}
+	for _, sn := range sns {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		s.dispatchHeadPending(ctx, sn)
+	}
+	return nil
 }

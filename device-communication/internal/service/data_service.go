@@ -150,6 +150,15 @@ func (s *DataService) FlushPendingCommands(ctx context.Context, sn string) {
 			logger.Warn("Failed to unmarshal pending command", zap.String("sn", sn), zap.Error(err))
 			continue
 		}
+		// Older releases cached managed OTA payloads here. The database now
+		// recovers them with fresh task/firmware checks; replaying this copy
+		// could bypass cancellation or send several modules at once.
+		var persistedOTA struct {
+			UpgradeID int64 `json:"upgrade_id"`
+		}
+		if mqtt.IsOtaCommand(cmd.CmdType) && json.Unmarshal(cmd.RawPayload, &persistedOTA) == nil && persistedOTA.UpgradeID > 0 {
+			continue
+		}
 
 		s.hub.GetCmdChan() <- cmd
 

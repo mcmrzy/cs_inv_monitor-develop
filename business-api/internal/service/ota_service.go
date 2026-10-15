@@ -329,12 +329,18 @@ func (s *OTAService) PushUpgrade(ctx context.Context, req *PushUpgradeReq) error
 
 // SendUpgradeCommand 发送MQTT升级命令到设备
 func (s *OTAService) SendUpgradeCommand(ctx context.Context, du *model.DeviceUpgrade, _ *model.Firmware, _ string) {
-	current, _, compatibilityErr := s.validateFirmwareForDevice(ctx, du.DeviceSN, du.FirmwareID)
+	current, device, compatibilityErr := s.validateFirmwareForDevice(ctx, du.DeviceSN, du.FirmwareID)
 	if compatibilityErr != nil {
 		logger.Warn("OTA compatibility rejected before dispatch", zap.String("sn", du.DeviceSN), zap.Error(compatibilityErr))
 		if s.markUpgradeFailedBeforeDispatch(ctx, du, compatibilityErr) {
 			s.dispatchHeadPending(ctx, du.DeviceSN)
 		}
+		return
+	}
+	if device != nil && !device.IsOnline {
+		return // Keep the durable pending record until the device reconnects.
+	}
+	if s.rdb != nil && s.rdb.Exists(ctx, "device:heartbeat:"+du.DeviceSN).Val() == 0 {
 		return
 	}
 	if s.repo != nil {
@@ -358,6 +364,16 @@ func (s *OTAService) SendUpgradeCommand(ctx context.Context, du *model.DeviceUpg
 		return
 	}
 
+	if s.repo != nil {
+		claimed, err := s.repo.ClaimUpgradeDelivery(ctx, du.ID, du.DeviceSN)
+		if err != nil {
+			logger.Error("claim OTA delivery failed", zap.String("sn", du.DeviceSN), zap.Error(err))
+		}
+		if err != nil || !claimed {
+			return
+		}
+	}
+
 	cmdBody := map[string]interface{}{
 		"v":       1,
 		"t":       time.Now().Unix(),
@@ -376,6 +392,9 @@ func (s *OTAService) SendUpgradeCommand(ctx context.Context, du *model.DeviceUpg
 		"signature":        fw.ReleaseSignature,
 		"timeout":          300,
 		"upgrade_id":       du.ID,
+		// The database retries with fresh eligibility checks; avoid replaying a
+		// cached Redis command after cancellation or firmware withdrawal.
+		"queue_if_offline": false,
 	}
 	body, err := json.Marshal(cmdBody)
 	if err != nil {
@@ -385,7 +404,7 @@ func (s *OTAService) SendUpgradeCommand(ctx context.Context, du *model.DeviceUpg
 	}
 
 	url := fmt.Sprintf("%s/api/v1/device/%s/command", s.deviceServer, du.DeviceSN)
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		logger.Error("create OTA request failed",
 			zap.String("sn", du.DeviceSN), zap.Error(err))

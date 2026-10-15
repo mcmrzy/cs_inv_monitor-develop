@@ -513,9 +513,10 @@ func setupRouter(cfg *config.Config, dataService *service.DataService, stateMana
 			}
 
 			var req struct {
-				Command string                 `json:"command"`
-				Action  string                 `json:"action"`
-				Params  map[string]interface{} `json:"params"`
+				Command        string                 `json:"command"`
+				Action         string                 `json:"action"`
+				Params         map[string]interface{} `json:"params"`
+				QueueIfOffline *bool                  `json:"queue_if_offline"`
 			}
 			if err := json.Unmarshal(rawBody, &req); err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -530,7 +531,7 @@ func setupRouter(cfg *config.Config, dataService *service.DataService, stateMana
 
 			if !dataService.IsDeviceOnline(sn) {
 				// 设备离线时，将 OTA 命令入队，设备上线后自动发送
-				if mqtt.IsOtaCommand(cmdType) {
+				if mqtt.IsOtaCommand(cmdType) && (req.QueueIfOffline == nil || *req.QueueIfOffline) {
 					if err := dataService.QueueCommand(sn, cmdType, rawBody); err != nil {
 						logger.Error("Failed to queue offline OTA command",
 							zap.String("sn", sn), zap.String("cmd", cmdType), zap.Error(err))

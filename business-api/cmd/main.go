@@ -263,6 +263,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	go runOTATimeoutCleanup(db, cfg.OTA.RecordTimeoutMinutes, heartbeatDone)
 	// OTA 瀹氭椂浠诲姟锛氶鍙栧苟鎵ц鍒版湡浠诲姟锛岄噸鍚悗涔熶細鎭㈠宸插埌鏈熶絾鏈墽琛岀殑浠诲姟銆?
 	go runOTAScheduler(db, otaService, heartbeatDone)
+	go runOTADeliveryRetry(otaService, heartbeatDone)
 	// OTA 升级任务超时收口：后台定时扫描卡住的 pending/running 任务并置为 failed
 	otaService.SetTaskTimeout(time.Duration(cfg.OTA.TaskTimeoutMinutes) * time.Minute)
 	go runOTATaskTimeoutWatcher(otaService, time.Duration(cfg.OTA.TaskScanIntervalSeconds)*time.Second, heartbeatDone)
@@ -582,9 +583,25 @@ func runOTATimeoutCleanup(db *pgxpool.Pool, timeoutMinutes int, done chan struct
 	}
 }
 
-// runOTATaskTimeoutWatcher 周期性收口卡住的 OTA 升级任务：
-// 处于 pending/running 且超过阈值无任何更新的任务会被置为 failed，
-// 避免任务永远卡在进行中。
+// runOTADeliveryRetry recovers pending deliveries at startup and after reconnects.
+func runOTADeliveryRetry(otaService *service.OTAService, done <-chan struct{}) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+		if err := otaService.RetryPendingUpgradeCommands(ctx); err != nil {
+			logger.Warn("OTA pending delivery retry failed", zap.Error(err))
+		}
+		cancel()
+		select {
+		case <-done:
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+// runOTATaskTimeoutWatcher 周期性收口已下发且长时间无回报的 OTA 升级任务。
 func runOTATaskTimeoutWatcher(otaService *service.OTAService, interval time.Duration, done chan struct{}) {
 	if interval <= 0 {
 		interval = 60 * time.Second
