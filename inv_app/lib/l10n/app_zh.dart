@@ -1,4 +1,6 @@
 const Map<String, String> zh = {
+  'ota_err_trusted_authorization_required': '设备尚未完成可信硬件登记和升级授权，本地升级已停止。请联系售后完成登记。',
+  'ota_verification_pending': '固件已传输，但实际安装版本尚未确认。请重新连接设备核查，请勿重复刷写。',
   'ota_err_firmware_hardware_unknown': '固件未声明适用硬件版本，请删除旧缓存并重新下载适用固件',
   'ota_err_device_hardware_unknown': '设备未上报硬件版本，无法确认兼容性，升级已停止',
   'ota_err_hardware_mismatch': '固件与当前连接设备的硬件版本不兼容，升级已停止',
@@ -1537,7 +1539,12 @@ const Map<String, String> zh = {
   'cloud_bind_fallback': '改用云端绑定',
   'qr_bind_cloud_binding': '正在云端绑定…',
   'qr_bind_cloud_failed': '云端绑定失败，尝试BLE',
-  'qr_bind_try_ble': '尝试BLE扫描',
+  'qr_stage_connect': '连接设备',
+  'qr_stage_wifi': '联网',
+  'qr_stage_account': '添加到我的设备',
+  'qr_bind_wrong_device': '设备编号不匹配，未发送 Wi-Fi 信息',
+  'qr_bind_wifi_stage': '联网后添加到我的设备',
+  'qr_bind_try_ble': '通过蓝牙配网',
 
   // === 引导页（首次安装 / 版本升级）===
   'onboarding_page1_title': '从今天开始，掌握每一度电',

@@ -250,6 +250,7 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
   const { t } = useTranslation()
   const { token } = theme.useToken()
   const historyTheme = {
+    '--history-bg': token.colorBgContainer,
     '--history-fill': token.colorFillAlter,
     '--history-border': token.colorBorderSecondary,
     '--history-text': token.colorText,
@@ -883,7 +884,7 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
                 total,
                 showSizeChanger: true,
                 pageSizeOptions: ['10', '20', '50', '100'],
-                onChange: (p, ps) => { setPage(p); setPageSize(ps) },
+                onChange: (p, ps) => { setPage(ps === pageSize ? p : 1); setPageSize(ps) },
               }}
               scroll={{ x: Math.max(800, 180 + visibleFields.length * 132), y: 'min(65vh, 600px)' }}
               // MainLayout uses ProLayout's default 56px fixed header.

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { fireEvent, waitFor, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { server } from '@/test/mocks/server'
 import { renderAsAdmin } from '@/test/test-utils'
@@ -213,6 +214,48 @@ describe('StationHistoryTab', () => {
 
     await waitFor(() => expect(lastTelemetryParams().get('granularity')).toBe('day'))
     expect(lastTelemetryParams().get('page')).toBe('1')
+  })
+
+  it('切换每页条数后请求并展示对应数量，回到第一页后仍可翻页', async () => {
+    const rows = Array.from({ length: 125 }, (_, index) => ({
+      time: new Date(Date.UTC(2026, 9, 9, 0, index)).toISOString(),
+      data_hash: `page-row-${index}`,
+      pv_total_power: index,
+    }))
+    localStorage.setItem(stationHistoryPrefsKey('default'), JSON.stringify({ fields: ['pv_total_power'] }))
+    server.use(http.get(`${API_BASE}/devices/by-sn/:sn/telemetry`, ({ request }) => {
+      telemetryRequests.push(request.url)
+      const params = new URL(request.url).searchParams
+      const page = Number(params.get('page'))
+      const size = Number(params.get('page_size'))
+      return HttpResponse.json({ code: 0, data: {
+        items: rows.slice((page - 1) * size, page * size), total: rows.length, page, page_size: size,
+      } })
+    }))
+    const { container } = renderAsAdmin(<StationHistoryTab stationId={1} timezone="Asia/Shanghai" />)
+    const rowCount = () => container.querySelectorAll('.ant-table-body tr.ant-table-row').length
+    await waitFor(() => expect(rowCount()).toBe(10))
+    const user = userEvent.setup()
+    fireEvent.click(container.querySelector('.ant-pagination-item-2')!)
+    await waitFor(() => expect(lastTelemetryParams().get('page')).toBe('2'))
+    for (const size of [20, 50, 100, 10]) {
+      const selector = container.querySelector('.ant-pagination-options .ant-select-selector')!
+      await user.click(selector)
+      const option = await screen.findByTitle(`${size} 条/页`)
+      await user.click(option)
+      await waitFor(() => expect(lastTelemetryParams().get('page_size')).toBe(String(size)))
+      expect(lastTelemetryParams().get('page')).toBe('1')
+      await waitFor(() => expect(rowCount()).toBe(size))
+      if (size === 100) {
+        fireEvent.click(container.querySelector('.ant-pagination-item-2')!)
+        await waitFor(() => expect(lastTelemetryParams().get('page')).toBe('2'))
+        await waitFor(() => expect(rowCount()).toBe(25))
+      }
+    }
+    fireEvent.click(container.querySelector('.ant-pagination-item-2')!)
+    await waitFor(() => expect(lastTelemetryParams().get('page')).toBe('2'))
+    await waitFor(() => expect(rowCount()).toBe(10))
+    expect(container.querySelector('.ant-table-body td.history-number-cell')).toHaveTextContent('10')
   })
 
   it('选中字段后可生成曲线，按自动粒度请求所选字段', async () => {

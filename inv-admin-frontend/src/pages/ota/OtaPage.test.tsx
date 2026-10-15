@@ -8,15 +8,15 @@ import { API_BASE } from '@/utils/urls'
 import OtaPage from './index'
 
 describe('OtaPage', () => {
-  it('uploads a file with multiple selected standard hardware versions', async () => {
+  it('uploads a file with multiple selected board types for the exact model and target', async () => {
     let body = ''
     server.use(
       http.get(`${API_BASE}/ota/firmware`, () => HttpResponse.json({ code: 0, data: [{
         id: '901', model: 'L10', target_chip: 'esp', version: '1.0', release_status: 'published', file_size: 123,
         hardware_versions: ['HW-1'],
       }] })),
-      http.get(`${API_BASE}/ota/hardware-versions`, () => HttpResponse.json({ code: 0, data: [
-        { model: 'L10', version: 'HW-1' }, { model: 'L10', version: 'HW-2' },
+      http.get(`${API_BASE}/hardware/board-types`, () => HttpResponse.json({ code: 0, data: [
+        { model: 'L10', target_chip: 'esp', board_code: 'HW-1' }, { model: 'L10', target_chip: 'esp', board_code: 'HW-2' },
       ] })),
       http.post(`${API_BASE}/ota/firmware`, async ({ request }) => {
         body = await request.text()
@@ -38,21 +38,25 @@ describe('OtaPage', () => {
     fireEvent.change(dialog.querySelector('input[type="file"]')!, { target: { files: [new File(['bytes'], 'fw.bin')] } })
     await screen.findByText('fw.bin')
     fireEvent.click(screen.getByRole('button', { name: /确.*定/ }))
-    await waitFor(() => expect(body).toContain('name="hardware_versions"'))
+    await waitFor(() => expect(body).toContain('name="board_codes"'))
     expect(body).toContain('["HW-1","HW-2"]')
     expect(body).toContain('name="model"')
   })
-  it('limits batch selection and select-all to the explicit hardware range', async () => {
+  it('lists server-verified task candidates and never offers an excluded device', async () => {
     server.use(
       http.get(`${API_BASE}/ota/firmware`, () => HttpResponse.json({ code: 0, data: [{
         id: '901', model: 'L10', target_chip: 'esp', version: '1.0', release_status: 'published',
         hardware_versions: ['HW-1'],
+        board_codes: ['HW-1'],
       }] })),
-      http.get(`${API_BASE}/devices`, () => HttpResponse.json({ code: 0, data: { items: [
-        { id: '1', sn: 'COMPATIBLE', model: 'L10', hardware_version: 'HW-1' },
-        { id: '2', sn: 'OTHER-HARDWARE', model: 'L10', hardware_version: 'HW-2' },
-        { id: '3', sn: 'UNKNOWN-HARDWARE', model: 'L10', hardware_version: '' },
-      ], total: 3 } })),
+      http.get(`${API_BASE}/ota/firmware/901/task-candidates`, () => HttpResponse.json({ code: 0, data: {
+        firmware_id: 901, target_chip: 'esp', total: 3, eligible_count: 1, excluded_count: 2,
+        items: [
+          { sn: 'COMPATIBLE', model: 'L10', board_code: 'HW-1', current_version: '0.9', eligible: true },
+          { sn: 'OTHER-HARDWARE', model: 'L10', board_code: 'HW-2', current_version: '0.9', eligible: false, reason: 'firmware_incompatible' },
+          { sn: 'NEEDS-WINDOW', model: 'L10', board_code: 'HW-1', current_version: '0.9', eligible: false, reason: 'device_protection_required' },
+        ],
+      } })),
     )
     renderAsAdmin(<OtaPage />, { routerProps: { initialEntries: ['/ota?tab=tasks'] } })
     fireEvent.click(await screen.findByRole('button', { name: /创建升级任务/ }))
@@ -60,11 +64,16 @@ describe('OtaPage', () => {
     fireEvent.mouseDown(dialog.querySelector('[role="combobox"]')!)
     fireEvent.click(await screen.findByText('L10 · 通信采集 · 1.0 · HW-1', { selector: '.ant-select-item-option-content' }))
     fireEvent.click(screen.getByRole('button', { name: '下一步' }))
+    // Ineligible devices stay visible with the verdict the server returned.
     expect(await screen.findByText('COMPATIBLE')).toBeInTheDocument()
-    expect(screen.queryByText('OTHER-HARDWARE')).not.toBeInTheDocument()
-    expect(screen.queryByText('UNKNOWN-HARDWARE')).not.toBeInTheDocument()
+    expect(screen.getByText('OTHER-HARDWARE')).toBeInTheDocument()
+    expect(screen.getByText('板卡不在固件范围内')).toBeInTheDocument()
+    expect(screen.getByText(/需要受控迁移窗口/)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('checkbox', { name: '全选' }))
     expect(await screen.findByText('已选择 1 台设备')).toBeInTheDocument()
+    // Excluded rows carry disabled checkboxes, so select-all can never pick them.
+    const disabledCheckboxes = screen.getAllByRole('checkbox').filter((box) => (box as HTMLInputElement).disabled)
+    expect(disabledCheckboxes.length).toBeGreaterThanOrEqual(2)
   })
   it('shows unconfirmed hardware and does not claim no updates when compatibility is unknown', async () => {
     server.use(http.get(`${API_BASE}/ota/devices/:sn/firmware-overview`, ({ params }) => HttpResponse.json({
@@ -80,26 +89,28 @@ describe('OtaPage', () => {
     expect(screen.queryByRole('button', { name: '升级' })).not.toBeInTheDocument()
   })
 
-  it('lets an administrator supplement a legacy firmware range from the hardware directory', async () => {
+  it('lets an administrator supplement a legacy firmware with an audited board range', async () => {
     let submitted: any
     server.use(
       http.get(`${API_BASE}/ota/firmware`, () => HttpResponse.json({ code: 0, data: [{
         id: '901', model: 'L10', target_chip: 'esp', version: '1.0', release_status: 'published', file_size: 123,
         hardware_versions: [], created_at: '2026-10-01T00:00:00Z',
       }] })),
-      http.get(`${API_BASE}/ota/hardware-versions`, () => HttpResponse.json({ code: 0, data: [{ model: 'L10', version: 'HW-2' }] })),
-      http.put(`${API_BASE}/ota/firmware/901/hardware-versions`, async ({ request }) => {
+      http.get(`${API_BASE}/hardware/board-types`, () => HttpResponse.json({ code: 0, data: [{ model: 'L10', target_chip: 'esp', board_code: 'HW-2', description: '' }] })),
+      http.get(`${API_BASE}/ota/firmware/901/board-types`, () => HttpResponse.json({ code: 0, data: { board_codes: [] } })),
+      http.put(`${API_BASE}/ota/firmware/901/board-types`, async ({ request }) => {
         submitted = await request.json()
         return HttpResponse.json({ code: 0, data: {} })
       }),
     )
     renderAsAdmin(<OtaPage />, { routerProps: { initialEntries: ['/ota?tab=firmware'] } })
-    fireEvent.click(await screen.findByRole('button', { name: '设置适用硬件' }))
+    fireEvent.click(await screen.findByRole('button', { name: '配置板卡范围' }))
     const dialog = await screen.findByRole('dialog')
-    fireEvent.mouseDown(dialog.querySelector('[role="combobox"]')!)
-    fireEvent.click(await screen.findByText('HW-2', { selector: '.ant-select-item-option-content' }))
-    fireEvent.click(screen.getByRole('button', { name: /确.*定/ }))
-    await waitFor(() => expect(submitted).toEqual({ hardware_versions: ['HW-2'] }))
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'HW-2' }))
+    fireEvent.change(screen.getByLabelText('证据编号'), { target: { value: 'COMPAT-901' } })
+    fireEvent.change(screen.getByLabelText('原因'), { target: { value: '板卡兼容测试通过' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存板卡范围' }))
+    await waitFor(() => expect(submitted).toEqual({ board_codes: ['HW-2'], evidence_ref: 'COMPAT-901', reason: '板卡兼容测试通过' }))
   })
   it('renders five tabs for an admin', async () => {
     renderAsAdmin(<OtaPage />)

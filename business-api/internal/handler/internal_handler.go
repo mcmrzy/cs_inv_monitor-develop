@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"inv-api-server/internal/model"
 	"inv-api-server/internal/repository"
 	"inv-api-server/internal/service"
 	"inv-api-server/pkg/logger"
@@ -48,10 +49,15 @@ type internalDeviceInfoRequest struct {
 	CellCount       int     `json:"cell_count"`
 	TempSensorCount int     `json:"temp_sensor_count"`
 	// V2.1 新增只读字段（096 迁移落库列，见 V2.1 文档第 7 节）
-	Phase             string `json:"phase"`
-	InverterModule    string `json:"inverter_module"`
-	HardwareVersion   string `json:"hardware_version"`
-	BootloaderVersion string `json:"bootloader_version"`
+	Phase             string     `json:"phase"`
+	InverterModule    string     `json:"inverter_module"`
+	HardwareVersion   string     `json:"hardware_version"`
+	BootloaderVersion string     `json:"bootloader_version"`
+	AuthenticatedSN   string     `json:"authenticated_sn"`
+	ReportedScope     string     `json:"reported_scope"`
+	ReportedBoardCode string     `json:"reported_board_code"`
+	ReportedBoardUID  string     `json:"reported_board_uid"`
+	ReportedAt        *time.Time `json:"reported_at"`
 }
 
 type internalDeviceDataRequest struct {
@@ -160,13 +166,14 @@ type sseNotification struct {
 }
 
 type InternalHandler struct {
-	db           internalHandlerDB
-	protocolV1   protocolV1Store
-	rdb          *redis.Client
-	otaService   *service.OTAService
-	jpushService *service.JPushService
-	notifyPrefs  *repository.NotifyPrefsRepository
-	emailService *service.EmailService
+	db               internalHandlerDB
+	hardwareRegistry *repository.HardwareRegistryRepository
+	protocolV1       protocolV1Store
+	rdb              *redis.Client
+	otaService       *service.OTAService
+	jpushService     *service.JPushService
+	notifyPrefs      *repository.NotifyPrefsRepository
+	emailService     *service.EmailService
 	// SSE multi-client broadcast: map[user_id][]sseClientEntry
 	sseClientsByUser map[int64][]sseClientEntry
 	sseClientsMu     sync.RWMutex
@@ -204,6 +211,7 @@ func NewInternalHandler(db *pgxpool.Pool, rdb *redis.Client, otaService *service
 	}
 	if db != nil {
 		h.protocolV1 = &postgresProtocolV1Store{db: db}
+		h.hardwareRegistry = repository.NewHardwareRegistryRepository(db)
 	}
 	go h.runSSEHub()
 	return h
@@ -506,9 +514,50 @@ func (h *InternalHandler) DeviceInfo(c *gin.Context) {
 		response.Error(c, 400, "sn is required")
 		return
 	}
+	if req.AuthenticatedSN != "" && req.AuthenticatedSN != req.SN {
+		if h.hardwareRegistry != nil {
+			ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+			err := h.hardwareRegistry.RecordIdentityConflict(ctx, req.AuthenticatedSN, "payload SN differs from authenticated session", "device_info payload_sn="+req.SN)
+			cancel()
+			if err != nil {
+				logger.Error("record authenticated SN conflict failed", zap.Error(err))
+				response.InternalError(c, "record identity conflict failed")
+				return
+			}
+		}
+		response.BadRequest(c, "authenticated device identity differs from payload SN")
+		return
+	}
+	if req.ReportedScope == "" {
+		req.ReportedScope = "legacy_system"
+	}
+	if req.ReportedScope != "legacy_system" && !model.HardwareTargetValid(req.ReportedScope) {
+		response.BadRequest(c, "invalid reported_scope")
+		return
+	}
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
+	reportedAt := time.Now().UTC()
+	if req.ReportedAt != nil {
+		reportedAt = req.ReportedAt.UTC()
+	}
+	boardCode := req.ReportedBoardCode
+	if req.ReportedScope == "legacy_system" {
+		boardCode = req.HardwareVersion
+	}
+	if h.hardwareRegistry == nil {
+		response.InternalError(c, "hardware observation store unavailable")
+		return
+	}
+	if err := h.hardwareRegistry.Observe(ctx, model.HardwareObservation{
+		SN: req.SN, ReportedModel: req.Model, Scope: req.ReportedScope, ReportedBoardCode: boardCode,
+		ReportedBoardUID: req.ReportedBoardUID, Source: "device_info", ReportedAt: reportedAt,
+	}); err != nil {
+		logger.Error("write device hardware observation failed", zap.String("sn", req.SN), zap.Error(err))
+		response.Error(c, 500, "write device hardware observation failed")
+		return
+	}
 
 	// 升级前基线必须在下面 upsert 之前读取：upsert 之后 devices 里已是设备本次
 	// 上报的新版本，reconcile 的「版本是否变化」判定会退化成恒假而失效。
@@ -516,14 +565,14 @@ func (h *InternalHandler) DeviceInfo(c *gin.Context) {
 
 	_, err := h.db.Exec(ctx, `
 		INSERT INTO devices (
-			sn, model, manufacturer, firmware_arm, firmware_esp, firmware_dsp, firmware_bms, device_type,
+			sn, model, reported_model, manufacturer, firmware_arm, firmware_esp, firmware_dsp, firmware_bms, device_type,
 			rated_power, rated_power_w, rated_voltage, rated_freq, battery_voltage, battery_type, cell_count, temp_sensor_count,
-			phase, inverter_module, hardware_version, bootloader_version, info_reported_at,
+			phase, inverter_module, reported_hardware_version, bootloader_version, info_reported_at,
 			user_id, status, last_online_at, created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, NOW(), 0, 1, NOW(), NOW(), NOW())
+		VALUES ($1, $2, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, NOW(), 0, 1, NOW(), NOW(), NOW())
 		ON CONFLICT (sn) DO UPDATE SET
-			model = COALESCE(NULLIF(EXCLUDED.model, ''), devices.model),
+			reported_model = COALESCE(NULLIF(EXCLUDED.reported_model, ''), devices.reported_model),
 			manufacturer = COALESCE(NULLIF(EXCLUDED.manufacturer, ''), devices.manufacturer),
 			firmware_arm = COALESCE(NULLIF(EXCLUDED.firmware_arm, ''), devices.firmware_arm),
 			firmware_esp = COALESCE(NULLIF(EXCLUDED.firmware_esp, ''), devices.firmware_esp),
@@ -544,7 +593,7 @@ func (h *InternalHandler) DeviceInfo(c *gin.Context) {
 			temp_sensor_count = CASE WHEN EXCLUDED.temp_sensor_count > 0 THEN EXCLUDED.temp_sensor_count ELSE devices.temp_sensor_count END,
 			phase = COALESCE(NULLIF(EXCLUDED.phase, ''), devices.phase),
 			inverter_module = COALESCE(NULLIF(EXCLUDED.inverter_module, ''), devices.inverter_module),
-			hardware_version = COALESCE(NULLIF(EXCLUDED.hardware_version, ''), devices.hardware_version),
+			reported_hardware_version = COALESCE(NULLIF(EXCLUDED.reported_hardware_version, ''), devices.reported_hardware_version),
 			bootloader_version = COALESCE(NULLIF(EXCLUDED.bootloader_version, ''), devices.bootloader_version),
 			info_reported_at = NOW(),
 			model_id = COALESCE(

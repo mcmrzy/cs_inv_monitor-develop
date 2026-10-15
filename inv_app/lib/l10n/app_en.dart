@@ -1,4 +1,6 @@
 const Map<String, String> en = {
+  'ota_err_trusted_authorization_required': 'Verified hardware enrollment and installation authorization are required. Contact service before upgrading locally.',
+  'ota_verification_pending': 'Firmware transfer has finished, but the installed version is unconfirmed. Reconnect to check the device before retrying.',
   'ota_err_firmware_hardware_unknown': 'Firmware hardware compatibility is missing. Delete the old cache and download compatible firmware again.',
   'ota_err_device_hardware_unknown': 'The device did not report its hardware version. Upgrade stopped because compatibility cannot be verified.',
   'ota_err_hardware_mismatch': 'Firmware is incompatible with the connected device hardware. Upgrade stopped.',
@@ -1591,7 +1593,12 @@ const Map<String, String> en = {
   'cloud_bind_fallback': 'Bind via cloud',
   'qr_bind_cloud_binding': 'Binding via cloud…',
   'qr_bind_cloud_failed': 'Cloud binding failed, try BLE',
-  'qr_bind_try_ble': 'Try Bluetooth',
+  'qr_stage_connect': 'Connect device',
+  'qr_stage_wifi': 'Wi-Fi',
+  'qr_stage_account': 'Add to my devices',
+  'qr_bind_wrong_device': 'Device SN does not match. Wi-Fi credentials were not sent.',
+  'qr_bind_wifi_stage': 'Connect Wi-Fi, then add to my devices',
+  'qr_bind_try_ble': 'Set up Wi-Fi via Bluetooth',
 
   // === Onboarding (first install / version upgrade) ===
   'onboarding_page1_title': 'See every watt from day one',

@@ -36,6 +36,18 @@ class LocalOtaHardwareException implements Exception {
   String toString() => 'Local OTA hardware validation failed: $reason';
 }
 
+class LocalOtaAuthorizationRequiredException implements Exception {
+  const LocalOtaAuthorizationRequiredException();
+  @override
+  String toString() => 'Verified hardware identity and signed install authorization required';
+}
+
+class OtaInstallationUnconfirmedException implements Exception {
+  const OtaInstallationUnconfirmedException();
+  @override
+  String toString() => 'Actual installed module version has not been confirmed';
+}
+
 /// The connected BLE device does not advertise this module for local OTA.
 class LocalOtaUnsupportedTargetException implements Exception {
   final String target;
@@ -105,6 +117,12 @@ class OtaErrorMapper {
         'missingDeviceHardware' => 'ota_err_device_hardware_unknown',
         _ => 'ota_err_hardware_mismatch',
       };
+    }
+    if (error is LocalOtaAuthorizationRequiredException) {
+      return 'ota_err_trusted_authorization_required';
+    }
+    if (error is OtaInstallationUnconfirmedException) {
+      return 'ota_verification_pending';
     }
     if (error is LocalOtaUnsupportedTargetException) {
       return 'ota_err_unsupported_target';

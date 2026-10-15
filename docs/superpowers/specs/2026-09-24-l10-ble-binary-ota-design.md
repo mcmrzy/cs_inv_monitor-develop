@@ -17,6 +17,12 @@ currently installed App, cloud OTA, Wi-Fi AP OTA, or service flashing.
 `ota.ctrl`, `ota.query`, `ota.cancel`, and `ota.status` remain JSON v2. The
 OTA data characteristic additionally accepts binary frames:
 
+The App omits unused `ota.ctrl` fields (`message_id`, `manifest_version`, and
+`model`) so a signed control message fits the ESP's 512-byte JSON buffer.
+It checks the UTF-8 encoded length before writing and fails locally when it
+would be 512 bytes or more; SHA-256, signature, security version, task ID,
+and timeout remain intact.
+
 | Byte(s) | Value |
 | --- | --- |
 | 0 | `0xB1` magic |

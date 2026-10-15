@@ -32,12 +32,12 @@ void main() {
       expect(link!.sn, validSn);
     });
 
-    test('非 csinv scheme → null', () {
+    test('HTTPS binding link shares parser', () {
       expect(
         DeepLinkService.parse(
           Uri.parse('https://jiuxiaoyw.online/bind?sn=$validSn&pin=123456'),
         ),
-        isNull,
+        isNotNull,
       );
     });
 

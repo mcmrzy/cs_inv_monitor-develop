@@ -18,7 +18,8 @@ import 'package:inv_app/l10n/app_localizations.dart';
 part 'wifi_config_sections.dart';
 
 class WifiConfigPage extends StatefulWidget {
-  const WifiConfigPage({super.key});
+  final String? expectedSn;
+  const WifiConfigPage({super.key, this.expectedSn});
 
   @override
   State<WifiConfigPage> createState() => _WifiConfigPageState();
@@ -707,7 +708,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       _bleConnecting = true;
     });
 
-    final result = await _bleProvisioningService.connectToDevice(device);
+    final result = await _bleProvisioningService.connectToDevice(device, expectedSn: widget.expectedSn);
 
     if (result.success && mounted) {
       // 连接成功，更新设备信息（包含真实SN）
@@ -775,7 +776,12 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
   }
 
   void _onBleProvisionSuccess() {
-    if (!mounted) return;
+    if (!mounted || _provisionSuccess) return;
+    if (widget.expectedSn != null) {
+      _provisionSuccess = true;
+      Navigator.of(context).pop(true);
+      return;
+    }
 
     setState(() {
       _provisioning = false;
@@ -800,6 +806,8 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         return l10n.bleWifiPasswordFailed;
       case 'ble_timeout':
         return l10n.bleTimeout;
+      case 'ble_sn_mismatch':
+        return l10n.str('qr_bind_wrong_device');
       case 'ble_device_not_connected':
         return l10n.bleDeviceNotConnected;
       case 'ble_credentials_sent':
@@ -879,7 +887,8 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
           20.w + MediaQuery.viewInsetsOf(context).bottom,
         ),
         children: [
-          _buildModeSwitch(),
+          if (widget.expectedSn == null) _buildModeSwitch(),
+          if (widget.expectedSn != null) Text(widget.expectedSn!, textAlign: TextAlign.center),
           SizedBox(height: 20.h),
           if (_provisionMode == WifiProvisionMode.softAp)
             _buildSoftApSection()
@@ -901,7 +910,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
   }
 
   void _selectProvisionMode(WifiProvisionMode mode) {
-    if (mode == _provisionMode) return;
+    if (widget.expectedSn != null || mode == _provisionMode) return;
     _cancelWifiOperation();
     if (mode == WifiProvisionMode.ble) {
       unawaited(_releaseForcedWifiRoute());

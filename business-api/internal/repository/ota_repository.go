@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -35,7 +36,8 @@ func firmwareSelectCols(alias string) string {
 		COALESCE(` + p + `main_version,''), ` + p + `release_status, ` + p + `published_at,
 		COALESCE(` + p + `rollout_percent,100), COALESCE(` + p + `rollout_type,'all'),
 		COALESCE(` + p + `rollout_targets,''), ` + p + `rollback_to_firmware_id,
-		ARRAY(SELECT h.hardware_version FROM firmware_hardware_versions h WHERE h.firmware_id=` + p + `id ORDER BY h.hardware_version)`
+		ARRAY(SELECT h.hardware_version FROM firmware_hardware_versions h WHERE h.firmware_id=` + p + `id ORDER BY h.hardware_version),
+ ARRAY(SELECT b.board_code FROM firmware_board_types b WHERE b.firmware_id=` + p + `id ORDER BY b.board_code)`
 }
 
 func scanFirmware(row pgx.Row, f *model.Firmware) error {
@@ -43,12 +45,17 @@ func scanFirmware(row pgx.Row, f *model.Firmware) error {
 		&f.FileMD5, &f.FileSHA256, &f.SecurityVersion, &f.ReleaseSignature, &f.Changelog,
 		&f.IsForce, &f.UploadedBy, &f.Status, &f.CreatedAt, &f.UpdatedAt, &f.TargetChip,
 		&f.MainVersion, &f.ReleaseStatus, &f.PublishedAt, &f.RolloutPercent, &f.RolloutType,
-		&f.RolloutTargets, &f.RollbackToFirmwareID, &f.HardwareVersions)
+		&f.RolloutTargets, &f.RollbackToFirmwareID, &f.HardwareVersions, &f.BoardCodes)
 }
 
 func (r *OTARepository) CreateFirmware(ctx context.Context, f *model.Firmware) error {
-	if _, err := model.NormalizeHardwareVersions(f.HardwareVersions); err != nil {
-		return err
+	if len(f.HardwareVersions) == 0 && len(f.BoardCodes) == 0 {
+		return model.ErrFirmwareHardwareUnspecified
+	}
+	if len(f.HardwareVersions) > 0 {
+		if _, err := model.NormalizeHardwareVersions(f.HardwareVersions); err != nil {
+			return err
+		}
 	}
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
@@ -65,7 +72,12 @@ func (r *OTARepository) CreateFirmware(ctx context.Context, f *model.Firmware) e
 	if err != nil {
 		return err
 	}
-	if err = writeFirmwareHardware(ctx, tx, f, f.HardwareVersions); err != nil {
+	if len(f.HardwareVersions) > 0 {
+		if err = writeFirmwareHardware(ctx, tx, f, f.HardwareVersions); err != nil {
+			return err
+		}
+	}
+	if err = writeFirmwareBoards(ctx, tx, f); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
@@ -198,39 +210,40 @@ func (r *OTARepository) DisableFirmware(ctx context.Context, id int64, actorID i
 
 // ListPublishedFirmwareForDevice 返回设备型号下、指定芯片（可选）且在发布范围内的已发布固件
 func (r *OTARepository) ListPublishedFirmwareForDevice(ctx context.Context, sn, target string) ([]model.Firmware, error) {
-	query := `
-		SELECT ` + firmwareSelectCols("f") + `
-		FROM firmware_versions f
-		JOIN devices d ON d.model = f.model
-		WHERE d.sn = $1 AND d.deleted_at IS NULL AND f.release_status = 'published'
-		AND EXISTS (SELECT 1 FROM firmware_hardware_versions h WHERE h.firmware_id=f.id
-		 AND h.hardware_version=upper(btrim(d.hardware_version)))
-	`
-	args := []interface{}{sn}
-	if target != "" {
-		query += " AND f.target_chip = $2"
-		args = append(args, target)
-	}
-	query += " ORDER BY f.published_at DESC NULLS LAST, f.id DESC"
-
-	rows, err := r.db.Query(ctx, query, args...)
+	rows, err := r.db.Query(ctx, `SELECT `+firmwareSelectCols("f")+` FROM firmware_versions f
+ JOIN device_hardware_registry r ON r.verified_model=f.model
+ JOIN devices d ON d.sn=r.sn AND d.deleted_at IS NULL
+ WHERE r.sn=$1 AND f.release_status='published' AND ($2='' OR f.target_chip=$2)
+ ORDER BY f.published_at DESC NULLS LAST,f.id DESC`, sn, target)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	result := make([]model.Firmware, 0)
+	var candidates []model.Firmware
 	for rows.Next() {
 		var f model.Firmware
-		if err := scanFirmware(rows, &f); err != nil {
-			continue
+		if err = scanFirmware(rows, &f); err != nil {
+			rows.Close()
+			return nil, err
 		}
-		if !firmwareEligibleForDevice(&f, sn) {
-			continue
-		}
-		result = append(result, f)
+		candidates = append(candidates, f)
 	}
-	return result, nil
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return nil, err
+	}
+	out := []model.Firmware{}
+	for _, f := range candidates {
+		if _, err = validateTrustedFirmware(ctx, r.db, sn, &f, "cloud", false); err == nil {
+			out = append(out, f)
+		} else {
+			var e *OTAEligibilityError
+			if !errors.As(err, &e) && !errors.Is(err, ErrFirmwareNotPublished) && !errors.Is(err, ErrFirmwareOutsideRollout) {
+				return nil, err
+			}
+		}
+	}
+	return out, nil
 }
 
 func (r *OTARepository) ListFirmware(ctx context.Context, modelFilter string) ([]model.Firmware, error) {
@@ -560,6 +573,9 @@ func (r *OTARepository) GetAllUpgradeHistory(ctx context.Context, sns []string, 
 
 // RetryFailedUpgrades 重试失败的升级（批量重置为pending）
 func (r *OTARepository) RetryFailedUpgrades(ctx context.Context, firmwareID int64, deviceSNs []string) error {
+	if err := r.validateRetryCandidates(ctx, firmwareID, deviceSNs, 0); err != nil {
+		return err
+	}
 	_, err := r.db.Exec(ctx, `
 		UPDATE device_upgrades SET
 		    status = 'pending',
@@ -685,16 +701,18 @@ func (r *OTARepository) GetDeviceOTAHistory(ctx context.Context, sn string, page
 
 // DeviceInfo 设备基本信息
 type DeviceInfo struct {
-	HardwareVersion string `json:"hardware_version"`
-	HardwareKnown   bool   `json:"-"`
-	SN              string `json:"sn"`
-	Model           string `json:"model"`
-	FirmwareArm     string `json:"firmware_arm"`
-	FirmwareEsp     string `json:"firmware_esp"`
-	FirmwareDSP     string `json:"firmware_dsp"`
-	FirmwareBMS     string `json:"firmware_bms"`
-	MainVersion     string `json:"main_version"`
-	IsOnline        bool   `json:"is_online"`
+	IdentityState    string `json:"identity_state"`
+	IdentityRevision int64  `json:"identity_revision"`
+	HardwareVersion  string `json:"hardware_version"`
+	HardwareKnown    bool   `json:"-"`
+	SN               string `json:"sn"`
+	Model            string `json:"model"`
+	FirmwareArm      string `json:"firmware_arm"`
+	FirmwareEsp      string `json:"firmware_esp"`
+	FirmwareDSP      string `json:"firmware_dsp"`
+	FirmwareBMS      string `json:"firmware_bms"`
+	MainVersion      string `json:"main_version"`
+	IsOnline         bool   `json:"is_online"`
 }
 
 // VersionSummary 生成合并主版本号，如 "V1.2.3.20240510-V1.2.0.20260629"
@@ -782,38 +800,14 @@ func (r *OTARepository) CheckDeviceOwnership(ctx context.Context, sn string, use
 
 // GetLatestFirmware 获取指定型号的最新固件。sn 非空时按发布范围/灰度过滤。
 func (r *OTARepository) GetLatestFirmware(ctx context.Context, sn, deviceModel, targetChip string) (*model.Firmware, error) {
-	query := `
-		SELECT ` + firmwareSelectCols("f") + `
-		FROM firmware_versions f
-		WHERE f.model = $1 AND f.release_status = 'published'
-		AND EXISTS (SELECT 1 FROM firmware_hardware_versions h JOIN devices d
-		 ON d.model=h.model AND upper(btrim(d.hardware_version))=h.hardware_version
-		 WHERE h.firmware_id=f.id AND d.sn=$2 AND d.deleted_at IS NULL)
-	`
-	args := []interface{}{deviceModel, sn}
-	if targetChip != "" {
-		query += " AND f.target_chip = $3"
-		args = append(args, targetChip)
-	}
-	query += " ORDER BY f.published_at DESC NULLS LAST, f.id DESC"
-
-	rows, err := r.db.Query(ctx, query, args...)
+	list, err := r.ListPublishedFirmwareForDevice(ctx, sn, targetChip)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var f model.Firmware
-		if err := scanFirmware(rows, &f); err != nil {
-			continue
-		}
-		if sn != "" && !firmwareEligibleForDevice(&f, sn) {
-			continue
-		}
-		return &f, nil
+	if len(list) == 0 {
+		return nil, pgx.ErrNoRows
 	}
-	return nil, pgx.ErrNoRows
+	return &list[0], nil
 }
 
 // GetLatestMainVersion 获取指定芯片的最大主版本号
@@ -948,7 +942,7 @@ func (r *OTARepository) CreateUpgradePackage(ctx context.Context, pkg *model.Upg
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	err = tx.QueryRow(ctx, `
 		INSERT INTO upgrade_packages (model, main_version, changelog, is_force, created_by, status,
@@ -1177,7 +1171,7 @@ func (r *OTARepository) RollbackToPackage(ctx context.Context, sn string, packag
 	if err != nil {
 		return 0, fmt.Errorf("begin transaction: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	// 事务内查询升级包（避免 TOCTOU 竞态）
 	var pkg model.UpgradePackage
@@ -1581,7 +1575,7 @@ func (r *OTARepository) CreateTaskFromAppTrigger(ctx context.Context, userID int
 	if err != nil {
 		return 0, fmt.Errorf("begin transaction: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	// 事务内查询设备信息（避免 TOCTOU 竞态）
 	var device DeviceInfo
@@ -1752,108 +1746,7 @@ func (r *OTARepository) CreateTaskFromAppTrigger(ctx context.Context, userID int
 
 // CreateTaskFromLocalOTA 本地 OTA 完成后记录任务并更新设备版本
 func (r *OTARepository) CreateTaskFromLocalOTA(ctx context.Context, userID int64, sn, targetChip, newVersion, mainVersion string, firmwareIDs ...int64) (int64, error) {
-	tx, err := r.db.Begin(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("begin transaction: %w", err)
-	}
-	defer tx.Rollback(ctx)
-
-	device, err := queryDeviceInfoForOTA(ctx, tx, sn, true)
-	if err != nil {
-		return 0, fmt.Errorf("get device by sn: %w", err)
-	}
-	if !device.HardwareKnown {
-		return 0, model.ErrHardwareVersionUnknown
-	}
-
-	triggeredBy := userID
-	task := &model.UpgradeTask{
-		Name:          fmt.Sprintf("本地OTA升级到 %s", newVersion),
-		TaskType:      model.TaskTypeSingle,
-		Model:         device.Model,
-		TargetVersion: newVersion,
-		Status:        model.TaskStatusCompleted,
-		TotalDevices:  1,
-		Source:        model.OTASourceLocal,
-		TriggeredBy:   &triggeredBy,
-	}
-
-	err = tx.QueryRow(ctx, `
-		INSERT INTO upgrade_tasks (name, task_type, model, target_version,
-		    status, execute_mode, rollout_percent, total_devices, created_by,
-		    source, triggered_by, notes)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-		RETURNING id, created_at, updated_at
-	`, task.Name, task.TaskType, task.Model, task.TargetVersion,
-		task.Status, model.ExecuteModeImmediate, 100, task.TotalDevices, userID,
-		task.Source, task.TriggeredBy, task.Notes).
-		Scan(&task.ID, &task.CreatedAt, &task.UpdatedAt)
-	if err != nil {
-		return 0, fmt.Errorf("insert upgrade task: %w", err)
-	}
-
-	var oldVersion string
-	switch targetChip {
-	case "arm":
-		oldVersion = device.FirmwareArm
-	case "esp":
-		oldVersion = device.FirmwareEsp
-	case "dsp":
-		oldVersion = device.FirmwareDSP
-	case "bms":
-		oldVersion = device.FirmwareBMS
-	}
-
-	// 查找 firmware_id（device_upgrades 表要求 NOT NULL）
-	var firmwareID int64
-	requestedID := int64(0)
-	if len(firmwareIDs) > 0 {
-		requestedID = firmwareIDs[0]
-	}
-	err = tx.QueryRow(ctx, `SELECT f.id FROM firmware_versions f JOIN firmware_hardware_versions h ON h.firmware_id=f.id
-	 WHERE f.model=$1 AND f.target_chip=$2 AND f.version=$3 AND h.hardware_version=$4
-	 AND ($5::bigint=0 OR f.id=$5)`, device.Model, targetChip, newVersion, model.NormalizeHardwareVersion(device.HardwareVersion), requestedID).Scan(&firmwareID)
-	if err != nil {
-		return 0, fmt.Errorf("firmware record not found for model=%s chip=%s version=%s", device.Model, targetChip, newVersion)
-	}
-	if _, err = tx.Exec(ctx, `UPDATE upgrade_tasks SET firmware_id=$2 WHERE id=$1`, task.ID, firmwareID); err != nil {
-		return 0, err
-	}
-
-	_, err = tx.Exec(ctx, `
-		INSERT INTO device_upgrades (device_sn, firmware_id, firmware_version, target_chip,
-		    old_version, status, progress, source, task_id, pushed_by, completed_at, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW(), NOW())
-	`, sn, firmwareID, newVersion, targetChip, oldVersion, model.UpgradeStatusSuccess, 100, model.OTASourceLocal, task.ID, userID)
-	if err != nil {
-		return 0, fmt.Errorf("insert device upgrade: %w", err)
-	}
-
-	updateCol := ""
-	switch targetChip {
-	case "arm":
-		updateCol = "firmware_arm"
-	case "esp":
-		updateCol = "firmware_esp"
-	case "dsp":
-		updateCol = "firmware_dsp"
-	case "bms":
-		updateCol = "firmware_bms"
-	}
-	if updateCol != "" && newVersion != "" {
-		_, err = tx.Exec(ctx, fmt.Sprintf(
-			"UPDATE devices SET %s = $2, updated_at = NOW() WHERE sn = $1",
-			updateCol,
-		), sn, newVersion)
-		if err != nil {
-			return 0, fmt.Errorf("update firmware version: %w", err)
-		}
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return 0, fmt.Errorf("commit transaction: %w", err)
-	}
-	return task.ID, nil
+	return 0, &OTAEligibilityError{"verification_pending"}
 }
 
 // GetUpgradeTask 获取升级任务详情
@@ -2091,6 +1984,9 @@ func (r *OTARepository) UpsertDeviceUpgradeWithTask(ctx context.Context, du *mod
 
 // RetryFailedUpgradesByTask 重试任务下失败的升级
 func (r *OTARepository) RetryFailedUpgradesByTask(ctx context.Context, taskID int64) error {
+	if err := r.validateRetryCandidates(ctx, 0, nil, taskID); err != nil {
+		return err
+	}
 	_, err := r.db.Exec(ctx, `
 		UPDATE device_upgrades SET
 		    status = 'pending',
@@ -2133,41 +2029,9 @@ func (r *OTARepository) GetTaskStats(ctx context.Context, tz string) (pending, r
 
 // ReportLocalOTAResult 本地OTA完成后，更新设备固件版本并记录升级历史
 func (r *OTARepository) ReportLocalOTAResult(ctx context.Context, sn string, targetChip string, newVersion string, mainVersion string) error {
-	// 1. 更新设备对应芯片的固件版本
-	var updateCol string
-	switch targetChip {
-	case "arm":
-		updateCol = "firmware_arm"
-	case "esp":
-		updateCol = "firmware_esp"
-	case "dsp":
-		updateCol = "firmware_dsp"
-	case "bms":
-		updateCol = "firmware_bms"
-	}
-	if updateCol != "" && newVersion != "" {
-		if _, err := r.db.Exec(ctx, fmt.Sprintf(
-			"UPDATE devices SET %s = $2, updated_at = NOW() WHERE sn = $1",
-			updateCol,
-		), sn, newVersion); err != nil {
-			return fmt.Errorf("update firmware version: %w", err)
-		}
-	}
-
-	// 2. 记录一条 device_upgrades 历史记录（标记为本地升级）
-	if newVersion != "" {
-		if _, err := r.db.Exec(ctx, `
-			INSERT INTO device_upgrades (device_sn, firmware_version, target_chip, old_version, status, completed_at, created_at, updated_at)
-			VALUES ($1, $2, $3, '', 'success', NOW(), NOW(), NOW())
-		`, sn, newVersion, targetChip); err != nil {
-			return fmt.Errorf("insert upgrade record: %w", err)
-		}
-	}
-
-	return nil
+	return &OTAEligibilityError{"verification_pending"}
 }
 
-// GetDevicesByFirmwareVersion 按固件版本查询正在使用该版本的设备
 func (r *OTARepository) GetDevicesByFirmwareVersion(ctx context.Context, deviceModel string, targetChip string, firmwareVersion string) ([]DeviceInfo, error) {
 	colMap := map[string]string{
 		"arm": "firmware_arm", "esp": "firmware_esp",

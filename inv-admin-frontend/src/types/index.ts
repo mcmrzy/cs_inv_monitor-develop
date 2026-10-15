@@ -44,6 +44,11 @@ export interface Device {
   model: string
   hardware_version?: string
   hardwareVersion?: string
+  verified_model?: string
+  identity_state?: string
+  identity_revision?: number
+  frozen?: boolean
+  modules?: { target_chip: string; board_code?: string; state?: string; protection_level?: string }[]
   ratedPower: number
   firmwareVersion: string
   firmware_arm?: string
@@ -61,6 +66,7 @@ export interface Firmware {
   id: string
   model: string
   hardware_versions?: string[]
+  board_codes?: string[]
   version: string
   /** @deprecated Read-only compatibility with historical API records. */
   main_version?: string
@@ -119,11 +125,36 @@ export interface DeviceFirmwareOverview {
   modules: FirmwareModuleOverview[]
 }
 
+/** 升级任务可选设备（创建任务步骤二；不可升级设备附带原因） */
+export interface OTATaskCandidate {
+  sn: string
+  model: string
+  alias?: string
+  verified_model?: string
+  identity_state?: string
+  board_code?: string
+  module_state?: string
+  protection_level?: string
+  current_version?: string
+  eligible: boolean
+  reason?: string
+}
+
+export interface OTATaskCandidateList {
+  target_chip?: string
+  firmware_id?: number
+  items: OTATaskCandidate[]
+  total: number
+  eligible_count: number
+  excluded_count: number
+}
+
 /** 设备侧可安装固件资源（published） */
 export interface FirmwareResource {
   id: number | string
   model: string
   hardware_versions?: string[]
+  board_codes?: string[]
   version: string
   main_version?: string
   target_chip: string

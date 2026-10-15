@@ -10,6 +10,9 @@ class DeviceFirmwareOverview {
     required this.modules,
     this.hardwareVersion = '',
     this.hardwareState = 'unknown',
+    this.identityState = 'unverified',
+    this.identityRevision = 0,
+    this.protectionLevel = 'registry_verified',
   });
 
   final String deviceSn;
@@ -18,6 +21,10 @@ class DeviceFirmwareOverview {
   final List<FirmwareModuleOverview> modules;
   final String hardwareVersion;
   final String hardwareState;
+  final String identityState;
+  final int identityRevision;
+  final String protectionLevel;
+  bool get hasVerifiedIdentity => identityState == 'verified' && identityRevision > 0;
   bool get hasKnownHardware =>
       hardwareState == 'known' && hardwareVersion.trim().isNotEmpty;
 
@@ -29,6 +36,9 @@ class DeviceFirmwareOverview {
       isOnline: json['is_online'] == true,
       hardwareVersion: json['hardware_version']?.toString() ?? '',
       hardwareState: json['hardware_state']?.toString() ?? 'unknown',
+      identityState: json['identity_state']?.toString() ?? 'unverified',
+      identityRevision: (json['identity_revision'] as num?)?.toInt() ?? 0,
+      protectionLevel: json['protection_level']?.toString() ?? 'registry_verified',
       modules: rawModules is List
           ? rawModules
               .whereType<Map>()
@@ -54,6 +64,10 @@ class FirmwareModuleOverview {
     this.isConnected,
     this.isEligible,
     this.compatibilityReason = '',
+    this.boardCode = '',
+    this.boardUid = '',
+    this.moduleRevision = 0,
+    this.protectionLevel = 'registry_verified',
     this.supportedChannels,
     this.changelog = '',
     this.publishedAt,
@@ -74,6 +88,10 @@ class FirmwareModuleOverview {
   final bool? isConnected;
   final bool? isEligible;
   final String compatibilityReason;
+  final String boardCode;
+  final String boardUid;
+  final int moduleRevision;
+  final String protectionLevel;
   final List<String>? supportedChannels;
   final String changelog;
   final DateTime? publishedAt;
@@ -114,6 +132,10 @@ class FirmwareModuleOverview {
       isConnected: _readOptionalBool(json, const ['connected', 'is_connected']),
       isEligible: _readOptionalBool(json, const ['eligible', 'is_eligible']),
       compatibilityReason: json['compatibility_reason']?.toString() ?? '',
+      boardCode: json['board_code']?.toString() ?? '',
+      boardUid: json['board_uid']?.toString() ?? '',
+      moduleRevision: (json['module_revision'] as num?)?.toInt() ?? 0,
+      protectionLevel: json['protection_level']?.toString() ?? 'registry_verified',
       supportedChannels: _readOptionalStringList(
         json,
         const ['supported_channels', 'channels'],
@@ -141,6 +163,7 @@ class FirmwareResource {
     this.securityVersion,
     this.releaseSignature = '',
     this.hardwareVersions = const [],
+    this.boardCodes = const [],
     this.supportedChannels,
   });
 
@@ -158,6 +181,7 @@ class FirmwareResource {
   final int? securityVersion;
   final String releaseSignature;
   final List<String> hardwareVersions;
+  final List<String> boardCodes;
   final List<String>? supportedChannels;
 
   bool get canRemoteUpgrade {
@@ -201,6 +225,9 @@ class FirmwareResource {
       releaseSignature: json['release_signature']?.toString() ?? '',
       hardwareVersions: json['hardware_versions'] is List
           ? (json['hardware_versions'] as List).whereType<String>().toList()
+          : const [],
+      boardCodes: json['board_codes'] is List
+          ? (json['board_codes'] as List).whereType<String>().toList()
           : const [],
       supportedChannels: _readOptionalStringList(
         json,

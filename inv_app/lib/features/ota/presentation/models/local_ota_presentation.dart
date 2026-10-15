@@ -31,8 +31,8 @@ enum LocalOtaHardwareCompatibility {
   mismatch,
 }
 
-/// The connected device INFO is authoritative. Only trim and case normalization
-/// are allowed: HW-1, V1 and 1 are different hardware identities.
+/// Legacy INFO comparison is a diagnostic, never installation authorization.
+/// Only trim and case normalization are allowed: HW-1, V1 and 1 remain distinct.
 LocalOtaHardwareCompatibility checkLocalOtaHardwareCompatibility({
   required List<String> firmwareHardwareVersions,
   required Map<String, dynamic> deviceInfo,

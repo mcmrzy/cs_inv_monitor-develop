@@ -3,6 +3,7 @@ export interface FirmwareUploadInput {
   model: string
   targetChip: string
   hardwareVersions: string[]
+  boardCodes?: string[]
   changelog?: string
 }
 
@@ -11,12 +12,14 @@ export interface FirmwareUploadInput {
  */
 export function buildFirmwareUploadFormData(input: FirmwareUploadInput): FormData {
   const hardwareVersions = [...new Set((input.hardwareVersions ?? []).map((v) => v.trim().toUpperCase()).filter(Boolean))]
-  if (hardwareVersions.length === 0) throw new Error('Explicit hardware compatibility is required')
+  const boardCodes = [...new Set((input.boardCodes ?? []).map(v => v.trim()).filter(Boolean))]
+  if (hardwareVersions.length === 0 && boardCodes.length === 0) throw new Error('Explicit board compatibility is required')
   const formData = new FormData()
   formData.append('file', input.file)
   formData.append('model', input.model)
   formData.append('target_chip', input.targetChip)
-  formData.append('hardware_versions', JSON.stringify(hardwareVersions))
+  if (hardwareVersions.length) formData.append('hardware_versions', JSON.stringify(hardwareVersions))
+  if (boardCodes.length) formData.append('board_codes', JSON.stringify(boardCodes))
   formData.append('changelog', input.changelog || '')
   return formData
 }

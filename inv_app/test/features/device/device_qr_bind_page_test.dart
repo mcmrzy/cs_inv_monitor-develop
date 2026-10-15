@@ -35,6 +35,8 @@ void main() {
   late MockBleDeviceSession session;
   late MockDeviceRepositoryBind mockDeviceRepo;
   late DeviceBloc deviceBloc;
+  bool wifiResult = true;
+  int wifiCalls = 0;
 
   // 16 位字母数字 SN（页面仅做长度/字符集与 INFO 对比，无需通过 parseSN 语义校验）
   const testSn = 'TESTSN1234567890';
@@ -46,6 +48,8 @@ void main() {
   });
 
   setUp(() {
+    wifiResult = true;
+    wifiCalls = 0;
     adapter = MockBleAdapter();
     manager = MockBleDeviceManager();
     bindingService = MockBleBindingService();
@@ -109,6 +113,11 @@ void main() {
         manager: manager,
         bindingService: bindingService,
         deviceRepository: mockDeviceRepo,
+        provisionWifi: (sn) async {
+          expect(sn, testSn);
+          wifiCalls++;
+          return wifiResult;
+        },
       );
 
   testWidgets('云端绑定成功 → 直接显示成功文案', (tester) async {
@@ -170,12 +179,14 @@ void main() {
     );
   });
 
-  testWidgets('云端失败后点击「尝试BLE」→ BLE 扫描绑定成功', (tester) async {
+  testWidgets('未联网扫码：INFO匹配、配网成功、原PIN云绑定成功', (tester) async {
     final l10n = await AppLocalizations.delegate.load(const Locale('zh', 'CN'));
     // 云端绑定失败
     when(
       () => mockDeviceRepo.bind(any(), any(), pin: any(named: 'pin')),
-    ).thenAnswer((_) async => const Left(NotFoundFailure('device not found')));
+    ).thenAnswer((_) async => wifiCalls == 0
+        ? const Left(NotFoundFailure('device not found'))
+        : const Right(null),);
 
     await pumpApp(tester, buildPage(), deviceBloc: deviceBloc);
 
@@ -195,13 +206,15 @@ void main() {
       ),
     ).called(1);
     verify(() => manager.connectDevice('AA:BB:CC:DD:EE:FF')).called(1);
-    verify(
+    verifyNever(
       () => bindingService.bindAfterProvision(
         macAddress: 'AA:BB:CC:DD:EE:FF',
         knownSn: testSn,
         pin: '123456',
       ),
-    ).called(1);
+    );
+    expect(wifiCalls, 1);
+    verify(() => mockDeviceRepo.bind(testSn, null, pin: '123456')).called(2);
   });
 
   testWidgets('云端失败后BLE扫描无匹配设备 → 未找到文案', (tester) async {
@@ -258,7 +271,7 @@ void main() {
     verify(() => manager.connectDevice(any())).called(1);
   });
 
-  testWidgets('云端失败后BLE匹配绑定失败 → 绑定失败文案', (tester) async {
+  testWidgets('配网完成但服务器绑定失败，不显示成功', (tester) async {
     final l10n = await AppLocalizations.delegate.load(const Locale('zh', 'CN'));
     // 云端绑定失败
     when(
@@ -279,8 +292,38 @@ void main() {
     await tester.tap(find.text(l10n.qrBindTryBle));
     await tester.pumpAndSettle();
 
-    expect(find.text(l10n.str('ble_binding_failed')), findsOneWidget);
-    expect(find.text(l10n.str('qr_bind_done')), findsOneWidget);
+    expect(find.text(l10n.str('ble_binding_success')), findsNothing);
+    expect(find.text(l10n.qrBindTryBle), findsOneWidget);
+    expect(wifiCalls, 1);
+    verify(() => mockDeviceRepo.bind(testSn, null, pin: '123456')).called(2);
+  });
+
+  testWidgets('取消配网保留扫码凭据，不再次绑定', (tester) async {
+    final l10n = await AppLocalizations.delegate.load(const Locale('zh', 'CN'));
+    wifiResult = false;
+    when(() => mockDeviceRepo.bind(any(), any(), pin: any(named: 'pin')))
+        .thenAnswer(
+            (_) async => const Left(NotFoundFailure('device not found')),);
+    await pumpApp(tester, buildPage(), deviceBloc: deviceBloc);
+    await tester.tap(find.text(l10n.qrBindTryBle));
+    await tester.pumpAndSettle();
+    expect(wifiCalls, 1);
+    verify(() => mockDeviceRepo.bind(testSn, null, pin: '123456')).called(1);
+    expect(find.text(l10n.str('ble_binding_success')), findsNothing);
+  });
+
+  testWidgets('INFO编号错误即使bound为true也不进入配网', (tester) async {
+    final l10n = await AppLocalizations.delegate.load(const Locale('zh', 'CN'));
+    when(() => mockDeviceRepo.bind(any(), any(), pin: any(named: 'pin')))
+        .thenAnswer(
+            (_) async => const Left(NotFoundFailure('device not found')),);
+    when(() => session.readInfo())
+        .thenAnswer((_) async => {'sn': 'OTHER12345678901', 'bound': true});
+    await pumpApp(tester, buildPage(), deviceBloc: deviceBloc);
+    await tester.tap(find.text(l10n.qrBindTryBle));
+    await tester.pumpAndSettle();
+    expect(wifiCalls, 0);
+    expect(find.text(l10n.str('qr_bind_not_found')), findsOneWidget);
   });
 
   testWidgets('点击「完成」返回上一页', (tester) async {

@@ -97,10 +97,10 @@ void main() {
 
     test('parseQRCode handles all formats', () {
       final sn = base15 + calculateCheckDigit(base15);
-      final r1 = parseQRCode('SN:$sn PIN:1234');
+      final r1 = parseQRCode('SN:$sn PIN:123456');
       expect(r1, isNotNull);
       expect(r1!.sn, sn);
-      expect(r1.pin, '1234');
+      expect(r1.pin, '123456');
 
       final r2 = parseQRCode('sn：$sn'); // full-width colon, lowercase
       expect(r2, isNotNull);

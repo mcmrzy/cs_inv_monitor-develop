@@ -57,10 +57,9 @@ import type { ProColumns } from '@ant-design/pro-components'
 import { ProTable, ProCard } from '@ant-design/pro-components'
 import type { UploadProps } from 'antd'
 import { otaApi, createOtaIdempotencyKey } from '@/services/otaApi'
-import { deviceApi } from '@/services/deviceApi'
 import { modelApi } from '@/services/modelApi'
 import { queryKeys } from '@/utils/queryKeys'
-import type { Firmware, FirmwarePublishRequest, FirmwareResource, DeviceUpgrade, Device, UpgradeTask } from '@/types'
+import type { Firmware, FirmwarePublishRequest, FirmwareResource, DeviceUpgrade, UpgradeTask, OTATaskCandidate } from '@/types'
 import useAuthStore from '@/stores/authStore'
 import useTranslation from '@/hooks/useTranslation'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
@@ -77,8 +76,10 @@ import DeviceFirmwareUpgradeTab from './DeviceFirmwareUpgradeTab'
 import UpgradeHistoryTab from './UpgradeHistoryTab'
 import FirmwarePublishModal from './components/FirmwarePublishModal'
 import OTAProgressCell from './components/OTAProgressCell'
-import HardwareVersionsSelect from './components/HardwareVersionsSelect'
-import { firmwareSupportsDevice } from './hardwareCompatibility'
+import BoardTypesSelect from './components/BoardTypesSelect'
+import FirmwareBoardTypesEditor from './components/FirmwareBoardTypesEditor'
+import CompatibilityWindowsModal from './components/CompatibilityWindowsModal'
+import { hardwareCompatibilityLabel } from './hardwareCompatibility'
 
 const { TextArea } = Input
 const { Dragger } = Upload
@@ -96,6 +97,7 @@ interface FirmwareFormValues {
   model: string
   targetChip: string
   hardwareVersions: string[]
+  boardCodes: string[]
   version: string
   changelog: string
 }
@@ -131,6 +133,8 @@ const RELEASE_STATUS_MAP: Record<string, { i18nKey: string; color: string }> = {
   published: { i18nKey: 'ota.statusPublished', color: 'success' },
   disabled: { i18nKey: 'ota.statusDisabled', color: 'error' },
 }
+
+const NO_CANDIDATES: OTATaskCandidate[] = []
 
 // =================== 主页面：五 Tab + 权限深链 ===================
 const OtaPage: React.FC = () => {
@@ -278,15 +282,28 @@ const UpgradeTasksTab: React.FC = () => {
     enabled: createOpen,
   })
 
-  const { data: deviceList = [], error: deviceListError, refetch: refetchDeviceList } = useQuery({
-    queryKey: ['devices', 'all'],
-    queryFn: () => deviceApi.getAll().then((r) => {
-      const d = r.data; const list = d?.data?.items ?? d?.data ?? d?.items ?? []
-      return (Array.isArray(list) ? list : []) as Device[]
+  // Candidates come from the OTA endpoint so server-side identity, board scope and
+  // migration-window checks define the list; /devices carries none of that.
+  const { data: candidateData, isLoading: candidatesLoading, error: candidateError, refetch: refetchCandidates } = useQuery({
+    queryKey: ['ota', 'task-candidates', selectedFirmwareId],
+    queryFn: () => otaApi.getTaskCandidates(selectedFirmwareId!).then((r) => {
+      const payload = r.data?.data ?? r.data ?? {}
+      return {
+        items: (Array.isArray(payload?.items) ? payload.items : []) as OTATaskCandidate[],
+        eligibleCount: Number(payload?.eligible_count ?? 0),
+        excludedCount: Number(payload?.excluded_count ?? 0),
+      }
     }),
-    enabled: createOpen,
+    enabled: createOpen && !!selectedFirmwareId,
   })
-
+  // Stable identities: the pruning effect below depends on both collections.
+  // Upgradable rows come first, otherwise an excluded-only first page reads as
+  // "no devices" even though the firmware has candidates.
+  const candidates = useMemo(() => {
+    const items = candidateData?.items ?? NO_CANDIDATES
+    return [...items].sort((a, b) => Number(b.eligible) - Number(a.eligible))
+  }, [candidateData])
+  const eligibleCandidates = useMemo(() => candidates.filter((c) => c.eligible), [candidates])
   const { data: taskDevices = [], isLoading: devicesLoading, error: taskDevicesError, refetch: refetchTaskDevices } = useQuery({
     queryKey: queryKeys.ota.taskDevices(detailTaskId ?? 0),
     queryFn: () => otaApi.getTaskDevices(detailTaskId!).then((r) => {
@@ -388,7 +405,7 @@ const UpgradeTasksTab: React.FC = () => {
 
   const handleSubmitTask = () => {
     if (selectedDeviceSns.length === 0) { message.warning(t('ota.pleaseSelectDevice')); return }
-    if (selectedDeviceSns.some((sn) => !filteredDevices.some((d) => d.sn === sn))) {
+    if (selectedDeviceSns.some((sn) => !eligibleCandidates.some((d) => d.sn === sn))) {
       message.warning(t('ota.hardwareSelectionMismatch')); return
     }
     const data: any = {
@@ -403,17 +420,17 @@ const UpgradeTasksTab: React.FC = () => {
     createMutation.mutate(data)
   }
 
-  const filteredDevices = useMemo(() => {
-    const firmware = firmwareList.find((f) => Number(f.id) === selectedFirmwareId)
-    return firmware ? deviceList.filter((d) => firmwareSupportsDevice(firmware, d)) : []
-  }, [deviceList, selectedFirmwareId, firmwareList])
   const targetModel = firmwareList.find((f) => Number(f.id) === selectedFirmwareId)?.model ?? ''
 
   // Deep links and changing the firmware cannot preserve incompatible selections.
   useEffect(() => {
     if (!selectedFirmwareId) return
-    setSelectedDeviceSns((sns) => sns.filter((sn) => filteredDevices.some((d) => d.sn === sn)))
-  }, [selectedFirmwareId, filteredDevices])
+    setSelectedDeviceSns((sns) => {
+      const kept = sns.filter((sn) => eligibleCandidates.some((d) => d.sn === sn))
+      // Returning the same array avoids a render loop while the list is loading.
+      return kept.length === sns.length ? sns : kept
+    })
+  }, [selectedFirmwareId, eligibleCandidates])
 
   const targetVersion = useMemo(() => {
     if (selectedFirmwareId) {
@@ -614,14 +631,14 @@ const UpgradeTasksTab: React.FC = () => {
     { error: tasksError, retry: refetch },
     { error: statsError, retry: refetchStats },
     { error: firmwareListError, retry: refetchFirmwareList },
-    { error: deviceListError, retry: refetchDeviceList },
+    { error: candidateError, retry: refetchCandidates },
     { error: taskDevicesError, retry: refetchTaskDevices },
   ].find((item) => item.error)
 
   const publishedFirmwareOptions = firmwareList
-    .filter((fw) => (fw.release_status || 'published') === 'published' && (fw.hardware_versions?.length ?? 0) > 0)
+    .filter((fw) => (fw.release_status || 'published') === 'published' && (fw.board_codes?.length ?? 0) > 0)
     .map((fw) => ({
-      label: `${sanitizeLegacyFirmwareLabel(fw.model) || fw.model} · ${firmwareModuleLabel(fw.target_chip, t)} · ${fw.version} · ${(fw.hardware_versions ?? []).join(', ')}`,
+      label: `${sanitizeLegacyFirmwareLabel(fw.model) || fw.model} · ${firmwareModuleLabel(fw.target_chip, t)} · ${fw.version} · ${(fw.board_codes ?? []).join(', ')}`,
       value: Number(fw.id),
     }))
 
@@ -635,7 +652,7 @@ const UpgradeTasksTab: React.FC = () => {
     enabled: rollbackOpen && !!rollbackSn,
   })
   const rollbackOptions = rollbackResources.map((fw) => ({
-    value: Number(fw.id), label: `${firmwareModuleLabel(fw.target_chip, t)} · ${fw.version} · ${(fw.hardware_versions ?? []).join(', ')}`,
+    value: Number(fw.id), label: `${firmwareModuleLabel(fw.target_chip, t)} · ${fw.version} · ${(fw.board_codes ?? []).join(', ')}`,
   }))
 
   return (
@@ -767,34 +784,51 @@ const UpgradeTasksTab: React.FC = () => {
 
         {currentStep === 1 && (
           <div>
-            <Alert type="info" showIcon message={t('ota.hardwareDeviceFilterHint', { count: deviceList.length - filteredDevices.length })} style={{ marginBottom: 12 }} />
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 12 }}
+              message={t('hw.taskScopeHint', { eligible: candidateData?.eligibleCount ?? 0, excluded: candidateData?.excludedCount ?? 0 })}
+            />
             <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>{t('ota.selectedCount', { count: selectedDeviceSns.length })}</span>
               <Checkbox
-                checked={selectedDeviceSns.length === filteredDevices.length && filteredDevices.length > 0}
-                indeterminate={selectedDeviceSns.length > 0 && selectedDeviceSns.length < filteredDevices.length}
-                onChange={(e) => setSelectedDeviceSns(e.target.checked ? filteredDevices.map((d) => d.sn) : [])}
+                checked={selectedDeviceSns.length === eligibleCandidates.length && eligibleCandidates.length > 0}
+                indeterminate={selectedDeviceSns.length > 0 && selectedDeviceSns.length < eligibleCandidates.length}
+                onChange={(e) => setSelectedDeviceSns(e.target.checked ? eligibleCandidates.map((d) => d.sn) : [])}
               >
                 {t('ota.selectAll')}
               </Checkbox>
             </div>
-            <ProTable<Device>
+            <ProTable<OTATaskCandidate>
               rowKey="sn"
               size="small"
               search={false}
+              loading={candidatesLoading}
               rowSelection={{
                 selectedRowKeys: selectedDeviceSns,
                 onChange: (keys) => setSelectedDeviceSns(keys as string[]),
+                getCheckboxProps: (record) => ({ disabled: !record.eligible }),
               }}
-              dataSource={filteredDevices}
+              dataSource={candidates}
               columns={[
                 { title: 'SN', dataIndex: 'sn', key: 'sn', width: 140 },
-                { title: t('ota.hardwareVersion'), dataIndex: 'hardware_version', key: 'hardware_version', width: 100 },
-                { title: t('ota.model'), dataIndex: 'model', key: 'model', width: 100 },
-                { title: t('ota.currentVersion'), dataIndex: 'firmwareVersion', key: 'firmwareVersion', width: 120, render: (_: any, record: Device) => record.firmwareVersion || '-' },
+                { title: t('hw.board'), dataIndex: 'board_code', key: 'board_code', width: 120, render: (_: any, record: OTATaskCandidate) => record.board_code || '--' },
+                { title: t('ota.model'), dataIndex: 'model', key: 'model', width: 90 },
+                { title: t('ota.currentVersion'), dataIndex: 'current_version', key: 'current_version', width: 110, render: (_: any, record: OTATaskCandidate) => record.current_version || '-' },
+                {
+                  title: t('hw.upgradeState'), key: 'eligible', width: 200,
+                  render: (_: any, record: OTATaskCandidate) => record.eligible
+                    ? <Tag color="success">{t('hw.eligible')}</Tag>
+                    : <Tooltip title={hardwareCompatibilityLabel(record.reason, t)}><Tag color="warning">{t('hw.excluded')}</Tag></Tooltip>,
+                },
+                {
+                  title: t('hw.excludeReason'), key: 'reason', width: 220,
+                  render: (_: any, record: OTATaskCandidate) => record.eligible ? '-' : hardwareCompatibilityLabel(record.reason, t),
+                },
               ]}
               pagination={{ pageSize: 8, size: 'small' }}
-              scroll={{ y: 350 }}
+              scroll={{ x: 900, y: 350 }}
               locale={{ emptyText: <Empty description={t('ota.noDeviceData')} /> }}
             />
           </div>
@@ -938,11 +972,12 @@ const FirmwareTab: React.FC = () => {
   const [form] = Form.useForm<FirmwareFormValues>()
   const [publishOpen, setPublishOpen] = useState(false)
   const [publishTarget, setPublishTarget] = useState<Firmware | null>(null)
-  const [hardwareTarget, setHardwareTarget] = useState<Firmware | null>(null)
-  const [hardwareValues, setHardwareValues] = useState<string[]>([])
+  const [boardTypeTarget, setBoardTypeTarget] = useState<Firmware | null>(null)
+  const [compatibilityWindowsOpen, setCompatibilityWindowsOpen] = useState(false)
   const uploadModelValue = Form.useWatch('model', form)
   const uploadModel = Array.isArray(uploadModelValue) ? uploadModelValue[0] : uploadModelValue
-  useEffect(() => { form.setFieldValue('hardwareVersions', []) }, [uploadModel, form])
+  const uploadTarget = Form.useWatch('targetChip', form)
+  useEffect(() => { form.setFieldValue('boardCodes', []) }, [uploadModel, uploadTarget, form])
 
   const [fwDevicesOpen, setFwDevicesOpen] = useState(false)
   const [fwDevicesTarget, setFwDevicesTarget] = useState<Firmware | null>(null)
@@ -1068,7 +1103,8 @@ const FirmwareTab: React.FC = () => {
         file: fileList[0].originFileObj,
         model: modelValue,
         targetChip: values.targetChip,
-        hardwareVersions: values.hardwareVersions,
+        hardwareVersions: [],
+        boardCodes: values.boardCodes,
         changelog: values.changelog,
       })
       uploadMutation.mutate(formData)
@@ -1091,15 +1127,6 @@ const FirmwareTab: React.FC = () => {
   }
 
   const firmwareData = firmwareRes?.items ?? []
-  const hardwareMutation = useMutation({
-    mutationFn: () => otaApi.updateFirmwareHardwareVersions(hardwareTarget!.id, hardwareValues),
-    onSuccess: () => {
-      setHardwareTarget(null)
-      void queryClient.invalidateQueries({ queryKey: queryKeys.ota.all })
-      message.success(t('ota.hardwareSaved'))
-    },
-    onError: (err: any) => message.error(err?.response?.data?.message || t('ota.hardwareSaveFailed')),
-  })
   const queryFailure = firmwareError
     ? { error: firmwareError, retry: refetch }
     : allFirmwareError
@@ -1110,11 +1137,15 @@ const FirmwareTab: React.FC = () => {
   const firmwareTotal = firmwareRes?.total ?? 0
 
   const columns: ProColumns<Firmware>[] = [
+    { title: t('hw.boardRange'), key: 'board_codes', width: 180,
+      render: (_, fw) => (fw as Firmware & { board_codes?: string[] }).board_codes?.length
+        ? (fw as Firmware & { board_codes: string[] }).board_codes.map(code => <Tag key={code}>{code}</Tag>)
+        : <Tag color="warning">{t('hw.rangeMissing')}</Tag> },
     { title: t('ota.model'), dataIndex: 'model', key: 'model', width: 120 },
-    { title: t('ota.hardwareVersions'), key: 'hardware_versions', width: 180,
+    { title: <Tooltip title={t('hw.legacyHint')}>{t('hw.legacyRange')}</Tooltip>, key: 'hardware_versions', width: 180,
       render: (_, fw) => fw.hardware_versions?.length
         ? fw.hardware_versions.map((v) => <Tag key={v}>{v}</Tag>)
-        : <Tag color="warning">{t('ota.hardwareRangeMissing')}</Tag> },
+        : <span>--</span> },
     {
       title: t('ota.module'), dataIndex: 'target_chip', key: 'target_chip', width: 120,
       render: (_, record: Firmware) => (
@@ -1177,11 +1208,7 @@ const FirmwareTab: React.FC = () => {
         const st = record.release_status || 'published'
         return (
           <Space size={4} wrap>
-            {isSystemAdmin && (st === 'draft' || !record.hardware_versions?.length) && (
-              <Button type="link" size="small" onClick={() => {
-                setHardwareTarget(record); setHardwareValues(record.hardware_versions ?? [])
-              }}>{t('ota.editHardwareVersions')}</Button>
-            )}
+            {isSystemAdmin && (st === 'draft' || (st === 'published' && !(record as Firmware & { board_codes?: string[] }).board_codes?.length)) && <Button type="link" size="small" onClick={() => setBoardTypeTarget(record)}>{t('hw.editBoardRange')}</Button>}
             <Tooltip title={t('ota.viewFirmwareDevices')}>
               <Button type="link" size="small" icon={<DesktopOutlined />} onClick={() => openFwDevicesModal(record)}>
                 {t('ota.viewDevices')}
@@ -1189,7 +1216,7 @@ const FirmwareTab: React.FC = () => {
             </Tooltip>
             {canControl && st !== 'published' && (
               <Button
-                disabled={!record.hardware_versions?.length}
+                disabled={!(record as Firmware & { board_codes?: string[] }).board_codes?.length}
                 type="link"
                 size="small"
                 onClick={() => {
@@ -1238,6 +1265,7 @@ const FirmwareTab: React.FC = () => {
               <Button type="primary" icon={<UploadOutlined />} onClick={() => setUploadOpen(true)}>{t('ota.uploadFirmware')}</Button>
             )}
           </Col>
+          {isSystemAdmin && <Col><Button onClick={() => setCompatibilityWindowsOpen(true)}>{t('hw.window')}</Button></Col>}
           <Col>
             <Select allowClear placeholder={t('ota.filterByModel')} style={{ width: 180 }} value={modelFilter}
               onChange={(val) => { setModelFilter(val); setHardwareFilter(undefined); setPage(1) }}
@@ -1254,7 +1282,7 @@ const FirmwareTab: React.FC = () => {
               ]} />
           </Col>
           <Col>
-            <Select allowClear placeholder={t('ota.filterByHardware')} style={{ width: 180 }} value={hardwareFilter}
+            <Select allowClear placeholder={t('hw.legacyFilter')} style={{ width: 180 }} value={hardwareFilter}
               onChange={(val) => { setHardwareFilter(val); setPage(1) }}
               options={[...new Set(allFirmwareList.filter((fw) => !modelFilter || fw.model === modelFilter)
                 .flatMap((fw) => fw.hardware_versions ?? []))].map((v) => ({ label: v, value: v }))} />
@@ -1286,16 +1314,8 @@ const FirmwareTab: React.FC = () => {
         }}
       />
 
-      <Modal title={t('ota.editHardwareVersions')} open={!!hardwareTarget} destroyOnClose
-        confirmLoading={hardwareMutation.isPending} onCancel={() => setHardwareTarget(null)}
-        okButtonProps={{ disabled: !hardwareValues.length }} onOk={() => hardwareMutation.mutate()}>
-        <Alert showIcon type="info" message={t('ota.hardwareRangeHint')} style={{ marginBottom: 16 }} />
-        <Descriptions column={1} size="small">
-          <Descriptions.Item label={t('ota.model')}>{hardwareTarget?.model}</Descriptions.Item>
-          <Descriptions.Item label={t('ota.subVersion')}>{hardwareTarget?.version}</Descriptions.Item>
-        </Descriptions>
-        <HardwareVersionsSelect model={hardwareTarget?.model} value={hardwareValues} onChange={setHardwareValues} />
-      </Modal>
+      {boardTypeTarget && <FirmwareBoardTypesEditor firmware={boardTypeTarget} onClose={() => setBoardTypeTarget(null)} />}
+      {compatibilityWindowsOpen && <CompatibilityWindowsModal open onClose={() => setCompatibilityWindowsOpen(false)} />}
 
       <Modal title={t('ota.uploadFirmwareTitle')} open={uploadOpen}
         onCancel={() => { setUploadOpen(false); form.resetFields(); setFileList([]) }}
@@ -1314,11 +1334,11 @@ const FirmwareTab: React.FC = () => {
               <Select.Option value="bms">{t('ota.bmsChip')}</Select.Option>
             </Select>
           </Form.Item>
-          <Form.Item name="hardwareVersions" label={t('ota.hardwareVersions')}
-            rules={[{ required: true, type: 'array', min: 1, message: t('ota.selectHardwareVersions') }]}>
-            <HardwareVersionsSelect model={uploadModel} />
+          <Form.Item name="boardCodes" label={t('hw.boardRange')}
+            rules={[{ required: true, type: 'array', min: 1, message: t('hw.rangeMissing') }]}>
+            <BoardTypesSelect model={uploadModel} target={uploadTarget} />
           </Form.Item>
-          <Alert type="info" showIcon message={t('ota.hardwareRangeHint')} style={{ marginBottom: 16 }} />
+          <Alert type="info" showIcon message={t('hw.rangeHint')} style={{ marginBottom: 16 }} />
           <Form.Item name="changelog" label={t('ota.changelog')}><TextArea rows={3} placeholder={t('ota.inputChangelog')} /></Form.Item>
           <Form.Item label={t('ota.firmwareFile')}>
             <Dragger {...uploadProps}>

@@ -62,17 +62,15 @@ func queryDeviceInfoForOTA(ctx context.Context, q interface {
 }, sn string, lock bool) (*DeviceInfo, error) {
 	var d DeviceInfo
 	var online bool
-	query := `
-		SELECT sn, COALESCE(model,''), COALESCE(firmware_arm,''), COALESCE(firmware_esp,''),
-		       COALESCE(firmware_dsp,''), COALESCE(firmware_bms,''), COALESCE(main_version,''), COALESCE(status,0) IN (1,2),
-		       COALESCE(hardware_version,''), EXISTS(SELECT 1 FROM device_hardware_versions h
-		        WHERE h.model=devices.model AND h.version=upper(btrim(devices.hardware_version)))
-		FROM devices WHERE sn = $1 AND deleted_at IS NULL
-	`
+	query := `SELECT d.sn,COALESCE(r.verified_model,''),COALESCE(d.firmware_arm,''),COALESCE(d.firmware_esp,''),
+ COALESCE(d.firmware_dsp,''),COALESCE(d.firmware_bms,''),COALESCE(d.main_version,''),COALESCE(d.status,0) IN (1,2),
+ COALESCE(d.hardware_version,''),COALESCE(r.identity_state,'unverified'),COALESCE(r.identity_revision,0)
+ FROM devices d LEFT JOIN device_hardware_registry r ON r.sn=d.sn WHERE d.sn=$1 AND d.deleted_at IS NULL`
 	if lock {
-		query += " FOR UPDATE"
+		query += " FOR UPDATE OF d"
 	}
-	err := q.QueryRow(ctx, query, sn).Scan(&d.SN, &d.Model, &d.FirmwareArm, &d.FirmwareEsp, &d.FirmwareDSP, &d.FirmwareBMS, &d.MainVersion, &online, &d.HardwareVersion, &d.HardwareKnown)
+	err := q.QueryRow(ctx, query, sn).Scan(&d.SN, &d.Model, &d.FirmwareArm, &d.FirmwareEsp, &d.FirmwareDSP, &d.FirmwareBMS, &d.MainVersion, &online, &d.HardwareVersion, &d.IdentityState, &d.IdentityRevision)
+	d.HardwareKnown = d.IdentityState == "verified"
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +177,7 @@ func (r *OTARepository) CreateIndependentFirmwareTasks(ctx context.Context, user
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	// 幂等：尝试读取已有请求
 	var existingPayload string
@@ -203,24 +201,13 @@ func (r *OTARepository) CreateIndependentFirmwareTasks(ctx context.Context, user
 	}
 
 	// 设备
-	var device DeviceInfo
-	err = tx.QueryRow(ctx, `
-		SELECT sn, COALESCE(model,''), COALESCE(firmware_arm,''), COALESCE(firmware_esp,''),
-		       COALESCE(firmware_dsp,''), COALESCE(firmware_bms,''), COALESCE(status,0) IN (1,2),
-		       COALESCE(hardware_version,''), EXISTS(SELECT 1 FROM device_hardware_versions h
-		        WHERE h.model=devices.model AND h.version=upper(btrim(devices.hardware_version)))
-		FROM devices WHERE sn = $1 AND deleted_at IS NULL FOR UPDATE
-	`, deviceSN).Scan(&device.SN, &device.Model, &device.FirmwareArm, &device.FirmwareEsp, &device.FirmwareDSP, &device.FirmwareBMS, &device.IsOnline, &device.HardwareVersion, &device.HardwareKnown)
+	device, err := queryDeviceInfoForOTA(ctx, tx, deviceSN, true)
 	if err != nil {
 		return nil, ErrDeviceNotFound
 	}
 	if !device.IsOnline {
 		return nil, ErrDeviceOffline
 	}
-	if !device.HardwareKnown {
-		return nil, model.ErrHardwareVersionUnknown
-	}
-
 	// 固件元数据
 	type fwInfo struct {
 		id      int64
@@ -240,14 +227,8 @@ func (r *OTARepository) CreateIndependentFirmwareTasks(ctx context.Context, user
 		if f.ReleaseStatus != model.FirmwareReleasePublished {
 			return nil, ErrFirmwareNotPublished
 		}
-		if f.Model != device.Model {
-			return nil, fmt.Errorf("firmware model mismatch: %s != %s", f.Model, device.Model)
-		}
-		if err = model.CheckFirmwareHardware(&f, device.Model, device.HardwareVersion); err != nil {
+		if _, err = validateTrustedFirmware(ctx, tx, deviceSN, &f, "cloud", true); err != nil {
 			return nil, err
-		}
-		if !firmwareEligibleForDevice(&f, deviceSN) {
-			return nil, fmt.Errorf("设备不在固件发布范围或灰度内")
 		}
 		target := strings.ToLower(strings.TrimSpace(f.TargetChip))
 		if seenTarget[target] {
@@ -454,9 +435,10 @@ func (r *OTARepository) ListUpgradeHistoryFiltered(ctx context.Context, f model.
 		       du.started_at, du.completed_at, du.created_at, du.updated_at,
 		       COALESCE(du.task_id,0), COALESCE(f.changelog,''),
 		       COALESCE((SELECT f2.id FROM firmware_versions f2
-		          WHERE f2.model=d.model AND f2.target_chip=du.target_chip
+		          WHERE f2.model=(SELECT verified_model FROM device_hardware_registry WHERE sn=du.device_sn AND identity_state='verified' AND NOT frozen) AND f2.target_chip=du.target_chip
 		            AND f2.version=du.old_version AND f2.release_status='published'
-		            AND EXISTS (SELECT 1 FROM firmware_hardware_versions h WHERE h.firmware_id=f2.id AND h.hardware_version=upper(btrim(d.hardware_version)))
+		            AND EXISTS (SELECT 1 FROM firmware_board_types h JOIN device_hardware_modules m ON m.verified_model=h.model AND m.target_chip=h.target_chip AND m.board_code=h.board_code
+ WHERE h.firmware_id=f2.id AND m.sn=du.device_sn AND m.state='verified')
 		          ORDER BY f2.id DESC LIMIT 1),0), COALESCE(du.hardware_version,'')
 		FROM device_upgrades du
 		LEFT JOIN firmware_versions f ON f.id=du.firmware_id

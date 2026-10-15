@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:app_links/app_links.dart';
+import 'package:inv_app/core/utils/sn_utils.dart';
 
 /// 解析后的绑定链接参数
 class BindLink {
@@ -22,13 +23,8 @@ class DeepLinkService {
 
   /// 纯解析（可单测）：csinv://bind?sn=xxx&pin=yyy → BindLink
   static BindLink? parse(Uri uri) {
-    if (uri.scheme != 'csinv' || uri.host != 'bind') return null;
-    final sn = uri.queryParameters['sn']?.trim().toUpperCase();
-    final pin = uri.queryParameters['pin']?.trim();
-    if (sn == null || sn.isEmpty || !RegExp(r'^[A-Za-z0-9]{16}$').hasMatch(sn)) {
-      return null;
-    }
-    return BindLink(sn: sn, pin: pin ?? '');
+    final scan = parseQRCode(uri.toString());
+    return scan == null ? null : BindLink(sn: scan.sn, pin: scan.pin ?? '');
   }
 
   /// 冷启动初始链接

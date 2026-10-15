@@ -269,10 +269,10 @@ func (h *DeviceHandler) GetDetail(c *gin.Context) {
 	}
 
 	result := map[string]interface{}{
-		"device":         device,
-		"realtime_data":  realtimeData,
-		"load_percent":   loadPercent,
-		"ota_available":  otaAvailable,
+		"device":        device,
+		"realtime_data": realtimeData,
+		"load_percent":  loadPercent,
+		"ota_available": otaAvailable,
 		"online_status": map[string]interface{}{
 			"online": online,
 		},
@@ -297,6 +297,7 @@ type CreateDeviceRequest struct {
 	Model           string   `json:"model"`
 	RatedPower      *float64 `json:"ratedPower"`
 	FirmwareVersion string   `json:"firmwareVersion"`
+	FirmwareESP     string   `json:"firmwareEsp"`
 	HardwareVersion string   `json:"hardwareVersion"`
 }
 
@@ -330,7 +331,8 @@ func (h *DeviceHandler) Create(c *gin.Context) {
 		return
 	}
 
-	if err := h.deviceService.Create(c.Request.Context(), req.SN, req.Model, req.RatedPower, req.FirmwareVersion, req.HardwareVersion); err != nil {
+	// Legacy hardwareVersion is display input, never an ESP software version or a verification action.
+	if err := h.deviceService.Create(c.Request.Context(), req.SN, req.Model, req.RatedPower, req.FirmwareVersion, req.FirmwareESP); err != nil {
 		if strings.Contains(err.Error(), "already exists") {
 			response.Error(c, 400, "device already exists")
 			return
@@ -357,6 +359,7 @@ type UpdateDeviceRequest struct {
 	ModelID         *int64   `json:"model_id"`
 	RatedPower      *float64 `json:"ratedPower"`
 	FirmwareVersion string   `json:"firmwareVersion"`
+	FirmwareESP     string   `json:"firmwareEsp"`
 	HardwareVersion string   `json:"hardwareVersion"`
 	Alias           *string  `json:"alias"`
 	Remark          *string  `json:"remark"`
@@ -409,7 +412,7 @@ func (h *DeviceHandler) Update(c *gin.Context) {
 			response.Error(c, 500, "failed to update device")
 			return
 		}
-	} else if err := h.deviceService.Update(c.Request.Context(), sn, req.Model, req.RatedPower, req.FirmwareVersion, req.HardwareVersion); err != nil {
+	} else if err := h.deviceService.Update(c.Request.Context(), sn, req.Model, req.RatedPower, req.FirmwareVersion, req.FirmwareESP); err != nil {
 		response.Error(c, 500, "failed to update device")
 		return
 	}

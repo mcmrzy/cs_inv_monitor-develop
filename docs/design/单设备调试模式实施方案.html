@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>单设备调试模式与电压电流曲线实施方案</title>
+  <style>
+    :root{color-scheme:light;--ink:#152233;--muted:#52647a;--line:#d9e2ea;--blue:#1769aa;--bg:#f5f8fb;--card:#fff;--amber:#9b5a00;--teal:#087d76}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.72 system-ui,-apple-system,"Microsoft YaHei",sans-serif}
+    header{background:linear-gradient(120deg,#12304a,#17677c);color:#fff;padding:46px max(24px,calc((100vw - 1140px)/2));}
+    h1{font-size:clamp(27px,4vw,40px);line-height:1.2;margin:0 0 16px}header p{max-width:900px;margin:7px 0;color:#dcecf3}.badge{display:inline-block;border:1px solid #a8d6dc;border-radius:99px;padding:2px 11px;font-size:12px;margin-right:8px}
+    main{max-width:1140px;margin:auto;padding:22px 20px 60px}.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:24px;margin:18px 0;box-shadow:0 3px 16px #18334d09}
+    h2{font-size:24px;margin:0 0 16px;border-bottom:1px solid var(--line);padding-bottom:10px}h3{font-size:18px;margin:24px 0 8px}h4{font-size:15px;margin:17px 0 5px}p{margin:8px 0}ul,ol{margin:8px 0;padding-left:24px}li{margin:4px 0}
+    a{color:var(--blue)}code,pre{font-family:Consolas,"SFMono-Regular",monospace;font-size:13px}code{background:#edf3f8;border-radius:4px;padding:1px 4px;overflow-wrap:anywhere}pre{white-space:pre-wrap;background:#132a3f;color:#eaf5ff;padding:16px;border-radius:8px;overflow:auto}pre code{background:none;padding:0;color:inherit}
+    .table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;min-width:680px}th,td{border-bottom:1px solid var(--line);padding:9px 10px;text-align:left;vertical-align:top}th{background:#edf5f9;color:#213c53}tr:last-child td{border-bottom:0}
+    .note{border-left:4px solid var(--blue);background:#eef6fb;padding:11px 15px;border-radius:5px;margin:14px 0}.warn{border-left-color:#d48518;background:#fff6e8}.good{border-left-color:#078b77;background:#e9f8f4}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}.mini{border:1px solid var(--line);border-radius:9px;padding:13px;background:#fbfdff}.mini strong{display:block;color:#164c70;margin-bottom:4px}.tag{font-size:12px;padding:2px 7px;border-radius:5px;white-space:nowrap}.add{background:#e5f7ee;color:#11613a}.mod{background:#e6f1ff;color:#17558b}.gate{background:#fff0d8;color:#8c5200}
+    .flow{display:flex;flex-wrap:wrap;align-items:center;gap:7px}.flow span{background:#eef6fb;border:1px solid #c8dbe8;border-radius:8px;padding:8px 11px}.flow b{color:#2d798c}
+    .toc{columns:2}.toc li{break-inside:avoid}.small{font-size:13px;color:var(--muted)}.nowrap{white-space:nowrap}
+    @media(max-width:650px){header{padding:30px 20px}.card{padding:17px}.toc{columns:1}table{font-size:13px}}
+    @media print{body{background:#fff}header{print-color-adjust:exact}.card{box-shadow:none;break-inside:avoid}a{text-decoration:none}}
+  </style>
+</head>
+<body>
+<header>
+  <span class="badge">实施方案 · 待评审</span><span class="badge">仓库调研日期：2026-09-20</span>
+  <h1>单设备调试模式与电压电流曲线</h1>
+  <p>目标：在 App 和管理后台对指定设备开启临时调试，使设备每 30 秒生成并上报一次新的运行快照；按指标选择曲线，查看 MPPT、电池、逆变、负载相关电压和电流。</p>
+  <p>范围：云端设备模式、MQTT 命令、设备固件、原始时序查询、Web 与 Flutter。本文是实施方案，尚未修改业务代码。</p>
+</header>
+<main>
+  <section class="card" id="files">
+    <h2>文件树变更清单</h2>
+    <p class="small">[A] 新增；[M] 修改。路径相对仓库根目录。固件路径是当前工作区可见的外部副本，实施前须确认它与实际固件仓的关系。迁移序号以实施时最新序号分配，现有最大号为 121，不预占具体编号。</p>
+    <div class="table-wrap"><table><thead><tr><th>状态</th><th>文件 / 模块</th><th>落地改动摘要</th></tr></thead><tbody>
+      <tr><td><span class="tag add">[A]</span></td><td><code>contracts/openapi/device-debug-v1.yaml</code></td><td>四个设备级接口、命令与状态响应、字段字典的契约。</td></tr>
+      <tr><td><span class="tag add">[A]</span></td><td><code>database/migrations/&lt;next&gt;_device_debug_sessions.up.sql</code><br><code>database/migrations/&lt;next&gt;_device_debug_sessions.down.sql</code></td><td>调试会话表、按设备的唯一活跃约束及审计所需索引；down 仅用于测试与未投产环境，线上遵循只增不改的迁移约定。</td></tr>
+      <tr><td><span class="tag mod">[M]</span></td><td><code>database/schema.sql</code></td><td>同步新基线表结构；不改变现有遥测列及既有迁移。</td></tr>
+      <tr><td><span class="tag add">[A]</span></td><td><code>business-api/internal/model/device_debug.go</code><br><code>business-api/internal/repository/device_debug_repository.go</code><br><code>business-api/internal/service/device_debug_service.go</code><br><code>business-api/internal/handler/device_debug_handler.go</code></td><td>会话状态机、权限/幂等/超时、命令调度、按设备有界读取原始样本。</td></tr>
+      <tr><td><span class="tag mod">[M]</span></td><td><code>business-api/cmd/main.go</code><br><code>business-api/internal/service/services.go</code><br><code>business-api/internal/handler/internal_handler.go</code></td><td>注册路由；复用命令通道；消费命令回执并关联调试会话。</td></tr>
+      <tr><td><span class="tag mod">[M]</span></td><td><code>device-communication/cmd/main.go</code><br><code>device-communication/internal/mqtt/client.go</code></td><td>保留现有 MQTT 下发路径；调试命令离线时明确拒绝且绝不进入延迟执行队列，并透传新参数与回执。</td></tr>
+      <tr><td><span class="tag mod">[M]</span></td><td><code>external/f28335_bootloader/external/esp32c3_l10_idf/main/app/config.h</code><br><code>.../main/telemetry/telemetry.c</code><br><code>.../main/telemetry/cmd_handler.c</code></td><td>固件默认周期与调试周期切换、设备侧到期自动恢复、重启恢复默认、命令参数校验和回执。</td></tr>
+      <tr><td><span class="tag mod">[M]</span></td><td><code>inv-admin-frontend/src/pages/device-detail/index.tsx</code><br><code>inv-admin-frontend/src/services/deviceApi.ts</code><br><code>inv-admin-frontend/src/utils/queryKeys.ts</code><br><code>inv-admin-frontend/src/locales/deviceDetail.ts</code></td><td>设备级入口、API 封装、缓存键、中英文文案。</td></tr>
+      <tr><td><span class="tag add">[A]</span></td><td><code>inv-admin-frontend/src/pages/device-detail/DebugTab.tsx</code><br><code>inv-admin-frontend/src/pages/device-detail/DebugTab.test.tsx</code></td><td>ECharts 双单位曲线、单线/多线选择、状态及关键交互测试。</td></tr>
+      <tr><td><span class="tag mod">[M]</span></td><td><code>inv_app/lib/core/router/app_router.dart</code><br><code>inv_app/lib/features/device/presentation/pages/device_realtime_page.dart</code><br><code>inv_app/lib/l10n/app_zh.dart</code><br><code>inv_app/lib/l10n/app_en.dart</code><br><code>inv_app/lib/l10n/app_localizations.dart</code></td><td>从设备实时页进入调试页；本地直连模式提示；中英文文案。</td></tr>
+      <tr><td><span class="tag add">[A]</span></td><td><code>inv_app/lib/features/device/data/device_debug_api.dart</code><br><code>inv_app/lib/features/device/presentation/pages/device_debug_page.dart</code><br><code>inv_app/lib/features/device/presentation/widgets/device_debug_chart.dart</code><br><code>inv_app/test/features/device/device_debug_test.dart</code></td><td>App 状态/样本请求、前后台生命周期、fl_chart 曲线及行为测试。</td></tr>
+      <tr><td><span class="tag add">[A]</span></td><td><code>business-api/internal/handler/device_debug_handler_test.go</code><br><code>business-api/internal/repository/device_debug_repository_test.go</code></td><td>权限、并发、超时、游标、质量标志、数据隔离的测试。</td></tr>
+    </tbody></table></div>
+  </section>
+
+  <section class="card" id="toc"><h2>目录</h2><ol class="toc"><li><a href="#findings">现状与关键发现</a></li><li><a href="#scope">目标、假设与数据语义</a></li><li><a href="#architecture">端到端架构</a></li><li><a href="#api">接口与状态机</a></li><li><a href="#process">分流程实施</a></li><li><a href="#ui">双端交互与曲线</a></li><li><a href="#checks">测试与验收</a></li><li><a href="#decisions">实施前确认项与工作量</a></li></ol></section>
+
+  <section class="card" id="findings">
+    <h2>1. 现状与关键发现</h2>
+    <div class="grid">
+      <div class="mini"><strong>现行协议</strong><code>docs/CS-L10-6K2_MQTT_上报协议设计_V2.1.md</code> 定义 <code>cs_inv/{sn}/heartbeat</code>、57 值 V2.1 快照，标称 180 秒；旧 <code>docs/MQTT接口文档.md</code> 是多主题 5 秒方案，不能直接套用于新型号。</div>
+      <div class="mini"><strong>代码与文档频率冲突</strong>当前可见的 ESP32 副本在 <code>main/app/config.h</code> 将 <code>TELEMETRY_PERIOD_MS</code> 设为 30000；<code>telemetry.c</code> 已每 30 秒发 heartbeat。仅改 App/Web 刷新不会实现“开启后才 30 秒”。须先确认生产固件实际版本。</div>
+      <div class="mini"><strong>已有数据链路</strong>设备服务解析 V1/V2 heartbeat，写 <code>device_telemetry_3min</code>、<code>device_latest_state</code> 和 Redis。表名含“3min”，实际按每条 heartbeat 写入；现有 <code>GET /devices/by-sn/:sn/telemetry</code> 会整段查询再分页，不适合调试曲线。</div>
+      <div class="mini"><strong>已有 UI 与图表库</strong>Web 设备详情的实时 Tab 每 10 秒查询最新值，已依赖 ECharts；App 实时页默认每 60 秒轮询，已依赖 fl_chart。两端可复用依赖，但应新增专用的原始样本接口。</div>
+    </div>
+    <div class="note warn"><strong>目前没有“设备级调试模式”：</strong>Web 的“全部参数（调试）”只是展开字段；Flutter 的 <code>kDebugMode</code> 是开发构建开关；固件的 <code>query_telemetry</code> 只触发一次补报。不能把这些当作本需求的启停开关。</div>
+    <p>命令链路已经存在：<code>POST /devices/by-sn/:sn/control</code> → <code>DeviceService.SendPreparedCommand</code> → Device Server 内部 HTTP → <code>cs_inv/{sn}/cmd</code> → <code>cmd/response</code>。但当前“已发送”只表示已投递，不代表设备已经切换频率；固件处理 <code>query_telemetry</code> 时也是先回 OK 再等待下一次 tick 发样本。</p>
+  </section>
+
+  <section class="card" id="scope">
+    <h2>2. 目标、假设与数据语义</h2>
+    <ul>
+      <li><strong>范围</strong>：每次仅操作路径中的一台设备 SN；App/Web 看到同一会话状态，关闭任一页面不自动停止设备调试。</li>
+      <li><strong>频率</strong>：设备侧以 30 秒周期重新读取/获取运行参数并上报 heartbeat。前端每 10 秒读取新增样本是界面刷新频率，两者不是同一概念。</li>
+      <li><strong>时长假设</strong>：每次开启默认 60 分钟，服务器与固件都设置绝对过期时间；本期只允许固定 30 秒，不开放任意高频配置。时长与并发上限可在实施前调为运营参数。</li>
+      <li><strong>权限</strong>：查看沿用设备数据归属；开关沿用 <code>devices:control</code> 加设备归属。所有操作者共享设备状态，保留操作者与来源审计。</li>
+      <li><strong>支持范围</strong>：先支持已确认 heartbeat V2.1 且可升级 ESP32 固件的型号；其他型号显示“不支持调试频率切换”，不能只开启网页计时器。</li>
+      <li><strong>历史范围</strong>：曲线默认显示当前会话最近 60 分钟，首屏最多 120～140 点；可在会话内切换 15/30/60 分钟。仅提供会话内原始采样，不把 3 分钟聚合值标成 30 秒点。</li>
+    </ul>
+    <h3>字段核对：四组曲线的真实来源</h3>
+    <div class="table-wrap"><table><thead><tr><th>图上分组</th><th>电压线</th><th>电流线</th><th>语义与可交付性</th></tr></thead><tbody>
+      <tr><td>MPPT / PV1</td><td><code>pv1_voltage</code></td><td><code>buck1_current</code></td><td>当前电流是 Buck1 电流，<strong>不等于已证实的 PV1 输入电流</strong>；PV2 可选 <code>pv2_voltage</code> + <code>buck2_current</code>。界面必须按原名标注。</td></tr>
+      <tr><td>电池</td><td><code>battery_voltage</code></td><td><code>battery_current</code></td><td>可直接交付。电流充电为正、放电为负，零值是有效数据。</td></tr>
+      <tr><td>逆变相关</td><td><code>dc_bus_voltage</code></td><td><code>inv_current</code></td><td>分别是直流母线电压和逆变电流，<strong>不是同一测点的电压电流对</strong>；只能按这两个真实名称呈现。</td></tr>
+      <tr><td>负载 / 交流输出</td><td><code>ac_output_voltage</code>（落库别名可能为 <code>ac_voltage</code>）</td><td><code>output_current</code>（落库别名可能为 <code>ac_current</code>）</td><td>已有的是设备交流输出测点，可用作负载侧参考；协议没有独立负载端传感器字段。</td></tr>
+    </tbody></table></div>
+    <div class="note warn"><strong>需求边界：</strong>若“MPPT 电流”“逆变电压”“负载电压/电流”必须是各自独立物理测点，则现有 V2.1 还缺输入电流、逆变桥电压和独立负载端数据源。实施流程 1 必须先由固件/硬件确认寄存器或传感器；有来源再按协议追加字段、迁移和解析，不允许把 Buck 电流、母线电压或交流输出值改名充数。确认前的首版仅展示上表可证实的曲线与说明。</div>
+  </section>
+
+  <section class="card" id="architecture">
+    <h2>3. 端到端架构</h2>
+    <div class="flow" aria-label="链路图"><span>Web / App 开启</span><b>→</b><span>Business API 会话状态机</span><b>→</b><span>Device Server</span><b>→</b><span>MQTT 单 SN 命令</span><b>→</b><span>ESP32 30 秒采样</span><b>→</b><span>heartbeat V2.1</span><b>→</b><span>现有解析/存储</span><b>→</b><span>调试样本 API</span><b>→</b><span>两端曲线</span></div>
+    <h3>数据与模式分离</h3>
+    <p><code>device_debug_sessions</code> 只保存调试意图与生命周期：<code>id</code>、<code>device_sn</code>、<code>request_id</code>、<code>status</code>、<code>interval_seconds</code>、<code>started_at</code>、<code>expires_at</code>、<code>stopped_at</code>、<code>requested_by</code>、<code>source</code>、<code>start_task_id</code>、<code>stop_task_id</code>、<code>last_sample_at</code>、<code>failure_reason</code>、<code>created_at/updated_at</code>。<code>(device_sn,request_id)</code> 唯一。曲线点继续写现有 <code>device_telemetry_3min</code>，首版无需复制一张遥测表。</p>
+    <p>新增按 <code>(device_sn,event_time)</code> 的有界原始查询：只投影列入白名单的时间、电压、电流、<code>quality_flags</code> 和协议版本；以 <code>session.started_at</code> 和 <code>expires_at</code> 限定范围，按时间和 <code>data_hash</code> 稳定排序，游标增量返回。不得调用现有先全量加载再分页的 <code>GetTelemetryData</code>。现有 90 天遥测保留策略仍适用；如果后续要求短期删除调试样本，再单独设计分表与留存规则。</p>
+    <h3>设备固件行为</h3>
+    <ol>
+      <li>新增设备命令 <code>set_debug_telemetry</code>；参数建议为 <code>args=[enabled,30,duration_seconds]</code>，固件当前只解析 <code>args[0]</code>，须扩展解析并校验全部参数。关闭时 <code>enabled=0</code>，设备恢复实际发布的默认周期。</li>
+      <li>设备仅在 MQTT 在线且 ARM 运行参数可用时确认启用；回执包含 <code>task_id</code>、结果、<code>effective_interval_seconds</code> 和设备侧到期时间。设备端使用单调时钟管理本次剩余时长，不因 NTP 回拨无限延长。</li>
+      <li>每周期必须取得新采样时间；不能把同一份 30 秒以上的缓存重复写成“实时点”。ARM 未应答时跳过本点并上报故障，不做过期快照补发。</li>
+      <li>固件重启、到期、云端停止、恢复出厂均回到默认周期；调试开关不持久化为永久配置。开始/停止命令幂等，重复 task 不反复重置到期时间。</li>
+      <li>在当前本地固件副本中默认常量已经是 30 秒；如果生产也如此，必须先将正常模式恢复为经确认的基线（协议文档为 180 秒），再发布支持模式切换的固件，否则开关没有效果。</li>
+    </ol>
+    <div class="note good">吞吐估算：单台设备 60 分钟调试约 120 条 heartbeat；若正常为 180 秒，同段原本约 20 条，增量约 100 条。上线前按计划并发上限压测 MQTT、Kafka、解析、数据库与 API 查询，不用单机理论值代替实测。</div>
+  </section>
+
+  <section class="card" id="api">
+    <h2>4. API 契约与状态机</h2>
+    <div class="table-wrap"><table><thead><tr><th>方法与路径</th><th>输入 / 返回</th><th>关键语义</th></tr></thead><tbody>
+      <tr><td><code>GET /api/v1/devices/by-sn/{sn}/debug-session</code></td><td>当前会话、能力、有效频率、结束时间、最后样本时间、失败原因。</td><td>设备数据权限；Web/App 共用。</td></tr>
+      <tr><td><code>POST /api/v1/devices/by-sn/{sn}/debug-session</code></td><td><code>{"duration_seconds":3600,"request_id":"UUID"}</code>；返回 <code>session_id</code>、<code>status</code>、<code>task_id</code>。</td><td>只允许在线且支持的设备；相同 <code>request_id</code> 幂等；同设备已有活动会话返回现有会话或 409。</td></tr>
+      <tr><td><code>DELETE /api/v1/devices/by-sn/{sn}/debug-session/{id}</code></td><td>返回停止中的会话；重复关闭幂等。</td><td>控制权限；离线时状态标为待确认/中断，固件 TTL 最终收敛。</td></tr>
+      <tr><td><code>GET /api/v1/devices/by-sn/{sn}/debug-samples?session_id=...&amp;after=...&amp;limit=100</code></td><td><code>{items:[{time,received_at,quality_flags,metrics:{...}}],next_cursor,...}</code></td><td>仅查询该 SN、该会话、有界时窗；<code>limit</code> 上限 200，禁止任意 SQL 字段名与任意无限时间区间。</td></tr>
+    </tbody></table></div>
+    <pre><code>设备命令建议格式（最终写入契约并由固件联调确认）
+cs_inv/{sn}/cmd  QoS 1  retain=false
+{"v":2,"t":&lt;unix秒&gt;,"task_id":"&lt;uuid&gt;","cmd":"set_debug_telemetry","args":[1,30,3600]}
+
+设备回执：cs_inv/{sn}/cmd/response
+{"task_id":"&lt;uuid&gt;","cmd":"set_debug_telemetry","result":"OK","err":0,
+ "effective_interval_seconds":30,"expires_at":&lt;unix秒&gt;}</code></pre>
+    <p class="small">现有 API 命令代码会为有 schema 的命令带 <code>v=1</code>；上例的 <code>v=2</code> 仅是目标协议草案，实施时必须让 Business API、Device Server 与固件使用同一值，不能单独改固件。<code>expires_at</code> 需要由 Device Server 透传到 MQTT 的话也要显式补齐；设备端仍以接收后的 duration 为准。</p>
+    <h3>状态转换</h3>
+    <div class="flow"><span>idle</span><b>→</b><span>starting</span><b>→</b><span>active</span><b>→</b><span>stopping</span><b>→</b><span>stopped / expired</span></div>
+    <ul>
+      <li><code>starting</code>：事务写会话并下发命令；只有收到该 task 的成功回执，且 75 秒内看到新采样，才显示 <code>active</code>。单纯 HTTP 200/MQTT 已投递不算启用成功。</li>
+      <li><code>active</code>：样本迟到超过 75 秒显示“数据中断”；允许补样本恢复。设备离线则标记 <code>interrupted</code>，不排队旧开启命令；恢复连接后须重新开启。</li>
+      <li><code>stopping</code>：收到停止成功回执后 <code>stopped</code>；失败则给出待确认状态和最终到期时间。服务端定期扫描过期会话、发送在线停止命令；设备本地 TTL 为最终兜底。</li>
+      <li>并发控制：数据库事务或按 SN 的锁保证同一时刻只有一个未结束会话；部分唯一索引约束 <code>starting/active/stopping</code>；API 重试与 App/Web 同时点击不会创建多个设备定时器。</li>
+    </ul>
+    <div class="note warn">安全要求：调试命令不能走当前普通命令“离线入 Redis 队列、稍后补发”的路径。过期后才送达会造成意外高频上报；Device Server 应对该命令离线返回明确错误，Business API 不得转为 queued。</div>
+  </section>
+
+  <section class="card" id="process">
+    <h2>5. 分流程实施</h2>
+    <h3>流程 1：协议与测点定稿</h3>
+    <p><strong>涉及文件：</strong><code>contracts/openapi/device-debug-v1.yaml</code>、固件 <code>config.h</code>、现行 MQTT 协议文档。</p>
+    <p><strong>修改说明：</strong>确认量产固件的 heartbeat 默认周期和可升级范围；逐一记录 PV 输入、Buck、母线、逆变桥和负载端的物理测点/寄存器/单位。如果硬件有独立新测点，先追加协议字段定义和版本能力位，再排迁移、解析与曲线；没有则固定使用第 2 节的真实字段名称与提示。确定 60 分钟 TTL、同时开启设备数上限和允许角色。</p>
+    <h3>流程 2：设备侧切换与回执</h3>
+    <p><strong>涉及文件：</strong>ESP32 <code>main/app/config.h</code>、<code>main/telemetry/telemetry.c</code>、<code>main/telemetry/cmd_handler.c</code>；如有新增物理量，再涉及 ARM 寄存器读取与 V2 解析器。</p>
+    <p><strong>修改说明：</strong>把默认频率与调试频率分开；解析三参数命令、执行幂等切换、单调 TTL 与断电恢复；按 30 秒新鲜运行参数发送 heartbeat，保留既有告警与 OTA 优先级。固件版本/能力返回是否支持此命令，避免旧设备误显示开关。</p>
+    <h3>流程 3：后端会话、存储与样本接口</h3>
+    <p><strong>涉及文件：</strong>上表迁移、<code>database/schema.sql</code>、Business API 的 model/repository/service/handler、<code>business-api/cmd/main.go</code>、Device Server 命令路由/MQTT 通道。</p>
+    <p><strong>修改说明：</strong>新增设备级状态机和受保护路由；复用命令审计表并关联 task；在回执消费处推进会话；会话协调任务仅对活动 SN 查询最新入库 heartbeat，确认首次新样本、更新 <code>last_sample_at</code> 并处理到期/中断。新样本接口直接读 <code>device_telemetry_3min</code> 的类型列，严格白名单、时间窗、游标、查询超时；按 <code>quality_flags</code> 标示无效/乱序点，不以 0 替代 null。对确有新测点的型号，新增只增迁移并同步 <code>telemetry_field_catalog</code> 与型号能力。</p>
+    <h3>流程 4：管理后台</h3>
+    <p><strong>涉及文件：</strong><code>device-detail/index.tsx</code>、新增 <code>DebugTab.tsx</code>、<code>deviceApi.ts</code>、<code>queryKeys.ts</code>、<code>locales/deviceDetail.ts</code>。</p>
+    <p><strong>修改说明：</strong>在设备详情新增“设备调试”Tab，展示设备 SN、模式状态、剩余时间、实际最新样本时间、启停按钮及字段来源提示；ECharts 分电压 V / 电流 A 两个纵轴，按量测分组勾选曲线。隐藏浏览器页面时停止数据轮询，回来先查服务端状态和增量点；不因关 Tab 自动关闭设备模式。</p>
+    <h3>流程 5：Flutter App</h3>
+    <p><strong>涉及文件：</strong><code>device_realtime_page.dart</code>、<code>app_router.dart</code>、新增 <code>device_debug_api.dart</code> / <code>device_debug_page.dart</code> / <code>device_debug_chart.dart</code>、三处 l10n 文件。</p>
+    <p><strong>修改说明：</strong>从单台设备实时页进入调试页，状态与 Web 一致；使用 fl_chart 绘图、Chip 多选曲线、时间窗选择。App 退后台暂停拉取，回前台按游标补点；网络断开保留已见曲线并标记中断。当前 App 存在局域网直连模式，该页面应明确“云端调试需要设备在线”，不把本地 3 秒轮询误写成云端 30 秒上报。</p>
+    <h3>流程 6：端到端联调</h3>
+    <p><strong>涉及文件：</strong>对应 Go、Web、Flutter 测试文件及固件主仓测试。</p>
+    <p><strong>修改说明：</strong>先用模拟器覆盖成功/拒绝/超时/重复回执，再用一台可升级设备核对 30 秒真实采样、双端曲线、停止后的默认周期。最后测试多台设备隔离与预定并发上限。</p>
+  </section>
+
+  <section class="card" id="ui">
+    <h2>6. Web 与 App 的共同交互规格</h2>
+    <div class="grid">
+      <div class="mini"><strong>顶部控制区</strong>显示“未开启 / 正在开启 / 已开启 / 数据中断 / 正在关闭 / 已过期”，设备 SN、30 秒采样、自动关闭倒计时、最新样本本地时间。启停按钮带请求中禁用与错误提示。</div>
+      <div class="mini"><strong>曲线选择</strong>四组入口；每条线可单独勾选与取消，支持“全部清除”，默认选电池电压/电流与交流输出电压/电流。MPPT1/2 分别命名，Unsupported 的线不可选并说明来源。</div>
+      <div class="mini"><strong>图表尺度</strong>同一时间轴，V/A 双纵轴或手机上电压、电流上下两张同步图；单位写在轴标题和悬浮提示中。电池负电流可过零；横轴按用户时区展示，数据以 UTC 存储。</div>
+      <div class="mini"><strong>数据质量</strong>缺值断线、不连零点；质量标志异常和超过 75 秒间隔显示缺口/提示；按 <code>event_time</code> 排序、按游标去重，不平滑跨过断档。</div>
+    </div>
+    <p>首屏获取当前会话最近 60 分钟原始点，之后每 10 秒增量拉取；每次请求都校验会话 id 与 SN。单页只保存约 200～240 点的环形缓冲，长时间会话通过服务端再次查询指定窗口。启停结果可在另一个客户端 10 秒内同步可见。</p>
+  </section>
+
+  <section class="card" id="checks">
+    <h2>7. 测试与验收</h2>
+    <div class="table-wrap"><table><thead><tr><th>顺序</th><th>验证点</th><th>通过标准</th></tr></thead><tbody>
+      <tr><td>1</td><td>协议/固件单测</td><td>未开启按生产默认周期；开启一台后只该 SN 约每 30 秒一条<strong>新</strong> heartbeat；到期/关闭/重启恢复默认；非法参数、重复命令、无 ARM 数据均有确定结果。</td></tr>
+      <tr><td>2</td><td>后端权限与并发</td><td>无归属或无 control 权限为 403；离线开启明确失败且不会延后执行；两个客户端同时开启仅一个会话；停止和重试幂等；不同 SN 互不影响。</td></tr>
+      <tr><td>3</td><td>原始时序</td><td>返回顺序、单位、负电流、零值、null、乱序/重复、时区与游标均正确；长查询被限制；未暴露 raw envelope；30 秒采样没有被 3 分钟聚合。</td></tr>
+      <tr><td>4</td><td>Web/App 行为</td><td>双端看到相同状态；能独立开关每一条可用曲线；关闭页面后设备模式由 TTL 维持；重新进入可恢复曲线；背景/离线显示明确。</td></tr>
+      <tr><td>5</td><td>实机与负载</td><td>用设备时间戳核对连续样本间隔目标 30 秒，允许网络抖动；停止后实测恢复默认周期。并发上限下消息摄入、数据库写入、样本接口延迟满足上线目标，实际目标值以压测记录定稿。</td></tr>
+    </tbody></table></div>
+    <h3>执行命令（按仓库现有工具）</h3>
+    <pre><code># 后端：从仓库根目录执行
+make build-go
+make test-go
+make vet-go
+
+# Web：涉及前端时执行
+make type-check
+make lint-web
+cd inv-admin-frontend &amp;&amp; npm run test:run
+
+# Flutter：涉及 App 时执行
+make analyze-app
+make test-app
+
+# 固件：在已确认的 ESP-IDF 主仓/工具链中执行
+idf.py build</code></pre>
+    <p class="small">上述命令是实施后的验证清单，不代表本方案编写时已运行。实机验收需要可升级的测试设备、MQTT/数据库测试环境和采样日志。</p>
+  </section>
+
+  <section class="card" id="decisions">
+    <h2>8. 实施前确认项、交付顺序与工作量</h2>
+    <div class="note warn"><strong>必须确认的三件事：</strong>① 生产 ESP32 固件的默认上报频率究竟是协议中的 180 秒还是本地副本的 30 秒；② MPPT 输入、逆变桥、独立负载端是否存在真实测点，以及地址与单位；③ 允许开启调试的角色、单次时长和并发设备上限。确认后再冻结接口与固件协议。</div>
+    <p><strong>建议交付顺序：</strong>协议/测点清单 → 固件开关及自动到期 → 服务端会话与有界样本 API → Web 调试页 → App 调试页 → 实机与并发联调。若新增真实测点，协议和数据库解析工作插入在固件与 API 之间。</p>
+    <p><strong>粗估：</strong>在不新增硬件测点、可直接修改并构建固件的前提下，后端与数据接口 3～5 人日，固件 2～4 人日，Web 2～3 人日，App 2～3 人日，测试/实机联调 2～3 人日，总计约 11～18 人日；真实测点扩展、固件仓整合和生产环境部署另计。估算以协议和设备能力确认后重算。</p>
+    <p><strong>本方案的文件级落地摘要：</strong>契约定义唯一语义；迁移保存设备会话；Business API 负责权限、状态、样本；Device Server 保证调试命令即时性；固件负责真正的 30 秒采样与超时恢复；Web/App 分别通过已有 ECharts / fl_chart 实现可选曲线，统一从服务端读取模式和采样。</p>
+  </section>
+  <footer class="small">依据：仓库内协议文档、Go 数据链路、数据库 schema、Web / Flutter 现有页面与当前工作区可见固件副本。方案中的新增命令/API 为建议契约，尚未实现。</footer>
+</main>
+</body>
+</html>

@@ -34,6 +34,7 @@ type Client struct {
 	onStatusChange func(sn string, online bool)
 	onCmdResult    func(sn string, payload []byte)
 	onAlarm        func(sn string, payload []byte)
+	onBindingQuery func(sn string, payload []byte) bool
 }
 
 // DeviceStateUpdater abstracts the device state manager for the MQTT layer.
@@ -293,7 +294,7 @@ func (h *Hub) GetCmdChan() chan *DeviceCommand {
 
 func (h *Hub) GetStats() MQTTStats {
 	h.stats.OnlineClients = len(h.GetOnlineDeviceSNs())
-	
+
 	// Create a copy with loaded atomic values for safe JSON serialization
 	return MQTTStats{
 		DataReceived:  h.stats.DataReceived.Load(),
@@ -407,6 +408,9 @@ func (c *Client) Connect(ctx context.Context) error {
 			OnPublishReceived: []func(paho.PublishReceived) (bool, error){
 				func(pr paho.PublishReceived) (bool, error) {
 					topic := pr.Packet.Topic
+					if c.dispatchBinding(topic, pr.Packet.Payload) {
+						return true, nil
+					}
 					sn := extractSN(topic)
 
 					// Debug: log received MQTT messages

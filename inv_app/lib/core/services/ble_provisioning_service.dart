@@ -330,8 +330,9 @@ class BleProvisioningService {
 
   /// 连接到BLE设备
   Future<BleProvisioningResult> connectToDevice(
-    BleDeviceInfo deviceInfo,
-  ) async {
+    BleDeviceInfo deviceInfo, {
+    String? expectedSn,
+  }) async {
     // 先停止扫描（不恢复直连：配网连接即将占用设备）
     _stopScanInternal();
 
@@ -367,6 +368,11 @@ class BleProvisioningService {
 
       // 读取设备信息
       final deviceInfoResult = await _readDeviceInfo(targetService);
+      if (expectedSn != null && deviceInfoResult.sn.trim() != expectedSn) {
+        await disconnectFromDevice();
+        _emitStatus(BleProvisioningStatus.error);
+        return BleProvisioningResult(success: false, message: 'ble_sn_mismatch');
+      }
 
       _emitStatus(BleProvisioningStatus.subscribingNotifications);
 

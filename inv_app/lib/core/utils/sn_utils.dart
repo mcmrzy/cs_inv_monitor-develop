@@ -357,32 +357,39 @@ class QRScanResult {
   const QRScanResult({required this.sn, this.pin});
 }
 
+/// One parser for camera scans and cold/hot application links.
+/// PIN is optional for old labels; if supplied it must be six decimal digits.
 QRScanResult? parseQRCode(String raw) {
-  final trimmed = raw.trim();
-
-  final r1 = RegExp(
-    r'^SN\s*[:：]\s*([A-Za-z0-9]{16})(?:\s+PIN\s*[:：]\s*([A-Za-z0-9]+))?\s*$',
-    caseSensitive: false,
-  );
-  final m = r1.firstMatch(trimmed);
-  if (m != null) {
-    return QRScanResult(sn: m.group(1)!.toUpperCase(), pin: m.group(2));
+  final value = raw.trim();
+  QRScanResult? validated(String? sn, String? pin) {
+    if (sn == null || !RegExp(r'^[A-Za-z0-9]{16}$').hasMatch(sn)) return null;
+    if (pin != null && !RegExp(r'^[0-9]{6}$').hasMatch(pin)) return null;
+    return QRScanResult(sn: sn.toUpperCase(), pin: pin);
   }
 
-  final r2 = RegExp(r'^([A-Za-z0-9]{16})$');
-  if (r2.hasMatch(trimmed)) {
-    return QRScanResult(sn: trimmed.toUpperCase());
+  final label = RegExp(
+          r'^SN\s*[:：]\s*([A-Za-z0-9]{16})(?:\s+PIN\s*[:：]\s*(\S+))?\s*$',
+          caseSensitive: false,)
+      .firstMatch(value);
+  if (label != null) return validated(label.group(1), label.group(2));
+  if (RegExp(r'^[A-Za-z0-9]{16}$').hasMatch(value)) {
+    return validated(value, null);
   }
-
-  // 智能链接：https://<host>/bind?sn=xxx&pin=yyy（host 不做白名单限制，仅校验路径 + SN 格式）
-  final uri = Uri.tryParse(trimmed);
-  if (uri != null && uri.hasScheme && uri.path == '/bind') {
-    final sn = uri.queryParameters['sn'];
-    final pin = uri.queryParameters['pin'];
-    if (sn != null && RegExp(r'^[A-Za-z0-9]{16}$').hasMatch(sn)) {
-      return QRScanResult(sn: sn.toUpperCase(), pin: pin);
-    }
+  final uri = Uri.tryParse(value);
+  if (uri == null || uri.userInfo.isNotEmpty || uri.fragment.isNotEmpty) {
+    return null;
   }
-
-  return null;
+  final isApp = uri.scheme == 'csinv' &&
+      uri.host == 'bind' &&
+      uri.path.isEmpty &&
+      !uri.hasPort;
+  final isWeb =
+      uri.scheme == 'https' && uri.host.isNotEmpty && uri.path == '/bind';
+  if (!isApp && !isWeb) return null;
+  final args = uri.queryParametersAll;
+  if (args['sn']?.length != 1 ||
+      (args.containsKey('pin') && args['pin']!.length != 1)) {
+    return null;
+  }
+  return validated(args['sn']!.single, args['pin']?.single);
 }
