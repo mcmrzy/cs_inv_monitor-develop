@@ -365,7 +365,7 @@ func (s *OTAService) SendUpgradeCommand(ctx context.Context, du *model.DeviceUpg
 	}
 
 	if s.repo != nil {
-		claimed, err := s.repo.ClaimUpgradeDelivery(ctx, du.ID, du.DeviceSN)
+		claimed, err := s.repo.ClaimUpgradeDelivery(ctx, du.ID, du.DeviceSN, du.RetryCount)
 		if err != nil {
 			logger.Error("claim OTA delivery failed", zap.String("sn", du.DeviceSN), zap.Error(err))
 		}
@@ -379,9 +379,9 @@ func (s *OTAService) SendUpgradeCommand(ctx context.Context, du *model.DeviceUpg
 		"t":       time.Now().Unix(),
 		"command": "start",
 		"action":  "start",
-		// task_id is the stable device_upgrades record identifier. Devices must
-		// echo it in cmd_ack/status so concurrent chip upgrades cannot cross-update.
-		"task_id":          strconv.FormatInt(du.ID, 10),
+		// A manual retry is a new device execution; redelivery of that attempt
+		// keeps its token so the device's replay protection remains effective.
+		"task_id":          model.OTACommandTaskID(du.ID, du.RetryCount),
 		"target":           fw.TargetChip,
 		"url":              downloadURL,
 		"version":          fw.Version,

@@ -37,7 +37,7 @@ func (r *OTARepository) ListPendingDeliveryDevices(ctx context.Context) ([]strin
 // ClaimUpgradeDelivery serializes attempts for the same device and throttles
 // unacknowledged commands. Keep the same upgrade ID on every attempt. Do not
 // skip a locked head: that could dispatch the following module concurrently.
-func (r *OTARepository) ClaimUpgradeDelivery(ctx context.Context, id int64, sn string) (bool, error) {
+func (r *OTARepository) ClaimUpgradeDelivery(ctx context.Context, id int64, sn string, retryCount int) (bool, error) {
 	var claimed bool
 	err := r.db.QueryRow(ctx, `WITH head AS (
  SELECT du.id, du.task_id, du.last_dispatched_at IS NULL AS first_delivery
@@ -48,6 +48,7 @@ func (r *OTARepository) ClaimUpgradeDelivery(ctx context.Context, id int64, sn s
  UPDATE device_upgrades du SET last_dispatched_at = NOW()
  WHERE du.id = $1 AND du.id = (SELECT id FROM head)
    AND du.status = 'pending'
+   AND COALESCE(du.retry_count, 0) = $3
    AND (du.last_dispatched_at IS NULL OR du.last_dispatched_at < NOW() - INTERVAL '1 minute')
    AND EXISTS (SELECT 1 FROM devices d WHERE d.sn = $2 AND d.status IN (1,2) AND d.deleted_at IS NULL)
  RETURNING du.id
@@ -56,6 +57,6 @@ func (r *OTARepository) ClaimUpgradeDelivery(ctx context.Context, id int64, sn s
  WHERE id = (SELECT task_id FROM head WHERE first_delivery)
    AND EXISTS (SELECT 1 FROM delivered)
 )
-SELECT EXISTS (SELECT 1 FROM delivered)`, id, sn).Scan(&claimed)
+SELECT EXISTS (SELECT 1 FROM delivered)`, id, sn, retryCount).Scan(&claimed)
 	return claimed, err
 }

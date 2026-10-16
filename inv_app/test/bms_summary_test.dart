@@ -45,6 +45,17 @@ Map<String, dynamic> summaryFixture() => {
     };
 
 void main() {
+  test('server expiry preserves reported BMS link and rejects stale readings', () {
+    final summary = BmsSummary.fromJson({
+      ...summaryFixture(),
+      'bms_online': 0,
+      'reported_bms_online': 1,
+      'soc': null,
+    });
+    expect(summary.online, isTrue);
+    expect(summary.onlineAt(DateTime.utc(2026, 10, 8, 0, 5, 31)), isFalse);
+    expect(summary.soc, isNull);
+  });
   test('unsupported layout and missing essential live metadata are unknown',
       () {
     for (final override in [

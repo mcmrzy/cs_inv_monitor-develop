@@ -102,10 +102,13 @@ class FirmwareModuleOverview {
 
   bool get canRemoteUpgrade {
     if (compatibilityReason.isNotEmpty) return false;
-    if (!updateAvailable || latestFirmwareId <= 0 || isUnreported) return false;
-    if (isSupported == false || isConnected == false || isEligible == false) {
+    if (!updateAvailable || latestFirmwareId <= 0) return false;
+    if (isSupported == false || isEligible == false) {
       return false;
     }
+    // The server can authorize a published target before its current version
+    // has been reported. Its connected field also derives from that version.
+    if (isEligible != true && (isUnreported || isConnected == false)) return false;
     final channels = supportedChannels;
     if (channels != null &&
         !channels.any((channel) =>
@@ -115,7 +118,7 @@ class FirmwareModuleOverview {
     final normalizedTarget = target.trim().toLowerCase();
     if (normalizedTarget == 'bms' ||
         !const {'esp', 'arm', 'dsp', 'bms'}.contains(normalizedTarget)) {
-      return isSupported == true && isConnected == true && isEligible == true;
+      return isSupported == true && isEligible == true;
     }
     return true;
   }
@@ -185,7 +188,8 @@ class FirmwareResource {
   final List<String>? supportedChannels;
 
   bool get canRemoteUpgrade {
-    if (!hardwareVersions.any((value) => value.trim().isNotEmpty)) return false;
+    // Resources are scoped by the server to the real device model and rollout.
+    // Hardware metadata is optional for ordinary remote upgrades.
     final target = targetChip.trim().toLowerCase();
     if (!const {'esp', 'arm', 'dsp', 'bms'}.contains(target)) return false;
     final channels = supportedChannels;

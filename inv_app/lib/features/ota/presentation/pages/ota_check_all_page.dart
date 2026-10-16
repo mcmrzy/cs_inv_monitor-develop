@@ -167,27 +167,21 @@ class _OtaCheckAllPageState extends State<OtaCheckAllPage> {
                     currentVersion: m.currentVersion,
                     latestVersion: m.latestVersion,
                     latestFirmwareId: m.latestFirmwareId,
-                    compatibilityReason: overview.hasKnownHardware
-                        ? m.compatibilityReason
-                        : 'hardware_version_unknown',
-                    taskStatus: !overview.hasKnownHardware ||
-                            m.compatibilityReason.isNotEmpty
+                    compatibilityReason: m.compatibilityReason,
+                    taskStatus: m.compatibilityReason.isNotEmpty
                         ? 'blocked'
-                        : m.isUnreported
-                            ? 'skipped'
-                            : m.canRemoteUpgrade
-                                ? 'updating'
+                        : m.canRemoteUpgrade
+                            ? 'updating'
+                            : m.isUnreported
+                                ? 'skipped'
                                 : 'success',
                   ),),);
-            final hasUpdate =
-                overview.hasKnownHardware &&
-                overview.modules.any((m) => m.canRemoteUpgrade);
+            final hasUpdate = overview.modules.any((m) => m.canRemoteUpgrade);
             _mark(
               entry,
               hasUpdate
                   ? _CheckResult.updating
-                  : !overview.hasKnownHardware ||
-                          overview.modules.any((m) => m.compatibilityReason.isNotEmpty)
+                  : overview.modules.any((m) => m.compatibilityReason.isNotEmpty)
                       ? _CheckResult.blocked
                       : _CheckResult.upToDate,
             );

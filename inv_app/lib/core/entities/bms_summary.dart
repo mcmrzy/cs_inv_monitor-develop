@@ -22,7 +22,7 @@ class BmsSummary extends Equatable {
 
   BmsSummary.fromJson(Map<String, dynamic> json)
       : layout = _int(json['layout']),
-        bmsOnline = _int(json['bms_online']),
+        bmsOnline = _int(json['reported_bms_online']) ?? _int(json['bms_online']),
         batteryCount = _int(json['battery_count']),
         voltage = _double(json['voltage']),
         current = _double(json['current']),
