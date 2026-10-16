@@ -230,6 +230,28 @@ void main() {
     }
   });
 
+  testWidgets('invalid SOC is unavailable while real zero remains a reading',
+      (tester) async {
+    for (final value in [-0.1, 100.1]) {
+      await surface(tester, {...fixture(), 'soc': value});
+      expect(find.text('${value.toStringAsFixed(1)} %'), findsNothing);
+      expect(find.text('51.24 V'), findsOneWidget);
+      expect(find.bySemanticsLabel('SOC --'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    }
+    await surface(tester, {...fixture(), 'soc': 0, 'current': 0});
+    expect(find.text('0.0 %'), findsOneWidget);
+    expect(find.text('0.00 A'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('expired overview hides live battery count with other readings',
+      (tester) async {
+    await surface(tester, fixture(expired: true));
+    expect(find.text('Battery count: 2'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('missing and reserved operating state never imply no activity',
       (tester) async {
     for (final word in [null, 0x20C8]) {
@@ -493,7 +515,8 @@ void main() {
         await tester.runAsync(() async {
           final font = FontLoader('Roboto')
             ..addFont(
-                File(previewFont).readAsBytes().then(ByteData.sublistView),);
+              File(previewFont).readAsBytes().then(ByteData.sublistView),
+            );
           await font.load();
           final icons = FontLoader('MaterialIcons')
             ..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'));
@@ -501,11 +524,14 @@ void main() {
         });
       }
       await pumpMinimalApp(
-          tester,
-          RepaintBoundary(
-              key: boundary, child: const DeviceStoragePage(sn: 'SN'),),
-          locale: Locale(language),
-          theme: ThemeData.dark(useMaterial3: true),);
+        tester,
+        RepaintBoundary(
+          key: boundary,
+          child: const DeviceStoragePage(sn: 'SN'),
+        ),
+        locale: Locale(language),
+        theme: ThemeData.dark(useMaterial3: true),
+      );
       expect(find.text('51.20 V'), findsOneWidget);
       expect(find.text('-614 W'), findsOneWidget);
       expect(tester.takeException(), isNull);

@@ -102,7 +102,7 @@ func TestFirmwareModuleOverview(t *testing.T) {
 	assert.Equal(t, "fix", ov.Changelog)
 }
 
-func TestFirmwareModuleOverviewFailsClosedWhenOfflineOrUnreported(t *testing.T) {
+func TestFirmwareModuleOverviewRequiresOnlineButNotCurrentVersion(t *testing.T) {
 	fw := &model.Firmware{ID: 9, Version: "1.1.0"}
 	offline := FirmwareModuleOverview("arm", "1.0.0", false, fw)
 	assert.True(t, offline.Supported)
@@ -112,7 +112,10 @@ func TestFirmwareModuleOverviewFailsClosedWhenOfflineOrUnreported(t *testing.T) 
 	unreported := FirmwareModuleOverview("bms", "", true, fw)
 	assert.True(t, unreported.Supported)
 	assert.False(t, unreported.Connected)
-	assert.False(t, unreported.Eligible)
+	assert.True(t, unreported.Eligible)
+	assert.Empty(t, unreported.CurrentVersion)
+	assert.Equal(t, "unreported", unreported.VersionState)
+	assert.True(t, unreported.UpdateAvailable)
 }
 
 func TestFirmwareSupportedChannels(t *testing.T) {

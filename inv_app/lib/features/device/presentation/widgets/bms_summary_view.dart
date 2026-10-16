@@ -9,6 +9,7 @@ import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 import 'bms_summary_components.dart';
+import 'bms_battery_visual.dart';
 
 class BmsStorageTabs extends StatelessWidget {
   final int selected;
@@ -108,6 +109,9 @@ class _BmsSummaryViewState extends State<BmsSummaryView>
   DateTime get now => widget.clock?.call() ?? DateTime.now();
   bool? get online => b.onlineAt(now);
   bool get live => online == true;
+  double? get liveSoc => live && b.soc != null && b.soc! >= 0 && b.soc! <= 100
+      ? b.soc
+      : null;
   Color get primary => AppColor.primary(context);
   Color get green => Theme.of(context).brightness == Brightness.dark
       ? const Color(0xFF72CBB0)
@@ -391,96 +395,116 @@ class _BmsSummaryViewState extends State<BmsSummaryView>
         ),
       );
 
+  Widget _overviewHero() => Container(
+        padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: Theme.of(context).brightness == Brightness.dark
+                ? const [Color(0xFF20352F), Color(0xFF182423)]
+                : const [Color(0xFFF0F7F3), Color(0xFFE6F0EC)],
+          ),
+          border: Border.all(color: green.withValues(alpha: .1)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(children: [
+              Expanded(
+                  child: Text(t('storage_bms_soc'),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: AppColor.textSecondary(context),
+                      ),),),
+              provisional(),
+            ],),
+            LayoutBuilder(builder: (context, constraints) {
+              final large = MediaQuery.textScalerOf(context).scale(14) > 20;
+              final readings = Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  BmsMetric(
+                      label: t('storage_pack_voltage'),
+                      value: number(b.voltage, 'V', 2),),
+                  const SizedBox(height: 28),
+                  BmsMetric(
+                    label: t('storage_current'),
+                    value: number(b.current, 'A', 2),
+                    detail: !live || b.current == null || b.current == 0
+                        ? null
+                        : t(
+                            b.current! < 0
+                                ? 'storage_bms_negative_current'
+                                : 'storage_bms_positive_current',
+                          ),
+                  ),
+                ],
+              );
+              final cabinet =
+                  BmsBatteryVisual(soc: liveSoc, value: number(liveSoc, '%'));
+              if (large) {
+                return Column(children: [
+                  SizedBox(height: 250, child: cabinet),
+                  readings,
+                  const SizedBox(height: 20),
+                ],);
+              }
+              return Row(children: [
+                Expanded(flex: 4, child: readings),
+                const SizedBox(width: 4),
+                Expanded(flex: 6, child: cabinet),
+              ],);
+            },),
+            Divider(color: green.withValues(alpha: .14)),
+            const SizedBox(height: 10),
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              spacing: 14,
+              runSpacing: 8,
+              children: [
+                Text(
+                    live
+                        ? operating(summary: true)
+                        : t('storage_bms_unavailable'),
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: severity,),),
+                Text(
+                    "${t('storage_summary_count')}: ${live ? integer(b.batteryCount) : '--'}",
+                    style: TextStyle(
+                        fontSize: 12, color: AppColor.textSecondary(context),),),
+              ],
+            ),
+          ],
+        ),
+      );
+
   List<Widget> overview() => [
-        Row(
-          children: [
-            Flexible(
-              child: Text(
-                t('storage_bms_soc'),
-                style: TextStyle(
-                  fontSize: 12,
-                  color: AppColor.textSecondary(context),
-                ),
-              ),
-            ),
-            const SizedBox(width: 6),
-            provisional(),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              number(b.soc, '%'),
-              style: TextStyle(
-                fontSize: 48,
-                fontWeight: FontWeight.w600,
-                color: AppColor.textPrimary(context),
-              ),
-            ),
+        _overviewHero(),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            color: AppColor.surfaceHover(context),
           ),
-        ),
-        const SizedBox(height: 12),
-        Semantics(
-          label: 'SOC ${number(b.soc, '%')}',
-          child: LinearProgressIndicator(
-            value: live && b.soc != null ? (b.soc! / 100).clamp(0, 1) : 0,
-            minHeight: 8,
-            borderRadius: BorderRadius.circular(2),
-            color: primary,
-            backgroundColor: AppColor.primarySoft(context),
+          child: BmsMetricGrid(
+            columns: 2,
+            children: [
+              BmsMetric(
+                  label: 'SOH',
+                  value: number(b.soh, '%'),
+                  trailing: provisional(),),
+              BmsMetric(
+                  label: t('storage_cycle_count'),
+                  value: live ? integer(b.cycleCount) : '--',),
+            ],
           ),
-        ),
-        const SizedBox(height: 14),
-        Wrap(
-          alignment: WrapAlignment.spaceBetween,
-          runSpacing: 6,
-          spacing: 12,
-          children: [
-            Text(
-              live ? operating(summary: true) : t('storage_bms_unavailable'),
-              style: TextStyle(fontSize: 12, color: severity),
-            ),
-            Text(
-              '${t('storage_summary_count')}: ${integer(b.batteryCount)}',
-              style: TextStyle(
-                fontSize: 12,
-                color: AppColor.textSecondary(context),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 26),
-        BmsMetricGrid(
-          columns: 2,
-          children: [
-            BmsMetric(
-              label: t('storage_pack_voltage'),
-              value: number(b.voltage, 'V', 2),
-            ),
-            BmsMetric(
-              label: t('storage_current'),
-              value: number(b.current, 'A', 2),
-              detail: !live || b.current == null || b.current == 0
-                  ? null
-                  : t(
-                      b.current! < 0
-                          ? 'storage_bms_negative_current'
-                          : 'storage_bms_positive_current',
-                    ),
-            ),
-            BmsMetric(
-              label: 'SOH',
-              value: number(b.soh, '%'),
-              trailing: provisional(),
-            ),
-            BmsMetric(
-              label: t('storage_cycle_count'),
-              value: live ? integer(b.cycleCount) : '--',
-            ),
-          ],
         ),
         const SizedBox(height: 24),
         const Divider(),
@@ -959,7 +983,7 @@ class _BmsSummaryViewState extends State<BmsSummaryView>
             expansion('storage_bms_measurements', [
               read('storage_pack_voltage', number(b.voltage, 'V', 2)),
               read('storage_current', number(b.current, 'A', 2)),
-              BmsReadout(label: 'SOC', value: number(b.soc, '%')),
+              BmsReadout(label: 'SOC', value: number(liveSoc, '%')),
               BmsReadout(label: 'SOH', value: number(b.soh, '%')),
               read(
                 'storage_cycle_count',

@@ -69,12 +69,10 @@ func (s *OTAService) Preflight(ctx context.Context, sn string, id int64, channel
 	if channel != "cloud" && channel != "local" && channel != "offline" {
 		return nil, fmt.Errorf("invalid channel")
 	}
-	f, d, err := s.repo.ValidateFirmwareForDevice(ctx, sn, id)
+	f, d, err := s.validateFirmwareForDevice(ctx, sn, id)
 	reason := ""
 	if err != nil {
 		reason = repository.OTAEligibilityReason(err)
-	} else if channel != "cloud" {
-		reason = "device_protection_required"
 	}
 	result := map[string]interface{}{"eligible": reason == "", "compatibility_reason": reason, "channel": channel, "firmware_id": id}
 	if f != nil {

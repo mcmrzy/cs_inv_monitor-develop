@@ -1430,7 +1430,7 @@ func (s *OTAService) RollbackPackageUpgrade(ctx context.Context, packageID int64
 
 			// 查找旧固件（按型号+版本+芯片）
 			device, err := s.repo.GetDeviceInfoForOTA(ctx, origDU.DeviceSN)
-			if err != nil || !device.HardwareKnown {
+			if err != nil {
 				return
 			}
 			oldFW, err := s.repo.FindFirmwareByVersion(ctx, pkg.Model, origDU.OldVersion, origDU.TargetChip, device.HardwareVersion)

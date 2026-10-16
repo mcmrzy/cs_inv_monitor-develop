@@ -220,6 +220,11 @@ func FirmwareModuleOverview(target, currentVersion string, deviceOnline bool, la
 		ov.RolloutType = latestFirmware.RolloutType
 	}
 	ov.VersionState, ov.UpdateAvailable = VersionState(ov.CurrentVersion, ov.LatestVersion)
-	ov.Eligible = deviceOnline && ov.Supported && ov.Connected
+	// A known published target can be chosen manually even before the device
+	// reports its current version. Keep that version visibly unreported.
+	if ov.CurrentVersion == "" && latestFirmware != nil {
+		ov.UpdateAvailable = true
+	}
+	ov.Eligible = deviceOnline && ov.Supported
 	return ov
 }

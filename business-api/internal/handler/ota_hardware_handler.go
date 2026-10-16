@@ -89,6 +89,9 @@ func parseHardwareVersionsForm(raw string) ([]string, error) {
 	if err := json.Unmarshal([]byte(raw), &versions); err != nil {
 		return nil, model.ErrFirmwareHardwareUnspecified
 	}
+	if len(versions) == 0 {
+		return []string{}, nil
+	}
 	return model.NormalizeHardwareVersions(versions)
 }
 
@@ -102,8 +105,8 @@ func parseBoardCodesForm(raw string) ([]string, error) {
 	if err := json.Unmarshal([]byte(raw), &codes); err != nil {
 		return nil, err
 	}
-	if len(codes) == 0 || len(codes) > 100 {
-		return nil, errors.New("board_codes required")
+	if len(codes) > 100 {
+		return nil, errors.New("too many board_codes")
 	}
 	// Uppercase letters and digits anywhere; separators only after the first
 	// character, matching the board_code CHECK constraint.

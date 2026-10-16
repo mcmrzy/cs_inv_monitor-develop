@@ -4,7 +4,6 @@ import useTranslation from '@/hooks/useTranslation'
 import useTimezoneStore from '@/stores/timezoneStore'
 import { formatInTimezone } from '@/utils/timezone'
 import type { Firmware, FirmwarePublishRequest } from '@/types'
-import { rollbackCoversHardware } from '../hardwareCompatibility'
 import { firmwareModuleLabel } from '../firmwarePresentation'
 
 const ROLLOUT_MARKS: Record<number, string> = {
@@ -60,20 +59,16 @@ const FirmwarePublishModal: React.FC<FirmwarePublishModalProps> = ({
     return publishedPeers
       .filter((fw) => Number(fw.id) !== Number(firmware.id)
         && fw.model === firmware.model && fw.target_chip === firmware.target_chip
-        && fw.release_status === 'published' && rollbackCoversHardware(firmware, fw))
+        && fw.release_status === 'published')
       .map((fw) => ({
-        label: `${fw.version} · ${(fw.board_codes ?? []).join(', ')}${fw.published_at ? ` · ${formatInTimezone(fw.published_at, timezone, 'YYYY-MM-DD HH:mm')}` : ''}`,
+        label: `${fw.version}${fw.published_at ? ` · ${formatInTimezone(fw.published_at, timezone, 'YYYY-MM-DD HH:mm')}` : ''}`,
         value: Number(fw.id),
       }))
   }, [publishedPeers, firmware, timezone])
 
   const handleOk = () => {
-    if (!firmware?.board_codes?.length) {
-      setError(t('hw.rangeMissing'))
-      return
-    }
     if (rollbackTo != null && !peerOptions.some((p) => p.value === rollbackTo)) {
-      setError(t('ota.rollbackHardwareMismatch'))
+      setError(t('ota.rollbackTargetUnavailable'))
       return
     }
     if (scope === 'device') {
@@ -118,9 +113,6 @@ const FirmwarePublishModal: React.FC<FirmwarePublishModalProps> = ({
           <Descriptions column={2} size="small" bordered style={{ marginBottom: 16 }}>
             <Descriptions.Item label={t('ota.model')}>{firmware.model}</Descriptions.Item>
             <Descriptions.Item label={t('ota.module')}>{firmwareModuleLabel(firmware.target_chip, t)}</Descriptions.Item>
-            <Descriptions.Item label={t('hw.boardRange')} span={2}>
-              {firmware.board_codes?.length ? firmware.board_codes.join(', ') : t('hw.rangeMissing')}
-            </Descriptions.Item>
             <Descriptions.Item label={t('ota.subVersion')}>{firmware.version}</Descriptions.Item>
             <Descriptions.Item label={t('ota.uploadTime')}>
               {formatInTimezone(firmware.created_at, timezone, 'YYYY-MM-DD HH:mm:ss')}

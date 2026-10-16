@@ -36,15 +36,6 @@ func (s *OTAService) GetDeviceFirmwareOverview(ctx context.Context, sn string) (
 		module.BoardUID = identity.BoardUID
 		module.ModuleRevision = identity.ModuleRevision
 		module.ProtectionLevel = identity.ProtectionLevel
-		if identity.CompatibilityReason != "" {
-			module.CompatibilityReason = identity.CompatibilityReason
-			module.Eligible = false
-			module.UpdateAvailable = false
-		} else if latest == nil {
-			module.CompatibilityReason = "device_protection_required"
-			module.Eligible = false
-			module.UpdateAvailable = false
-		}
 		modules = append(modules, module)
 	}
 	return &model.DeviceFirmwareOverview{
@@ -66,20 +57,6 @@ func (s *OTAService) GetDeviceFirmwareOverview(ctx context.Context, sn string) (
 		IsOnline:    device.IsOnline,
 		Modules:     modules,
 	}, nil
-}
-
-func applyModuleHardwareCompatibility(module *model.FirmwareModuleOverview, hardwareKnown, hasCompatibleFirmware bool) {
-	if !module.Supported {
-		return
-	}
-	if !hardwareKnown {
-		module.CompatibilityReason = "hardware_version_unknown"
-		module.Eligible = false
-		module.UpdateAvailable = false
-	} else if !hasCompatibleFirmware {
-		module.CompatibilityReason = "no_compatible_firmware"
-		module.Eligible = false
-	}
 }
 
 // GetPublishedFirmwareResources 设备可安装已发布固件
@@ -166,14 +143,6 @@ func (s *OTAService) RollbackIndependentFirmware(ctx context.Context, userID int
 	}
 	if fw.Model != device.Model {
 		return nil, fmt.Errorf("firmware model mismatch")
-	}
-	target := strings.ToLower(strings.TrimSpace(fw.TargetChip))
-	current, _ := CurrentModuleVersion(device.Model, device.FirmwareArm, device.FirmwareEsp, device.FirmwareDSP, device.FirmwareBMS, target)
-	if current == "" && !isSystemAdmin {
-		return nil, ErrCurrentVersionUnknown
-	}
-	if current == "" && isSystemAdmin && strings.TrimSpace(forceReason) == "" {
-		return nil, fmt.Errorf("force_reason required when current version unreported")
 	}
 	refs, err := s.repo.CreateIndependentFirmwareTasks(ctx, userID, sn, []int64{firmwareID}, idempotencyKey, "rollback", forceReason)
 	if err != nil {
