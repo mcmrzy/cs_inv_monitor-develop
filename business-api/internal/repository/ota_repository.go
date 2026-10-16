@@ -2051,11 +2051,14 @@ func (r *OTARepository) RetryFailedUpgradesByTask(ctx context.Context, taskID in
 	return err
 }
 
-// CancelUpgradesByTask 取消任务下待执行的升级
+// CancelUpgradesByTask 取消任务下的全部未终态升级。
+// 只取消 pending 会留下 downloading/upgrading 的孤儿记录：设备队列判定
+// （pendingDeliveryCondition）会把任何同设备进行中的记录视为占用，导致用户在
+// 取消任务后新建的升级一直停在「待执行」，直到 20 分钟记录超时收口。
 func (r *OTARepository) CancelUpgradesByTask(ctx context.Context, taskID int64) error {
 	_, err := r.db.Exec(ctx, `
 		UPDATE device_upgrades SET status = 'cancelled', completed_at = NOW(), updated_at = NOW()
-		WHERE task_id = $1 AND status = 'pending'
+		WHERE task_id = $1 AND status IN ('pending', 'downloading', 'upgrading')
 	`, taskID)
 	return err
 }

@@ -203,3 +203,41 @@ func TestOTADeliveryGuardsAndConcurrentClaim(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, ok, "cancellation after selection must prevent delivery")
 }
+
+// TestCancelTaskReleasesDeviceDeliveryQueue covers the production stall where a
+// task was cancelled while its record was still downloading/upgrading: the
+// orphaned in-flight record kept blocking every later pending upgrade of the
+// same device until the record timeout fired.
+func TestCancelTaskReleasesDeviceDeliveryQueue(t *testing.T) {
+	pool := setupOTAHardwareDB(t, true)
+	ctx := context.Background()
+	hardwareExec(t, pool, `INSERT INTO devices(sn,model,status) VALUES ('cancel-release','MODEL',1)`)
+	dsp := seedHardwareFirmware(t, pool, "dsp", "1.1.50", nil, true)
+	esp := seedHardwareFirmware(t, pool, "esp", "2.0", nil, true)
+	hardwareExec(t, pool, `INSERT INTO upgrade_tasks(id,status,execute_mode,updated_at) VALUES (1,'running','immediate',NOW()),(2,'running','immediate',NOW())`)
+	hardwareExec(t, pool, `INSERT INTO device_upgrades(id,device_sn,firmware_id,task_id,target_chip,status) VALUES
+ (1,'cancel-release',$1,1,'dsp','upgrading'),(2,'cancel-release',$2,2,'esp','pending')`, dsp.ID, esp.ID)
+	repo := NewOTARepository(pool)
+
+	// The in-flight DSP record blocks the pending ESP delivery for this device.
+	sns, err := repo.ListPendingDeliveryDevices(ctx)
+	require.NoError(t, err)
+	require.Empty(t, sns)
+	claimed, err := repo.ClaimUpgradeDelivery(ctx, 2, "cancel-release", 0)
+	require.NoError(t, err)
+	require.False(t, claimed)
+
+	// Cancelling the owning task must cancel the in-flight record too so the
+	// queue is released immediately instead of after the record timeout.
+	require.NoError(t, repo.CancelUpgradesByTask(ctx, 1))
+	var status string
+	require.NoError(t, pool.QueryRow(ctx, `SELECT status FROM device_upgrades WHERE id=1`).Scan(&status))
+	require.Equal(t, "cancelled", status, "cancelling a task must release its in-flight record")
+
+	sns, err = repo.ListPendingDeliveryDevices(ctx)
+	require.NoError(t, err)
+	require.Equal(t, []string{"cancel-release"}, sns)
+	claimed, err = repo.ClaimUpgradeDelivery(ctx, 2, "cancel-release", 0)
+	require.NoError(t, err)
+	require.True(t, claimed)
+}
