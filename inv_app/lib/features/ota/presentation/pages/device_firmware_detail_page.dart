@@ -158,13 +158,11 @@ class _DeviceFirmwareDetailPageState extends State<DeviceFirmwareDetailPage> {
       _deviceError == null &&
       _device != null &&
       _online &&
-      (_overview?.hasKnownHardware ?? false) &&
+      _overview != null &&
       !_triggering;
 
   List<FirmwareModuleOverview> get _updatableModules =>
-      _overview?.hasKnownHardware == true
-          ? _overview!.modules.where((m) => m.canRemoteUpgrade).toList()
-          : const [];
+      _overview?.modules.where((m) => m.canRemoteUpgrade).toList() ?? const [];
 
   Future<void> _triggerSingle(FirmwareModuleOverview module) async {
     final l10n = AppLocalizations.of(context)!;
@@ -496,15 +494,13 @@ class _DeviceFirmwareDetailPageState extends State<DeviceFirmwareDetailPage> {
                   ? l10n.str('firmware_version_not_reported')
                   : m.currentVersion),
           latestVersion: m.latestVersion,
-          compatibilityReason: overview!.hasKnownHardware
-              ? m.compatibilityReason
-              : 'hardware_version_unknown',
+          compatibilityReason: m.compatibilityReason,
           changelog: FirmwareModulePresentation.sanitizeCustomerCopy(
             m.changelog,
             l10n,
           ),
-          updateAvailable: m.updateAvailable && overview.hasKnownHardware && m.compatibilityReason.isEmpty,
-          canUpgrade: online && overview.hasKnownHardware && m.canRemoteUpgrade,
+          updateAvailable: m.updateAvailable && m.compatibilityReason.isEmpty,
+          canUpgrade: online && m.canRemoteUpgrade,
           onUpgrade: () => _triggerSingle(m),
         );
       },

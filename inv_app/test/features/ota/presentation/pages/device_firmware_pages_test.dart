@@ -16,6 +16,7 @@ import 'package:inv_app/features/ota/domain/repositories/ota_repository.dart';
 import 'package:inv_app/features/ota/presentation/pages/device_firmware_detail_page.dart';
 import 'package:inv_app/features/ota/presentation/pages/ota_tab_page.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
+import '../../../../helpers/pump_app.dart';
 
 void main() {
   Widget localizedApp(
@@ -42,15 +43,40 @@ void main() {
       );
   Widget app(Widget child) => localizedApp(child);
 
-  testWidgets('unknown hardware remains blocked despite an update flag', (tester) async {
+  testWidgets('ordinary server-approved upgrade does not require hardware metadata', (tester) async {
+    final ota = _HardwareUnknownOtaRepo();
+    await pumpMinimalApp(tester, DeviceFirmwareDetailPage(
+      deviceSN: 'INV-001', deviceRepository: _DeviceRepo(),
+      otaRepository: ota,
+    ),);
+    await tester.pumpAndSettle();
+    // Keep the missing hardware value visible in device metadata only.
+    expect(find.text('硬件版本未确认'), findsOneWidget);
+    expect(find.text('暂无适用此硬件版本的固件'), findsNothing);
+    final upgrade = find.widgetWithText(FilledButton, '升级此模块');
+    expect(upgrade, findsOneWidget);
+    await tester.scrollUntilVisible(
+      upgrade, 200, scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(upgrade);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '确认'));
+    await tester.pumpAndSettle();
+    expect(ota.triggeredIds, [42]);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('server compatibility rejection still blocks an upgrade', (tester) async {
     await tester.pumpWidget(app(DeviceFirmwareDetailPage(
       deviceSN: 'INV-001', deviceRepository: _DeviceRepo(),
-      otaRepository: _HardwareUnknownOtaRepo(),
+      otaRepository: _HardwareUnknownOtaRepo(
+        compatibilityReason: 'hardware_version_unknown',
+      ),
     ),),);
     await tester.pumpAndSettle();
     expect(find.text('硬件版本未确认'), findsWidgets);
-    expect(find.text('暂无适用此硬件版本的固件'), findsNothing);
-    expect(find.text('升级'), findsNothing);
+    expect(find.text('升级此模块'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -667,15 +693,33 @@ class _OtaRepo implements OtaRepository {
 
 /// 第二次起 getFirmwareOverview 挂起，用于断言检查更新按钮的 loading 态
 class _HardwareUnknownOtaRepo extends _OtaRepo {
+  _HardwareUnknownOtaRepo({this.compatibilityReason = ''});
+
+  final String compatibilityReason;
+  List<int>? triggeredIds;
+
   @override
   Future<Either<Failure, DeviceFirmwareOverview>> getFirmwareOverview(String sn) async =>
       Right(DeviceFirmwareOverview(
         deviceSn: sn, deviceModel: 'CS-10K', isOnline: true,
-        modules: const [FirmwareModuleOverview(
-          target: 'esp', currentVersion: '1.0.0', latestFirmwareId: 42,
-          latestVersion: '1.1.0', versionState: 'outdated', updateAvailable: true,
+        modules: [FirmwareModuleOverview(
+          target: 'esp', currentVersion: '', latestFirmwareId: 42,
+          latestVersion: '1.1.0', versionState: 'unreported', updateAvailable: true,
+          isSupported: true, isConnected: false, isEligible: true,
+          compatibilityReason: compatibilityReason,
         ),],
       ),);
+
+  @override
+  Future<Either<Failure, List<OtaTriggerTask>>> triggerFirmware(
+    String sn,
+    List<int> firmwareIds, {
+    required String idempotencyKey,
+    String? forceReason,
+  }) async {
+    triggeredIds = firmwareIds;
+    return const Right([]);
+  }
 }
 
 class _PendingOverviewOtaRepo extends _OtaRepo {

@@ -91,6 +91,11 @@ func (r *DeviceRepository) batchBMSSummaries(ctx context.Context, sns []string) 
 }
 
 func markBMSSummaryFreshness(summary map[string]interface{}, now time.Time) {
+	// Keep the last reported BMS link separate from the effective live-data
+	// gate. Expiry means no current evidence, not a newly disconnected BMS.
+	if _, exists := summary["reported_bms_online"]; !exists {
+		summary["reported_bms_online"] = summary["bms_online"]
+	}
 	expires, _ := summary["expires_at"].(string)
 	deadline, err := time.Parse(time.RFC3339Nano, expires)
 	if err != nil || now.After(deadline) || deadline.After(now.Add(215*time.Second)) {

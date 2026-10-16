@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:dio/dio.dart';
@@ -11,9 +12,11 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/services/connection_mode_service.dart';
+import 'package:inv_app/core/entities/inverter_data.dart';
 import 'package:inv_app/core/services/network_status_service.dart';
 import 'package:inv_app/core/services/realtime_data_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
+import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
 import 'package:inv_app/features/device/presentation/pages/device_realtime_page.dart';
 import 'package:inv_app/features/device/presentation/pages/device_storage_page.dart';
@@ -35,6 +38,7 @@ void main() {
   late MockDeviceBloc deviceBloc;
   late MockRealtimeDataService realtimeService;
   late MockConnectionModeService mode;
+  late StreamController<InverterRealtime> realtimeUpdates;
   late Map<String, dynamic> payload;
   final boundary = GlobalKey();
   final station = <String, dynamic>{
@@ -121,6 +125,7 @@ void main() {
     stationBloc = MockStationBloc();
     deviceBloc = MockDeviceBloc();
     realtimeService = MockRealtimeDataService();
+    realtimeUpdates = StreamController<InverterRealtime>.broadcast();
     mode = MockConnectionModeService();
     final network = MockNetworkStatusService();
     when(() => stationBloc.state).thenReturn(StationDetailLoaded(
@@ -129,7 +134,8 @@ void main() {
     when(() => deviceBloc.state).thenReturn(DeviceInitial());
     when(() => deviceBloc.stream).thenAnswer((_) => const Stream.empty());
     when(() => realtimeService.getLatestData(any())).thenReturn(null);
-    when(() => realtimeService.realtimeDataStream).thenAnswer((_) => const Stream.empty());
+    when(() => realtimeService.realtimeDataStream).thenAnswer((_) => realtimeUpdates.stream);
+    when(() => realtimeService.refresh(any())).thenAnswer((_) async {});
     when(() => realtimeService.statusStream).thenAnswer((_) => const Stream.empty());
     when(() => realtimeService.alarmStream).thenAnswer((_) => const Stream.empty());
     when(() => mode.isLocal).thenReturn(false);
@@ -150,7 +156,10 @@ void main() {
     getIt.registerSingleton<ConnectionModeService>(mode);
     getIt.registerSingleton<NetworkStatusService>(network);
   });
-  tearDown(() async => getIt.reset());
+  tearDown(() async {
+    await realtimeUpdates.close();
+    await getIt.reset();
+  });
 
   testWidgets('station energy metrics fit 320px at large system text scale', (tester) async {
     await pump(tester, const StationDetailPage(stationId: 7), width: 320, scale: 1.8);
@@ -189,6 +198,151 @@ void main() {
     await tester.pump(const Duration(milliseconds: 600));
     expect(tester.widget<DeviceStoragePage>(find.byType(DeviceStoragePage)).sn, 'B');
     expect(find.byKey(const ValueKey('storage-choice-A')), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('selected inverter energy flow uses measured battery power when current is unavailable', (tester) async {
+    when(() => stationBloc.state).thenReturn(StationDetailLoaded(
+      stationId: 7, station: station, devices: [device('A', hasBattery: false), device('B', hasBattery: false)],
+    ),);
+    when(() => realtimeService.getLatestData('A')).thenReturn(
+      InverterRealtime.fromJson({
+        'device_sn': 'A',
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+        'bat': {'data': {'battery_soc': 63, 'battery_voltage': 51.2,
+          'battery_current': null, 'battery_charge_power': 600,
+          'battery_discharge_power': 0,},},
+      }),
+    );
+    await pump(tester, const StationDetailPage(stationId: 7));
+    await tester.tap(find.text('All').last);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.tap(find.text('A').last);
+    await tester.pump(const Duration(milliseconds: 600));
+    final batteryNode = find.byKey(const ValueKey('station-energy-battery'));
+    expect(find.descendant(of: batteryNode, matching: find.text('600')), findsOneWidget);
+    expect(find.descendant(of: batteryNode, matching: find.text('63%')), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('station listens for selected power changes and stops its refresh on disposal', (tester) async {
+    when(() => stationBloc.state).thenReturn(StationDetailLoaded(
+      stationId: 7, station: station, devices: [device('A', hasBattery: false), device('B', hasBattery: false)],
+    ),);
+    InverterRealtime reading(double power) => InverterRealtime.fromJson({
+      'device_sn': 'A', 'updated_at': DateTime.now().toUtc().toIso8601String(),
+      'bat': {'data': {'battery_soc': 63,
+        'battery_voltage': 51.2, 'battery_power': power,},},
+    });
+    var latest = reading(600);
+    when(() => realtimeService.getLatestData('A')).thenAnswer((_) => latest);
+    await pump(tester, const StationDetailPage(stationId: 7));
+    await tester.tap(find.text('All').last);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.tap(find.text('A').last);
+    await tester.pump(const Duration(milliseconds: 600));
+    latest = reading(725);
+    realtimeUpdates.add(latest);
+    await tester.pump();
+    final batteryNode = find.byKey(const ValueKey('station-energy-battery'));
+    expect(find.descendant(of: batteryNode, matching: find.text('725')), findsOneWidget);
+    verify(() => realtimeService.refresh('A')).called(1);
+    await tester.pump(const Duration(seconds: 61));
+    verify(() => realtimeService.refresh('A')).called(1);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 61));
+    verifyNever(() => realtimeService.refresh('A'));
+  });
+
+  testWidgets('station aggregate refreshes from server once per cycle without event request floods', (tester) async {
+    await pump(tester, const StationDetailPage(stationId: 7));
+    verify(() => stationBloc.add(any(that: isA<StationDetailRequested>()))).called(1);
+    realtimeUpdates.add(const InverterRealtime(deviceSN: 'OTHER'));
+    await tester.pump();
+    verifyNever(() => stationBloc.add(any(that: isA<StationDetailRequested>())));
+    realtimeUpdates.add(const InverterRealtime(deviceSN: 'A'));
+    await tester.pump();
+    verifyNever(() => stationBloc.add(any(that: isA<StationDetailRequested>())));
+    await tester.pump(const Duration(seconds: 61));
+    verify(() => stationBloc.add(any(that: isA<StationDetailRequested>()))).called(1);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  for (final stale in [false, true]) {
+    testWidgets('selected battery is unavailable when ${stale ? 'legacy telemetry expires' : 'its gateway is offline despite another online inverter'}', (tester) async {
+      when(() => stationBloc.state).thenReturn(StationDetailLoaded(
+        stationId: 7, station: station, devices: [
+          {...device('A', hasBattery: false), 'status': stale ? 1 : 0},
+          device('B', hasBattery: false),
+        ],
+      ),);
+      when(() => realtimeService.getLatestData('A')).thenReturn(InverterRealtime.fromJson({
+        'device_sn': 'A',
+        'updated_at': DateTime.now().toUtc().subtract(Duration(minutes: stale ? 6 : 0)).toIso8601String(),
+        'battery_soc': 63, 'battery_power': 600,
+      },),);
+      await pump(tester, const StationDetailPage(stationId: 7));
+      await tester.tap(find.text('All').last);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.tap(find.text('A').last);
+      await tester.pump(const Duration(milliseconds: 600));
+      final batteryNode = find.byKey(const ValueKey('station-energy-battery'));
+      expect(find.descendant(of: batteryNode, matching: find.text('--')), findsOneWidget);
+      expect(find.descendant(of: batteryNode, matching: find.text('--%')), findsOneWidget);
+      expect(find.descendant(of: batteryNode, matching: find.text('0')), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+
+  for (final summary in [false, true]) {
+    testWidgets('selected ${summary ? 'CMD08' : 'legacy'} battery expires without a new response or stream event', (tester) async {
+      final snapshot = battery();
+      when(() => stationBloc.state).thenReturn(StationDetailLoaded(
+        stationId: 7, station: station, devices: [
+          device('A', hasBattery: false), device('B', hasBattery: false),
+        ],
+      ),);
+      when(() => realtimeService.getLatestData('A')).thenReturn(InverterRealtime.fromJson({
+        'device_sn': 'A',
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+        if (summary) 'bms_summary': {...snapshot, 'voltage': 50, 'current': -12, 'soc': 63}
+        else ...{'battery_soc': 63, 'battery_power': -600},
+      },),);
+      await pump(tester, const StationDetailPage(stationId: 7));
+      await tester.tap(find.text('All').last);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.tap(find.text('A').last);
+      await tester.pump(const Duration(milliseconds: 600));
+      final batteryNode = find.byKey(const ValueKey('station-energy-battery'));
+      expect(find.descendant(of: batteryNode, matching: find.text('600')), findsOneWidget);
+      final flowPaint = find.byWidgetPredicate((w) => w is CustomPaint && w.painter.runtimeType.toString() == '_EnergyFlowPainter');
+      expect((tester.widget<CustomPaint>(flowPaint).painter as dynamic).flows, isNotEmpty);
+      // Polling returns no changed sample; only the expiry transition can
+      // invalidate the values captured by the energy-flow AnimatedBuilder.
+      await tester.pump(Duration(seconds: summary ? 211 : 301));
+      expect(find.descendant(of: batteryNode, matching: find.text('--')), findsOneWidget);
+      expect(find.descendant(of: batteryNode, matching: find.text('--%')), findsOneWidget);
+      expect((tester.widget<CustomPaint>(flowPaint).painter as dynamic).flows, isEmpty);
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+
+  testWidgets('overview pull to refresh requests the selected battery source', (tester) async {
+    await pump(tester, const StationDetailPage(stationId: 7));
+    await tester.tap(find.text('All').last);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.tap(find.text('A').last);
+    await tester.pump(const Duration(milliseconds: 600));
+    verify(() => realtimeService.refresh('A')).called(1);
+    await tester.widget<StyledRefreshIndicator>(find.byType(StyledRefreshIndicator).first).onRefresh();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    verify(() => realtimeService.refresh('A')).called(1);
     await tester.pumpWidget(const SizedBox());
   });
 

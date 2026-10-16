@@ -1214,7 +1214,7 @@ func (h *InternalHandler) insertNotification(ctx context.Context, sn string, sta
 
 type internalOTAStatusRequest struct {
 	DeviceSN        string `json:"device_sn"`
-	TaskID          string `json:"task_id"`     // device_upgrades.id echoed by the device
+	TaskID          string `json:"task_id"`     // device upgrade ID and delivery attempt echoed by the device
 	FirmwareID      *int64 `json:"firmware_id"` // 可选，设备上报时可能携带
 	Status          string `json:"status"`
 	Progress        int    `json:"progress"`
@@ -1281,23 +1281,31 @@ func (h *InternalHandler) OTACmdAck(c *gin.Context) {
 		zap.String("task_id", req.TaskID),
 		zap.String("message", req.Message))
 
-	// 更新唯一一条 device_upgrades 记录。旧设备没有 task_id 时只更新最近
-	// 一条 pending 记录，绝不能把同一设备的多个芯片任务全部推进。
+	// Explicit task tokens identify exactly one attempt. Legacy anonymous ACKs
+	// may update only an initial attempt, never a manually retried task.
 	if req.Ack {
-		upgradeID, _ := strconv.ParseInt(req.TaskID, 10, 64)
+		var upgradeID int64
+		var retryCount int
+		if req.TaskID != "" {
+			var err error
+			upgradeID, retryCount, err = model.ParseOTACommandTaskID(req.TaskID)
+			if err != nil {
+				response.Error(c, 400, "invalid OTA task_id")
+				return
+			}
+		}
 		tag, err := h.db.Exec(ctx, `
 			UPDATE device_upgrades SET
 				status = 'upgrading',
 				started_at = CASE WHEN started_at IS NULL THEN NOW() ELSE started_at END,
 				updated_at = NOW()
-			WHERE id = COALESCE(
+			WHERE device_sn = $1 AND status = 'pending' AND retry_count = $3
+			AND id = CASE WHEN $2::bigint > 0 THEN $2::bigint ELSE
 				(SELECT id FROM device_upgrades
-				 WHERE id = NULLIF($2, 0) AND device_sn = $1 AND status = 'pending'),
-				(SELECT id FROM device_upgrades
-				 WHERE device_sn = $1 AND status = 'pending'
+				 WHERE device_sn = $1 AND status = 'pending' AND retry_count = 0
 				 ORDER BY updated_at DESC, id DESC LIMIT 1)
-			)
-		`, req.DeviceSN, upgradeID)
+			END
+		`, req.DeviceSN, upgradeID, retryCount)
 		if err != nil {
 			logger.Error("OTACmdAck update failed", zap.String("sn", req.DeviceSN), zap.Error(err))
 			response.Error(c, 500, "update OTA cmd ack failed")
@@ -1361,10 +1369,20 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 		return
 	}
 
-	// 精确更新设备回传的升级记录。兼容旧固件：task_id 缺失时先按
-	// firmware_id 定位，再退化到最近一条活跃记录，但始终只更新一条。
-	upgradeID, _ := strconv.ParseInt(req.TaskID, 10, 64)
-	tag, err := h.db.Exec(ctx, `
+	// A supplied token must never fall back to another task. Only reports with
+	// no token may use the legacy firmware/latest lookup, and only at attempt 0.
+	var upgradeID int64
+	var retryCount int
+	if req.TaskID != "" {
+		var err error
+		upgradeID, retryCount, err = model.ParseOTACommandTaskID(req.TaskID)
+		if err != nil {
+			response.Error(c, 400, "invalid OTA task_id")
+			return
+		}
+	}
+	var appliedUpgradeID int64
+	err := h.db.QueryRow(ctx, `
 		UPDATE device_upgrades SET
 			status = $2::varchar,
 			stage = $7::varchar,
@@ -1375,33 +1393,37 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 			started_at = CASE WHEN started_at IS NULL AND $2::varchar IN ('downloading','upgrading') THEN NOW() ELSE started_at END,
 			completed_at = CASE WHEN $2::varchar IN ('success', 'failed', 'cancelled') THEN NOW() ELSE completed_at END,
 			updated_at = NOW()
-		WHERE id = COALESCE(
+		WHERE device_sn = $1 AND retry_count = $10
+		  AND status NOT IN ('success', 'failed', 'cancelled')
+		  AND id = CASE WHEN $5::bigint > 0 THEN $5::bigint ELSE COALESCE(
 			(SELECT id FROM device_upgrades
-			 WHERE id = NULLIF($5, 0) AND device_sn = $1
-			   AND status NOT IN ('success', 'failed', 'cancelled')),
-			(SELECT id FROM device_upgrades
-			 WHERE firmware_id = $6 AND device_sn = $1
+			 WHERE firmware_id = $6 AND device_sn = $1 AND retry_count = 0
 			   AND status NOT IN ('success', 'failed', 'cancelled')
 			 ORDER BY updated_at DESC, id DESC LIMIT 1),
 			(SELECT id FROM device_upgrades
-			 WHERE device_sn = $1 AND status NOT IN ('success', 'failed', 'cancelled')
+			 WHERE device_sn = $1 AND retry_count = 0 AND status NOT IN ('success', 'failed', 'cancelled')
 			 ORDER BY updated_at DESC, id DESC LIMIT 1)
-		)
-	`, req.DeviceSN, dbStatus, req.Progress, req.Message, upgradeID, req.FirmwareID, req.Stage, req.StageProgress, req.OverallProgress)
-	if err != nil {
+		) END
+		RETURNING id
+	`, req.DeviceSN, dbStatus, req.Progress, req.Message, upgradeID, req.FirmwareID, req.Stage, req.StageProgress, req.OverallProgress, retryCount).Scan(&appliedUpgradeID)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		logger.Error("InternalOTAStatus failed", zap.String("sn", req.DeviceSN), zap.Error(err))
 		response.Error(c, 500, "update OTA status failed")
 		return
 	}
 
+	rowsAffected := int64(0)
+	if err == nil {
+		rowsAffected = 1
+	}
 	logger.Info("OTA status updated",
 		zap.String("sn", req.DeviceSN),
 		zap.String("status", dbStatus),
 		zap.Int("progress", req.Progress),
-		zap.Int64("rows_affected", tag.RowsAffected()))
+		zap.Int64("rows_affected", rowsAffected))
 
 	// 更新关联升级任务的统计（best-effort，不阻塞主流程）
-	if tag.RowsAffected() > 0 && (dbStatus == "success" || dbStatus == "failed" || dbStatus == "upgrading") {
+	if rowsAffected > 0 && (dbStatus == "success" || dbStatus == "failed" || dbStatus == "upgrading") {
 		go func() {
 			bgCtx := context.Background()
 
@@ -1479,17 +1501,14 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 						}
 					}
 				}
-			} else {
-				timeoutRows.Close()
 			}
 
 			var taskID int64
 			err = h.db.QueryRow(bgCtx, `
 				SELECT COALESCE(task_id, 0)
 				FROM device_upgrades
-				WHERE device_sn = $1
-				ORDER BY updated_at DESC LIMIT 1
-			`, req.DeviceSN).Scan(&taskID)
+				WHERE device_sn = $1 AND id = $2 AND retry_count = $3
+			`, req.DeviceSN, appliedUpgradeID, retryCount).Scan(&taskID)
 			if err != nil || taskID <= 0 {
 				return
 			}
@@ -1550,15 +1569,14 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 	}
 
 	// 单芯片升级成功时，更新设备固件版本并触发下一个芯片
-	if dbStatus == "success" && tag.RowsAffected() > 0 {
+	if dbStatus == "success" && rowsAffected > 0 {
 		// 查询升级记录的目标芯片和固件版本
 		var targetChip, firmwareVersion string
 		if err := h.db.QueryRow(ctx, `
 			SELECT COALESCE(target_chip,''), COALESCE(firmware_version,'')
 			FROM device_upgrades
-			WHERE device_sn = $1 AND status = 'success'
-			ORDER BY updated_at DESC LIMIT 1
-		`, req.DeviceSN).Scan(&targetChip, &firmwareVersion); err != nil {
+			WHERE device_sn = $1 AND id = $2 AND retry_count = $3 AND status = 'success'
+		`, req.DeviceSN, appliedUpgradeID, retryCount).Scan(&targetChip, &firmwareVersion); err != nil {
 			logger.Warn("OTA: failed to query upgrade target chip and firmware version",
 				zap.String("sn", req.DeviceSN), zap.Error(err))
 		}
@@ -1599,9 +1617,8 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 				err := h.db.QueryRow(bgCtx, `
 					SELECT COALESCE(upgrade_package_id, 0)
 					FROM device_upgrades
-					WHERE device_sn = $1 AND status = 'success' AND upgrade_package_id IS NOT NULL
-					ORDER BY updated_at DESC LIMIT 1
-				`, req.DeviceSN).Scan(&pkgID)
+					WHERE device_sn = $1 AND id = $2 AND retry_count = $3 AND status = 'success' AND upgrade_package_id IS NOT NULL
+				`, req.DeviceSN, appliedUpgradeID, retryCount).Scan(&pkgID)
 				if err == nil && pkgID > 0 {
 					h.otaService.OnChipUpgradeComplete(bgCtx, req.DeviceSN, pkgID)
 				}

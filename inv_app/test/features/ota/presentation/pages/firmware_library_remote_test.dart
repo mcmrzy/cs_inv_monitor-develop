@@ -27,7 +27,6 @@ void main() {
       version: '1.0.18',
       fileUrl: '/firmware.bin',
       targetChip: 'esp',
-      hardwareVersions: const ['HW-1'],
       publishedAt: DateTime(2026, 10, 9),
       supportedChannels: const ['remote', 'ble'],);
   const local = FirmwareResource(

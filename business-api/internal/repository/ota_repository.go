@@ -585,6 +585,7 @@ func (r *OTARepository) RetryFailedUpgrades(ctx context.Context, firmwareID int6
 		    retry_count = retry_count + 1,
 		    started_at = NULL,
 		    completed_at = NULL,
+		    last_dispatched_at = NULL,
 		    updated_at = NOW()
 		WHERE firmware_id = $1 AND device_sn = ANY($2) AND status = 'failed'
 	`, firmwareID, deviceSNs)
@@ -2015,16 +2016,18 @@ func (r *OTARepository) UpsertDeviceUpgradeWithTask(ctx context.Context, du *mod
 		    error_message = CASE WHEN $6 = 'failed' THEN $8 ELSE device_upgrades.error_message END,
 		    retry_count = CASE WHEN $6 = 'pending' AND device_upgrades.status = 'failed'
 		                  THEN device_upgrades.retry_count + 1 ELSE device_upgrades.retry_count END,
+		    last_dispatched_at = CASE WHEN $6 = 'pending' AND device_upgrades.status = 'failed'
+		                  THEN NULL ELSE device_upgrades.last_dispatched_at END,
 		    pushed_by = COALESCE($10, device_upgrades.pushed_by),
 		    task_id = COALESCE($12, device_upgrades.task_id),
 		    started_at = CASE WHEN $6 IN ('downloading','upgrading') AND device_upgrades.started_at IS NULL
 		                THEN NOW() ELSE device_upgrades.started_at END,
 		    completed_at = CASE WHEN $6 IN ('success','failed') THEN NOW() ELSE device_upgrades.completed_at END,
 		    updated_at = NOW()
-		RETURNING id, created_at, updated_at
+		RETURNING id, created_at, updated_at, retry_count
 	`, du.DeviceSN, du.FirmwareID, du.FirmwareVersion, du.TargetChip,
 		du.OldVersion, du.Status, du.Progress, du.ErrorMessage, du.RetryCount, du.PushedBy, du.UpgradePackageID, du.TaskID).
-		Scan(&du.ID, &du.CreatedAt, &du.UpdatedAt)
+		Scan(&du.ID, &du.CreatedAt, &du.UpdatedAt, &du.RetryCount)
 }
 
 // RetryFailedUpgradesByTask 重试任务下失败的升级
@@ -2041,17 +2044,21 @@ func (r *OTARepository) RetryFailedUpgradesByTask(ctx context.Context, taskID in
 		    retry_count = retry_count + 1,
 		    started_at = NULL,
 		    completed_at = NULL,
+		    last_dispatched_at = NULL,
 		    updated_at = NOW()
 		WHERE task_id = $1 AND status = 'failed'
 	`, taskID)
 	return err
 }
 
-// CancelUpgradesByTask 取消任务下待执行的升级
+// CancelUpgradesByTask 取消任务下的全部未终态升级。
+// 只取消 pending 会留下 downloading/upgrading 的孤儿记录：设备队列判定
+// （pendingDeliveryCondition）会把任何同设备进行中的记录视为占用，导致用户在
+// 取消任务后新建的升级一直停在「待执行」，直到 20 分钟记录超时收口。
 func (r *OTARepository) CancelUpgradesByTask(ctx context.Context, taskID int64) error {
 	_, err := r.db.Exec(ctx, `
 		UPDATE device_upgrades SET status = 'cancelled', completed_at = NOW(), updated_at = NOW()
-		WHERE task_id = $1 AND status = 'pending'
+		WHERE task_id = $1 AND status IN ('pending', 'downloading', 'upgrading')
 	`, taskID)
 	return err
 }

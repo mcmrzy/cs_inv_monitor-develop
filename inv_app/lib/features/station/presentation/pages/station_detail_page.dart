@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:async';
 import 'dart:ui' as ui;
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -6,6 +7,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/services/realtime_data_service.dart';
+import 'package:inv_app/core/entities/inverter_data.dart';
+import 'package:inv_app/core/services/connection_mode_service.dart';
 import 'package:inv_app/core/services/network_status_service.dart';
 import 'package:inv_app/core/services/data_cache_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
@@ -54,6 +57,12 @@ class _StationDetailPageState extends State<StationDetailPage>
   String _selectedDeviceSn = 'all';
   // 设备拖动排序模式：由设备编辑页“设备排序”入口开启
   bool _deviceSortMode = false;
+  Timer? _refreshTimer;
+  Timer? _batteryExpiryTimer;
+  String? _batteryExpirySn;
+  DateTime? _batteryExpiryDeadline;
+  bool _selectedBatteryExpired = false;
+  StreamSubscription<InverterRealtime>? _realtimeSubscription;
 
   @override
   void initState() {
@@ -72,6 +81,59 @@ class _StationDetailPageState extends State<StationDetailPage>
         .read<StationBloc>()
         .add(StationDetailRequested(stationId: widget.stationId));
     _fetchWeather();
+    _realtimeSubscription = getIt<RealtimeDataService>()
+        .realtimeDataStream.listen((data) {
+      if (mounted && _selectedDeviceSn != 'all' &&
+          data.deviceSN == _selectedDeviceSn) {
+        setState(() {});
+      }
+    });
+    _refreshTimer = Timer.periodic(const Duration(seconds: 60), (_) {
+      if (!mounted || ModalRoute.of(context)?.isCurrent == false ||
+          (WidgetsBinding.instance.lifecycleState != null &&
+              WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed)) {
+        return;
+      }
+      _refreshEnergyData();
+    });
+  }
+
+  void _refreshEnergyData() {
+    if (getIt.isRegistered<ConnectionModeService>() &&
+        getIt<ConnectionModeService>().isLocal) {
+      return;
+    }
+    if (_selectedDeviceSn == 'all') {
+      context.read<StationBloc>().add(
+        StationDetailRequested(stationId: widget.stationId),
+      );
+    } else {
+      unawaited(getIt<RealtimeDataService>().refresh(_selectedDeviceSn));
+    }
+  }
+
+  void _watchBatteryExpiry(DateTime? deadline) {
+    if (_batteryExpirySn == _selectedDeviceSn &&
+        _batteryExpiryDeadline == deadline) {
+      return;
+    }
+    _batteryExpiryTimer?.cancel();
+    _batteryExpirySn = _selectedDeviceSn;
+    _batteryExpiryDeadline = deadline;
+    _selectedBatteryExpired = false;
+    if (deadline == null) return;
+    final remaining = deadline.difference(DateTime.now());
+    if (remaining <= Duration.zero) {
+      _selectedBatteryExpired = true;
+      return;
+    }
+    // One redraw at the sample's validity boundary also handles unchanged
+    // responses and failed refreshes, neither of which emits a stream event.
+    _batteryExpiryTimer = Timer(remaining, () {
+      if (mounted) {
+        setState(() => _selectedBatteryExpired = true);
+      }
+    });
   }
 
   Future<void> _fetchWeather() async {
@@ -164,6 +226,9 @@ class _StationDetailPageState extends State<StationDetailPage>
 
   @override
   void dispose() {
+    _refreshTimer?.cancel();
+    _batteryExpiryTimer?.cancel();
+    _realtimeSubscription?.cancel();
     _anim.dispose();
     super.dispose();
   }
@@ -292,9 +357,10 @@ class _StationDetailPageState extends State<StationDetailPage>
   Widget _buildOverviewBody(dynamic station) {
     final name = station['station_name'] ?? station['name'] ?? '';
     // 在线口径与首页电站卡片统一：以 online_count 为准（status 由后端 SyncStationStatus 联动设备维护，避免两端不一致）
-    final online = ((station['online_count'] as num?)?.toInt() ?? 0) > 0;
+    var online = ((station['online_count'] as num?)?.toInt() ?? 0) > 0;
 
-    double pvW, loadW, battW, soc;
+    double pvW, loadW;
+    double? battW, soc;
     if (_selectedDeviceSn != 'all') {
       // 单设备模式：从 RealtimeDataService 获取该设备数据
       final rt = getIt<RealtimeDataService>().getLatestData(_selectedDeviceSn);
@@ -304,35 +370,55 @@ class _StationDetailPageState extends State<StationDetailPage>
           .whereType<Map>()
           .where((d) => d['sn'] == _selectedDeviceSn)
           .firstOrNull;
+      final deviceStatus = device?['status'];
+      online = rt?.onlineStatus?.online ??
+          (deviceStatus == 1 || deviceStatus == 2);
       final summary = rt?.bmsSummary ??
           (device == null
               ? null
               : deviceBattery(Map<String, dynamic>.from(device)));
+      _watchBatteryExpiry(summary != null
+          ? summary.expiresAt
+          : rt?.updatedAt?.add(const Duration(minutes: 5)),);
       if (summary != null) {
-        final live = summary.onlineAt(DateTime.now()) == true;
+        final live = !_selectedBatteryExpired &&
+            summary.onlineAt(DateTime.now()) == true;
         battW = live && summary.voltage != null && summary.current != null
             ? summary.voltage! * summary.current!
-            : 0;
-        soc = live ? summary.soc ?? 0 : 0;
-      } else if (rt?.battery != null) {
-        battW = rt!.battery!.voltage * rt.battery!.current;
-        soc = rt.battery!.soc;
+            : null;
+        soc = live ? summary.soc : null;
+      } else if (!_selectedBatteryExpired &&
+          rt?.battery != null && rt!.updatedAt != null &&
+          DateTime.now().difference(rt.updatedAt!) >= Duration.zero &&
+          DateTime.now().difference(rt.updatedAt!) < const Duration(minutes: 5)) {
+        final battery = rt.battery!;
+        final hasMeasuredPower = const [
+          'battery_power', 'battery_charge_power', 'battery_discharge_power',
+        ].any((key) => rt.telemetryFields[key] is num);
+        battW = hasMeasuredPower
+            ? battery.power
+            : rt.telemetryFields['battery_voltage'] is num &&
+                    rt.telemetryFields['battery_current'] is num
+                ? battery.voltage * battery.current
+                : null;
+        soc = rt.telemetryFields['battery_soc'] is num ? battery.soc : null;
       } else {
-        battW = 0;
-        soc = 0;
+        battW = null;
+        soc = null;
       }
     } else {
+      _watchBatteryExpiry(null);
       pvW = (station['pv_power'] as num?)?.toDouble() ?? 0;
       loadW = (station['load_power'] as num?)?.toDouble() ?? 0;
-      battW = (station['batt_power'] as num?)?.toDouble() ?? 0;
-      soc = (station['batt_soc'] as num?)?.toDouble() ?? 0;
+      battW = deviceNumber(station['batt_power']);
+      soc = deviceNumber(station['batt_soc']);
     }
 
-    // 离线时功率/SOC 清零：能量流全零，动画自然停止
+    // 离线时停止功率动画；电池未知读数保留为缺失，不伪装成真实零值。
     final displayPvW = online ? pvW : 0.0;
     final displayLoadW = online ? loadW : 0.0;
-    final displayBattW = online ? battW : 0.0;
-    final displaySoc = online ? soc : 0.0;
+    final displayBattW = online ? battW : null;
+    final displaySoc = online ? soc : null;
     const displayGridW = 0.0;
     final todayKwh = (station['today_energy'] ?? 0.0).toDouble();
     final totalKwh = (station['total_energy'] ?? 0.0).toDouble();
@@ -343,7 +429,7 @@ class _StationDetailPageState extends State<StationDetailPage>
     final co2 = (totalKwh * 0.997).toStringAsFixed(1);
     final trees = (totalKwh * 0.05).toStringAsFixed(0);
     final flows =
-        _computeFlows(displayPvW, displayBattW, displayGridW, displayLoadW);
+        _computeFlows(displayPvW, displayBattW ?? 0, displayGridW, displayLoadW);
 
     return Stack(
       children: [
@@ -369,6 +455,7 @@ class _StationDetailPageState extends State<StationDetailPage>
             context
                 .read<StationBloc>()
                 .add(StationDetailRequested(stationId: widget.stationId));
+            if (_selectedDeviceSn != 'all') _refreshEnergyData();
             _fetchWeather();
           },
           child: ListView(
@@ -580,6 +667,7 @@ class _StationDetailPageState extends State<StationDetailPage>
     );
     if (selected == null || !mounted) return;
     setState(() => _selectedDeviceSn = selected);
+    _refreshEnergyData();
   }
 
   Future<void> _openBatteryStorage() async {
@@ -656,16 +744,16 @@ class _StationDetailPageState extends State<StationDetailPage>
   Widget _flowArea(
     double pv,
     double load,
-    double batt,
+    double? batt,
     double grid,
-    double soc,
+    double? soc,
     List<FlowEdge> flows,
   ) {
     final l10n = AppLocalizations.of(context)!;
     final pvW = pv.toStringAsFixed(0);
     final loadW = load.toStringAsFixed(0);
     final gridW = grid.abs().toStringAsFixed(0);
-    final battW = batt.abs().toStringAsFixed(0);
+    final battW = batt?.abs().toStringAsFixed(0) ?? '--';
 
     return SizedBox(
       height: 400.h,
@@ -707,7 +795,7 @@ class _StationDetailPageState extends State<StationDetailPage>
               Icons.battery_charging_full,
               AppColors.successLight,
               const Alignment(-0.75, 0),
-              active: batt.abs() > 0,
+              active: (batt ?? 0).abs() > 0,
             ),
             _energyNode(
               l10n.grid,
@@ -874,7 +962,7 @@ class _StationDetailPageState extends State<StationDetailPage>
   Widget _energyNodeBatt(
     String label,
     String val,
-    double soc,
+    double? soc,
     IconData icon,
     Color color,
     Alignment align, {
@@ -918,12 +1006,17 @@ class _StationDetailPageState extends State<StationDetailPage>
                 children: [
                   Icon(icon, size: 15.sp, color: color),
                   SizedBox(width: 2.w),
-                  Text(
-                    '${soc.toStringAsFixed(0)}%',
-                    style: TextStyle(
-                      fontSize: 9.sp,
-                      fontWeight: FontWeight.w700,
-                      color: color,
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        soc == null ? '--%' : '${soc.toStringAsFixed(0)}%',
+                        style: TextStyle(
+                          fontSize: 9.sp,
+                          fontWeight: FontWeight.w700,
+                          color: color,
+                        ),
+                      ),
                     ),
                   ),
                 ],
