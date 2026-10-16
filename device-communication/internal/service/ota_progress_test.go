@@ -16,13 +16,14 @@ func TestOTAStageProgressForwarding(t *testing.T) {
 			require.NoError(t, json.NewDecoder(r.Body).Decode(&got))
 			w.WriteHeader(http.StatusOK)
 		}))
-		payload := `{"state":"installing","progress":70,"stage":"transferring","stage_progress":0,"overall_progress":70,"target":"dsp"}`
+		payload := `{"task_id":"123-r1","state":"installing","progress":70,"stage":"transferring","stage_progress":0,"overall_progress":70,"target":"dsp"}`
 		if nested {
 			payload = `{"data":` + payload + `}`
 		}
 		service := NewDataService(nil, nil, mqtt.NewHub(nil), nil, server.URL, "key")
 		service.HandleOTAStatus("SN", []byte(payload))
 		server.Close()
+		require.Equal(t, "123-r1", got["task_id"], "retry attempt tokens must survive both payload envelopes unchanged")
 		require.Equal(t, "transferring", got["stage"])
 		require.Equal(t, float64(0), got["stage_progress"])
 		require.Equal(t, float64(70), got["overall_progress"])

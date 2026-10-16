@@ -38,7 +38,7 @@ func TestInternalOTAStageProgressPersistence(t *testing.T) {
 	defer pool.Close()
 	_, err = pool.Exec(ctx, `CREATE TABLE device_upgrades (
 		id bigint PRIMARY KEY, device_sn text, firmware_id bigint, task_id bigint,
-		status varchar, stage varchar, progress integer, error_message text,
+		status varchar, stage varchar, progress integer, error_message text, retry_count integer NOT NULL DEFAULT 0,
 		started_at timestamptz, completed_at timestamptz, updated_at timestamptz DEFAULT NOW()
 	)`)
 	require.NoError(t, err)

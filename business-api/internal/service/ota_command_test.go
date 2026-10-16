@@ -64,3 +64,29 @@ func TestSendUpgradeCommandIncludesStableUpgradeID(t *testing.T) {
 	require.Equal(t, "arm", payload["target"])
 	require.Equal(t, "V1.2.3", payload["version"])
 }
+
+func TestManualRetryUsesNewTaskIDButRedeliveryKeepsAttemptID(t *testing.T) {
+	var taskIDs []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload map[string]interface{}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+		require.Equal(t, float64(123), payload["upgrade_id"])
+		taskIDs = append(taskIDs, payload["task_id"].(string))
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+	s := &OTAService{
+		deviceServer: server.URL,
+		httpClient:   server.Client(),
+		firmwareValidator: fixedFirmwareValidator{firmware: &model.Firmware{
+			ID: 42, TargetChip: "dsp", Version: "1.1.50", FileURL: "https://example.test/fw.bin",
+		}},
+	}
+	for _, retryCount := range []int{0, 0, 1, 1, 2} {
+		s.SendUpgradeCommand(context.Background(), &model.DeviceUpgrade{
+			ID: 123, DeviceSN: "SN001", FirmwareID: 42, RetryCount: retryCount,
+		}, nil, "")
+	}
+	require.Equal(t, []string{"123", "123", "123-r1", "123-r1", "123-r2"}, taskIDs,
+		"a manual retry needs a new device task ID, while automatic redelivery must remain idempotent")
+}
