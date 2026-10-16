@@ -73,10 +73,27 @@ describe('Production CMD08 BMS presentation', () => {
       const { container } = view({ expires_at: new Date(NOW + 1000).toISOString() }, new Error('network'))
       expect(screen.getByText(/刷新失败/)).toBeInTheDocument()
       expect(screen.getByTestId('cmd08-bms')).toHaveAttribute('data-availability', 'live')
+      expect(screen.getByRole('meter')).toHaveAttribute('aria-valuenow', '72.6')
+      expect(container.querySelector('[data-energy-fill]')).not.toBeNull()
       act(() => { vi.advanceTimersByTime(1000) })
       expect(screen.getByTestId('cmd08-bms')).toHaveAttribute('data-availability', 'expired')
+      expect(screen.getByRole('meter')).not.toHaveAttribute('aria-valuenow')
+      expect(container.querySelector('[data-energy-fill]')).toBeNull()
       expect(container.querySelector('.cmd08-summary')).not.toHaveTextContent('52.78')
     } finally { vi.useRealTimers() }
+  })
+  it.each([0, null, -1, 101])('keeps SOC %s honest in the storage overview and retains other live measurements', soc => {
+    const { container } = view({ soc })
+    const meter = screen.getByRole('meter', { name: 'SOC' })
+    if (soc === 0) {
+      expect(meter).toHaveAttribute('aria-valuenow', '0')
+      expect(meter).toHaveTextContent('0.0')
+    } else {
+      expect(meter).not.toHaveAttribute('aria-valuenow')
+      expect(meter).toHaveAttribute('aria-valuetext', '未提供')
+    }
+    expect(container.querySelector('[data-energy-fill]')).toBeNull()
+    expect(container.querySelector('.cmd08-summary')).toHaveTextContent('52.78')
   })
   it('retains all fields, uncertain quantities, metadata and 100 original bytes in diagnostics', () => {
     const { container } = view()
