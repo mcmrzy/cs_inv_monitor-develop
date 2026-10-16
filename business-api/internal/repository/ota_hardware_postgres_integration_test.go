@@ -53,9 +53,9 @@ func setupOTAHardwareDB(t *testing.T, migrate bool) *pgxpool.Pool {
 	require.NoError(t, err)
 	if migrate {
 		runOTAHardwareMigration(t, pool, "up")
-		paths, err := filepath.Glob(filepath.Join("..", "..", "..", "database", "migrations", "13[12]*.up.sql"))
+		paths, err := filepath.Glob(filepath.Join("..", "..", "..", "database", "migrations", "13[123]*.up.sql"))
 		require.NoError(t, err)
-		require.Len(t, paths, 2)
+		require.Len(t, paths, 3)
 		for _, path := range paths {
 			data, err := os.ReadFile(path)
 			require.NoError(t, err)

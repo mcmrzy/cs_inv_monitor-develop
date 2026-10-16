@@ -661,6 +661,25 @@ jobs:
               AND position('firmware_board_types' in pg_get_functiondef('snapshot_trusted_ota_identity()'::regprocedure))=0);
             OTA_GATE_REMOVAL_SQL
               fi
+              if [ -f /opt/inv-mqtt/database/migrations/133_ota_offline_delivery.up.sql ]; then
+                DEPLOY_PHASE=verify_ota_offline_delivery_migration
+                docker exec -i inv-postgres sh -c 'export PGPASSWORD="$POSTGRES_PASSWORD"; exec psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At' <<'OTA_OFFLINE_DELIVERY_SQL'
+            DO $$ BEGIN
+              IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version=133) THEN
+                RAISE EXCEPTION 'OTA delivery migration 133 was not applied';
+              END IF;
+              IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                  WHERE table_schema=current_schema() AND table_name='device_upgrades'
+                    AND column_name='last_dispatched_at' AND data_type='timestamp with time zone')
+                 OR to_regclass('idx_device_upgrades_pending_delivery') IS NULL THEN
+                RAISE EXCEPTION 'OTA delivery migration 133 schema is incomplete';
+              END IF;
+            END $$;
+            SELECT json_build_object('migration',133,'offline_delivery_ready',true,
+              'waiting_first_delivery',(SELECT count(*) FROM device_upgrades
+                WHERE status='pending' AND last_dispatched_at IS NULL));
+            OTA_OFFLINE_DELIVERY_SQL
+              fi
               report_external_readiness
               cleanup_old_images
               echo "🎉 部署成功完成！"
