@@ -111,6 +111,19 @@ func (s *DataService) HandleCmdResult(sn string, payload []byte) {
 	}
 	payload = normalizedPayload
 
+	// The deployed ESP32 OTA adapter publishes its acceptance ACK on the
+	// generic cmd/response topic. Treat an explicit ack+task_id payload as an
+	// OTA ACK before forwarding ordinary command results; otherwise the API
+	// server never advances the durable device_upgrades row beyond pending.
+	var otaAck struct {
+		Ack    *bool  `json:"ack"`
+		TaskID string `json:"task_id"`
+	}
+	if err := json.Unmarshal(payload, &otaAck); err == nil && otaAck.Ack != nil && strings.TrimSpace(otaAck.TaskID) != "" {
+		s.HandleOTACmdAck(sn, payload)
+		return
+	}
+
 	// 直接转发原始 JSON 给 API Server，由 API Server 更新 command_logs 和插入通知
 	url := s.apiServer + "/api/v1/internal/device-cmd-result"
 
