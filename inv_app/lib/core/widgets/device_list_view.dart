@@ -230,6 +230,13 @@ class _DeviceCardState extends State<DeviceCard>
     final ratedPower = deviceRatedWatts(widget.device);
     final battery = deviceBattery(widget.device);
     final batteryLive = isOnline && battery?.onlineAt(DateTime.now()) == true;
+    final batteryStatus = !isOnline
+        ? l10n.str('offline_data_hint')
+        : battery?.online == false
+            ? l10n.str('storage_summary_offline')
+            : battery?.onlineAt(DateTime.now()) == false
+                ? l10n.str('storage_bms_expired')
+                : l10n.str('storage_summary_unknown');
     final updated = DateTime.tryParse('${widget.device['telemetry_updated_at'] ?? ''}');
     final fresh = isOnline && updated != null &&
         DateTime.now().difference(updated).inSeconds >= 0 &&
@@ -331,7 +338,7 @@ class _DeviceCardState extends State<DeviceCard>
                     SizedBox(width: 8.w),
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text(l10n.deviceTypeStorage, style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600)),
-                      Text(batteryLive ? '${battery.soc?.toStringAsFixed(1) ?? '--'}% SOC  |  ${devicePowerLabel(battery.voltage == null || battery.current == null ? null : battery.voltage! * battery.current!)}' : l10n.str('storage_summary_offline'), style: TextStyle(fontSize: 12.sp, color: AppColor.textSecondary(context))),
+                      Text(batteryLive ? '${battery.soc?.toStringAsFixed(1) ?? '--'}% SOC  |  ${devicePowerLabel(battery.voltage == null || battery.current == null ? null : battery.voltage! * battery.current!)}' : batteryStatus, style: TextStyle(fontSize: 12.sp, color: AppColor.textSecondary(context))),
                     ],),),
                     Icon(Icons.chevron_right, size: 20, color: AppColor.textHint(context)),
                   ],),),

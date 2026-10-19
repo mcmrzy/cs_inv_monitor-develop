@@ -102,6 +102,30 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('battery distinguishes expired data, unknown link and offline gateway',
+      (tester) async {
+    final device = fixture();
+    final summary = Map<String, dynamic>.from(device['bms_summary'] as Map);
+    await pumpMinimalApp(tester, Scaffold(body: ListView(children: [DeviceCard(device: {
+      ...device,
+      'bms_summary': {
+        ...summary,
+        'bms_online': 0,
+        'reported_bms_online': 1,
+        'expires_at': now.subtract(const Duration(seconds: 1)).toIso8601String(),
+      },
+    },),],),), locale: const Locale('en'),);
+    expect(find.text('BMS data expired'), findsOneWidget);
+    await pumpMinimalApp(tester, Scaffold(body: ListView(children: [DeviceCard(device: {
+      ...device, 'bms_summary': {...summary, 'expires_at': null},
+    },),],),), locale: const Locale('en'),);
+    expect(find.text('Connection unknown'), findsOneWidget);
+    await pumpMinimalApp(tester, Scaffold(body: ListView(children: [DeviceCard(device: {
+      ...device, 'status': 0,
+    },),],),), locale: const Locale('en'),);
+    expect(find.text('Offline data, may not be latest'), findsOneWidget);
+  });
+
   testWidgets('battery child opens only storage, not parent inverter detail',
       (tester) async {
     var parentOpened = 0;

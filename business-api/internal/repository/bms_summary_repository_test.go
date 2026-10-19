@@ -21,3 +21,15 @@ func TestBMSSummaryFreshness(t *testing.T) {
 		}
 	}
 }
+
+func TestBMSSummaryFreshnessPreservesReportedLink(t *testing.T) {
+	now := time.Now().UTC()
+	for _, reported := range []int{0, 1} {
+		s := map[string]interface{}{"bms_online": reported, "expires_at": now.Add(-time.Second).Format(time.RFC3339Nano), "soc": 88.0}
+		markBMSSummaryFreshness(s, now)
+		markBMSSummaryFreshness(s, now)
+		require.Equal(t, reported, s["reported_bms_online"], "expiry must not become evidence of a disconnected BMS")
+		require.Equal(t, 0, s["bms_online"], "legacy consumers must continue rejecting stale readings")
+		require.Nil(t, s["soc"])
+	}
+}

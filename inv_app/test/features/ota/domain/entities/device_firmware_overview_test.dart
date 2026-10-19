@@ -2,6 +2,50 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:inv_app/features/ota/domain/entities/device_firmware_overview.dart';
 
 void main() {
+  test('server eligibility permits published targets before version reporting', () {
+    for (final target in ['esp', 'arm', 'dsp', 'bms']) {
+      final module = FirmwareModuleOverview.fromJson({
+        'target': target,
+        'current_version': '',
+        'latest_firmware_id': 7,
+        'latest_version': '1.1.0',
+        'version_state': 'unreported',
+        'update_available': true,
+        'supported': true,
+        'connected': false,
+        'eligible': true,
+        'supported_channels': ['remote'],
+      });
+      expect(module.isUnreported, isTrue);
+      expect(module.canRemoteUpgrade, isTrue, reason: target);
+    }
+    expect(FirmwareModuleOverview.fromJson({
+      'target': 'esp', 'latest_firmware_id': 7,
+      'version_state': 'unreported', 'update_available': true,
+    },).canRemoteUpgrade, isFalse,);
+    expect(FirmwareModuleOverview.fromJson({
+      'target': 'esp', 'current_version': '1.0.0', 'latest_firmware_id': 7,
+      'version_state': 'outdated', 'update_available': true,
+      'supported': true, 'connected': false, 'eligible': true,
+    },).canRemoteUpgrade, isTrue,);
+  });
+
+  test('ordinary remote resources do not require a hardware range', () {
+    final resource = FirmwareResource.fromJson({
+      'id': 12,
+      'model': 'L10',
+      'version': '1.2.0',
+      'target_chip': 'esp',
+      'supported_channels': ['remote', 'ble'],
+    });
+    expect(resource.canRemoteUpgrade, isTrue);
+    // The separate trusted local flow retains its preflight requirements.
+    expect(resource.canLocalUpgrade, isFalse);
+    expect(FirmwareResource.fromJson({
+      'target_chip': 'esp', 'supported_channels': ['ble'],
+    },).canRemoteUpgrade, isFalse,);
+  });
+
   test('parses raw device hardware and each module compatibility reason', () {
     final overview = DeviceFirmwareOverview.fromJson({
       'device_sn': 'SN1',
@@ -70,7 +114,7 @@ void main() {
     expect(module('arm').canRemoteUpgrade, isTrue);
   });
 
-  test('an explicit unsupported or disconnected module cannot upgrade', () {
+  test('unsupported, ineligible and legacy disconnected modules cannot upgrade', () {
     final unsupported = FirmwareModuleOverview.fromJson({
       'target': 'arm',
       'latest_firmware_id': 7,
@@ -80,6 +124,15 @@ void main() {
       'connected': true,
       'eligible': true,
     });
+    final ineligible = FirmwareModuleOverview.fromJson({
+      'target': 'esp',
+      'latest_firmware_id': 8,
+      'version_state': 'unreported',
+      'update_available': true,
+      'supported': true,
+      'connected': false,
+      'eligible': false,
+    });
     final disconnected = FirmwareModuleOverview.fromJson({
       'target': 'esp',
       'latest_firmware_id': 8,
@@ -87,11 +140,11 @@ void main() {
       'update_available': true,
       'supported': true,
       'connected': false,
-      'eligible': true,
     });
 
     expect(unsupported.canRemoteUpgrade, isFalse);
     expect(disconnected.canRemoteUpgrade, isFalse);
+    expect(ineligible.canRemoteUpgrade, isFalse);
   });
 
   test('firmware resources allow DSP and BMS only on advertised BLE channels',
