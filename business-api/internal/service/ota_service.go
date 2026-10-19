@@ -345,10 +345,9 @@ func (s *OTAService) SendUpgradeCommand(ctx context.Context, du *model.DeviceUpg
 		return
 	}
 	if device != nil && !device.IsOnline {
+		logger.Info("OTA delivery deferred: device offline",
+			zap.String("sn", du.DeviceSN), zap.Int64("upgrade_id", du.ID))
 		return // Keep the durable pending record until the device reconnects.
-	}
-	if s.rdb != nil && s.rdb.Exists(ctx, "device:heartbeat:"+du.DeviceSN).Val() == 0 {
-		return
 	}
 	if s.repo != nil {
 		if err := s.repo.ValidateUpgradeSnapshot(ctx, du.ID, du.DeviceSN, du.FirmwareID); err != nil {
