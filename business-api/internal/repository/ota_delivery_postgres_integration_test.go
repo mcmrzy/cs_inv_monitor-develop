@@ -241,3 +241,59 @@ func TestCancelTaskReleasesDeviceDeliveryQueue(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, claimed)
 }
+
+// A server build that cancelled only pending rows can leave a downloading row
+// behind. The queue must ignore that orphan immediately, otherwise every later
+// task for the device stays at "pending" with an empty error until someone
+// edits the database.
+func TestTerminalTaskInFlightRowDoesNotBlockLaterDelivery(t *testing.T) {
+	pool := setupOTAHardwareDB(t, true)
+	ctx := context.Background()
+	hardwareExec(t, pool, `INSERT INTO devices(sn,model,status) VALUES ('orphan-release','MODEL',1)`)
+	dsp := seedHardwareFirmware(t, pool, "dsp", "1.1.50", nil, true)
+	esp := seedHardwareFirmware(t, pool, "esp", "2.0", nil, true)
+	hardwareExec(t, pool, `INSERT INTO upgrade_tasks(id,status,execute_mode,updated_at) VALUES
+ (1,'cancelled','immediate',NOW()),(2,'running','immediate',NOW())`)
+	hardwareExec(t, pool, `INSERT INTO device_upgrades(id,device_sn,firmware_id,firmware_version,task_id,target_chip,status,updated_at) VALUES
+ (1,'orphan-release',$1,'1.1.50',1,'dsp','downloading',NOW()-INTERVAL '2 minutes'),
+ (2,'orphan-release',$2,'2.0',2,'esp','pending',NOW())`, dsp.ID, esp.ID)
+	repo := NewOTARepository(pool)
+
+	sns, err := repo.ListPendingDeliveryDevices(ctx)
+	require.NoError(t, err)
+	require.Equal(t, []string{"orphan-release"}, sns)
+	du, _, err := repo.GetPendingUpgradeForDevice(ctx, "orphan-release")
+	require.NoError(t, err)
+	require.EqualValues(t, 2, du.ID)
+	claimed, err := repo.ClaimUpgradeDelivery(ctx, du.ID, "orphan-release", 0)
+	require.NoError(t, err)
+	require.True(t, claimed)
+}
+
+func TestFailStaleUpgradeRecordsReleasesAbandonedDownload(t *testing.T) {
+	pool := setupOTAHardwareDB(t, true)
+	ctx := context.Background()
+	hardwareExec(t, pool, `INSERT INTO devices(sn,model,status) VALUES ('stale-download','MODEL',1)`)
+	fw := seedHardwareFirmware(t, pool, "esp", "2.1", nil, true)
+	hardwareExec(t, pool, `INSERT INTO upgrade_tasks(id,status,execute_mode,updated_at) VALUES (10,'running','immediate',NOW())`)
+	hardwareExec(t, pool, `INSERT INTO device_upgrades(id,device_sn,firmware_id,firmware_version,task_id,target_chip,status,updated_at) VALUES
+ (10,'stale-download',$1,'2.1',10,'esp','downloading',NOW()-INTERVAL '2 hours'),
+ (11,'stale-download',$1,'2.1',10,'esp','upgrading',NOW()),
+ (12,'stale-download',$1,'2.1',10,'esp','downloading',NOW()-INTERVAL '5 minutes')`, fw.ID)
+	repo := NewOTARepository(pool)
+
+	stale, err := repo.FailStaleUpgradeRecords(ctx, 20*time.Minute, "timeout")
+	require.NoError(t, err)
+	require.Len(t, stale, 1)
+	require.EqualValues(t, 10, stale[0].ID)
+	require.Equal(t, "downloading", stale[0].Status)
+
+	var failedAt *time.Time
+	require.NoError(t, pool.QueryRow(ctx, `SELECT completed_at FROM device_upgrades WHERE id=10`).Scan(&failedAt))
+	require.NotNil(t, failedAt)
+	var status string
+	require.NoError(t, pool.QueryRow(ctx, `SELECT status FROM device_upgrades WHERE id=11`).Scan(&status))
+	require.Equal(t, "upgrading", status, "a record reporting progress must survive the sweep")
+	require.NoError(t, pool.QueryRow(ctx, `SELECT status FROM device_upgrades WHERE id=12`).Scan(&status))
+	require.Equal(t, "downloading", status, "a recent download must survive the sweep")
+}

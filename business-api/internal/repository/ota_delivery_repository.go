@@ -1,13 +1,24 @@
 package repository
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // Only executed tasks may deliver. A pending sibling must wait until the device
 // finishes its current module, including across separate parent tasks.
+//
+// An in-flight row only blocks while its owning task can still make progress.
+// Rows left behind by cancelled/failed/completed tasks (or by a deleted task)
+// must not keep every later upgrade of the device at "pending" forever; the
+// cancel path can miss records written by an older server build, so the queue
+// condition itself has to ignore those orphans.
 const pendingDeliveryCondition = `du.status = 'pending'
  AND (du.task_id IS NULL OR task.status = 'running')
  AND NOT EXISTS (SELECT 1 FROM device_upgrades active
-     WHERE active.device_sn = du.device_sn AND active.status IN ('downloading', 'upgrading'))`
+     LEFT JOIN upgrade_tasks active_task ON active_task.id = active.task_id
+     WHERE active.device_sn = du.device_sn AND active.status IN ('downloading', 'upgrading')
+       AND (active.task_id IS NULL OR COALESCE(active_task.status, '') IN ('draft', 'pending', 'scheduled', 'running')))`
 
 // ListPendingDeliveryDevices recovers tasks after reconnects, lost commands and
 // server restarts. The oldest eligible module is selected again before sending.
@@ -59,4 +70,48 @@ func (r *OTARepository) ClaimUpgradeDelivery(ctx context.Context, id int64, sn s
 )
 SELECT EXISTS (SELECT 1 FROM delivered)`, id, sn, retryCount).Scan(&claimed)
 	return claimed, err
+}
+
+// StaleUpgradeRecord identifies an in-flight row that stopped reporting.
+type StaleUpgradeRecord struct {
+	ID, TaskID int64
+	Status     string
+}
+
+// FailStaleUpgradeRecords releases rows whose device has stopped reporting for
+// the whole timeout window. Both downloading and upgrading are included:
+// a device that loses power during download never sends a terminal status, and
+// leaving the row downloading would block every later upgrade of that device.
+// A record still receiving progress keeps refreshing updated_at and survives.
+func (r *OTARepository) FailStaleUpgradeRecords(ctx context.Context, timeout time.Duration, reason string) ([]StaleUpgradeRecord, error) {
+	minutes := int(timeout.Minutes())
+	if minutes < 1 {
+		minutes = 1
+	}
+	rows, err := r.db.Query(ctx, `WITH stale AS (
+ SELECT id, status FROM device_upgrades
+ WHERE status IN ('downloading', 'upgrading')
+   AND updated_at < NOW() - make_interval(mins => $1)
+ FOR UPDATE SKIP LOCKED
+), updated AS (
+ UPDATE device_upgrades du
+ SET status = 'failed', error_message = $2, completed_at = NOW(), updated_at = NOW()
+ FROM stale
+ WHERE du.id = stale.id
+ RETURNING du.id, COALESCE(du.task_id, 0) AS task_id, stale.status
+)
+SELECT id, task_id, status FROM updated`, minutes, reason)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var stale []StaleUpgradeRecord
+	for rows.Next() {
+		var r StaleUpgradeRecord
+		if err := rows.Scan(&r.ID, &r.TaskID, &r.Status); err != nil {
+			return nil, err
+		}
+		stale = append(stale, r)
+	}
+	return stale, rows.Err()
 }

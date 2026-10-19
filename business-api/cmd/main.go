@@ -260,7 +260,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	go runPipelineHealthPing(rdb, heartbeatDone)
 
 	// OTA 鍗囩骇瓒呮椂娓呯悊锛氭瘡 5 鍒嗛挓鎵弿鍗′綇鐨勫崌绾ц褰曞苟鏇存柊鍏宠仈浠诲姟缁熻
-	go runOTATimeoutCleanup(db, cfg.OTA.RecordTimeoutMinutes, heartbeatDone)
+	go runOTATimeoutCleanup(db, otaRepo, cfg.OTA.RecordTimeoutMinutes, heartbeatDone)
 	// OTA 瀹氭椂浠诲姟锛氶鍙栧苟鎵ц鍒版湡浠诲姟锛岄噸鍚悗涔熶細鎭㈠宸插埌鏈熶絾鏈墽琛岀殑浠诲姟銆?
 	go runOTAScheduler(db, otaService, heartbeatDone)
 	go runOTADeliveryRetry(otaService, heartbeatDone)
@@ -493,14 +493,18 @@ func sendOfflineNotification(ctx context.Context, db *pgxpool.Pool, sn string, u
 }
 
 // runOTATimeoutCleanup 定期清理卡住的 OTA 升级记录。
-// 每 5 分钟扫描一次 status='upgrading' 且 updated_at 超过 timeoutMinutes 无任何
-// 更新的记录，将其标记为 failed，并更新关联 upgrade_tasks 的统计数据与状态。
+// 每 5 分钟扫描一次 downloading/upgrading 且 updated_at 超过 timeoutMinutes
+// 无任何更新的记录，将其标记为 failed，并更新关联 upgrade_tasks 的统计数据与状态。
 //
 // 判据用 updated_at 而非 started_at：设备每次上报进度都会刷新 updated_at，
 // 因此仍在正常推进的升级不会被误判；started_at 只在首次置位、永不刷新，用它
 // 判超时会让慢速升级（arm/dsp 走 9600 baud IAP 串口）在中途被判失败，而失败后
-// 设备的成功回报会被 `WHERE status='upgrading'` 守卫静默丢弃。
-func runOTATimeoutCleanup(db *pgxpool.Pool, timeoutMinutes int, done chan struct{}) {
+// 设备的成功回报会被活跃状态守卫静默丢弃。
+//
+// downloading 也必须纳入清理：设备在下载阶段掉电/重启后不会再上报终态，
+// 而该记录会作为"同设备进行中"阻塞后续所有 pending 升级，表现为新任务永远
+// 停在「待执行」且错误信息为空。
+func runOTATimeoutCleanup(db *pgxpool.Pool, repo *repository.OTARepository, timeoutMinutes int, done chan struct{}) {
 	if timeoutMinutes < 1 {
 		timeoutMinutes = 20
 	}
@@ -512,43 +516,30 @@ func runOTATimeoutCleanup(db *pgxpool.Pool, timeoutMinutes int, done chan struct
 			logger.Info("OTA timeout cleanup stopped")
 			return
 		case <-ticker.C:
-			// 1. 鏌ユ壘鎵€鏈?status='upgrading' 涓?started_at 瓒呰繃 15 鍒嗛挓鐨勮褰?
-			rows, err := db.Query(context.Background(), `
-				SELECT id, COALESCE(task_id, 0)
-				FROM device_upgrades
-				WHERE status = 'upgrading' AND updated_at < NOW() - make_interval(mins => $1)
-			`, timeoutMinutes)
+			// 1. 查找并收口所有下载/写入阶段长时间无进度更新的记录。
+			staleRecords, err := repo.FailStaleUpgradeRecords(
+				context.Background(),
+				time.Duration(timeoutMinutes)*time.Minute,
+				"升级超时，设备可能已断连",
+			)
 			if err != nil {
-				logger.Warn("OTA timeout cleanup query failed", zap.Error(err))
+				logger.Warn("OTA timeout cleanup failed", zap.Error(err))
 				continue
 			}
-
-			type staleRecord struct{ id, taskID int64 }
-			var staleRecords []staleRecord
-			for rows.Next() {
-				var r staleRecord
-				rows.Scan(&r.id, &r.taskID)
-				staleRecords = append(staleRecords, r)
-			}
-			rows.Close()
 
 			if len(staleRecords) == 0 {
 				continue
 			}
-
-			// 2. 鎵归噺鏍囪涓?failed
 			for _, r := range staleRecords {
-				db.Exec(context.Background(), `
-					UPDATE device_upgrades SET status = 'failed', error_message = '升级超时，设备可能已断连', updated_at = NOW()
-					WHERE id = $1 AND status = 'upgrading'`, r.id)
-				logger.Info("OTA upgrade marked as timed out", zap.Int64("id", r.id))
+				logger.Info("OTA upgrade marked as timed out",
+					zap.Int64("id", r.ID), zap.String("status", r.Status))
 			}
 
-			// 3. 鏇存柊鍏宠仈浠诲姟缁熻
+			// 2. 更新关联任务统计
 			taskIDs := map[int64]bool{}
 			for _, r := range staleRecords {
-				if r.taskID > 0 {
-					taskIDs[r.taskID] = true
+				if r.TaskID > 0 {
+					taskIDs[r.TaskID] = true
 				}
 			}
 			for taskID := range taskIDs {

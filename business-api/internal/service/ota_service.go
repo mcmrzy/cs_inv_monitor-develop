@@ -243,13 +243,20 @@ func (s *OTAService) PushUpgrade(ctx context.Context, req *PushUpgradeReq) error
 	taskID := req.TaskID
 	if taskID == nil {
 		createdBy := req.PushedBy
+		status := model.TaskStatusPending
+		if req.Immediate {
+			// The command is sent below in the same request. Without this the
+			// parent task stays pending, and the durable delivery retry (which
+			// only selects running tasks) can never recover an offline device.
+			status = model.TaskStatusRunning
+		}
 		task := &model.UpgradeTask{
 			Name:          fmt.Sprintf("管理员推送升级 %s", fw.Version),
 			TaskType:      model.TaskTypeSingle,
 			FirmwareID:    &fw.ID,
 			Model:         fw.Model,
 			TargetVersion: fw.Version,
-			Status:        model.TaskStatusPending,
+			Status:        status,
 			ExecuteMode:   model.ExecuteModeImmediate,
 			TotalDevices:  len(req.DeviceSNs),
 			CreatedBy:     &createdBy,
