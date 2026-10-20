@@ -646,6 +646,7 @@ const Map<String, String> en = {
   'control_execution_timeout': 'Command execution timed out',
   'control_executing': 'Executing...',
   'control_applied': 'Applied',
+  'control_submitted_unconfirmed': 'Saved and submitted; device application unconfirmed',
   'control_execution_failed': 'Execution failed',
   'control_load_failed':
       'Device control data failed to load. Values shown may be incomplete.',

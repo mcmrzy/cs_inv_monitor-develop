@@ -9,6 +9,7 @@ import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/entities/device_model_field.dart';
 import 'package:inv_app/core/utils/api_response.dart';
 import 'package:inv_app/core/utils/energy_schedule.dart';
+import 'package:inv_app/core/utils/device_command_state.dart';
 import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
@@ -61,6 +62,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
   Timer? _refreshTimer;
   int _pollGeneration = 0;
   Map<String, int> _riskLevels = {};
+  Set<String> _allowedCommands = {};
 
   // Tab1 — 运行
   Map<String, dynamic> _realtimeData = {};
@@ -137,6 +139,9 @@ class _DeviceControlPageState extends State<DeviceControlPage>
     final dio = getIt<Dio>();
     bool isOnline = false;
     Map<String, int> riskLevels = {};
+    Set<String> allowedCommands = {};
+    // Revoke stale permissions while a fresh capability request is pending.
+    if (mounted) setState(() => _allowedCommands = {});
     var success = true;
 
     try {
@@ -163,12 +168,13 @@ class _DeviceControlPageState extends State<DeviceControlPage>
         validate: (data) => data is List,
         expected: 'a list',
       );
+      allowedCommands = enabledDeviceCommands(capsData);
       for (final cap in capsData) {
         if (cap is Map<String, dynamic>) {
-          final code = cap['command_code'] as String?;
-          final risk = cap['risk_level'] as int?;
-          if (code != null && risk != null) {
-            riskLevels[code] = risk;
+          final code = cap['command_code'];
+          final risk = cap['risk_level'];
+          if (code is String && risk is num) {
+            riskLevels[code] = risk.toInt();
           }
         }
       }
@@ -194,6 +200,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
       setState(() {
         _isOnline = isOnline;
         _riskLevels = riskLevels;
+        _allowedCommands = allowedCommands;
       });
     }
     return success;
@@ -342,6 +349,10 @@ class _DeviceControlPageState extends State<DeviceControlPage>
     Map<String, dynamic>? params,
   }) async {
     final l10n = AppLocalizations.of(context)!;
+    if (const {'ac_on', 'ac_off'}.contains(commandCode) &&
+        !canSendAcCommand(_allowedCommands, commandCode)) {
+      return;
+    }
     try {
       final dio = getIt<Dio>();
       final response = await dio.post(
@@ -366,6 +377,11 @@ class _DeviceControlPageState extends State<DeviceControlPage>
       String? taskID;
       if (respData is Map<String, dynamic>) {
         taskID = respData['task_id'] as String?;
+        if (deviceCommandStatus(respData) == 'submitted') {
+          _showCommandStatusSnack('submitted');
+          _fetchAllData();
+          return;
+        }
       }
 
       if (taskID == null || taskID.isEmpty) {
@@ -434,7 +450,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
         if (items != null) {
           for (final item in items) {
             if (item is Map<String, dynamic> && item['task_id'] == taskID) {
-              status = item['status'] as String?;
+              status = deviceCommandStatus(item);
               break;
             }
           }
@@ -445,7 +461,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
           _showCommandStatusSnack(status);
         }
 
-        if (status != null && _isTerminalStatus(status)) {
+        if (status != null && isTerminalDeviceCommand(status)) {
           // Refresh data after terminal status
           _fetchAllData();
           return;
@@ -464,41 +480,13 @@ class _DeviceControlPageState extends State<DeviceControlPage>
     if (!mounted) return;
     final l10n = AppLocalizations.of(context)!;
 
-    String message;
-    ToastType type;
-
-    switch (status) {
-      case 'acknowledged':
-      case 'executing':
-        message = l10n.str('control_executing');
-        type = ToastType.info;
-        break;
-      case 'success':
-      case 'completed':
-        message = l10n.str('control_applied');
-        type = ToastType.success;
-        break;
-      case 'timeout':
-      case 'failed':
-      case 'cancelled':
-        message = l10n.str('control_execution_failed');
-        type = ToastType.error;
-        break;
-      default:
-        message = l10n.str('control_waiting_execution');
-        type = ToastType.info;
-        break;
-    }
-
+    final message = l10n.str(deviceCommandStatusLabel(status));
+    final type = isSuccessfulDeviceCommand(status)
+        ? ToastType.success
+        : const {'failed', 'timeout', 'cancelled'}.contains(status)
+            ? ToastType.error
+            : ToastType.info;
     AppToast.show(context, message, type: type);
-  }
-
-  bool _isTerminalStatus(String status) {
-    return status == 'success' ||
-        status == 'completed' ||
-        status == 'failed' ||
-        status == 'timeout' ||
-        status == 'cancelled';
   }
 
   // ─────────────────────────────────────────────────────────────────────
@@ -753,7 +741,10 @@ class _DeviceControlPageState extends State<DeviceControlPage>
             children: [
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: _isOnline ? () => _toggleAcOutput(true) : null,
+                  onPressed: _isOnline &&
+                          canSendAcCommand(_allowedCommands, 'ac_on')
+                      ? () => _toggleAcOutput(true)
+                      : null,
                   icon: Icon(Icons.power_settings_new, size: 18.sp),
                   label: Text(l10n.str('open')),
                   style: FilledButton.styleFrom(
@@ -767,7 +758,10 @@ class _DeviceControlPageState extends State<DeviceControlPage>
               SizedBox(width: 8.w),
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: _isOnline ? () => _toggleAcOutput(false) : null,
+                  onPressed: _isOnline &&
+                          canSendAcCommand(_allowedCommands, 'ac_off')
+                      ? () => _toggleAcOutput(false)
+                      : null,
                   icon: Icon(Icons.power_off, size: 18.sp),
                   label: Text(l10n.str('close')),
                   style: FilledButton.styleFrom(
@@ -788,7 +782,8 @@ class _DeviceControlPageState extends State<DeviceControlPage>
   void _toggleAcOutput(bool turnOn) {
     final l10n = AppLocalizations.of(context)!;
     final command = turnOn ? 'ac_on' : 'ac_off';
-    final riskLevel = _riskLevels[command] ?? 0;
+    if (!canSendAcCommand(_allowedCommands, command)) return;
+    final riskLevel = _riskLevels[command] ?? 2;
     // 不做乐观更新：UI 状态由命令终态成功后的 _fetchAllData() 回填，
     // 避免命令失败时开关状态与设备实际状态不一致
     if (riskLevel >= 2) {
