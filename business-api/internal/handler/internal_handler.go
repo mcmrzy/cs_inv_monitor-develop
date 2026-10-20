@@ -1141,10 +1141,11 @@ func (h *InternalHandler) DeviceCmdResult(c *gin.Context) {
 	if userID > 0 && commandResultTerminal(status) {
 		notifyTitle := "控制指令执行成功"
 		notifyContent := fmt.Sprintf("设备 %s 执行「%s」指令成功", req.SN, req.Cmd)
-		if status == "submitted" {
+		switch status {
+		case "submitted":
 			notifyTitle = "控制指令已提交"
 			notifyContent = fmt.Sprintf("设备 %s 的「%s」已保存并提交，DSP生效未确认", req.SN, req.Cmd)
-		} else if status == "failed" {
+		case "failed":
 			notifyTitle = "控制指令执行失败"
 			notifyContent = fmt.Sprintf("设备 %s 执行「%s」指令失败: %s", req.SN, req.Cmd, req.Message)
 		}
