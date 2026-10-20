@@ -20,16 +20,13 @@ import (
 )
 
 type DataService struct {
-	repo            *repository.DeviceRepository
-	metaRepo        *repository.MetadataRepository
-	hub             *mqtt.Hub
-	rdb             *redis.Client
-	apiServer       string
-	internalKey     string
-	httpClient      *http.Client
-	mqttStats       mqtt.MQTTStats
-	dlqPrefixes     []string
-	ingestMetrics   *IngestMetrics
+	repo          *repository.DeviceRepository
+	metaRepo      *repository.MetadataRepository
+	hub           *mqtt.Hub
+	rdb           *redis.Client
+	apiServer     string
+	internalKey   string
+	httpClient    *http.Client
 }
 
 func NewDataService(repo *repository.DeviceRepository, metaRepo *repository.MetadataRepository, hub *mqtt.Hub, rdb *redis.Client, apiServer string, internalKey string) *DataService {
@@ -84,10 +81,10 @@ func (s *DataService) QueueCommand(sn string, cmdType string, rawPayload []byte)
 
 	queueKey := "device:cmd:queue:" + sn
 	entry := map[string]interface{}{
-		"command":    cmdType,
+		"command":     cmdType,
 		"raw_payload": string(rawPayload),
-		"t":          time.Now().Unix(),
-		"expires_at": time.Now().Add(24 * time.Hour).Unix(),
+		"t":           time.Now().Unix(),
+		"expires_at":  time.Now().Add(24 * time.Hour).Unix(),
 	}
 	data, err := json.Marshal(entry)
 	if err != nil {
@@ -110,6 +107,19 @@ func (s *DataService) HandleCmdResult(sn string, payload []byte) {
 		return
 	}
 	payload = normalizedPayload
+
+	// The deployed ESP32 OTA adapter publishes its acceptance ACK on the
+	// generic cmd/response topic. Treat an explicit ack+task_id payload as an
+	// OTA ACK before forwarding ordinary command results; otherwise the API
+	// server never advances the durable device_upgrades row beyond pending.
+	var otaAck struct {
+		Ack    *bool  `json:"ack"`
+		TaskID string `json:"task_id"`
+	}
+	if err := json.Unmarshal(payload, &otaAck); err == nil && otaAck.Ack != nil && strings.TrimSpace(otaAck.TaskID) != "" {
+		s.HandleOTACmdAck(sn, payload)
+		return
+	}
 
 	// 直接转发原始 JSON 给 API Server，由 API Server 更新 command_logs 和插入通知
 	url := s.apiServer + "/api/v1/internal/device-cmd-result"
@@ -186,7 +196,7 @@ func decodePendingCommand(sn string, raw []byte) (*mqtt.DeviceCommand, error) {
 		return nil, fmt.Errorf("queued command is required")
 	}
 	now := time.Now().Unix()
-	if (queued.ExpiresAt > 0 && now > queued.ExpiresAt) ||
+	if (queued.ExpiresAt > 0 && now >= queued.ExpiresAt) ||
 		(queued.ExpiresAt == 0 && queued.CreatedAt > 0 && now-queued.CreatedAt > 300) {
 		return nil, fmt.Errorf("queued command %s has expired", queued.TaskID)
 	}
@@ -231,9 +241,8 @@ func normalizeCommandResultPayload(sn string, payload []byte) ([]byte, error) {
 		}
 	}
 
-	if _, exists := body["sn"]; !exists {
-		body["sn"], _ = json.Marshal(sn)
-	}
+	// MQTT routing identifies the device; payload fields cannot override it.
+	body["sn"], _ = json.Marshal(sn)
 	if rawResult, ok := body["result"]; ok {
 		var resultString string
 		if json.Unmarshal(rawResult, &resultString) != nil {

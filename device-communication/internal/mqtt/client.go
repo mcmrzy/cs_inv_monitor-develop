@@ -624,6 +624,9 @@ func (c *Client) buildMqttPayload(cmd *DeviceCommand) map[string]interface{} {
 			if timestamp, ok := rawReq["t"]; ok {
 				payload["t"] = timestamp
 			}
+			if expiry, ok := rawReq["expires_at"]; ok {
+				payload["expires_at"] = expiry
+			}
 			if tid, ok := rawReq["task_id"].(string); ok {
 				taskID = tid
 			}
@@ -774,8 +777,10 @@ func isThreePhaseTopic(topic string) bool {
 
 // parseStatusOnline 从 status 消息的 payload 中解析 online 字段。
 // 兼容两种格式：
-//   信封格式 {"t":0,"v":2,"data":{"online":false}}（协议文档 LWT）
-//   平铺格式 {"online":false}（部分固件 LWT）
+//
+//	信封格式 {"t":0,"v":2,"data":{"online":false}}（协议文档 LWT）
+//	平铺格式 {"online":false}（部分固件 LWT）
+//
 // 两者都取不到或 JSON 解析失败时默认认为在线（收到消息本身说明设备还在）。
 func parseStatusOnline(payload []byte) bool {
 	var data map[string]interface{}

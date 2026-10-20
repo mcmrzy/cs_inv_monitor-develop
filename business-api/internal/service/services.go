@@ -847,7 +847,11 @@ func (s *DeviceService) GetControlCapabilitiesBySN(ctx context.Context, sn strin
 	if err != nil || modelID == 0 {
 		return []repository.CommandCapability{}, nil
 	}
-	return s.modelRepo.GetCommandCapabilitiesByModelID(ctx, modelID)
+	caps, err := s.modelRepo.GetCommandCapabilitiesByModelID(ctx, modelID)
+	if err != nil {
+		return nil, err
+	}
+	return s.restrictControllerCapabilities(ctx, sn, caps)
 }
 
 func (s *DeviceService) GetControlFieldsBySN(ctx context.Context, sn string) ([]model.DeviceModelField, error) {
@@ -906,6 +910,10 @@ func (s *DeviceService) SendCommand(ctx context.Context, sn, cmdType string, par
 		return "", fmt.Errorf("device server URL not configured")
 	}
 
+	if err := s.checkControllerCommand(ctx, sn, cmdType); err != nil {
+		return "", err
+	}
+
 	// 生成唯一任务ID
 	taskID := generateTaskID()
 	args, hasV2Spec, err := s.modelRepo.BuildCommandArgs(ctx, sn, cmdType, params)
@@ -923,16 +931,16 @@ func (s *DeviceService) SendCommand(ctx context.Context, sn, cmdType string, par
 
 	// 2. 构造命令体
 	cmdBody := map[string]interface{}{
-		"command": cmdType,
-		"params":  params,
-		"task_id": taskID,
+		"command":    cmdType,
+		"params":     params,
+		"task_id":    taskID,
+		"expires_at": time.Now().Add(5 * time.Minute).Unix(),
 	}
 	if hasV2Spec {
 		cmdBody["v"] = 1
 		cmdBody["t"] = time.Now().Unix()
 		cmdBody["cmd"] = cmdType
 		cmdBody["args"] = args
-		cmdBody["expires_at"] = time.Now().Add(5 * time.Minute).Unix()
 	}
 	body, err := json.Marshal(cmdBody)
 	if err != nil {
