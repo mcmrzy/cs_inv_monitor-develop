@@ -10,6 +10,9 @@ const migrationDir = new URL('../../database/migrations/', import.meta.url)
 const oldSql = await readFile(new URL('096_add_csl10_6k2_v21.up.sql', migrationDir), 'utf8')
 const seed = oldSql.match(/INSERT INTO device_config_schema\([\s\S]+?;/)?.[0]
 assert.ok(seed, 'migration 096 config seed must exist')
+const schemaSql = await readFile(new URL('../../database/schema.sql', import.meta.url), 'utf8')
+const commandTable = schemaSql.match(/CREATE TABLE IF NOT EXISTS device_model_commands \([\s\S]+?\r?\n\);/)?.[0]
+assert.ok(commandTable, 'use the actual canonical command table definition')
 const client = new Client({ host: '127.0.0.1', port: 25467, user: 'postgres', database: 'postgres' })
 await client.connect()
 try {
@@ -18,16 +21,16 @@ try {
     param_key text PRIMARY KEY, group_code text, sub_group text, control_type text,
     scale numeric, unit text, min numeric, max numeric, enum_map jsonb, step numeric,
     confirmation_mode text, display_name_key text, sort_order integer, visibility jsonb, validation jsonb
-  ); CREATE TEMP TABLE device_models(id integer PRIMARY KEY, model_code text);
-  CREATE TEMP TABLE device_model_commands(model_id integer, command_code text, param_schema jsonb);
+  ); CREATE TEMP TABLE device_models(id bigint PRIMARY KEY, model_code text);
   INSERT INTO device_models VALUES (1,'CS-L10-6K2'),(2,'OTHER-MODEL')`)
+  await client.query(commandTable.replace('CREATE TABLE IF NOT EXISTS', 'CREATE TEMP TABLE'))
   await client.query(seed)
-  await client.query(`INSERT INTO device_model_commands
-    SELECT m.id,s.param_key,jsonb_build_object('args',jsonb_build_array(
+  await client.query(`INSERT INTO device_model_commands(model_id,command_code,display_name_key,parameter_schema)
+    SELECT m.id,s.param_key,'commands.'||s.param_key,jsonb_build_object('args',jsonb_build_array(
       jsonb_build_object('key','value','type','integer','min',0,'max',2,'enum',jsonb_build_array(0,1,2))))
     FROM device_models m CROSS JOIN device_config_schema s
     WHERE s.param_key IN ('set_output_priority','set_battery_type','set_ac_volt_range','set_charge_priority','set_ac_output_mode');
-    INSERT INTO device_model_commands VALUES (1,'set_max_charge_current',
+    INSERT INTO device_model_commands(model_id,command_code,display_name_key,parameter_schema) VALUES (1,'set_max_charge_current','commands.set_max_charge_current',
       '{"args":[{"key":"value","type":"number","min":0,"max":60}]}');
     CREATE TEMP TABLE schema_before AS SELECT * FROM device_config_schema;
     CREATE TEMP TABLE commands_before AS SELECT * FROM device_model_commands;`)
@@ -53,9 +56,9 @@ try {
   assert.deepEqual(schema.get('set_equalize_enable').visibility.in, [2, 4])
   assert.equal(schema.get('set_equalize_enable').visibility.eq, 2, 'legacy clients retain their safe filter')
   const commands = (await client.query('SELECT * FROM device_model_commands')).rows
-  assert.deepEqual(commands.find(c => c.model_id === 1 && c.command_code === 'set_battery_type').param_schema.args[0].enum, [1, 2, 3, 4, 5])
-  assert.deepEqual(commands.find(c => c.model_id === 2 && c.command_code === 'set_battery_type').param_schema.args[0].enum, [0, 1, 2])
-  assert.equal(commands.find(c => c.command_code === 'set_max_charge_current').param_schema.args[0].max, 140)
+  assert.deepEqual(commands.find(c => c.model_id === '1' && c.command_code === 'set_battery_type').parameter_schema.args[0].enum, [1, 2, 3, 4, 5])
+  assert.deepEqual(commands.find(c => c.model_id === '2' && c.command_code === 'set_battery_type').parameter_schema.args[0].enum, [0, 1, 2])
+  assert.equal(commands.find(c => c.command_code === 'set_max_charge_current').parameter_schema.args[0].max, 140)
 
   const workflow = await readFile(new URL('../../.github/workflows/cd.yml', import.meta.url), 'utf8')
   const gate = workflow.match(/<<'L10_CONFIG_WIRE_SQL'\r?\n([\s\S]*?)\r?\n\s*L10_CONFIG_WIRE_SQL/)?.[1]

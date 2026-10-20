@@ -19,14 +19,14 @@ UPDATE device_config_schema SET validation='{"lte":"set_gen_start_voltage"}'::js
 UPDATE device_config_schema SET validation='{"lte":"set_soc_back_gen"}'::jsonb WHERE param_key='set_soc_back_utl';
 UPDATE device_config_schema SET validation='{"gte":"set_soc_back_utl"}'::jsonb WHERE param_key='set_soc_back_gen';
 UPDATE device_config_schema SET validation=NULL WHERE param_key='set_soc_close_gen';
-UPDATE device_model_commands c SET param_schema=jsonb_set(c.param_schema,'{args,0}',
-    (c.param_schema->'args'->0) || '{"min":0,"max":2,"enum":[0,1,2]}'::jsonb)
+UPDATE device_model_commands c SET parameter_schema=jsonb_set(c.parameter_schema,'{args,0}',
+    (c.parameter_schema->'args'->0) || '{"min":0,"max":2,"enum":[0,1,2]}'::jsonb)
 FROM device_models m
 WHERE c.model_id=m.id AND m.model_code='CS-L10-6K2'
   AND c.command_code IN ('set_output_priority','set_ac_volt_range','set_battery_type','set_charge_priority','set_ac_output_mode')
-  AND jsonb_typeof(c.param_schema->'args')='array' AND jsonb_array_length(c.param_schema->'args')=1;
-UPDATE device_model_commands c SET param_schema=jsonb_set(c.param_schema,'{args,0}',
-    (c.param_schema->'args'->0) || '{"max":60}'::jsonb)
+  AND jsonb_typeof(c.parameter_schema->'args')='array' AND jsonb_array_length(c.parameter_schema->'args')=1;
+UPDATE device_model_commands c SET parameter_schema=jsonb_set(c.parameter_schema,'{args,0}',
+    (c.parameter_schema->'args'->0) || '{"max":60}'::jsonb)
 FROM device_models m
 WHERE c.model_id=m.id AND m.model_code='CS-L10-6K2' AND c.command_code='set_max_charge_current'
-  AND jsonb_typeof(c.param_schema->'args')='array' AND jsonb_array_length(c.param_schema->'args')=1;
+  AND jsonb_typeof(c.parameter_schema->'args')='array' AND jsonb_array_length(c.parameter_schema->'args')=1;
