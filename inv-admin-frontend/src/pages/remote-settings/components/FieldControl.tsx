@@ -53,7 +53,7 @@ const PRIORITY_LABEL_KEY: Record<PrioritySource, string> = {
 // ── 当前值摘要（收起态可见，一眼读出配置现状） ──
 const ValueSummary: React.FC<FieldCardProps> = ({ cfg, paramKey }) => {
   const { t, lang } = useTranslation()
-  const current = cfg.getEditValue(paramKey)
+  const current = cfg.getSummaryValue(paramKey)
   const meta = cfg.getMeta(paramKey)
 
   if (current === undefined) return <Text type="secondary">--</Text>
@@ -97,7 +97,7 @@ const NumberField: React.FC<{ cfg: DeviceConfigApi; meta: ResolvedFieldMeta }> =
   const [draft, setDraft] = useState<number | undefined>(current)
   useEffect(() => {
     setDraft(current)
-  }, [current])
+  }, [current, cfg.controlState?.reported_at])
   const dirty =
     (draft !== undefined && current !== undefined && draft !== current) ||
     (draft !== undefined && current === undefined)
@@ -108,7 +108,7 @@ const NumberField: React.FC<{ cfg: DeviceConfigApi; meta: ResolvedFieldMeta }> =
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-      {hasRange && (
+      {hasRange && draft !== undefined && (
         <Slider
           style={{ flex: 1, minWidth: 140, maxWidth: 320 }}
           min={meta.min}
@@ -193,6 +193,11 @@ const FieldControlWidget: React.FC<FieldCardProps> = ({ cfg, paramKey }) => {
   const sending = cfg.sendingKey === paramKey
   const editable = cfg.canEdit(paramKey)
 
+  // Switch 与排序列表没有未知值状态，不能把缺失回报渲染成关闭或默认排序。
+  if (current === undefined && (meta.kind === 'boolean' || meta.kind === 'priority')) {
+    return <Text type="secondary">{t('remote.valueNotReported')}</Text>
+  }
+
   let control: React.ReactNode
 
   if (meta.kind === 'boolean') {
@@ -208,7 +213,7 @@ const FieldControlWidget: React.FC<FieldCardProps> = ({ cfg, paramKey }) => {
   } else if (meta.kind === 'enum' && meta.enumOptions) {
     const options = meta.enumOptions.map((o) => ({ label: cfg.enumLabel(o.semanticKey), value: o.value }))
     control =
-      options.length <= 4 ? (
+      options.length <= 4 && current !== undefined ? (
         <Segmented
           options={options}
           value={current}
