@@ -292,12 +292,7 @@ const DeviceFirmwareUpgradeTab: React.FC = () => {
       dataIndex: 'started_at',
       key: 'started_at',
       width: 160,
-      render: (v: string, r) =>
-        v
-          ? formatInTimezone(v, timezone, 'YYYY-MM-DD HH:mm:ss')
-          : r.created_at
-            ? formatInTimezone(r.created_at, timezone, 'YYYY-MM-DD HH:mm:ss')
-            : '-',
+      render: (v: string) => (v ? formatInTimezone(v, timezone, 'YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
       title: t('ota.completeTime'),

@@ -1085,7 +1085,7 @@ extension _DeviceControlTabSections on _DeviceControlPageState {
           else
             ..._commandHistory.take(10).map((cmd) {
               final m = cmd as Map<String, dynamic>;
-              final status = m['status'] as String? ?? '—';
+              final status = deviceCommandStatus(m);
               final command = m['command'] as String? ?? '—';
               final time = m['created_at'] ?? m['timestamp'] ?? '';
               return _buildCommandHistoryItem(command, status, '$time');
@@ -1103,6 +1103,7 @@ extension _DeviceControlTabSections on _DeviceControlPageState {
     Color statusColor;
     switch (status) {
       case 'success':
+      case 'applied':
       case 'completed':
         statusColor = AppColors.success;
         break;
@@ -1110,6 +1111,9 @@ extension _DeviceControlTabSections on _DeviceControlPageState {
       case 'timeout':
       case 'cancelled':
         statusColor = AppColors.error;
+        break;
+      case 'submitted':
+        statusColor = AppColors.warning;
         break;
       case 'acknowledged':
       case 'executing':
@@ -1162,12 +1166,15 @@ extension _DeviceControlTabSections on _DeviceControlPageState {
               ],
             ),
           ),
-          Text(
-            status,
+          Flexible(
+            child: Text(
+              AppLocalizations.of(context)!
+                  .str(deviceCommandStatusLabel(status)),
             style: TextStyle(
               fontSize: 11.sp,
               color: statusColor,
               fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],

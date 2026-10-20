@@ -626,6 +626,7 @@ const Map<String, String> zh = {
   'control_execution_timeout': '命令执行超时',
   'control_executing': '执行中...',
   'control_applied': '已生效',
+  'control_submitted_unconfirmed': '已保存并提交，设备生效未确认',
   'control_execution_failed': '执行失败',
   'control_load_failed': '设备控制数据加载失败，当前显示可能不完整。',
   'control_partial_failed': '有 {count} 组控制数据加载失败。',

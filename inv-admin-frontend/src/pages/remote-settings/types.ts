@@ -19,7 +19,9 @@ export interface ControlState {
 export interface CommandRecord {
   task_id: string
   command_code: string
-  stage: 'pending' | 'acknowledged' | 'executing' | 'completed'
+  status?: string
+  stage?: 'pending' | 'acknowledged' | 'executing' | 'submitted' | 'applied' | 'completed'
+  response_data?: { stage?: string }
   success?: boolean
   code?: string
   result?: unknown[]
@@ -92,9 +94,15 @@ export const SYNC_STATUS_MAP: Record<string, { color: string; label_zh: string }
 // ── 命令阶段颜色映射 ──
 export const STAGE_MAP: Record<string, { color: string; label_zh: string }> = {
   pending: { color: 'default', label_zh: '等待中' },
-  acknowledged: { color: 'processing', label_zh: '已确认' },
+  acknowledged: { color: 'processing', label_zh: '设备已接收' },
   executing: { color: 'warning', label_zh: '执行中' },
+  submitted: { color: 'warning', label_zh: '已保存并提交，设备生效未确认' },
+  applied: { color: 'success', label_zh: '已生效' },
   completed: { color: 'success', label_zh: '已完成' },
+  success: { color: 'success', label_zh: '已完成' },
+  failed: { color: 'error', label_zh: '执行失败' },
+  timeout: { color: 'error', label_zh: '执行超时' },
+  cancelled: { color: 'error', label_zh: '已取消' },
 }
 
 // ── 统一视觉规范（保留供后续组件使用）──
@@ -120,3 +128,10 @@ export const DS = {
   shadowCardHover: '0 4px 12px rgba(0,0,0,0.10), 0 8px 24px rgba(0,0,0,0.06)',
   transition: 'all 0.2s ease',
 } as const
+
+export function commandRecordPresentation(record: Pick<CommandRecord, 'status' | 'success' | 'response_data'> & { stage?: string }) {
+  const failed = ['failed', 'timeout', 'cancelled'].includes(record.status ?? '')
+  const stage = failed || record.status === 'submitted' ? record.status! : record.stage ?? record.response_data?.stage ?? record.status ?? 'pending'
+  if (record.success === false && ['applied', 'completed', 'success'].includes(stage)) return STAGE_MAP.failed
+  return STAGE_MAP[stage] ?? { color: 'default', label_zh: stage }
+}
