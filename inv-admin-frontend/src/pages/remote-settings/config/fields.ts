@@ -24,7 +24,7 @@ export interface ConfigSchemaItem {
   confirmation_mode?: string | null
   display_name_key: string
   sort_order: number
-  visibility?: { param?: string; eq?: number; ne?: number } | null
+  visibility?: { param?: string; eq?: number; ne?: number; in?: number[] } | null
   validation?: Record<string, string> | null
 }
 
@@ -37,34 +37,35 @@ export interface StaticFieldMeta {
   max?: number
   step?: number
   enumKeys?: string[] // 枚举语义键（raw 值升序），标签走 config.enum.<key>
-  visibility?: { param: string; eq?: number; ne?: number }
+  enumValues?: number[] // Collector 枚举并非统一从 0 开始
+  visibility?: { param: string; eq?: number; ne?: number; in?: number[] }
   confirm?: boolean // 下发前二次确认
 }
 
 export const STATIC_FIELD_META: Record<string, StaticFieldMeta> = {
   // ── 工作模式 ──
-  set_output_priority: { kind: 'enum', scale: 1, enumKeys: ['solar_first', 'utility_first', 'solar_utility'] },
-  set_ac_output_mode: { kind: 'enum', scale: 1, enumKeys: ['battery_first', 'utility_first', 'hybrid'] },
+  set_output_priority: { kind: 'enum', scale: 1, enumKeys: ['solar_first', 'utility_first', 'solar_battery_utility', 'solar_utility_battery'], enumValues: [1, 2, 3, 4] },
+  set_ac_output_mode: { kind: 'enum', scale: 1, enumKeys: ['ac_single_phase', 'ac_parallel', 'ac_three_phase_l1', 'ac_three_phase_l2', 'ac_three_phase_l3'], enumValues: [1, 2, 3, 4, 5] },
   set_master_slave: { kind: 'enum', scale: 1, enumKeys: ['slave', 'master'], confirm: true },
   set_overload_use_city_power: { kind: 'boolean', scale: 1 },
   set_overload_restart: { kind: 'boolean', scale: 1 },
   set_high_temp_restart: { kind: 'boolean', scale: 1 },
   // ── 电池设置 ──
-  set_battery_type: { kind: 'enum', scale: 1, enumKeys: ['LiFePO4', 'NCM', 'LeadAcid'] },
-  set_li_bat_material: { kind: 'enum', scale: 1, enumKeys: ['LiFePO4', 'NCM'], visibility: { param: 'set_battery_type', ne: 2 } },
+  set_battery_type: { kind: 'enum', scale: 1, enumKeys: ['agm', 'flooded', 'lithium', 'user_lead_acid', 'user_lithium'], enumValues: [1, 2, 3, 4, 5] },
+  set_li_bat_material: { kind: 'enum', scale: 1, enumKeys: ['LiFePO4', 'NCM'], visibility: { param: 'set_battery_type', eq: 5 } },
   set_battery_capacity: { kind: 'number', scale: 1, unit: 'Ah', min: 0, max: 2000, step: 1 },
-  set_cell_serial_lifepo4: { kind: 'number', scale: 1, unit: 'cells', min: 4, max: 32, step: 1, visibility: { param: 'set_battery_type', eq: 0 } },
-  set_cell_serial_li_nmc: { kind: 'number', scale: 1, unit: 'cells', min: 4, max: 32, step: 1, visibility: { param: 'set_battery_type', eq: 1 } },
+  set_cell_serial_lifepo4: { kind: 'number', scale: 1, unit: 'cells', min: 4, max: 32, step: 1, visibility: { param: 'set_battery_type', eq: 5 } },
+  set_cell_serial_li_nmc: { kind: 'number', scale: 1, unit: 'cells', min: 4, max: 32, step: 1, visibility: { param: 'set_battery_type', eq: 5 } },
   // ── 充电设置 ──
-  set_max_charge_current: { kind: 'number', scale: 10, unit: 'A', min: 0, max: 60, step: 0.1 },
+  set_max_charge_current: { kind: 'number', scale: 10, unit: 'A', min: 0, max: 140, step: 1 },
   set_max_chg_curr: { kind: 'number', scale: 10, unit: 'A', min: 0, max: 150, step: 0.1 },
   set_ac_charge_current: { kind: 'number', scale: 10, unit: 'A', min: 0, max: 150, step: 0.1 },
-  set_equalize_enable: { kind: 'boolean', scale: 1, visibility: { param: 'set_battery_type', eq: 2 } },
-  set_equalize_voltage: { kind: 'number', scale: 10, unit: 'V', min: 40, max: 65, step: 0.1, visibility: { param: 'set_battery_type', eq: 2 } },
-  set_equalize_time: { kind: 'number', scale: 1, unit: 'min', min: 0, max: 720, step: 1, visibility: { param: 'set_battery_type', eq: 2 } },
-  set_equalize_timeout: { kind: 'number', scale: 1, unit: 'min', min: 0, max: 1440, step: 1, visibility: { param: 'set_battery_type', eq: 2 } },
-  set_equalize_interval: { kind: 'number', scale: 1, unit: 'day', min: 0, max: 90, step: 1, visibility: { param: 'set_battery_type', eq: 2 } },
-  set_equalize_activate: { kind: 'boolean', scale: 1, visibility: { param: 'set_battery_type', eq: 2 } },
+  set_equalize_enable: { kind: 'boolean', scale: 1, visibility: { param: 'set_battery_type', in: [2, 4] } },
+  set_equalize_voltage: { kind: 'number', scale: 10, unit: 'V', min: 40, max: 65, step: 0.1, visibility: { param: 'set_battery_type', in: [2, 4] } },
+  set_equalize_time: { kind: 'number', scale: 1, unit: 'min', min: 0, max: 720, step: 1, visibility: { param: 'set_battery_type', in: [2, 4] } },
+  set_equalize_timeout: { kind: 'number', scale: 1, unit: 'min', min: 0, max: 1440, step: 1, visibility: { param: 'set_battery_type', in: [2, 4] } },
+  set_equalize_interval: { kind: 'number', scale: 1, unit: 'day', min: 0, max: 90, step: 1, visibility: { param: 'set_battery_type', in: [2, 4] } },
+  set_equalize_activate: { kind: 'boolean', scale: 1, visibility: { param: 'set_battery_type', in: [2, 4] } },
   set_charge_time: { kind: 'number', scale: 1, unit: 'min', min: 0, max: 1440, step: 1 },
   set_close_charge_time: { kind: 'number', scale: 1, unit: 'min', min: 0, max: 1440, step: 1 },
   // ── 放电设置 ──
@@ -78,10 +79,10 @@ export const STATIC_FIELD_META: Record<string, StaticFieldMeta> = {
   // ── 输出设置 ──
   set_output_voltage: { kind: 'number', scale: 10, unit: 'V', min: 200, max: 250, step: 0.1 },
   set_output_frequency: { kind: 'number', scale: 100, unit: 'Hz', min: 45, max: 55, step: 0.01 },
-  set_ac_volt_range: { kind: 'enum', scale: 1, enumKeys: ['appliance', 'ups'] },
+  set_ac_volt_range: { kind: 'enum', scale: 1, enumKeys: ['appliance', 'ups', 'generator'], enumValues: [1, 2, 3] },
   // ── 太阳能设置 ──
   set_solar_power_balance: { kind: 'boolean', scale: 1 },
-  set_charge_priority: { kind: 'priority', scale: 1 },
+  set_charge_priority: { kind: 'enum', scale: 1, enumKeys: ['solar_first', 'solar_utility', 'solar_only'], enumValues: [1, 2, 3] },
   // ── 发电机设置 ──
   set_gen_start_voltage: { kind: 'number', scale: 10, unit: 'V', min: 40, max: 60, step: 0.1 },
   set_gen_stop_voltage: { kind: 'number', scale: 10, unit: 'V', min: 40, max: 60, step: 0.1 },

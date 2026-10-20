@@ -5,7 +5,7 @@
 // V2.1 起 control-state 与命令参数均为工程单位（物理量），服务端按 schema min/max 校验；
 // raw = round(physical × scale) 仅在对接原始量纲来源时使用（见 conversion.ts）。
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { App } from 'antd'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { deviceApi } from '@/services/deviceApi'
@@ -14,7 +14,7 @@ import useTranslation from '@/hooks/useTranslation'
 import useAuthStore from '@/stores/authStore'
 import type { ConfigSchemaItem } from '../config/fields'
 import { normalizeIncoming, resolveFieldMeta, type ResolvedFieldMeta } from '../config/conversion'
-import type { CommandRecord } from '../types'
+import type { CommandRecord, ControlState } from '../types'
 
 export function useDeviceConfig(sn: string) {
   const { t } = useTranslation()
@@ -22,6 +22,11 @@ export function useDeviceConfig(sn: string) {
   const queryClient = useQueryClient()
   const hasPermission = useAuthStore((s) => s.hasPermission)
   const [sendingKey, setSendingKey] = useState<string | null>(null)
+  const [reading, setReading] = useState(false)
+  const [readRequest, setReadRequest] = useState<{ baselineTime: number; deadline: number } | null>(null)
+  const readBusy = useRef(false)
+  const readGeneration = useRef(0)
+  useEffect(() => () => { readGeneration.current += 1 }, [sn])
 
   const { data: schemaItems, isLoading: schemaLoading, error: schemaError, refetch: refetchSchema } = useQuery({
     queryKey: ['config-schema', sn],
@@ -56,8 +61,9 @@ export function useDeviceConfig(sn: string) {
 
   const { data: controlState, isLoading: stateLoading, error: stateError, refetch: refetchState } = useQuery({
     queryKey: queryKeys.devices.controlState(sn),
-    queryFn: () => deviceApi.getControlState(sn).then((r) => (r.data?.data ?? null) as any),
-    refetchInterval: 10_000,
+    queryFn: () => deviceApi.getControlState(sn).then((r) => (r.data?.data ?? null) as ControlState | null),
+    refetchInterval: reading ? 1_000 : 10_000,
+    refetchIntervalInBackground: reading,
   })
 
   const { data: history, refetch: refetchHistory } = useQuery({
@@ -90,29 +96,75 @@ export function useDeviceConfig(sn: string) {
   /** 设备是否已回报过配置（reported 非空），用于「未上报/值不可信」提示 */
   const hasReportedConfig = useMemo(() => Object.keys(reported).length > 0, [reported])
 
+  // 查询命令被接受后，继续等待比读取前更新的设备配置回报。
+  // reported_revision 在参数不变时也不变，不能用它判断本次读取是否完成。
+  useEffect(() => {
+    if (!readRequest) return
+    const reportTime = Date.parse(controlState?.reported_at ?? '')
+    if (hasReportedConfig && Number.isFinite(reportTime) && reportTime > readRequest.baselineTime) {
+      setReadRequest(null)
+      setReading(false)
+      readBusy.current = false
+      message.success(t('remote.readSuccess'))
+      return
+    }
+    const timer = setTimeout(() => {
+      setReadRequest(null)
+      setReading(false)
+      readBusy.current = false
+      message.warning(t('remote.readTimeout'))
+    }, Math.max(0, readRequest.deadline - Date.now()))
+    return () => clearTimeout(timer)
+  }, [readRequest, controlState?.reported_at, hasReportedConfig, message, t])
+
+  const readCurrent = useCallback(async () => {
+    if (readBusy.current) return
+    readBusy.current = true
+    const generation = ++readGeneration.current
+    setReading(true)
+    message.info(t('remote.readingConfig'))
+    try {
+      const baseline = await refetchState({ throwOnError: true })
+      if (generation !== readGeneration.current) return
+      const baselineTime = Date.parse(baseline.data?.reported_at ?? '')
+      await deviceApi.sendCommand(sn, { command: 'query_config', params: {} })
+      if (generation !== readGeneration.current) return
+      setReadRequest({
+        baselineTime: Number.isFinite(baselineTime) ? baselineTime : -Infinity,
+        deadline: Date.now() + 30_000,
+      })
+      void refetchState()
+      void refetchHistory()
+    } catch (err: any) {
+      if (generation !== readGeneration.current) return
+      readBusy.current = false
+      setReading(false)
+      const detail = err?.response?.data?.data?.reject_detail ?? err?.response?.data?.message ?? err?.message ?? ''
+      message.error(`${t('remote.commandSendFailed')}${detail ? `: ${detail}` : ''}`)
+    }
+  }, [sn, refetchState, refetchHistory, message, t])
+
   const getMeta = useCallback(
     (paramKey: string): ResolvedFieldMeta => resolveFieldMeta(schemaMap, paramKey),
     [schemaMap],
   )
 
-  /** 编辑态当前值（工程单位）：desired 优先（已下发待同步的意图），否则 reported */
+  /** 控件显示设备回报值；历史下发意图仅用于待生效标记。 */
   const getEditValue = useCallback(
     (paramKey: string): number | undefined => {
       const meta = resolveFieldMeta(schemaMap, paramKey)
-      const v = normalizeIncoming(desired[paramKey], meta)
-      return v !== undefined ? v : normalizeIncoming(reported[paramKey], meta)
+      return normalizeIncoming(reported[paramKey], meta)
     },
-    [schemaMap, desired, reported],
+    [schemaMap, reported],
   )
 
-  /** 展示态当前值（工程单位）：reported 优先（设备实际值），缺失时回退 desired */
+  /** 未回报字段保持未知，不能用下发意图代替设备实际值。 */
   const getSummaryValue = useCallback(
     (paramKey: string): number | undefined => {
       const meta = resolveFieldMeta(schemaMap, paramKey)
-      const v = normalizeIncoming(reported[paramKey], meta)
-      return v !== undefined ? v : normalizeIncoming(desired[paramKey], meta)
+      return normalizeIncoming(reported[paramKey], meta)
     },
-    [schemaMap, desired, reported],
+    [schemaMap, reported],
   )
 
   /** 字段显示名：schema display_name_key → config.<param_key> → 原键名 */
@@ -141,14 +193,15 @@ export function useDeviceConfig(sn: string) {
     (meta: ResolvedFieldMeta): boolean => {
       const v = meta.visibility
       if (!v?.param) return true
-      const cur = reported[v.param] ?? desired[v.param]
+      const cur = reported[v.param]
       if (cur === undefined) return false
       const num = Number(cur)
+      if (v.in) return v.in.includes(num)
       if (v.eq !== undefined) return num === v.eq
       if (v.ne !== undefined) return num !== v.ne
       return true
     },
-    [reported, desired],
+    [reported],
   )
 
   /** 参数是否可编辑（后端 permission_code 校验） */
@@ -239,6 +292,8 @@ export function useDeviceConfig(sn: string) {
     stateError,
     history: history ?? [],
     sendingKey,
+    reading,
+    readCurrent,
     getMeta,
     getEditValue,
     getSummaryValue,

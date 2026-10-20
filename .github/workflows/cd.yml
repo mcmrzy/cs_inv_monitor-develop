@@ -680,6 +680,25 @@ jobs:
                 WHERE status='pending' AND last_dispatched_at IS NULL));
             OTA_OFFLINE_DELIVERY_SQL
               fi
+              if [ -f /opt/inv-mqtt/database/migrations/134_l10_config_wire_contract.up.sql ]; then
+                DEPLOY_PHASE=verify_l10_config_wire_contract
+                docker exec -i inv-postgres sh -c 'export PGPASSWORD="$POSTGRES_PASSWORD"; exec psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At' <<'L10_CONFIG_WIRE_SQL'
+            DO $$ BEGIN
+              IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version=134) THEN
+                RAISE EXCEPTION 'L10 config migration 134 was not applied';
+              END IF;
+              IF (SELECT count(*) FROM device_config_schema WHERE
+                  (param_key='set_output_priority' AND enum_map->>'1'='solar_first') OR
+                  (param_key='set_battery_type' AND enum_map->>'1'='agm') OR
+                  (param_key='set_charge_priority' AND enum_map->>'3'='solar_only') OR
+                  (param_key='set_ac_output_mode' AND enum_map->>'1'='ac_single_phase') OR
+                  (param_key='set_max_charge_current' AND max=140)) <> 5 THEN
+                RAISE EXCEPTION 'L10 config migration 134 metadata is incomplete';
+              END IF;
+            END $$;
+            SELECT json_build_object('migration',134,'l10_config_wire_contract_ready',true);
+            L10_CONFIG_WIRE_SQL
+              fi
               report_external_readiness
               cleanup_old_images
               echo "🎉 部署成功完成！"

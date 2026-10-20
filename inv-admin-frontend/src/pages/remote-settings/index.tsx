@@ -1,10 +1,7 @@
 // 远程设置 —— 两层结构：设置首页（模块分组折叠列表，逐项点击展开）→ 高级参数（工程师模式）
 
 import React, { useState } from 'react'
-import { Empty, Typography, App } from 'antd'
-import { useQueryClient } from '@tanstack/react-query'
-import { queryKeys } from '@/utils/queryKeys'
-import { deviceApi } from '@/services/deviceApi'
+import { Empty, Typography } from 'antd'
 import useTranslation from '@/hooks/useTranslation'
 import DeviceSelector from './components/DeviceSelector'
 import SettingsHome from './components/SettingsHome'
@@ -38,7 +35,7 @@ const RemoteSettingsPage: React.FC = () => {
       </Text>
 
       {selectedSn ? (
-        <SettingsWorkspace sn={selectedSn} onDeviceChange={handleDeviceChange} />
+        <SettingsWorkspace key={selectedSn} sn={selectedSn} onDeviceChange={handleDeviceChange} />
       ) : (
         <>
           <DeviceSelector selectedSn={null} onDeviceChange={handleDeviceChange} onRead={() => undefined} reading={false} />
@@ -58,34 +55,8 @@ interface SettingsWorkspaceProps {
 
 /** 选中设备后的工作区：设备选择器 + 三层视图切换 */
 const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({ sn, onDeviceChange }) => {
-  const { message } = App.useApp()
-  const { t } = useTranslation()
-  const queryClient = useQueryClient()
   const cfg = useDeviceConfig(sn)
   const [view, setView] = useState<View>({ name: 'home' })
-  const [reading, setReading] = useState(false)
-
-  const handleRead = () => {
-    setReading(true)
-    message.info(t('remote.readingConfig'))
-    // 下发 query_config 查询命令，让设备真实回报当前参数；
-    // 设备回报后 device_control_state.reported 更新，10s 轮询会自动刷新界面
-    deviceApi
-      .sendCommand(sn, { command: 'query_config', params: {} })
-      .then(() => {
-        message.success(t('remote.readCommandSent'))
-      })
-      .catch((err: any) => {
-        const detail =
-          err?.response?.data?.data?.reject_detail ?? err?.response?.data?.message ?? err?.message ?? ''
-        message.error(`${t('remote.commandSendFailed')}${detail ? `: ${detail}` : ''}`)
-      })
-      .finally(() => {
-        cfg.refetchAll()
-        void queryClient.invalidateQueries({ queryKey: queryKeys.devices.controlState(sn) })
-        setReading(false)
-      })
-  }
 
   return (
     <>
@@ -95,8 +66,8 @@ const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({ sn, onDeviceChang
           setView({ name: 'home' })
           onDeviceChange(next)
         }}
-        onRead={handleRead}
-        reading={reading}
+        onRead={cfg.readCurrent}
+        reading={cfg.reading}
       />
 
       {view.name === 'home' && (
