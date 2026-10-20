@@ -2277,7 +2277,7 @@ func (r *DeviceRepository) UpdateCommandLogStatus(ctx context.Context, taskID, s
 	defer tx.Rollback(ctx)
 	if _, err = tx.Exec(ctx, `
 		UPDATE device_cmd_logs SET status = $2, result = $3
-		WHERE task_id = $1
+		WHERE task_id = $1 AND status IN ('pending','queued','sent')
 	`, taskID, status, message); err != nil {
 		return err
 	}
@@ -2287,7 +2287,7 @@ func (r *DeviceRepository) UpdateCommandLogStatus(ctx context.Context, taskID, s
 		queued_at=CASE WHEN $4 THEN NOW() ELSE queued_at END,
 		sent_at=CASE WHEN $5 THEN NOW() ELSE sent_at END,
 		completed_at=CASE WHEN $6 THEN NOW() ELSE completed_at END
-		WHERE task_id=$1::uuid`, taskID, status, message,
+		WHERE task_id=$1::uuid AND status IN ('pending','queued','sent')`, taskID, status, message,
 		status == "queued", status == "sent",
 		status == "failed" || status == "timeout" || status == "cancelled"); err != nil {
 		return err

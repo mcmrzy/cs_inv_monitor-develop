@@ -62,13 +62,35 @@ func TestDataService_HandleCmdResult_AlreadyHasSN(t *testing.T) {
 	payload := []byte(`{"sn":"SN002","task_id":"task_1","result":"success"}`)
 	service.HandleCmdResult("SN001", payload)
 
-	assert.Equal(t, "SN002", received["sn"])
+	assert.Equal(t, "SN001", received["sn"])
 }
 
 func TestDataService_HandleCmdResult_EmptyAPIServer(t *testing.T) {
 	service := NewDataService(nil, nil, mqtt.NewHub(nil), nil, "", "")
 	// 不应 panic，也不应发送请求
 	service.HandleCmdResult("SN001", []byte(`{"task_id":"task_1"}`))
+}
+
+func TestDataService_HandleCmdResult_ForwardsOTAACKToOTACallback(t *testing.T) {
+	var path string
+	var received map[string]interface{}
+	handler := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path = r.URL.Path
+		body, _ := io.ReadAll(r.Body)
+		defer r.Body.Close()
+		_ = json.Unmarshal(body, &received)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer handler.Close()
+
+	service := NewDataService(nil, nil, mqtt.NewHub(nil), nil, handler.URL, "test-key")
+	// 现有 ESP32 OTA 适配器把 ACK 发布到 cmd/response，而不是 ota/cmd_ack。
+	service.HandleCmdResult("SN001", []byte(`{"t":1783676931,"v":1,"data":{"ack":true,"task_id":"123","message":"OTA task accepted"}}`))
+
+	assert.Equal(t, "/api/v1/internal/ota-cmd-ack", path)
+	assert.Equal(t, "SN001", received["device_sn"])
+	assert.Equal(t, true, received["ack"])
+	assert.Equal(t, "123", received["task_id"])
 }
 
 func TestDataService_HandleOTACmdAck(t *testing.T) {

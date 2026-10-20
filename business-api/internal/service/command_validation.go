@@ -101,6 +101,10 @@ func (s *DeviceService) ValidateAndPrepareCommand(ctx context.Context, userID in
 		}
 	}
 
+	if err := s.checkControllerCommand(ctx, sn, commandCode); err != nil {
+		return nil, err
+	}
+
 	// ── 步骤2: 型号/固件是否支持命令（fail-closed：未知命令默认拒绝） ──
 	found, enabled, err := s.modelRepo.CommandCapability(ctx, sn, commandCode)
 	if err != nil {
@@ -259,6 +263,10 @@ func (s *DeviceService) SendPreparedCommand(ctx context.Context, sn string, prep
 		return "", fmt.Errorf("device server URL not configured")
 	}
 
+	if err := s.checkControllerCommand(ctx, sn, prepared.Command); err != nil {
+		return "", err
+	}
+
 	params := prepared.Params
 	cmdType := prepared.Command
 	taskID := prepared.TaskID
@@ -275,16 +283,16 @@ func (s *DeviceService) SendPreparedCommand(ctx context.Context, sn string, prep
 
 	// 2. 构造命令体
 	cmdBody := map[string]interface{}{
-		"command": cmdType,
-		"params":  params,
-		"task_id": taskID,
+		"command":    cmdType,
+		"params":     params,
+		"task_id":    taskID,
+		"expires_at": time.Now().Add(5 * time.Minute).Unix(),
 	}
 	if hasV2Spec {
 		cmdBody["v"] = 1
 		cmdBody["t"] = time.Now().Unix()
 		cmdBody["cmd"] = cmdType
 		cmdBody["args"] = args
-		cmdBody["expires_at"] = time.Now().Add(5 * time.Minute).Unix()
 	}
 	body, err := json.Marshal(cmdBody)
 	if err != nil {

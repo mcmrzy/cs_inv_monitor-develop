@@ -50,12 +50,12 @@ type ProtocolParser struct {
 
 // DeviceRegistry handles asynchronous device registration via a buffered channel.
 type DeviceRegistry struct {
-	infoCh    chan *internalDeviceInfoRequest
-	retryCh   chan *internalDeviceInfoRequest
-	httpClient *http.Client
-	apiServer  string
+	infoCh      chan *internalDeviceInfoRequest
+	retryCh     chan *internalDeviceInfoRequest
+	httpClient  *http.Client
+	apiServer   string
 	internalKey string
-	maxRetries int
+	maxRetries  int
 	baseBackoff time.Duration
 }
 
@@ -67,6 +67,7 @@ type internalDeviceInfoRequest struct {
 	FirmwareESP     string  `json:"firmware_esp"`
 	FirmwareDSP     string  `json:"firmware_dsp"`
 	FirmwareBMS     string  `json:"firmware_bms"`
+	DSPProtocol     string  `json:"dsp_protocol,omitempty"`
 	Type            string  `json:"device_type"`
 	RatedPower      float64 `json:"rated_power"`
 	RatedPowerW     int     `json:"rated_power_w"` // V2.1：协议 W 原值（与 rated_power 语义隔离）
@@ -87,12 +88,12 @@ type internalDeviceInfoRequest struct {
 // NewDeviceRegistry creates a new async device registry with buffered channels.
 func NewDeviceRegistry(apiServer, internalKey string) *DeviceRegistry {
 	return &DeviceRegistry{
-		infoCh:     make(chan *internalDeviceInfoRequest, 1000),
-		retryCh:    make(chan *internalDeviceInfoRequest, 500),
-		httpClient: &http.Client{Timeout: 5 * time.Second},
-		apiServer:  strings.TrimRight(apiServer, "/"),
+		infoCh:      make(chan *internalDeviceInfoRequest, 1000),
+		retryCh:     make(chan *internalDeviceInfoRequest, 500),
+		httpClient:  &http.Client{Timeout: 5 * time.Second},
+		apiServer:   strings.TrimRight(apiServer, "/"),
 		internalKey: internalKey,
-		maxRetries: 3,
+		maxRetries:  3,
 		baseBackoff: 100 * time.Millisecond,
 	}
 }
@@ -631,8 +632,8 @@ func (p *ProtocolParser) handleHeartbeat(ctx context.Context, raw *RawMessage) e
 						"work_state": sample.System.WorkState,
 						"fault_code": sample.System.FaultCode, "alarm_code": sample.System.AlarmCode,
 						"inverter_temperature": sample.System.InverterTemperature,
-						"mos_temperature": sample.System.MOSTemperature,
-						"ambient_temperature": sample.System.AmbientTemperature,
+						"mos_temperature":      sample.System.MOSTemperature,
+						"ambient_temperature":  sample.System.AmbientTemperature,
 					},
 					"timestamp": eventTimeUnix,
 				},
@@ -746,7 +747,7 @@ func buildRealtimeV2(s *telemetryv2.Sample, sn string, eventTimeUnix int64, spec
 				"output_current": s.AC.Current, "grid_voltage": s.AC.GridVoltage,
 				"grid_frequency": s.AC.GridFrequency, "ac_input_power": s.AC.ACInputPower,
 				"ac_input_apparent_power": s.AC.ACInputApparentPower,
-				"ac_bypass_power": s.AC.ACBypassPower, "ac_bypass_apparent_power": s.AC.ACBypassApparentPower,
+				"ac_bypass_power":         s.AC.ACBypassPower, "ac_bypass_apparent_power": s.AC.ACBypassApparentPower,
 			},
 			"timestamp": eventTimeUnix,
 		},
@@ -760,7 +761,7 @@ func buildRealtimeV2(s *telemetryv2.Sample, sn string, eventTimeUnix int64, spec
 		"bat": map[string]interface{}{
 			"data": map[string]interface{}{
 				"battery_voltage": s.Battery.Voltage, "battery_soc": s.Battery.SOC,
-				"battery_current": s.Battery.Current,
+				"battery_current":      s.Battery.Current,
 				"battery_charge_power": s.Battery.ChargePower, "battery_discharge_power": s.Battery.DischargePower,
 				"battery_overcharge": s.System.BatteryOvercharge, "power": s.Battery.Power,
 			},
@@ -990,25 +991,26 @@ func (p *ProtocolParser) handleInfo(ctx context.Context, raw *RawMessage) error 
 	// Use async device registry for non-blocking registration
 	if p.registry != nil {
 		p.registry.Enqueue(&internalDeviceInfoRequest{
-			SN:               info.SN,
-			Model:            info.Model,
-			Manufacturer:     info.Manufacturer,
-			FirmwareARM:      info.FirmwareARM,
-			FirmwareESP:      info.FirmwareESP,
-			FirmwareDSP:      info.FirmwareDSP,
-			FirmwareBMS:      info.FirmwareBMS,
-			Type:             info.Type,
-			RatedPower:       float64(info.RatedPower),
-			RatedPowerW:      info.RatedPower,
-			RatedVoltage:     float64(info.RatedVoltage),
-			RatedFreq:        info.RatedFreq,
-			BatteryVoltage:   info.BatteryVoltage,
-			BatteryType:      info.BatteryType,
-			CellCount:        info.CellCount,
-			TempSensorCount:  info.TempSensorCount,
-			Phase:            info.Phase,
-			InverterModule:   info.InverterModule,
-			HardwareVersion:  info.HardwareVersion,
+			SN:                info.SN,
+			Model:             info.Model,
+			Manufacturer:      info.Manufacturer,
+			FirmwareARM:       info.FirmwareARM,
+			FirmwareESP:       info.FirmwareESP,
+			FirmwareDSP:       info.FirmwareDSP,
+			FirmwareBMS:       info.FirmwareBMS,
+			DSPProtocol:       info.DSPProtocol,
+			Type:              info.Type,
+			RatedPower:        float64(info.RatedPower),
+			RatedPowerW:       info.RatedPower,
+			RatedVoltage:      float64(info.RatedVoltage),
+			RatedFreq:         info.RatedFreq,
+			BatteryVoltage:    info.BatteryVoltage,
+			BatteryType:       info.BatteryType,
+			CellCount:         info.CellCount,
+			TempSensorCount:   info.TempSensorCount,
+			Phase:             info.Phase,
+			InverterModule:    info.InverterModule,
+			HardwareVersion:   info.HardwareVersion,
 			BootloaderVersion: info.BootloaderVersion,
 		})
 	} else {
@@ -1020,8 +1022,16 @@ func (p *ProtocolParser) handleInfo(ctx context.Context, raw *RawMessage) error 
 
 	// 同步更新 Redis 缓存中的 info 数据，保持与数据库一致
 	if p.rdb != nil {
+		// Keep explicit controller evidence beyond the telemetry cache lifetime.
+		// Missing fields in legacy INFO must not silently erase known direct mode.
+		if info.DSPProtocol == "direct_uart_03_04_25" {
+			if err := p.rdb.Set(ctx, "device:control:dsp_protocol:"+raw.SN, info.DSPProtocol, 0).Err(); err != nil {
+				return fmt.Errorf("cache controller protocol: %w", err)
+			}
+		}
 		infoPayload := map[string]interface{}{
 			"data": map[string]interface{}{
+				"dsp_protocol":            info.DSPProtocol,
 				"model":                   info.Model,
 				"manufacturer":            info.Manufacturer,
 				"firmware_arm":            info.FirmwareARM,
@@ -1333,6 +1343,15 @@ func (p *ProtocolParser) handleCommandResponse(ctx context.Context, raw *RawMess
 	if resp.Data != nil {
 		payload["data"] = json.RawMessage(resp.Data)
 	}
+	// Submission evidence is not DSP readback/application evidence.
+	var evidence map[string]json.RawMessage
+	if json.Unmarshal(normalizedPayload, &evidence) == nil {
+		for _, key := range []string{"submitted_args", "desired_revision"} {
+			if value, ok := evidence[key]; ok {
+				payload[key] = value
+			}
+		}
+	}
 
 	if err := p.postInternal(endpoint, payload); err != nil {
 		return err
@@ -1340,7 +1359,7 @@ func (p *ProtocolParser) handleCommandResponse(ctx context.Context, raw *RawMess
 
 	// 命令闭环（文档 11.4.1）：设置类命令执行成功后立即下发 query_config 索取最新配置。
 	// query_ 查询类命令自身豁免，避免 query_config → 成功 → query_config 无限自循环。
-	if isCommandSuccess(result) && !strings.HasPrefix(resp.Cmd, "query_") && p.hub != nil {
+	if isCommandApplicationConfirmed(resp.Stage, result, resp.Success, resultCode) && !strings.HasPrefix(resp.Cmd, "query_") && p.hub != nil {
 		select {
 		case p.hub.GetCmdChan() <- &mqtt.DeviceCommand{DeviceSN: raw.SN, CmdType: "query_config"}:
 			logger.Info("query_config queued after command", zap.String("sn", raw.SN), zap.String("cmd", resp.Cmd))
@@ -1418,6 +1437,18 @@ func mapCommandResultCode(result string) *int {
 		return nil
 	}
 	return &code
+}
+
+func isCommandApplicationConfirmed(stage, result string, success bool, code *int) bool {
+	if code != nil && *code != 0 {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(stage)) {
+	case "", "applied", "completed":
+		return isCommandSuccess(result) || (strings.TrimSpace(result) == "" && success)
+	default:
+		return false
+	}
 }
 
 // isCommandSuccess 判断命令执行成功（OK/success，兼容大小写）。

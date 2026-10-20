@@ -1057,6 +1057,9 @@ type internalDeviceCmdResultRequest struct {
 	ResultCode       *int            `json:"result_code"`       // V2.1：拒绝码数值（err），见协议 11.4
 	AppliedArgs      json.RawMessage `json:"applied_args"`      // V2.1：ARM 实际采纳的参数值
 	ReportedRevision *uint64         `json:"reported_revision"` // V2.1：命令生效后最新 CtrlParamAlterTime
+	SubmittedArgs    json.RawMessage `json:"submitted_args"`
+	DesiredRevision  *uint64         `json:"desired_revision"`
+	Err              *int            `json:"err"` // flat MQTT forwarding path
 }
 
 func (h *InternalHandler) DeviceCmdResult(c *gin.Context) {
@@ -1073,19 +1076,21 @@ func (h *InternalHandler) DeviceCmdResult(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
-	// 确定状态
-	status := "success"
-	switch req.Stage {
-	case "acknowledged":
-		status = "acknowledged"
-	case "executing":
-		status = "executing"
+	if req.ResultCode == nil {
+		req.ResultCode = req.Err
 	}
-	// 设备回执的 result 可能为大写（OK/Success），状态判断须大小写不敏感，
-	// 否则 result=OK 的查询/设置命令会被误标为 failed（不影响 reported 入库，但记录不准）。
-	if req.Stage != "acknowledged" && req.Stage != "executing" && !req.Success &&
-		!strings.EqualFold(req.Result, "ok") && !strings.EqualFold(req.Result, "success") {
-		status = "failed"
+	status, err := commandResultStatus(req.Stage, req.Result, req.Success, req.ResultCode)
+	if err != nil {
+		response.Error(c, 400, err.Error())
+		return
+	}
+	if status == "ignored" || strings.EqualFold(req.Code, "IDEMPOTENCY_CONFLICT") {
+		logger.Warn("Conflicting command retry ignored", zap.String("sn", req.SN), zap.String("task_id", req.TaskID))
+		response.Success(c, gin.H{"status": "ignored"})
+		return
+	}
+	if status == "submitted" && req.Message == "" {
+		req.Message = "已保存并提交，DSP生效未确认"
 	}
 
 	// V2.1 命令闭环：result_code 数值优先于旧字符串 code；applied_args/reported_revision 合并进 response_data
@@ -1098,41 +1103,31 @@ func (h *InternalHandler) DeviceCmdResult(c *gin.Context) {
 		responseData = mergeCmdResultData(req.Data, req.AppliedArgs, req.ReportedRevision)
 	}
 
-	// 更新命令日志（通过 task_id 匹配）
+	// Preserve stage and submission evidence without relabelling it as applied.
+	responseData = mergeCommandStageData(responseData, req.Stage, req.SubmittedArgs, req.DesiredRevision)
+	changed := true
 	if req.TaskID != "" {
-		_, err := h.db.Exec(ctx, `
-			UPDATE device_cmd_logs
-			SET status = $2, result = $3, message = $4, data = $5::jsonb
-			WHERE task_id = $1
-		`, req.TaskID, status, req.Result, req.Message, responseData)
+		var updated int64
+		err := h.db.QueryRow(ctx, updateCommandResultSQL, req.TaskID, status, req.Result,
+			req.Message, responseData, req.SN, commandResultPredecessors(status, req.Stage), resultCodeStr,
+			status == "acknowledged", commandResultTerminal(status)).Scan(&updated)
 		if err != nil {
-			logger.Error("DeviceCmdResult update failed",
-				zap.String("sn", req.SN), zap.String("task_id", req.TaskID), zap.Error(err))
+			response.Error(c, 500, "update command lifecycle failed")
+			return
 		}
-		// 注意：status 参数不可在 CASE WHEN 中复用（SET 列推断 varchar 与字面量比较推断
-		// text 冲突，服务器报 SQLSTATE 42P08），状态时间戳改用独立布尔参数控制。
-		_, err = h.db.Exec(ctx, `
-			UPDATE device_commands SET status=$2,result_code=COALESCE(NULLIF($3,''),result_code),
-				result_message=$4,response_data=COALESCE($5::jsonb,'[]'::jsonb),
-				acknowledged_at=CASE WHEN $6 THEN NOW() ELSE acknowledged_at END,
-				completed_at=CASE WHEN $7 THEN NOW() ELSE completed_at END
-			WHERE task_id::text=$1
-		`, req.TaskID, status, resultCodeStr, req.Message, responseData,
-			status == "acknowledged", status == "success" || status == "failed")
-		if err != nil {
-			logger.Error("Device command lifecycle update failed", zap.String("task_id", req.TaskID), zap.Error(err))
-		}
+		changed = updated > 0
 	} else {
-		// 兼容旧格式：没有 task_id，插入新记录
 		if _, err := h.db.Exec(ctx, `
-			INSERT INTO device_cmd_logs (device_sn, cmd, result, message, status, sent_at)
-			VALUES ($1, $2, $3, $4, $5,
-				CASE WHEN $6 > 0 THEN TO_TIMESTAMP($6) ELSE NOW() END
-			)
-		`, req.SN, req.Cmd, req.Result, req.Message, status, req.Timestamp); err != nil {
-			logger.Warn("DeviceCmdResult: failed to insert cmd log",
-				zap.String("sn", req.SN), zap.String("cmd", req.Cmd), zap.Error(err))
+			INSERT INTO device_cmd_logs (device_sn, cmd, result, message, status, sent_at, data)
+			VALUES ($1,$2,$3,$4,$5,CASE WHEN $6 > 0 THEN TO_TIMESTAMP($6) ELSE NOW() END,$7::jsonb)
+		`, req.SN, req.Cmd, req.Result, req.Message, status, req.Timestamp, responseData); err != nil {
+			response.Error(c, 500, "insert command result failed")
+			return
 		}
+	}
+	if !changed {
+		response.Success(c, gin.H{"status": "ignored"})
+		return
 	}
 
 	// 插入命令结果通知
@@ -1143,10 +1138,13 @@ func (h *InternalHandler) DeviceCmdResult(c *gin.Context) {
 		h.debugService.HandleCommandResult(ctx, req.TaskID, status, req.Message)
 	}
 
-	if userID > 0 {
+	if userID > 0 && commandResultTerminal(status) {
 		notifyTitle := "控制指令执行成功"
 		notifyContent := fmt.Sprintf("设备 %s 执行「%s」指令成功", req.SN, req.Cmd)
-		if status == "failed" {
+		if status == "submitted" {
+			notifyTitle = "控制指令已提交"
+			notifyContent = fmt.Sprintf("设备 %s 的「%s」已保存并提交，DSP生效未确认", req.SN, req.Cmd)
+		} else if status == "failed" {
 			notifyTitle = "控制指令执行失败"
 			notifyContent = fmt.Sprintf("设备 %s 执行「%s」指令失败: %s", req.SN, req.Cmd, req.Message)
 		}

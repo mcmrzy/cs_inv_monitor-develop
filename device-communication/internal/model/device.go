@@ -14,6 +14,7 @@ type DeviceInfo struct {
 	FirmwareESP     string  `json:"firmware_esp"`
 	FirmwareDSP     string  `json:"firmware_dsp"`
 	FirmwareBMS     string  `json:"firmware_bms"`
+	DSPProtocol     string  `json:"dsp_protocol,omitempty"`
 	Type            string  `json:"device_type"`
 	RatedPower      int     `json:"rated_power"`
 	RatedVoltage    int     `json:"rated_voltage"`
@@ -23,9 +24,9 @@ type DeviceInfo struct {
 	CellCount       int     `json:"cell_count"`
 	TempSensorCount int     `json:"temp_sensor_count"`
 	// V2.1 新增只读字段（096 迁移落库列，见 CS-L10-6K2_MQTT_上报协议设计_V2.1.md 第 7 节）
-	Phase            string `json:"phase"`
-	InverterModule   string `json:"inverter_module"`
-	HardwareVersion  string `json:"hardware_version"`
+	Phase             string `json:"phase"`
+	InverterModule    string `json:"inverter_module"`
+	HardwareVersion   string `json:"hardware_version"`
 	BootloaderVersion string `json:"bootloader_version"`
 }
 

@@ -1122,7 +1122,7 @@ func (h *AdminHandler) GetOperationStats(c *gin.Context) {
 	// 6. Command success rate (last 7 days)
 	cmdRows, _ := h.db.Query(ctx, `
 		SELECT DATE(created_at) as d,
-			COUNT(*) FILTER (WHERE status IN ('success','acknowledged')) as success,
+			COUNT(*) FILTER (WHERE status = 'success') as success,
 			COUNT(*) as total
 		FROM device_commands
 		WHERE created_at >= CURRENT_DATE - INTERVAL '6 days'
@@ -1146,7 +1146,7 @@ func (h *AdminHandler) GetOperationStats(c *gin.Context) {
 	failRows, _ := h.db.Query(ctx, `
 		SELECT status, COUNT(*) as cnt FROM device_commands
 		WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
-		AND status NOT IN ('success','acknowledged','pending','queued','sent','executing')
+		AND status NOT IN ('success','submitted','acknowledged','pending','queued','sent','executing')
 		GROUP BY status`)
 	cmdFailures := gin.H{}
 	if failRows != nil {
