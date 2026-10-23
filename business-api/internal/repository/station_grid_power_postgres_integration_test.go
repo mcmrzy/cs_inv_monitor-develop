@@ -5,6 +5,8 @@ package repository
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -80,4 +82,47 @@ func setupStationGridTestDB(t *testing.T) *pgxpool.Pool {
 	CREATE TABLE device_telemetry_3min(device_sn text,bms_summary jsonb,received_at timestamptz,event_time timestamptz);`)
 	require.NoError(t, err)
 	return pool
+}
+
+func TestStationGridPowerMigrationRepairsMissingColumns(t *testing.T) {
+	pool := setupStationGridTestDB(t)
+	ctx := context.Background()
+	_, err := pool.Exec(ctx, `ALTER TABLE device_latest_state DROP COLUMN ac_input_power, DROP COLUMN ac_charge_power;
+	INSERT INTO users(id,status,is_system_admin) VALUES(99109,1,true);
+	INSERT INTO stations(id) VALUES(99109);
+	INSERT INTO devices(sn,station_id,status) VALUES('GRID-A',99109,1);
+	INSERT INTO device_latest_state(device_sn,pv_total_power) VALUES('GRID-A',500);`)
+	require.NoError(t, err)
+	repo := NewDeviceRepository(pool, nil)
+	actor := model.ActorContext{UserID: 99109, RootTenantID: 99109, OrganizationID: 99109, MembershipID: 99109, MembershipVersion: 1}
+	read := func() (StationOverviewPower, error) {
+		return repo.GetOverviewStationPower(ctx, model.ScopePlan{Actor: actor, ResourceType: "station"}, model.ScopePlan{Actor: actor, ResourceType: "device"}, true, 99109)
+	}
+	_, err = read()
+	require.ErrorContains(t, err, "ac_input_power")
+	apply := func(direction string) {
+		contents, err := os.ReadFile(filepath.Join("..", "..", "..", "database", "migrations", "135_restore_grid_power_columns."+direction+".sql"))
+		require.NoError(t, err)
+		_, err = pool.Exec(ctx, string(contents))
+		require.NoError(t, err)
+	}
+	apply("up")
+	power, err := read()
+	require.NoError(t, err)
+	require.Equal(t, 500.0, power.PV)
+	require.Nil(t, power.Grid, "adding columns must not invent a measured zero")
+	_, err = pool.Exec(ctx, `UPDATE device_latest_state SET ac_input_power=1200,ac_charge_power=600 WHERE device_sn='GRID-A';
+	INSERT INTO device_telemetry_3min(device_sn,ac_input_power,ac_charge_power) VALUES('GRID-A',1200,600);`)
+	require.NoError(t, err)
+	apply("up")
+	apply("down")
+	power, err = read()
+	require.NoError(t, err)
+	require.NotNil(t, power.Grid)
+	require.Equal(t, 1800.0, *power.Grid, "replay and rollback must retain telemetry owned by migration 091")
+	var input, charge float64
+	err = pool.QueryRow(ctx, `SELECT ac_input_power,ac_charge_power FROM device_telemetry_3min WHERE device_sn='GRID-A'`).Scan(&input, &charge)
+	require.NoError(t, err)
+	require.Equal(t, 1200.0, input)
+	require.Equal(t, 600.0, charge)
 }
