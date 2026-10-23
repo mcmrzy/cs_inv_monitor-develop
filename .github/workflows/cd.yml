@@ -7,11 +7,11 @@ permissions:
   contents: read
 
 jobs:
-  diagnose-grid-power-schema:
-    name: Read-only grid power schema diagnostics
+  diagnose-grid-power-deployment:
+    name: Read-only grid power deployment diagnostics
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect production grid power schema
+      - name: Inspect production deployment state
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.SERVER_HOST }}
@@ -20,11 +20,23 @@ jobs:
           port: 22
           script: |
             set -eu
-            docker inspect --format '{{.Config.Image}}' business-api
+            date -u '+%Y-%m-%dT%H:%M:%SZ'
+            df -h /opt/inv-mqtt
+            for container in inv-postgres inv-redis inv-kafka mqtt-kafka-bridge device-communication business-api api-gateway inv-admin-frontend inv-nginx; do
+              docker inspect --format '{{.Name}} {{.State.Status}} {{.Config.Image}}' "$container"
+            done
+            for service in inv-api-server inv-device-server api-gateway mqtt-kafka-bridge inv-admin-frontend; do
+              candidate="ghcr.io/mcmrzy/$service:c067eb68e44f7e57f862d14d1aefab4e03a908ab"
+              if image_id=$(docker image inspect --format '{{.Id}}' "$candidate" 2>/dev/null); then
+                printf '%s %s\n' "$candidate" "$image_id"
+              else
+                printf '%s MISSING\n' "$candidate"
+              fi
+            done
+            ps -eo pid,ppid,comm,etime
             docker exec -i inv-postgres sh -c 'export PGPASSWORD="$POSTGRES_PASSWORD"; exec psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At' <<'SQL'
             BEGIN READ ONLY;
-            SELECT column_name,data_type FROM information_schema.columns WHERE table_name='device_latest_state' AND column_name IN ('device_sn','pv_total_power','ac_active_power','battery_power','battery_soc','ac_input_power','ac_charge_power','updated_at') ORDER BY column_name;
-            SELECT version FROM schema_migrations WHERE version=91;
-            SELECT d.sn,l.pv_total_power,l.ac_active_power,l.battery_power,l.battery_soc,l.ac_input_power,l.ac_charge_power,l.updated_at FROM devices d JOIN stations s ON s.id=d.station_id JOIN device_latest_state l ON l.device_sn=d.sn WHERE false;
+            SELECT 'migration_135_recorded',count(*) FROM schema_migrations WHERE version=135;
+            SELECT 'grid_power_columns',count(*) FROM information_schema.columns WHERE table_schema=current_schema() AND table_name IN ('device_telemetry_3min','device_latest_state') AND column_name IN ('ac_input_power','ac_charge_power');
             COMMIT;
             SQL
