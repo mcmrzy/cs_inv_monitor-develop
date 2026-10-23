@@ -104,7 +104,7 @@ func (h *StationHandler) overviewStation(c *gin.Context, id int64) (*model.Stati
 	}
 	station, err := h.stationService.GetOverviewByID(c.Request.Context(), plan, admin, id)
 	if err != nil {
-		response.InternalError(c, "get station failed")
+		response.InternalError(c, "get station failed", err)
 		return nil, plan, admin, false
 	}
 	if station == nil {

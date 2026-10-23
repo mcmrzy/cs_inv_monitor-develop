@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { server } from '@/test/mocks/server'
-import { createTestQueryClient, renderAsAdmin } from '@/test/test-utils'
+import { createTestQueryClient, renderAsAdmin, renderWithProviders } from '@/test/test-utils'
+import { mockManagerUser } from '@/test/mocks/data'
 import SystemConfigPage from './SystemConfig'
 import SystemMonitorPage from './SystemMonitor'
 
@@ -180,12 +181,32 @@ describe('SystemConfigPage', () => {
 })
 
 describe('SystemMonitorPage', () => {
-  it('renders title, big screen entry and five tabs', async () => {
+  it('shows a runtime fault while connectivity cards remain healthy', async () => {
+    server.use(http.get('/api/v1/admin/runtime-monitor', () => HttpResponse.json({ code: 0, data: {
+      checked_at: '2026-10-23T13:00:00Z', errors_status: 'ok', errors_5m: 0,
+      events_retained: 0, limited: false, retention_hours: 24, capacity: 1000, groups: [],
+      schema: { status: 'degraded', checks: [] },
+    } })))
+    renderAsAdmin(<SystemMonitorPage />)
+    expect(await screen.findByText('发现接口错误或数据库结构异常，请查看“运行异常”')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getAllByText('已连接').length).toBe(3))
+  })
+
+  it('hides global runtime monitoring and does not request it for organization admins', async () => {
+    let reads = 0
+    server.use(http.get('/api/v1/admin/runtime-monitor', () => { reads++; return HttpResponse.json({ code: 0, data: {} }) }))
+    renderWithProviders(<SystemMonitorPage />, { initialUser: mockManagerUser, initialToken: 'mock-token', initialPermissions: ['admin:manage'] })
+    await waitFor(() => expect(screen.getAllByText('已连接').length).toBe(3))
+    expect(screen.queryByRole('tab', { name: '运行异常' })).not.toBeInTheDocument()
+    expect(reads).toBe(0)
+  })
+
+  it('renders title, big screen entry and runtime monitoring tab', async () => {
     renderAsAdmin(<SystemMonitorPage />)
 
     expect(screen.getByText('系统监控')).toBeInTheDocument()
     await waitFor(() => {
-      expect(document.querySelectorAll('.ant-tabs-tab').length).toBe(5)
+      expect(document.querySelectorAll('.ant-tabs-tab').length).toBe(6)
     })
     // 「系统健康」同时出现在 Tab 与健康面板标题中，用 getAllByText 断言 Tab 存在
     expect(screen.getAllByText('系统健康').length).toBeGreaterThanOrEqual(1)

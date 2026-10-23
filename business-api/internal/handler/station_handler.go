@@ -385,7 +385,7 @@ func (h *StationHandler) GetByID(c *gin.Context) {
 	admin := systemAdmin && deviceAdmin
 	devices, err := h.deviceService.GetOverviewStationDevices(c.Request.Context(), plan, devicePlan, admin, stationID)
 	if err != nil {
-		response.InternalError(c, "get station devices failed")
+		response.InternalError(c, "get station devices failed", err)
 		return
 	}
 
@@ -405,13 +405,13 @@ func (h *StationHandler) GetByID(c *gin.Context) {
 
 	statsByStation, err := h.stationService.OverviewDeviceStats(c.Request.Context(), plan, devicePlan, admin, []int64{stationID})
 	if err != nil {
-		response.InternalError(c, "get station device stats failed")
+		response.InternalError(c, "get station device stats failed", err)
 		return
 	}
 	stats := statsByStation[stationID]
 	power, err := h.deviceService.GetOverviewStationPower(c.Request.Context(), plan, devicePlan, admin, stationID)
 	if err != nil {
-		response.InternalError(c, "get station power failed")
+		response.InternalError(c, "get station power failed", err)
 		return
 	}
 

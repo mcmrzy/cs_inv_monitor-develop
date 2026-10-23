@@ -17,6 +17,9 @@ type Response struct {
 	Data    interface{} `json:"data,omitempty"`
 }
 
+// RuntimeErrorCodeKey lets monitoring observe legacy HTTP-200 error envelopes.
+const RuntimeErrorCodeKey = "runtime_error_code"
+
 type PageData struct {
 	Items    interface{} `json:"items"`
 	Total    int64       `json:"total"`
@@ -41,6 +44,9 @@ func SuccessWithMessage(c *gin.Context, message string, data interface{}) {
 }
 
 func Error(c *gin.Context, code int, message string) {
+	if code >= 500 && code <= 599 {
+		c.Set(RuntimeErrorCodeKey, code)
+	}
 	c.JSON(http.StatusOK, Response{
 		Code:    code,
 		Message: localizeMessage(c, message, "Request failed"),
@@ -82,7 +88,12 @@ func NotFound(c *gin.Context, message string) {
 	})
 }
 
-func InternalError(c *gin.Context, message string) {
+func InternalError(c *gin.Context, message string, causes ...error) {
+	for _, cause := range causes {
+		if cause != nil {
+			_ = c.Error(cause)
+		}
+	}
 	c.JSON(http.StatusInternalServerError, Response{
 		Code:    http.StatusInternalServerError,
 		Message: localizeMessage(c, message, "Internal server error"),
@@ -112,6 +123,9 @@ func Page(c *gin.Context, list interface{}, total int64, page, pageSize int) {
 func HandleError(c *gin.Context, err error) {
 	var appErr *apperr.AppError
 	if errors.As(err, &appErr) {
+		if appErr.HTTPCode >= 500 {
+			_ = c.Error(err)
+		}
 		c.JSON(appErr.HTTPCode, Response{
 			Code:    appErr.BizCode,
 			Message: localizeMessage(c, appErr.Message, "Request failed"),
@@ -119,7 +133,8 @@ func HandleError(c *gin.Context, err error) {
 		return
 	}
 	// 未知错误返回 500，记录日志便于排查
-	logger.Error("HandleError", zap.Error(err), zap.String("status", "500"))
+	_ = c.Error(err)
+	logger.Error("HandleError", zap.String("request_id", c.GetString("request_id")), zap.String("status", "500"))
 	c.JSON(http.StatusInternalServerError, Response{
 		Code:    http.StatusInternalServerError,
 		Message: "system error",

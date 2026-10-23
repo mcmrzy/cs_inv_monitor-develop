@@ -187,6 +187,7 @@ func TestRouteRegistration_AdminRoutes(t *testing.T) {
 		"/api/v1/admin/permissions",
 		"/api/v1/admin/logs",
 		"/api/v1/admin/system-health",
+		"/api/v1/admin/runtime-monitor",
 		"/api/v1/admin/system-config",
 		"/api/v1/admin/tenants",
 		"/api/v1/admin/metrics",
