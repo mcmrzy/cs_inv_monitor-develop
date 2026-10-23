@@ -5,454 +5,66 @@ class _EnergyFlowPainter extends CustomPainter {
   final double animValue;
   final Color gridColor;
 
-  _EnergyFlowPainter({
-    required this.flows,
-    required this.animValue,
-    required this.gridColor,
-  });
+  _EnergyFlowPainter({required this.flows, required this.animValue, required this.gridColor});
 
   @override
   void paint(Canvas canvas, Size size) {
-    final cx = size.width / 2;
-    final cy = size.height / 2;
-
-    // 动态计算：80.w / 2 = 40 * size.width / 375
+    final center = Offset(size.width / 2, size.height / 2);
     final nodeR = 40.0 * size.width / 375.0;
-    // 标签12.sp + 间距4.h 导致圆心偏移
+    final centerR = 20.0 * size.width / 375.0;
     final labelOff = (12.0 * size.width / 375.0 + size.height / 100.0) / 2.0;
-
-    // 旧版本的节点位置计算（与 Align 布局精确对齐）
-    final pvC = Offset(cx, size.height * 0.125 + labelOff);
-    final loadC = Offset(cx, size.height * 0.875 - labelOff);
-    final battC = Offset(size.width * 0.125, cy + labelOff);
-    final gridC = Offset(size.width * 0.875, cy + labelOff);
-
-    const pvColor = AppColors.orange;
-    const loadColor = AppColors.blue;
-    const battColor = AppColors.successLight;
-    const r = 16.0;
-    const offset = 8.0;
-
-    bool hasEdge(NodePosition a, NodePosition b) => flows
-        .any((f) => (f.from == a && f.to == b) || (f.from == b && f.to == a));
-
-    // ── 光伏 ↔ 负载：中心竖直线（完全保留，走cx） ──
-    if (hasEdge(NodePosition.top, NodePosition.bottom)) {
-      final a = Offset(pvC.dx, pvC.dy + nodeR);
-      final b = Offset(loadC.dx, loadC.dy - nodeR);
-      _line(canvas, a, b, pvColor, loadColor);
-      _particles(canvas, a, b, pvColor, loadColor);
-      _drawArrow(canvas, b.dx, b.dy + 12, loadColor);
-    }
-
-    // ── 储能 ↔ 光伏：向右 → 拐弯 → 走 cx-offset 竖线 → 到光伏中心左侧 ──
-    if (hasEdge(NodePosition.left, NodePosition.top)) {
-      final battRight = Offset(battC.dx + nodeR, battC.dy);
-      final pvTarget = Offset(pvC.dx - offset, pvC.dy + nodeR);
-      final bY = battC.dy;
-      final pvToBatt = flows
-          .any((f) => f.from == NodePosition.top && f.to == NodePosition.left);
-
-      // pvToBatt=true：PV→储能，粒子reverse=true，从pv到batt移动 → 颜色顺序也要反过来
-      final lineStartColor = pvToBatt ? pvColor : battColor;
-      final lineEndColor = pvToBatt ? battColor : pvColor;
-
-      _solidLine(canvas, battRight, Offset(cx - offset - r, bY), lineEndColor);
-
-      _curvedArcOnly(
-        canvas,
-        Offset(cx - offset - r, bY),
-        Offset(cx - offset, bY),
-        Offset(cx - offset, bY - r),
-        lineEndColor,
-        lineStartColor,
-        reverse: !pvToBatt,
-      );
-
-      _solidLine(canvas, Offset(cx - offset, bY - r), pvTarget, lineStartColor);
-
-      _curvedParticlesV(
-        canvas,
-        battRight,
-        Offset(cx - offset - r, bY),
-        Offset(cx - offset, bY),
-        Offset(cx - offset, bY - r),
-        pvTarget,
-        battColor,
-        pvColor,
-        reverse: pvToBatt,
-      );
-      if (pvToBatt) {
-        _drawArrow(
-          canvas,
-          battRight.dx - 12,
-          bY,
-          battColor,
-          pointingLeft: true,
-        );
-      } else {
-        _drawArrow(
-          canvas,
-          pvTarget.dx,
-          pvTarget.dy - 12,
-          pvColor,
-          pointingUp: true,
-        );
-      }
-    }
-
-    // ── 储能 ↔ 负载：向右 → 拐弯 → 走 cx-offset 竖线 → 到负载中心左侧 ──
-    if (hasEdge(NodePosition.left, NodePosition.bottom)) {
-      final battRight = Offset(battC.dx + nodeR, battC.dy);
-      final loadTarget = Offset(loadC.dx - offset, loadC.dy - nodeR);
-      final bY = battC.dy;
-
-      _solidLine(canvas, battRight, Offset(cx - offset - r, bY), battColor);
-
-      _curvedArcOnly(
-        canvas,
-        Offset(cx - offset - r, bY),
-        Offset(cx - offset, bY),
-        Offset(cx - offset, bY + r),
-        battColor,
-        loadColor,
-      );
-
-      _solidLine(canvas, Offset(cx - offset, bY + r), loadTarget, loadColor);
-
-      _curvedParticlesV(
-        canvas,
-        battRight,
-        Offset(cx - offset - r, bY),
-        Offset(cx - offset, bY),
-        Offset(cx - offset, bY + r),
-        loadTarget,
-        battColor,
-        loadColor,
-      );
-      _drawArrow(canvas, loadTarget.dx, loadTarget.dy - 12, loadColor);
-    }
-
-    // ── 电网 ↔ 光伏：向左 → 拐弯 → 走 cx+offset 竖线 → 到光伏中心右侧 ──
-    if (hasEdge(NodePosition.right, NodePosition.top)) {
-      final gridLeft = Offset(gridC.dx - nodeR, gridC.dy);
-      final pvTarget = Offset(pvC.dx + offset, pvC.dy + nodeR);
-      final gY = gridC.dy;
-      final pvToGrid = flows
-          .any((f) => f.from == NodePosition.top && f.to == NodePosition.right);
-
-      final lineStartColor = pvToGrid ? pvColor : gridColor;
-      final lineEndColor = pvToGrid ? gridColor : pvColor;
-
-      _solidLine(canvas, gridLeft, Offset(cx + offset + r, gY), lineEndColor);
-
-      _curvedArcOnly(
-        canvas,
-        Offset(cx + offset + r, gY),
-        Offset(cx + offset, gY),
-        Offset(cx + offset, gY - r),
-        lineEndColor,
-        lineStartColor,
-        reverse: !pvToGrid,
-      );
-
-      _solidLine(canvas, Offset(cx + offset, gY - r), pvTarget, lineStartColor);
-
-      _curvedParticlesV(
-        canvas,
-        gridLeft,
-        Offset(cx + offset + r, gY),
-        Offset(cx + offset, gY),
-        Offset(cx + offset, gY - r),
-        pvTarget,
-        gridColor,
-        pvColor,
-        reverse: pvToGrid,
-      );
-      if (pvToGrid) {
-        _drawArrow(
-          canvas,
-          gridLeft.dx + 12,
-          gY,
-          gridColor,
-          pointingLeft: false,
-        );
-      } else {
-        _drawArrow(
-          canvas,
-          pvTarget.dx,
-          pvTarget.dy - 12,
-          pvColor,
-          pointingUp: true,
-        );
-      }
-    }
-
-    // ── 电网 ↔ 负载：向左 → 拐弯 → 走 cx+offset 竖线 → 到负载中心右侧 ──
-    if (hasEdge(NodePosition.right, NodePosition.bottom)) {
-      final gridLeft = Offset(gridC.dx - nodeR, gridC.dy);
-      final loadTarget = Offset(loadC.dx + offset, loadC.dy - nodeR);
-      final gY = gridC.dy;
-      final loadToGrid = flows.any(
-        (f) => f.from == NodePosition.bottom && f.to == NodePosition.right,
-      );
-
-      final lineStartColor = loadToGrid ? loadColor : gridColor;
-      final lineEndColor = loadToGrid ? gridColor : loadColor;
-
-      _solidLine(canvas, gridLeft, Offset(cx + offset + r, gY), lineEndColor);
-
-      _curvedArcOnly(
-        canvas,
-        Offset(cx + offset + r, gY),
-        Offset(cx + offset, gY),
-        Offset(cx + offset, gY + r),
-        lineEndColor,
-        lineStartColor,
-        reverse: !loadToGrid,
-      );
-
-      _solidLine(
-        canvas,
-        Offset(cx + offset, gY + r),
-        loadTarget,
-        lineStartColor,
-      );
-
-      _curvedParticlesV(
-        canvas,
-        gridLeft,
-        Offset(cx + offset + r, gY),
-        Offset(cx + offset, gY),
-        Offset(cx + offset, gY + r),
-        loadTarget,
-        gridColor,
-        loadColor,
-        reverse: loadToGrid,
-      );
-      if (loadToGrid) {
-        _drawArrow(
-          canvas,
-          gridLeft.dx + 12,
-          gY,
-          gridColor,
-          pointingLeft: false,
-        );
-      } else {
-        _drawArrow(canvas, loadTarget.dx, loadTarget.dy - 12, loadColor);
-      }
-    }
-  }
-
-  void _drawArrow(
-    Canvas canvas,
-    double x,
-    double y,
-    Color c, {
-    bool pointingLeft = false,
-    bool pointingUp = false,
-  }) {
-    const s = 6.0;
-    final path = Path();
-    if (pointingUp) {
-      path.moveTo(x, y - s);
-      path.lineTo(x - s, y + s);
-      path.lineTo(x + s, y + s);
-    } else if (pointingLeft) {
-      path.moveTo(x - s, y);
-      path.lineTo(x + s, y - s);
-      path.lineTo(x + s, y + s);
-    } else {
-      path.moveTo(x, y + s);
-      path.lineTo(x - s, y - s);
-      path.lineTo(x + s, y - s);
-    }
-    path.close();
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = c
-        ..style = PaintingStyle.fill,
-    );
-  }
-
-  void _line(Canvas canvas, Offset a, Offset b, Color ca, Color cb) {
-    final dx = b.dx - a.dx, dy = b.dy - a.dy;
-    final len = sqrt(dx * dx + dy * dy);
-    if (len < 1) return;
-
-    const segments = 20;
-
-    for (int i = 0; i < segments; i++) {
-      final t1 = i / segments;
-      final t2 = (i + 1) / segments;
-
-      final x1 = a.dx + dx * t1;
-      final y1 = a.dy + dy * t1;
-      final x2 = a.dx + dx * t2;
-      final y2 = a.dy + dy * t2;
-
-      final color1 = _lerp3(ca, cb, t1);
-      final color2 = _lerp3(ca, cb, t2);
-
-      final shader = ui.Gradient.linear(
-        Offset(x1, y1),
-        Offset(x2, y2),
-        [color1, color2],
-        [0.0, 1.0],
-      );
-
-      canvas.drawLine(
-        Offset(x1, y1),
-        Offset(x2, y2),
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2.8
-          ..strokeCap = StrokeCap.round
-          ..shader = shader,
-      );
-    }
-  }
-
-  void _solidLine(Canvas canvas, Offset a, Offset b, Color color) {
-    canvas.drawLine(
-      a,
-      b,
-      Paint()
+    final positions = {
+      NodePosition.top: Offset(center.dx, size.height * 0.125 + labelOff),
+      NodePosition.bottom: Offset(center.dx, size.height * 0.875 - labelOff),
+      NodePosition.left: Offset(size.width * 0.125, center.dy + labelOff),
+      NodePosition.right: Offset(size.width * 0.875, center.dy + labelOff),
+      NodePosition.center: center,
+    };
+    for (final flow in flows) {
+      final from = positions[flow.from]!;
+      final to = positions[flow.to]!;
+      final direction = (to - from) / (to - from).distance;
+      final start = from + direction * (flow.from == NodePosition.center ? centerR : nodeR);
+      final end = to - direction * (flow.to == NodePosition.center ? centerR : nodeR);
+      final path = Path()..moveTo(start.dx, start.dy)..lineTo(end.dx, end.dy);
+      final paint = Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.8
         ..strokeCap = StrokeCap.round
-        ..color = color,
-    );
-  }
-
-  void _curvedArcOnly(
-    Canvas canvas,
-    Offset cornerStart,
-    Offset control,
-    Offset cornerEnd,
-    Color ca,
-    Color cb, {
-    bool reverse = false,
-  }) {
-    final path = Path();
-    path.moveTo(cornerStart.dx, cornerStart.dy);
-    path.quadraticBezierTo(control.dx, control.dy, cornerEnd.dx, cornerEnd.dy);
-
-    final shader = ui.Gradient.linear(
-      cornerStart,
-      cornerEnd,
-      [reverse ? cb : ca, reverse ? ca : cb],
-      [0.0, 1.0],
-    );
-    canvas.drawPath(
-      path,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.8
-        ..strokeCap = StrokeCap.round
-        ..shader = shader,
-    );
-  }
-
-  void _particles(Canvas canvas, Offset a, Offset b, Color ca, Color cb) {
-    final dx = b.dx - a.dx, dy = b.dy - a.dy;
-    final len = sqrt(dx * dx + dy * dy);
-    if (len < 1) return;
-    const n = 8;
-    for (int i = 0; i < n; i++) {
-      final t = ((i / n) + animValue) % 1.0;
-      final px = a.dx + dx * t, py = a.dy + dy * t;
-      final alpha = (sin(t * pi) * 0.7).clamp(0.0, 0.8);
-      _dot(canvas, px, py, 0, alpha, _lerp3(ca, cb, t));
-    }
-  }
-
-  void _curvedParticlesV(
-    Canvas canvas,
-    Offset start,
-    Offset cornerStart,
-    Offset control,
-    Offset cornerEnd,
-    Offset end,
-    Color ca,
-    Color cb, {
-    bool reverse = false,
-  }) {
-    final s1 = (cornerStart - start).distance;
-    final bChord = (cornerEnd - cornerStart).distance;
-    final bCtrl1 = (control - cornerStart).distance;
-    final bCtrl2 = (cornerEnd - control).distance;
-    final s2 = (bChord + bCtrl1 + bCtrl2) / 2;
-    final s3 = (end - cornerEnd).distance;
-    final total = s1 + s2 + s3;
-    if (total < 1) return;
-
-    const n = 8;
-    for (int i = 0; i < n; i++) {
-      final t = ((i / n) + animValue) % 1.0;
-      final tp = reverse ? 1.0 - t : t;
-      final alpha = (sin(tp * pi) * 0.7).clamp(0.0, 0.8);
-      final d = tp * total;
-      double px, py;
-      if (d < s1) {
-        final lt = d / s1;
-        px = start.dx + (cornerStart.dx - start.dx) * lt;
-        py = start.dy + (cornerStart.dy - start.dy) * lt;
-      } else if (d < s1 + s2) {
-        final bt = (d - s1) / s2;
-        final tInv = 1 - bt;
-        px = tInv * tInv * cornerStart.dx +
-            2 * tInv * bt * control.dx +
-            bt * bt * cornerEnd.dx;
-        py = tInv * tInv * cornerStart.dy +
-            2 * tInv * bt * control.dy +
-            bt * bt * cornerEnd.dy;
-      } else {
-        final lt = (d - s1 - s2) / s3;
-        px = cornerEnd.dx + (end.dx - cornerEnd.dx) * lt;
-        py = cornerEnd.dy + (end.dy - cornerEnd.dy) * lt;
+        ..strokeWidth = flow.active ? 2.8 : 1.8;
+      if (!flow.active) {
+        paint.color = gridColor.withValues(alpha: 0.25);
+        final metric = path.computeMetrics().first;
+        for (double d = 0; d < metric.length; d += 10) {
+          canvas.drawPath(metric.extractPath(d, min(d + 5, metric.length)), paint);
+        }
+        continue;
       }
-      _dot(canvas, px, py, 0, alpha, _lerp3(ca, cb, tp));
+      paint.shader = ui.Gradient.linear(start, end, [flow.fromColor, flow.toColor]);
+      canvas.drawPath(path, paint);
+      for (var i = 0; i < 4; i++) {
+        final t = (i / 4 + animValue) % 1.0;
+        canvas.drawCircle(Offset.lerp(start, end, t)!, 3,
+          Paint()..color = Color.lerp(flow.fromColor, flow.toColor, t)!,);
+      }
+      final tip = Offset.lerp(start, end, 0.8)!;
+      final normal = Offset(-direction.dy, direction.dx);
+      final arrow = Path()
+        ..moveTo(tip.dx, tip.dy)
+        ..lineTo((tip - direction * 9 + normal * 4).dx, (tip - direction * 9 + normal * 4).dy)
+        ..lineTo((tip - direction * 9 - normal * 4).dx, (tip - direction * 9 - normal * 4).dy)
+        ..close();
+      canvas.drawPath(arrow, Paint()..color = flow.toColor);
     }
-  }
-
-  Color _lerp3(Color ca, Color cb, double t) {
-    if (t < 0.33) return ca;
-    if (t < 0.67) return Color.lerp(ca, cb, (t - 0.33) / 0.34)!;
-    return cb;
-  }
-
-  void _dot(
-    Canvas canvas,
-    double x,
-    double y,
-    double angle,
-    double alpha,
-    Color c,
-  ) {
-    canvas.drawCircle(
-      Offset(x, y),
-      5.0,
-      Paint()
-        ..color = c.withValues(alpha: alpha * 0.5)
-        ..style = PaintingStyle.fill
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
-    );
-    canvas.drawCircle(
-      Offset(x, y),
-      3.0,
-      Paint()
-        ..color = c.withValues(alpha: alpha)
-        ..style = PaintingStyle.fill,
-    );
   }
 
   @override
   bool shouldRepaint(covariant _EnergyFlowPainter old) =>
+      animValue != old.animValue || gridColor != old.gridColor ||
       flows.length != old.flows.length ||
-      animValue != old.animValue ||
-      gridColor != old.gridColor;
+      Iterable<int>.generate(flows.length).any((i) =>
+        flows[i].from != old.flows[i].from || flows[i].to != old.flows[i].to ||
+        flows[i].active != old.flows[i].active ||
+        flows[i].fromColor != old.flows[i].fromColor || flows[i].toColor != old.flows[i].toColor,);
 }
 
 // 选择设备弹窗：主题自适应圆角面板 + 设备列表（选中态高亮、逐项入场动画）

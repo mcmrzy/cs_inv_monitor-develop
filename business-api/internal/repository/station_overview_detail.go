@@ -74,16 +74,34 @@ func (r *DeviceRepository) GetOverviewStationDevices(ctx context.Context, statio
 }
 
 type StationOverviewPower struct {
-	PV      float64
-	Load    float64
-	Battery float64
-	SOC     float64
+	PV            float64
+	Load          float64
+	Battery       float64
+	SOC           float64
+	Grid          *float64
+	GridUpdatedAt *time.Time
+}
+
+// AC input feeds loads; AC charge feeds the battery. Both are measured active power.
+// Keep unreported grid power distinct from a measured zero.
+func stationGridPower(input, charge *float64) *float64 {
+	var total *float64
+	for _, v := range []*float64{input, charge} {
+		if v == nil || math.IsNaN(*v) || math.IsInf(*v, 0) {
+			continue
+		}
+		if total == nil {
+			total = new(float64)
+		}
+		*total += *v
+	}
+	return total
 }
 
 func (r *DeviceRepository) GetOverviewStationPower(ctx context.Context, stationPlan, devicePlan model.ScopePlan, systemAdmin bool, stationID int64) (StationOverviewPower, error) {
 	filter, args := stationOverviewReadFilters(stationPlan, devicePlan, systemAdmin, 2)
 	args = append([]any{stationID}, args...)
-	rows, err := r.db.Query(ctx, `SELECT d.sn,l.pv_total_power,l.ac_active_power,l.battery_power,l.battery_soc
+	rows, err := r.db.Query(ctx, `SELECT d.sn,l.pv_total_power,l.ac_active_power,l.battery_power,l.battery_soc,l.ac_input_power,l.ac_charge_power,l.updated_at
 		FROM devices d JOIN stations s ON s.id=d.station_id JOIN device_latest_state l ON l.device_sn=d.sn
 		WHERE d.station_id=$1 AND d.status IN (1,2) AND l.updated_at>NOW()-INTERVAL '5 minutes' AND l.updated_at<=NOW() AND `+filter, args...)
 	if err != nil {
@@ -100,8 +118,9 @@ func (r *DeviceRepository) GetOverviewStationPower(ctx context.Context, stationP
 	finite := func(v *float64) bool { return v != nil && !math.IsNaN(*v) && !math.IsInf(*v, 0) }
 	for rows.Next() {
 		var b batteryReading
-		var pv, load *float64
-		if err := rows.Scan(&b.sn, &pv, &load, &b.power, &b.soc); err != nil {
+		var pv, load, input, charge *float64
+		var updatedAt time.Time
+		if err := rows.Scan(&b.sn, &pv, &load, &b.power, &b.soc, &input, &charge, &updatedAt); err != nil {
 			return StationOverviewPower{}, err
 		}
 		if finite(pv) {
@@ -109,6 +128,16 @@ func (r *DeviceRepository) GetOverviewStationPower(ctx context.Context, stationP
 		}
 		if finite(load) {
 			result.Load += *load
+		}
+		if grid := stationGridPower(input, charge); grid != nil {
+			if result.Grid == nil {
+				result.Grid = new(float64)
+			}
+			*result.Grid += *grid
+			if result.GridUpdatedAt == nil || updatedAt.Before(*result.GridUpdatedAt) {
+				stamp := updatedAt
+				result.GridUpdatedAt = &stamp
+			}
 		}
 		readings = append(readings, b)
 		sns = append(sns, b.sn)

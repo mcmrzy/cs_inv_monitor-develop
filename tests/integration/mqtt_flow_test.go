@@ -6,6 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
+	"net/url"
 	"testing"
 	"time"
 
@@ -255,6 +257,12 @@ func TestMQTTDeviceOnlineOffline(t *testing.T) {
 		statusCh <- string(msg.Payload())
 	})
 	require.True(t, subToken.WaitTimeout(5*time.Second))
+	require.NoError(t, subToken.Error())
+
+	// Keep the transport so the test can simulate a real connection loss.
+	transport, err := net.DialTimeout("tcp", net.JoinHostPort(cfg.MQTTBroker, cfg.MQTTPort), 5*time.Second)
+	require.NoError(t, err)
+	defer transport.Close()
 
 	// Device client with LWT (Last Will and Testament)
 	opts := mqtt.NewClientOptions().
@@ -262,9 +270,13 @@ func TestMQTTDeviceOnlineOffline(t *testing.T) {
 		SetClientID(fmt.Sprintf("device-%s", testSN)).
 		SetWill(statusTopic, `{"status":"offline"}`, 1, true).
 		SetAutoReconnect(false).
-		SetConnectTimeout(5 * time.Second)
+		SetConnectTimeout(5 * time.Second).
+		SetCustomOpenConnectionFn(func(_ *url.URL, _ mqtt.ClientOptions) (net.Conn, error) {
+			return transport, nil
+		})
 
 	deviceClient := mqtt.NewClient(opts)
+	defer deviceClient.Disconnect(250)
 	token := deviceClient.Connect()
 	require.True(t, token.WaitTimeout(10*time.Second))
 	require.NoError(t, token.Error())
@@ -272,6 +284,7 @@ func TestMQTTDeviceOnlineOffline(t *testing.T) {
 	// Publish online status
 	pubToken := deviceClient.Publish(statusTopic, 1, true, `{"status":"online"}`)
 	require.True(t, pubToken.WaitTimeout(5*time.Second))
+	require.NoError(t, pubToken.Error())
 
 	// Wait for online status
 	select {
@@ -281,8 +294,9 @@ func TestMQTTDeviceOnlineOffline(t *testing.T) {
 		t.Fatal("did not receive online status")
 	}
 
-	// Disconnect abruptly - LWT should fire
-	deviceClient.Disconnect(0)
+	// Disconnect(0) can still send MQTT DISCONNECT, which suppresses the will.
+	// Closing the transport without that packet deterministically triggers LWT.
+	require.NoError(t, transport.Close())
 
 	// Wait for offline will message. 30s window: 本测试常与其他套件同机并发
 	// （soak 战役），EMQX 的半关检测与遗嘱投递可能被调度延迟拖过 10s

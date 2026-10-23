@@ -14,6 +14,7 @@ import 'package:inv_app/core/services/data_cache_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/utils/timezone_utils.dart';
 import 'package:inv_app/core/utils/device_card_data.dart';
+import 'package:inv_app/core/utils/grid_power.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
@@ -62,6 +63,9 @@ class _StationDetailPageState extends State<StationDetailPage>
   String? _batteryExpirySn;
   DateTime? _batteryExpiryDeadline;
   bool _selectedBatteryExpired = false;
+  Timer? _gridExpiryTimer;
+  DateTime? _gridExpiryDeadline;
+  bool _gridExpired = false;
   StreamSubscription<InverterRealtime>? _realtimeSubscription;
 
   @override
@@ -133,6 +137,18 @@ class _StationDetailPageState extends State<StationDetailPage>
       if (mounted) {
         setState(() => _selectedBatteryExpired = true);
       }
+    });
+  }
+
+  void _watchGridExpiry(DateTime? updatedAt) {
+    final deadline = updatedAt?.add(const Duration(minutes: 5));
+    if (_gridExpiryDeadline == deadline) return;
+    _gridExpiryTimer?.cancel();
+    _gridExpiryDeadline = deadline;
+    _gridExpired = deadline == null || !deadline.isAfter(DateTime.now());
+    if (_gridExpired) return;
+    _gridExpiryTimer = Timer(deadline!.difference(DateTime.now()), () {
+      if (mounted) setState(() => _gridExpired = true);
     });
   }
 
@@ -228,6 +244,7 @@ class _StationDetailPageState extends State<StationDetailPage>
   void dispose() {
     _refreshTimer?.cancel();
     _batteryExpiryTimer?.cancel();
+    _gridExpiryTimer?.cancel();
     _realtimeSubscription?.cancel();
     _anim.dispose();
     super.dispose();
@@ -360,10 +377,15 @@ class _StationDetailPageState extends State<StationDetailPage>
     var online = ((station['online_count'] as num?)?.toInt() ?? 0) > 0;
 
     double pvW, loadW;
-    double? battW, soc;
+    double? battW, soc, gridW;
     if (_selectedDeviceSn != 'all') {
       // 单设备模式：从 RealtimeDataService 获取该设备数据
       final rt = getIt<RealtimeDataService>().getLatestData(_selectedDeviceSn);
+      _watchGridExpiry(rt?.updatedAt);
+      final fresh = !_gridExpired && rt?.updatedAt != null &&
+          DateTime.now().difference(rt!.updatedAt!) >= Duration.zero &&
+          DateTime.now().difference(rt.updatedAt!) < const Duration(minutes: 5);
+      gridW = fresh ? measuredGridPower(rt.telemetryFields) : null;
       pvW = rt?.pv?.pvPower ?? 0;
       loadW = rt?.ac?.power ?? 0;
       final device = (_cachedState?.devices ?? [])
@@ -412,6 +434,10 @@ class _StationDetailPageState extends State<StationDetailPage>
       loadW = (station['load_power'] as num?)?.toDouble() ?? 0;
       battW = deviceNumber(station['batt_power']);
       soc = deviceNumber(station['batt_soc']);
+      final gridUpdatedAt = DateTime.tryParse(station['grid_updated_at']?.toString() ?? '');
+      _watchGridExpiry(gridUpdatedAt);
+      gridW = !_gridExpired && gridUpdatedAt != null && !gridUpdatedAt.isAfter(DateTime.now())
+          ? deviceNumber(station['grid_power']) : null;
     }
 
     // 离线时停止功率动画；电池未知读数保留为缺失，不伪装成真实零值。
@@ -419,7 +445,7 @@ class _StationDetailPageState extends State<StationDetailPage>
     final displayLoadW = online ? loadW : 0.0;
     final displayBattW = online ? battW : null;
     final displaySoc = online ? soc : null;
-    const displayGridW = 0.0;
+    final displayGridW = online ? gridW : null;
     final todayKwh = (station['today_energy'] ?? 0.0).toDouble();
     final totalKwh = (station['total_energy'] ?? 0.0).toDouble();
     final monthKwh = (station['month_energy'] ?? 0.0).toDouble();
@@ -429,7 +455,7 @@ class _StationDetailPageState extends State<StationDetailPage>
     final co2 = (totalKwh * 0.997).toStringAsFixed(1);
     final trees = (totalKwh * 0.05).toStringAsFixed(0);
     final flows =
-        _computeFlows(displayPvW, displayBattW ?? 0, displayGridW, displayLoadW);
+        _computeFlows(displayPvW, displayBattW ?? 0, displayGridW ?? 0, displayLoadW);
 
     return Stack(
       children: [
@@ -745,14 +771,14 @@ class _StationDetailPageState extends State<StationDetailPage>
     double pv,
     double load,
     double? batt,
-    double grid,
+    double? grid,
     double? soc,
     List<FlowEdge> flows,
   ) {
     final l10n = AppLocalizations.of(context)!;
     final pvW = pv.toStringAsFixed(0);
     final loadW = load.toStringAsFixed(0);
-    final gridW = grid.abs().toStringAsFixed(0);
+    final gridW = grid?.abs().toStringAsFixed(0) ?? '--';
     final battW = batt?.abs().toStringAsFixed(0) ?? '--';
 
     return SizedBox(
@@ -766,7 +792,22 @@ class _StationDetailPageState extends State<StationDetailPage>
                 painter: _EnergyFlowPainter(
                   flows: flows,
                   animValue: _anim.value,
-                  gridColor: AppColor.textSecondary(context),
+                  gridColor: AppColors.primary,
+                ),
+              ),
+            ),
+            Align(
+              child: Tooltip(
+                message: l10n.inverter,
+                child: Container(
+                  width: 40.w,
+                  height: 40.w,
+                  decoration: BoxDecoration(
+                    color: AppColor.surfaceContainer(context),
+                    border: Border.all(color: AppColors.primary),
+                    borderRadius: BorderRadius.circular(10.r),
+                  ),
+                  child: Icon(Icons.memory, size: 24.sp, color: AppColors.primary),
                 ),
               ),
             ),
@@ -798,13 +839,13 @@ class _StationDetailPageState extends State<StationDetailPage>
               active: (batt ?? 0).abs() > 0,
             ),
             _energyNode(
-              l10n.grid,
+              (grid ?? 0) > 5 ? l10n.gridInput : (grid ?? 0) < -5 ? l10n.gridOutput : l10n.grid,
               gridW,
               Icons.electrical_services,
-              AppColor.textSecondary(context),
+              AppColors.primary,
               const Alignment(0.75, 0),
               true,
-              active: grid.abs() > 0,
+              active: (grid ?? 0).abs() > 5,
             ),
           ],
         ),
@@ -1086,70 +1127,24 @@ class _StationDetailPageState extends State<StationDetailPage>
     double grid,
     double load,
   ) {
-    final flows = <FlowEdge>[];
-    const threshold = 0.0;
-
-    // PV → Load (main trunk)
-    if (pv > threshold && load > threshold) {
-      flows.add(
-        const FlowEdge(
-          from: NodePosition.top,
-          to: NodePosition.bottom,
-          fromColor: AppColors.orange,
-          toColor: AppColors.blue,
-        ),
-      );
-    }
-
-    // PV → Battery (left branch)
-    if (pv > threshold && batt > threshold) {
-      flows.add(
-        const FlowEdge(
-          from: NodePosition.top,
-          to: NodePosition.left,
-          fromColor: AppColors.orange,
-          toColor: AppColors.successLight,
-        ),
-      );
-    }
-
-    // Battery → Load (left branch, discharging)
-    if (batt < -threshold) {
-      flows.add(
-        const FlowEdge(
-          from: NodePosition.left,
-          to: NodePosition.bottom,
-          fromColor: AppColors.successLight,
-          toColor: AppColors.blue,
-        ),
-      );
-    }
-
-    // Grid → Load (right branch, importing)
-    if (grid > threshold) {
-      flows.add(
-        FlowEdge(
-          from: NodePosition.right,
-          to: NodePosition.bottom,
-          fromColor: AppColor.textSecondary(context),
-          toColor: AppColors.blue,
-        ),
-      );
-    }
-
-    // Load → Grid (right branch, exporting to grid)
-    if (grid < -threshold) {
-      flows.add(
-        FlowEdge(
-          from: NodePosition.bottom,
-          to: NodePosition.right,
-          fromColor: AppColors.blue,
-          toColor: AppColor.textSecondary(context),
-        ),
-      );
-    }
-
-    return flows;
+    const threshold = 5.0;
+    const center = NodePosition.center;
+    return [
+      FlowEdge(from: NodePosition.top, to: center,
+        fromColor: AppColors.orange, toColor: AppColors.primary,
+        active: pv > threshold,),
+      FlowEdge(from: center, to: NodePosition.bottom,
+        fromColor: AppColors.primary, toColor: AppColors.blue,
+        active: load > threshold,),
+      FlowEdge(from: batt < 0 ? NodePosition.left : center,
+        to: batt < 0 ? center : NodePosition.left,
+        fromColor: AppColors.successLight, toColor: AppColors.successLight,
+        active: batt.abs() > threshold,),
+      FlowEdge(from: grid < 0 ? center : NodePosition.right,
+        to: grid < 0 ? NodePosition.right : center,
+        fromColor: AppColors.primary, toColor: AppColors.primary,
+        active: grid.abs() > threshold,),
+    ];
   }
 
   Widget _twoCards(double pvW, double totalPowerW, double todayKwh) {
@@ -1735,18 +1730,20 @@ class _StationDetailPageState extends State<StationDetailPage>
   }
 }
 
-enum NodePosition { top, bottom, left, right }
+enum NodePosition { top, bottom, left, right, center }
 
 class FlowEdge {
   final NodePosition from;
   final NodePosition to;
   final Color fromColor;
   final Color toColor;
+  final bool active;
 
   const FlowEdge({
     required this.from,
     required this.to,
     required this.fromColor,
     required this.toColor,
+    this.active = true,
   });
 }
