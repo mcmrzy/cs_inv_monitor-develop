@@ -104,7 +104,7 @@ func main() {
 
 func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	monitorRedis := repository.NewRuntimeMonitorRedis(rdb)
-	defer monitorRedis.Close()
+	defer func() { _ = monitorRedis.Close() }()
 	runtimeMonitor := service.NewRuntimeMonitorService(repository.NewRuntimeMonitorRepository(db, monitorRedis))
 	_ = telemetry.Init("inv-api-server")
 	defer telemetry.Shutdown()
