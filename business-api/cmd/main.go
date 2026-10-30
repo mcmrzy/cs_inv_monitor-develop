@@ -103,6 +103,9 @@ func main() {
 }
 
 func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
+	monitorRedis := repository.NewRuntimeMonitorRedis(rdb)
+	defer func() { _ = monitorRedis.Close() }()
+	runtimeMonitor := service.NewRuntimeMonitorService(repository.NewRuntimeMonitorRepository(db, monitorRedis))
 	_ = telemetry.Init("inv-api-server")
 	defer telemetry.Shutdown()
 
@@ -280,6 +283,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	router := setupRouter(cfg, &RouterDeps{
 		DB:                            db,
 		RDB:                           rdb,
+		RuntimeMonitor:                runtimeMonitor,
 		JWTInstance:                   jwtInstance,
 		JWTService:                    jwtService,
 		AuthHandler:                   authHandler,
@@ -818,6 +822,7 @@ func initRedis(cfg *config.Config) (*redis.Client, error) {
 }
 
 type RouterDeps struct {
+	RuntimeMonitor                *service.RuntimeMonitorService
 	DB                            *pgxpool.Pool
 	RDB                           *redis.Client
 	JWTInstance                   *jwt.JWT
@@ -868,6 +873,11 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 
 	router := gin.New()
 	router.MaxMultipartMemory = 8 << 20
+	runtimeMonitor := deps.RuntimeMonitor
+	if runtimeMonitor == nil {
+		runtimeMonitor = service.NewRuntimeMonitorService(repository.NewRuntimeMonitorRepository(deps.DB, nil))
+	}
+	router.Use(middleware.RuntimeMonitor(runtimeMonitor))
 	router.Use(customRecovery())
 	router.Use(requestBodyLimit())
 	router.Use(middleware.CORS(cfg.CORS.AllowedOrigins))
@@ -1205,6 +1215,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			adminGroup.GET("/logs", deps.AdminHandler.GetAuditLogs)
 			adminGroup.GET("/logs/export", deps.AdminHandler.ExportAuditLogs)
 			adminGroup.GET("/system-health", deps.AdminHandler.GetSystemHealth)
+			adminGroup.GET("/runtime-monitor", handler.RuntimeMonitorHandler(runtimeMonitor))
 			adminGroup.GET("/system-config", deps.AdminHandler.GetSystemConfig)
 			adminGroup.PATCH("/system-config", deps.AdminHandler.UpdateSystemConfig)
 			adminGroup.POST("/push-announcement", deps.NotificationHandler.PushAnnouncement)
@@ -1507,8 +1518,9 @@ func customRecovery() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		defer func() {
 			if r := recover(); r != nil {
-				fmt.Fprintf(os.Stderr, "[PANIC RECOVERED] %s %s: %v\n%s\n",
-					c.Request.Method, c.Request.URL.Path, r, debug.Stack())
+				c.Set("runtime_panic", true)
+				logger.Error("Request panic recovered", zap.String("request_id", c.GetString("request_id")),
+					zap.String("route", c.FullPath()), zap.ByteString("stack", debug.Stack()))
 				c.AbortWithStatus(http.StatusInternalServerError)
 			}
 		}()

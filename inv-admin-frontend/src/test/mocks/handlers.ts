@@ -500,6 +500,14 @@ export const handlers = [
     })
   }),
 
+  http.get(`${API_BASE}/admin/runtime-monitor`, () => HttpResponse.json({
+    code: 0, message: 'success', data: {
+      checked_at: '2026-10-23T13:00:00Z', errors_status: 'ok', errors_5m: 0,
+      events_retained: 0, limited: false, retention_hours: 24, capacity: 1000,
+      groups: [], schema: { status: 'ok', checks: [] },
+    },
+  })),
+
   /** 管理-审计日志 */
   http.get(`${API_BASE}/admin/logs`, () => {
     return HttpResponse.json({

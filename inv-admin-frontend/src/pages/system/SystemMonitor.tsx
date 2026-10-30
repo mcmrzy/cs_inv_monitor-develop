@@ -30,6 +30,8 @@ import { formatInTimezone } from '@/utils/timezone'
 import useTimezoneStore from '@/stores/timezoneStore'
 import { queryKeys } from '@/utils/queryKeys'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
+import useAuthStore from '@/stores/authStore'
+import RuntimeErrorsTab, { RuntimeMonitorAlert } from './RuntimeErrorsTab'
 import LocalizedPopconfirm from '@/components/LocalizedPopconfirm'
 import type {
   ServiceStatus,
@@ -924,6 +926,7 @@ const SettingsTab: React.FC = () => {
 
 const SystemMonitorPage: React.FC = () => {
   const { t } = useTranslation()
+  const isSystemAdmin = useAuthStore((s) => s.user?.isSystemAdmin === true)
   const [activeTab, setActiveTab] = useState('health')
 
   return (
@@ -939,6 +942,7 @@ const SystemMonitorPage: React.FC = () => {
           {t('system.openBigScreen')}
         </Button>
       </div>
+      {isSystemAdmin && <RuntimeMonitorAlert />}
       <Tabs
         activeKey={activeTab}
         onChange={setActiveTab}
@@ -947,6 +951,7 @@ const SystemMonitorPage: React.FC = () => {
           { key: 'pipeline', label: t('system.tabDataPipeline'), children: <DataPipelineTab /> },
           { key: 'stats', label: t('system.tabOperationStats'), children: <OperationStatsTab /> },
           { key: 'logs', label: t('system.tabSystemLog'), children: <SystemLogTab /> },
+          ...(isSystemAdmin ? [{ key: 'runtime-errors', label: t('system.runtime.tab'), children: <RuntimeErrorsTab /> }] : []),
           { key: 'settings', label: t('admin.systemConfig'), children: <SettingsTab /> },
         ]}
         size="large"

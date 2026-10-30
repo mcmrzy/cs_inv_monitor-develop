@@ -247,6 +247,7 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 	adminGroup.Any("/api/v1/admin/logs", p.Handler())
 	adminGroup.Any("/api/v1/admin/logs/*action", p.Handler())
 	adminGroup.Any("/api/v1/admin/system-health", p.Handler())
+	adminGroup.GET("/api/v1/admin/runtime-monitor", p.Handler())
 	adminGroup.Any("/api/v1/admin/system-config", p.Handler())
 	adminGroup.Any("/api/v1/admin/operation-stats", p.Handler())
 	adminGroup.Any("/api/v1/admin/tenants", p.Handler())
