@@ -31,13 +31,14 @@ jobs:
       - name: Resolve Flutter dependencies
         run: flutter pub get
 
-      - name: Correct jiguang_auth iOS podspec name
+      - name: Apply jiguang_auth iOS packaging fixes
         run: |
-          # jiguang_auth 3.0.3 still ships its podspec under its former name.
+          # 3.0.3 uses its former pod name and JVerification 3.2.6 lacks an OAuth simulator slice.
           plugin_uri=$(jq -er '.packages[] | select(.name == "jiguang_auth") | .rootUri' .dart_tool/package_config.json)
           plugin_dir=$(ruby -ruri -e 'puts URI::DEFAULT_PARSER.unescape(URI(ARGV.fetch(0)).path)' "$plugin_uri")
           if [[ ! -f "$plugin_dir/ios/jiguang_auth.podspec" ]]; then
-            sed -E "s/(s\.name[[:space:]]*=[[:space:]]*)'jverify'/\1'jiguang_auth'/" \
+            sed -E -e "s/(s\.name[[:space:]]*=[[:space:]]*)'jverify'/\1'jiguang_auth'/" \
+              -e "s/'JVerification', '3.2.6'/'JVerification', '3.4.7'/" \
               "$plugin_dir/ios/jverify.podspec" > "$plugin_dir/ios/jiguang_auth.podspec"
           fi
 
