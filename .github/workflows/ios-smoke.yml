@@ -1,0 +1,64 @@
+name: iOS Smoke Test
+
+on:
+  push:
+    branches: [codex/ios-smoke]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: inv_app
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44'
+          channel: stable
+          cache: true
+
+      - name: Resolve Flutter dependencies
+        run: flutter pub get
+
+      - name: Build unsigned iPhone app
+        run: |
+          flutter build ios --release --no-codesign \
+            --dart-define=API_BASE_URL=https://example.invalid/api/v1
+          ditto -c -k --keepParent build/ios/iphoneos/Runner.app "$RUNNER_TEMP/Runner-unsigned.zip"
+
+      - name: Upload unsigned build
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-unsigned-app
+          path: ${{ runner.temp }}/Runner-unsigned.zip
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Boot an iPhone simulator
+        id: simulator
+        run: |
+          udid=$(xcrun simctl list devices available -j | jq -er '
+            first(.devices | to_entries | sort_by(.key) | reverse | .[]
+              | select(.key | contains(".iOS-")) | .value[]
+              | select(.isAvailable and (.name | startswith("iPhone"))) | .udid)')
+          xcrun simctl boot "$udid"
+          xcrun simctl bootstatus "$udid" -b
+          printf 'udid=%s\n' "$udid" >> "$GITHUB_OUTPUT"
+
+      - name: Run app startup integration test
+        env:
+          SIMULATOR_UDID: ${{ steps.simulator.outputs.udid }}
+        run: |
+          flutter test integration_test/app_startup_test.dart -d "$SIMULATOR_UDID" \
+            --dart-define=API_BASE_URL=https://example.invalid/api/v1 -r expanded
