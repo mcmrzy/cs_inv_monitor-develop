@@ -369,19 +369,12 @@ packages:
   flutter_blue_ultra:
     dependency: "direct main"
     description:
-      name: flutter_blue_ultra
-      sha256: ccb8a63fc346fb975b5cb2e82cdf2f4cceb650cdef9d83b79571dd08a0b498dc
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.2.0"
-  flutter_blue_ultra_accessory_setup:
-    dependency: transitive
-    description:
-      name: flutter_blue_ultra_accessory_setup
-      sha256: b9069de4ae44e34623b724ad98c984ff3903191bdf152896d42b0172299d4b56
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.1.1"
+      path: "packages/flutter_blue_ultra"
+      ref: aabaadd71ab4e6c380371a62769d82b0fb0cdab6
+      resolved-ref: aabaadd71ab4e6c380371a62769d82b0fb0cdab6
+      url: "https://github.com/dotintent/flutter_blue_ultra.git"
+    source: git
+    version: "2.1.0"
   flutter_blue_ultra_android:
     dependency: transitive
     description:
