@@ -46,7 +46,7 @@ dependencies:
   mobile_scanner: ^7.4.0
   wifi_iot: ^0.3.19
   # wifi_scan 已停更（0.4.1+2）且应用 KGP，改为自研 MethodChannel（WifiScanPlugin.kt）替代，不再声明依赖
-  # 固定捆绑 AccessorySetupKit 前的官方提交，保留 iOS 13 支持。
+  # 固定捆绑 AccessorySetupKit 前的官方提交，避免最低版本被提升到 iOS 18。
   flutter_blue_ultra:
     git:
       url: https://github.com/dotintent/flutter_blue_ultra.git
