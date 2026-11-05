@@ -27,7 +27,9 @@ void main() {
 
   testWidgets('App 启动到登录页渲染', (tester) async {
     // 启动真实 App（含全部服务初始化）。
+    final testErrorHandler = FlutterError.onError;
     app.main();
+    FlutterError.onError = testErrorHandler;
     final loginPage = find.byType(AuthPage);
     final skipOnboarding = find.byKey(const Key('onboarding-skip'));
     var skippedOnboarding = false;

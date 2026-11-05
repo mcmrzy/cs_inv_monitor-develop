@@ -31,6 +31,16 @@ jobs:
       - name: Resolve Flutter dependencies
         run: flutter pub get
 
+      - name: Correct jiguang_auth iOS podspec name
+        run: |
+          # jiguang_auth 3.0.3 still ships its podspec under its former name.
+          plugin_uri=$(jq -er '.packages[] | select(.name == "jiguang_auth") | .rootUri' .dart_tool/package_config.json)
+          plugin_dir=$(ruby -ruri -e 'puts URI::DEFAULT_PARSER.unescape(URI(ARGV.fetch(0)).path)' "$plugin_uri")
+          if [[ ! -f "$plugin_dir/ios/jiguang_auth.podspec" ]]; then
+            sed -E "s/(s\.name[[:space:]]*=[[:space:]]*)'jverify'/\1'jiguang_auth'/" \
+              "$plugin_dir/ios/jverify.podspec" > "$plugin_dir/ios/jiguang_auth.podspec"
+          fi
+
       - name: Build unsigned iPhone app
         run: |
           flutter build ios --release --no-codesign \
