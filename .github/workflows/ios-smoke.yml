@@ -68,8 +68,9 @@ jobs:
           printf 'udid=%s\n' "$udid" >> "$GITHUB_OUTPUT"
 
       - name: Run app startup integration test
+        timeout-minutes: 18
         env:
           SIMULATOR_UDID: ${{ steps.simulator.outputs.udid }}
         run: |
-          flutter test integration_test/app_startup_test.dart -d "$SIMULATOR_UDID" \
+          flutter --verbose test --no-pub integration_test/app_startup_test.dart -d "$SIMULATOR_UDID" \
             --dart-define=API_BASE_URL=https://example.invalid/api/v1 -r expanded
