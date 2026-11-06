@@ -724,11 +724,13 @@ class _LoginFormState extends State<LoginForm> {
 
   Widget _buildRememberRow() {
     final l10n = AppLocalizations.of(context)!;
-    return Row(
+    return Wrap(
+      alignment: WrapAlignment.spaceBetween,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 8.w,
       children: [
         // 自绘圆角勾选框，替代原生 Checkbox
-        // 整行 opaque 命中 + 垂直 padding 撑起 ~48 高度触控热区（宽度不扩，
-        // 避免勾选框+文字超出约束宽度导致 RenderFlex 溢出）
+        // 保留整项触控热区，窄屏或大字体下允许两项换行。
         GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () {
@@ -761,18 +763,19 @@ class _LoginFormState extends State<LoginForm> {
                       : null,
                 ),
                 SizedBox(width: 8.w),
-                Text(
-                  l10n.rememberPassword,
-                  style: TextStyle(
-                    fontSize: 14.sp,
-                    color: AppColor.textSecondary(context),
+                Flexible(
+                  child: Text(
+                    l10n.rememberPassword,
+                    style: TextStyle(
+                      fontSize: 14.sp,
+                      color: AppColor.textSecondary(context),
+                    ),
                   ),
                 ),
               ],
             ),
           ),
         ),
-        const Spacer(),
         TextButton(
           onPressed: () => context.push('/forgot-password'),
           child: Text(

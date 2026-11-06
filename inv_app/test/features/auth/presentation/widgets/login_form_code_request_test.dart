@@ -9,6 +9,7 @@ import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:inv_app/features/auth/presentation/widgets/login_form.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 import '../../../../helpers/mock_providers.dart';
 import '../../../../helpers/pump_app.dart';
@@ -76,6 +77,42 @@ void main() {
     expect(captured, hasLength(1));
     expect(captured.single, isA<AuthSendEmailCodeRequested>());
     return captured.single as AuthSendEmailCodeRequested;
+  }
+
+  for (final textScale in [1.0, 1.5]) {
+    testWidgets('英文登录选项在窄屏和 $textScale 倍字体下保持可见且可切换', (tester) async {
+      tester.view.physicalSize = const Size(375, 812);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await pumpApp(
+        tester,
+        Builder(
+          builder: (context) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: TextScaler.linear(textScale),
+            ),
+            child: const Align(
+              alignment: Alignment.topCenter,
+              child: SizedBox(width: 302.5, child: LoginForm()),
+            ),
+          ),
+        ),
+        authBloc: authBloc,
+        locale: const Locale('en', 'US'),
+        useScaffold: true,
+      );
+
+      final l10n = AppLocalizations.of(tester.element(find.byType(LoginForm)))!;
+      expect(tester.takeException(), isNull);
+      expect(find.text(l10n.rememberPassword), findsOneWidget);
+      expect(find.widgetWithText(TextButton, l10n.forgotPasswordQ), findsOneWidget);
+      expect(find.byIcon(Icons.check), findsNothing);
+      await tester.tap(find.text(l10n.rememberPassword));
+      await tester.pump();
+      expect(find.byIcon(Icons.check), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
   }
 
   testWidgets('手机验证码快速连点只打开一次验证并保留 login 发码类型',
