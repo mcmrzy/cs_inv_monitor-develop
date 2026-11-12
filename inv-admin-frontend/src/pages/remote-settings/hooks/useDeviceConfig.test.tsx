@@ -3,35 +3,41 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestQueryClient } from '@/test/test-utils'
 import { useDeviceConfig } from './useDeviceConfig'
+import useAuthStore from '@/stores/authStore'
 
 const mocks = vi.hoisted(() => ({
-  success: vi.fn(), info: vi.fn(), error: vi.fn(), warning: vi.fn(),
+  success: vi.fn(), info: vi.fn(), error: vi.fn(), warning: vi.fn(), confirm: vi.fn(),
   sendCommand: vi.fn(), getControlState: vi.fn(),
+  getConfigSchema: vi.fn(), getControlCapabilities: vi.fn(), getCommands: vi.fn(),
 }))
-vi.mock('antd', () => ({ App: { useApp: () => ({ message: mocks, modal: {} }) } }))
+vi.mock('antd', () => ({ App: { useApp: () => ({ message: mocks, modal: { confirm: mocks.confirm } }) } }))
 vi.mock('@/hooks/useTranslation', () => ({ default: () => ({ t: (key: string) => key }) }))
 vi.mock('@/services/deviceApi', () => ({ deviceApi: {
-  getConfigSchema: async () => ({ data: { data: [] } }),
-  getControlCapabilities: async () => ({ data: { data: [] } }),
-  getCommands: async () => ({ data: { data: { items: [] } } }),
+  getConfigSchema: mocks.getConfigSchema,
+  getControlCapabilities: mocks.getControlCapabilities,
+  getCommands: mocks.getCommands,
   getControlState: mocks.getControlState, sendCommand: mocks.sendCommand,
 } }))
 
 let cfg: ReturnType<typeof useDeviceConfig>
 let state: Record<string, unknown>
-function Harness({ sn = 'test-sn' }: { sn?: string }) {
-  cfg = useDeviceConfig(sn)
+function Harness({ sn = 'test-sn', online }: { sn?: string; online?: boolean }) {
+  cfg = useDeviceConfig(sn, online)
   return null
 }
-async function setup() {
+async function setup(online?: boolean) {
   const client = createTestQueryClient()
-  const view = render(<QueryClientProvider client={client}><Harness /></QueryClientProvider>)
+  const view = render(<QueryClientProvider client={client}><Harness online={online} /></QueryClientProvider>)
   await waitFor(() => expect(cfg.stateLoading).toBe(false))
   return view
 }
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.getConfigSchema.mockResolvedValue({ data: { data: [] } })
+  mocks.getControlCapabilities.mockResolvedValue({ data: { data: [] } })
+  mocks.getCommands.mockResolvedValue({ data: { data: { items: [] } } })
+  useAuthStore.setState({ permissions: ['devices:control'] })
   state = {
     reported: { set_output_priority: 1 }, desired: { set_output_priority: 0, set_buzzer: 1 },
     reported_at: '2026-10-20T01:00:00Z', reported_revision: 10,
@@ -115,4 +121,43 @@ describe('设备实际参数与读取闭环', () => {
     expect(mocks.success).not.toHaveBeenCalled()
     expect(mocks.warning).not.toHaveBeenCalled()
   })
+  it('离线设备的远程读写保持禁用', async () => {
+    mocks.getConfigSchema.mockResolvedValue({ data: { data: [{
+      param_key: 'set_overload_restart', control_type: 'boolean', permission_code: 'devices:control',
+    }] } })
+    mocks.getControlCapabilities.mockResolvedValue({ data: { data: [
+      { command_code: 'set_overload_restart', is_enabled: true },
+      { command_code: 'query_config', is_enabled: true },
+    ] } })
+    await setup(false)
+    expect(cfg.canRead).toBe(false)
+    expect(cfg.canEdit('set_overload_restart')).toBe(false)
+    await act(async () => { await cfg.readCurrent() })
+    expect(mocks.sendCommand).not.toHaveBeenCalled()
+  })
+
+  it('远程设置等待设备 applied 回执，提交状态保持未确认', async () => {
+    mocks.getConfigSchema.mockResolvedValue({ data: { data: [{
+      param_key: 'set_overload_restart', control_type: 'boolean', permission_code: 'devices:control',
+    }] } })
+    mocks.getControlCapabilities.mockResolvedValue({ data: { data: [
+      { command_code: 'set_overload_restart', is_enabled: true },
+    ] } })
+    await setup(true)
+    await waitFor(() => expect(cfg.canEdit('set_overload_restart')).toBe(true))
+    vi.useFakeTimers()
+    mocks.confirm.mockImplementation((options: { onOk: () => void }) => options.onOk())
+    await act(async () => { cfg.sendValue(cfg.getMeta('set_overload_restart'), 1) })
+    expect(mocks.sendCommand).toHaveBeenCalledTimes(1)
+    expect(cfg.sendingKey).toBe('set_overload_restart')
+    expect(mocks.success).not.toHaveBeenCalled()
+    mocks.getCommands.mockResolvedValue({ data: { data: { items: [
+      { task_id: 'read-1', status: 'submitted', data: { stage: 'submitted' } },
+    ] } } })
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_100) })
+    expect(cfg.sendingKey).toBeNull()
+    expect(mocks.warning).toHaveBeenCalledWith('remote.readbackUnconfirmed')
+    expect(mocks.success).not.toHaveBeenCalled()
+  })
+
 })

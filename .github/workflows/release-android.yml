@@ -7,9 +7,18 @@ on:
         description: HTTPS API base URL, for example https://api.example.com/api/v1
         required: true
         type: string
+      release_tag:
+        description: Existing GitHub release with a locally signed app-release.apk (empty builds AAB)
+        required: false
+        type: string
+      apk_sha256:
+        description: Verified SHA-256 of the signed APK to publish
+        required: false
+        type: string
 
 jobs:
   build-signed-aab:
+    if: inputs.release_tag == ''
     name: Build signed Android App Bundle
     runs-on: ubuntu-latest
     permissions:
@@ -85,3 +94,114 @@ jobs:
           path: inv_app/build/app/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 14
+
+  publish-signed-apk:
+    name: Verify production models and publish signed APK
+    if: inputs.release_tag != ''
+    runs-on: ubuntu-latest
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download and verify release package
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          APK_SHA256: ${{ inputs.apk_sha256 }}
+          API_BASE_URL: ${{ inputs.api_base_url }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^[a-zA-Z0-9._-]+$ ]]
+          [[ "$APK_SHA256" =~ ^[a-f0-9]{64}$ ]]
+          test "$API_BASE_URL" = 'https://api.jiuxiaoyw.online/api/v1'
+          mkdir package
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern app-release.apk --dir package
+          printf '%s  %s\n' "$APK_SHA256" package/app-release.apk | sha256sum -c -
+          # Verify the actual signed manifest and signing certificate against the current public release.
+          BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          test -x "$BUILD_TOOLS/aapt"
+          "$BUILD_TOOLS/aapt" dump badging package/app-release.apk > package/badging.txt
+          grep -q "package: name='com.csergy.app1' versionCode='44' versionName='1.1.16'" package/badging.txt
+          "$BUILD_TOOLS/apksigner" verify --print-certs package/app-release.apk > package/certificate.txt
+          curl -fsS 'https://api.jiuxiaoyw.online/api/v1/ota/app/latest?platform=android' > package/current.json
+          CURRENT_URL=$(jq -er '.data.download_url | select(startswith("https://download.jiuxiaoyw.online/firmware/apps/android/"))' package/current.json)
+          curl -fL --retry 3 "$CURRENT_URL" -o package/previous.apk
+          PREVIOUS_SHA=$(jq -er '.data.file_sha256' package/current.json)
+          printf '%s  %s\n' "$PREVIOUS_SHA" package/previous.apk | sha256sum -c -
+          "$BUILD_TOOLS/apksigner" verify --print-certs package/previous.apk > package/previous-certificate.txt
+          NEW_CERT=$(sed -n 's/.*certificate SHA-256 digest: //p' package/certificate.txt | tr -d '\r')
+          OLD_CERT=$(sed -n 's/.*certificate SHA-256 digest: //p' package/previous-certificate.txt | tr -d '\r')
+          [[ "$NEW_CERT" =~ ^[a-f0-9]{64}$ && "$OLD_CERT" =~ ^[a-f0-9]{64}$ ]]
+          test "$NEW_CERT" = "$OLD_CERT"
+          APK_SIZE=$(stat -c %s package/app-release.apk)
+          APK_MD5=$(md5sum package/app-release.apk | cut -d' ' -f1)
+          MIN_SDK=$(sed -n "s/^sdkVersion:'\([0-9]*\)'.*/\1/p" package/badging.txt)
+          TARGET_SDK=$(sed -n "s/^targetSdkVersion:'\([0-9]*\)'.*/\1/p" package/badging.txt)
+          [[ "$MIN_SDK" =~ ^[0-9]+$ && "$TARGET_SDK" =~ ^[0-9]+$ ]]
+          cp deploy/verify-modbus-production.sql package/verify.sql
+          python3 - "$APK_SHA256" "$APK_MD5" "$APK_SIZE" "$MIN_SDK" "$TARGET_SDK" <<'PY'
+          import pathlib, sys
+          sha, md5, size, minimum, target = sys.argv[1:]
+          filename = f'com.csergy.app1-1.1.16-44-{sha[:12]}.apk'
+          sql = f"""BEGIN;
+          SELECT pg_advisory_xact_lock(11644);
+          DO $$ BEGIN
+            IF EXISTS (SELECT 1 FROM app_versions WHERE platform='android' AND version_code=44 AND file_sha256<>'{sha}') THEN
+              RAISE EXCEPTION 'Version 44 already exists with different content';
+            END IF;
+            IF EXISTS (SELECT 1 FROM app_versions WHERE platform='android' AND version_code=44
+                AND (status<>1 OR COALESCE(is_rolled_back,false) OR rollout_percentage<>100)) THEN
+              RAISE EXCEPTION 'Version 44 is rolled back, disabled or not fully released';
+            END IF;
+            IF EXISTS (SELECT 1 FROM app_versions WHERE platform='android' AND version_code>44 AND status=1 AND NOT COALESCE(is_rolled_back,false)) THEN
+              RAISE EXCEPTION 'A newer Android version is already published';
+            END IF;
+          END $$;
+          INSERT INTO app_versions(platform,version_code,version_name,download_url,file_size,file_md5,changelog,
+              is_force,min_supported_version,rollout_percentage,status,created_by,file_sha256,package_name,file_name,min_sdk,target_sdk)
+          SELECT 'android',44,'1.1.16','/firmware/apps/android/{filename}',{size},'{md5}',
+              '新增 Modbus 面板参数总览、蓝牙设置与远程设置；显示数据来源及更新时间，远程写入等待设备确认。',
+              false,0,100,1,0,'{sha}','com.csergy.app1','{filename}',{minimum},{target}
+          WHERE NOT EXISTS (SELECT 1 FROM app_versions WHERE platform='android' AND version_code=44);
+          SELECT version_name,version_code,file_sha256 FROM app_versions WHERE platform='android' AND version_code=44;
+          COMMIT;
+          """
+          pathlib.Path('package/publish.sql').write_text(sql)
+          pathlib.Path('package/filename').write_text(filename)
+          PY
+          rm package/previous.apk
+      - name: Publish verified artifact on production
+        env:
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USERNAME: ${{ secrets.SERVER_USERNAME }}
+          SOURCE_SHA: ${{ github.sha }}
+          APK_SHA256: ${{ inputs.apk_sha256 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          trap 'rm -f ~/.ssh/deploy_key' EXIT
+          printf -v REMOTE_COMMAND 'bash -c %q -- %q %q' "$(cat deploy/publish-modbus-app.sh)" "$SOURCE_SHA" "$APK_SHA256"
+          tar czf - -C package app-release.apk filename verify.sql publish.sql | \
+            ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no "$SERVER_USERNAME@$SERVER_HOST" "$REMOTE_COMMAND"
+      - name: Check public release metadata
+        env:
+          APK_SHA256: ${{ inputs.apk_sha256 }}
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5; do
+            curl -fsS "https://api.jiuxiaoyw.online/api/v1/ota/app/latest?platform=android&release_check=$(date +%s)" > package/published.json
+            if jq -e --arg sha "$APK_SHA256" '.code == 0 and .data.version_code == 44 and .data.file_sha256 == $sha' package/published.json; then
+              break
+            fi
+            sleep 5
+          done
+          jq -e --arg sha "$APK_SHA256" '.code == 0 and .data.version_code == 44 and .data.file_sha256 == $sha' package/published.json
+          PUBLISHED_URL=$(jq -er '.data.download_url | select(startswith("https://download.jiuxiaoyw.online/firmware/apps/android/"))' package/published.json)
+          curl -fL --retry 3 "$PUBLISHED_URL" -o package/published.apk
+          printf '%s  %s\n' "$APK_SHA256" package/published.apk | sha256sum -c -

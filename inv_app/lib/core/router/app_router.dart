@@ -295,7 +295,14 @@ class AppRouter {
         pageBuilder: (context, state) {
           final sn = state.pathParameters['sn']!;
 
-          return _slidePage(state, DeviceRealtimePage(sn: sn, type: 'inv'));
+          return _slidePage(
+            state,
+            DeviceRealtimePage(
+              sn: sn,
+              type: 'inv',
+              openRemoteSettings: state.uri.queryParameters['view'] == 'remote',
+            ),
+          );
         },
       ),
       GoRoute(

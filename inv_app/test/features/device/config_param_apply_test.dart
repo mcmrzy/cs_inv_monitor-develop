@@ -55,4 +55,52 @@ void main() {
       'params': {'value': 1},
     });
   });
+  for (final stage in ['applied', 'submitted']) {
+    test('verified Modbus writes require applied readback, stage $stage',
+        () async {
+      final dio = Dio();
+      var sent = 0;
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            if (options.method == 'POST') sent++;
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                statusCode: 200,
+                data: {
+                  'code': 0,
+                  'data': options.method == 'POST'
+                      ? {'task_id': 'task-1'}
+                      : {
+                          'items': [
+                            {
+                              'task_id': 'task-1',
+                              'status': stage == 'submitted'
+                                  ? 'submitted'
+                                  : 'success',
+                              'data': {'stage': stage},
+                            },
+                          ],
+                        },
+                },
+              ),
+            );
+          },
+        ),
+      );
+      final write = applyConfigParamWrites(
+        dio: dio,
+        sn: 'SN001',
+        changes: {'set_overload_restart': true},
+        verifyReadback: true,
+      );
+      if (stage == 'submitted') {
+        await expectLater(write, throwsException);
+      } else {
+        await write;
+      }
+      expect(sent, 1);
+    });
+  }
 }

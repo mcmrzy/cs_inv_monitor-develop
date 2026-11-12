@@ -15,6 +15,7 @@ import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/core/widgets/ble_pin_bind_dialog.dart';
 import 'package:inv_app/core/widgets/settings_widgets.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
+import 'package:inv_app/features/device/presentation/pages/modbus_panel_page.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 /// 离网直连设置页
@@ -41,6 +42,7 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
 
   /// 绑定弹窗打开中标记，防止快速连点重复弹窗（触发 Duplicate GlobalKeys）
   bool _bindDialogOpen = false;
+  String? _openingPanelMac;
 
   /// 发现设备列表（来自 BleDirectService.scanResultsStream）
   StreamSubscription<List<BleDiscoveredDevice>>? _scanSub;
@@ -76,6 +78,7 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
 
   @override
   void dispose() {
+    unawaited(_scanSub?.cancel());
     super.dispose();
   }
 
@@ -511,8 +514,10 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
 
   /// 发现设备行：SN + 直连开关 + 已连接徽标 > 已绑定徽标 > 绑定按钮
   Widget _buildFoundDeviceRow(BleDiscoveredDevice device) {
-    final connected =
-        getIt<BleDeviceManager>().sessionOf(device.macAddress) != null;
+    final connected = getIt<BleDeviceManager>()
+            .sessionOf(device.macAddress)
+            ?.state ==
+        BleDeviceState.ready;
     final bound = _boundByMac[device.macAddress] ?? false;
     final displaySn = displaySnOf(device);
     final isDirectEnabled = _directConnectedDevices.contains(device.macAddress);
@@ -583,6 +588,18 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
             ],
           ),
           SizedBox(width: 8.w),
+          IconButton(
+            icon: _openingPanelMac == device.macAddress
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.bluetooth_connected),
+            tooltip: l10n.bleDirectEnabled,
+            onPressed: _openingPanelMac == null
+                ? () => _openPanel(device.macAddress)
+                : null,
+          ),
           // 状态渲染优先级：已连接 > 已绑定 > 未绑定（绑定按钮）
           if (connected)
             Container(
@@ -653,5 +670,48 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
         ],
       ),
     );
+  }
+
+  Future<void> _openPanel(String mac) async {
+    if (_openingPanelMac != null) return;
+    setState(() => _openingPanelMac = mac);
+    try {
+      final session = await getIt<BleDeviceManager>().connectDevice(mac);
+      if (session.state == BleDeviceState.connecting ||
+          session.state == BleDeviceState.authenticating) {
+        await session.stateStream.firstWhere((state) =>
+            state == BleDeviceState.ready ||
+            state == BleDeviceState.disconnected,)
+            .timeout(const Duration(seconds: 15));
+      }
+      if (!mounted) return;
+      if (session.state != BleDeviceState.ready) {
+        throw const BleCommandException('NOT_READY', 'Panel not connected');
+      }
+      if (!session.supportsPanelApi) {
+        AppToast.show(
+          context,
+          Localizations.localeOf(context).languageCode == 'zh'
+              ? '该设备固件暂未开放蓝牙面板功能。'
+              : 'Bluetooth panel controls are unavailable on this firmware.',
+          type: ToastType.info,
+        );
+        return;
+      }
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(builder: (_) => ModbusPanelPage(session: session)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      AppToast.show(
+        context,
+        Localizations.localeOf(context).languageCode == 'zh'
+            ? '无法连接设备，请靠近面板后重试。'
+            : 'Could not connect. Move closer to the panel and retry.',
+        type: ToastType.error,
+      );
+    } finally {
+      if (mounted) setState(() => _openingPanelMac = null);
+    }
   }
 }

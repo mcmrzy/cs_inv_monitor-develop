@@ -217,7 +217,20 @@ func scale(p *float64, k float64) *float64 {
 }
 
 // ParseHeartbeatV3 解析 ESP 原样转发的 ARM 运行参数（87 个 u16）。
-func ParseHeartbeatV3(deviceSN string, payload []byte, receivedAt time.Time) (*Sample, error) {
+func ParseHeartbeatV3(deviceSN string, payload []byte, receivedAt time.Time, modelCode ...string) (*Sample, error) {
+	powerLimit := 7500.0
+	frequencyLimit := 55.0
+	if len(modelCode) > 0 {
+		switch modelCode[0] {
+		case "PWR2KH12H1", "3KU", "6KU", "12KU":
+			frequencyLimit = 65
+			if modelCode[0] == "12KU" {
+				// The Modbus adapter forwards measured watts in the existing u16 words.
+				// Preserve the wire range for the larger inverter's PV and battery power.
+				powerLimit = math.MaxUint16
+			}
+		}
+	}
 	dec := json.NewDecoder(bytes.NewReader(payload))
 	dec.UseNumber()
 	dec.DisallowUnknownFields()
@@ -323,30 +336,30 @@ func ParseHeartbeatV3(deviceSN string, payload []byte, receivedAt time.Time) (*S
 
 	// ---- pv（Vpv 1V、Ipv 0.01A、Ppv 1W；PV 电压 <60V 视为无输入归 0）----
 	s.PV = PV{
-		PV1Power:     boundedValue(u16At(wordPpv1), 0, 7500, &s.QualityFlags),
-		PV2Power:     boundedValue(u16At(wordPpv2), 0, 7500, &s.QualityFlags),
+		PV1Power:     boundedValue(u16At(wordPpv1), 0, powerLimit, &s.QualityFlags),
+		PV2Power:     boundedValue(u16At(wordPpv2), 0, powerLimit, &s.QualityFlags),
 		PV1Voltage:   pvVoltageNormalized(u16At(wordVpv1), &s.QualityFlags),
 		Buck1Current: boundedValue(scale(u16At(wordBuck1Curr), 0.01), 0, 30, &s.QualityFlags),
 		PV2Voltage:   pvVoltageNormalized(u16At(wordVpv2), &s.QualityFlags),
 		Buck2Current: boundedValue(scale(u16At(wordBuck2Curr), 0.01), 0, 30, &s.QualityFlags),
-		TotalPower:   boundedValue(u16At(wordPpv), 0, 7500, &s.QualityFlags),
+		TotalPower:   boundedValue(u16At(wordPpv), 0, powerLimit, &s.QualityFlags),
 	}
 
 	// ---- ac（**ACOutputVolt 为 1V 单位**、频率 0.1Hz、电流 0.01A、功率 1W/VA）----
 	s.AC = AC{
 		Voltage:               boundedValue(u16At(wordACOutputVolt), 0, 250, &s.QualityFlags),
-		Frequency:             boundedValue(scale(u16At(wordACOutputFreq), 0.1), 0, 55, &s.QualityFlags),
-		ActivePower:           boundedValue(clamp0(int16At(wordOutputWatt)), 0, 7500, &s.QualityFlags),
-		ApparentPower:         boundedValue(clamp0(int16At(wordOutputVA)), 0, 7500, &s.QualityFlags),
+		Frequency:             boundedValue(scale(u16At(wordACOutputFreq), 0.1), 0, frequencyLimit, &s.QualityFlags),
+		ActivePower:           boundedValue(clamp0(int16At(wordOutputWatt)), 0, powerLimit, &s.QualityFlags),
+		ApparentPower:         boundedValue(clamp0(int16At(wordOutputVA)), 0, powerLimit, &s.QualityFlags),
 		Current:               boundedValue(scale(clamp0(int16At(wordOutputCurr)), 0.01), 0, 100, &s.QualityFlags),
 		GridVoltage:           boundedValue(u16At(wordGridVolt), 0, 300, &s.QualityFlags),
-		GridFrequency:         boundedValue(scale(u16At(wordGridFreq), 0.1), 0, 55, &s.QualityFlags),
-		ACInputPower:          boundedValue(clamp0(int16At(wordACInWatt)), 0, 7500, &s.QualityFlags),
-		ACInputApparentPower:  boundedValue(clamp0(int16At(wordACInVA)), 0, 7500, &s.QualityFlags),
-		ACBypassPower:         boundedValue(clamp0(int16At(wordACDisChrWatt)), 0, 7500, &s.QualityFlags),
-		ACBypassApparentPower: boundedValue(clamp0(int16At(wordACDisChrVA)), 0, 7500, &s.QualityFlags),
-		ACChargePower:         boundedValue(clamp0(int16At(wordACChrWatt)), 0, 7500, &s.QualityFlags),
-		ACChargeApparentPower: boundedValue(clamp0(int16At(wordACChrVA)), 0, 7500, &s.QualityFlags),
+		GridFrequency:         boundedValue(scale(u16At(wordGridFreq), 0.1), 0, frequencyLimit, &s.QualityFlags),
+		ACInputPower:          boundedValue(clamp0(int16At(wordACInWatt)), 0, powerLimit, &s.QualityFlags),
+		ACInputApparentPower:  boundedValue(clamp0(int16At(wordACInVA)), 0, powerLimit, &s.QualityFlags),
+		ACBypassPower:         boundedValue(clamp0(int16At(wordACDisChrWatt)), 0, powerLimit, &s.QualityFlags),
+		ACBypassApparentPower: boundedValue(clamp0(int16At(wordACDisChrVA)), 0, powerLimit, &s.QualityFlags),
+		ACChargePower:         boundedValue(clamp0(int16At(wordACChrWatt)), 0, powerLimit, &s.QualityFlags),
+		ACChargeApparentPower: boundedValue(clamp0(int16At(wordACChrVA)), 0, powerLimit, &s.QualityFlags),
 		ACChargeCurrent:       boundedValue(scale(clamp0(int16At(wordACChrCurr)), 0.01), 0, 150, &s.QualityFlags),
 		LoadPercent:           boundedValue(scale(u16At(wordLoadPercent), 0.1), 0, 120, &s.QualityFlags),
 	}
@@ -368,8 +381,8 @@ func ParseHeartbeatV3(deviceSN string, payload []byte, receivedAt time.Time) (*S
 		Voltage:        boundedValue(scale(u16At(wordBatVolt), 0.1), 0, 70, &s.QualityFlags),
 		SOC:            boundedValue(u16At(wordBatterySOC), 0, 100, &s.QualityFlags),
 		Current:        batCurr,
-		ChargePower:    boundedValue(u16At(wordBatChrWatt), 0, 7500, &s.QualityFlags),
-		DischargePower: boundedValue(u16At(wordBatDisChrWatt), 0, 7500, &s.QualityFlags),
+		ChargePower:    boundedValue(u16At(wordBatChrWatt), 0, powerLimit, &s.QualityFlags),
+		DischargePower: boundedValue(u16At(wordBatDisChrWatt), 0, powerLimit, &s.QualityFlags),
 	}
 
 	// ---- eng（0.1kWh；日组 ≤200kWh = 6kW 机型 24h 物理天花板含余量，

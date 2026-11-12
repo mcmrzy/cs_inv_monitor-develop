@@ -23,6 +23,13 @@ class StationRemoteDataSource {
     return await dio.get('/stations/$stationId');
   }
 
+  Future<Response> getDeviceRealtime(String sn, {CancelToken? cancelToken}) =>
+      dio.get(
+        '/devices/by-sn/${Uri.encodeComponent(sn)}/realtime',
+        options: Options(receiveTimeout: const Duration(seconds: 8)),
+        cancelToken: cancelToken,
+      );
+
   Future<Response> create(Map<String, dynamic> data) async {
     return await dio.post('/stations', data: data);
   }
@@ -42,17 +49,22 @@ class StationRemoteDataSource {
 
   /// 换绑：直接更新设备所属电站（add-to-station 语义为 UPDATE station_id，天然支持换绑）
   Future<Response> rebindDevice(String sn, int newStationId) async {
-    return await dio.post('/devices/add-to-station',
-        data: {'sn': sn, 'station_id': newStationId},);
+    return await dio.post(
+      '/devices/add-to-station',
+      data: {'sn': sn, 'station_id': newStationId},
+    );
   }
 
   /// 绑定电站：设备已归属当前用户，仅需分配电站（非所有权绑定）
   Future<Response> bindDevice(String sn, int stationId) async {
-    return await dio.post('/devices/add-to-station', data: {
-      'sn': sn,
-      'station_id': stationId,
-      'only_unassigned': true,
-    },);
+    return await dio.post(
+      '/devices/add-to-station',
+      data: {
+        'sn': sn,
+        'station_id': stationId,
+        'only_unassigned': true,
+      },
+    );
   }
 
   Future<Response> deleteDevice(String sn) async {
@@ -60,9 +72,13 @@ class StationRemoteDataSource {
   }
 
   Future<Response> reorderDevices(
-      int stationId, List<String> deviceOrder,) async {
-    return await dio.put('/stations/$stationId/devices/reorder',
-        data: {'device_order': deviceOrder},);
+    int stationId,
+    List<String> deviceOrder,
+  ) async {
+    return await dio.put(
+      '/stations/$stationId/devices/reorder',
+      data: {'device_order': deviceOrder},
+    );
   }
 
   /// 电站列表拖动排序持久化（后端注册为 POST，规避 PUT 路由通配符冲突）

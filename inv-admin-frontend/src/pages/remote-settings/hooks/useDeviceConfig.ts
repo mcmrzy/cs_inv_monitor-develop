@@ -16,22 +16,28 @@ import type { ConfigSchemaItem } from '../config/fields'
 import { normalizeIncoming, resolveFieldMeta, type ResolvedFieldMeta } from '../config/conversion'
 import type { CommandRecord, ControlState } from '../types'
 
-export function useDeviceConfig(sn: string) {
+export function useDeviceConfig(sn: string, linkedOnline?: boolean) {
+  const apiSn = encodeURIComponent(sn)
+  const linkedDevice = linkedOnline !== undefined
   const { t } = useTranslation()
   const { message, modal } = App.useApp()
   const queryClient = useQueryClient()
   const hasPermission = useAuthStore((s) => s.hasPermission)
+  const linkedOnlineRef = useRef(linkedOnline)
+  useEffect(() => { linkedOnlineRef.current = linkedOnline }, [linkedOnline])
   const [sendingKey, setSendingKey] = useState<string | null>(null)
   const [reading, setReading] = useState(false)
+  const [writeRequest, setWriteRequest] = useState<{ taskId: string; deadline: number } | null>(null)
   const [readRequest, setReadRequest] = useState<{ baselineTime: number; deadline: number } | null>(null)
   const readBusy = useRef(false)
+  const writeBusy = useRef(false)
   const readGeneration = useRef(0)
   useEffect(() => () => { readGeneration.current += 1 }, [sn])
 
   const { data: schemaItems, isLoading: schemaLoading, error: schemaError, refetch: refetchSchema } = useQuery({
     queryKey: ['config-schema', sn],
     queryFn: () =>
-      deviceApi.getConfigSchema(sn).then((r) => {
+      deviceApi.getConfigSchema(apiSn).then((r) => {
         const d = (r as any).data?.data ?? (r as any).data
         // 兼容直接数组 / {items:[...]} 两种形状，非数组一律降级为空列表
         return (Array.isArray(d) ? d : (Array.isArray((d as any)?.items) ? (d as any).items : [])) as ConfigSchemaItem[]
@@ -44,9 +50,9 @@ export function useDeviceConfig(sn: string) {
   const { data: capabilities, refetch: refetchCapabilities } = useQuery({
     queryKey: queryKeys.devices.controlCapabilities(sn),
     queryFn: () =>
-      deviceApi.getControlCapabilities(sn).then((r) => {
+      deviceApi.getControlCapabilities(apiSn).then((r) => {
         const d = (r as any).data?.data ?? (r as any).data
-        return (Array.isArray(d) ? d : []) as Array<{ command_code: string; is_enabled?: boolean }>
+        return (Array.isArray(d) ? d : []) as Array<{ command_code: string; is_enabled?: boolean; permission_code?: string }>
       }),
     staleTime: 300_000,
   })
@@ -54,26 +60,27 @@ export function useDeviceConfig(sn: string) {
   const allowedCommands = useMemo(() => {
     const s = new Set<string>()
     for (const c of capabilities ?? []) {
-      if (c?.command_code && c.is_enabled !== false) s.add(c.command_code)
+      if (c?.command_code && (linkedDevice ? c.is_enabled === true : c.is_enabled !== false)) s.add(c.command_code)
     }
     return s
-  }, [capabilities])
+  }, [capabilities, linkedDevice])
 
   const { data: controlState, isLoading: stateLoading, error: stateError, refetch: refetchState } = useQuery({
     queryKey: queryKeys.devices.controlState(sn),
-    queryFn: () => deviceApi.getControlState(sn).then((r) => (r.data?.data ?? null) as ControlState | null),
-    refetchInterval: reading ? 1_000 : 10_000,
+    queryFn: () => deviceApi.getControlState(apiSn).then((r) => (r.data?.data ?? null) as ControlState | null),
+    refetchInterval: reading || sendingKey ? 1_000 : 10_000,
     refetchIntervalInBackground: reading,
   })
 
   const { data: history, refetch: refetchHistory } = useQuery({
     queryKey: ['device-commands', sn],
     queryFn: () =>
-      deviceApi.getCommands(sn, { page: 1, page_size: 10 }).then((r) => {
+      deviceApi.getCommands(apiSn, { page: 1, page_size: 10 }).then((r) => {
         const d = (r as any).data?.data ?? (r as any).data
         return (d?.items ?? (Array.isArray(d) ? d : [])) as CommandRecord[]
       }),
-    refetchInterval: 10_000,
+    refetchInterval: sendingKey ? 1_000 : 10_000,
+    refetchIntervalInBackground: Boolean(sendingKey),
   })
 
   const schemaMap = useMemo(() => {
@@ -117,8 +124,12 @@ export function useDeviceConfig(sn: string) {
     return () => clearTimeout(timer)
   }, [readRequest, controlState?.reported_at, hasReportedConfig, message, t])
 
+  const readCommand = capabilities?.find((command) => command.command_code === 'query_config' && allowedCommands.has(command.command_code))
+  const canRead = !sendingKey && (!linkedDevice || (linkedOnline === true && Boolean(readCommand)
+    && (!readCommand?.permission_code || hasPermission(readCommand.permission_code))))
+
   const readCurrent = useCallback(async () => {
-    if (readBusy.current) return
+    if (readBusy.current || writeBusy.current || !canRead) return
     readBusy.current = true
     const generation = ++readGeneration.current
     setReading(true)
@@ -127,7 +138,12 @@ export function useDeviceConfig(sn: string) {
       const baseline = await refetchState({ throwOnError: true })
       if (generation !== readGeneration.current) return
       const baselineTime = Date.parse(baseline.data?.reported_at ?? '')
-      await deviceApi.sendCommand(sn, { command: 'query_config', params: {} })
+      if (linkedOnlineRef.current === false) {
+        readBusy.current = false
+        setReading(false)
+        return
+      }
+      await deviceApi.sendCommand(apiSn, { command: 'query_config', params: {} })
       if (generation !== readGeneration.current) return
       setReadRequest({
         baselineTime: Number.isFinite(baselineTime) ? baselineTime : -Infinity,
@@ -142,7 +158,7 @@ export function useDeviceConfig(sn: string) {
       const detail = err?.response?.data?.data?.reject_detail ?? err?.response?.data?.message ?? err?.message ?? ''
       message.error(`${t('remote.commandSendFailed')}${detail ? `: ${detail}` : ''}`)
     }
-  }, [sn, refetchState, refetchHistory, message, t])
+  }, [apiSn, canRead, refetchState, refetchHistory, message, t])
 
   const getMeta = useCallback(
     (paramKey: string): ResolvedFieldMeta => resolveFieldMeta(schemaMap, paramKey),
@@ -204,17 +220,46 @@ export function useDeviceConfig(sn: string) {
     [reported],
   )
 
+  useEffect(() => {
+    if (!writeRequest) return
+    const record = history?.find((item) => String(item.task_id) === writeRequest.taskId)
+    const stage = record?.data?.stage ?? record?.response_data?.stage ?? record?.stage
+    const failed = ['failed', 'timeout', 'cancelled'].includes(record?.status ?? '')
+    const applied = !failed && stage === 'applied' &&
+      (record?.status === 'success' || record?.status === 'applied')
+    const unconfirmed = record?.status === 'submitted' || stage === 'submitted'
+    if (applied || failed || unconfirmed) {
+      setWriteRequest(null)
+      setSendingKey(null)
+      writeBusy.current = false
+      if (applied) {
+        message.success(t('remote.readbackVerified'))
+        void refetchState()
+      } else if (unconfirmed) message.warning(t('remote.readbackUnconfirmed'))
+      else message.error(t('remote.commandFailed'))
+      return
+    }
+    const timer = setTimeout(() => {
+      setWriteRequest(null)
+      setSendingKey(null)
+      writeBusy.current = false
+      message.warning(t('remote.readbackTimeout'))
+    }, Math.max(0, writeRequest.deadline - Date.now()))
+    return () => clearTimeout(timer)
+  }, [writeRequest, history, message, t, refetchState])
+
   /** 参数是否可编辑（后端 permission_code 校验） */
   const canEdit = useCallback(
     (paramKey: string): boolean => {
       // schema 已按设备型号命令裁剪：未登记的参数一律只读（含 Advanced 扩展键）
-      if (!schemaMap.has(paramKey)) return false
+      if (linkedOnline === false || (linkedDevice && sendingKey !== null) || !schemaMap.has(paramKey)) return false
+      if (linkedDevice && !allowedCommands.has(paramKey)) return false
       // 能力表加载后二次拦截禁用命令；能力表尚未返回时不额外阻塞
       if (allowedCommands.size > 0 && !allowedCommands.has(paramKey)) return false
       const code = schemaMap.get(paramKey)?.permission_code
       return !code || hasPermission(code)
     },
-    [schemaMap, hasPermission, allowedCommands],
+    [schemaMap, hasPermission, allowedCommands, linkedDevice, linkedOnline, sendingKey],
   )
 
   /** desired 与 reported 是否一致（用于同步徽标） */
@@ -231,15 +276,30 @@ export function useDeviceConfig(sn: string) {
 
   const doSend = useCallback(
     (meta: ResolvedFieldMeta, physical: number) => {
-      if (allowedCommands.size > 0 && !allowedCommands.has(meta.paramKey)) {
+      if (linkedOnlineRef.current === false || writeBusy.current) return
+      if (!canEdit(meta.paramKey)) {
         message.error(`${t('remote.commandSendFailed')}: ${t('remote.commandNotAllowed')}`)
         return
       }
+      writeBusy.current = true
+      const generation = readGeneration.current
+      let waitingForReadback = false
       setSendingKey(meta.paramKey)
       deviceApi
-        .sendCommand(sn, { command: meta.paramKey, params: { value: physical } })
-        .then(() => {
-          message.success(t('remote.commandSent', { taskId: '' }))
+        .sendCommand(apiSn, { command: meta.paramKey, params: { value: physical } })
+        .then((response) => {
+          if (generation !== readGeneration.current) return
+          if (linkedDevice) {
+            const taskId = response.data?.data?.task_id
+            if (typeof taskId !== 'string' && typeof taskId !== 'number') {
+              throw new Error(t('remote.readbackUnconfirmed'))
+            }
+            waitingForReadback = true
+            setWriteRequest({ taskId: String(taskId), deadline: Date.now() + 35_000 })
+            message.info(t('remote.waitingReadback'))
+          } else {
+            message.success(t('remote.commandSent', { taskId: '' }))
+          }
           void queryClient.invalidateQueries({ queryKey: queryKeys.devices.controlState(sn) })
           void refetchHistory()
         })
@@ -247,9 +307,14 @@ export function useDeviceConfig(sn: string) {
           const detail = err?.response?.data?.data?.reject_detail ?? err?.response?.data?.message ?? err?.message ?? ''
           message.error(`${t('remote.commandSendFailed')}${detail ? `: ${detail}` : ''}`)
         })
-        .finally(() => setSendingKey(null))
+        .finally(() => {
+          if (!waitingForReadback) {
+            writeBusy.current = false
+            setSendingKey(null)
+          }
+        })
     },
-    [sn, message, t, queryClient, refetchHistory, allowedCommands],
+    [apiSn, sn, message, t, queryClient, refetchHistory, canEdit, sendingKey, linkedDevice],
   )
 
   /** 下发工程单位值；confirm 字段弹二次确认（沿用现有确认逻辑） */
@@ -259,10 +324,19 @@ export function useDeviceConfig(sn: string) {
         message.warning(t('remote.paramRequired'))
         return
       }
-      if (meta.confirm) {
+      if (linkedDevice || meta.confirm) {
         modal.confirm({
-          title: t('remote.confirmSendTitle'),
-          content: t('remote.confirmSendContent', { sn, cmd: fieldLabel(meta.paramKey) }),
+          title: t(linkedDevice ? 'remote.confirmSettings' : 'remote.confirmSendTitle'),
+          content: linkedDevice
+            ? t('remote.confirmDeviceSetting', { sn, cmd: fieldLabel(meta.paramKey) }) + ' ' + t('remote.linkedChange', {
+                current: meta.kind === 'boolean' && getEditValue(meta.paramKey) !== undefined
+                  ? t(getEditValue(meta.paramKey) ? 'remote3.enabled' : 'remote3.disabled')
+                  : getEditValue(meta.paramKey) ?? '—',
+                target: meta.kind === 'boolean'
+                  ? t(physical ? 'remote3.enabled' : 'remote3.disabled')
+                  : physical,
+              })
+            : t('remote.confirmSendContent', { sn, cmd: fieldLabel(meta.paramKey) }),
           okText: t('remote.confirmExecute'),
           cancelText: t('remote.cancel'),
           okButtonProps: { danger: true },
@@ -272,7 +346,7 @@ export function useDeviceConfig(sn: string) {
       }
       doSend(meta, physical)
     },
-    [sn, modal, message, t, fieldLabel, doSend],
+    [sn, modal, message, t, fieldLabel, doSend, getEditValue, linkedDevice],
   )
 
   return {
@@ -293,6 +367,7 @@ export function useDeviceConfig(sn: string) {
     history: history ?? [],
     sendingKey,
     reading,
+    canRead,
     readCurrent,
     getMeta,
     getEditValue,

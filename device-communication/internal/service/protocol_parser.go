@@ -37,6 +37,7 @@ type ProtocolParser struct {
 	httpClient   *http.Client
 	batcher      *TelemetryBatcher
 
+	modbusModels sync.Map // SN -> verified Modbus inverter code, including unknown identity
 	snModelCache map[string]int32
 	snCacheMu    sync.RWMutex
 	parseEngine  *ParseRuleEngine
@@ -338,6 +339,25 @@ func (p *ProtocolParser) getModelID(ctx context.Context, sn string) int32 {
 	return modelID
 }
 
+// Model-specific V3 limits require explicit INFO controller and model evidence.
+// Persist the evidence so a service restart does not depend on a panel reboot.
+func (p *ProtocolParser) modbusTelemetryModel(ctx context.Context, sn string) string {
+	if model, found := p.modbusModels.Load(sn); found {
+		return model.(string)
+	}
+	if p.rdb == nil {
+		return ""
+	}
+	model, err := p.rdb.Get(ctx, "device:telemetry:modbus_model:"+sn).Result()
+	if errors.Is(err, redis.Nil) {
+		model = ""
+	} else if err != nil {
+		return ""
+	}
+	current, _ := p.modbusModels.LoadOrStore(sn, model)
+	return current.(string)
+}
+
 func (p *ProtocolParser) processKafkaMessage(ctx context.Context, message kafka.Message) error {
 	// Debug: log Kafka message consumption
 	logger.Info("Kafka message consumed",
@@ -519,7 +539,7 @@ func (p *ProtocolParser) handleHeartbeat(ctx context.Context, raw *RawMessage) e
 		// RunParamDef 原值（87 个 u16），字段映射/符号/量纲/界限全部在
 		// telemetryv2.ParseHeartbeatV3 内完成——量纲知识集中到服务端一处，
 		// 固件不再承担换算（此前 ESP 侧两次换算结论错误均源于知识分散）。
-		sample, parseErr = telemetryv2.ParseHeartbeatV3(raw.SN, raw.Payload, receivedAt)
+		sample, parseErr = telemetryv2.ParseHeartbeatV3(raw.SN, raw.Payload, receivedAt, p.modbusTelemetryModel(ctx, raw.SN))
 		if parseErr != nil {
 			if saveErr := p.repo.SaveIngestError(ctx, raw.SN, raw.MsgType, raw.Payload, "INVALID_HEARTBEAT", parseErr.Error()); saveErr != nil {
 				return fmt.Errorf("%v; save ingest error: %w", parseErr, saveErr)
@@ -987,6 +1007,19 @@ func (p *ProtocolParser) handleInfo(ctx context.Context, raw *RawMessage) error 
 		}
 	}
 	info.SN = raw.SN
+	modbusModel := ""
+	if info.DSPProtocol == "modbus_rtu_v1.27" {
+		switch info.Model {
+		case "PWR2KH12H1", "3KU", "6KU", "12KU":
+			modbusModel = info.Model
+		}
+	}
+	p.modbusModels.Store(raw.SN, modbusModel)
+	if p.rdb != nil {
+		if err := p.rdb.Set(ctx, "device:telemetry:modbus_model:"+raw.SN, modbusModel, 0).Err(); err != nil {
+			return fmt.Errorf("cache Modbus telemetry identity: %w", err)
+		}
+	}
 
 	// Use async device registry for non-blocking registration
 	if p.registry != nil {

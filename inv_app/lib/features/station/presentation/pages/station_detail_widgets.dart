@@ -3,68 +3,121 @@ part of 'station_detail_page.dart';
 class _EnergyFlowPainter extends CustomPainter {
   final List<FlowEdge> flows;
   final double animValue;
-  final Color gridColor;
+  final Map<NodePosition, Offset> nodeCenters;
+  final double nodeRadius;
 
-  _EnergyFlowPainter({required this.flows, required this.animValue, required this.gridColor});
+  _EnergyFlowPainter({
+    required this.flows,
+    required this.animValue,
+    required this.nodeCenters,
+    required this.nodeRadius,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final nodeR = 40.0 * size.width / 375.0;
-    final centerR = 20.0 * size.width / 375.0;
-    final labelOff = (12.0 * size.width / 375.0 + size.height / 100.0) / 2.0;
-    final positions = {
-      NodePosition.top: Offset(center.dx, size.height * 0.125 + labelOff),
-      NodePosition.bottom: Offset(center.dx, size.height * 0.875 - labelOff),
-      NodePosition.left: Offset(size.width * 0.125, center.dy + labelOff),
-      NodePosition.right: Offset(size.width * 0.875, center.dy + labelOff),
-      NodePosition.center: center,
-    };
+    final center = nodeCenters[NodePosition.center]!;
     for (final flow in flows) {
-      final from = positions[flow.from]!;
-      final to = positions[flow.to]!;
-      final direction = (to - from) / (to - from).distance;
-      final start = from + direction * (flow.from == NodePosition.center ? centerR : nodeR);
-      final end = to - direction * (flow.to == NodePosition.center ? centerR : nodeR);
-      final path = Path()..moveTo(start.dx, start.dy)..lineTo(end.dx, end.dy);
+      final outer = flow.from == NodePosition.center ? flow.to : flow.from;
+      final node = nodeCenters[outer]!;
+      final path = Path();
+      if (outer == NodePosition.left || outer == NodePosition.right) {
+        final side = outer == NodePosition.left ? -1.0 : 1.0;
+        final start = node + Offset(-side * nodeRadius, 0);
+        final bend =
+            min((start.dy - center.dy).abs(), (start.dx - center.dx).abs() / 2);
+        final vertical = (center.dy - start.dy).sign;
+        path.moveTo(start.dx, start.dy);
+        path.lineTo(center.dx + side * bend, start.dy);
+        path.quadraticBezierTo(
+          center.dx,
+          start.dy,
+          center.dx,
+          start.dy + vertical * bend,
+        );
+        path.lineTo(center.dx, center.dy);
+      } else {
+        final direction = (center - node) / (center - node).distance;
+        final start = node + direction * nodeRadius;
+        path.moveTo(start.dx, start.dy);
+        path.lineTo(center.dx, center.dy);
+      }
+      final metric = path.computeMetrics().first;
+      final inward = flow.to == NodePosition.center;
+      final start =
+          metric.getTangentForOffset(inward ? 0 : metric.length)!.position;
+      final end =
+          metric.getTangentForOffset(inward ? metric.length : 0)!.position;
       final paint = Paint()
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round
-        ..strokeWidth = flow.active ? 2.8 : 1.8;
+        ..strokeWidth = 2.8;
       if (!flow.active) {
-        paint.color = gridColor.withValues(alpha: 0.25);
-        final metric = path.computeMetrics().first;
-        for (double d = 0; d < metric.length; d += 10) {
-          canvas.drawPath(metric.extractPath(d, min(d + 5, metric.length)), paint);
-        }
+        paint.color =
+            Color.lerp(flow.fromColor, flow.toColor, .5)!.withValues(alpha: .2);
+        canvas.drawPath(path, paint);
         continue;
       }
-      paint.shader = ui.Gradient.linear(start, end, [flow.fromColor, flow.toColor]);
+      paint.shader =
+          ui.Gradient.linear(start, end, [flow.fromColor, flow.toColor]);
       canvas.drawPath(path, paint);
-      for (var i = 0; i < 4; i++) {
-        final t = (i / 4 + animValue) % 1.0;
-        canvas.drawCircle(Offset.lerp(start, end, t)!, 3,
-          Paint()..color = Color.lerp(flow.fromColor, flow.toColor, t)!,);
+      for (var i = 0; i < 6; i++) {
+        final t = (i / 6 + animValue) % 1.0;
+        final point = metric
+            .getTangentForOffset(metric.length * (inward ? t : 1 - t))!
+            .position;
+        final color = Color.lerp(flow.fromColor, flow.toColor, t)!;
+        final alpha = sin(t * pi) * .8;
+        canvas.drawCircle(
+          point,
+          5.w,
+          Paint()
+            ..color = color.withValues(alpha: alpha * .3)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+        );
+        canvas.drawCircle(
+          point,
+          2.3.w,
+          Paint()..color = color.withValues(alpha: alpha),
+        );
       }
-      final tip = Offset.lerp(start, end, 0.8)!;
+      final tangent =
+          metric.getTangentForOffset(metric.length * (inward ? .78 : .22))!;
+      final direction = tangent.vector * (inward ? 1.0 : -1.0);
       final normal = Offset(-direction.dy, direction.dx);
-      final arrow = Path()
-        ..moveTo(tip.dx, tip.dy)
-        ..lineTo((tip - direction * 9 + normal * 4).dx, (tip - direction * 9 + normal * 4).dy)
-        ..lineTo((tip - direction * 9 - normal * 4).dx, (tip - direction * 9 - normal * 4).dy)
-        ..close();
-      canvas.drawPath(arrow, Paint()..color = flow.toColor);
+      final tip = tangent.position;
+      canvas.drawPath(
+        Path()
+          ..moveTo(tip.dx, tip.dy)
+          ..lineTo(
+            (tip - direction * 7 + normal * 3).dx,
+            (tip - direction * 7 + normal * 3).dy,
+          )
+          ..lineTo(
+            (tip - direction * 7 - normal * 3).dx,
+            (tip - direction * 7 - normal * 3).dy,
+          )
+          ..close(),
+        Paint()..color = flow.toColor.withValues(alpha: .85),
+      );
     }
   }
 
   @override
   bool shouldRepaint(covariant _EnergyFlowPainter old) =>
-      animValue != old.animValue || gridColor != old.gridColor ||
+      animValue != old.animValue ||
+      nodeRadius != old.nodeRadius ||
+      NodePosition.values.any(
+        (position) => nodeCenters[position] != old.nodeCenters[position],
+      ) ||
       flows.length != old.flows.length ||
-      Iterable<int>.generate(flows.length).any((i) =>
-        flows[i].from != old.flows[i].from || flows[i].to != old.flows[i].to ||
-        flows[i].active != old.flows[i].active ||
-        flows[i].fromColor != old.flows[i].fromColor || flows[i].toColor != old.flows[i].toColor,);
+      Iterable<int>.generate(flows.length).any(
+        (i) =>
+            flows[i].from != old.flows[i].from ||
+            flows[i].to != old.flows[i].to ||
+            flows[i].active != old.flows[i].active ||
+            flows[i].fromColor != old.flows[i].fromColor ||
+            flows[i].toColor != old.flows[i].toColor,
+      );
 }
 
 // 选择设备弹窗：主题自适应圆角面板 + 设备列表（选中态高亮、逐项入场动画）
@@ -163,9 +216,8 @@ class _DeviceSelectSheetState extends State<_DeviceSelectSheet>
                   width: 40.w,
                   height: 40.w,
                   decoration: BoxDecoration(
-                    color:
-                        (selected ? AppColors.primary : color)
-                            .withValues(alpha: 0.1),
+                    color: (selected ? AppColors.primary : color)
+                        .withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12.r),
                   ),
                   child: Icon(

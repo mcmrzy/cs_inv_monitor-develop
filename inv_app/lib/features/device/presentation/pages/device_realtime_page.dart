@@ -21,10 +21,12 @@ import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/core/services/service_locator.dart';
+import 'package:inv_app/core/services/ble/ble_device_manager.dart';
 import 'package:inv_app/core/services/realtime_data_service.dart';
 import 'package:inv_app/core/services/connection_mode_service.dart';
 import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
 import 'package:inv_app/features/device/presentation/pages/device_settings_page.dart';
+import 'package:inv_app/features/device/presentation/pages/modbus_panel_page.dart';
 import 'package:inv_app/features/device/presentation/widgets/energy_dashboard_tabs.dart';
 import 'package:inv_app/core/entities/inverter_data.dart';
 import 'package:inv_app/core/utils/api_response.dart';
@@ -37,8 +39,14 @@ import 'package:inv_app/l10n/app_localizations.dart';
 class DeviceRealtimePage extends StatefulWidget {
   final String sn;
   final String type;
+  final bool openRemoteSettings;
 
-  const DeviceRealtimePage({super.key, required this.sn, required this.type});
+  const DeviceRealtimePage({
+    super.key,
+    required this.sn,
+    required this.type,
+    this.openRemoteSettings = false,
+  });
 
   @override
   State<DeviceRealtimePage> createState() => _DeviceRealtimePageState();
@@ -66,6 +74,13 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
   bool _hasMqttData = false;
   bool _apiUnavailable = false;
   bool _isLocalMode = false;
+  bool _isModbusPanel = false;
+  bool _modelBindingMismatch = false;
+  BleDeviceSession? _panelSession;
+
+  BleDeviceSession? _readyPanel() => getIt.isRegistered<BleDeviceManager>()
+      ? getIt<BleDeviceManager>().readyPanelFor(widget.sn)
+      : null;
 
   /// 遥测数据时间戳（用于滞后提示；null 表示未知）
   DateTime? _dataUpdatedAt;
@@ -80,7 +95,13 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(
+      length: 4,
+      vsync: this,
+      initialIndex: widget.openRemoteSettings ? 2 : 0,
+    );
+    _panelSession = widget.openRemoteSettings ? null : _readyPanel();
+    if (_panelSession != null) return;
     _subscribeMqttData();
     // 初始化本地模式（异步），完成后再决定是否调用云端 API
     _initLocalMode().then((_) {
@@ -126,9 +147,11 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
       final res = await getIt<Dio>()
           .get('/devices/by-sn/${Uri.encodeComponent(widget.sn)}/statistics')
           .timeout(const Duration(seconds: 10));
-      final data = unwrapApiResponse<Map<String, dynamic>>(res.data,
-          validate: (value) => value is Map<String, dynamic>,
-          expected: 'an object',);
+      final data = unwrapApiResponse<Map<String, dynamic>>(
+        res.data,
+        validate: (value) => value is Map<String, dynamic>,
+        expected: 'an object',
+      );
       final total = deviceNumber(data['total_energy']);
       if (mounted && total != null && total >= 0) {
         setState(() => _recordedTotalPV = total);
@@ -154,9 +177,11 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
     }
     _realtimeSub?.cancel();
     _staleRefreshTimer?.cancel();
-    try {
-      getIt<RealtimeDataService>().stopPolling(widget.sn);
-    } catch (_) {}
+    if (_panelSession == null) {
+      try {
+        getIt<RealtimeDataService>().stopPolling(widget.sn);
+      } catch (_) {}
+    }
     super.dispose();
   }
 
@@ -165,7 +190,8 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
       final dio = getIt<Dio>();
       if (kDebugMode) {
         debugPrint(
-            '[DeviceRealtimePage] Fetching device detail for ${widget.sn}',);
+          '[DeviceRealtimePage] Fetching device detail for ${widget.sn}',
+        );
       }
       // API 路径: /devices/by-sn/:sn
       final res = await dio
@@ -173,7 +199,8 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
           .timeout(const Duration(seconds: 10));
       if (kDebugMode) {
         debugPrint(
-            '[DeviceRealtimePage] API response status: ${res.statusCode}',);
+          '[DeviceRealtimePage] API response status: ${res.statusCode}',
+        );
       }
       if (res.statusCode == 200 && mounted) {
         final data = unwrapApiResponse<Map<String, dynamic>>(
@@ -181,7 +208,8 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
           validate: (value) {
             if (kDebugMode) {
               debugPrint(
-                  '[DeviceRealtimePage] Validating data type: ${value.runtimeType}, isMap: ${value is Map<String, dynamic>}',);
+                '[DeviceRealtimePage] Validating data type: ${value.runtimeType}, isMap: ${value is Map<String, dynamic>}',
+              );
             }
             return value is Map<String, dynamic>;
           },
@@ -189,11 +217,14 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
         );
         if (kDebugMode) {
           debugPrint(
-              '[DeviceRealtimePage] API data keys: ${data.keys.toList()}',);
+            '[DeviceRealtimePage] API data keys: ${data.keys.toList()}',
+          );
           debugPrint(
-              '[DeviceRealtimePage] has realtime_data: ${data.containsKey('realtime_data')}, value: ${data['realtime_data'] != null}',);
+            '[DeviceRealtimePage] has realtime_data: ${data.containsKey('realtime_data')}, value: ${data['realtime_data'] != null}',
+          );
           debugPrint(
-              '[DeviceRealtimePage] has online_status: ${data.containsKey('online_status')}, value: ${data['online_status']}',);
+            '[DeviceRealtimePage] has online_status: ${data.containsKey('online_status')}, value: ${data['online_status']}',
+          );
         }
 
         // 解析 realtime_data
@@ -201,7 +232,8 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
             data['realtime_data'] as Map<String, dynamic>? ?? {};
         if (kDebugMode) {
           debugPrint(
-              '[DeviceRealtimePage] realtimeRaw keys: ${realtimeRaw.keys.toList()}',);
+            '[DeviceRealtimePage] realtimeRaw keys: ${realtimeRaw.keys.toList()}',
+          );
         }
         final flatData = normalizeRealtimePayload(realtimeRaw);
 
@@ -220,25 +252,31 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
 
         if (kDebugMode) {
           debugPrint(
-              '[DeviceRealtimePage] structured: ac=${structured.ac != null}, pv=${structured.pv != null}, batt=${structured.battery != null}, sys=${structured.sysStatus != null}, energy=${structured.energy != null}',);
+            '[DeviceRealtimePage] structured: ac=${structured.ac != null}, pv=${structured.pv != null}, batt=${structured.battery != null}, sys=${structured.sysStatus != null}, energy=${structured.energy != null}',
+          );
           if (structured.ac != null) {
             debugPrint(
-                '[DeviceRealtimePage] ac: voltage=${structured.ac!.voltage}, power=${structured.ac!.power}, current=${structured.ac!.current}',);
+              '[DeviceRealtimePage] ac: voltage=${structured.ac!.voltage}, power=${structured.ac!.power}, current=${structured.ac!.current}',
+            );
           }
           if (structured.pv != null) {
             debugPrint(
-                '[DeviceRealtimePage] pv: power=${structured.pv!.pvPower}, pv1V=${structured.pv!.pvVoltage}',);
+              '[DeviceRealtimePage] pv: power=${structured.pv!.pvPower}, pv1V=${structured.pv!.pvVoltage}',
+            );
           }
           if (structured.battery != null) {
             debugPrint(
-                '[DeviceRealtimePage] batt: soc=${structured.battery!.soc}, voltage=${structured.battery!.voltage}, power=${structured.battery!.power}',);
+              '[DeviceRealtimePage] batt: soc=${structured.battery!.soc}, voltage=${structured.battery!.voltage}, power=${structured.battery!.power}',
+            );
           }
           if (structured.energy != null) {
             debugPrint(
-                '[DeviceRealtimePage] energy: dailyPv=${structured.energy!.dailyPV}, dailyCharge=${structured.energy!.dailyCharge}, dailyLoad=${structured.energy!.dailyLoad}',);
+              '[DeviceRealtimePage] energy: dailyPv=${structured.energy!.dailyPV}, dailyCharge=${structured.energy!.dailyCharge}, dailyLoad=${structured.energy!.dailyLoad}',
+            );
           }
           debugPrint(
-              '[DeviceRealtimePage] hasSection=$hasSection, flatData keys: ${flatData.keys.toList()}',);
+            '[DeviceRealtimePage] hasSection=$hasSection, flatData keys: ${flatData.keys.toList()}',
+          );
         }
 
         setState(() {
@@ -253,13 +291,29 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
           if (canReplaceTelemetry(_latest?.updatedAt, structured.updatedAt)) {
             _online = deviceCloudOnline(data);
           }
-          _timezone = data['device']?['timezone'] as String? ?? _timezone;
+          final device = data['device'];
+          if (device is Map) {
+            const models = {'PWR2KH12H1', '3KU', '6KU', '12KU'};
+            final firmware = device['firmware_esp'];
+            final reported = device['reported_model'];
+            final assigned = device['model'];
+            _modelBindingMismatch = reported is String &&
+                reported.isNotEmpty &&
+                assigned is String &&
+                assigned.isNotEmpty &&
+                reported.toUpperCase() != assigned.toUpperCase();
+            _isModbusPanel = models.contains(device['reported_model']) ||
+                models.contains(device['model']) ||
+                (firmware is String && firmware.contains('-modbus-full'));
+            _timezone = device['timezone'] as String? ?? _timezone;
+          }
           _loading = false;
           _error = null;
           _apiUnavailable = false;
           if (kDebugMode) {
             debugPrint(
-                '[DeviceRealtimePage] setState complete: _loading=$_loading, _error=$_error, _online=$_online',);
+              '[DeviceRealtimePage] setState complete: _loading=$_loading, _error=$_error, _online=$_online',
+            );
           }
         });
       }
@@ -430,14 +484,20 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
 
   @override
   Widget build(BuildContext context) {
+    final panel = _panelSession;
+    if (panel != null) return ModbusPanelPage(session: panel);
+    final readyPanel = _readyPanel();
     final l10n = AppLocalizations.of(context)!;
     return BlocListener<DeviceBloc, DeviceState>(
       listener: (context, state) {
         if (state is DeviceLocalDisconnected) {
           // 逆变器无响应，已自动断开设备热点并切回家用 WiFi
           final l10n = AppLocalizations.of(context)!;
-          AppToast.show(context, l10n.inverterNoResponse,
-              type: ToastType.error,);
+          AppToast.show(
+            context,
+            l10n.inverterNoResponse,
+            type: ToastType.error,
+          );
           context.pop();
         }
         // 本地直连模式：接收 DeviceBloc 的本地实时数据
@@ -479,19 +539,33 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
           backgroundColor: AppColor.surfaceContainer(context),
           foregroundColor: AppColor.textPrimary(context),
           actions: [
+            if (readyPanel != null || _isModbusPanel)
+              IconButton(
+                icon: Icon(
+                  readyPanel != null
+                      ? Icons.bluetooth_connected
+                      : Icons.bluetooth,
+                ),
+                tooltip: Localizations.localeOf(context).languageCode == 'zh'
+                    ? '蓝牙设置'
+                    : 'Bluetooth settings',
+                onPressed: () => _openPanelBluetooth(readyPanel),
+              ),
             if (!_isLocalMode)
               IconButton(
                 icon: const Icon(Icons.history_rounded),
                 tooltip: AppLocalizations.of(context)!.str('telemetry_history'),
                 onPressed: () => context.push(
-                    '/device/${widget.sn}/history?tz=${Uri.encodeComponent(_timezone)}',),
+                  '/device/${widget.sn}/history?tz=${Uri.encodeComponent(_timezone)}',
+                ),
               ),
             if (!_isLocalMode)
               IconButton(
                 icon: const Icon(Icons.battery_charging_full_rounded),
                 tooltip: AppLocalizations.of(context)!.str('storage_title'),
                 onPressed: () => context.push(
-                    '/device/${Uri.encodeComponent(widget.sn)}/storage?tz=${Uri.encodeComponent(_timezone)}',),
+                  '/device/${Uri.encodeComponent(widget.sn)}/storage?tz=${Uri.encodeComponent(_timezone)}',
+                ),
               ),
             // 云端调试入口（区别于局域网直连的本地模式）
             IconButton(
@@ -539,6 +613,45 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
   }
 
   /// 内容区：横幅区（顶部）+ TabBarView（4 Tab）+ 底部品牌 Tab 栏
+  Future<void> _openPanelBluetooth(BleDeviceSession? session) async {
+    if (session != null) {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) =>
+              ModbusPanelPage(session: session, startInSettings: true),
+        ),
+      );
+      if (mounted) setState(() {});
+      return;
+    }
+    final zh = Localizations.localeOf(context).languageCode == 'zh';
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(zh ? '蓝牙设置' : 'Bluetooth settings'),
+        content: Text(
+          zh
+              ? '请在面板打开「手机连接」，然后选择序列号 ${widget.sn} 并输入面板显示的 PIN。'
+              : 'Open Phone connection on the panel. Select ${widget.sn} and enter the PIN shown on the panel.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(zh ? '取消' : 'Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(zh ? '查找设备' : 'Find device'),
+          ),
+        ],
+      ),
+    );
+    if (mounted && proceed == true) {
+      await context.pushNamed('offlineModeSettings');
+      if (mounted) setState(() {});
+    }
+  }
+
   Widget _buildContent() {
     return Column(
       children: [
@@ -551,7 +664,8 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
               label:
                   Text(AppLocalizations.of(context)!.str('telemetry_history')),
               onPressed: () => context.push(
-                  '/device/${Uri.encodeComponent(widget.sn)}/history?tz=${Uri.encodeComponent(_timezone)}',),
+                '/device/${Uri.encodeComponent(widget.sn)}/history?tz=${Uri.encodeComponent(_timezone)}',
+              ),
             ),
           ),
         // ── 横幅区（位于 TabBarView 上方）──
@@ -575,7 +689,13 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
                 footer: _buildProtocolEntry(),
               ),
               EnergyStatsTab(data: _latest, recordedTotalPV: _recordedTotalPV),
-              RemoteSettingsTab(sn: widget.sn),
+              RemoteSettingsTab(
+                sn: widget.sn,
+                modelBindingMismatch: _isModbusPanel && _modelBindingMismatch,
+                cloudOnline: _isModbusPanel || widget.openRemoteSettings
+                    ? _online
+                    : null,
+              ),
               DeviceHealthTab(
                 data: _latest,
                 flat: _realtimeData,
@@ -681,17 +801,18 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
             ),
             SizedBox(width: 5.w),
             Expanded(
-                child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 11.sp,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                color:
-                    selected ? Colors.white : AppColor.textSecondary(context),
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11.sp,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  color:
+                      selected ? Colors.white : AppColor.textSecondary(context),
+                ),
               ),
-            ),),
+            ),
           ],
         ),
       ),
@@ -702,33 +823,47 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
   /// 避免设备离线时用户把陈旧功率/SOC 等数值当实时值
   Widget _buildStaleDataBanner() {
     final updatedAt = _dataUpdatedAt;
-    if (updatedAt == null) return const SizedBox.shrink();
-    final stale =
-        DateTime.now().difference(updatedAt.toLocal()) > _staleThreshold;
-    if (!stale) return const SizedBox.shrink();
+    final stale = updatedAt != null &&
+        DateTime.now().difference(updatedAt) > _staleThreshold;
+    if (!_isModbusPanel && !stale) return const SizedBox.shrink();
 
     final l10n = AppLocalizations.of(context)!;
-    final timeStr = DateFormat('HH:mm:ss').format(updatedAt.toLocal());
+    final zh = Localizations.localeOf(context).languageCode == 'zh';
+    final time = updatedAt == null
+        ? null
+        : DateFormat('HH:mm:ss').format(updatedAt.toLocal());
+    final message = !_isModbusPanel
+        ? l10n.str('realtime_data_stale', {'time': time!})
+        : time == null
+            ? (zh ? '等待云端采样' : 'Waiting for cloud data')
+            : stale || !_online
+                ? (zh ? '云端上次采样 · $time' : 'Last cloud sample · $time')
+                : (zh ? '云端实时 · $time' : 'Live cloud data · $time');
+    final color = _isModbusPanel && _online && !stale
+        ? Theme.of(context).colorScheme.primary
+        : AppColors.warning;
     return Container(
       margin: EdgeInsets.only(bottom: 12.h),
       padding: EdgeInsets.all(12.w),
       decoration: BoxDecoration(
-        color: AppColors.warning.withValues(alpha: 0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(10.r),
-        border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
           Icon(
-            Icons.hourglass_bottom_rounded,
+            _isModbusPanel
+                ? Icons.cloud_outlined
+                : Icons.hourglass_bottom_rounded,
             size: 18.sp,
-            color: AppColors.warning,
+            color: color,
           ),
           SizedBox(width: 8.w),
           Expanded(
             child: Text(
-              l10n.str('realtime_data_stale', {'time': timeStr}),
-              style: TextStyle(fontSize: 12.sp, color: AppColors.warning),
+              message,
+              style: TextStyle(fontSize: 12.sp, color: color),
             ),
           ),
         ],
@@ -803,7 +938,9 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
                   Text(
                     AppLocalizations.of(context)!.protocolTelemetryDesc,
                     style: TextStyle(
-                        fontSize: 12.sp, color: AppColor.textHint(context),),
+                      fontSize: 12.sp,
+                      color: AppColor.textHint(context),
+                    ),
                   ),
                 ],
               ),

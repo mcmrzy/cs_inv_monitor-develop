@@ -563,16 +563,23 @@ func (h *InternalHandler) DeviceInfo(c *gin.Context) {
 	// 上报的新版本，reconcile 的「版本是否变化」判定会退化成恒假而失效。
 	oldARM, oldESP, oldDSP, oldBMS := h.deviceFirmwareVersions(ctx, req.SN)
 
+	// 首次 INFO 也应写入型号 ID。面板初次绑定时同步旧的型号文本供现有查询使用。
 	_, err := h.db.Exec(ctx, `
 		INSERT INTO devices (
-			sn, model, reported_model, manufacturer, firmware_arm, firmware_esp, firmware_dsp, firmware_bms, device_type,
+			sn, model, reported_model, model_id, manufacturer, firmware_arm, firmware_esp, firmware_dsp, firmware_bms, device_type,
 			rated_power, rated_power_w, rated_voltage, rated_freq, battery_voltage, battery_type, cell_count, temp_sensor_count,
 			phase, inverter_module, reported_hardware_version, bootloader_version, info_reported_at,
 			user_id, status, last_online_at, created_at, updated_at
 		)
-		VALUES ($1, $2, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, NOW(), 0, 1, NOW(), NOW(), NOW())
+		VALUES ($1, $2, $2,
+			(SELECT id FROM device_models WHERE model_code = NULLIF($2::varchar, '') AND is_active AND lifecycle_status != 'retired'),
+			$3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, NOW(), 0, 1, NOW(), NOW(), NOW())
 		ON CONFLICT (sn) DO UPDATE SET
 			reported_model = COALESCE(NULLIF(EXCLUDED.reported_model, ''), devices.reported_model),
+			model = CASE
+				WHEN devices.deleted_at IS NULL AND devices.model_id IS NULL AND EXCLUDED.model_id IS NOT NULL
+					AND EXCLUDED.model IN ('PWR2KH12H1', '3KU', '6KU', '12KU') THEN EXCLUDED.model
+				ELSE devices.model END,
 			manufacturer = COALESCE(NULLIF(EXCLUDED.manufacturer, ''), devices.manufacturer),
 			firmware_arm = COALESCE(NULLIF(EXCLUDED.firmware_arm, ''), devices.firmware_arm),
 			firmware_esp = COALESCE(NULLIF(EXCLUDED.firmware_esp, ''), devices.firmware_esp),
@@ -596,10 +603,7 @@ func (h *InternalHandler) DeviceInfo(c *gin.Context) {
 			reported_hardware_version = COALESCE(NULLIF(EXCLUDED.reported_hardware_version, ''), devices.reported_hardware_version),
 			bootloader_version = COALESCE(NULLIF(EXCLUDED.bootloader_version, ''), devices.bootloader_version),
 			info_reported_at = NOW(),
-			model_id = COALESCE(
-				devices.model_id,
-				(SELECT id FROM device_models WHERE model_code = EXCLUDED.model AND lifecycle_status != 'retired' LIMIT 1)
-			),
+			model_id = CASE WHEN devices.deleted_at IS NULL THEN COALESCE(devices.model_id, EXCLUDED.model_id) ELSE devices.model_id END,
 			status = CASE WHEN devices.status = 2 AND EXISTS (
 				SELECT 1 FROM alarms WHERE alarms.device_sn = $1 AND alarms.alarm_level = 3 AND alarms.status = 0
 			) THEN 2 ELSE 1 END,

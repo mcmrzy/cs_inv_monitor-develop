@@ -22,6 +22,8 @@ export interface CommandRecord {
   status?: string
   stage?: 'pending' | 'acknowledged' | 'executing' | 'submitted' | 'applied' | 'completed'
   response_data?: { stage?: string }
+  data?: { stage?: string }
+  command_name?: string
   success?: boolean
   code?: string
   result?: unknown[]
@@ -129,9 +131,9 @@ export const DS = {
   transition: 'all 0.2s ease',
 } as const
 
-export function commandRecordPresentation(record: Pick<CommandRecord, 'status' | 'success' | 'response_data'> & { stage?: string }) {
+export function commandRecordPresentation(record: Pick<CommandRecord, 'status' | 'success' | 'response_data' | 'data'> & { stage?: string }) {
   const failed = ['failed', 'timeout', 'cancelled'].includes(record.status ?? '')
-  const stage = failed || record.status === 'submitted' ? record.status! : record.stage ?? record.response_data?.stage ?? record.status ?? 'pending'
+  const stage = failed || record.status === 'submitted' ? record.status! : record.stage ?? record.response_data?.stage ?? record.data?.stage ?? record.status ?? 'pending'
   if (record.success === false && ['applied', 'completed', 'success'].includes(stage)) return STAGE_MAP.failed
   return STAGE_MAP[stage] ?? { color: 'default', label_zh: stage }
 }

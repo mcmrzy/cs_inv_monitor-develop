@@ -202,3 +202,34 @@ func TestParseHeartbeatV3EnergyBounds(t *testing.T) {
 	require.Nil(t, s.Energy.ACChargeDaily)
 	require.NotZero(t, s.QualityFlags&QualityOutOfRange)
 }
+
+// Modbus models reuse the V3 word layout, with 60 Hz and a 12 kW model.
+func TestParseHeartbeatV3ModbusModelLimits(t *testing.T) {
+	run := strings.Split(strings.Trim(v3RunSample, "[]"), ",")
+	run[wordACOutputFreq] = "600"
+	run[wordGridFreq] = "600"
+	run[wordOutputWatt] = "12000"
+	run[wordPpv] = "14000"
+	ts := int64(1789974000)
+	payload := v3Envelope("["+strings.Join(run, ",")+"]", ts)
+
+	legacy, err := ParseHeartbeatV3("TEST", payload, time.Unix(ts+1, 0))
+	require.NoError(t, err)
+	require.Nil(t, legacy.AC.Frequency)
+	require.Nil(t, legacy.AC.ActivePower)
+	require.Nil(t, legacy.PV.TotalPower)
+
+	panel, err := ParseHeartbeatV3("TEST", payload, time.Unix(ts+1, 0), "12KU")
+	require.NoError(t, err)
+	require.InDelta(t, 60, *panel.AC.Frequency, 0.001)
+	require.InDelta(t, 60, *panel.AC.GridFrequency, 0.001)
+	require.InDelta(t, 12000, *panel.AC.ActivePower, 0.001)
+	require.InDelta(t, 14000, *panel.PV.TotalPower, 0.001)
+
+	for _, code := range []string{"PWR2KH12H1", "3KU", "6KU"} {
+		panel, err = ParseHeartbeatV3("TEST", payload, time.Unix(ts+1, 0), code)
+		require.NoError(t, err)
+		require.InDelta(t, 60, *panel.AC.Frequency, 0.001)
+		require.Nil(t, panel.AC.ActivePower)
+	}
+}

@@ -5,6 +5,7 @@ import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/utils/api_response.dart';
+import 'package:inv_app/core/utils/device_command_state.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 import 'package:inv_app/features/device/domain/entities/config_schema.dart';
@@ -22,8 +23,15 @@ import 'package:inv_app/l10n/app_localizations.dart';
 /// AutomaticKeepAliveClientMixin 保持切 Tab 不重建（避免重复 query_config）。
 class RemoteSettingsTab extends StatefulWidget {
   final String sn;
+  final bool? cloudOnline;
+  final bool modelBindingMismatch;
 
-  const RemoteSettingsTab({super.key, required this.sn});
+  const RemoteSettingsTab({
+    super.key,
+    required this.sn,
+    this.cloudOnline,
+    this.modelBindingMismatch = false,
+  });
 
   @override
   State<RemoteSettingsTab> createState() => _RemoteSettingsTabState();
@@ -51,6 +59,12 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
   bool _failed = false;
   bool _applying = false;
   bool _reading = false;
+  Set<String> _commands = {};
+  bool get _guarded => widget.cloudOnline != null;
+  bool get _canWrite =>
+      !widget.modelBindingMismatch && (!_guarded || widget.cloudOnline == true);
+  bool get _canRead =>
+      _canWrite && (!_guarded || _commands.contains('query_config'));
   DateTime? _lastReadAt;
 
   /// control-state 拉取成功即视为设备可读（在线徽标）
@@ -66,6 +80,14 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
     _fetchData();
   }
 
+  @override
+  void didUpdateWidget(RemoteSettingsTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.cloudOnline == true && oldWidget.cloudOnline == false) {
+      _fetchData();
+    }
+  }
+
   // ==================== 数据加载 ====================
 
   /// 并行拉取参数 schema 与当前值，然后自动读取设备配置
@@ -77,8 +99,16 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
     final dio = getIt<Dio>();
     try {
       final results = await Future.wait([
-        dio.get('/devices/by-sn/${widget.sn}/config-schema'),
-        dio.get('/devices/by-sn/${widget.sn}/control-state'),
+        dio.get(
+          '/devices/by-sn/${Uri.encodeComponent(widget.sn)}/config-schema',
+        ),
+        dio.get(
+          '/devices/by-sn/${Uri.encodeComponent(widget.sn)}/control-state',
+        ),
+        if (_guarded)
+          dio.get(
+            '/devices/by-sn/${Uri.encodeComponent(widget.sn)}/control-capabilities',
+          ),
       ]);
       final schemaList = unwrapApiResponse<List<dynamic>>(
         results[0].data,
@@ -98,9 +128,21 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
         }
       }
       // 基线用 reported 优先：设备真实值优先，未被设备回报的键回退 desired
-      final values = mergeControlStateReportedFirst(state);
+      final values = _guarded
+          ? (state['reported'] is Map
+              ? Map<String, dynamic>.from(state['reported'] as Map)
+              : <String, dynamic>{})
+          : mergeControlStateReportedFirst(state);
+      final capabilities = _guarded
+          ? unwrapApiResponse<List<dynamic>>(
+              results[2].data,
+              validate: (value) => value is List,
+              expected: 'device command capabilities',
+            )
+          : <dynamic>[];
       if (!mounted) return;
       setState(() {
+        _commands = enabledDeviceCommands(capabilities);
         _schemaMap = schemas;
         _original = Map.from(values);
         _pending = Map.from(values);
@@ -109,7 +151,9 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
         _loading = false;
       });
       // 自动发送 query_config 读取设备实际配置
-      _readDeviceConfig();
+      if (_canRead && (!_guarded || _schemaMap.isNotEmpty)) {
+        _readDeviceConfig();
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -131,7 +175,11 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
         validate: (v) => v is Map<String, dynamic>,
         expected: 'an object',
       );
-      final values = mergeControlStateReportedFirst(state);
+      final values = _guarded
+          ? (state['reported'] is Map
+              ? Map<String, dynamic>.from(state['reported'] as Map)
+              : <String, dynamic>{})
+          : mergeControlStateReportedFirst(state);
       if (!mounted) return state;
       setState(() {
         _original = Map.from(values);
@@ -147,14 +195,28 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
 
   /// 发送 query_config 命令读取设备当前配置
   Future<void> _readDeviceConfig() async {
-    if (_reading) return;
+    if (_reading || _applying || !_canRead) return;
     setState(() => _reading = true);
     final l10n = AppLocalizations.of(context)!;
 
     try {
       final dio = getIt<Dio>();
+      DateTime? baselineTime;
+      if (_guarded) {
+        final baselineResponse = await dio.get(
+          '/devices/by-sn/${Uri.encodeComponent(widget.sn)}/control-state',
+        );
+        final baseline = unwrapApiResponse<Map<String, dynamic>>(
+          baselineResponse.data,
+          validate: (value) => value is Map<String, dynamic>,
+          expected: 'device configuration',
+        );
+        baselineTime =
+            DateTime.tryParse(baseline['reported_at']?.toString() ?? '');
+        if (!mounted || !_canRead) return;
+      }
       final response = await dio.post(
-        '/devices/by-sn/${widget.sn}/control',
+        '/devices/by-sn/${Uri.encodeComponent(widget.sn)}/control',
         data: {'command': 'query_config', 'params': {}},
       );
       unwrapApiResponse<Map<String, dynamic>>(
@@ -165,11 +227,29 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
       );
 
       // 等待设备响应后刷新状态
-      await Future.delayed(const Duration(seconds: 2));
-      final refreshed = await _refreshState();
+      await Future<void>.delayed(const Duration(seconds: 2));
+      var refreshed = await _refreshState();
+      if (!mounted) return;
+      var reported = refreshed != null && controlStateHasReported(refreshed);
+      if (_guarded) {
+        final timer = Stopwatch()..start();
+        while (mounted && _canRead) {
+          final reportTime =
+              DateTime.tryParse(refreshed?['reported_at']?.toString() ?? '');
+          reported = refreshed != null &&
+              refreshed['reported'] is Map &&
+              (refreshed['reported'] as Map).isNotEmpty &&
+              reportTime != null &&
+              (baselineTime == null || reportTime.isAfter(baselineTime));
+          if (reported || timer.elapsed >= const Duration(seconds: 28)) break;
+          await Future<void>.delayed(const Duration(seconds: 1));
+          if (!mounted) return;
+          refreshed = await _refreshState();
+        }
+        if (!_canRead) reported = false;
+      }
 
       if (!mounted) return;
-      final reported = refreshed != null && controlStateHasReported(refreshed);
       setState(() {
         _reading = false;
         _lastReadAt = DateTime.now();
@@ -189,6 +269,8 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
     } catch (_) {
       if (!mounted) return;
       setState(() => _reading = false);
+    } finally {
+      if (mounted) setState(() => _reading = false);
     }
   }
 
@@ -293,6 +375,12 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
 
   /// 请求修改：confirmation_mode=='modal' 的参数先弹确认框再纳入
   void _requestChange(ConfigParamSchema schema, dynamic newValue) {
+    if (!_canWrite ||
+        _reading ||
+        _applying ||
+        (_guarded && !_commands.contains(schema.paramKey))) {
+      return;
+    }
     if (schema.needsModalConfirm) {
       _showModalConfirm(schema, newValue);
       return;
@@ -339,12 +427,51 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
 
   /// 应用修改：按 param_key 逐条下发独立命令（与 Web 远程设置一致）
   Future<void> _applyChanges() async {
+    if (_applying || _reading || !_canWrite) return;
     final l10n = AppLocalizations.of(context)!;
     final paramsToWrite = <String, dynamic>{
       for (final key in _pending.keys)
         if (_pending[key] != _original[key]) key: _pending[key],
     };
     if (paramsToWrite.isEmpty) return;
+    if (_guarded) {
+      final zh = Localizations.localeOf(context).languageCode == 'zh';
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(zh ? '确认远程设置' : 'Confirm remote settings'),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(widget.sn),
+                const SizedBox(height: 12),
+                for (final change in paramsToWrite.entries)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      '${configParamName(l10n, _schemaMap[change.key]!)}'
+                      '\n${_original[change.key] ?? '—'} → ${change.value}',
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(l10n.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: Text(l10n.confirm),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || confirmed != true || !_canWrite) return;
+    }
 
     setState(() => _applying = true);
     try {
@@ -352,16 +479,24 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
         dio: getIt<Dio>(),
         sn: widget.sn,
         changes: paramsToWrite,
+        verifyReadback: _guarded,
+        isActive: () => mounted,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(l10n.settingSetSuccess),
+          content: Text(
+            _guarded
+                ? (Localizations.localeOf(context).languageCode == 'zh'
+                    ? '已回读确认'
+                    : 'Verified by device readback')
+                : l10n.settingSetSuccess,
+          ),
           backgroundColor: AppColors.success,
         ),
       );
       setState(() {
-        _original = Map.from(_pending);
+        if (!_guarded) _original = Map.from(_pending);
         _applying = false;
       });
       // 成功后刷新 control-state，同步服务端 desired
@@ -382,6 +517,7 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
         ),
       );
       setState(() => _applying = false);
+      if (_guarded) await _refreshState();
     }
   }
 
@@ -399,7 +535,7 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
         // 主内容
         Expanded(child: _buildBody(l10n)),
         // 底部应用条（有修改项时）
-        if (_modifiedCount > 0)
+        if (_modifiedCount > 0 && _canWrite && !_reading)
           ConfigApplyBar(
             modifiedCount: _modifiedCount,
             applying: _applying,
@@ -428,7 +564,8 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
               side:
                   BorderSide(color: AppColors.primary.withValues(alpha: 0.45)),
             ),
-            onPressed: _reading ? null : _readDeviceConfig,
+            onPressed:
+                _reading || _applying || !_canRead ? null : _readDeviceConfig,
             icon: _reading
                 ? SizedBox(
                     width: 14.w,
@@ -456,7 +593,7 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
 
   /// 在线/离线小徽标
   Widget _buildReadableBadge(AppLocalizations l10n) {
-    final online = _readable;
+    final online = widget.cloudOnline ?? _readable;
     final color = online ? AppColors.online : AppColors.offline;
     return Container(
       margin: EdgeInsets.only(right: 4.w),
@@ -503,6 +640,24 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
 
     return Column(
       children: [
+        if (widget.modelBindingMismatch)
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              Localizations.localeOf(context).languageCode == 'zh'
+                  ? '设备上报机型与系统绑定型号不一致，请先核对设备型号绑定。'
+                  : 'The reported inverter model differs from the assigned model. Check the device model binding first.',
+            ),
+          ),
+        if (_guarded && widget.cloudOnline == false)
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              Localizations.localeOf(context).languageCode == 'zh'
+                  ? '云端离线。蓝牙维护期间设备可能暂离云端，重新上线后可继续远程设置。'
+                  : 'Cloud offline. The panel may leave the cloud during Bluetooth maintenance. Remote settings resume when it reconnects.',
+            ),
+          ),
         // 读取中提示条
         if (_reading)
           Container(
@@ -515,15 +670,18 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
                   width: 16.w,
                   height: 16.w,
                   child: const CircularProgressIndicator(
-                      strokeWidth: 2, color: AppColors.primary,),
+                    strokeWidth: 2,
+                    color: AppColors.primary,
+                  ),
                 ),
                 SizedBox(width: 10.w),
                 Text(
                   l10n.str('settings_reading_device'),
                   style: TextStyle(
-                      fontSize: 13.sp,
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w500,),
+                    fontSize: 13.sp,
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ],
             ),
@@ -536,16 +694,20 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
             color: AppColors.warning.withValues(alpha: 0.12),
             child: Row(
               children: [
-                Icon(Icons.warning_amber_rounded,
-                    size: 16.sp, color: AppColors.warning,),
+                Icon(
+                  Icons.warning_amber_rounded,
+                  size: 16.sp,
+                  color: AppColors.warning,
+                ),
                 SizedBox(width: 8.w),
                 Expanded(
                   child: Text(
                     l10n.str('settings_not_reported_hint'),
                     style: TextStyle(
-                        fontSize: 12.sp,
-                        color: AppColors.warning,
-                        fontWeight: FontWeight.w500,),
+                      fontSize: 12.sp,
+                      color: AppColors.warning,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
               ],
@@ -563,16 +725,24 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
                   child: Text(
                     '${l10n.str("settings_last_read")}: ${_formatTime(_lastReadAt!)}',
                     style: TextStyle(
-                        fontSize: 11.sp,
-                        color: AppColor.textSecondary(context),),
+                      fontSize: 11.sp,
+                      color: AppColor.textSecondary(context),
+                    ),
                   ),
                 ),
               // 8 大功能分类：点击原地展开参数控件（手风琴）
+              if (_guarded && _schemaMap.isEmpty)
+                Text(
+                  Localizations.localeOf(context).languageCode == 'zh'
+                      ? '当前设备尚未登记可用的远程设置，请核对系统型号绑定。'
+                      : 'No remote settings are registered. Check the device model binding.',
+                ),
               for (final category in settingsCategories)
-                _buildCategoryCard(l10n, category),
+                if (!_guarded || _visibleParams(category).isNotEmpty)
+                  _buildCategoryCard(l10n, category),
               SizedBox(height: 6.h),
               // 高级参数入口（独立页：工程师模式）
-              _buildAdvancedEntry(l10n),
+              if (!_guarded) _buildAdvancedEntry(l10n),
             ],
           ),
         ),
@@ -745,6 +915,10 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
                 schema: schema,
                 value: _pending[schema.paramKey],
                 modified: _isModified(schema.paramKey),
+                disabled: _applying ||
+                    _reading ||
+                    !_canWrite ||
+                    (_guarded && !_commands.contains(schema.paramKey)),
                 onRequestChange: (v) => _requestChange(schema, v),
               ),
         ],

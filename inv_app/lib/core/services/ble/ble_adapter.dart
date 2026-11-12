@@ -73,6 +73,12 @@ abstract class BleGattConnection {
 }
 
 /// BLE 适配器抽象
+abstract class BleNotificationReadiness {
+  /// Completes only after the already-listened notification stream is enabled.
+  Future<void> notificationsReady(
+      String serviceUuid, String characteristicUuid);
+}
+
 abstract class BleAdapter {
   Future<BleAdapterStatus> get status;
 
@@ -212,13 +218,25 @@ class FlutterBlueUltraAdapter implements BleAdapter {
 }
 
 /// flutter_blue_ultra 的 GATT 连接封装
-class FbuGattConnection implements BleGattConnection {
+class FbuGattConnection implements BleGattConnection, BleNotificationReadiness {
   final fbu.BluetoothDevice _device;
   final Map<String, fbu.BluetoothCharacteristic> _charCache = {};
 
   @override
   int get mtuNow => _device.mtuNow;
   final Map<String, int> _notifyRefCount = {};
+  final Map<String, Future<void>> _notifyReady = {};
+
+  @override
+  Future<void> notificationsReady(
+      String serviceUuid, String characteristicUuid) {
+    final key =
+        '${serviceUuid.toLowerCase()}/${characteristicUuid.toLowerCase()}';
+    return _notifyReady[key] ??
+        Future<void>.error(
+            StateError('notification stream has not been listened: $key'));
+  }
+
   List<fbu.BluetoothService>? _services;
 
   FbuGattConnection(this._device);
@@ -306,9 +324,12 @@ class FbuGattConnection implements BleGattConnection {
     StreamSubscription<List<int>>? sub;
     bool cancelled = false;
     bool subscribed = false;
+    final ready = Completer<void>();
+    ready.future.ignore();
 
     controller = StreamController<List<int>>(
       onListen: () async {
+        _notifyReady[key] = ready.future;
         try {
           final c = await _resolve(serviceUuid, characteristicUuid);
           if (cancelled) return;
@@ -321,17 +342,27 @@ class FbuGattConnection implements BleGattConnection {
           if (cancelled) {
             await sub?.cancel();
             await c.setNotifyValue(false);
+            if (!ready.isCompleted)
+              ready.completeError(
+                  StateError('notification subscription cancelled'));
             return;
           }
           _notifyRefCount[key] = (_notifyRefCount[key] ?? 0) + 1;
           subscribed = true;
+          ready.complete();
         } catch (error, stackTrace) {
+          if (!ready.isCompleted) ready.completeError(error, stackTrace);
           await sub?.cancel();
           if (!cancelled) controller.addError(error, stackTrace);
         }
       },
       onCancel: () async {
         cancelled = true;
+        if (!ready.isCompleted)
+          ready
+              .completeError(StateError('notification subscription cancelled'));
+        if (identical(_notifyReady[key], ready.future))
+          _notifyReady.remove(key);
         await sub?.cancel();
         if (!subscribed) return;
         subscribed = false;

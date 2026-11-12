@@ -85,17 +85,20 @@ class _StationDetailPageState extends State<StationDetailPage>
         .read<StationBloc>()
         .add(StationDetailRequested(stationId: widget.stationId));
     _fetchWeather();
-    _realtimeSubscription = getIt<RealtimeDataService>()
-        .realtimeDataStream.listen((data) {
-      if (mounted && _selectedDeviceSn != 'all' &&
+    _realtimeSubscription =
+        getIt<RealtimeDataService>().realtimeDataStream.listen((data) {
+      if (mounted &&
+          _selectedDeviceSn != 'all' &&
           data.deviceSN == _selectedDeviceSn) {
         setState(() {});
       }
     });
     _refreshTimer = Timer.periodic(const Duration(seconds: 60), (_) {
-      if (!mounted || ModalRoute.of(context)?.isCurrent == false ||
+      if (!mounted ||
+          ModalRoute.of(context)?.isCurrent == false ||
           (WidgetsBinding.instance.lifecycleState != null &&
-              WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed)) {
+              WidgetsBinding.instance.lifecycleState !=
+                  AppLifecycleState.resumed)) {
         return;
       }
       _refreshEnergyData();
@@ -109,8 +112,8 @@ class _StationDetailPageState extends State<StationDetailPage>
     }
     if (_selectedDeviceSn == 'all') {
       context.read<StationBloc>().add(
-        StationDetailRequested(stationId: widget.stationId),
-      );
+            StationDetailRequested(stationId: widget.stationId),
+          );
     } else {
       unawaited(getIt<RealtimeDataService>().refresh(_selectedDeviceSn));
     }
@@ -286,6 +289,44 @@ class _StationDetailPageState extends State<StationDetailPage>
         }
         final ds = _cachedState;
         if (ds == null) {
+          if (state is StationError) {
+            return Scaffold(
+              appBar: AppBar(),
+              body: Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24.w),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.cloud_off_rounded,
+                        size: 40.sp,
+                        color: AppColor.textSecondary(context),
+                      ),
+                      SizedBox(height: 16.h),
+                      Text(l10n.loadFailed, textAlign: TextAlign.center),
+                      SizedBox(height: 8.h),
+                      Text(
+                        l10n.translateError(state.message),
+                        textAlign: TextAlign.center,
+                      ),
+                      SizedBox(height: 16.h),
+                      FilledButton.icon(
+                        key: const ValueKey('station-detail-retry'),
+                        onPressed: () => context.read<StationBloc>().add(
+                              StationDetailRequested(
+                                stationId: widget.stationId,
+                              ),
+                            ),
+                        icon: const Icon(Icons.refresh_rounded),
+                        label: Text(l10n.retry),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }
           return const Scaffold(
             body: SkeletonStationDetail(),
             bottomNavigationBar: null,
@@ -301,38 +342,52 @@ class _StationDetailPageState extends State<StationDetailPage>
           listener: (context, state) {
             if (state is DeviceUnbindSuccess) {
               AppToast.show(
-                  context, '${l10n.str('device_unbound', {})} - ${state.sn}',
-                  type: ToastType.success,);
+                context,
+                '${l10n.str('device_unbound', {})} - ${state.sn}',
+                type: ToastType.success,
+              );
               context.read<StationBloc>().add(
                     StationDetailRequested(stationId: widget.stationId),
                   );
             } else if (state is DeviceDeleteSuccess) {
               AppToast.show(
-                  context, '${l10n.str('device_deleted', {})} - ${state.sn}',
-                  type: ToastType.success,);
+                context,
+                '${l10n.str('device_deleted', {})} - ${state.sn}',
+                type: ToastType.success,
+              );
               context.read<StationBloc>().add(
                     StationDetailRequested(stationId: widget.stationId),
                   );
             } else if (state is DeviceRebindSuccess) {
               AppToast.show(
-                  context, '${l10n.str('device_rebound', {})} - ${state.sn}',
-                  type: ToastType.success,);
+                context,
+                '${l10n.str('device_rebound', {})} - ${state.sn}',
+                type: ToastType.success,
+              );
               context.read<StationBloc>().add(
                     StationDetailRequested(stationId: widget.stationId),
                   );
             } else if (state is DeviceBindSuccess) {
               AppToast.show(
-                  context, '${l10n.str('device_bound', {})} - ${state.sn}',
-                  type: ToastType.success,);
+                context,
+                '${l10n.str('device_bound', {})} - ${state.sn}',
+                type: ToastType.success,
+              );
               context.read<StationBloc>().add(
                     StationDetailRequested(stationId: widget.stationId),
                   );
             } else if (state is DeviceReorderSuccess) {
-              AppToast.show(context, l10n.str('device_order_saved', {}),
-                  type: ToastType.success,);
+              AppToast.show(
+                context,
+                l10n.str('device_order_saved', {}),
+                type: ToastType.success,
+              );
             } else if (state is StationError && state is! StationActionError) {
-              AppToast.show(context, l10n.translateError(state.message),
-                  type: ToastType.error,);
+              AppToast.show(
+                context,
+                l10n.translateError(state.message),
+                type: ToastType.error,
+              );
             }
           },
           child: Scaffold(
@@ -382,7 +437,8 @@ class _StationDetailPageState extends State<StationDetailPage>
       // 单设备模式：从 RealtimeDataService 获取该设备数据
       final rt = getIt<RealtimeDataService>().getLatestData(_selectedDeviceSn);
       _watchGridExpiry(rt?.updatedAt);
-      final fresh = !_gridExpired && rt?.updatedAt != null &&
+      final fresh = !_gridExpired &&
+          rt?.updatedAt != null &&
           DateTime.now().difference(rt!.updatedAt!) >= Duration.zero &&
           DateTime.now().difference(rt.updatedAt!) < const Duration(minutes: 5);
       gridW = fresh ? measuredGridPower(rt.telemetryFields) : null;
@@ -393,15 +449,17 @@ class _StationDetailPageState extends State<StationDetailPage>
           .where((d) => d['sn'] == _selectedDeviceSn)
           .firstOrNull;
       final deviceStatus = device?['status'];
-      online = rt?.onlineStatus?.online ??
-          (deviceStatus == 1 || deviceStatus == 2);
+      online =
+          rt?.onlineStatus?.online ?? (deviceStatus == 1 || deviceStatus == 2);
       final summary = rt?.bmsSummary ??
           (device == null
               ? null
               : deviceBattery(Map<String, dynamic>.from(device)));
-      _watchBatteryExpiry(summary != null
-          ? summary.expiresAt
-          : rt?.updatedAt?.add(const Duration(minutes: 5)),);
+      _watchBatteryExpiry(
+        summary != null
+            ? summary.expiresAt
+            : rt?.updatedAt?.add(const Duration(minutes: 5)),
+      );
       if (summary != null) {
         final live = !_selectedBatteryExpired &&
             summary.onlineAt(DateTime.now()) == true;
@@ -410,12 +468,16 @@ class _StationDetailPageState extends State<StationDetailPage>
             : null;
         soc = live ? summary.soc : null;
       } else if (!_selectedBatteryExpired &&
-          rt?.battery != null && rt!.updatedAt != null &&
+          rt?.battery != null &&
+          rt!.updatedAt != null &&
           DateTime.now().difference(rt.updatedAt!) >= Duration.zero &&
-          DateTime.now().difference(rt.updatedAt!) < const Duration(minutes: 5)) {
+          DateTime.now().difference(rt.updatedAt!) <
+              const Duration(minutes: 5)) {
         final battery = rt.battery!;
         final hasMeasuredPower = const [
-          'battery_power', 'battery_charge_power', 'battery_discharge_power',
+          'battery_power',
+          'battery_charge_power',
+          'battery_discharge_power',
         ].any((key) => rt.telemetryFields[key] is num);
         battW = hasMeasuredPower
             ? battery.power
@@ -434,10 +496,14 @@ class _StationDetailPageState extends State<StationDetailPage>
       loadW = (station['load_power'] as num?)?.toDouble() ?? 0;
       battW = deviceNumber(station['batt_power']);
       soc = deviceNumber(station['batt_soc']);
-      final gridUpdatedAt = DateTime.tryParse(station['grid_updated_at']?.toString() ?? '');
+      final gridUpdatedAt =
+          DateTime.tryParse(station['grid_updated_at']?.toString() ?? '');
       _watchGridExpiry(gridUpdatedAt);
-      gridW = !_gridExpired && gridUpdatedAt != null && !gridUpdatedAt.isAfter(DateTime.now())
-          ? deviceNumber(station['grid_power']) : null;
+      gridW = !_gridExpired &&
+              gridUpdatedAt != null &&
+              !gridUpdatedAt.isAfter(DateTime.now())
+          ? deviceNumber(station['grid_power'])
+          : null;
     }
 
     // 离线时停止功率动画；电池未知读数保留为缺失，不伪装成真实零值。
@@ -454,8 +520,12 @@ class _StationDetailPageState extends State<StationDetailPage>
     final coal = (totalKwh * 0.33).toStringAsFixed(1);
     final co2 = (totalKwh * 0.997).toStringAsFixed(1);
     final trees = (totalKwh * 0.05).toStringAsFixed(0);
-    final flows =
-        _computeFlows(displayPvW, displayBattW ?? 0, displayGridW ?? 0, displayLoadW);
+    final flows = _computeFlows(
+      displayPvW,
+      displayBattW ?? 0,
+      displayGridW ?? 0,
+      displayLoadW,
+    );
 
     return Stack(
       children: [
@@ -658,8 +728,11 @@ class _StationDetailPageState extends State<StationDetailPage>
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.devices_other,
-                size: 16.sp, color: AppColor.textSecondary(context),),
+            Icon(
+              Icons.devices_other,
+              size: 16.sp,
+              color: AppColor.textSecondary(context),
+            ),
             SizedBox(width: 6.w),
             Text(
               getSelectedDeviceName(),
@@ -704,8 +777,10 @@ class _StationDetailPageState extends State<StationDetailPage>
       if (selected != null && deviceCategory(selected) == 'inv') {
         _pushStorage(_selectedDeviceSn);
       } else {
-        AppToast.show(context,
-            AppLocalizations.of(context)!.str('storage_not_connected'),);
+        AppToast.show(
+          context,
+          AppLocalizations.of(context)!.str('storage_not_connected'),
+        );
       }
       return;
     }
@@ -722,49 +797,59 @@ class _StationDetailPageState extends State<StationDetailPage>
     }
     if (candidates.isEmpty) {
       AppToast.show(
-          context, AppLocalizations.of(context)!.str('storage_not_connected'),);
+        context,
+        AppLocalizations.of(context)!.str('storage_not_connected'),
+      );
       return;
     }
     var sn = candidates.keys.singleOrNull;
     sn ??= await showModalBottomSheet<String>(
-        context: context,
-        isScrollControlled: true,
-        builder: (ctx) => SafeArea(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.sizeOf(ctx).height * .7,
-            ),
-            child: ListView(
-              shrinkWrap: true,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Text(AppLocalizations.of(ctx)!.deviceTypeStorage,
-                      style: const TextStyle(fontWeight: FontWeight.w600),),
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(ctx).height * .7,
+          ),
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Text(
+                  AppLocalizations.of(ctx)!.deviceTypeStorage,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
-                for (final entry in candidates.entries)
-                  ListTile(
-                    key: ValueKey('storage-choice-${entry.key}'),
-                    leading: const Icon(Icons.battery_charging_full_rounded),
-                    title: Text('${entry.value['alias'] ?? ''}'.isEmpty
-                        ? entry.key : '${entry.value['alias']}',),
-                    subtitle: Text(entry.key),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => Navigator.pop(ctx, entry.key),
+              ),
+              for (final entry in candidates.entries)
+                ListTile(
+                  key: ValueKey('storage-choice-${entry.key}'),
+                  leading: const Icon(Icons.battery_charging_full_rounded),
+                  title: Text(
+                    '${entry.value['alias'] ?? ''}'.isEmpty
+                        ? entry.key
+                        : '${entry.value['alias']}',
                   ),
-              ],
-            ),
+                  subtitle: Text(entry.key),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.pop(ctx, entry.key),
+                ),
+            ],
           ),
         ),
-      );
+      ),
+    );
     if (sn != null && mounted) {
       _pushStorage(sn);
     }
   }
 
   void _pushStorage(String sn) {
-    final timezone = TimezoneUtils.getTimezoneFromStation(_cachedState?.station);
-    context.push('/device/${Uri.encodeComponent(sn)}/storage?tz=${Uri.encodeComponent(timezone)}');
+    final timezone =
+        TimezoneUtils.getTimezoneFromStation(_cachedState?.station);
+    context.push(
+      '/device/${Uri.encodeComponent(sn)}/storage?tz=${Uri.encodeComponent(timezone)}',
+    );
   }
 
   Widget _flowArea(
@@ -783,72 +868,99 @@ class _StationDetailPageState extends State<StationDetailPage>
 
     return SizedBox(
       height: 400.h,
-      child: AnimatedBuilder(
-        animation: _anim,
-        builder: (_, child) => Stack(
-          children: [
-            Positioned.fill(
-              child: CustomPaint(
-                painter: _EnergyFlowPainter(
-                  flows: flows,
-                  animValue: _anim.value,
-                  gridColor: AppColors.primary,
-                ),
-              ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final radius = 40.w;
+          // The painter and widgets share circle centers; labels and glow never
+          // participate in node positioning.
+          final centers = <NodePosition, Offset>{
+            NodePosition.top: Offset(constraints.maxWidth / 2, 76.h),
+            NodePosition.bottom:
+                Offset(constraints.maxWidth / 2, constraints.maxHeight - 76.h),
+            NodePosition.left: Offset(radius + 18.w, constraints.maxHeight / 2),
+            NodePosition.right: Offset(
+              constraints.maxWidth - radius - 18.w,
+              constraints.maxHeight / 2,
             ),
-            Align(
-              child: Tooltip(
-                message: l10n.inverter,
-                child: Container(
-                  width: 40.w,
-                  height: 40.w,
-                  decoration: BoxDecoration(
-                    color: AppColor.surfaceContainer(context),
-                    border: Border.all(color: AppColors.primary),
-                    borderRadius: BorderRadius.circular(10.r),
+            NodePosition.center: Offset(
+              constraints.maxWidth / 2,
+              constraints.maxHeight / 2 - 24.w,
+            ),
+          };
+          Widget at(NodePosition position, Widget child) => Positioned(
+                left: centers[position]!.dx - radius,
+                top: centers[position]!.dy - radius,
+                width: radius * 2,
+                height: radius * 2,
+                child: child,
+              );
+          return AnimatedBuilder(
+            animation: _anim,
+            builder: (_, child) => Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: _EnergyFlowPainter(
+                      flows: flows,
+                      animValue: _anim.value,
+                      nodeCenters: centers,
+                      nodeRadius: radius,
+                    ),
                   ),
-                  child: Icon(Icons.memory, size: 24.sp, color: AppColors.primary),
                 ),
-              ),
+                at(
+                  NodePosition.top,
+                  _energyNode(
+                    l10n.pv,
+                    pvW,
+                    Icons.wb_sunny,
+                    AppColors.orange,
+                    true,
+                    active: pv > 5,
+                  ),
+                ),
+                at(
+                  NodePosition.bottom,
+                  _energyNode(
+                    l10n.load,
+                    loadW,
+                    Icons.home_rounded,
+                    AppColors.blue,
+                    false,
+                    active: load > 5,
+                  ),
+                ),
+                at(
+                  NodePosition.left,
+                  _energyNodeBatt(
+                    l10n.battery,
+                    battW,
+                    soc,
+                    Icons.battery_charging_full,
+                    AppColors.successLight,
+                    active: (batt ?? 0).abs() > 5,
+                  ),
+                ),
+                at(
+                  NodePosition.right,
+                  _energyNode(
+                    (grid ?? 0) > 5
+                        ? l10n.gridInput
+                        : (grid ?? 0) < -5
+                            ? l10n.gridOutput
+                            : l10n.grid,
+                    gridW,
+                    Icons.electrical_services,
+                    AppColors.primary,
+                    true,
+                    active: (grid ?? 0).abs() > 5,
+                  ),
+                ),
+              ],
             ),
-            _energyNode(
-              l10n.pv,
-              pvW,
-              Icons.wb_sunny,
-              AppColors.orange,
-              const Alignment(0, -0.75),
-              true,
-              active: pv > 0,
-            ),
-            _energyNode(
-              l10n.load,
-              loadW,
-              Icons.home_rounded,
-              AppColors.blue,
-              const Alignment(0, 0.75),
-              false,
-              active: load > 0,
-            ),
-            _energyNodeBatt(
-              l10n.battery,
-              battW,
-              soc,
-              Icons.battery_charging_full,
-              AppColors.successLight,
-              const Alignment(-0.75, 0),
-              active: (batt ?? 0).abs() > 0,
-            ),
-            _energyNode(
-              (grid ?? 0) > 5 ? l10n.gridInput : (grid ?? 0) < -5 ? l10n.gridOutput : l10n.grid,
-              gridW,
-              Icons.electrical_services,
-              AppColors.primary,
-              const Alignment(0.75, 0),
-              true,
-              active: (grid ?? 0).abs() > 5,
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -906,7 +1018,6 @@ class _StationDetailPageState extends State<StationDetailPage>
     String val,
     IconData icon,
     Color color,
-    Alignment align,
     bool labelAbove, {
     bool active = false,
   }) {
@@ -919,6 +1030,9 @@ class _StationDetailPageState extends State<StationDetailPage>
       ),
     );
     final circle = Container(
+      key: ValueKey(
+        'station-energy-${icon == Icons.wb_sunny ? 'pv' : icon == Icons.home_rounded ? 'load' : 'grid'}',
+      ),
       width: 80.w,
       height: 80.w,
       decoration: BoxDecoration(
@@ -979,24 +1093,38 @@ class _StationDetailPageState extends State<StationDetailPage>
         ),
       ),
     );
-    return Align(
-      alignment: align,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (labelAbove) labelWidget,
-          if (labelAbove) SizedBox(height: 4.h),
-          if (active)
-            Stack(
-              alignment: Alignment.center,
-              children: [_buildGlow(color), circle],
-            )
-          else
-            circle,
-          if (!labelAbove) SizedBox(height: 4.h),
-          if (!labelAbove) labelWidget,
-        ],
-      ),
+    return _nodeFrame(
+      circle,
+      labelWidget,
+      color,
+      labelAbove: labelAbove,
+      active: active,
+    );
+  }
+
+  Widget _nodeFrame(
+    Widget circle,
+    Widget label,
+    Color color, {
+    required bool labelAbove,
+    required bool active,
+  }) {
+    return Stack(
+      clipBehavior: Clip.none,
+      alignment: Alignment.center,
+      children: [
+        if (active)
+          Positioned(left: -15.w, top: -15.w, child: _buildGlow(color)),
+        circle,
+        Positioned(
+          left: -16.w,
+          right: -16.w,
+          top: labelAbove ? -30.h : null,
+          bottom: labelAbove ? null : -30.h,
+          height: 24.h,
+          child: FittedBox(fit: BoxFit.scaleDown, child: label),
+        ),
+      ],
     );
   }
 
@@ -1005,8 +1133,7 @@ class _StationDetailPageState extends State<StationDetailPage>
     String val,
     double? soc,
     IconData icon,
-    Color color,
-    Alignment align, {
+    Color color, {
     bool active = false,
   }) {
     final circle = Container(
@@ -1090,33 +1217,23 @@ class _StationDetailPageState extends State<StationDetailPage>
         ),
       ),
     );
-    return Align(
-      alignment: align,
-      child: InkWell(
-        key: const ValueKey('station-energy-battery'),
-        onTap: _openBatteryStorage,
-        borderRadius: BorderRadius.circular(8),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12.sp,
-                fontWeight: FontWeight.w600,
-                color: AppColor.textPrimary(context),
-              ),
-            ),
-            SizedBox(height: 4.h),
-            if (active)
-              Stack(
-                alignment: Alignment.center,
-                children: [_buildGlow(color), circle],
-              )
-            else
-              circle,
-          ],
+    return InkWell(
+      key: const ValueKey('station-energy-battery'),
+      onTap: _openBatteryStorage,
+      borderRadius: BorderRadius.circular(40.w),
+      child: _nodeFrame(
+        circle,
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12.sp,
+            fontWeight: FontWeight.w600,
+            color: AppColor.textPrimary(context),
+          ),
         ),
+        color,
+        labelAbove: true,
+        active: active,
       ),
     );
   }
@@ -1130,20 +1247,34 @@ class _StationDetailPageState extends State<StationDetailPage>
     const threshold = 5.0;
     const center = NodePosition.center;
     return [
-      FlowEdge(from: NodePosition.top, to: center,
-        fromColor: AppColors.orange, toColor: AppColors.primary,
-        active: pv > threshold,),
-      FlowEdge(from: center, to: NodePosition.bottom,
-        fromColor: AppColors.primary, toColor: AppColors.blue,
-        active: load > threshold,),
-      FlowEdge(from: batt < 0 ? NodePosition.left : center,
+      FlowEdge(
+        from: NodePosition.top,
+        to: center,
+        fromColor: AppColors.orange,
+        toColor: AppColors.primary,
+        active: pv > threshold,
+      ),
+      FlowEdge(
+        from: center,
+        to: NodePosition.bottom,
+        fromColor: AppColors.primary,
+        toColor: AppColors.blue,
+        active: load > threshold,
+      ),
+      FlowEdge(
+        from: batt < 0 ? NodePosition.left : center,
         to: batt < 0 ? center : NodePosition.left,
-        fromColor: AppColors.successLight, toColor: AppColors.successLight,
-        active: batt.abs() > threshold,),
-      FlowEdge(from: grid < 0 ? center : NodePosition.right,
+        fromColor: AppColors.successLight,
+        toColor: AppColors.successLight,
+        active: batt.abs() > threshold,
+      ),
+      FlowEdge(
+        from: grid < 0 ? center : NodePosition.right,
         to: grid < 0 ? NodePosition.right : center,
-        fromColor: AppColors.primary, toColor: AppColors.primary,
-        active: grid.abs() > threshold,),
+        fromColor: AppColors.primary,
+        toColor: AppColors.primary,
+        active: grid.abs() > threshold,
+      ),
     ];
   }
 
@@ -1250,7 +1381,9 @@ class _StationDetailPageState extends State<StationDetailPage>
                 Text(
                   label,
                   style: TextStyle(
-                      fontSize: 10.sp, color: AppColor.textHint(context),),
+                    fontSize: 10.sp,
+                    color: AppColor.textHint(context),
+                  ),
                 ),
               ],
             ),

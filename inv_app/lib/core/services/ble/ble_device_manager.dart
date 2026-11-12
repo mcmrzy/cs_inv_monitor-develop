@@ -141,19 +141,36 @@ class SecureStorageBleDeviceKeyStore implements BleDeviceKeyStore {
 /// TELEMETRY 分帧重组器（协议 §6.3：统一 1 字节控制头）
 class BleFrameReassembler {
   static const int maxFrames = 8;
+  final int _frameLimit;
+  final int _byteLimit;
+  final Stopwatch _clock = Stopwatch()..start();
+  int? _lastFrameMs;
+
+  BleFrameReassembler({int maxFrames = 8, int maxBytes = 4096})
+      : _frameLimit = maxFrames,
+        _byteLimit = maxBytes;
 
   final List<int> _buffer = [];
   int? _nextIndex;
 
   /// 喂入一帧；消息完整时返回完整字节，否则返回 null
-  List<int>? feed(List<int> chunk) {
-    if (chunk.length < 2) return null;
+  List<int>? feed(List<int> chunk, {int? nowMs}) {
+    final now = nowMs ?? _clock.elapsedMilliseconds;
+    if (chunk.length < 2 ||
+        (_lastFrameMs != null && now - _lastFrameMs! > 5000)) {
+      reset();
+      return null;
+    }
     final header = chunk[0];
     final isFirst = (header & 0x80) != 0;
     final isLast = (header & 0x40) != 0;
     final index = header & 0x3F;
 
     if (isFirst) {
+      if (index != 0 || _nextIndex != null) {
+        reset();
+        return null;
+      }
       _buffer
         ..clear()
         ..addAll(chunk.sublist(1));
@@ -161,17 +178,18 @@ class BleFrameReassembler {
     } else {
       // 未收到首帧而收到后续帧，或序号不连续：丢弃等待下一首帧
       if (_nextIndex == null || index != _nextIndex) {
-        _buffer.clear();
-        _nextIndex = null;
+        reset();
         return null;
       }
       _buffer.addAll(chunk.sublist(1));
       _nextIndex = index + 1;
     }
 
-    if (_buffer.length > maxFrames * 509 || (_nextIndex ?? 0) > maxFrames) {
+    _lastFrameMs = now;
+    if (_buffer.length > _byteLimit || (_nextIndex ?? 0) > _frameLimit) {
       _buffer.clear();
       _nextIndex = null;
+      _lastFrameMs = null;
       return null;
     }
 
@@ -179,9 +197,16 @@ class BleFrameReassembler {
       final complete = List<int>.unmodifiable(_buffer);
       _buffer.clear();
       _nextIndex = null;
+      _lastFrameMs = null;
       return complete;
     }
     return null;
+  }
+
+  void reset() {
+    _buffer.clear();
+    _nextIndex = null;
+    _lastFrameMs = null;
   }
 }
 
@@ -217,7 +242,10 @@ class BleDeviceSession {
 
   final _telemetryController =
       StreamController<Map<String, dynamic>>.broadcast();
-  final _reassembler = BleFrameReassembler();
+  var _reassembler = BleFrameReassembler();
+  final _resultReassembler = BleFrameReassembler(maxFrames: 64, maxBytes: 512);
+  bool _directSessionOpen = false;
+  bool _panelApiV1 = false;
 
   /// 命令队列（Future 链串行化，防 GATT 并发冲突）
   Future<void> _commandChain = Future.value();
@@ -254,6 +282,8 @@ class BleDeviceSession {
       capabilities.contains('control');
 
   bool get isOtaInProgress => _activeOtaLeaseToken != null;
+
+  bool get supportsPanelApi => _directSessionOpen && _panelApiV1;
 
   int get negotiatedMtu => _connection?.mtuNow ?? 23;
 
@@ -298,6 +328,7 @@ class BleDeviceSession {
       }
       await _afterConnected();
     } catch (e) {
+      await _teardown();
       _setState(BleDeviceState.disconnected);
       rethrow;
     }
@@ -343,7 +374,37 @@ class BleDeviceSession {
       } catch (_) {}
     }
     if (_state != BleDeviceState.disconnected) {
-      _setState(BleDeviceState.ready);
+      if (capabilities.contains('framing_v1') &&
+          capabilities.contains('direct_control_v1')) {
+        _setState(BleDeviceState.connecting);
+        final notifications = _connection;
+        if (notifications is BleNotificationReadiness) {
+          final readiness = notifications as BleNotificationReadiness;
+          await Future.wait([
+            readiness.notificationsReady(
+                BleCtProtocol.serviceUuid, BleCtProtocol.cmdResultCharUuid),
+            readiness.notificationsReady(
+                BleCtProtocol.serviceUuid, BleCtProtocol.telemetryCharUuid),
+          ]).timeout(BleCtProtocol.commandTimeout);
+        }
+        final negotiated = await _sendCommandInternal('open_session', {
+          'framing_v1': true,
+          'direct_control_v1': true,
+        });
+        if (negotiated['framing_v1'] != true ||
+            negotiated['direct_control_v1'] != true) {
+          throw const BleCommandException(
+            'PROTOCOL_NOT_READY',
+            'direct session rejected',
+          );
+        }
+        _directSessionOpen = true;
+        _panelApiV1 = negotiated['panel_api_v1'] == true;
+        _reassembler = BleFrameReassembler(maxFrames: 64, maxBytes: 1024);
+      }
+      if (_connection != null && _state != BleDeviceState.disconnected) {
+        _setState(BleDeviceState.ready);
+      }
     }
   }
 
@@ -403,7 +464,10 @@ class BleDeviceSession {
   }
 
   /// 读取最新遥测快照（协议修订①：TELEMETRY 支持 Read，App 轮询用）
-  Future<Map<String, dynamic>> readTelemetrySnapshot() async {
+  Future<Map<String, dynamic>> readTelemetrySnapshot() =>
+      _enqueue(_readTelemetrySnapshot);
+
+  Future<Map<String, dynamic>> _readTelemetrySnapshot() async {
     if (_activeOtaLeaseToken != null) {
       throw const BleCommandException('OTA_IN_PROGRESS', 'OTA owns BLE link');
     }
@@ -436,15 +500,20 @@ class BleDeviceSession {
     if (resp['mode'] != 'pin_check' || resp['result'] != 'ok') {
       final err = (resp['error'] as String?) ?? 'pin rejected';
       throw BleCommandException(
-          err == 'locked' ? 'PIN_LOCKED' : 'PIN_REJECTED', err,);
+        err == 'locked' ? 'PIN_LOCKED' : 'PIN_REJECTED',
+        err,
+      );
     }
   }
 
   /// 绑定（协议 §4.1 + 附录 B）：设备未绑定时写入 bind 消息，设备 notify 返回结果。
   /// [deviceKeyBase64] App 本地生成的 32B Base64 key；[pin] 场景 B 必传（设备端校验），
   /// 场景 A 配网已验证可不传；[issuedAt] 设备时钟校准用（缺省当前时间）。
-  Future<void> bind(String deviceKeyBase64,
-      {String? pin, DateTime? issuedAt,}) async {
+  Future<void> bind(
+    String deviceKeyBase64, {
+    String? pin,
+    DateTime? issuedAt,
+  }) async {
     final connection = _connection;
     if (connection == null) {
       throw const BleCommandException('UNAUTHENTICATED', 'not connected');
@@ -493,7 +562,9 @@ class BleDeviceSession {
       final key = base64Decode(deviceKeyBase64);
       if (key.length != 32) {
         throw const BleCommandException(
-            'UNAUTHENTICATED', 'invalid device key',);
+          'UNAUTHENTICATED',
+          'invalid device key',
+        );
       }
       final phoneNonce = List<int>.generate(16, (_) => _random.nextInt(256));
       final initId = _generateMessageId();
@@ -531,13 +602,15 @@ class BleDeviceSession {
       await connection.write(
         BleCtProtocol.serviceUuid,
         BleCtProtocol.authCharUuid,
-        utf8.encode(jsonEncode({
-          'v': 2,
-          'type': 'auth.proof',
-          'message_id': proofId,
-          'session_id': connectionSessionId,
-          'body': {'phone_proof': base64Encode(phoneProof)},
-        }),),
+        utf8.encode(
+          jsonEncode({
+            'v': 2,
+            'type': 'auth.proof',
+            'message_id': proofId,
+            'session_id': connectionSessionId,
+            'body': {'phone_proof': base64Encode(phoneProof)},
+          }),
+        ),
       );
       final result = await resultFuture.timeout(authTimeout);
       final body = (result['body'] as Map).cast<String, dynamic>();
@@ -552,7 +625,9 @@ class BleDeviceSession {
       if (body['result'] != 'ok' ||
           body['device_proof'] is! String ||
           !_constantTimeEquals(
-              base64Decode(body['device_proof'] as String), expected,)) {
+            base64Decode(body['device_proof'] as String),
+            expected,
+          )) {
         throw const BleCommandException(
           'UNAUTHENTICATED',
           'digest mismatch',
@@ -564,7 +639,9 @@ class BleDeviceSession {
         _setState(BleDeviceState.connecting);
       }
       throw const BleCommandException(
-          'AUTH_TIMEOUT', 'authentication timed out',);
+        'AUTH_TIMEOUT',
+        'authentication timed out',
+      );
     } catch (e) {
       // 鉴权失败不断开连接，交由上层决定（可重试或走绑定）
       if (_state != BleDeviceState.disconnected) {
@@ -627,7 +704,17 @@ class BleDeviceSession {
         const BleCommandException('OTA_IN_PROGRESS', 'OTA owns BLE link'),
       );
     }
-    return _enqueue(() => _sendCommandInternal(action, params));
+    final connection = _connection;
+    final sessionId = connectionSessionId;
+    return _enqueue(() {
+      if (_activeOtaLeaseToken != null) {
+        throw const BleCommandException('OTA_IN_PROGRESS', 'OTA owns BLE link');
+      }
+      if (_connection != connection || connectionSessionId != sessionId) {
+        throw const BleCommandException('UNAUTHENTICATED', 'session changed');
+      }
+      return _sendCommandInternal(action, params);
+    });
   }
 
   Future<T> _enqueue<T>(Future<T> Function() task) {
@@ -642,8 +729,25 @@ class BleDeviceSession {
     Map<String, dynamic> params,
   ) async {
     final connection = _connection;
-    if (connection == null || _state != BleDeviceState.ready) {
+    final opening = action == 'open_session' &&
+        _state == BleDeviceState.connecting &&
+        capabilities.contains('direct_control_v1');
+    if (connection == null || (_state != BleDeviceState.ready && !opening)) {
       throw const BleCommandException('UNAUTHENTICATED', 'session not ready');
+    }
+    if (capabilities.contains('direct_control_v1')) {
+      if (action == 'power_on' || action == 'power_off') {
+        throw const BleCommandException(
+          'UNSUPPORTED_ACTION',
+          'output priority is not power control',
+        );
+      }
+      if (action != 'open_session' && !_directSessionOpen) {
+        throw const BleCommandException(
+          'PROTOCOL_NOT_READY',
+          'direct session not open',
+        );
+      }
     }
 
     final commandId = _generateCommandId();
@@ -659,6 +763,9 @@ class BleDeviceSession {
       messageId: messageId,
       sessionId: sessionId,
     );
+    // Notifications can complete with an error before the final write returns.
+    // Observe it immediately; awaiting the same future below still reports it.
+    completer.future.ignore();
 
     final payload = utf8.encode(
       jsonEncode({
@@ -681,11 +788,7 @@ class BleDeviceSession {
       for (var attempt = 0;
           attempt <= BleCtProtocol.commandMaxRetries;
           attempt++) {
-        await connection.write(
-          BleCtProtocol.serviceUuid,
-          BleCtProtocol.commandCharUuid,
-          payload,
-        );
+        await _writeCommandPayload(connection, payload);
         try {
           // 重试沿用原 commandId，设备端幂等；迟到的首次回报同样可完成配对
           return await completer.future.timeout(BleCtProtocol.commandTimeout);
@@ -699,7 +802,58 @@ class BleDeviceSession {
     }
   }
 
+  Future<void> _writeCommandPayload(
+    BleGattConnection connection,
+    List<int> payload,
+  ) async {
+    if (!capabilities.contains('framing_v1')) {
+      await connection.write(
+        BleCtProtocol.serviceUuid,
+        BleCtProtocol.commandCharUuid,
+        payload,
+      );
+      return;
+    }
+    if (payload.length > 512) {
+      throw const BleCommandException(
+        'COMMAND_TOO_LARGE',
+        'command exceeds 512 bytes',
+      );
+    }
+    final chunkSize = min(connection.mtuNow, 512) - 4;
+    if (chunkSize <= 0) {
+      throw const BleCommandException(
+        'INVALID_MTU',
+        'MTU does not fit a frame',
+      );
+    }
+    for (var offset = 0, sequence = 0; offset < payload.length; sequence++) {
+      final end = min(offset + chunkSize, payload.length);
+      final header = sequence |
+          (offset == 0 ? 0x80 : 0) |
+          (end == payload.length ? 0x40 : 0);
+      await connection.write(
+        BleCtProtocol.serviceUuid,
+        BleCtProtocol.commandCharUuid,
+        [header, ...payload.sublist(offset, end)],
+      );
+      if (!identical(connection, _connection)) {
+        throw const BleCommandException(
+          'UNAUTHENTICATED',
+          'connection changed during command',
+        );
+      }
+      offset = end;
+    }
+  }
+
   void _onCmdResult(List<int> bytes) {
+    if (bytes.isEmpty) return;
+    if (bytes.first != 0x7b && capabilities.contains('framing_v1')) {
+      final complete = _resultReassembler.feed(bytes);
+      if (complete == null) return;
+      bytes = complete;
+    }
     Map<String, dynamic> json;
     try {
       json = jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
@@ -724,6 +878,20 @@ class BleDeviceSession {
     if (status == 'applied') {
       pending.completer.complete(
         (result['actual'] as Map?)?.cast<String, dynamic>() ?? const {},
+      );
+    } else if (status == 'submitted' && supportsPanelApi) {
+      pending.completer.complete(<String, dynamic>{
+        if (result['actual'] is Map)
+          ...(result['actual'] as Map).cast<String, dynamic>(),
+        'submitted': true,
+        'observed': false,
+      });
+    } else if (status == 'saved' && _directSessionOpen) {
+      pending.completer.completeError(
+        const BleCommandException(
+          'SAVED_UNCONFIRMED',
+          'saved on controller; DSP application is unconfirmed',
+        ),
       );
     } else {
       final err = result['error'] as Map?;
@@ -854,6 +1022,10 @@ class BleDeviceSession {
     _expectedAuthType = null;
     _expectedAuthReplyTo = null;
     connectionSessionId = null;
+    _directSessionOpen = false;
+    _panelApiV1 = false;
+    _reassembler = BleFrameReassembler();
+    _resultReassembler.reset();
     protocolVersion = 0;
     capabilities = const {};
     _activeOtaLeaseToken = null;
@@ -884,6 +1056,10 @@ class BleDeviceSession {
   }
 
   Future<void> _teardown() async {
+    _directSessionOpen = false;
+    _panelApiV1 = false;
+    _reassembler = BleFrameReassembler();
+    _resultReassembler.reset();
     _activeOtaLeaseToken = null;
     await _telemetrySub?.cancel();
     await _cmdResultSub?.cancel();
@@ -960,6 +1136,19 @@ class BleDeviceManager {
   Map<String, BleDeviceSession> get sessions => Map.unmodifiable(_sessions);
 
   BleDeviceSession? sessionOf(String macAddress) => _sessions[macAddress];
+
+  /// A local panel route is tied to the selected SN, never another nearby unit.
+  BleDeviceSession? readyPanelFor(String sn) {
+    if (sn.trim().isEmpty) return null;
+    for (final session in _sessions.values) {
+      if (session.sn == sn &&
+          session.state == BleDeviceState.ready &&
+          session.supportsPanelApi) {
+        return session;
+      }
+    }
+    return null;
+  }
 
   /// 连接（或复用）指定设备会话
   Future<BleDeviceSession> connectDevice(
