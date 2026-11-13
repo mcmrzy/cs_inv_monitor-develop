@@ -20,10 +20,15 @@ on:
         required: false
         default: false
         type: boolean
+      prepare_retry:
+        description: Restore image tags from running containers before retrying the failed Modbus deployment
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   build-signed-aab:
-    if: inputs.release_tag == '' && !inputs.relay_images
+    if: inputs.release_tag == '' && !inputs.relay_images && !inputs.prepare_retry
     name: Build signed Android App Bundle
     runs-on: ubuntu-latest
     permissions:
@@ -102,7 +107,7 @@ jobs:
 
   publish-signed-apk:
     name: Verify production models and publish signed APK
-    if: inputs.release_tag != '' && !inputs.relay_images
+    if: inputs.release_tag != '' && !inputs.relay_images && !inputs.prepare_retry
     runs-on: ubuntu-latest
     concurrency:
       group: production-deploy
@@ -217,7 +222,7 @@ jobs:
 
   relay-release-images:
     name: Relay verified release images to production
-    if: inputs.relay_images
+    if: inputs.relay_images && !inputs.prepare_retry
     runs-on: ubuntu-latest
     timeout-minutes: 20
     concurrency:
@@ -254,3 +259,82 @@ jobs:
             test "$expected" = "$actual"
             echo "Verified image ID: $service"
           done
+
+  prepare-production-retry:
+    name: Restore retry baseline from running production images
+    if: inputs.prepare_retry
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    steps:
+      - name: Verify running images and restore only image tag settings
+        env:
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USERNAME: ${{ secrets.SERVER_USERNAME }}
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          trap 'rm -f ~/.ssh/deploy_key' EXIT
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o ConnectTimeout=20 \
+            -o ServerAliveInterval=15 -o ServerAliveCountMax=4 "$SERVER_USERNAME@$SERVER_HOST" 'bash -se' <<'REMOTE'
+          set -Eeuo pipefail
+          baseline=6ccdf93cecaa2accb359400648c1802bc451c43e
+          declare -A running_tags
+          while read -r container service key; do
+            inspected=$(docker inspect --format '{{.State.Running}} {{.Config.Image}}' "$container")
+            read -r running image <<< "$inspected"
+            test "$running" = true
+            prefix="ghcr.io/mcmrzy/$service:"
+            [[ "$image" == "$prefix"* ]]
+            tag=${image#"$prefix"}
+            [[ "$tag" =~ ^[a-f0-9]{40}$ ]]
+            running_tags[$key]=$tag
+            printf 'Running %s: %s\n' "$container" "$image"
+          done <<'SERVICES'
+          device-communication inv-device-server IMAGE_TAG_DEVICE
+          mqtt-kafka-bridge mqtt-kafka-bridge IMAGE_TAG_BRIDGE
+          business-api inv-api-server IMAGE_TAG_API
+          api-gateway api-gateway IMAGE_TAG_GATEWAY
+          inv-admin-frontend inv-admin-frontend IMAGE_TAG_FRONTEND
+          SERVICES
+          if [ "${running_tags[IMAGE_TAG_API]}" != "$baseline" ]; then
+            echo 'Running API differs from the known previous production release; no configuration changed.' >&2
+            exit 1
+          fi
+          python3 - "$baseline" "${running_tags[IMAGE_TAG_DEVICE]}" "${running_tags[IMAGE_TAG_BRIDGE]}" \
+            "${running_tags[IMAGE_TAG_API]}" "${running_tags[IMAGE_TAG_GATEWAY]}" "${running_tags[IMAGE_TAG_FRONTEND]}" <<'PYTHON'
+          import fcntl, os, pathlib, re, sys
+          keys = ['IMAGE_TAG', 'IMAGE_TAG_DEVICE', 'IMAGE_TAG_BRIDGE', 'IMAGE_TAG_API', 'IMAGE_TAG_GATEWAY', 'IMAGE_TAG_FRONTEND']
+          assert len(sys.argv) == len(keys) + 1
+          replacements = dict(zip(keys, sys.argv[1:]))
+          assert all(re.fullmatch(r'[a-f0-9]{40}', value) for value in replacements.values())
+          path = pathlib.Path('/opt/inv-mqtt/deploy/.env.prod')
+          with path.open('r+b') as stream:
+              fcntl.flock(stream, fcntl.LOCK_EX)
+              lines = stream.read().splitlines(keepends=True)
+              counts = dict.fromkeys(keys, 0)
+              updated = []
+              for line in lines:
+                  key = line.split(b'=', 1)[0].decode('ascii', errors='replace')
+                  if key in replacements:
+                      counts[key] += 1
+                      ending = b'\r\n' if line.endswith(b'\r\n') else b'\n' if line.endswith(b'\n') else b''
+                      line = key.encode() + b'=' + replacements[key].encode() + ending
+                  updated.append(line)
+              if any(count != 1 for count in counts.values()):
+                  raise SystemExit('Expected exactly one line for every image tag; no configuration changed')
+              stream.seek(0)
+              stream.write(b''.join(updated))
+              stream.truncate()
+              stream.flush()
+              os.fsync(stream.fileno())
+          print('Restored six image tag settings from the verified running containers; services and database unchanged.')
+          PYTHON
+          REMOTE
