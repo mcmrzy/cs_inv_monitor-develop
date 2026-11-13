@@ -15,10 +15,15 @@ on:
         description: Verified SHA-256 of the signed APK to publish
         required: false
         type: string
+      relay_images:
+        description: Relay the verified Modbus release images over SSH when server GHCR downloads stall
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   build-signed-aab:
-    if: inputs.release_tag == ''
+    if: inputs.release_tag == '' && !inputs.relay_images
     name: Build signed Android App Bundle
     runs-on: ubuntu-latest
     permissions:
@@ -97,7 +102,7 @@ jobs:
 
   publish-signed-apk:
     name: Verify production models and publish signed APK
-    if: inputs.release_tag != ''
+    if: inputs.release_tag != '' && !inputs.relay_images
     runs-on: ubuntu-latest
     concurrency:
       group: production-deploy
@@ -107,6 +112,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Download and verify release package
+        id: package
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.release_tag }}
@@ -117,6 +123,9 @@ jobs:
           [[ "$RELEASE_TAG" =~ ^[a-zA-Z0-9._-]+$ ]]
           [[ "$APK_SHA256" =~ ^[a-f0-9]{64}$ ]]
           test "$API_BASE_URL" = 'https://api.jiuxiaoyw.online/api/v1'
+          SOURCE_SHA=$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_TAG" --jq .sha)
+          [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          echo "source_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
           mkdir package
           gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern app-release.apk --dir package
           printf '%s  %s\n' "$APK_SHA256" package/app-release.apk | sha256sum -c -
@@ -178,7 +187,7 @@ jobs:
           SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
           SERVER_USERNAME: ${{ secrets.SERVER_USERNAME }}
-          SOURCE_SHA: ${{ github.sha }}
+          SOURCE_SHA: ${{ steps.package.outputs.source_sha }}
           APK_SHA256: ${{ inputs.apk_sha256 }}
         run: |
           set -euo pipefail
@@ -205,3 +214,43 @@ jobs:
           PUBLISHED_URL=$(jq -er '.data.download_url | select(startswith("https://download.jiuxiaoyw.online/firmware/apps/android/"))' package/published.json)
           curl -fL --retry 3 "$PUBLISHED_URL" -o package/published.apk
           printf '%s  %s\n' "$APK_SHA256" package/published.apk | sha256sum -c -
+
+  relay-release-images:
+    name: Relay verified release images to production
+    if: inputs.relay_images
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Transfer immutable release images
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USERNAME: ${{ secrets.SERVER_USERNAME }}
+          RELEASE_SHA: 536d094df7a25eb46d3a800316adae81dab2aa3f
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          trap 'rm -f ~/.ssh/deploy_key' EXIT
+          SSH_ARGS=(-i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=4)
+          remote="$SERVER_USERNAME@$SERVER_HOST"
+          ssh "${SSH_ARGS[@]}" "$remote" 'set -eu; df -h /; docker ps --format "{{.Names}} {{.Status}}"; pgrep -af "docker compose.*pull" || true'
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          for service in inv-device-server inv-api-server inv-admin-frontend; do
+            image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/$service:$RELEASE_SHA"
+            timeout 180 docker pull "$image"
+            expected=$(docker image inspect --format '{{.Id}}' "$image")
+            echo "Relaying $service ($expected)"
+            timeout 600 bash -o pipefail -c 'docker save "$1" | gzip -1 | ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 "$2" "docker load"' _ "$image" "$remote"
+            actual=$(ssh "${SSH_ARGS[@]}" "$remote" "docker image inspect --format '{{.Id}}' '$image'")
+            test "$expected" = "$actual"
+            echo "Verified image ID: $service"
+          done
