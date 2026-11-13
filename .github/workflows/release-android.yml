@@ -36,7 +36,7 @@ on:
         default: false
         type: boolean
       repair_modbus_fields:
-        description: Add measured fields to empty production Modbus model catalogs
+        description: Complete measured field definitions for production Modbus models
         required: false
         default: false
         type: boolean
@@ -407,11 +407,15 @@ jobs:
           version=138
           filename=138_modbus_panel_capabilities.up.sql
           if [ "$REPAIR_MODBUS_FIELDS" = true ]; then
-            version=139
-            filename=139_modbus_panel_fields.up.sql
+            version=140
+            filename=140_modbus_panel_catalog.up.sql
           fi
           cp "database/migrations/$filename" repair-package/
           cp deploy/verify-modbus-production.sql repair-package/verify.sql
+          if [ "$version" = 140 ]; then
+            printf '\n' >> repair-package/verify.sql
+            cat deploy/verify-modbus-fields.sql >> repair-package/verify.sql
+          fi
           MIGRATION_SHA=$(sha256sum "repair-package/$filename" | cut -d' ' -f1)
           printf -v REMOTE_COMMAND 'bash -c %q -- %q %q' "$(cat deploy/repair-modbus-capabilities.sh)" "$MIGRATION_SHA" "$version"
           tar czf - -C repair-package "$filename" verify.sql | \

@@ -7,6 +7,7 @@ version=${2:-138}
 case "$version" in
   138) filename=138_modbus_panel_capabilities.up.sql ;;
   139) filename=139_modbus_panel_fields.up.sql ;;
+  140) filename=140_modbus_panel_catalog.up.sql ;;
   *) echo 'Unsupported Modbus catalog migration.' >&2; exit 1 ;;
 esac
 [[ "$migration_sha" =~ ^[a-f0-9]{64}$ ]]
@@ -35,7 +36,7 @@ SQL
 }
 
 # Report catalog data only.
-if [ "$version" = 139 ]; then
+if [ "$version" = 139 ] || [ "$version" = 140 ]; then
   fields_before=$(field_counts)
   printf 'Model field counts before repair:\n%s\n' "$fields_before"
 else
