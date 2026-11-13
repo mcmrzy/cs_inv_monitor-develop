@@ -24,3 +24,13 @@ SELECT m.model_code,m.model_name,count(d.id) AS bound_devices
 FROM device_models m LEFT JOIN devices d ON d.model_id=m.id AND d.deleted_at IS NULL
 WHERE m.model_code IN ('PWR2KH12H1','3KU','6KU','12KU')
 GROUP BY m.model_code,m.model_name ORDER BY m.model_code;
+
+-- Report panel binding states without exposing device serial numbers in CI logs.
+SELECT COALESCE(NULLIF(d.reported_model,''),'unidentified') AS reported_model,
+       COALESCE(NULLIF(d.model,''),'unassigned') AS configured_model,
+       COALESCE(m.model_code,'unbound') AS registered_model,
+       count(*) AS panel_devices
+FROM devices d LEFT JOIN device_models m ON m.id=d.model_id
+WHERE d.deleted_at IS NULL AND d.firmware_esp LIKE '%-modbus-full%'
+GROUP BY d.reported_model,d.model,m.model_code
+ORDER BY registered_model,reported_model;

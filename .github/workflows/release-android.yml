@@ -201,8 +201,17 @@ jobs:
           printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
           trap 'rm -f ~/.ssh/deploy_key' EXIT
           printf -v REMOTE_COMMAND 'bash -c %q -- %q %q' "$(cat deploy/publish-modbus-app.sh)" "$SOURCE_SHA" "$APK_SHA256"
-          tar czf - -C package app-release.apk filename verify.sql publish.sql | \
-            ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no "$SERVER_USERNAME@$SERVER_HOST" "$REMOTE_COMMAND"
+          tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner \
+            -czf package/publish.tar.gz -C package app-release.apk filename verify.sql publish.sql
+          ARCHIVE_SHA=$(sha256sum package/publish.tar.gz | cut -d' ' -f1)
+          REMOTE_DIR="/opt/inv-mqtt/.release-relay/$SOURCE_SHA/app/$ARCHIVE_SHA"
+          remote="$SERVER_USERNAME@$SERVER_HOST"
+          python3 deploy/ssh-upload-chunks.py --file package/publish.tar.gz --remote-dir "$REMOTE_DIR" \
+            --host "$remote" --identity ~/.ssh/deploy_key
+          printf -v PAYLOAD_COMMAND '%s < %q' "$REMOTE_COMMAND" "$REMOTE_DIR/payload"
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no "$remote" "$PAYLOAD_COMMAND"
+          printf -v CLEANUP_COMMAND 'rm -rf -- %q' "$REMOTE_DIR"
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no "$remote" "$CLEANUP_COMMAND"
       - name: Check public release metadata
         env:
           APK_SHA256: ${{ inputs.apk_sha256 }}
@@ -224,7 +233,7 @@ jobs:
     name: Relay verified release images to production
     if: inputs.relay_images && !inputs.prepare_retry
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     concurrency:
       group: production-deploy
       cancel-in-progress: false
@@ -232,6 +241,7 @@ jobs:
       contents: read
       packages: read
     steps:
+      - uses: actions/checkout@v4
       - name: Transfer immutable release images
         env:
           GH_TOKEN: ${{ github.token }}
@@ -253,10 +263,25 @@ jobs:
             image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/$service:$RELEASE_SHA"
             timeout 180 docker pull "$image"
             expected=$(docker image inspect --format '{{.Id}}' "$image")
+            actual=$(ssh "${SSH_ARGS[@]}" "$remote" "docker image inspect --format '{{.Id}}' '$image' 2>/dev/null || true")
+            if [ "$expected" = "$actual" ]; then
+              echo "Verified image already present; skipping $service"
+              continue
+            fi
             echo "Relaying $service ($expected)"
-            timeout 600 bash -o pipefail -c 'docker save "$1" | gzip -1 | ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 "$2" "docker load"' _ "$image" "$remote"
+            archive="$RUNNER_TEMP/$service-$RELEASE_SHA.tar.gz"
+            docker save "$image" | gzip -9 > "$archive"
+            archive_sha=$(sha256sum "$archive" | cut -d' ' -f1)
+            remote_dir="/opt/inv-mqtt/.release-relay/$RELEASE_SHA/$service/$archive_sha"
+            python3 deploy/ssh-upload-chunks.py --file "$archive" --remote-dir "$remote_dir" \
+              --host "$remote" --identity ~/.ssh/deploy_key
+            printf -v LOAD_COMMAND 'docker load -i %q' "$remote_dir/payload"
+            ssh "${SSH_ARGS[@]}" "$remote" "$LOAD_COMMAND"
             actual=$(ssh "${SSH_ARGS[@]}" "$remote" "docker image inspect --format '{{.Id}}' '$image'")
             test "$expected" = "$actual"
+            printf -v CLEANUP_COMMAND 'rm -rf -- %q' "$remote_dir"
+            ssh "${SSH_ARGS[@]}" "$remote" "$CLEANUP_COMMAND"
+            rm -- "$archive"
             echo "Verified image ID: $service"
           done
 
