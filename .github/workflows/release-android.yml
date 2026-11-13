@@ -25,10 +25,15 @@ on:
         required: false
         default: false
         type: boolean
+      repair_capabilities:
+        description: Apply missing Modbus model grants through the deployed API migration runner
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   build-signed-aab:
-    if: inputs.release_tag == '' && !inputs.relay_images && !inputs.prepare_retry
+    if: inputs.release_tag == '' && !inputs.relay_images && !inputs.prepare_retry && !inputs.repair_capabilities
     name: Build signed Android App Bundle
     runs-on: ubuntu-latest
     permissions:
@@ -107,7 +112,7 @@ jobs:
 
   publish-signed-apk:
     name: Verify production models and publish signed APK
-    if: inputs.release_tag != '' && !inputs.relay_images && !inputs.prepare_retry
+    if: inputs.release_tag != '' && !inputs.relay_images && !inputs.prepare_retry && !inputs.repair_capabilities
     runs-on: ubuntu-latest
     concurrency:
       group: production-deploy
@@ -231,7 +236,7 @@ jobs:
 
   relay-release-images:
     name: Relay verified release images to production
-    if: inputs.relay_images && !inputs.prepare_retry
+    if: inputs.relay_images && !inputs.prepare_retry && !inputs.repair_capabilities
     runs-on: ubuntu-latest
     timeout-minutes: 35
     concurrency:
@@ -287,7 +292,7 @@ jobs:
 
   prepare-production-retry:
     name: Restore retry baseline from running production images
-    if: inputs.prepare_retry
+    if: inputs.prepare_retry && !inputs.repair_capabilities
     runs-on: ubuntu-latest
     timeout-minutes: 5
     concurrency:
@@ -363,3 +368,35 @@ jobs:
           print('Restored six image tag settings from the verified running containers; services and database unchanged.')
           PYTHON
           REMOTE
+
+  repair-modbus-capabilities:
+    name: Repair existing Modbus model capability grants
+    if: inputs.repair_capabilities
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Back up and apply migration through production API startup
+        env:
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USERNAME: ${{ secrets.SERVER_USERNAME }}
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          trap 'rm -f ~/.ssh/deploy_key' EXIT
+          mkdir repair-package
+          cp database/migrations/138_modbus_panel_capabilities.up.sql repair-package/
+          cp deploy/verify-modbus-production.sql repair-package/verify.sql
+          MIGRATION_SHA=$(sha256sum repair-package/138_modbus_panel_capabilities.up.sql | cut -d' ' -f1)
+          printf -v REMOTE_COMMAND 'bash -c %q -- %q' "$(cat deploy/repair-modbus-capabilities.sh)" "$MIGRATION_SHA"
+          tar czf - -C repair-package 138_modbus_panel_capabilities.up.sql verify.sql | \
+            ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o ConnectTimeout=20 \
+              -o ServerAliveInterval=15 -o ServerAliveCountMax=4 "$SERVER_USERNAME@$SERVER_HOST" "$REMOTE_COMMAND"
