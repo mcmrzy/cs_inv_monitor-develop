@@ -30,10 +30,15 @@ on:
         required: false
         default: false
         type: boolean
+      inspect_panel_binding:
+        description: Read the production Modbus panel bindings and target model settings
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   build-signed-aab:
-    if: inputs.release_tag == '' && !inputs.relay_images && !inputs.prepare_retry && !inputs.repair_capabilities
+    if: inputs.release_tag == '' && !inputs.relay_images && !inputs.prepare_retry && !inputs.repair_capabilities && !inputs.inspect_panel_binding
     name: Build signed Android App Bundle
     runs-on: ubuntu-latest
     permissions:
@@ -112,7 +117,7 @@ jobs:
 
   publish-signed-apk:
     name: Verify production models and publish signed APK
-    if: inputs.release_tag != '' && !inputs.relay_images && !inputs.prepare_retry && !inputs.repair_capabilities
+    if: inputs.release_tag != '' && !inputs.relay_images && !inputs.prepare_retry && !inputs.repair_capabilities && !inputs.inspect_panel_binding
     runs-on: ubuntu-latest
     concurrency:
       group: production-deploy
@@ -236,7 +241,7 @@ jobs:
 
   relay-release-images:
     name: Relay verified release images to production
-    if: inputs.relay_images && !inputs.prepare_retry && !inputs.repair_capabilities
+    if: inputs.relay_images && !inputs.prepare_retry && !inputs.repair_capabilities && !inputs.inspect_panel_binding
     runs-on: ubuntu-latest
     timeout-minutes: 35
     concurrency:
@@ -292,7 +297,7 @@ jobs:
 
   prepare-production-retry:
     name: Restore retry baseline from running production images
-    if: inputs.prepare_retry && !inputs.repair_capabilities
+    if: inputs.prepare_retry && !inputs.repair_capabilities && !inputs.inspect_panel_binding
     runs-on: ubuntu-latest
     timeout-minutes: 5
     concurrency:
@@ -371,7 +376,7 @@ jobs:
 
   repair-modbus-capabilities:
     name: Repair existing Modbus model capability grants
-    if: inputs.repair_capabilities
+    if: inputs.repair_capabilities && !inputs.inspect_panel_binding
     runs-on: ubuntu-latest
     timeout-minutes: 10
     concurrency:
@@ -400,3 +405,31 @@ jobs:
           tar czf - -C repair-package 138_modbus_panel_capabilities.up.sql verify.sql | \
             ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o ConnectTimeout=20 \
               -o ServerAliveInterval=15 -o ServerAliveCountMax=4 "$SERVER_USERNAME@$SERVER_HOST" "$REMOTE_COMMAND"
+
+  inspect-modbus-binding:
+    name: Inspect Modbus model bindings
+    if: inputs.inspect_panel_binding
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Query production bindings in a read-only transaction
+        env:
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USERNAME: ${{ secrets.SERVER_USERNAME }}
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          trap 'rm -f ~/.ssh/deploy_key' EXIT
+          remote_command=$(cat <<'REMOTE'
+          docker exec -i inv-postgres sh -c 'export PGPASSWORD="$POSTGRES_PASSWORD"; exec psql -X -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At'
+          REMOTE
+          )
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o ConnectTimeout=20 \
+            -o ServerAliveInterval=15 -o ServerAliveCountMax=4 "$SERVER_USERNAME@$SERVER_HOST" "$remote_command" \
+            < deploy/inspect-modbus-binding.sql
