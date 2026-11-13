@@ -70,4 +70,37 @@ SELECT json_build_object(
 FROM (VALUES ('PWR2KH12H1')) AS target(model_code)
 LEFT JOIN device_models m ON m.model_code = target.model_code;
 
+-- Compare the exact migration 139 fields with the global catalog and each model.
+WITH expected(field_key) AS (VALUES
+    ('pv_total_power'), ('pv1_voltage'), ('pv1_current'),
+    ('pv1_power'), ('pv2_voltage'), ('pv2_current'),
+    ('pv2_power'), ('battery_soc'), ('battery_voltage'),
+    ('battery_current'), ('battery_charge_power'), ('battery_discharge_power'),
+    ('grid_voltage'), ('grid_frequency'), ('ac_input_power'),
+    ('ac_output_voltage'), ('ac_output_frequency'), ('output_current'),
+    ('output_power'), ('load_percent'), ('inverter_temperature'),
+    ('boost_temperature'), ('dc_bus_voltage'), ('sys_status'),
+    ('fault_code'), ('daily_pv_energy'), ('total_pv_energy')
+), target(model_code) AS (VALUES ('PWR2KH12H1'), ('3KU'), ('6KU'), ('12KU')),
+gaps AS (
+    SELECT 'telemetry_field_catalog' AS scope, NULL::text AS model_code,
+           e.field_key, c.field_key IS NULL AS missing
+    FROM expected e LEFT JOIN telemetry_field_catalog c ON c.field_key = e.field_key
+    UNION ALL
+    SELECT 'device_model_fields', t.model_code,
+           e.field_key, f.field_key IS NULL
+    FROM target t CROSS JOIN expected e
+    LEFT JOIN device_models m ON m.model_code = t.model_code
+    LEFT JOIN device_model_fields f ON f.model_id = m.id AND f.field_key = e.field_key
+)
+SELECT json_build_object(
+    'scope', scope,
+    'model_code', model_code,
+    'expected_count', count(*),
+    'missing_count', count(*) FILTER (WHERE missing),
+    'missing_keys', COALESCE(json_agg(field_key ORDER BY field_key) FILTER (WHERE missing), '[]'::json)
+)
+FROM gaps GROUP BY scope, model_code
+ORDER BY scope DESC, model_code;
+
 COMMIT;
