@@ -131,6 +131,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Download and verify release package
         id: package
         env:
@@ -138,15 +140,22 @@ jobs:
           RELEASE_TAG: ${{ inputs.release_tag }}
           APK_SHA256: ${{ inputs.apk_sha256 }}
           API_BASE_URL: ${{ inputs.api_base_url }}
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USERNAME: ${{ secrets.SERVER_USERNAME }}
         run: |
           set -euo pipefail
           [[ "$RELEASE_TAG" =~ ^[a-zA-Z0-9._-]+$ ]]
           [[ "$APK_SHA256" =~ ^[a-f0-9]{64}$ ]]
           test "$API_BASE_URL" = 'https://api.jiuxiaoyw.online/api/v1'
           SOURCE_SHA=$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_TAG" --jq .sha)
-          [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ && "$SOURCE_SHA" = "$GITHUB_SHA" ]]
+          [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          # Publishing-only fixes may follow the immutable signed App source.
+          git merge-base --is-ancestor "$SOURCE_SHA" "$GITHUB_SHA"
+          test "$(git rev-parse "$SOURCE_SHA:inv_app")" = "$(git rev-parse "$GITHUB_SHA:inv_app")"
           DEPLOY_SHA=$(gh api "repos/$GITHUB_REPOSITORY/commits/$SOURCE_SHA" --jq '.parents[0].sha')
           [[ "$DEPLOY_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$(git rev-parse "$DEPLOY_SHA:business-api")" = "$(git rev-parse "$SOURCE_SHA:business-api")"
           echo "source_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
           echo "deploy_sha=$DEPLOY_SHA" >> "$GITHUB_OUTPUT"
           mkdir package
@@ -162,9 +171,20 @@ jobs:
             exit 1
           fi
           "$BUILD_TOOLS/apksigner" verify --print-certs package/app-release.apk > package/certificate.txt
-          curl -fsS 'https://api.jiuxiaoyw.online/api/v1/ota/app/latest?platform=android' > package/current.json
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          trap 'rm -f ~/.ssh/deploy_key' EXIT
+          SSH_ARGS=(-i ~/.ssh/deploy_key -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=4)
+          remote="$SERVER_USERNAME@$SERVER_HOST"
+          # Read the same public endpoint at origin; runner-to-edge HTTPS is unavailable.
+          ssh "${SSH_ARGS[@]}" "$remote" "docker exec business-api wget -qO- 'http://127.0.0.1:8080/api/v1/ota/app/latest?platform=android'" > package/current.json
           CURRENT_URL=$(jq -er '.data.download_url | select(startswith("https://download.jiuxiaoyw.online/firmware/apps/android/"))' package/current.json)
-          curl -fL --retry 3 "$CURRENT_URL" -o package/previous.apk
+          CURRENT_FILE=$(jq -er '.data.file_name' package/current.json)
+          [[ "$CURRENT_FILE" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*\.apk$ ]]
+          test "${CURRENT_URL##*/}" = "$CURRENT_FILE"
+          printf -v READ_PREVIOUS 'docker exec business-api cat %q' "/data/firmware/apps/android/$CURRENT_FILE"
+          ssh "${SSH_ARGS[@]}" "$remote" "$READ_PREVIOUS" > package/previous.apk
           PREVIOUS_SHA=$(jq -er '.data.file_sha256' package/current.json)
           printf '%s  %s\n' "$PREVIOUS_SHA" package/previous.apk | sha256sum -c -
           "$BUILD_TOOLS/apksigner" verify --print-certs package/previous.apk > package/previous-certificate.txt
@@ -235,13 +255,22 @@ jobs:
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no "$remote" "$PAYLOAD_COMMAND"
           printf -v CLEANUP_COMMAND 'rm -rf -- %q' "$REMOTE_DIR"
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no "$remote" "$CLEANUP_COMMAND"
-      - name: Check public release metadata
+      - name: Check origin release metadata and durable package
         env:
           APK_SHA256: ${{ inputs.apk_sha256 }}
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USERNAME: ${{ secrets.SERVER_USERNAME }}
         run: |
           set -euo pipefail
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          trap 'rm -f ~/.ssh/deploy_key' EXIT
+          SSH_ARGS=(-i ~/.ssh/deploy_key -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=4)
+          remote="$SERVER_USERNAME@$SERVER_HOST"
           for attempt in 1 2 3 4 5; do
-            curl -fsS "https://api.jiuxiaoyw.online/api/v1/ota/app/latest?platform=android&release_check=$(date +%s)" > package/published.json
+            ssh "${SSH_ARGS[@]}" "$remote" "docker exec business-api wget -qO- 'http://127.0.0.1:8080/api/v1/ota/app/latest?platform=android'" > package/published.json
             if jq -e --arg sha "$APK_SHA256" '.code == 0 and .data.version_code == 46 and .data.file_sha256 == $sha' package/published.json; then
               break
             fi
@@ -249,7 +278,11 @@ jobs:
           done
           jq -e --arg sha "$APK_SHA256" '.code == 0 and .data.version_code == 46 and .data.file_sha256 == $sha' package/published.json
           PUBLISHED_URL=$(jq -er '.data.download_url | select(startswith("https://download.jiuxiaoyw.online/firmware/apps/android/"))' package/published.json)
-          curl -fL --retry 3 "$PUBLISHED_URL" -o package/published.apk
+          PUBLISHED_FILE=$(jq -er '.data.file_name' package/published.json)
+          [[ "$PUBLISHED_FILE" =~ ^com\.csergy\.app1-1\.1\.18-46-[a-f0-9]{12}\.apk$ ]]
+          test "${PUBLISHED_URL##*/}" = "$PUBLISHED_FILE"
+          printf -v READ_PUBLISHED 'docker exec business-api cat %q' "/data/firmware/apps/android/$PUBLISHED_FILE"
+          ssh "${SSH_ARGS[@]}" "$remote" "$READ_PUBLISHED" > package/published.apk
           printf '%s  %s\n' "$APK_SHA256" package/published.apk | sha256sum -c -
 
   relay-release-images:
