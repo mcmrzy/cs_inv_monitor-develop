@@ -817,18 +817,18 @@ func (h *AuthHandler) AuthorizationContext(c *gin.Context) {
 		req.RefreshToken, _ = c.Cookie("refresh_token")
 	}
 	if req.RefreshToken == "" {
-		response.Error(c, 401, "missing refresh token")
+		response.Unauthorized(c, "missing refresh token")
 		return
 	}
 
 	refreshClaims, err := h.jwtService.ParseRefreshToken(req.RefreshToken)
 	if err != nil {
-		response.Error(c, 401, "invalid refresh session")
+		response.Unauthorized(c, "invalid refresh session")
 		return
 	}
 	resolved, err := h.contextResolver.ResolveAuthorizationSessionContext(c.Request.Context(), refreshClaims.UserID, req.OrganizationID)
 	if err != nil || !resolved.Valid() || resolved.SessionVersion != refreshClaims.SessionVersion {
-		response.Error(c, 401, "organization membership is not active")
+		response.Unauthorized(c, "organization membership is not active")
 		return
 	}
 	permissions, err := h.contextResolver.LoadAllPermissionCodes(c.Request.Context(), resolved.Actor)
@@ -857,7 +857,7 @@ func (h *AuthHandler) AuthorizationContext(c *gin.Context) {
 		_ = h.jwtService.RevokeRefreshToken(c.Request.Context(), resolved.Actor.UserID, req.RefreshToken)
 	}
 	if err := requireRefreshSwap(swapped, swapErr); err != nil {
-		response.Error(c, 500, err.Error())
+		response.HandleError(c, err)
 		return
 	}
 
@@ -887,7 +887,7 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 
 	claims, err := h.jwtService.ParseRefreshToken(req.RefreshToken)
 	if err != nil {
-		response.Error(c, 401, "invalid refresh token")
+		response.Unauthorized(c, "invalid refresh token")
 		return
 	}
 
@@ -896,13 +896,21 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		return
 	}
 	currentSessionVersion, err := h.contextResolver.ResolveUserSessionVersion(c.Request.Context(), claims.UserID)
-	if err != nil || currentSessionVersion != claims.SessionVersion {
-		response.Error(c, 401, "refresh session revoked")
+	if err != nil {
+		response.InternalError(c, "session validation unavailable", err)
+		return
+	}
+	if currentSessionVersion != claims.SessionVersion {
+		response.Unauthorized(c, "refresh session revoked")
 		return
 	}
 	user, err := h.userService.GetByID(c.Request.Context(), claims.UserID)
-	if err != nil || user == nil || user.Status != 1 {
-		response.Error(c, 401, "refresh session revoked")
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		response.InternalError(c, "user validation unavailable", err)
+		return
+	}
+	if user == nil || user.Status != 1 {
+		response.Unauthorized(c, "refresh session revoked")
 		return
 	}
 
@@ -951,11 +959,7 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		_ = h.jwtService.RevokeRefreshToken(c.Request.Context(), claims.UserID, req.RefreshToken)
 	}
 	if err := requireRefreshSwap(swapped, swapErr); err != nil {
-		if _, ok := err.(*apperr.AppError); ok {
-			response.Error(c, 500, err.Error())
-			return
-		}
-		response.Error(c, 500, "token refresh failed")
+		response.HandleError(c, err)
 		return
 	}
 

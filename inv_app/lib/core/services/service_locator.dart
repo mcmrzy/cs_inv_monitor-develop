@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:pretty_dio_logger/pretty_dio_logger.dart';
@@ -15,6 +14,7 @@ import 'package:inv_app/core/services/ble/ble_polling_service.dart';
 import 'package:inv_app/core/network/api_client.dart';
 import 'package:inv_app/core/network/retry_request_options.dart';
 import 'package:inv_app/core/auth/organization_context_session_service.dart';
+import 'package:inv_app/core/auth/token_refresh_service.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/data/local_cache_database.dart';
 import 'package:inv_app/core/services/realtime_data_service.dart';
@@ -120,6 +120,22 @@ class ServiceLocator {
           }
           return handler.next(options);
         },
+        onResponse: (response, handler) {
+          final body = response.data;
+          if (body is Map<String, dynamic> && body['code'] == 401) {
+            // 兼容旧后端 HTTP 200/code 401，统一进入认证恢复链路。
+            response.statusCode = 401;
+            return handler.reject(
+              DioException(
+                requestOptions: response.requestOptions,
+                response: response,
+                type: DioExceptionType.badResponse,
+              ),
+              true,
+            );
+          }
+          handler.next(response);
+        },
         onError: (error, handler) async {
           if (error.response?.statusCode == 401) {
             // 刷新成功后重放请求仍然 401，说明新会话也不可用。
@@ -153,19 +169,18 @@ class ServiceLocator {
               return handler.next(error);
             }
 
-            // 刷新 access token（内部处理并发锁；失败时已触发登出）
-            final refreshed = await refreshAccessToken();
-            if (!refreshed) {
-              return handler.next(error);
-            }
-
             final storageService = getIt<StorageService>();
-            final newToken = normalizeTokenValue(
-              await storageService.getToken(),
-            );
-            if (newToken == null) {
-              return handler.next(error);
+            var newToken = normalizeTokenValue(await storageService.getToken());
+            final failedAuthorization =
+                error.requestOptions.headers['Authorization'];
+            // 并发旧请求的 401 可能晚于刷新完成：直接复用已保存的新令牌。
+            if (newToken == null || failedAuthorization == 'Bearer $newToken') {
+              if (!await refreshAccessToken()) {
+                return handler.next(error);
+              }
+              newToken = normalizeTokenValue(await storageService.getToken());
             }
+            if (newToken == null) return handler.next(error);
 
             final retryOptions = buildTokenRefreshRetryOptions(
               error.requestOptions,
@@ -175,8 +190,8 @@ class ServiceLocator {
             try {
               final retryResponse = await dio.fetch(retryOptions);
               return handler.resolve(retryResponse);
-            } catch (e) {
-              return handler.next(error);
+            } on DioException catch (retryError) {
+              return handler.next(retryError);
             }
           }
           return handler.next(error);
@@ -200,106 +215,21 @@ class ServiceLocator {
     getIt.registerLazySingleton<Dio>(() => dio);
   }
 
-  static bool _tokenRefreshLock = false;
-  static Completer<bool>? _refreshCompleter;
-
-  /// 刷新 access token（Dio 拦截器与 SSE 等非 Dio 请求共用）。
-  /// 返回 true 表示刷新成功且新 token 已保存；false 表示刷新失败
-  /// （仅当服务端明确拒绝 refresh token 时才触发登出，网络类异常保留 token）。
-  static Future<bool> refreshAccessToken() async {
-    if (_tokenRefreshLock) {
-      _refreshCompleter ??= Completer<bool>();
-      return _refreshCompleter!.future;
-    }
-
-    _tokenRefreshLock = true;
-    _refreshCompleter ??= Completer<bool>();
-    try {
-      final storageService = getIt<StorageService>();
-      final refreshToken = normalizeTokenValue(
-        await storageService.getRefreshToken(),
-      );
-
-      if (refreshToken == null) {
-        _finishTokenRefresh(false);
-        getIt<AuthBloc>().add(AuthLogoutRequested());
-        return false;
-      }
-
-      final refreshDio = Dio(
-        BaseOptions(
-          baseUrl: AppConfig.apiBaseUrl,
-          connectTimeout:
-              const Duration(milliseconds: AppConfig.connectTimeout),
-          receiveTimeout:
-              const Duration(milliseconds: AppConfig.receiveTimeout),
-        ),
-      );
-
-      final refreshResponse = await refreshDio.post(
-        '/auth/refresh',
-        data: {'refresh_token': refreshToken},
-      );
-
-      final responseData = refreshResponse.data;
-      String? newToken;
-      String? newRefreshToken;
-
-      if (responseData is Map<String, dynamic>) {
-        if (responseData['code'] == 0 && responseData['data'] != null) {
-          final data = responseData['data'] as Map<String, dynamic>;
-          newToken = (data['access_token'] ??
-              data['token'] ??
-              data['accessToken']) as String?;
-          newRefreshToken =
-              (data['refresh_token'] ?? data['refreshToken']) as String?;
-        } else if (responseData['access_token'] != null ||
-            responseData['token'] != null) {
-          newToken = (responseData['access_token'] ??
-              responseData['token'] ??
-              responseData['accessToken']) as String?;
-          newRefreshToken = (responseData['refresh_token'] ??
-              responseData['refreshToken']) as String?;
-        }
-      }
-
-      final normalizedNewToken = normalizeTokenValue(newToken);
-      final normalizedNewRefreshToken = normalizeTokenValue(newRefreshToken);
-      if (normalizedNewToken != null) {
-        await storageService.saveToken(normalizedNewToken);
-        if (normalizedNewRefreshToken != null) {
-          await storageService.saveRefreshToken(normalizedNewRefreshToken);
-        }
-        _finishTokenRefresh(true);
-        return true;
-      }
-
-      _finishTokenRefresh(false);
-      getIt<AuthBloc>().add(AuthLogoutRequested());
-      return false;
-    } catch (e) {
-      _finishTokenRefresh(false);
-      // 仅当服务端明确拒绝 refresh token（401/403）时才登出；
-      // 连接超时/断网/5xx 等临时故障保留 token，等待后续请求重试刷新，
-      // 避免一次网络抖动把用户登出并清空本地数据。
-      if (e is DioException &&
-          e.type == DioExceptionType.badResponse &&
-          (e.response?.statusCode == 401 || e.response?.statusCode == 403)) {
-        getIt<AuthBloc>().add(AuthLogoutRequested());
-      }
-      return false;
-    }
-  }
-
-  static void _finishTokenRefresh(bool success) {
-    _tokenRefreshLock = false;
-    _refreshCompleter?.complete(success);
-    _refreshCompleter = null;
-  }
+  /// API 与 SSE 共用续期锁；仅确认会话失效时触发登出。
+  static Future<bool> refreshAccessToken() =>
+      getIt<TokenRefreshService>().refresh();
 
   static void _initCoreServices() {
     getIt.registerLazySingleton<StorageService>(
       () => StorageServiceImpl(getIt(), getIt()),
+    );
+    getIt.registerLazySingleton<TokenRefreshService>(
+      () => TokenRefreshService(
+        Dio(getIt<Dio>().options.copyWith()),
+        getIt<StorageService>(),
+        () => getIt<AuthBloc>().add(AuthLogoutRequested()),
+      ),
+      dispose: (service) => service.dispose(),
     );
 
     getIt.registerLazySingleton<ApiService>(

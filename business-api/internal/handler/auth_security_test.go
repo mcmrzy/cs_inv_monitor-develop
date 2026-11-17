@@ -23,9 +23,9 @@ import (
 )
 
 type fakeAuthorizationContextResolver struct {
-	context model.AuthorizationSessionContext
+	context     model.AuthorizationSessionContext
 	permissions []string
-	err     error
+	err         error
 }
 
 func (f fakeAuthorizationContextResolver) ResolveAuthorizationSessionContext(context.Context, int64, int64) (model.AuthorizationSessionContext, error) {
@@ -46,7 +46,7 @@ func (f fakeAuthorizationContextResolver) LoadAllPermissionCodes(context.Context
 
 func TestHasUsablePassword(t *testing.T) {
 	require.False(t, hasUsablePassword(""))
-	require.False(t, hasUsablePassword("\\"))   // 历史一键登录占位符
+	require.False(t, hasUsablePassword("\\"))        // 历史一键登录占位符
 	require.False(t, hasUsablePassword("plaintext")) // 非 bcrypt
 	valid, err := bcrypt.GenerateFromPassword([]byte("secret123"), bcrypt.DefaultCost)
 	require.NoError(t, err)
@@ -120,9 +120,9 @@ func TestAuthorizationContextIssuesOrganizationBoundAccessAndRotatesRefresh(t *t
 
 	var envelope struct {
 		Data struct {
-			AccessToken  string `json:"access_token"`
-			RefreshToken string `json:"refresh_token"`
-			Permissions []string `json:"permissions"`
+			AccessToken  string   `json:"access_token"`
+			RefreshToken string   `json:"refresh_token"`
+			Permissions  []string `json:"permissions"`
 		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &envelope))
@@ -138,9 +138,94 @@ func TestAuthorizationContextIssuesOrganizationBoundAccessAndRotatesRefresh(t *t
 	replayRequest.Header.Set("Content-Type", "application/json")
 	replayRecorder := httptest.NewRecorder()
 	router.ServeHTTP(replayRecorder, replayRequest)
-	require.Equal(t, http.StatusOK, replayRecorder.Code)
+	require.Equal(t, http.StatusUnauthorized, replayRecorder.Code)
 	var replayResp map[string]interface{}
 	require.NoError(t, json.Unmarshal(replayRecorder.Body.Bytes(), &replayResp))
-	require.Equal(t, float64(500), replayResp["code"], "body: %s", replayRecorder.Body.String())
+	require.Equal(t, float64(401), replayResp["code"], "body: %s", replayRecorder.Body.String())
 	require.False(t, jwtService.ValidateRefreshToken(context.Background(), 7, envelope.Data.RefreshToken), "refresh replay must revoke the whole user session family")
+}
+
+func TestRefreshTokenInvalidCredentialReturnsHTTPUnauthorized(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	jwtService := service.NewJWTService(jwtpkg.NewJWT(&jwtpkg.JWTConfig{
+		Secret: "refresh-test-secret", Issuer: "inv-api-server",
+		ExpireTime: time.Minute, RefreshExpireTime: time.Hour,
+	}), nil)
+	handler := &AuthHandler{jwtService: jwtService}
+	router := gin.New()
+	router.POST("/auth/refresh", handler.RefreshToken)
+	request := httptest.NewRequest(http.MethodPost, "/auth/refresh", bytes.NewBufferString(`{"refresh_token":"invalid-token"}`))
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	require.Equal(t, http.StatusUnauthorized, recorder.Code, recorder.Body.String())
+}
+
+func TestRefreshTokenSessionLookupFailureReturnsServerError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	jwtService := service.NewJWTService(jwtpkg.NewJWT(&jwtpkg.JWTConfig{
+		Secret: "refresh-test-secret", Issuer: "inv-api-server",
+		ExpireTime: time.Minute, RefreshExpireTime: time.Hour,
+	}), nil)
+	token, err := jwtService.GenerateRefreshTokenWithVersion(7, 3)
+	require.NoError(t, err)
+	handler := &AuthHandler{
+		jwtService:      jwtService,
+		contextResolver: fakeAuthorizationContextResolver{err: errors.New("database restarting")},
+	}
+	router := gin.New()
+	router.POST("/auth/refresh", handler.RefreshToken)
+	body, err := json.Marshal(gin.H{"refresh_token": token})
+	require.NoError(t, err)
+	request := httptest.NewRequest(http.MethodPost, "/auth/refresh", bytes.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	require.Equal(t, http.StatusInternalServerError, recorder.Code, recorder.Body.String())
+}
+
+func TestAuthorizationContextLostOrUnavailableSessionCache(t *testing.T) {
+	for _, unavailable := range []bool{false, true} {
+		name := "session lost after restart"
+		expectedStatus := http.StatusUnauthorized
+		if unavailable {
+			name = "session store temporarily unavailable"
+			expectedStatus = http.StatusInternalServerError
+		}
+		t.Run(name, func(t *testing.T) {
+			mr := miniredis.RunT(t)
+			rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+			defer rdb.Close()
+			jwtService := service.NewJWTService(jwtpkg.NewJWT(&jwtpkg.JWTConfig{
+				Secret: "context-secret", Issuer: "inv-api-server",
+				ExpireTime: time.Minute, RefreshExpireTime: time.Hour,
+			}), rdb)
+			token, err := jwtService.GenerateRefreshTokenWithVersion(7, 3)
+			require.NoError(t, err)
+			require.NoError(t, jwtService.StoreRefreshToken(t.Context(), 7, token, time.Hour))
+			handler := &AuthHandler{
+				jwtService: jwtService,
+				contextResolver: fakeAuthorizationContextResolver{
+					context: model.AuthorizationSessionContext{
+						Actor:                model.ActorContext{UserID: 7, RootTenantID: 100, OrganizationID: 101, MembershipID: 102, MembershipVersion: 4},
+						AuthorizationVersion: 5, SessionVersion: 3,
+					},
+				},
+			}
+			if unavailable {
+				require.NoError(t, rdb.Close())
+			} else {
+				mr.FlushAll()
+			}
+			router := gin.New()
+			router.POST("/auth/context", handler.AuthorizationContext)
+			body, err := json.Marshal(gin.H{"organization_id": 101, "refresh_token": token})
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "/auth/context", bytes.NewReader(body))
+			request.Header.Set("Content-Type", "application/json")
+			recorder := httptest.NewRecorder()
+			router.ServeHTTP(recorder, request)
+			require.Equal(t, expectedStatus, recorder.Code, recorder.Body.String())
+		})
+	}
 }
