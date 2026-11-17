@@ -156,7 +156,7 @@ jobs:
           BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
           test -x "$BUILD_TOOLS/aapt"
           "$BUILD_TOOLS/aapt" dump badging package/app-release.apk > package/badging.txt
-          grep -q "package: name='com.csergy.app1' versionCode='45' versionName='1.1.17'" package/badging.txt
+          grep -q "package: name='com.csergy.app1' versionCode='46' versionName='1.1.18'" package/badging.txt
           if grep -q '^application-debuggable' package/badging.txt; then
             echo "The APK must be a non-debuggable release build" >&2
             exit 1
@@ -181,28 +181,28 @@ jobs:
           python3 - "$APK_SHA256" "$APK_MD5" "$APK_SIZE" "$MIN_SDK" "$TARGET_SDK" <<'PY'
           import pathlib, sys
           sha, md5, size, minimum, target = sys.argv[1:]
-          filename = f'com.csergy.app1-1.1.17-45-{sha[:12]}.apk'
+          filename = f'com.csergy.app1-1.1.18-46-{sha[:12]}.apk'
           sql = f"""BEGIN;
           SELECT pg_advisory_xact_lock(11645);
           DO $$ BEGIN
-            IF EXISTS (SELECT 1 FROM app_versions WHERE platform='android' AND version_code=45 AND file_sha256<>'{sha}') THEN
-              RAISE EXCEPTION 'Version 45 already exists with different content';
+            IF EXISTS (SELECT 1 FROM app_versions WHERE platform='android' AND version_code=46 AND file_sha256<>'{sha}') THEN
+              RAISE EXCEPTION 'Version 46 already exists with different content';
             END IF;
-            IF EXISTS (SELECT 1 FROM app_versions WHERE platform='android' AND version_code=45
+            IF EXISTS (SELECT 1 FROM app_versions WHERE platform='android' AND version_code=46
                 AND (status<>1 OR COALESCE(is_rolled_back,false) OR rollout_percentage<>100)) THEN
-              RAISE EXCEPTION 'Version 45 is rolled back, disabled or not fully released';
+              RAISE EXCEPTION 'Version 46 is rolled back, disabled or not fully released';
             END IF;
-            IF EXISTS (SELECT 1 FROM app_versions WHERE platform='android' AND version_code>45 AND status=1 AND NOT COALESCE(is_rolled_back,false)) THEN
+            IF EXISTS (SELECT 1 FROM app_versions WHERE platform='android' AND version_code>46 AND status=1 AND NOT COALESCE(is_rolled_back,false)) THEN
               RAISE EXCEPTION 'A newer Android version is already published';
             END IF;
           END $$;
           INSERT INTO app_versions(platform,version_code,version_name,download_url,file_size,file_md5,changelog,
               is_force,min_supported_version,rollout_percentage,status,created_by,file_sha256,package_name,file_name,min_sdk,target_sdk)
-          SELECT 'android',45,'1.1.17','/firmware/apps/android/{filename}',{size},'{md5}',
-              '优化通讯板蓝牙连接、运行参数和设置界面；增加远程输出开关及电池、系统设置；完善告警名称。',
+          SELECT 'android',46,'1.1.18','/firmware/apps/android/{filename}',{size},'{md5}',
+              '修复服务器重启后登录状态异常：自动续期令牌并恢复请求；会话失效时返回登录页；临时网络或服务故障保留登录状态。',
               false,0,100,1,0,'{sha}','com.csergy.app1','{filename}',{minimum},{target}
-          WHERE NOT EXISTS (SELECT 1 FROM app_versions WHERE platform='android' AND version_code=45);
-          SELECT version_name,version_code,file_sha256 FROM app_versions WHERE platform='android' AND version_code=45;
+          WHERE NOT EXISTS (SELECT 1 FROM app_versions WHERE platform='android' AND version_code=46);
+          SELECT version_name,version_code,file_sha256 FROM app_versions WHERE platform='android' AND version_code=46;
           COMMIT;
           """
           pathlib.Path('package/publish.sql').write_text(sql)
@@ -242,12 +242,12 @@ jobs:
           set -euo pipefail
           for attempt in 1 2 3 4 5; do
             curl -fsS "https://api.jiuxiaoyw.online/api/v1/ota/app/latest?platform=android&release_check=$(date +%s)" > package/published.json
-            if jq -e --arg sha "$APK_SHA256" '.code == 0 and .data.version_code == 45 and .data.file_sha256 == $sha' package/published.json; then
+            if jq -e --arg sha "$APK_SHA256" '.code == 0 and .data.version_code == 46 and .data.file_sha256 == $sha' package/published.json; then
               break
             fi
             sleep 5
           done
-          jq -e --arg sha "$APK_SHA256" '.code == 0 and .data.version_code == 45 and .data.file_sha256 == $sha' package/published.json
+          jq -e --arg sha "$APK_SHA256" '.code == 0 and .data.version_code == 46 and .data.file_sha256 == $sha' package/published.json
           PUBLISHED_URL=$(jq -er '.data.download_url | select(startswith("https://download.jiuxiaoyw.online/firmware/apps/android/"))' package/published.json)
           curl -fL --retry 3 "$PUBLISHED_URL" -o package/published.apk
           printf '%s  %s\n' "$APK_SHA256" package/published.apk | sha256sum -c -

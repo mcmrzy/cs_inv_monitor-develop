@@ -9,7 +9,10 @@ for container in business-api device-communication inv-admin-frontend; do
   running=$(docker inspect --format '{{.State.Running}}' "$container")
   image=$(docker inspect --format '{{.Config.Image}}' "$container")
   test "$running" = true
-  test "${image##*:}" = "$deploy_sha"
+  # Only the API image changes in this release; preserve running device/Web images.
+  if [ "$container" = business-api ]; then
+    test "${image##*:}" = "$deploy_sha"
+  fi
 done
 incoming=$(mktemp -d /opt/inv-mqtt/.app-release.XXXXXX)
 trap 'rm -rf "$incoming"' EXIT
@@ -17,13 +20,13 @@ tar xzf - -C "$incoming"
 cd "$incoming"
 printf '%s  %s\n' "$apk_sha256" app-release.apk | sha256sum -c -
 filename=$(cat filename)
-[[ "$filename" =~ ^com\.csergy\.app1-1\.1\.17-45-[a-f0-9]{12}\.apk$ ]]
+[[ "$filename" =~ ^com\.csergy\.app1-1\.1\.18-46-[a-f0-9]{12}\.apk$ ]]
 
 # Verify the live registry and bindings, rather than inferring migration success from container health.
 docker exec -i inv-postgres sh -c 'export PGPASSWORD="$POSTGRES_PASSWORD"; exec psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At' < verify.sql
 
 umask 077
-backup=/opt/inv-mqtt/database-backups/app-versions-$(date -u +%Y%m%dT%H%M%SZ)-45.dump
+backup=/opt/inv-mqtt/database-backups/app-versions-$(date -u +%Y%m%dT%H%M%SZ)-46.dump
 mkdir -p /opt/inv-mqtt/database-backups
 docker exec inv-postgres sh -c 'export PGPASSWORD="$POSTGRES_PASSWORD"; exec pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t app_versions -Fc' > "$backup.partial"
 test -s "$backup.partial"
@@ -48,4 +51,4 @@ docker exec -u root business-api sh -c '
 
 # The file is durable and verified before the update becomes visible to users.
 docker exec -i inv-postgres sh -c 'export PGPASSWORD="$POSTGRES_PASSWORD"; exec psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At' < publish.sql
-echo "Published Android 1.1.17+45; previous version rows and installation packages retained."
+echo "Published Android 1.1.18+46; previous version rows and installation packages retained."
