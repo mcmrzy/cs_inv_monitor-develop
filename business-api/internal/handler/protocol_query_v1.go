@@ -21,6 +21,7 @@ type alarmEventDetailResponse struct {
 	StationID   *int64          `json:"station_id,omitempty"`
 	Source      int16           `json:"source"`
 	Code        string          `json:"code"`
+	Message     string          `json:"fault_message,omitempty"`
 	Level       int16           `json:"level"`
 	State       string          `json:"state"`
 	Topic       string          `json:"topic"`
@@ -81,6 +82,7 @@ func (h *InternalHandler) GetAlarmEventDetail(c *gin.Context) {
 	if !h.ensureDeviceAccess(c, event.DeviceSN) {
 		return
 	}
+	event.Message = modbusPanelAlarmEventName(int(event.Source), event.Code)
 
 	var snapshots []byte
 	err = h.db.QueryRow(ctx, `

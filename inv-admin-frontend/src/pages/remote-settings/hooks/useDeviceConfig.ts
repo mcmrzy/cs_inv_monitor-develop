@@ -16,6 +16,8 @@ import type { ConfigSchemaItem } from '../config/fields'
 import { normalizeIncoming, resolveFieldMeta, type ResolvedFieldMeta } from '../config/conversion'
 import type { CommandRecord, ControlState } from '../types'
 
+type PowerCommand = 'ac_on' | 'ac_off'
+
 export function useDeviceConfig(sn: string, linkedOnline?: boolean) {
   const apiSn = encodeURIComponent(sn)
   const linkedDevice = linkedOnline !== undefined
@@ -27,7 +29,7 @@ export function useDeviceConfig(sn: string, linkedOnline?: boolean) {
   useEffect(() => { linkedOnlineRef.current = linkedOnline }, [linkedOnline])
   const [sendingKey, setSendingKey] = useState<string | null>(null)
   const [reading, setReading] = useState(false)
-  const [writeRequest, setWriteRequest] = useState<{ taskId: string; deadline: number } | null>(null)
+  const [writeRequest, setWriteRequest] = useState<{ taskId: string; deadline: number; power: boolean } | null>(null)
   const [readRequest, setReadRequest] = useState<{ baselineTime: number; deadline: number } | null>(null)
   const readBusy = useRef(false)
   const writeBusy = useRef(false)
@@ -225,7 +227,8 @@ export function useDeviceConfig(sn: string, linkedOnline?: boolean) {
     const record = history?.find((item) => String(item.task_id) === writeRequest.taskId)
     const stage = record?.data?.stage ?? record?.response_data?.stage ?? record?.stage
     const failed = ['failed', 'timeout', 'cancelled'].includes(record?.status ?? '')
-    const applied = !failed && stage === 'applied' &&
+    const applied = !failed &&
+      (stage === 'applied' || (writeRequest.power && stage === 'completed')) &&
       (record?.status === 'success' || record?.status === 'applied')
     const unconfirmed = record?.status === 'submitted' || stage === 'submitted'
     if (applied || failed || unconfirmed) {
@@ -262,6 +265,12 @@ export function useDeviceConfig(sn: string, linkedOnline?: boolean) {
     [schemaMap, hasPermission, allowedCommands, linkedDevice, linkedOnline, sendingKey],
   )
 
+  const canSendPower = useCallback((command: PowerCommand) => {
+    if (linkedOnline !== true || sendingKey !== null || !allowedCommands.has(command)) return false
+    const permission = capabilities?.find((item) => item.command_code === command)?.permission_code
+    return hasPermission(permission || 'devices:control')
+  }, [linkedOnline, sendingKey, allowedCommands, capabilities, hasPermission])
+
   /** desired 与 reported 是否一致（用于同步徽标） */
   const isSynced = useCallback(
     (paramKey: string): 'synced' | 'pending' | 'none' => {
@@ -275,18 +284,19 @@ export function useDeviceConfig(sn: string, linkedOnline?: boolean) {
   )
 
   const doSend = useCallback(
-    (meta: ResolvedFieldMeta, physical: number) => {
+    (command: string, physical?: number) => {
       if (linkedOnlineRef.current === false || writeBusy.current) return
-      if (!canEdit(meta.paramKey)) {
+      const power = command === 'ac_on' || command === 'ac_off'
+      if (power ? !canSendPower(command) : !canEdit(command)) {
         message.error(`${t('remote.commandSendFailed')}: ${t('remote.commandNotAllowed')}`)
         return
       }
       writeBusy.current = true
       const generation = readGeneration.current
       let waitingForReadback = false
-      setSendingKey(meta.paramKey)
+      setSendingKey(command)
       deviceApi
-        .sendCommand(apiSn, { command: meta.paramKey, params: { value: physical } })
+        .sendCommand(apiSn, { command, params: power ? {} : { value: physical } })
         .then((response) => {
           if (generation !== readGeneration.current) return
           if (linkedDevice) {
@@ -295,7 +305,7 @@ export function useDeviceConfig(sn: string, linkedOnline?: boolean) {
               throw new Error(t('remote.readbackUnconfirmed'))
             }
             waitingForReadback = true
-            setWriteRequest({ taskId: String(taskId), deadline: Date.now() + 35_000 })
+            setWriteRequest({ taskId: String(taskId), deadline: Date.now() + 35_000, power })
             message.info(t('remote.waitingReadback'))
           } else {
             message.success(t('remote.commandSent', { taskId: '' }))
@@ -314,7 +324,7 @@ export function useDeviceConfig(sn: string, linkedOnline?: boolean) {
           }
         })
     },
-    [apiSn, sn, message, t, queryClient, refetchHistory, canEdit, sendingKey, linkedDevice],
+    [apiSn, sn, message, t, queryClient, refetchHistory, canEdit, canSendPower, linkedDevice],
   )
 
   /** 下发工程单位值；confirm 字段弹二次确认（沿用现有确认逻辑） */
@@ -340,16 +350,30 @@ export function useDeviceConfig(sn: string, linkedOnline?: boolean) {
           okText: t('remote.confirmExecute'),
           cancelText: t('remote.cancel'),
           okButtonProps: { danger: true },
-          onOk: () => doSend(meta, physical),
+          onOk: () => doSend(meta.paramKey, physical),
         })
         return
       }
-      doSend(meta, physical)
+      doSend(meta.paramKey, physical)
     },
     [sn, modal, message, t, fieldLabel, doSend, getEditValue, linkedDevice],
   )
 
+  const sendPower = useCallback((command: PowerCommand) => {
+    if (!canSendPower(command)) return
+    modal.confirm({
+      title: t('commands.' + command),
+      content: t('remote.confirmDeviceSetting', { sn, cmd: t('commands.' + command) }),
+      okText: t('remote.confirmExecute'),
+      cancelText: t('remote.cancel'),
+      okButtonProps: { danger: command === 'ac_off' },
+      onOk: () => doSend(command),
+    })
+  }, [canSendPower, modal, sn, t, doSend])
+
   return {
+    canSendPower,
+    sendPower,
     schemaItems: schemaItems ?? [],
     schemaMap,
     schemaLoading,

@@ -34,6 +34,7 @@ async function setup(online?: boolean) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.confirm.mockReset()
   mocks.getConfigSchema.mockResolvedValue({ data: { data: [] } })
   mocks.getControlCapabilities.mockResolvedValue({ data: { data: [] } })
   mocks.getCommands.mockResolvedValue({ data: { data: { items: [] } } })
@@ -158,6 +159,26 @@ describe('设备实际参数与读取闭环', () => {
     expect(cfg.sendingKey).toBeNull()
     expect(mocks.warning).toHaveBeenCalledWith('remote.readbackUnconfirmed')
     expect(mocks.success).not.toHaveBeenCalled()
+  })
+
+
+  it('waits for confirmed AC power completion and sends no scalar setting', async () => {
+    mocks.getControlCapabilities.mockResolvedValue({ data: { data: [
+      { command_code: 'ac_on', is_enabled: true, permission_code: 'devices:control' },
+      { command_code: 'ac_off', is_enabled: false },
+    ] } })
+    await setup(true)
+    await waitFor(() => expect(cfg.canSendPower('ac_on')).toBe(true))
+    expect(cfg.canSendPower('ac_off')).toBe(false)
+
+    act(() => cfg.sendPower('ac_on'))
+    expect(mocks.sendCommand).not.toHaveBeenCalled()
+    mocks.getCommands.mockResolvedValue({ data: { data: { items: [
+      { task_id: 'read-1', status: 'success', data: { stage: 'completed' } },
+    ] } } })
+    await act(async () => { mocks.confirm.mock.calls[0][0].onOk() })
+    expect(mocks.sendCommand).toHaveBeenCalledWith('test-sn', { command: 'ac_on', params: {} })
+    await waitFor(() => expect(mocks.success).toHaveBeenCalledWith('remote.readbackVerified'))
   })
 
 })

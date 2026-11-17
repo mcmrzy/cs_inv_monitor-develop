@@ -49,3 +49,29 @@ func TestExplicitDirectProtocolRestrictsCapabilitiesAndAllWrites(t *testing.T) {
 		t.Fatal("Redis outage advertised usable capability")
 	}
 }
+
+func TestModbusSystemSettingsRequireExplicitReadbackCapability(t *testing.T) {
+	ctx := context.Background()
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer rdb.Close()
+	s := &DeviceService{cache: rdb}
+	const key = "device:control:dsp_protocol:SYSTEM-SN"
+	for _, protocol := range []string{modbusBatteryProtocol, modbusSystemProtocol, modbusBatteryProtocol} {
+		mr.Set(key, protocol)
+		minimum := modbusBatteryMinFirmware
+		caps, err := s.restrictControllerCapabilities(ctx, "SYSTEM-SN", []repository.CommandCapability{
+			{CommandCode: "set_modbus_inverter_mute", IsEnabled: true},
+			{CommandCode: "set_modbus_auto_frequency", IsEnabled: false},
+			{CommandCode: "set_soc_cutoff", MinFirmware: &minimum, IsEnabled: true},
+			{CommandCode: "ac_on", IsEnabled: true},
+		})
+		ready := protocol == modbusSystemProtocol
+		if err != nil || caps[0].IsEnabled != ready || caps[1].IsEnabled || !caps[2].IsEnabled || !caps[3].IsEnabled {
+			t.Fatalf("unexpected capabilities for %q: %#v, %v", protocol, caps, err)
+		}
+		if err := s.checkControllerCommand(ctx, "SYSTEM-SN", "set_modbus_inverter_mute"); (err == nil) != ready {
+			t.Fatalf("unexpected dispatch decision for %q: %v", protocol, err)
+		}
+	}
+}

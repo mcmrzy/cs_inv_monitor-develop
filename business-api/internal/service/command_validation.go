@@ -205,6 +205,9 @@ func (s *DeviceService) checkDynamicLimits(ctx context.Context, sn, commandCode 
 			return nil // 无限制信息，不阻塞
 		}
 		requestedCurrent, ok := extractCurrentFromParams(params, true)
+		if !ok && commandCode == "set_max_charge_current" {
+			requestedCurrent, ok = params["value"].(float64)
+		}
 		if ok && requestedCurrent > effectiveLimit {
 			return NewCommandError(ErrBMSLimitExceeded,
 				fmt.Sprintf("请求充电电流 %.1fA 超过有效限制 %.1fA（BMS CCL/温度降额）", requestedCurrent, effectiveLimit),
@@ -272,6 +275,11 @@ func (s *DeviceService) SendPreparedCommand(ctx context.Context, sn string, prep
 	taskID := prepared.TaskID
 	args := prepared.Args
 	hasV2Spec := prepared.HasV2Spec
+	modbusPower := prepared.Caps != nil && requiresModbusPower(*prepared.Caps)
+	validFor := 5 * time.Minute
+	if modbusPower {
+		validFor = 30 * time.Second
+	}
 
 	// 1. 写入命令日志（status=pending）
 	paramsJSON, _ := json.Marshal(params)
@@ -286,7 +294,7 @@ func (s *DeviceService) SendPreparedCommand(ctx context.Context, sn string, prep
 		"command":    cmdType,
 		"params":     params,
 		"task_id":    taskID,
-		"expires_at": time.Now().Add(5 * time.Minute).Unix(),
+		"expires_at": time.Now().Add(validFor).Unix(),
 	}
 	if hasV2Spec {
 		cmdBody["v"] = 1
@@ -323,6 +331,11 @@ func (s *DeviceService) SendPreparedCommand(ctx context.Context, sn string, prep
 
 	// 4. 设备离线时，存入 Redis 离线队列
 	if resp.StatusCode == http.StatusServiceUnavailable {
+		if modbusPower {
+			message := fmt.Sprintf("设备 %s 已离线，请重新确认开关机操作", sn)
+			_ = s.repo.UpdateCommandLogStatus(ctx, taskID, "failed", message)
+			return "", NewCommandError(ErrDeviceOffline, message, http.StatusServiceUnavailable)
+		}
 		_ = s.repo.UpdateCommandLogStatus(ctx, taskID, "queued", fmt.Sprintf("设备 %s 离线，命令已排队等待发送", sn))
 		if s.cache != nil {
 			queueKey := "device:cmd:queue:" + sn
@@ -346,7 +359,7 @@ func (s *DeviceService) SendPreparedCommand(ctx context.Context, sn string, prep
 	_ = s.repo.UpdateCommandLogStatus(ctx, taskID, "sent", "命令已发送")
 
 	// 5. 插入发送通知
-	if hasV2Spec && !strings.HasPrefix(cmdType, "query_") {
+	if hasV2Spec && !isACOutputCommand(cmdType) && !strings.HasPrefix(cmdType, "query_") {
 		_ = s.repo.SetDesiredControlState(ctx, sn, taskID, cmdType, params)
 	}
 	s.insertCmdNotification(ctx, sn, taskID, cmdType)

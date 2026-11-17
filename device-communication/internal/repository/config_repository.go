@@ -3,22 +3,31 @@ package repository
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"sort"
+	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"inv-device-server/internal/model"
 	"inv-device-server/internal/telemetry"
 )
 
 // LoadConfigSchema 加载 device_config_schema 全部参数定义（config v2 校验与 SchemaGroupPanel 渲染共用）。
-func (r *DeviceRepository) LoadConfigSchema(ctx context.Context) (map[string]model.ConfigParamSchema, error) {
+func (r *DeviceRepository) LoadConfigSchema(ctx context.Context, modbusModel string) (map[string]model.ConfigParamSchema, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT param_key, group_code, COALESCE(sub_group,''), control_type,
-			scale, COALESCE(unit,''), min, max, enum_map, step,
-			permission_code, COALESCE(confirmation_mode,''), display_name_key,
-			sort_order, visibility, validation
-		FROM device_config_schema ORDER BY sort_order`)
+		SELECT s.param_key, s.group_code, COALESCE(s.sub_group,''),
+			CASE WHEN o.enum_map IS NULL THEN s.control_type ELSE 'enum' END,
+			s.scale, COALESCE(s.unit,''), COALESCE(o.min,s.min), COALESCE(o.max,s.max),
+			COALESCE(o.enum_map,s.enum_map), s.step, s.permission_code,
+			COALESCE(s.confirmation_mode,''), s.display_name_key,
+			s.sort_order, COALESCE(o.visibility,s.visibility), COALESCE(o.validation,s.validation)
+		FROM device_config_schema s
+		LEFT JOIN device_models m ON m.model_code = $1 AND m.is_active AND m.lifecycle_status != 'retired'
+		LEFT JOIN device_model_config_options o ON o.model_id = m.id AND o.param_key = s.param_key
+		ORDER BY s.sort_order`, modbusModel)
 	if err != nil {
 		return nil, err
 	}
@@ -126,24 +135,39 @@ func ValidateConfigV2Params(values map[string]any, schemas map[string]model.Conf
 //   - 审计：相对上次上报发生变化的参数写 device_config_changes（source=reported）
 //
 // 返回 sync_status 与无效键清单（供调用方日志/诊断）。
-func (r *DeviceRepository) SaveReportedConfigV2(ctx context.Context, sn string, cfg *telemetry.ReportedConfig, schemas map[string]model.ConfigParamSchema) (string, []string, error) {
+func (r *DeviceRepository) SaveReportedConfigV2(ctx context.Context, sn string, cfg *telemetry.ReportedConfig, schemas map[string]model.ConfigParamSchema, modbus bool) (string, map[string]any, []string, error) {
 	validValues, invalidKeys := ValidateConfigV2Params(cfg.Values, schemas)
 
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
-		return "", invalidKeys, err
+		return "", nil, invalidKeys, err
 	}
 	defer tx.Rollback(ctx)
 
 	var oldReported []byte
 	var oldRev uint64
-	_ = tx.QueryRow(ctx, `SELECT reported, reported_revision FROM device_control_state WHERE device_sn=$1 FOR UPDATE`, sn).Scan(&oldReported, &oldRev)
-	if cfg.Revision < oldRev {
-		return "", invalidKeys, nil // rev 回退：拒绝更新（防回退）
+	var oldReportedAt *time.Time
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, "reported-config:"+sn); err != nil {
+		return "", nil, invalidKeys, err
+	}
+	err = tx.QueryRow(ctx, `SELECT reported, reported_revision, reported_at
+		FROM device_control_state WHERE device_sn=$1 FOR UPDATE`, sn).Scan(&oldReported, &oldRev, &oldReportedAt)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return "", nil, invalidKeys, err
+	}
+	// Modbus revisions are local to one boot. Require a newer event time to
+	// accept a rollback of the revision counter after a restart.
+	if modbus && oldReportedAt != nil {
+		if cfg.EventTime.Before(*oldReportedAt) ||
+			(cfg.EventTime.Equal(*oldReportedAt) && cfg.Revision <= oldRev) {
+			return "", nil, invalidKeys, nil
+		}
+	} else if cfg.Revision < oldRev {
+		return "", nil, invalidKeys, nil
 	}
 	reported, err := json.Marshal(validValues)
 	if err != nil {
-		return "", invalidKeys, err
+		return "", nil, invalidKeys, err
 	}
 
 	syncStatus := "unknown"
@@ -157,11 +181,11 @@ func (r *DeviceRepository) SaveReportedConfigV2(ctx context.Context, sn string, 
 			reported_at=EXCLUDED.reported_at,
 			sync_status=CASE
 				WHEN device_control_state.desired='{}'::jsonb THEN 'unknown'
-				WHEN device_control_state.desired=EXCLUDED.reported THEN 'synced'
+				WHEN EXCLUDED.reported @> device_control_state.desired THEN 'synced'
 				ELSE 'drifted' END,
 			updated_at=NOW()
 		RETURNING sync_status`, sn, reported, cfg.Revision, cfg.EventTime).Scan(&syncStatus); err != nil {
-		return "", invalidKeys, fmt.Errorf("save reported config v2: %w", err)
+		return "", nil, invalidKeys, fmt.Errorf("save reported config v2: %w", err)
 	}
 
 	// 审计：相对上次上报变化的参数（source=reported）
@@ -174,15 +198,15 @@ func (r *DeviceRepository) SaveReportedConfigV2(ctx context.Context, sn string, 
 					INSERT INTO device_config_changes(device_sn,param_key,old_value,new_value,source,rev)
 					VALUES($1,$2,$3::jsonb,$4::jsonb,'reported',$5)`,
 					sn, key, oldV, newV, cfg.Revision); err != nil {
-					return "", invalidKeys, err
+					return "", nil, invalidKeys, err
 				}
 			}
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return "", invalidKeys, err
+		return "", nil, invalidKeys, err
 	}
-	return syncStatus, invalidKeys, nil
+	return syncStatus, validValues, invalidKeys, nil
 }
 
 // GetControlState 读取设备 desired/reported 配置与同步状态（诊断引擎 CONFIG_DRIFT 用）。

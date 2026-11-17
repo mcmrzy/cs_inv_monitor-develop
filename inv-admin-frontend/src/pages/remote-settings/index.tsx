@@ -108,6 +108,18 @@ const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({ sn, onDeviceChang
             <Button onClick={cfg.readCurrent} loading={cfg.reading} disabled={!cfg.canRead}>
               {t('remote.readCurrent')}
             </Button>
+            {(['ac_on', 'ac_off'] as const).filter((command) => cfg.allowedCommands.has(command)).map((command) => (
+              <Button
+                key={command}
+                type={command === 'ac_on' ? 'primary' : 'default'}
+                danger={command === 'ac_off'}
+                disabled={!cfg.canSendPower(command)}
+                loading={cfg.sendingKey === command}
+                onClick={() => cfg.sendPower(command)}
+              >
+                {t('commands.' + command)}
+              </Button>
+            ))}
             <Link to="/remote-settings">{t('remote.selectDevice')}</Link>
           </Flex>
           {linkedDevice.modelMismatch
@@ -151,7 +163,7 @@ const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({ sn, onDeviceChang
                 <List.Item>
                   <Flex vertical gap={4} style={{ width: '100%' }}>
                     <Flex gap={8} justify="space-between" wrap="wrap">
-                      <Text>{cfg.fieldLabel(command)}</Text>
+                      <Text>{['ac_on', 'ac_off'].includes(command) ? t('commands.' + command) : cfg.fieldLabel(command)}</Text>
                       <Tag color={presentation.color}>{presentation.label_zh}</Tag>
                     </Flex>
                     {target !== undefined && (

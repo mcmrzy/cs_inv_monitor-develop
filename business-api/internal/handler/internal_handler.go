@@ -2743,6 +2743,9 @@ func (h *InternalHandler) GetAlarmEvents(c *gin.Context) {
 			"created_at":   createdAt,
 			"raw_data":     rawDataVal,
 		}
+		if name := modbusPanelAlarmEventName(source, code); name != "" {
+			item["fault_message"] = name
+		}
 		if stationID.Valid {
 			item["station_id"] = stationID.Int64
 		}

@@ -14,6 +14,7 @@ import {
   Switch,
   Segmented,
   Radio,
+  Select,
   Button,
   Tag,
   Tooltip,
@@ -212,8 +213,16 @@ const FieldControlWidget: React.FC<FieldCardProps> = ({ cfg, paramKey }) => {
     )
   } else if (meta.kind === 'enum' && meta.enumOptions) {
     const options = meta.enumOptions.map((o) => ({ label: cfg.enumLabel(o.semanticKey), value: o.value }))
-    control =
-      options.length <= 4 && current !== undefined ? (
+    control = options.length > 8 ? (
+      <Select
+        options={options}
+        value={current !== undefined && options.some((option) => option.value === current) ? current : undefined}
+        placeholder={t('remote.paramRequired')}
+        disabled={!editable || sending}
+        onChange={(value) => cfg.sendValue(meta, value)}
+        style={{ minWidth: 144 }}
+      />
+    ) : options.length <= 4 && current !== undefined ? (
         <Segmented
           options={options}
           value={current}

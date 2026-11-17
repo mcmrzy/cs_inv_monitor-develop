@@ -192,7 +192,24 @@ func (h *DeviceHandler) BatchControl(c *gin.Context) {
 
 	results := make(map[string]string)
 	taskIDs := make(map[string]string)
+	ctx := c.Request.Context()
 	for _, sn := range req.SNs {
+		// Use the same online and current-limit checks as the single-device endpoint.
+		if req.Command == "ac_on" || req.Command == "ac_off" || req.Command == "set_max_charge_current" {
+			prepared, err := h.deviceService.ValidateAndPrepareCommand(ctx, userID, sn, req.Command, req.Params, isAdmin)
+			if err != nil {
+				results[sn] = err.Error()
+				continue
+			}
+			taskID, err := h.deviceService.SendPreparedCommand(ctx, sn, prepared)
+			if err != nil {
+				results[sn] = err.Error()
+				continue
+			}
+			results[sn] = "sent"
+			taskIDs[sn] = taskID
+			continue
+		}
 		if !isAdmin && !h.deviceService.HasControlPermission(c.Request.Context(), userID, sn) {
 			results[sn] = "permission denied"
 			continue

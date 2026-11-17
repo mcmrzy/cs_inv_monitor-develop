@@ -284,10 +284,15 @@ const AlertsPage: React.FC = () => {
 
   const traceColumns: ColumnsType<AlarmEvent> = [
     { title: t('alert.source'), dataIndex: 'source', width: 70 },
-    { title: t('alert.faultCode'), dataIndex: 'code', width: 90 },
+    {
+      title: t('alert.faultCode'), dataIndex: 'code', width: 180,
+      render: (code: string, event: AlarmEvent) => event.fault_message
+        ? <>{event.fault_message} <Text type="secondary">#{code}</Text></>
+        : code,
+    },
     {
       title: t('alert.alertLevel'), dataIndex: 'level', width: 90,
-      render: (value: number) => <Tag color={value === 1 ? 'red' : value === 2 ? 'orange' : 'blue'}>{value}</Tag>,
+      render: (value: number) => <Tag color={value === 2 ? 'red' : value === 1 ? 'orange' : 'blue'}>{value}</Tag>,
     },
     {
       title: t('alert.lifecycleState'), dataIndex: 'state', width: 110,

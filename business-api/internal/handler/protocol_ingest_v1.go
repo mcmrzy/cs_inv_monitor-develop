@@ -395,10 +395,34 @@ var alarmV1CodeMessageMap = map[int]string{
 	12: "恢复并网运行",
 }
 
+func modbusPanelAlarmName(data alarmV1Data) (string, bool) {
+	name, ok := modbusPanelAlarmNames[data.Code]
+	if !ok {
+		return "", false
+	}
+	collector := data.Code >= 0x4a00 && data.Code <= 0x4a02
+	return name, (collector && data.Source == 2) || (!collector && data.Source == 0)
+}
+
+func modbusPanelAlarmEventName(source int, code string) string {
+	number, err := strconv.Atoi(code)
+	if err != nil {
+		return ""
+	}
+	name, known := modbusPanelAlarmName(alarmV1Data{Source: source, Code: number})
+	if !known {
+		return ""
+	}
+	return name
+}
+
 // alarmV1PushCopy 根据 V1 告警信封生成推送/通知文案。
 // 返回 notifyType、标题、内容与推送告警级别（3=严重可穿透免打扰，2=警告，恢复=0）。
 func alarmV1PushCopy(sn string, data alarmV1Data) (notifyType, title, content string, alarmLevel int) {
 	msg, ok := alarmV1CodeMessageMap[data.Code]
+	if name, known := modbusPanelAlarmName(data); known {
+		msg, ok = name, true
+	}
 	if data.State == 1 {
 		if !ok {
 			msg = fmt.Sprintf("未知告警(代码 %d)", data.Code)
@@ -693,12 +717,16 @@ func (s *postgresProtocolV1Store) IngestAlarm(ctx context.Context, record protoc
 		alarmLevel = 3
 	}
 	if data.State == 1 {
-		tag, err := tx.Exec(ctx, `UPDATE alarms SET type='device_fault',level=$4,alarm_level=$4,alarm_source=$2,event_state='active',station_id=$5,user_id=$6,fault_message=$7::text,message=$7::text,recovered_at=NULL,updated_at=NOW() WHERE device_sn=$1 AND alarm_source=$2 AND fault_code=$3 AND event_state='active'`, record.SN, data.Source, code, alarmLevel, nullableInt64(stationID), userID, "alarm code "+code)
+		message := "alarm code " + code
+		if name, known := modbusPanelAlarmName(data); known {
+			message = name
+		}
+		tag, err := tx.Exec(ctx, `UPDATE alarms SET type='device_fault',level=$4,alarm_level=$4,alarm_source=$2,event_state='active',station_id=$5,user_id=$6,fault_message=$7::text,message=$7::text,recovered_at=NULL,updated_at=NOW() WHERE device_sn=$1 AND alarm_source=$2 AND fault_code=$3 AND event_state='active'`, record.SN, data.Source, code, alarmLevel, nullableInt64(stationID), userID, message)
 		if err != nil {
 			return protocolV1Result{}, err
 		}
 		if tag.RowsAffected() == 0 {
-			if _, err := tx.Exec(ctx, `INSERT INTO alarms(device_sn,type,level,alarm_level,alarm_source,event_state,station_id,user_id,fault_code,fault_message,message,status,occurred_at,created_at,updated_at) VALUES($1,'device_fault',$4,$4,$2,'active',$5,$6,$3,$7::text,$7::text,0,$8,NOW(),NOW())`, record.SN, data.Source, code, alarmLevel, nullableInt64(stationID), userID, "alarm code "+code, record.EventTime); err != nil {
+			if _, err := tx.Exec(ctx, `INSERT INTO alarms(device_sn,type,level,alarm_level,alarm_source,event_state,station_id,user_id,fault_code,fault_message,message,status,occurred_at,created_at,updated_at) VALUES($1,'device_fault',$4,$4,$2,'active',$5,$6,$3,$7::text,$7::text,0,$8,NOW(),NOW())`, record.SN, data.Source, code, alarmLevel, nullableInt64(stationID), userID, message, record.EventTime); err != nil {
 				return protocolV1Result{}, err
 			}
 		}

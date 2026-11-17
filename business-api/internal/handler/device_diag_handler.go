@@ -112,22 +112,24 @@ func (h *DeviceHandler) GetHealthHistory(c *gin.Context) {
 func (h *DeviceHandler) GetConfigSchema(c *gin.Context) {
 	sn := c.Param("sn")
 	rows, err := h.db.Query(c.Request.Context(), `
-		SELECT s.param_key, s.group_code, COALESCE(s.sub_group, ''), s.control_type,
-		       s.scale, COALESCE(s.unit, ''), s.min, s.max, COALESCE(s.enum_map, '{}'::jsonb),
-		       s.step, s.permission_code, COALESCE(s.confirmation_mode, ''),
-		       s.display_name_key, s.sort_order, COALESCE(s.visibility, '{}'::jsonb),
-		       COALESCE(s.validation, '{}'::jsonb)
-		FROM device_config_schema s
-		WHERE EXISTS (
-			SELECT 1 FROM devices d
-			JOIN device_model_commands c ON c.model_id = COALESCE(
-				d.model_id,
-				(SELECT dm.id FROM device_models dm
-				 WHERE dm.model_code = d.model AND dm.lifecycle_status != 'retired' LIMIT 1)
-			)
-			WHERE d.sn = $1 AND d.deleted_at IS NULL
-			  AND c.command_code = s.param_key AND c.is_enabled
+		SELECT s.param_key, s.group_code, COALESCE(s.sub_group, ''),
+		       CASE WHEN o.enum_map IS NULL THEN s.control_type ELSE 'enum' END,
+		       s.scale, COALESCE(s.unit, ''), COALESCE(o.min,s.min), COALESCE(o.max,s.max),
+		       COALESCE(o.enum_map, s.enum_map, '{}'::jsonb),
+		       s.step, s.permission_code,
+		       CASE WHEN o.param_key IS NULL THEN COALESCE(s.confirmation_mode, '')
+		            ELSE COALESCE(c.confirmation_mode, s.confirmation_mode, '') END,
+		       s.display_name_key, s.sort_order, COALESCE(o.visibility, s.visibility, '{}'::jsonb),
+		       COALESCE(o.validation, s.validation, '{}'::jsonb)
+		FROM devices d
+		JOIN device_model_commands c ON c.model_id = COALESCE(
+			d.model_id,
+			(SELECT dm.id FROM device_models dm
+			 WHERE dm.model_code = d.model AND dm.lifecycle_status != 'retired' LIMIT 1)
 		)
+		JOIN device_config_schema s ON c.command_code = s.param_key
+		LEFT JOIN device_model_config_options o ON o.model_id = c.model_id AND o.param_key = s.param_key
+		WHERE d.sn = $1 AND d.deleted_at IS NULL AND c.is_enabled
 		ORDER BY s.group_code, s.sort_order, s.param_key`, sn)
 	if err != nil {
 		response.Error(c, 500, "query config schema failed")

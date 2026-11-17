@@ -103,4 +103,24 @@ SELECT json_build_object(
 FROM gaps GROUP BY scope, model_code
 ORDER BY scope DESC, model_code;
 
+DO $$
+BEGIN
+    IF (SELECT count(*) FROM schema_migrations WHERE version BETWEEN 141 AND 144) != 4 THEN
+        RAISE EXCEPTION 'Modbus release migrations 141-144 are not all applied';
+    END IF;
+END $$;
+
+SELECT json_build_object('migrations',json_agg(version ORDER BY version))
+FROM schema_migrations WHERE version BETWEEN 141 AND 144;
+
+SELECT json_build_object('model',m.model_code,'control_count',count(c.command_code))
+FROM device_models m JOIN device_model_commands c ON c.model_id=m.id
+WHERE m.model_code IN ('PWR2KH12H1','3KU','6KU','12KU') AND c.is_enabled
+GROUP BY m.model_code ORDER BY m.model_code;
+
+SELECT json_build_object('code',fault_code,'label',fault_message,'count',count(*))
+FROM alarms WHERE fault_code IN ('18434','18944')
+  AND alarm_source=CASE fault_code WHEN '18944' THEN 2 ELSE 0 END
+GROUP BY fault_code,fault_message ORDER BY fault_code,fault_message;
+
 COMMIT;

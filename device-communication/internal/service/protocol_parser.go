@@ -457,11 +457,12 @@ func (p *ProtocolParser) handleReportedConfigV2(ctx context.Context, raw *RawMes
 	if err != nil {
 		return permanentMessage("INVALID_REPORTED_CONFIG", err)
 	}
-	schemas, sErr := p.repo.LoadConfigSchema(ctx)
-	if sErr != nil {
-		logger.Warn("Load config schema failed, skip v2 validation", zap.String("sn", raw.SN), zap.Error(sErr))
+	modbusModel := p.modbusTelemetryModel(ctx, raw.SN)
+	schemas, err := p.repo.LoadConfigSchema(ctx, modbusModel)
+	if err != nil {
+		return fmt.Errorf("load reported config schema: %w", err)
 	}
-	syncStatus, invalidKeys, err := p.repo.SaveReportedConfigV2(ctx, raw.SN, cfg, schemas)
+	syncStatus, accepted, invalidKeys, err := p.repo.SaveReportedConfigV2(ctx, raw.SN, cfg, schemas, modbusModel != "")
 	if err != nil {
 		return err
 	}
@@ -472,7 +473,9 @@ func (p *ProtocolParser) handleReportedConfigV2(ctx context.Context, raw *RawMes
 	logger.Info("Reported config v2 saved",
 		zap.String("sn", raw.SN), zap.Uint64("rev", cfg.Revision),
 		zap.Int("params", len(cfg.Values)), zap.String("sync_status", syncStatus))
-	p.cacheReportedConfig(ctx, raw.SN, cfg.Values)
+	if accepted != nil {
+		p.cacheReportedConfig(ctx, raw.SN, accepted)
+	}
 	return nil
 }
 
@@ -994,7 +997,12 @@ func (p *ProtocolParser) handleInfo(ctx context.Context, raw *RawMessage) error 
 		}
 	}
 
-	var info model.DeviceInfo
+	var info struct {
+		model.DeviceInfo
+		ModbusACPower         bool `json:"modbus_ac_power"`
+		ModbusBatterySettings bool `json:"modbus_battery_settings"`
+		ModbusSystemSettings  bool `json:"modbus_system_settings"`
+	}
 	if err := json.Unmarshal(payloadBytes, &info); err != nil {
 		// 尝试解包字符串形式的 payload
 		var s string
@@ -1048,7 +1056,7 @@ func (p *ProtocolParser) handleInfo(ctx context.Context, raw *RawMessage) error 
 		})
 	} else {
 		// Fallback to synchronous registration if registry not initialized
-		if err := p.postInternal("/api/v1/internal/device-info", info); err != nil {
+		if err := p.postInternal("/api/v1/internal/device-info", info.DeviceInfo); err != nil {
 			return err
 		}
 	}
@@ -1057,8 +1065,18 @@ func (p *ProtocolParser) handleInfo(ctx context.Context, raw *RawMessage) error 
 	if p.rdb != nil {
 		// Keep explicit controller evidence beyond the telemetry cache lifetime.
 		// Missing fields in legacy INFO must not silently erase known direct mode.
-		if info.DSPProtocol == "direct_uart_03_04_25" {
-			if err := p.rdb.Set(ctx, "device:control:dsp_protocol:"+raw.SN, info.DSPProtocol, 0).Err(); err != nil {
+		if info.DSPProtocol == "direct_uart_03_04_25" || info.DSPProtocol == "modbus_rtu_v1.27" {
+			controller := info.DSPProtocol
+			if modbusModel != "" && info.ModbusACPower {
+				controller += ":ac_power"
+				if info.ModbusBatterySettings {
+					controller += ":battery_settings"
+					if info.ModbusSystemSettings {
+						controller += ":system_settings"
+					}
+				}
+			}
+			if err := p.rdb.Set(ctx, "device:control:dsp_protocol:"+raw.SN, controller, 0).Err(); err != nil {
 				return fmt.Errorf("cache controller protocol: %w", err)
 			}
 		}

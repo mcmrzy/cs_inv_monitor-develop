@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"math"
+	"strings"
 	"time"
 
 	"inv-api-server/pkg/timezone"
@@ -119,6 +120,17 @@ func (r *DeviceRepository) GetControlState(ctx context.Context, sn string) (map[
 }
 
 func (r *DeviceRepository) SetDesiredControlState(ctx context.Context, sn, taskID, command string, params map[string]interface{}) error {
+	value, hasValue := params["value"]
+	scalar := len(params) == 1 && hasValue && strings.HasPrefix(command, "set_")
+	if scalar {
+		if enabled, ok := value.(bool); ok {
+			value = 0
+			if enabled {
+				value = 1
+			}
+		}
+		params = map[string]interface{}{command: value}
+	}
 	raw, err := json.Marshal(params)
 	if err != nil {
 		return err
@@ -126,9 +138,11 @@ func (r *DeviceRepository) SetDesiredControlState(ctx context.Context, sn, taskI
 	_, err = r.db.Exec(ctx, `
 		INSERT INTO device_control_state(device_sn,desired,desired_version,sync_status,desired_at,last_task_id,updated_at)
 		VALUES($1,$2::jsonb,1,'pending',NOW(),$3::uuid,NOW())
-		ON CONFLICT(device_sn) DO UPDATE SET desired=device_control_state.desired || EXCLUDED.desired,
+		ON CONFLICT(device_sn) DO UPDATE SET
+			desired=(CASE WHEN $4 THEN device_control_state.desired - 'value'
+			              ELSE device_control_state.desired END) || EXCLUDED.desired,
 			desired_version=device_control_state.desired_version+1,sync_status='pending',desired_at=NOW(),
-			last_task_id=EXCLUDED.last_task_id,updated_at=NOW()`, sn, raw, taskID)
+			last_task_id=EXCLUDED.last_task_id,updated_at=NOW()`, sn, raw, taskID, scalar)
 	if err != nil {
 		return err
 	}

@@ -13,6 +13,27 @@ func TestAlarmV1PushCopy(t *testing.T) {
 		wantLevel      int
 	}{
 		{
+			name:           "3KU 母线软启故障",
+			sn:             "SN1000000000001",
+			data:           alarmV1Data{Source: 0, Code: 0x5600, Level: 2, State: 1},
+			wantNotifyType: "device_alarm", wantTitle: "设备告警",
+			wantContent: "设备 SN1000000000001: 母线软启故障", wantLevel: 3,
+		},
+		{
+			name:           "3KU 恢复",
+			sn:             "SN1000000000001",
+			data:           alarmV1Data{Source: 0, Code: 0x5600, Level: 2, State: 0},
+			wantNotifyType: "alarm_cleared", wantTitle: "故障已恢复",
+			wantContent: "设备 SN1000000000001 母线软启故障 已恢复", wantLevel: 0,
+		},
+		{
+			name:           "V1.27 的同一物理位",
+			sn:             "SN1000000000001",
+			data:           alarmV1Data{Source: 0, Code: 0x4600, Level: 2, State: 1},
+			wantNotifyType: "device_alarm", wantTitle: "设备告警",
+			wantContent: "设备 SN1000000000001: 市电软启失败", wantLevel: 3,
+		},
+		{
 			name:           "严重告警已知码",
 			sn:             "SN1000000000001",
 			data:           alarmV1Data{Source: 1, Code: 1, Level: 2, State: 1},
@@ -29,6 +50,20 @@ func TestAlarmV1PushCopy(t *testing.T) {
 			wantTitle:      "设备告警",
 			wantContent:    "设备 SN1000000000001: 电池SOC过低",
 			wantLevel:      2,
+		},
+		{
+			name:           "通讯板电池低压 18434",
+			sn:             "SN1000000000001",
+			data:           alarmV1Data{Source: 0, Code: 18434, Level: 1, State: 1},
+			wantNotifyType: "device_alarm", wantTitle: "设备告警",
+			wantContent: "设备 SN1000000000001: 电池低压", wantLevel: 2,
+		},
+		{
+			name:           "通讯板逆变器通信中断 18944",
+			sn:             "SN1000000000001",
+			data:           alarmV1Data{Source: 2, Code: 18944, Level: 2, State: 1},
+			wantNotifyType: "device_alarm", wantTitle: "设备告警",
+			wantContent: "设备 SN1000000000001: 逆变器通信中断", wantLevel: 3,
 		},
 		{
 			name:           "未知告警码回退",
