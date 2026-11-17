@@ -1,3 +1,7 @@
+import 'package:inv_app/features/device/presentation/widgets/modbus_panel_overview.dart';
+import 'package:inv_app/features/device/presentation/widgets/device_section_navigation.dart';
+import 'package:inv_app/features/device/presentation/widgets/device_connection_card.dart';
+import 'package:inv_app/features/device/presentation/widgets/device_settings_heading.dart';
 // 设备详情页 —— 实时监控与远程设置
 //
 // 结构：AppBar + 横幅区（MQTT 降级 / 数据滞后）+ TabBarView + 底部 Tab 栏（4 Tab）
@@ -20,6 +24,7 @@ import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
+import 'package:inv_app/core/widgets/settings_widgets.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/ble/ble_device_manager.dart';
 import 'package:inv_app/core/services/realtime_data_service.dart';
@@ -54,6 +59,59 @@ class DeviceRealtimePage extends StatefulWidget {
 
 class _DeviceRealtimePageState extends State<DeviceRealtimePage>
     with SingleTickerProviderStateMixin {
+  Widget _buildRealtimeTab() {
+    if (!_isModbusPanel) {
+      return RealtimeDataTab(data: _latest, footer: _buildProtocolEntry());
+    }
+    final zh = Localizations.localeOf(context).languageCode == 'zh';
+    final entry = SettingsCard(
+      [
+        SettingsValueRow(
+          icon: Icons.insights_outlined,
+          accent: AppColors.primary,
+          title: zh ? '完整运行参数' : 'All parameters',
+          onTap: () => setState(() => _showFullPanelReadings = true),
+        ),
+      ],
+      margin: EdgeInsets.zero,
+    );
+    if (_showFullPanelReadings) {
+      return RealtimeDataTab(
+        data: _latest,
+        header: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextButton.icon(
+              onPressed: () => setState(() => _showFullPanelReadings = false),
+              icon: const Icon(Icons.arrow_back_rounded, size: 17),
+              label: Text(zh ? '返回运行概览' : 'Back to overview'),
+            ),
+            DeviceSettingsHeading(title: zh ? '完整运行参数' : 'All parameters'),
+          ],
+        ),
+        footer: _buildProtocolEntry(),
+        selectedCategory: _panelReadingCategory,
+        onCategorySelected: (index) =>
+            setState(() => _panelReadingCategory = index),
+        readingsStatus: _latest == null
+            ? (zh ? '等待设备上报' : 'Waiting for device data')
+            : _cloudDataFresh
+                ? (zh ? '云端实时读数' : 'Live cloud readings')
+                : (zh ? '云端上次读数' : 'Last cloud readings'),
+      );
+    }
+    return ListView(
+      padding: EdgeInsets.fromLTRB(16.w, 0, 16.w, 24.h),
+      children: [
+        ModbusPanelOverview(
+          telemetry: _panelOverviewTelemetry(),
+          live: _cloudDataFresh,
+        ),
+        entry,
+      ],
+    );
+  }
+
   /// 底部 Tab 栏控制器（4 Tab：实时数据 / 能量统计 / 远程设置 / 设备健康）
   late final TabController _tabController;
 
@@ -76,6 +134,8 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
   bool _isLocalMode = false;
   bool _isModbusPanel = false;
   bool _modelBindingMismatch = false;
+  bool _showFullPanelReadings = false;
+  int _panelReadingCategory = 0;
   BleDeviceSession? _panelSession;
 
   BleDeviceSession? _readyPanel() => getIt.isRegistered<BleDeviceManager>()
@@ -91,6 +151,12 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
 
   /// 超过该时长未更新的遥测数据视为滞后
   static const Duration _staleThreshold = Duration(minutes: 5);
+  bool get _cloudDataFresh {
+    final time = _dataUpdatedAt;
+    return _online &&
+        time != null &&
+        DateTime.now().difference(time) <= _staleThreshold;
+  }
 
   @override
   void initState() {
@@ -482,6 +548,44 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
     return map;
   }
 
+  Map<String, dynamic> _panelOverviewTelemetry() {
+    Object? value(String key) => _realtimeData[key];
+    return {
+      'pv': {
+        'pv_voltage': value('pv1_voltage'),
+        'pv_current': value('pv1_current'),
+        'pv2_voltage': value('pv2_voltage'),
+        'pv2_current': value('pv2_current'),
+        'pv_power': value('pv_total_power'),
+      },
+      'battery': {
+        'soc': value('battery_soc'),
+        'voltage': value('battery_voltage'),
+        'current': value('battery_current'),
+        'power': value('battery_power'),
+        'charge_state': _latest?.battery?.chargeState,
+      },
+      'ac': {
+        'voltage': value('ac_output_voltage'),
+        'current': value('output_current'),
+        'power': value('output_power'),
+        'frequency': value('ac_output_frequency'),
+        'load_percent': value('load_percent'),
+        'grid_voltage': value('grid_voltage'),
+        'input_power': value('ac_input_power'),
+      },
+      'energy': {
+        'daily_pv': value('daily_pv_energy'),
+        'total_pv': value('total_pv_energy'),
+      },
+      'sys_status': {
+        'state': value('work_state'),
+        'fault_code': value('fault_code'),
+        'temp_inv': value('inverter_temperature'),
+      },
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     final panel = _panelSession;
@@ -631,8 +735,8 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
         title: Text(zh ? '蓝牙设置' : 'Bluetooth settings'),
         content: Text(
           zh
-              ? '请在面板打开「手机连接」，然后选择序列号 ${widget.sn} 并输入面板显示的 PIN。'
-              : 'Open Phone connection on the panel. Select ${widget.sn} and enter the PIN shown on the panel.',
+              ? '请在面板打开「手机连接」，然后选择序列号 ${widget.sn}。'
+              : 'Open Phone connection on the panel, then select ${widget.sn}.',
         ),
         actions: [
           TextButton(
@@ -647,7 +751,10 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
       ),
     );
     if (mounted && proceed == true) {
-      await context.pushNamed('offlineModeSettings');
+      await context.pushNamed(
+        'offlineModeSettings',
+        queryParameters: {'sn': widget.sn},
+      );
       if (mounted) setState(() {});
     }
   }
@@ -655,7 +762,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
   Widget _buildContent() {
     return Column(
       children: [
-        if (!_isLocalMode)
+        if (!_isLocalMode && !_isModbusPanel)
           Align(
             alignment: Alignment.centerRight,
             child: TextButton.icon(
@@ -684,10 +791,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
           child: TabBarView(
             controller: _tabController,
             children: [
-              RealtimeDataTab(
-                data: _latest,
-                footer: _buildProtocolEntry(),
-              ),
+              _buildRealtimeTab(),
               EnergyStatsTab(data: _latest, recordedTotalPV: _recordedTotalPV),
               RemoteSettingsTab(
                 sn: widget.sn,
@@ -721,100 +825,13 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
       (Icons.health_and_safety_outlined, l10n.str('health_title')),
     ];
 
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return SafeArea(
-      top: false,
-      child: Container(
-        margin: EdgeInsets.fromLTRB(12.w, 0, 12.w, 8.h),
-        padding: EdgeInsets.all(5.w),
-        decoration: BoxDecoration(
-          color: AppColor.surfaceContainer(context),
-          borderRadius: BorderRadius.circular(22.r),
-          border: Border.all(color: AppColor.border(context)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
-              blurRadius: 18,
-              offset: Offset(0, 4.h),
-            ),
-          ],
-        ),
-        child: AnimatedBuilder(
-          animation: _tabController,
-          builder: (context, _) {
-            final current =
-                _tabController.animation?.value.round() ?? _tabController.index;
-            return Row(
-              children: [
-                for (var i = 0; i < tabs.length; i++)
-                  Expanded(
-                    child: _buildBottomTabItem(
-                      i,
-                      current,
-                      tabs[i].$1,
-                      tabs[i].$2,
-                    ),
-                  ),
-              ],
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  /// 单个底部 Tab 项：选中品牌蓝渐变药丸（图标+文字白色），未选中灰
-  Widget _buildBottomTabItem(
-    int index,
-    int current,
-    IconData icon,
-    String label,
-  ) {
-    final selected = index == current;
-    return InkWell(
-      onTap: () => _tabController.animateTo(index),
-      borderRadius: BorderRadius.circular(16.r),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
-        padding: EdgeInsets.symmetric(vertical: 8.h),
-        decoration: BoxDecoration(
-          gradient: selected
-              ? LinearGradient(
-                  colors: [
-                    AppColors.primary,
-                    AppColors.primary.withValues(alpha: 0.75),
-                  ],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                )
-              : null,
-          borderRadius: BorderRadius.circular(16.r),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 17.sp,
-              color: selected ? Colors.white : AppColor.textSecondary(context),
-            ),
-            SizedBox(width: 5.w),
-            Expanded(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 11.sp,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                  color:
-                      selected ? Colors.white : AppColor.textSecondary(context),
-                ),
-              ),
-            ),
-          ],
-        ),
+    return AnimatedBuilder(
+      animation: _tabController,
+      builder: (context, _) => DeviceSectionNavigation(
+        tabs: tabs,
+        selectedIndex:
+            _tabController.animation?.value.round() ?? _tabController.index,
+        onSelected: _tabController.animateTo,
       ),
     );
   }
@@ -829,19 +846,29 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
 
     final l10n = AppLocalizations.of(context)!;
     final zh = Localizations.localeOf(context).languageCode == 'zh';
-    final time = updatedAt == null
-        ? null
-        : DateFormat('HH:mm:ss').format(updatedAt.toLocal());
-    final message = !_isModbusPanel
-        ? l10n.str('realtime_data_stale', {'time': time!})
-        : time == null
-            ? (zh ? '等待云端采样' : 'Waiting for cloud data')
-            : stale || !_online
-                ? (zh ? '云端上次采样 · $time' : 'Last cloud sample · $time')
-                : (zh ? '云端实时 · $time' : 'Live cloud data · $time');
-    final color = _isModbusPanel && _online && !stale
-        ? Theme.of(context).colorScheme.primary
-        : AppColors.warning;
+    if (_isModbusPanel) {
+      final dataStatus = updatedAt == null
+          ? (zh ? '等待云端采样' : 'Waiting for cloud data')
+          : stale || !_online
+              ? (zh ? '云端上次采样' : 'Last cloud sample')
+              : (zh ? '云端实时数据' : 'Live cloud data');
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: DeviceConnectionCard(
+          icon: Icons.cloud_outlined,
+          connection: _online
+              ? (zh ? '云端已连接' : 'Cloud connected')
+              : (zh ? '云端离线' : 'Cloud offline'),
+          connected: _online,
+          dataStatus: dataStatus,
+          sampleTime: updatedAt,
+        ),
+      );
+    }
+
+    final time = DateFormat('HH:mm:ss').format(updatedAt!.toLocal());
+    final message = l10n.str('realtime_data_stale', {'time': time});
+    final color = AppColors.warning;
     return Container(
       margin: EdgeInsets.only(bottom: 12.h),
       padding: EdgeInsets.all(12.w),
@@ -853,9 +880,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
       child: Row(
         children: [
           Icon(
-            _isModbusPanel
-                ? Icons.cloud_outlined
-                : Icons.hourglass_bottom_rounded,
+            Icons.hourglass_bottom_rounded,
             size: 18.sp,
             color: color,
           ),

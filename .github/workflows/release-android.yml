@@ -144,8 +144,11 @@ jobs:
           [[ "$APK_SHA256" =~ ^[a-f0-9]{64}$ ]]
           test "$API_BASE_URL" = 'https://api.jiuxiaoyw.online/api/v1'
           SOURCE_SHA=$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_TAG" --jq .sha)
-          [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ && "$SOURCE_SHA" = "$GITHUB_SHA" ]]
+          DEPLOY_SHA=$(gh api "repos/$GITHUB_REPOSITORY/commits/$SOURCE_SHA" --jq '.parents[0].sha')
+          [[ "$DEPLOY_SHA" =~ ^[a-f0-9]{40}$ ]]
           echo "source_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+          echo "deploy_sha=$DEPLOY_SHA" >> "$GITHUB_OUTPUT"
           mkdir package
           gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern app-release.apk --dir package
           printf '%s  %s\n' "$APK_SHA256" package/app-release.apk | sha256sum -c -
@@ -153,7 +156,11 @@ jobs:
           BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
           test -x "$BUILD_TOOLS/aapt"
           "$BUILD_TOOLS/aapt" dump badging package/app-release.apk > package/badging.txt
-          grep -q "package: name='com.csergy.app1' versionCode='44' versionName='1.1.16'" package/badging.txt
+          grep -q "package: name='com.csergy.app1' versionCode='45' versionName='1.1.17'" package/badging.txt
+          if grep -q '^application-debuggable' package/badging.txt; then
+            echo "The APK must be a non-debuggable release build" >&2
+            exit 1
+          fi
           "$BUILD_TOOLS/apksigner" verify --print-certs package/app-release.apk > package/certificate.txt
           curl -fsS 'https://api.jiuxiaoyw.online/api/v1/ota/app/latest?platform=android' > package/current.json
           CURRENT_URL=$(jq -er '.data.download_url | select(startswith("https://download.jiuxiaoyw.online/firmware/apps/android/"))' package/current.json)
@@ -174,28 +181,28 @@ jobs:
           python3 - "$APK_SHA256" "$APK_MD5" "$APK_SIZE" "$MIN_SDK" "$TARGET_SDK" <<'PY'
           import pathlib, sys
           sha, md5, size, minimum, target = sys.argv[1:]
-          filename = f'com.csergy.app1-1.1.16-44-{sha[:12]}.apk'
+          filename = f'com.csergy.app1-1.1.17-45-{sha[:12]}.apk'
           sql = f"""BEGIN;
-          SELECT pg_advisory_xact_lock(11644);
+          SELECT pg_advisory_xact_lock(11645);
           DO $$ BEGIN
-            IF EXISTS (SELECT 1 FROM app_versions WHERE platform='android' AND version_code=44 AND file_sha256<>'{sha}') THEN
-              RAISE EXCEPTION 'Version 44 already exists with different content';
+            IF EXISTS (SELECT 1 FROM app_versions WHERE platform='android' AND version_code=45 AND file_sha256<>'{sha}') THEN
+              RAISE EXCEPTION 'Version 45 already exists with different content';
             END IF;
-            IF EXISTS (SELECT 1 FROM app_versions WHERE platform='android' AND version_code=44
+            IF EXISTS (SELECT 1 FROM app_versions WHERE platform='android' AND version_code=45
                 AND (status<>1 OR COALESCE(is_rolled_back,false) OR rollout_percentage<>100)) THEN
-              RAISE EXCEPTION 'Version 44 is rolled back, disabled or not fully released';
+              RAISE EXCEPTION 'Version 45 is rolled back, disabled or not fully released';
             END IF;
-            IF EXISTS (SELECT 1 FROM app_versions WHERE platform='android' AND version_code>44 AND status=1 AND NOT COALESCE(is_rolled_back,false)) THEN
+            IF EXISTS (SELECT 1 FROM app_versions WHERE platform='android' AND version_code>45 AND status=1 AND NOT COALESCE(is_rolled_back,false)) THEN
               RAISE EXCEPTION 'A newer Android version is already published';
             END IF;
           END $$;
           INSERT INTO app_versions(platform,version_code,version_name,download_url,file_size,file_md5,changelog,
               is_force,min_supported_version,rollout_percentage,status,created_by,file_sha256,package_name,file_name,min_sdk,target_sdk)
-          SELECT 'android',44,'1.1.16','/firmware/apps/android/{filename}',{size},'{md5}',
-              '新增 Modbus 面板参数总览、蓝牙设置与远程设置；显示数据来源及更新时间，远程写入等待设备确认。',
+          SELECT 'android',45,'1.1.17','/firmware/apps/android/{filename}',{size},'{md5}',
+              '优化通讯板蓝牙连接、运行参数和设置界面；增加远程输出开关及电池、系统设置；完善告警名称。',
               false,0,100,1,0,'{sha}','com.csergy.app1','{filename}',{minimum},{target}
-          WHERE NOT EXISTS (SELECT 1 FROM app_versions WHERE platform='android' AND version_code=44);
-          SELECT version_name,version_code,file_sha256 FROM app_versions WHERE platform='android' AND version_code=44;
+          WHERE NOT EXISTS (SELECT 1 FROM app_versions WHERE platform='android' AND version_code=45);
+          SELECT version_name,version_code,file_sha256 FROM app_versions WHERE platform='android' AND version_code=45;
           COMMIT;
           """
           pathlib.Path('package/publish.sql').write_text(sql)
@@ -208,6 +215,7 @@ jobs:
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
           SERVER_USERNAME: ${{ secrets.SERVER_USERNAME }}
           SOURCE_SHA: ${{ steps.package.outputs.source_sha }}
+          DEPLOY_SHA: ${{ steps.package.outputs.deploy_sha }}
           APK_SHA256: ${{ inputs.apk_sha256 }}
         run: |
           set -euo pipefail
@@ -215,7 +223,7 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
           trap 'rm -f ~/.ssh/deploy_key' EXIT
-          printf -v REMOTE_COMMAND 'bash -c %q -- %q %q' "$(cat deploy/publish-modbus-app.sh)" "$SOURCE_SHA" "$APK_SHA256"
+          printf -v REMOTE_COMMAND 'bash -c %q -- %q %q' "$(cat deploy/publish-modbus-app.sh)" "$DEPLOY_SHA" "$APK_SHA256"
           tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner \
             -czf package/publish.tar.gz -C package app-release.apk filename verify.sql publish.sql
           ARCHIVE_SHA=$(sha256sum package/publish.tar.gz | cut -d' ' -f1)
@@ -234,12 +242,12 @@ jobs:
           set -euo pipefail
           for attempt in 1 2 3 4 5; do
             curl -fsS "https://api.jiuxiaoyw.online/api/v1/ota/app/latest?platform=android&release_check=$(date +%s)" > package/published.json
-            if jq -e --arg sha "$APK_SHA256" '.code == 0 and .data.version_code == 44 and .data.file_sha256 == $sha' package/published.json; then
+            if jq -e --arg sha "$APK_SHA256" '.code == 0 and .data.version_code == 45 and .data.file_sha256 == $sha' package/published.json; then
               break
             fi
             sleep 5
           done
-          jq -e --arg sha "$APK_SHA256" '.code == 0 and .data.version_code == 44 and .data.file_sha256 == $sha' package/published.json
+          jq -e --arg sha "$APK_SHA256" '.code == 0 and .data.version_code == 45 and .data.file_sha256 == $sha' package/published.json
           PUBLISHED_URL=$(jq -er '.data.download_url | select(startswith("https://download.jiuxiaoyw.online/firmware/apps/android/"))' package/published.json)
           curl -fL --retry 3 "$PUBLISHED_URL" -o package/published.apk
           printf '%s  %s\n' "$APK_SHA256" package/published.apk | sha256sum -c -
@@ -443,6 +451,10 @@ jobs:
           printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
           trap 'rm -f ~/.ssh/deploy_key' EXIT
           remote_command=$(cat <<'REMOTE'
+          set -eu
+          docker ps --format '{{.Names}} {{.Status}} {{.Image}}'
+          pgrep -af '^docker compose.*pull' || true
+          df -h /
           docker exec -i inv-postgres sh -c 'export PGPASSWORD="$POSTGRES_PASSWORD"; exec psql -X -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At'
           REMOTE
           )

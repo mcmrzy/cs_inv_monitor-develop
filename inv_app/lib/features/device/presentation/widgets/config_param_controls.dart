@@ -98,6 +98,8 @@ const List<SettingsCategory> settingsCategories = [
       'set_output_voltage',
       'set_output_frequency',
       'set_ac_volt_range',
+      'set_modbus_power_saving',
+      'set_modbus_auto_frequency',
     ],
   ),
   SettingsCategory(
@@ -126,6 +128,9 @@ const List<SettingsCategory> settingsCategories = [
       'set_alarm_control',
       'set_backlight_ctrl',
       'set_power_shutdown_alarm',
+      'set_modbus_input_change_alarm',
+      'set_modbus_battery_open_alarm',
+      'set_modbus_inverter_mute',
     ],
   ),
 ];
@@ -152,6 +157,9 @@ String configParamName(AppLocalizations l10n, ConfigParamSchema schema) {
 
 /// 枚举选项文案：l10n.str('config_enum_' + 语义值)，无则 humanize 原值
 String configEnumOptionLabel(AppLocalizations l10n, String enumValue) {
+  if (RegExp(r'^\d+(?:\.\d+)?\s*(?:%|V|A|Hz|min)$').hasMatch(enumValue)) {
+    return enumValue;
+  }
   final key = 'config_enum_$enumValue';
   final text = l10n.str(key);
   if (text != key) return text;
@@ -238,6 +246,7 @@ class ConfigParamControl extends StatelessWidget {
 
   /// 危险操作红色描边
   final bool dangerous;
+  final bool compact;
 
   final ValueChanged<dynamic> onRequestChange;
 
@@ -249,12 +258,45 @@ class ConfigParamControl extends StatelessWidget {
     required this.onRequestChange,
     this.disabled = false,
     this.dangerous = false,
+    this.compact = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
+    if (compact) {
+      final label = _buildLabelRow(l10n, theme);
+      if (schema.controlType == 'boolean') {
+        final on = configBoolIsOn(value);
+        return Row(
+          children: [
+            Expanded(child: label),
+            if (value == null) const Text('—'),
+            Semantics(
+              label: configParamName(l10n, schema),
+              child: Switch(
+                value: on,
+                onChanged: disabled
+                    ? null
+                    : (v) => onRequestChange(configBoolForWrite(v, value)),
+              ),
+            ),
+          ],
+        );
+      }
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            label,
+            const SizedBox(height: 6),
+            _buildControl(context, l10n, theme),
+          ],
+        ),
+      );
+    }
 
     return Container(
       margin: EdgeInsets.only(bottom: 10.h),
@@ -279,7 +321,7 @@ class ConfigParamControl extends StatelessWidget {
           children: [
             _buildLabelRow(l10n, theme),
             SizedBox(height: 10.h),
-            _buildControl(l10n, theme),
+            _buildControl(context, l10n, theme),
           ],
         ),
       ),
@@ -339,20 +381,24 @@ class ConfigParamControl extends StatelessWidget {
     );
   }
 
-  Widget _buildControl(AppLocalizations l10n, ThemeData theme) {
+  Widget _buildControl(
+    BuildContext context,
+    AppLocalizations l10n,
+    ThemeData theme,
+  ) {
     switch (schema.controlType) {
       case 'enum':
         return _buildEnum(l10n, theme);
       case 'boolean':
         return _buildSwitch(l10n, theme);
       default:
-        return _buildNumber(theme);
+        return _buildNumber(context, theme);
     }
   }
 
   // ==================== number：Slider + 大号当前值 ====================
 
-  Widget _buildNumber(ThemeData theme) {
+  Widget _buildNumber(BuildContext context, ThemeData theme) {
     final min = schema.min;
     final max = schema.max;
     final decimals = configDecimalsForStep(schema.step);
@@ -369,21 +415,78 @@ class ConfigParamControl extends StatelessWidget {
       );
     }
 
-    final current = value is num ? (value as num).toDouble() : min;
+    final hasValue = value is num && (value as num).isFinite;
+    final current = hasValue ? (value as num).toDouble() : min;
     final clamped = current.clamp(min, max);
     final divisions = ((max - min) / schema.effectiveStep).round();
+    final zh = Localizations.localeOf(context).languageCode == 'zh';
+    final number = Text(
+      compact && !hasValue ? '—' : formatConfigNumber(current, schema),
+      style: TextStyle(
+        fontSize: compact ? 22.sp : 18.sp,
+        fontWeight: FontWeight.w700,
+        color:
+            modified ? AppColor.primary(context) : theme.colorScheme.onSurface,
+      ),
+    );
+    final canStep = !disabled && hasValue;
+    final stepperStyle = IconButton.styleFrom(
+      foregroundColor: AppColor.primary(context),
+      backgroundColor: AppColor.primarySoft(context),
+      disabledBackgroundColor: AppColor.surfaceHover(context),
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          formatConfigNumber(current, schema),
-          style: TextStyle(
-            fontSize: 18.sp,
-            fontWeight: FontWeight.w700,
-            color: modified ? AppColors.primary : theme.colorScheme.onSurface,
-          ),
-        ),
+        if (compact)
+          SizedBox(
+            width: double.infinity,
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              runSpacing: 4,
+              children: [
+                number,
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton.filledTonal(
+                      style: stepperStyle,
+                      tooltip: zh ? '减少' : 'Decrease',
+                      onPressed: canStep && clamped > min
+                          ? () => onRequestChange(
+                                configNumberForWrite(
+                                  (clamped - schema.effectiveStep)
+                                      .clamp(min, max),
+                                  schema,
+                                ),
+                              )
+                          : null,
+                      icon: const Icon(Icons.remove, size: 20),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton.filledTonal(
+                      style: stepperStyle,
+                      tooltip: zh ? '增加' : 'Increase',
+                      onPressed: canStep && clamped < max
+                          ? () => onRequestChange(
+                                configNumberForWrite(
+                                  (clamped + schema.effectiveStep)
+                                      .clamp(min, max),
+                                  schema,
+                                ),
+                              )
+                          : null,
+                      icon: const Icon(Icons.add, size: 20),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          )
+        else
+          number,
         SizedBox(height: 4.h),
         Slider(
           value: clamped,
@@ -433,7 +536,33 @@ class ConfigParamControl extends StatelessWidget {
       onRequestChange(configEnumForWrite(opt.key, value));
     }
 
-    // 选项 ≤4 个用 ChoiceChip 横排；否则竖排列表
+    if (options.length > 8) {
+      final reportedKey = value?.toString();
+      return DropdownButton<String>(
+        isExpanded: true,
+        menuMaxHeight: 320,
+        value: options.any((option) => option.key == reportedKey)
+            ? reportedKey
+            : null,
+        hint: Text(l10n.str('no_data')),
+        items: [
+          for (final option in options)
+            DropdownMenuItem(
+              value: option.key,
+              child: Text(configEnumOptionLabel(l10n, option.value)),
+            ),
+        ],
+        onChanged: disabled
+            ? null
+            : (key) {
+                if (key != null) {
+                  onRequestChange(configEnumForWrite(key, value));
+                }
+              },
+      );
+    }
+
+    // Keep short option lists visible without opening a menu.
     if (options.length <= 4) {
       return Wrap(
         spacing: 8.w,
@@ -561,6 +690,7 @@ class ConfigApplyBar extends StatelessWidget {
             FilledButton(
               onPressed: applying ? null : onApply,
               style: FilledButton.styleFrom(
+                minimumSize: const Size(144, 52),
                 padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 12.h),
               ),
               child: applying

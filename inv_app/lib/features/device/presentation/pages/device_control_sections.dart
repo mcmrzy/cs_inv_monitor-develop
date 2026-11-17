@@ -1170,10 +1170,10 @@ extension _DeviceControlTabSections on _DeviceControlPageState {
             child: Text(
               AppLocalizations.of(context)!
                   .str(deviceCommandStatusLabel(status)),
-            style: TextStyle(
-              fontSize: 11.sp,
-              color: statusColor,
-              fontWeight: FontWeight.w600,
+              style: TextStyle(
+                fontSize: 11.sp,
+                color: statusColor,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -1205,6 +1205,7 @@ extension _DeviceControlTabSections on _DeviceControlPageState {
             child: Text(l10n.cancel),
           ),
           FilledButton(
+            style: FilledButton.styleFrom(minimumSize: const Size(144, 52)),
             onPressed: () {
               Navigator.pop(ctx);
               onConfirm();

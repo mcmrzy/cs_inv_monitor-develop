@@ -16,11 +16,15 @@ import 'package:intl/intl.dart';
 class DeviceSearchBar extends StatefulWidget {
   final ValueChanged<String>? onSearchChanged;
   final String? hintText;
+  final EdgeInsetsGeometry? padding;
+  final Color? fillColor;
 
   const DeviceSearchBar({
     super.key,
     this.onSearchChanged,
     this.hintText,
+    this.padding,
+    this.fillColor,
   });
 
   @override
@@ -38,29 +42,36 @@ class _DeviceSearchBarState extends State<DeviceSearchBar> {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
+    final l10n = AppLocalizations.of(context);
     return Padding(
-      padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 8.h),
+      padding: widget.padding ?? EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 8.h),
       child: TextField(
         controller: _controller,
-        onChanged: widget.onSearchChanged,
+        textInputAction: TextInputAction.search,
+        onChanged: (value) {
+          setState(() {});
+          widget.onSearchChanged?.call(value);
+        },
         cursorColor: AppColors.primary,
         style: TextStyle(fontSize: 15.sp),
         decoration: InputDecoration(
-          hintText: widget.hintText ?? l10n.searchDeviceHint,
+          hintText: widget.hintText ?? l10n?.searchDeviceHint ?? 'Search devices',
           hintStyle: TextStyle(fontSize: 14.sp, color: AppColor.textHint(context)),
           prefixIcon: Icon(Icons.search_rounded, size: 20, color: AppColor.textHint(context)),
           suffixIcon: _controller.text.isNotEmpty
               ? IconButton(
+                  tooltip: Localizations.localeOf(context).languageCode == 'zh'
+                      ? '清除搜索'
+                      : 'Clear search',
                   icon: Icon(Icons.close_rounded, size: 18, color: AppColor.textHint(context)),
                   onPressed: () {
-                    _controller.clear();
+                    setState(_controller.clear);
                     widget.onSearchChanged?.call('');
                   },
                 )
               : null,
           filled: true,
-          fillColor: AppColor.surfaceHover(context),
+          fillColor: widget.fillColor ?? AppColor.surfaceHover(context),
           contentPadding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 12.h),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: BorderSide.none),
           enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: BorderSide.none),

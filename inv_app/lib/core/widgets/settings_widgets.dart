@@ -55,9 +55,10 @@ class SettingsSectionTitle extends StatelessWidget {
 
 /// 分组卡片：圆角 16 白卡 + 细边框，行间细分隔线（缩进避开图标容器）
 class SettingsCard extends StatelessWidget {
-  const SettingsCard(this.children, {super.key});
+  const SettingsCard(this.children, {super.key, this.margin});
 
   final List<Widget> children;
+  final EdgeInsetsGeometry? margin;
 
   @override
   Widget build(BuildContext context) {
@@ -65,7 +66,7 @@ class SettingsCard extends StatelessWidget {
     // Material 上，而不是被外层带背景色的 DecoratedBox 遮挡，
     // 否则每个设置行都会告警 “ListTile background color or ink splashes may be invisible”。
     return Container(
-      margin: EdgeInsets.symmetric(horizontal: 16.w),
+      margin: margin ?? EdgeInsets.symmetric(horizontal: 16.w),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: AppColor.surfaceContainer(context),

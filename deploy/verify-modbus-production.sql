@@ -2,6 +2,9 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version=137) THEN
     RAISE EXCEPTION 'Modbus model migration 137 is missing';
   END IF;
+  IF (SELECT count(*) FROM schema_migrations WHERE version BETWEEN 141 AND 144) <> 4 THEN
+    RAISE EXCEPTION 'Modbus remote settings and alarm label migrations 141-144 are missing';
+  END IF;
   IF (SELECT count(*) FROM device_models WHERE model_code IN ('PWR2KH12H1','3KU','6KU','12KU')
       AND is_active AND lifecycle_status!='retired') <> 4 THEN
     RAISE EXCEPTION 'Modbus model registry is incomplete';

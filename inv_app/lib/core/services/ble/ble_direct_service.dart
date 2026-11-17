@@ -208,10 +208,12 @@ class BleDirectService {
     await _scanSub?.cancel();
     _scanSub = null;
     await adapter.stopScan();
-    _scanSub = adapter.scan(
+    _scanSub = adapter
+        .scan(
       serviceUuids: BleCtProtocol.scanServiceUuids,
       timeout: const Duration(seconds: 15),
-    ).listen(
+    )
+        .listen(
       (result) {
         if (!_enabled || _suspended) return;
         final device = BleDiscoveredDevice(
@@ -222,15 +224,36 @@ class BleDirectService {
         _scanResults[result.macAddress] = device;
         _scanResultsController.add(scanResults);
         // 已连接会话忽略；未绑定候选交由 UI 确认（场景 B）
-        if (manager.sessionOf(result.macAddress) != null) return;
+        final session = manager.sessionOf(result.macAddress);
+        if (session != null && session.state != BleDeviceState.disconnected) {
+          return;
+        }
         _unboundController.add(device);
         // 自动连接由本轮发现扫描统一驱动，不再另起 startScan
-        unawaited(manager.tryAutoConnect(result));
+        unawaited(_reconnectSelected(result));
       },
       onError: (Object e) {
         if (kDebugMode) debugPrint('[BleDirect] scan error: $e');
       },
     );
+  }
+
+  Future<void> _reconnectSelected(BleScanResult result) async {
+    if (!_enabled || _suspended || !_autoConnect) return;
+    try {
+      final store = storage;
+      if (store is StorageService &&
+          (await store.getDirectConnectedDevices())
+              .contains(result.macAddress)) {
+        if (_enabled && !_suspended && _autoConnect) {
+          await manager.connectDevice(result.macAddress, autoReconnect: true);
+        }
+        return;
+      }
+      await manager.tryAutoConnect(result);
+    } catch (error) {
+      if (kDebugMode) debugPrint('[BleDirect] local reconnect failed: $error');
+    }
   }
 
   /// 从持久化存储恢复开关状态（App 启动时调用）

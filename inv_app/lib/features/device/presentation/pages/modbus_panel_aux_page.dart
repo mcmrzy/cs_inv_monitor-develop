@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:inv_app/core/services/ble/ble_device_manager.dart';
+import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/widgets/settings_widgets.dart';
 import 'package:inv_app/features/device/domain/entities/modbus_panel_alarms.dart';
-import 'package:inv_app/features/device/presentation/widgets/modbus_panel_metrics.dart';
+import 'package:inv_app/features/device/presentation/widgets/device_readings.dart';
 
 typedef PanelCommand = Future<Map<String, dynamic>> Function(
   String action,
@@ -350,23 +352,56 @@ class _ModbusPanelAuxPageState extends State<ModbusPanelAuxPage> {
     }
   }
 
-  Widget _tile(String title, String? value, VoidCallback? onTap) => ListTile(
-        title: Text(title),
+  Widget _tile(String title, String? value, VoidCallback? onTap,
+          {bool inlineValue = false}) =>
+      ListTile(
+        title: inlineValue
+            ? Row(
+                children: [
+                  Expanded(child: Text(title)),
+                  const SizedBox(width: 12),
+                  Flexible(
+                    child: Align(
+                      alignment: AlignmentDirectional.centerEnd,
+                      child: Text(
+                        value ?? '—',
+                        textAlign: TextAlign.end,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: AppColor.textSecondary(context),
+                            ),
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            : Text(title),
         trailing: const Icon(Icons.chevron_right),
-        subtitle: Text(value ?? '—'),
+        subtitle: inlineValue ? null : Text(value ?? '—'),
         enabled: onTap != null,
         onTap: onTap,
       );
 
-  Widget _group(String title, List<Widget> items) => Card(
+  Widget _group(String title, IconData icon, List<Widget> items) => Padding(
+        padding: const EdgeInsets.only(bottom: 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-              child: Text(title, style: Theme.of(context).textTheme.titleSmall),
+              padding: const EdgeInsets.fromLTRB(4, 0, 4, 7),
+              child: Row(
+                children: [
+                  Icon(icon, size: 18, color: AppColor.primary(context)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ),
+                ],
+              ),
             ),
-            ...items,
+            SettingsCard(items, margin: EdgeInsets.zero),
           ],
         ),
       );
@@ -378,6 +413,7 @@ class _ModbusPanelAuxPageState extends State<ModbusPanelAuxPage> {
         _canChange && choices.containsKey(_value(key))
             ? () => _choose(key, title, choices)
             : null,
+        inlineValue: true,
       );
 
   Widget _levelTile(String key, String title, int minimum) {
@@ -388,6 +424,7 @@ class _ModbusPanelAuxPageState extends State<ModbusPanelAuxPage> {
       _canChange && value != null
           ? () => _chooseLevel(key, title, minimum)
           : null,
+      inlineValue: true,
     );
   }
 
@@ -440,7 +477,7 @@ class _ModbusPanelAuxPageState extends State<ModbusPanelAuxPage> {
             : null,
       ),
       body: ListView(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(16),
         children: [
           if (_loadError != null)
             ListTile(
@@ -448,7 +485,8 @@ class _ModbusPanelAuxPageState extends State<ModbusPanelAuxPage> {
               title: Text(_errorMessage(context, _loadError!)),
             ),
           if (_settings != null) ...[
-            _group(_t('显示和声音', 'Display and sound'), [
+            _group(
+                _t('显示和声音', 'Display and sound'), Icons.light_mode_outlined, [
               _levelTile('brightness', _t('背光亮度', 'Backlight'), 10),
               _choiceTile(
                   'timeout', _t('自动息屏', 'Screen timeout'), timeoutLabels),
@@ -472,7 +510,8 @@ class _ModbusPanelAuxPageState extends State<ModbusPanelAuxPage> {
                 1: '简体中文',
               }),
             ]),
-            _group(_t('电池连接', 'Battery connection'), [
+            _group(
+                _t('电池连接', 'Battery connection'), Icons.battery_charging_full, [
               _choiceTile('bms', _t('电池协议', 'Battery protocol'), const {
                 0: 'BBJ',
                 1: 'CSERGY',
@@ -485,11 +524,12 @@ class _ModbusPanelAuxPageState extends State<ModbusPanelAuxPage> {
                     : null,
               ),
             ]),
-            _group(_t('日期和时间', 'Date and time'), [
+            _group(_t('日期和时间', 'Date and time'), Icons.schedule, [
               _tile(
                 _t('时区', 'Time zone'),
                 zone == null ? null : _utcOffset(zone),
                 _canChange && zone != null ? _chooseTimeZone : null,
+                inlineValue: true,
               ),
               _tile(
                 _t('同步手机时间', 'Sync with phone'),
@@ -498,7 +538,8 @@ class _ModbusPanelAuxPageState extends State<ModbusPanelAuxPage> {
               ),
             ]),
           ],
-          _group(_t('状态与诊断', 'Status and diagnostics'), [
+          _group(_t('状态与诊断', 'Status and diagnostics'),
+              Icons.monitor_heart_outlined, [
             _tile(
               _t('运行数据', 'Operating data'),
               _t('查看逆变器各路数据', 'View inverter measurements'),
@@ -558,6 +599,7 @@ class _ModbusPanelStatusPageState extends State<ModbusPanelStatusPage> {
   bool _loading = false;
   DateTime? _scanRequestedUntil;
   int _page = 0;
+  int? _requestedMetricPage;
   Timer? _refreshTimer;
 
   String _t(String zh, String en) => _label(context, zh, en);
@@ -577,8 +619,13 @@ class _ModbusPanelStatusPageState extends State<ModbusPanelStatusPage> {
   Future<void> _read([int? newPage]) async {
     if (_loading) return;
     _refreshTimer?.cancel();
-    setState(() => _loading = true);
     var page = newPage ?? _page;
+    setState(() {
+      _loading = true;
+      if (widget.kind == ModbusPanelStatusKind.metrics && page != _page) {
+        _requestedMetricPage = page;
+      }
+    });
     try {
       var result = switch (widget.kind) {
         ModbusPanelStatusKind.battery =>
@@ -608,7 +655,10 @@ class _ModbusPanelStatusPageState extends State<ModbusPanelStatusPage> {
       setState(() => _error = error);
     } finally {
       if (mounted) {
-        setState(() => _loading = false);
+        setState(() {
+          _loading = false;
+          _requestedMetricPage = null;
+        });
         final scanPending =
             _scanRequestedUntil?.isAfter(DateTime.now()) == true;
         if (widget.kind != ModbusPanelStatusKind.diagnostics ||
@@ -861,7 +911,7 @@ class _ModbusPanelStatusPageState extends State<ModbusPanelStatusPage> {
         parity < 0 ||
         parity > 2 ||
         profile == null ||
-        !const [0, 5, 7, 1, 4].contains(profile)) return;
+        !const [0, 5, 7, 1, 2, 4].contains(profile)) return;
     var addressText = '${suggestedAddress ?? address}';
     final locked = data['locked'] == true;
     final draft = await showDialog<Map<String, dynamic>>(
@@ -920,6 +970,10 @@ class _ModbusPanelStatusPageState extends State<ModbusPanelStatusPage> {
                       const DropdownMenuItem(value: 5, child: Text('2KU')),
                       const DropdownMenuItem(value: 7, child: Text('3KU')),
                       const DropdownMenuItem(value: 1, child: Text('6KU')),
+                      DropdownMenuItem(
+                        value: 2,
+                        child: Text(_t('6KU（支持并机）', '6KU (parallel)')),
+                      ),
                       const DropdownMenuItem(value: 4, child: Text('12KU')),
                     ],
                     onChanged: locked
@@ -994,55 +1048,33 @@ class _ModbusPanelStatusPageState extends State<ModbusPanelStatusPage> {
     }
   }
 
-  Iterable<Widget> _metrics(Map<String, dynamic> data) sync* {
-    final groups = [
-      _t('市电与负载', 'Grid and load'),
-      _t('电池与充电', 'Battery and charging'),
-      _t('光伏输入', 'Solar input'),
-      _t('温度监测', 'Temperatures'),
-      _t('发电机', 'Generator'),
-      _t('电量与输出', 'Energy and output'),
-      _t('当前运行设置', 'Operating settings'),
-    ];
+  Iterable<Widget> _metrics(Map<String, dynamic>? data) sync* {
+    final rows = _requestedMetricPage != null ? null : data?['rows'];
     yield Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-      child: InputDecorator(
-        decoration: InputDecoration(
-          labelText: _t('参数分类', 'Data category'),
-          border: const OutlineInputBorder(),
-        ),
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<int>(
-            value: _page,
-            isExpanded: true,
-            isDense: true,
-            items: [
-              for (var i = 0; i < groups.length; i++)
-                DropdownMenuItem(value: i, child: Text(groups[i])),
-            ],
-            onChanged: _loading
-                ? null
-                : (page) {
-                    if (page != null && page != _page) unawaited(_read(page));
-                  },
-          ),
-        ),
-      ),
-    );
-    final rows = data['rows'];
-    if (rows is! List) return;
-    yield Padding(
-      padding: const EdgeInsets.all(16),
-      child: ModbusPanelMetrics(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      child: DeviceReadings(
+        categories: [
+          (Icons.power_outlined, _t('市电与负载', 'Grid and load')),
+          (Icons.battery_charging_full, _t('电池与充电', 'Battery and charging')),
+          (Icons.wb_sunny_outlined, _t('光伏输入', 'Solar input')),
+          (Icons.thermostat, _t('温度监测', 'Temperatures')),
+          (Icons.local_gas_station_outlined, _t('发电机', 'Generator')),
+          (Icons.bolt_outlined, _t('电量与输出', 'Energy and output')),
+          (Icons.tune, _t('当前运行设置', 'Operating settings')),
+        ],
+        selected: _requestedMetricPage ?? _page,
+        onSelect: _loading ? null : (page) => unawaited(_read(page)),
+        loading: _loading && rows == null,
         values: [
-          for (final row in rows)
-            if (row is List && row.length == 2)
-              (
-                '${row[0]}',
-                _error != null && !'${row[1]}'.endsWith('*')
-                    ? '${row[1]}*'
-                    : '${row[1]}'
-              ),
+          if (rows is List)
+            for (final row in rows)
+              if (row is List && row.length == 2)
+                (
+                  '${row[0]}',
+                  _error != null && !'${row[1]}'.endsWith('*')
+                      ? '${row[1]}*'
+                      : '${row[1]}',
+                ),
         ],
         staleLabel: _t('上次读数', 'Last reading'),
       ),
@@ -1056,7 +1088,7 @@ class _ModbusPanelStatusPageState extends State<ModbusPanelStatusPage> {
       ModbusPanelStatusKind.battery => _t('电池数据', 'Battery data'),
       ModbusPanelStatusKind.alarms => _t('故障告警', 'Faults and warnings'),
       ModbusPanelStatusKind.diagnostics => _t('通信诊断', 'Link diagnostics'),
-      ModbusPanelStatusKind.metrics => _t('运行参数', 'Operating data'),
+      ModbusPanelStatusKind.metrics => _t('完整运行参数', 'All parameters'),
     };
     final rows = data == null
         ? const <Widget>[]
@@ -1064,7 +1096,7 @@ class _ModbusPanelStatusPageState extends State<ModbusPanelStatusPage> {
             ModbusPanelStatusKind.battery => _battery(data),
             ModbusPanelStatusKind.alarms => _alarms(data),
             ModbusPanelStatusKind.diagnostics => _diagnostics(data),
-            ModbusPanelStatusKind.metrics => _metrics(data),
+            ModbusPanelStatusKind.metrics => const <Widget>[],
           };
     return Scaffold(
       appBar: AppBar(
@@ -1079,13 +1111,17 @@ class _ModbusPanelStatusPageState extends State<ModbusPanelStatusPage> {
       ),
       body: ListView(
         children: [
-          if (_loading && data == null) const LinearProgressIndicator(),
+          if (_loading &&
+              data == null &&
+              widget.kind != ModbusPanelStatusKind.metrics)
+            const LinearProgressIndicator(),
           if (_error != null)
             ListTile(
               leading: const Icon(Icons.info_outline),
               title: Text(_errorMessage(context, _error!)),
             ),
           ...rows,
+          if (widget.kind == ModbusPanelStatusKind.metrics) ..._metrics(data),
         ],
       ),
     );

@@ -16,6 +16,7 @@ import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 
 import 'package:inv_app/l10n/app_localizations.dart';
+import 'package:inv_app/features/device/presentation/widgets/device_power_buttons.dart';
 
 part 'device_control_sections.dart';
 
@@ -66,7 +67,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
 
   // Tab1 — 运行
   Map<String, dynamic> _realtimeData = {};
-  bool _acOutputOn = false;
+  bool? _acOutputOn;
   bool _muteEnabled = false;
 
   // Tab2 — 电池保护
@@ -218,12 +219,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
       if (mounted) {
         setState(() {
           _realtimeData = data;
-          // Infer AC output state from realtime data (V2: ac.output_power, V1: output_power)
-          final outputPower =
-              _rtPickNum(data, 'output_power', 'ac', 'output_power');
-          _acOutputOn = data['ac_output_on'] == true ||
-              data['ac_on'] == true ||
-              outputPower > 0;
+          _acOutputOn = deviceAcOutputState(data);
         });
       }
       return true;
@@ -666,6 +662,11 @@ class _DeviceControlPageState extends State<DeviceControlPage>
   Widget _buildAcOutputCard() {
     final l10n = AppLocalizations.of(context)!;
     final riskLevel = _riskLevels['ac_on'] ?? _riskLevels['ac_off'] ?? 2;
+    final statusColor = switch (_acOutputOn) {
+      true => AppColors.success,
+      false => AppColors.error,
+      null => AppColor.textSecondary(context),
+    };
     return Container(
       decoration: AppColor.card(context),
       padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 16.h),
@@ -678,14 +679,13 @@ class _DeviceControlPageState extends State<DeviceControlPage>
                 width: 40.w,
                 height: 40.w,
                 decoration: BoxDecoration(
-                  color: (_acOutputOn ? AppColors.success : AppColors.error)
-                      .withValues(alpha: 0.1),
+                  color: statusColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10.r),
                 ),
                 child: Icon(
-                  _acOutputOn ? Icons.power_settings_new : Icons.power_off,
+                  _acOutputOn == false ? Icons.power_off : Icons.power_settings_new,
                   size: 20.sp,
-                  color: _acOutputOn ? AppColors.success : AppColors.error,
+                  color: statusColor,
                 ),
               ),
               SizedBox(width: 12.w),
@@ -702,9 +702,11 @@ class _DeviceControlPageState extends State<DeviceControlPage>
                     ),
                     SizedBox(height: 2.h),
                     Text(
-                      _acOutputOn
-                          ? l10n.str('control_enabled')
-                          : l10n.str('control_disabled'),
+                      switch (_acOutputOn) {
+                        true => l10n.str('control_enabled'),
+                        false => l10n.str('control_disabled'),
+                        null => l10n.str('no_data'),
+                      },
                       style: TextStyle(
                         fontSize: 12.sp,
                         color: AppColor.textSecondary(context),
@@ -737,42 +739,15 @@ class _DeviceControlPageState extends State<DeviceControlPage>
             ],
           ),
           SizedBox(height: 12.h),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: _isOnline &&
-                          canSendAcCommand(_allowedCommands, 'ac_on')
-                      ? () => _toggleAcOutput(true)
-                      : null,
-                  icon: Icon(Icons.power_settings_new, size: 18.sp),
-                  label: Text(l10n.str('open')),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.success,
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor:
-                        AppColors.success.withValues(alpha: 0.3),
-                  ),
-                ),
-              ),
-              SizedBox(width: 8.w),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: _isOnline &&
-                          canSendAcCommand(_allowedCommands, 'ac_off')
-                      ? () => _toggleAcOutput(false)
-                      : null,
-                  icon: Icon(Icons.power_off, size: 18.sp),
-                  label: Text(l10n.str('close')),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.error,
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor:
-                        AppColors.error.withValues(alpha: 0.3),
-                  ),
-                ),
-              ),
-            ],
+          DevicePowerButtons(
+            startLabel: l10n.str('open'),
+            stopLabel: l10n.str('close'),
+            onStart: _isOnline && canSendAcCommand(_allowedCommands, 'ac_on')
+                ? () => _toggleAcOutput(true)
+                : null,
+            onStop: _isOnline && canSendAcCommand(_allowedCommands, 'ac_off')
+                ? () => _toggleAcOutput(false)
+                : null,
           ),
         ],
       ),

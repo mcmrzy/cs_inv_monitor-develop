@@ -196,6 +196,10 @@ bool configParamVisible(
   if (depKey is! String) return true;
   final current = values[depKey];
   if (current == null) return false;
+  final allowed = vis['in'];
+  if (allowed is List) {
+    return allowed.any((item) => item.toString() == current.toString());
+  }
   if (vis.containsKey('eq')) {
     return current.toString() == vis['eq'].toString();
   }
@@ -234,9 +238,9 @@ dynamic configBoolForWrite(bool value, dynamic original) {
   return value ? 1 : 0;
 }
 
-/// 枚举写回：保持与原值相同的 JSON 类型（num 或 string）
+/// 枚举写回：有原值时保留类型；初次写入时把数字选项作为数字发送。
 dynamic configEnumForWrite(String optionKey, dynamic original) {
-  if (original is num) {
+  if (original is num || original == null) {
     return int.tryParse(optionKey) ?? optionKey;
   }
   return optionKey;

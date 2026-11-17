@@ -29,6 +29,7 @@ class AlarmProtocolEvent extends Equatable {
     this.activeAt,
     this.recoveredAt,
     this.dataHash = '',
+    this.faultMessage = '',
   });
 
   final int id;
@@ -42,6 +43,7 @@ class AlarmProtocolEvent extends Equatable {
   final DateTime? activeAt;
   final DateTime? recoveredAt;
   final String dataHash;
+  final String faultMessage;
 
   bool get isActive => state == 'active';
 
@@ -65,6 +67,7 @@ class AlarmProtocolEvent extends Equatable {
       activeAt: _dateTime(json['active_at']),
       recoveredAt: _dateTime(json['recovered_at']),
       dataHash: json['data_hash']?.toString() ?? '',
+      faultMessage: json['fault_message']?.toString() ?? '',
     );
   }
 
@@ -81,6 +84,7 @@ class AlarmProtocolEvent extends Equatable {
         activeAt,
         recoveredAt,
         dataHash,
+        faultMessage,
       ];
 }
 

@@ -15,6 +15,7 @@ import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
+import 'package:inv_app/features/device/presentation/widgets/device_readings.dart';
 
 // ═══════════════════════════ 通用格式化 ═══════════════════════════
 
@@ -106,7 +107,11 @@ Widget _kvRow(
 
 /// 大号数值展示（数值 + 下方说明标签）
 Widget _bigValue(
-    BuildContext context, String value, String label, Color color,) {
+  BuildContext context,
+  String value,
+  String label,
+  Color color,
+) {
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
@@ -160,8 +165,21 @@ class RealtimeDataTab extends StatelessWidget {
 
   /// 底部附加内容（参数设置 / 协议遥测入口，由页面注入）
   final Widget? footer;
+  final Widget? header;
 
-  const RealtimeDataTab({super.key, required this.data, this.footer});
+  final int? selectedCategory;
+  final ValueChanged<int>? onCategorySelected;
+  final String? readingsStatus;
+
+  const RealtimeDataTab({
+    super.key,
+    required this.data,
+    this.footer,
+    this.header,
+    this.selectedCategory,
+    this.onCategorySelected,
+    this.readingsStatus,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -181,137 +199,193 @@ class RealtimeDataTab extends StatelessWidget {
             ? v.toStringAsFixed(1)
             : '${v.toStringAsFixed(1)} $unit';
 
+    final groups = <(IconData, Color, String, List<(String, String)>)>[
+      // ── PV ──
+      (
+        Icons.wb_sunny_outlined,
+        AppColors.orange,
+        l10n.str('pv'),
+        [
+          (
+            l10n.str('energy_pv1_voltage'),
+            num1(pv?.pvVoltage, 'V', 'pv1_voltage'),
+          ),
+          (
+            l10n.str('energy_pv1_current'),
+            num1(pv?.pvCurrent, 'A', 'pv1_current'),
+          ),
+          (
+            l10n.str('energy_pv1_power'),
+            num1(pv?.pv1Power, 'W', 'pv1_power'),
+          ),
+          (
+            l10n.str('telemetry_pv_total_power'),
+            num1(pv?.pvPower, 'W', 'pv_total_power'),
+          ),
+          (
+            l10n.str('energy_pv2_voltage'),
+            num1(pv?.pv2Voltage, 'V', 'pv2_voltage'),
+          ),
+          (
+            l10n.str('energy_pv2_current'),
+            num1(pv?.pv2Current, 'A', 'pv2_current'),
+          ),
+          (
+            l10n.str('energy_pv2_power'),
+            num1(pv?.pv2Power, 'W', 'pv2_power'),
+          ),
+          (
+            l10n.str('energy_mppt_state'),
+            (pv == null || pv.mpptState.isEmpty) ? '--' : pv.mpptState,
+          ),
+        ],
+      ),
+      // ── 电池 ──
+      (
+        Icons.battery_charging_full,
+        AppColors.teal,
+        l10n.str('battery_label'),
+        [
+          (
+            l10n.str('voltage'),
+            num1(battery?.voltage, 'V', 'battery_voltage'),
+          ),
+          ('SOC', num1(battery?.soc, '%', 'battery_soc')),
+          (
+            l10n.str('current'),
+            num1(battery?.current, 'A', 'battery_current'),
+          ),
+          (
+            l10n.str('energy_battery_temp_max'),
+            num1(battery?.tempMax, '℃', 'battery_temp_max'),
+          ),
+          (
+            l10n.str('energy_max_charge_current'),
+            num1(battery?.maxChargeCurrent, 'A', 'max_charge_current'),
+          ),
+          (
+            l10n.str('energy_max_discharge_current'),
+            num1(battery?.maxDischargeCurrent, 'A', 'max_discharge_current'),
+          ),
+          (
+            l10n.str('energy_cycle_count'),
+            battery == null ||
+                    (data!.telemetryFields.isNotEmpty &&
+                        data!.telemetryFields['cycle_count'] == null)
+                ? '--'
+                : '${battery.cycleCount}',
+          ),
+        ],
+      ),
+      // ── 逆变器 ──
+      (
+        Icons.power_rounded,
+        AppColors.primary,
+        l10n.str('inverter'),
+        [
+          (
+            l10n.str('inverter_temp'),
+            num1(sys?.tempInv, '℃', 'inverter_temperature'),
+          ),
+          (
+            l10n.str('boost_temp'),
+            num1(sys?.boostTemp, '℃', 'boost_temperature'),
+          ),
+          (
+            l10n.str('transformer_temp'),
+            num1(sys?.transformerTemp, '℃', 'transformer_temperature'),
+          ),
+          (
+            l10n.str('pv_temp'),
+            num1(sys?.pvTemp, '℃', 'pv_temperature'),
+          ),
+          (
+            l10n.str('energy_dc_bus_voltage'),
+            num1(sys?.dcBusVoltage, 'V', 'dc_bus_voltage'),
+          ),
+          (
+            l10n.str('mppt_fan_speed'),
+            num1(data?.fan?.mpptSpeed, '%', 'mppt_fan_speed'),
+          ),
+          (
+            l10n.str('inv_fan_speed'),
+            num1(data?.fan?.invSpeed, '%', 'inv_fan_speed'),
+          ),
+          (
+            l10n.str('energy_runtime_hours'),
+            (data?.workTimeTotalSec ?? 0) > 0
+                ? '${(data!.workTimeTotalSec / 3600).toStringAsFixed(0)} h'
+                : '--',
+          ),
+        ],
+      ),
+      // ── 交流输出 ──
+      (
+        Icons.bolt_rounded,
+        AppColors.purple,
+        l10n.str('ac_output'),
+        [
+          (
+            l10n.str('voltage'),
+            num1(ac?.voltage, 'V', 'ac_output_voltage'),
+          ),
+          (
+            l10n.str('current'),
+            num1(ac?.current, 'A', 'output_current'),
+          ),
+          (
+            l10n.str('ac_output_power'),
+            num1(ac?.power, 'W', 'output_power'),
+          ),
+          (
+            l10n.str('frequency'),
+            num1(ac?.frequency, 'Hz', 'ac_output_frequency'),
+          ),
+          (
+            l10n.str('load_rate'),
+            num1(sys?.loadPercent, '%', 'load_percent'),
+          ),
+          (
+            l10n.str('energy_power_factor'),
+            num1(ac?.pf, ''),
+          ),
+        ],
+      ),
+    ];
+    final selected = selectedCategory;
     return ListView(
+      key: selected == null
+          ? null
+          : const PageStorageKey('full-device-readings'),
       padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 40.h),
       children: [
-        // ── PV ──
-        _groupCard(
-          context,
-          icon: Icons.wb_sunny_outlined,
-          color: AppColors.orange,
-          title: l10n.str('pv'),
-          rows: [
-            _kvRow(context, l10n.str('energy_pv1_voltage'),
-                num1(pv?.pvVoltage, 'V', 'pv1_voltage'),),
-            _kvRow(context, l10n.str('energy_pv1_current'),
-                num1(pv?.pvCurrent, 'A', 'pv1_current'),),
-            _kvRow(context, l10n.str('energy_pv1_power'),
-                num1(pv?.pv1Power, 'W', 'pv1_power'),),
-            _kvRow(context, l10n.str('telemetry_pv_total_power'),
-                num1(pv?.pvPower, 'W', 'pv_total_power'),),
-            _kvRow(context, l10n.str('energy_pv2_voltage'),
-                num1(pv?.pv2Voltage, 'V', 'pv2_voltage'),),
-            _kvRow(context, l10n.str('energy_pv2_current'),
-                num1(pv?.pv2Current, 'A', 'pv2_current'),),
-            _kvRow(context, l10n.str('energy_pv2_power'),
-                num1(pv?.pv2Power, 'W', 'pv2_power'),),
-            _kvRow(
+        if (header != null) header!,
+        if (selected != null)
+          DeviceReadings(
+            categories: [
+              for (final (icon, _, title, _) in groups) (icon, title)
+            ],
+            selected: selected,
+            onSelect: onCategorySelected,
+            status: readingsStatus,
+            values: groups[selected].$4,
+          )
+        else
+          for (final (icon, color, title, readings) in groups)
+            _groupCard(
               context,
-              l10n.str('energy_mppt_state'),
-              (pv == null || pv.mpptState.isEmpty) ? '--' : pv.mpptState,
+              icon: icon,
+              color: color,
+              title: title,
+              rows: [
+                for (final (label, value) in readings)
+                  _kvRow(context, label, value),
+              ],
             ),
-          ],
-        ),
-        // ── 电池 ──
-        _groupCard(
-          context,
-          icon: Icons.battery_charging_full,
-          color: AppColors.teal,
-          title: l10n.str('battery_label'),
-          rows: [
-            _kvRow(context, l10n.str('voltage'),
-                num1(battery?.voltage, 'V', 'battery_voltage'),),
-            _kvRow(context, 'SOC', num1(battery?.soc, '%', 'battery_soc')),
-            _kvRow(context, l10n.str('current'),
-                num1(battery?.current, 'A', 'battery_current'),),
-            _kvRow(
-              context,
-              l10n.str('energy_battery_temp_max'),
-              num1(battery?.tempMax, '℃', 'battery_temp_max'),
-            ),
-            _kvRow(
-              context,
-              l10n.str('energy_max_charge_current'),
-              num1(battery?.maxChargeCurrent, 'A', 'max_charge_current'),
-            ),
-            _kvRow(
-              context,
-              l10n.str('energy_max_discharge_current'),
-              num1(battery?.maxDischargeCurrent, 'A', 'max_discharge_current'),
-            ),
-            _kvRow(
-              context,
-              l10n.str('energy_cycle_count'),
-              battery == null ||
-                      (data!.telemetryFields.isNotEmpty &&
-                          data!.telemetryFields['cycle_count'] == null)
-                  ? '--'
-                  : '${battery.cycleCount}',
-            ),
-          ],
-        ),
-        // ── 逆变器 ──
-        _groupCard(
-          context,
-          icon: Icons.power_rounded,
-          color: AppColors.primary,
-          title: l10n.str('inverter'),
-          rows: [
-            _kvRow(context, l10n.str('inverter_temp'),
-                num1(sys?.tempInv, '℃', 'inverter_temperature'),),
-            _kvRow(context, l10n.str('boost_temp'),
-                num1(sys?.boostTemp, '℃', 'boost_temperature'),),
-            _kvRow(
-              context,
-              l10n.str('transformer_temp'),
-              num1(sys?.transformerTemp, '℃', 'transformer_temperature'),
-            ),
-            _kvRow(context, l10n.str('pv_temp'),
-                num1(sys?.pvTemp, '℃', 'pv_temperature'),),
-            _kvRow(
-              context,
-              l10n.str('energy_dc_bus_voltage'),
-              num1(sys?.dcBusVoltage, 'V', 'dc_bus_voltage'),
-            ),
-            _kvRow(context, l10n.str('mppt_fan_speed'),
-                num1(data?.fan?.mpptSpeed, '%', 'mppt_fan_speed'),),
-            _kvRow(context, l10n.str('inv_fan_speed'),
-                num1(data?.fan?.invSpeed, '%', 'inv_fan_speed'),),
-            _kvRow(
-              context,
-              l10n.str('energy_runtime_hours'),
-              (data?.workTimeTotalSec ?? 0) > 0
-                  ? '${(data!.workTimeTotalSec / 3600).toStringAsFixed(0)} h'
-                  : '--',
-            ),
-          ],
-        ),
-        // ── 交流输出 ──
-        _groupCard(
-          context,
-          icon: Icons.bolt_rounded,
-          color: AppColors.purple,
-          title: l10n.str('ac_output'),
-          rows: [
-            _kvRow(context, l10n.str('voltage'),
-                num1(ac?.voltage, 'V', 'ac_output_voltage'),),
-            _kvRow(context, l10n.str('current'),
-                num1(ac?.current, 'A', 'output_current'),),
-            _kvRow(context, l10n.str('ac_output_power'),
-                num1(ac?.power, 'W', 'output_power'),),
-            _kvRow(context, l10n.str('frequency'),
-                num1(ac?.frequency, 'Hz', 'ac_output_frequency'),),
-            _kvRow(context, l10n.str('load_rate'),
-                num1(sys?.loadPercent, '%', 'load_percent'),),
-            _kvRow(
-              context,
-              l10n.str('energy_power_factor'),
-              num1(ac?.pf, ''),
-            ),
-          ],
-        ),
-        // 底部功能入口（参数设置 / 协议遥测）
-        if (footer != null) footer!,
+        if (footer != null) ...[
+          if (selected != null) const SizedBox(height: 12),
+          footer!,
+        ],
       ],
     );
   }

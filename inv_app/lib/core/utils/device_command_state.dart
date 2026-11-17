@@ -1,15 +1,27 @@
 /// Only capabilities explicitly advertised for this device enable a command.
 Set<String> enabledDeviceCommands(List<dynamic> capabilities) => {
-  for (final capability in capabilities)
-    if (capability is Map &&
-        capability['command_code'] is String &&
-        (capability['command_code'] as String).isNotEmpty &&
-        capability['is_enabled'] == true)
-      capability['command_code'] as String,
-};
+      for (final capability in capabilities)
+        if (capability is Map &&
+            capability['command_code'] is String &&
+            (capability['command_code'] as String).isNotEmpty &&
+            capability['is_enabled'] == true)
+          capability['command_code'] as String,
+    };
 
 bool canSendAcCommand(Set<String> commands, String command) =>
     const {'ac_on', 'ac_off'}.contains(command) && commands.contains(command);
+
+bool? deviceAcOutputState(Map<String, dynamic> realtime) {
+  final explicit = realtime['ac_output_on'] ?? realtime['ac_on'];
+  if (explicit is bool) return explicit;
+  final ac = realtime['ac'];
+  final voltage = (ac is Map ? ac['voltage'] : null) ??
+      realtime['ac_output_voltage'];
+  if (voltage is num && voltage.isFinite && voltage >= 0) return voltage > 0;
+  final power = (ac is Map ? ac['output_power'] : null) ??
+      realtime['output_power'];
+  return power is num && power.isFinite && power > 0 ? true : null;
+}
 
 String deviceCommandStatus(Map<String, dynamic> record) {
   final status = record['status'] as String?;

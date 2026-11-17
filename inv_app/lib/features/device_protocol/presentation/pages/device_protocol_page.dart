@@ -222,7 +222,9 @@ class _DeviceProtocolView extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  '${l10n.alarmLabel} ${event.code} · ${l10n.sourceLabel} ${event.source}',
+                  event.faultMessage.isEmpty
+                      ? '${l10n.alarmLabel} ${event.code} · ${l10n.sourceLabel} ${event.source}'
+                      : '${event.faultMessage} · #${event.code}',
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
