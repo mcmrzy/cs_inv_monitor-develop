@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -6,11 +8,11 @@ import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
+import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/core/widgets/network_failure_panel.dart';
 import 'package:inv_app/core/widgets/xiaoshuo_state_panel.dart';
 import 'package:inv_app/features/dashboard/presentation/bloc/dashboard_bloc.dart';
 import 'package:inv_app/features/dashboard/presentation/widgets/hero_energy_card.dart';
-import 'package:inv_app/features/dashboard/presentation/widgets/quick_stats_row.dart';
 import 'package:inv_app/features/dashboard/presentation/widgets/energy_trend_chart.dart';
 import 'package:inv_app/features/dashboard/presentation/widgets/device_distribution_chart.dart';
 import 'package:inv_app/features/dashboard/presentation/widgets/station_ranking_list.dart';
@@ -51,14 +53,16 @@ class _DashboardOverviewPageState extends State<DashboardOverviewPage> {
       body: BlocConsumer<DashboardBloc, DashboardState>(
         listener: (context, state) {
           // 数据加载成功后自动连接 SSE
-          if (state is DashboardLoaded && !state.isSSEConnected) {
+          if (state is DashboardLoaded &&
+              state.pendingSections.isEmpty &&
+              !state.isSSEConnected) {
             context
                 .read<DashboardBloc>()
                 .add(const DashboardSSEConnectRequested());
           }
         },
         builder: (context, state) {
-          if (state is DashboardLoading && state is! DashboardLoaded) {
+          if (state is DashboardLoading) {
             return const DashboardSkeleton();
           }
 
@@ -78,16 +82,18 @@ class _DashboardOverviewPageState extends State<DashboardOverviewPage> {
 
   Widget _buildContent(BuildContext context, DashboardLoaded state) {
     final data = state.data;
+    final l10n = AppLocalizations.of(context)!;
 
     return StyledRefreshIndicator(
-      onRefresh: () async {
-        context.read<DashboardBloc>().add(const DashboardLoadRequested());
-        await context.read<DashboardBloc>().stream.firstWhere(
-              (s) => s is! DashboardLoading,
-            );
-        if (!context.mounted) return;
+      onRefresh: () {
+        final completion = Completer<void>();
+        context
+            .read<DashboardBloc>()
+            .add(DashboardLoadRequested(completion: completion));
+        return completion.future;
       },
       child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.symmetric(vertical: 16.h),
         children: [
           // 离线数据提示（guest 离网模式走本地缓存是预期行为，不提示）
@@ -97,60 +103,85 @@ class _DashboardOverviewPageState extends State<DashboardOverviewPage> {
           if (state.failedSections.isNotEmpty)
             _buildPartialFailureBanner(context),
 
-          // Hero 能量卡片
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16.w),
-            child: HeroEnergyCard(
+          _buildSection(
+            context, state, DashboardSection.statistics,
+            title: l10n.todayGeneration,
+            height: 150,
+            content: () => HeroEnergyCard(
               todayEnergy: data.todayEnergy,
               totalEnergy: data.totalEnergy,
               deviceCount: data.deviceTotal,
             ),
           ),
           SizedBox(height: 16.h),
-
-          // 快捷状态行
-          QuickStatsRow(
-            onlineCount: data.onlineCount,
-            offlineCount: data.offlineCount,
-            faultCount: data.faultCount,
-          ),
-          SizedBox(height: 16.h),
-
-          // 能量趋势图
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16.w),
-            child: EnergyTrendChart(data: data.trendData),
-          ),
-          SizedBox(height: 16.h),
-
-          // 设备分布图
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16.w),
-            child: DeviceDistributionChart(
+          _buildSection(
+            context, state, DashboardSection.distribution,
+            title: l10n.deviceStatusDistribution,
+            height: 165,
+            content: () => DeviceDistributionChart(
               onlineCount: data.onlineCount,
               offlineCount: data.offlineCount,
               faultCount: data.faultCount,
             ),
           ),
           SizedBox(height: 16.h),
-
-          // 电站排行
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16.w),
-            child: StationRankingList(items: data.stationRanking),
+          _buildSection(
+            context, state, DashboardSection.trend,
+            title: l10n.energyTrend,
+            height: 230,
+            content: () => EnergyTrendChart(data: data.trendData),
           ),
           SizedBox(height: 16.h),
-
-          // 最近告警
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16.w),
-            child: RecentAlarmsCard(alarms: data.recentAlarms),
+          _buildSection(
+            context, state, DashboardSection.ranking,
+            title: l10n.stationGenerationRanking,
+            height: 220,
+            content: () => StationRankingList(items: data.stationRanking),
+          ),
+          SizedBox(height: 16.h),
+          _buildSection(
+            context, state, DashboardSection.alarms,
+            title: l10n.recentAlarms,
+            height: 180,
+            content: () => RecentAlarmsCard(alarms: data.recentAlarms),
           ),
 
           // 底部留白
           SizedBox(height: 100.h),
         ],
       ),
+    );
+  }
+
+  Widget _buildSection(
+    BuildContext context,
+    DashboardLoaded state,
+    DashboardSection section, {
+    required String title,
+    required double height,
+    required Widget Function() content,
+  }) {
+    final l10n = AppLocalizations.of(context)!;
+    Widget child;
+    if (state.pendingSections.contains(section)) {
+      child = Semantics(
+        label: '$title · ${l10n.loading}',
+        child: SkeletonCard(height: height),
+      );
+    } else if (state.failedSections.contains(section)) {
+      child = Card(
+        margin: EdgeInsets.zero,
+        child: ListTile(
+          title: Text(title),
+          subtitle: Text(l10n.failedToLoad),
+        ),
+      );
+    } else {
+      child = content();
+    }
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 16.w),
+      child: child,
     );
   }
 

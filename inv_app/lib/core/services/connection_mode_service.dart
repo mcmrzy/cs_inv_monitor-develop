@@ -62,9 +62,16 @@ class ConnectionModeService {
     await _storageService.saveIsLocalMode(isLocal);
   }
 
+  /// Explicit offline mode routes device pages locally and survives restart.
+  Future<void> setOfflineMode(bool enabled) async {
+    await _storageService.saveIsOfflineMode(enabled);
+    await setLocalMode(enabled);
+  }
+
   /// 切换到云端模式；默认置手动锁（用户显式切换），
   /// 系统兜底（自动断连/配网结束）传 [byUser]=false 不置锁
   Future<void> switchToRemote({bool byUser = true}) async {
+    if (byUser) await _storageService.saveIsOfflineMode(false);
     if (byUser) _manualOverride = true;
     _currentMode = ConnectionMode.remote;
     _modeController.add(_currentMode);
@@ -107,6 +114,10 @@ class ConnectionModeService {
   Future<void> onUserLoggedIn() async {
     final wasGuest = _isGuestLocalMode;
     await exitGuestLocalMode();
+    if (await _storageService.getIsOfflineMode()) {
+      await switchToLocal();
+      return;
+    }
     _manualOverride = false;
     if (wasGuest && _currentMode == ConnectionMode.local) {
       await switchToRemote(byUser: false);
@@ -119,7 +130,12 @@ class ConnectionModeService {
     if (_initialized) return;
     _initialized = true;
 
-    final isLocal = await _storageService.getIsLocalMode();
+    final offline = await _storageService.getIsOfflineMode();
+    final isLocal = offline || await _storageService.getIsLocalMode();
+    if (offline) {
+      _manualOverride = true;
+      await _storageService.saveIsLocalMode(true);
+    }
     _isGuestLocalMode = await _storageService.getIsGuestLocalMode();
     _currentMode = isLocal ? ConnectionMode.local : ConnectionMode.remote;
     _modeController.add(_currentMode);

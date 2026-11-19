@@ -22,7 +22,7 @@ class DeviceSettingsGroupCard extends StatelessWidget {
   final IconData icon;
   final Color accent;
   final bool expanded;
-  final VoidCallback onToggle;
+  final VoidCallback? onToggle;
   final Widget content;
   final Widget? badge;
   final bool compact;
@@ -76,15 +76,16 @@ class DeviceSettingsGroupCard extends StatelessWidget {
                   ),
                 ),
                 if (badge != null) ...[badge!, SizedBox(width: 6.w)],
-                AnimatedRotation(
-                  turns: expanded ? 0.25 : 0,
-                  duration: const Duration(milliseconds: 200),
-                  child: Icon(
-                    Icons.chevron_right_rounded,
-                    size: 22.sp,
-                    color: AppColor.textHint(context),
+                if (onToggle != null)
+                  AnimatedRotation(
+                    turns: expanded ? 0.25 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Icon(
+                      Icons.chevron_right_rounded,
+                      size: 22.sp,
+                      color: AppColor.textHint(context),
+                    ),
                   ),
-                ),
               ],
             ),
           ),

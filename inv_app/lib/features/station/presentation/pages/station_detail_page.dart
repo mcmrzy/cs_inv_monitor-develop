@@ -863,104 +863,68 @@ class _StationDetailPageState extends State<StationDetailPage>
     final l10n = AppLocalizations.of(context)!;
     final pvW = pv.toStringAsFixed(0);
     final loadW = load.toStringAsFixed(0);
-    final gridW = grid?.abs().toStringAsFixed(0) ?? '--';
-    final battW = batt?.abs().toStringAsFixed(0) ?? '--';
+    final gridW = grid?.abs().toStringAsFixed(0) ?? '—';
+    final battW = batt?.abs().toStringAsFixed(0) ?? '—';
 
     return SizedBox(
       height: 400.h,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final radius = 40.w;
-          // The painter and widgets share circle centers; labels and glow never
-          // participate in node positioning.
-          final centers = <NodePosition, Offset>{
-            NodePosition.top: Offset(constraints.maxWidth / 2, 76.h),
-            NodePosition.bottom:
-                Offset(constraints.maxWidth / 2, constraints.maxHeight - 76.h),
-            NodePosition.left: Offset(radius + 18.w, constraints.maxHeight / 2),
-            NodePosition.right: Offset(
-              constraints.maxWidth - radius - 18.w,
-              constraints.maxHeight / 2,
+      child: AnimatedBuilder(
+        animation: _anim,
+        builder: (_, child) => Stack(
+          children: [
+            Positioned.fill(
+              child: CustomPaint(
+                painter: _EnergyFlowPainter(
+                  flows: flows,
+                  animValue: _anim.value,
+                  gridColor: AppColor.textSecondary(context),
+                ),
+              ),
             ),
-            NodePosition.center: Offset(
-              constraints.maxWidth / 2,
-              constraints.maxHeight / 2 - 24.w,
+            _energyNode(
+              l10n.pv,
+              pvW,
+              Icons.wb_sunny,
+              AppColors.orange,
+              const Alignment(0, -0.75),
+              true,
+              key: const ValueKey('station-energy-pv'),
+              active: pv > 0,
             ),
-          };
-          Widget at(NodePosition position, Widget child) => Positioned(
-                left: centers[position]!.dx - radius,
-                top: centers[position]!.dy - radius,
-                width: radius * 2,
-                height: radius * 2,
-                child: child,
-              );
-          return AnimatedBuilder(
-            animation: _anim,
-            builder: (_, child) => Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Positioned.fill(
-                  child: CustomPaint(
-                    painter: _EnergyFlowPainter(
-                      flows: flows,
-                      animValue: _anim.value,
-                      nodeCenters: centers,
-                      nodeRadius: radius,
-                    ),
-                  ),
-                ),
-                at(
-                  NodePosition.top,
-                  _energyNode(
-                    l10n.pv,
-                    pvW,
-                    Icons.wb_sunny,
-                    AppColors.orange,
-                    true,
-                    active: pv > 5,
-                  ),
-                ),
-                at(
-                  NodePosition.bottom,
-                  _energyNode(
-                    l10n.load,
-                    loadW,
-                    Icons.home_rounded,
-                    AppColors.blue,
-                    false,
-                    active: load > 5,
-                  ),
-                ),
-                at(
-                  NodePosition.left,
-                  _energyNodeBatt(
-                    l10n.battery,
-                    battW,
-                    soc,
-                    Icons.battery_charging_full,
-                    AppColors.successLight,
-                    active: (batt ?? 0).abs() > 5,
-                  ),
-                ),
-                at(
-                  NodePosition.right,
-                  _energyNode(
-                    (grid ?? 0) > 5
-                        ? l10n.gridInput
-                        : (grid ?? 0) < -5
-                            ? l10n.gridOutput
-                            : l10n.grid,
-                    gridW,
-                    Icons.electrical_services,
-                    AppColors.primary,
-                    true,
-                    active: (grid ?? 0).abs() > 5,
-                  ),
-                ),
-              ],
+            _energyNode(
+              l10n.load,
+              loadW,
+              Icons.home_rounded,
+              AppColors.blue,
+              const Alignment(0, 0.75),
+              false,
+              active: load > 0,
             ),
-          );
-        },
+            _energyNodeBatt(
+              l10n.battery,
+              battW,
+              soc,
+              Icons.battery_charging_full,
+              AppColors.successLight,
+              const Alignment(-0.75, 0),
+              active: (batt ?? 0).abs() > 0,
+            ),
+            _energyNode(
+              (grid ?? 0) > 0
+                  ? l10n.gridInput
+                  : (grid ?? 0) < 0
+                      ? l10n.gridOutput
+                      : l10n.grid,
+              gridW,
+              Icons.electrical_services,
+              AppColor.textSecondary(context),
+              const Alignment(0.75, 0),
+              true,
+              key: const ValueKey('station-energy-grid-reading'),
+              active: (grid ?? 0).abs() > 0,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1018,7 +982,9 @@ class _StationDetailPageState extends State<StationDetailPage>
     String val,
     IconData icon,
     Color color,
+    Alignment align,
     bool labelAbove, {
+    Key? key,
     bool active = false,
   }) {
     final labelWidget = Text(
@@ -1030,9 +996,6 @@ class _StationDetailPageState extends State<StationDetailPage>
       ),
     );
     final circle = Container(
-      key: ValueKey(
-        'station-energy-${icon == Icons.wb_sunny ? 'pv' : icon == Icons.home_rounded ? 'load' : 'grid'}',
-      ),
       width: 80.w,
       height: 80.w,
       decoration: BoxDecoration(
@@ -1093,38 +1056,25 @@ class _StationDetailPageState extends State<StationDetailPage>
         ),
       ),
     );
-    return _nodeFrame(
-      circle,
-      labelWidget,
-      color,
-      labelAbove: labelAbove,
-      active: active,
-    );
-  }
-
-  Widget _nodeFrame(
-    Widget circle,
-    Widget label,
-    Color color, {
-    required bool labelAbove,
-    required bool active,
-  }) {
-    return Stack(
-      clipBehavior: Clip.none,
-      alignment: Alignment.center,
-      children: [
-        if (active)
-          Positioned(left: -15.w, top: -15.w, child: _buildGlow(color)),
-        circle,
-        Positioned(
-          left: -16.w,
-          right: -16.w,
-          top: labelAbove ? -30.h : null,
-          bottom: labelAbove ? null : -30.h,
-          height: 24.h,
-          child: FittedBox(fit: BoxFit.scaleDown, child: label),
-        ),
-      ],
+    return Align(
+      alignment: align,
+      child: Column(
+        key: key,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (labelAbove) labelWidget,
+          if (labelAbove) SizedBox(height: 4.h),
+          if (active)
+            Stack(
+              alignment: Alignment.center,
+              children: [_buildGlow(color), circle],
+            )
+          else
+            circle,
+          if (!labelAbove) SizedBox(height: 4.h),
+          if (!labelAbove) labelWidget,
+        ],
+      ),
     );
   }
 
@@ -1133,7 +1083,8 @@ class _StationDetailPageState extends State<StationDetailPage>
     String val,
     double? soc,
     IconData icon,
-    Color color, {
+    Color color,
+    Alignment align, {
     bool active = false,
   }) {
     final circle = Container(
@@ -1174,19 +1125,20 @@ class _StationDetailPageState extends State<StationDetailPage>
                 children: [
                   Icon(icon, size: 15.sp, color: color),
                   SizedBox(width: 2.w),
-                  Flexible(
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        soc == null ? '--%' : '${soc.toStringAsFixed(0)}%',
-                        style: TextStyle(
-                          fontSize: 9.sp,
-                          fontWeight: FontWeight.w700,
-                          color: color,
+                  if (soc != null)
+                    Flexible(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          '${soc.toStringAsFixed(0)}%',
+                          style: TextStyle(
+                            fontSize: 9.sp,
+                            fontWeight: FontWeight.w700,
+                            color: color,
+                          ),
                         ),
                       ),
                     ),
-                  ),
                 ],
               ),
               SizedBox(height: 1.h),
@@ -1217,23 +1169,33 @@ class _StationDetailPageState extends State<StationDetailPage>
         ),
       ),
     );
-    return InkWell(
-      key: const ValueKey('station-energy-battery'),
-      onTap: _openBatteryStorage,
-      borderRadius: BorderRadius.circular(40.w),
-      child: _nodeFrame(
-        circle,
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12.sp,
-            fontWeight: FontWeight.w600,
-            color: AppColor.textPrimary(context),
-          ),
+    return Align(
+      alignment: align,
+      child: InkWell(
+        key: const ValueKey('station-energy-battery'),
+        onTap: _openBatteryStorage,
+        borderRadius: BorderRadius.circular(8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12.sp,
+                fontWeight: FontWeight.w600,
+                color: AppColor.textPrimary(context),
+              ),
+            ),
+            SizedBox(height: 4.h),
+            if (active)
+              Stack(
+                alignment: Alignment.center,
+                children: [_buildGlow(color), circle],
+              )
+            else
+              circle,
+          ],
         ),
-        color,
-        labelAbove: true,
-        active: active,
       ),
     );
   }
@@ -1244,38 +1206,70 @@ class _StationDetailPageState extends State<StationDetailPage>
     double grid,
     double load,
   ) {
-    const threshold = 5.0;
-    const center = NodePosition.center;
-    return [
-      FlowEdge(
-        from: NodePosition.top,
-        to: center,
-        fromColor: AppColors.orange,
-        toColor: AppColors.primary,
-        active: pv > threshold,
-      ),
-      FlowEdge(
-        from: center,
-        to: NodePosition.bottom,
-        fromColor: AppColors.primary,
-        toColor: AppColors.blue,
-        active: load > threshold,
-      ),
-      FlowEdge(
-        from: batt < 0 ? NodePosition.left : center,
-        to: batt < 0 ? center : NodePosition.left,
-        fromColor: AppColors.successLight,
-        toColor: AppColors.successLight,
-        active: batt.abs() > threshold,
-      ),
-      FlowEdge(
-        from: grid < 0 ? center : NodePosition.right,
-        to: grid < 0 ? NodePosition.right : center,
-        fromColor: AppColors.primary,
-        toColor: AppColors.primary,
-        active: grid.abs() > threshold,
-      ),
-    ];
+    final flows = <FlowEdge>[];
+    const threshold = 0.0;
+
+    // PV → Load (main trunk)
+    if (pv > threshold && load > threshold) {
+      flows.add(
+        const FlowEdge(
+          from: NodePosition.top,
+          to: NodePosition.bottom,
+          fromColor: AppColors.orange,
+          toColor: AppColors.blue,
+        ),
+      );
+    }
+
+    // PV → Battery (left branch)
+    if (pv > threshold && batt > threshold) {
+      flows.add(
+        const FlowEdge(
+          from: NodePosition.top,
+          to: NodePosition.left,
+          fromColor: AppColors.orange,
+          toColor: AppColors.successLight,
+        ),
+      );
+    }
+
+    // Battery → Load (left branch, discharging)
+    if (batt < -threshold) {
+      flows.add(
+        const FlowEdge(
+          from: NodePosition.left,
+          to: NodePosition.bottom,
+          fromColor: AppColors.successLight,
+          toColor: AppColors.blue,
+        ),
+      );
+    }
+
+    // Grid → Load (right branch, importing)
+    if (grid > threshold) {
+      flows.add(
+        FlowEdge(
+          from: NodePosition.right,
+          to: NodePosition.bottom,
+          fromColor: AppColor.textSecondary(context),
+          toColor: AppColors.blue,
+        ),
+      );
+    }
+
+    // Load → Grid (right branch, exporting to grid)
+    if (grid < -threshold) {
+      flows.add(
+        FlowEdge(
+          from: NodePosition.bottom,
+          to: NodePosition.right,
+          fromColor: AppColors.blue,
+          toColor: AppColor.textSecondary(context),
+        ),
+      );
+    }
+
+    return flows;
   }
 
   Widget _twoCards(double pvW, double totalPowerW, double todayKwh) {
@@ -1863,20 +1857,18 @@ class _StationDetailPageState extends State<StationDetailPage>
   }
 }
 
-enum NodePosition { top, bottom, left, right, center }
+enum NodePosition { top, bottom, left, right }
 
 class FlowEdge {
   final NodePosition from;
   final NodePosition to;
   final Color fromColor;
   final Color toColor;
-  final bool active;
 
   const FlowEdge({
     required this.from,
     required this.to,
     required this.fromColor,
     required this.toColor,
-    this.active = true,
   });
 }

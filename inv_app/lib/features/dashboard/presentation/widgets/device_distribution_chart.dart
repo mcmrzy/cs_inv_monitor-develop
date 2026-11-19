@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:fl_chart/fl_chart.dart';
+import 'package:intl/intl.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
-/// 设备分布图 - 环形图展示在线/离线/故障占比
+/// Device health at a glance. The online share uses the same status counts
+/// as the offline and fault totals below it.
 class DeviceDistributionChart extends StatelessWidget {
-  final int onlineCount;
-  final int offlineCount;
-  final int faultCount;
-
   const DeviceDistributionChart({
     super.key,
     required this.onlineCount,
@@ -17,256 +14,190 @@ class DeviceDistributionChart extends StatelessWidget {
     required this.faultCount,
   });
 
+  final int onlineCount;
+  final int offlineCount;
+  final int faultCount;
+
   @override
   Widget build(BuildContext context) {
-    final total = onlineCount + offlineCount + faultCount;
     final l10n = AppLocalizations.of(context)!;
-
+    final locale = Localizations.localeOf(context).toLanguageTag();
+    final numbers = NumberFormat.decimalPattern(locale);
+    final percent = NumberFormat.percentPattern(locale)
+      ..maximumFractionDigits = 1;
+    final total = onlineCount + offlineCount + faultCount;
+    final text = Theme.of(context).textTheme;
+    final primary = AppColor.primary(context);
+    final muted = AppColor.textSecondary(context);
+    final foreground = AppColor.textPrimary(context);
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: EdgeInsets.all(16.w),
-      decoration: BoxDecoration(
-        color: AppColor.surfaceContainer(context),
-        borderRadius: BorderRadius.circular(16.r),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+      decoration: AppColor.card(context),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: EdgeInsets.all(8.w),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8.r),
-                ),
-                child: Icon(
-                  Icons.pie_chart_rounded,
-                  size: 18.w,
-                  color: AppColors.primary,
-                ),
-              ),
-              SizedBox(width: 10.w),
-              Text(
-                l10n.deviceStatusDistribution,
-                style: TextStyle(
-                  fontSize: 15.sp,
-                  fontWeight: FontWeight.w600,
-                  color: AppColor.textPrimary(context),
-                ),
-              ),
-            ],
+          Text(
+            l10n.deviceStatusDistribution,
+            style: text.titleSmall?.copyWith(
+              color: foreground,
+              fontWeight: FontWeight.w600,
+            ),
           ),
-          SizedBox(height: 20.h),
-          Row(
-            children: [
-              // 环形图
-              SizedBox(
-                width: 120.w,
-                height: 120.w,
-                child: total > 0
-                    ? Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          PieChart(
-                            PieChartData(
-                              sectionsSpace: 3,
-                              centerSpaceRadius: 36.w,
-                              sections: _buildSections(),
-                              borderData: FlBorderData(show: false),
-                            ),
-                          ),
-                          Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                '$total',
-                                style: TextStyle(
-                                  fontSize: 22.sp,
-                                  fontWeight: FontWeight.w800,
-                                  color: AppColor.textPrimary(context),
-                                ),
-                              ),
-                              Text(
-                                '${l10n.unitDevices}${l10n.deviceLabel}',
-                                style: TextStyle(
-                                  fontSize: 10.sp,
-                                  color: AppColor.textHint(context),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      )
-                    : Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
+          SizedBox(height: 14.h),
+          if (total == 0)
+            Text(
+              l10n.noDevicesYet,
+              style: text.bodySmall?.copyWith(color: muted),
+            )
+          else ...[
+            Container(
+              padding: EdgeInsets.fromLTRB(14.w, 11.h, 14.w, 12.h),
+              decoration: BoxDecoration(
+                color: AppColor.primarySoft(context),
+                borderRadius: BorderRadius.circular(12.r),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 12.w,
+                    runSpacing: 4.h,
+                    children: [
+                      Text.rich(
+                        TextSpan(
                           children: [
-                            Icon(
-                              Icons.devices_rounded,
-                              size: 32.w,
-                              color: AppColor.textHint(context),
-                            ),
-                            SizedBox(height: 4.h),
-                            Text(
-                              l10n.noDevicesYet,
-                              style: TextStyle(
-                                fontSize: 12.sp,
-                                color: AppColor.textHint(context),
+                            TextSpan(
+                              text: numbers.format(onlineCount),
+                              style: text.headlineSmall?.copyWith(
+                                color: primary,
+                                fontWeight: FontWeight.w700,
                               ),
+                            ),
+                            TextSpan(
+                              text:
+                                  ' / ${numbers.format(total)} ${l10n.statusOnline}',
                             ),
                           ],
                         ),
+                        style: text.bodyMedium?.copyWith(color: muted),
                       ),
+                      Text(
+                        percent.format(onlineCount / total),
+                        style: text.labelLarge?.copyWith(
+                          color: primary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 8.h),
+                  ExcludeSemantics(
+                    child: LinearProgressIndicator(
+                      value: onlineCount / total,
+                      minHeight: 5.h,
+                      borderRadius: BorderRadius.circular(8.r),
+                      color: primary,
+                      backgroundColor: primary.withValues(alpha: 0.15),
+                    ),
+                  ),
+                ],
               ),
-              SizedBox(width: 20.w),
-              // 图例
-              Expanded(
-                child: Column(
+            ),
+            SizedBox(height: 12.h),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final entries = [
+                  _StatusValue(
+                    icon: Icons.cloud_off_outlined,
+                    label: l10n.statusOffline,
+                    value: numbers.format(offlineCount),
+                    accent: muted,
+                  ),
+                  _StatusValue(
+                    icon: Icons.error_outline_rounded,
+                    label: l10n.statusFault,
+                    value: numbers.format(faultCount),
+                    accent: faultCount == 0
+                        ? muted
+                        : dark
+                            ? const Color(0xFFF2A49D)
+                            : const Color(0xFFAB524D),
+                  ),
+                ];
+                if (constraints.maxWidth < 250 ||
+                    MediaQuery.textScalerOf(context).scale(14) >= 22) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: entries,
+                  );
+                }
+                return Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _legendRow(
-                      context,
-                      AppColors.online,
-                      l10n.statusOnline,
-                      onlineCount,
-                      total,
-                      Icons.check_circle_rounded,
-                    ),
-                    SizedBox(height: 16.h),
-                    _legendRow(
-                      context,
-                      AppColors.offline,
-                      l10n.statusOffline,
-                      offlineCount,
-                      total,
-                      Icons.pause_circle_rounded,
-                    ),
-                    SizedBox(height: 16.h),
-                    _legendRow(
-                      context,
-                      AppColors.fault,
-                      l10n.statusFault,
-                      faultCount,
-                      total,
-                      Icons.error_rounded,
-                    ),
+                    for (var index = 0; index < entries.length; index++) ...[
+                      if (index > 0) SizedBox(width: 10.w),
+                      Expanded(child: entries[index]),
+                    ],
                   ],
-                ),
-              ),
-            ],
-          ),
+                );
+              },
+            ),
+          ],
         ],
       ),
     );
   }
+}
 
-  List<PieChartSectionData> _buildSections() {
-    final total = onlineCount + offlineCount + faultCount;
-    if (total == 0) return [];
+class _StatusValue extends StatelessWidget {
+  const _StatusValue({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.accent,
+  });
 
-    final sections = <PieChartSectionData>[];
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color accent;
 
-    if (onlineCount > 0) {
-      sections.add(
-        PieChartSectionData(
-          value: onlineCount.toDouble(),
-          color: AppColors.online,
-          radius: 16.w,
-          showTitle: false,
-        ),
-      );
-    }
-    if (offlineCount > 0) {
-      sections.add(
-        PieChartSectionData(
-          value: offlineCount.toDouble(),
-          color: AppColors.offline,
-          radius: 16.w,
-          showTitle: false,
-        ),
-      );
-    }
-    if (faultCount > 0) {
-      sections.add(
-        PieChartSectionData(
-          value: faultCount.toDouble(),
-          color: AppColors.fault,
-          radius: 16.w,
-          showTitle: false,
-        ),
-      );
-    }
-
-    return sections;
-  }
-
-  Widget _legendRow(
-    BuildContext context,
-    Color color,
-    String label,
-    int count,
-    int total,
-    IconData icon,
-  ) {
-    final percent = total > 0 ? (count / total * 100).toStringAsFixed(0) : '0';
-    final l10n = AppLocalizations.of(context)!;
-    return Row(
-      children: [
-        Container(
-          padding: EdgeInsets.all(6.w),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8.r),
-          ),
-          child: Icon(icon, size: 16.w, color: color),
-        ),
-        SizedBox(width: 10.w),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style:
-                    TextStyle(fontSize: 13.sp, color: AppColor.textSecondary(context)),
-              ),
-              SizedBox(height: 2.h),
-              LinearProgressIndicator(
-                value: total > 0 ? count / total : 0,
-                backgroundColor: color.withValues(alpha: 0.1),
-                valueColor: AlwaysStoppedAnimation<Color>(color),
-                borderRadius: BorderRadius.circular(2.r),
-                minHeight: 4.h,
-              ),
-            ],
-          ),
-        ),
-        SizedBox(width: 10.w),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              '$count ${l10n.unitDevices}',
-              style: TextStyle(
-                fontSize: 14.sp,
-                fontWeight: FontWeight.w700,
-                color: AppColor.textPrimary(context),
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 3.w, vertical: 4.h),
+      child: Row(
+        children: [
+          Icon(icon, size: 17.sp, color: accent),
+          SizedBox(width: 7.w),
+          Expanded(
+            child: Text(
+              label,
+              style: text.bodySmall?.copyWith(
+                color: AppColor.textSecondary(context),
               ),
             ),
-            Text(
-              '$percent%',
-              style: TextStyle(fontSize: 11.sp, color: AppColor.textHint(context)),
+          ),
+          SizedBox(width: 4.w),
+          Flexible(
+            child: Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: Text(
+                value,
+                textAlign: TextAlign.end,
+                style: text.titleMedium?.copyWith(
+                  color: AppColor.textPrimary(context),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
-          ],
-        ),
-      ],
+          ),
+        ],
+      ),
     );
   }
 }

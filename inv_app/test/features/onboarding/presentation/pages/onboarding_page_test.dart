@@ -9,6 +9,7 @@ import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/features/onboarding/data/onboarding_storage.dart';
 import 'package:inv_app/features/onboarding/presentation/pages/onboarding_page.dart';
+import 'package:inv_app/features/onboarding/presentation/widgets/guide_artwork.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -121,7 +122,7 @@ void main() {
     expect(find.byKey(const Key('onboarding-progress-2')), findsOneWidget);
   });
 
-  testWidgets('引导页使用 App 蓝色语义 token', (tester) async {
+  testWidgets('主操作使用 App 品牌蓝，插图区分不同功能主题', (tester) async {
     await pumpOnboarding(tester);
 
     final button = tester.widget<FilledButton>(
@@ -135,21 +136,18 @@ void main() {
       AppColor.primary(buttonContext),
     );
 
-    final illustration = currentIllustration(tester);
-    final illustrationContainer = tester.widget<Container>(
-      find
-          .ancestor(
-            of: find.byWidget(illustration),
-            matching: find.byType(Container),
-          )
-          .first,
-    );
-    final decoration = illustrationContainer.decoration! as BoxDecoration;
-    final gradient = decoration.gradient! as LinearGradient;
-    expect(gradient.colors, <Color>[
-      AppColor.primary(buttonContext).withValues(alpha: 0.16),
-      AppColor.primarySoft(buttonContext),
-    ]);
+    final activeSlide = find.byKey(const Key('onboarding-page-content'));
+    GuideAccent accent() => tester
+        .widget<GuideArtwork>(
+          find.descendant(of: activeSlide, matching: find.byType(GuideArtwork)),
+        )
+        .accent;
+
+    expect(accent(), GuideAccent.solar);
+    await nextPage(tester);
+    expect(accent(), GuideAccent.alert);
+    await nextPage(tester);
+    expect(accent(), GuideAccent.connection);
   });
 
   testWidgets('底部操作区在翻页时位置和高度保持稳定', (tester) async {

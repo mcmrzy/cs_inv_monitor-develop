@@ -1,10 +1,13 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/features/device/domain/entities/config_schema.dart';
 import 'package:inv_app/features/device/presentation/pages/device_settings_page.dart';
 import 'package:inv_app/features/device/presentation/widgets/config_param_controls.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 import '../../../../helpers/pump_app.dart';
 
@@ -14,6 +17,10 @@ void main() {
 
   testWidgets('remote numeric steps respect bounds and remain pending',
       (tester) async {
+    tester.view.physicalSize = const Size(390, 740);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     var sent = 0;
     final dio = Dio();
     dio.interceptors.add(InterceptorsWrapper(
@@ -54,6 +61,7 @@ void main() {
         ));
     await tester.tap(find.text('充电管理'));
     await tester.pumpAndSettle();
+    expect(find.text('全部分类'), findsOneWidget);
     expect(find.text('1.0 A'), findsWidgets);
     expect(
         tester
@@ -65,6 +73,8 @@ void main() {
     await tester.tap(find.byTooltip('增加'));
     await tester.pumpAndSettle();
     expect(find.text('1.5 A'), findsOneWidget);
+    await tester.ensureVisible(find.byTooltip('增加'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('增加'));
     await tester.pumpAndSettle();
     expect(
@@ -75,6 +85,8 @@ void main() {
             .onPressed,
         isNull);
     expect(sent, 0);
+    await tester.ensureVisible(find.byType(TextField));
+    await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'missing parameter');
     await tester.pumpAndSettle();
     expect(find.text('未找到匹配的参数'), findsOneWidget);
@@ -83,7 +95,105 @@ void main() {
     expect(find.text('充电管理'), findsOneWidget);
     expect(find.text('2.0 A'), findsWidgets);
     expect(sent, 0);
+    await tester.tap(find.text('全部分类'));
+    await tester.pumpAndSettle();
+    expect(find.text('全部分类'), findsNothing);
+    expect(find.byTooltip('增加'), findsNothing);
+    await tester.tap(find.text('充电管理'));
+    await tester.pumpAndSettle();
+    expect(find.text('2.0 A'), findsWidgets);
+    expect(sent, 0);
     await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('remote read applies only a new reported snapshot', (tester) async {
+    const previousReport = '2026-09-21T06:25:59+00:00';
+    const newReport = '2026-11-19T03:00:00+00:00';
+    var queryCount = 0;
+    var stateReads = 0;
+    var hasNewReport = false;
+    final dio = Dio();
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          final endpoint = options.path.split('/').last;
+          if (endpoint == 'control-state') stateReads++;
+          if (endpoint == 'control') {
+            expect(options.data, {'command': 'query_config', 'params': {}});
+            queryCount++;
+          }
+          final Object data = switch (endpoint) {
+            'config-schema' => [
+                {
+                  'param_key': 'set_max_chg_curr',
+                  'control_type': 'number',
+                  'unit': 'A',
+                },
+              ],
+            'control-capabilities' => [
+                {'command_code': 'query_config', 'is_enabled': true},
+              ],
+            'control-state' => {
+                'reported': {'set_max_chg_curr': hasNewReport ? 27 : 24},
+                'reported_at': hasNewReport ? newReport : previousReport,
+                'reported_revision': hasNewReport ? 9 : 1789971959,
+                'desired': {'value': 205.2},
+                'updated_at': '2026-11-12T09:02:49.496747+00:00',
+                'sync_status': 'pending',
+              },
+            'control' => {'task_id': 'test-query'},
+            _ => throw StateError('Unexpected endpoint $endpoint'),
+          };
+          handler.resolve(
+            Response(
+              requestOptions: options,
+              statusCode: 200,
+              data: {'code': 0, 'data': data},
+            ),
+          );
+        },
+      ),
+    );
+    getIt.registerSingleton<Dio>(dio);
+    await tester.pumpWidget(
+      ScreenUtilInit(
+        builder: (_, __) => const MaterialApp(
+          locale: Locale('zh', 'CN'),
+          localizationsDelegates: [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: RemoteSettingsTab(sn: 'PANEL-6KU', cloudOnline: true),
+          ),
+        ),
+      ),
+    );
+    for (var frame = 0; frame < 5; frame++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    final readButton = find.widgetWithText(OutlinedButton, '读取设备');
+    expect(queryCount, 1);
+    final originalRect = tester.getRect(readButton);
+    expect(find.text('24 A'), findsOneWidget);
+    expect(find.text('正在读取设备配置...'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pump();
+    expect(stateReads, greaterThanOrEqualTo(3));
+    expect(find.text('24 A'), findsOneWidget);
+    expect(find.textContaining('上次读取'), findsNothing);
+    expect(tester.getRect(readButton), originalRect);
+
+    hasNewReport = true;
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+    expect(find.text('27 A'), findsOneWidget);
+    expect(find.text('正在读取设备配置...'), findsNothing);
+    expect(find.textContaining('上次读取'), findsOneWidget);
+    expect(tester.getRect(readButton), originalRect);
   });
 
   testWidgets('SOC dropdown sends a numeric off value before the first read',

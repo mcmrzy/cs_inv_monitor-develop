@@ -422,7 +422,7 @@ void main() {
     expect(actionBtn().onPressed, isNotNull);
   });
 
-  testWidgets('update action is the final list content after the update log',
+  testWidgets('check-update action appears before firmware and update history',
       (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
@@ -444,12 +444,13 @@ void main() {
       (child) => child.key == const Key('firmwareUpdateLogHeader'),
     );
     final actionIndex = children.indexWhere(
-      (child) => child.key == const Key('firmwareUpdateAction'),
+      (child) => child.key == const Key('firmwareActions'),
     );
 
     expect(logIndex, greaterThanOrEqualTo(0));
-    expect(actionIndex, greaterThan(logIndex));
-    expect(actionIndex, children.length - 1);
+    expect(actionIndex, greaterThanOrEqualTo(0));
+    expect(actionIndex, lessThan(logIndex));
+    expect(find.text('检查固件更新').hitTestable(), findsOneWidget);
   });
 
   testWidgets('english large text layout has no overflow at 390 by 844',

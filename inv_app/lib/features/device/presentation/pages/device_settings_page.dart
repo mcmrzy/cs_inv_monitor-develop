@@ -1,6 +1,6 @@
 import 'package:inv_app/features/device/presentation/widgets/device_settings_group_card.dart';
 import 'package:inv_app/features/device/presentation/widgets/device_setting_change.dart';
-import 'package:inv_app/features/device/presentation/widgets/device_settings_heading.dart';
+import 'package:inv_app/features/device/presentation/widgets/device_settings_navigation.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -20,13 +20,7 @@ import 'package:inv_app/features/device/presentation/pages/device_settings_advan
 import 'package:inv_app/features/device/presentation/widgets/config_param_controls.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
-/// 远程设置 Tab（设备详情页内嵌，手风琴式）
-///
-/// 单页展示 8 大功能分类：点击分类卡片原地展开参数控件，
-/// 再点收起；修改项全局汇总，底部应用条按 param_key 逐条下发独立命令。
-/// 高级参数仍为独立页（工程师模式，参数多且按 group_code 分组）。
-/// 作为 TabBarView 子页内嵌于设备详情页（无 Scaffold/AppBar），
-/// AutomaticKeepAliveClientMixin 保持切 Tab 不重建（避免重复 query_config）。
+/// 远程设置页签。切换分类与设备页签时保留待应用的修改。
 class RemoteSettingsTab extends StatefulWidget {
   final String sn;
   final bool? cloudOnline;
@@ -51,15 +45,14 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
   /// 全量 schema（param_key → schema），用于摘要文案与参数渲染
   Map<String, ConfigParamSchema> _schemaMap = {};
 
-  /// 原始值（设备真实值：reported 优先、desired 兜底）——
-  /// 读取设备配置后输入框与摘要均反映设备最新回报
+  /// 设备最近一次回报的值。旧版入口兼容仅有 desired 的状态。
   Map<String, dynamic> _original = {};
 
   /// 工作值（含未应用修改）
   Map<String, dynamic> _pending = {};
 
-  /// 当前展开的分类 id（手风琴：同时只展开一个，null 表示全部收起）
-  String? _expandedId;
+  final _scrollController = ScrollController();
+  String? _selectedCategoryId;
 
   bool _loading = true;
   bool _failed = false;
@@ -85,6 +78,12 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
   void initState() {
     super.initState();
     _fetchData();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   @override
@@ -134,12 +133,6 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
           if (s.paramKey.isNotEmpty) schemas[s.paramKey] = s;
         }
       }
-      // 基线用 reported 优先：设备真实值优先，未被设备回报的键回退 desired
-      final values = _guarded
-          ? (state['reported'] is Map
-              ? Map<String, dynamic>.from(state['reported'] as Map)
-              : <String, dynamic>{})
-          : mergeControlStateReportedFirst(state);
       final capabilities = _guarded
           ? unwrapApiResponse<List<dynamic>>(
               results[2].data,
@@ -151,10 +144,8 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
       setState(() {
         _commands = enabledDeviceCommands(capabilities);
         _schemaMap = schemas;
-        _original = Map.from(values);
-        _pending = Map.from(values);
+        _showControlState(state);
         _readable = true;
-        _configUnreported = !controlStateHasReported(state);
         _loading = false;
       });
       // 自动发送 query_config 读取设备实际配置
@@ -171,40 +162,44 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
     }
   }
 
-  /// 仅刷新 control-state（应用成功后调用）。返回最新 control-state，
-  /// 供调用方判断设备是否已实际回报配置；失败返回 null。
-  Future<Map<String, dynamic>?> _refreshState() async {
+  Future<Map<String, dynamic>?> _fetchControlState() async {
     try {
       final dio = getIt<Dio>();
-      final res = await dio.get('/devices/by-sn/${widget.sn}/control-state');
-      final state = unwrapApiResponse<Map<String, dynamic>>(
+      final res = await dio.get(
+        '/devices/by-sn/${Uri.encodeComponent(widget.sn)}/control-state',
+      );
+      return unwrapApiResponse<Map<String, dynamic>>(
         res.data,
         validate: (v) => v is Map<String, dynamic>,
         expected: 'an object',
       );
-      final values = _guarded
-          ? (state['reported'] is Map
-              ? Map<String, dynamic>.from(state['reported'] as Map)
-              : <String, dynamic>{})
-          : mergeControlStateReportedFirst(state);
-      if (!mounted) return state;
-      setState(() {
-        _original = Map.from(values);
-        _pending = Map.from(values);
-        _configUnreported = !controlStateHasReported(state);
-      });
-      return state;
     } catch (_) {
-      // 刷新失败静默：保留本地已应用状态
+      return null;
     }
-    return null;
+  }
+
+  void _showControlState(Map<String, dynamic> state) {
+    final values = _guarded
+        ? (state['reported'] is Map
+            ? Map<String, dynamic>.from(state['reported'] as Map)
+            : <String, dynamic>{})
+        : mergeControlStateReportedFirst(state);
+    _original = Map.from(values);
+    _pending = Map.from(values);
+    _configUnreported = !controlStateHasReported(state);
+  }
+
+  Future<void> _refreshState() async {
+    final state = await _fetchControlState();
+    if (mounted && state != null) {
+      setState(() => _showControlState(state));
+    }
   }
 
   /// 发送 query_config 命令读取设备当前配置
   Future<void> _readDeviceConfig() async {
     if (_reading || _applying || !_canRead) return;
     setState(() => _reading = true);
-    final l10n = AppLocalizations.of(context)!;
 
     try {
       final dio = getIt<Dio>();
@@ -235,7 +230,7 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
 
       // 等待设备响应后刷新状态
       await Future<void>.delayed(const Duration(seconds: 2));
-      var refreshed = await _refreshState();
+      var refreshed = await _fetchControlState();
       if (!mounted) return;
       var reported = refreshed != null && controlStateHasReported(refreshed);
       if (_guarded) {
@@ -251,31 +246,22 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
           if (reported || timer.elapsed >= const Duration(seconds: 28)) break;
           await Future<void>.delayed(const Duration(seconds: 1));
           if (!mounted) return;
-          refreshed = await _refreshState();
+          refreshed = await _fetchControlState();
         }
         if (!_canRead) reported = false;
       }
 
       if (!mounted) return;
+      final currentReport = refreshed;
       setState(() {
-        _reading = false;
-        _lastReadAt = DateTime.now();
+        if (reported && currentReport != null) {
+          _showControlState(currentReport);
+          _lastReadAt = DateTime.now();
+        }
         _configUnreported = !reported;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            reported
-                ? l10n.str('settings_read_success')
-                : l10n.str('settings_read_no_report'),
-          ),
-          backgroundColor: reported ? AppColors.success : AppColors.warning,
-          duration: const Duration(seconds: 2),
-        ),
-      );
     } catch (_) {
-      if (!mounted) return;
-      setState(() => _reading = false);
+      if (mounted) setState(() => _configUnreported = true);
     } finally {
       if (mounted) setState(() => _reading = false);
     }
@@ -571,11 +557,7 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
 
     return Column(
       children: [
-        // Tab 顶部操作条（原 AppBar actions 下沉）
-        _buildActionBar(l10n),
-        // 主内容
         Expanded(child: _buildBody(l10n)),
-        // 底部应用条（有修改项时）
         if (_modifiedCount > 0 && _canWrite && !_reading)
           ConfigApplyBar(
             modifiedCount: _modifiedCount,
@@ -586,102 +568,45 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
     );
   }
 
-  /// Tab 顶部操作条：在线徽标 + 读取设备 + 刷新
-  Widget _buildActionBar(AppLocalizations l10n) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(16.w, 8.h, 8.w, 4.h),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (_guarded)
-            DeviceSettingsHeading(
-              title: Localizations.localeOf(context).languageCode == 'zh'
-                  ? '远程设置'
-                  : 'Remote settings',
-            ),
-          Wrap(
-            alignment:
-                _guarded ? WrapAlignment.spaceBetween : WrapAlignment.start,
-            spacing: 6,
-            runSpacing: 4,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              if (!_loading) _buildReadableBadge(l10n),
-              // 读取设备（含 loading 态）
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(144, 52),
-                  padding: EdgeInsets.symmetric(horizontal: 12.w),
-                  textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        fontSize: 12.sp,
-                        fontWeight: FontWeight.w600,
-                      ),
-                  foregroundColor: AppColor.primary(context),
-                  side: BorderSide(
-                      color: AppColor.primary(context).withValues(alpha: 0.45)),
-                ),
-                onPressed: _reading || _applying || !_canRead
-                    ? null
-                    : _readDeviceConfig,
-                icon: _reading
-                    ? SizedBox(
-                        width: 14.w,
-                        height: 14.w,
-                        child: const CircularProgressIndicator(
-                          strokeWidth: 1.5,
-                          color: AppColors.primary,
-                        ),
-                      )
-                    : Icon(Icons.download_rounded, size: 16.sp),
-                label: Text(l10n.str('settings_read_device')),
-              ),
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                iconSize: 20.sp,
-                color: AppColor.textSecondary(context),
-                tooltip: l10n.refreshLabel,
-                onPressed:
-                    _loading || _reading || _applying ? null : _fetchData,
-                icon: const Icon(Icons.refresh_rounded),
-              ),
-            ],
-          ),
-        ],
-      ),
+  Widget _buildSettingsHeader(AppLocalizations l10n) {
+    final zh = Localizations.localeOf(context).languageCode == 'zh';
+    final ready =
+        !widget.modelBindingMismatch && (widget.cloudOnline ?? _readable);
+    final status = switch ((widget.modelBindingMismatch, widget.cloudOnline)) {
+      (true, _) => zh ? '型号待核对' : 'Check model',
+      (false, true) => zh ? '云端在线' : 'Cloud online',
+      (false, false) => l10n.str('offline'),
+      _ => _readable
+          ? zh
+              ? '配置已加载'
+              : 'Configuration loaded'
+          : zh
+              ? '连接待确认'
+              : 'Connection unknown',
+    };
+    final readAt = _lastReadAt;
+    return DeviceSettingsHeader(
+      title: l10n.str('remote_settings'),
+      icon: Icons.cloud_outlined,
+      device: widget.sn,
+      status: status,
+      ready: ready,
+      detail: _reading
+          ? l10n.str('settings_reading_device')
+          : readAt == null
+              ? null
+              : '${l10n.str("settings_last_read")} · ${_formatTime(readAt)}',
+      readLabel: l10n.str('settings_read_device'),
+      reading: _reading,
+      onRead: _applying || !_canRead ? null : _readDeviceConfig,
+      refreshLabel: l10n.refreshLabel,
+      onRefresh: _reading || _applying ? null : _fetchData,
     );
   }
 
-  /// 在线/离线小徽标
-  Widget _buildReadableBadge(AppLocalizations l10n) {
-    final online = widget.cloudOnline ?? _readable;
-    final color = online ? AppColors.online : AppColors.offline;
-    return Container(
-      margin: EdgeInsets.only(right: 4.w),
-      padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(12.r),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 6.w,
-            height: 6.w,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ),
-          SizedBox(width: 4.w),
-          Text(
-            online ? l10n.str('online') : l10n.str('offline'),
-            style: TextStyle(
-              fontSize: 11.sp,
-              color: color,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
+  void _selectCategory(String? id) {
+    if (_scrollController.hasClients) _scrollController.jumpTo(0);
+    setState(() => _selectedCategoryId = id);
   }
 
   Widget _buildBody(AppLocalizations l10n) {
@@ -698,168 +623,124 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
       );
     }
 
+    final zh = Localizations.localeOf(context).languageCode == 'zh';
+    final searching = _search.isNotEmpty;
     final categories = [
       for (final category in settingsCategories)
-        if (!_guarded || _matchingParams(l10n, category).isNotEmpty) category,
+        if ((!_guarded && !searching) ||
+            _matchingParams(l10n, category).isNotEmpty)
+          category,
     ];
-    return Column(
+    final selectedId = _selectedCategoryId;
+    final selected = searching || selectedId == null
+        ? null
+        : findSettingsCategory(selectedId);
+
+    return ListView(
+      controller: _scrollController,
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 24.h),
       children: [
-        if (widget.modelBindingMismatch)
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              Localizations.localeOf(context).languageCode == 'zh'
-                  ? '设备上报机型与系统绑定型号不一致，请先核对设备型号绑定。'
-                  : 'The reported inverter model differs from the assigned model. Check the device model binding first.',
-            ),
+        _buildSettingsHeader(l10n),
+        if (widget.modelBindingMismatch) ...[
+          const SizedBox(height: 10),
+          DeviceSettingsNotice(
+            warning: true,
+            text: zh
+                ? '设备上报机型与系统绑定型号不一致，请先核对设备型号绑定。'
+                : 'The reported inverter model differs from the assigned model. Check the device model binding first.',
           ),
-        if (_guarded && widget.cloudOnline == false)
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              Localizations.localeOf(context).languageCode == 'zh'
-                  ? '云端离线。蓝牙维护期间设备可能暂离云端，重新上线后可继续远程设置。'
-                  : 'Cloud offline. The panel may leave the cloud during Bluetooth maintenance. Remote settings resume when it reconnects.',
-            ),
+        ],
+        if (widget.cloudOnline == false) ...[
+          const SizedBox(height: 10),
+          DeviceSettingsNotice(
+            warning: true,
+            text: zh
+                ? '云端离线。设备恢复云端连接后可继续远程设置。'
+                : 'Cloud offline. Remote settings resume when the device reconnects.',
           ),
-        // 读取中提示条
-        if (_reading)
-          Container(
-            width: double.infinity,
-            padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h),
-            color: AppColors.primary.withValues(alpha: 0.08),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 16.w,
-                  height: 16.w,
-                  child: const CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: AppColors.primary,
-                  ),
-                ),
-                SizedBox(width: 10.w),
-                Text(
-                  l10n.str('settings_reading_device'),
-                  style: TextStyle(
-                    fontSize: 13.sp,
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
+        ],
+        if (_configUnreported) ...[
+          const SizedBox(height: 10),
+          DeviceSettingsNotice(
+            warning: true,
+            text: l10n.str('settings_not_reported_hint'),
           ),
-        // 设备未上报配置提示条：值不可信，不要谎称“读取成功/在线”
-        if (_configUnreported && !_reading)
-          Container(
-            width: double.infinity,
-            padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h),
-            color: AppColors.warning.withValues(alpha: 0.12),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.warning_amber_rounded,
-                  size: 16.sp,
-                  color: AppColors.warning,
-                ),
-                SizedBox(width: 8.w),
-                Expanded(
-                  child: Text(
-                    l10n.str('settings_not_reported_hint'),
-                    style: TextStyle(
-                      fontSize: 12.sp,
-                      color: AppColors.warning,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+        ],
+        if (_schemaMap.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          DeviceSearchBar(
+            padding: EdgeInsets.zero,
+            hintText: zh ? '搜索参数' : 'Search settings',
+            fillColor: AppColor.surfaceContainer(context),
+            onSearchChanged: (value) =>
+                setState(() => _search = value.trim().toLowerCase()),
           ),
-        // 主内容
-        Expanded(
-          child: ListView(
-            padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 24.h),
-            children: [
-              if (_guarded && _schemaMap.isNotEmpty) ...[
-                DeviceSearchBar(
-                  padding: EdgeInsets.zero,
-                  hintText: Localizations.localeOf(context).languageCode == 'zh'
-                      ? '搜索参数'
-                      : 'Search settings',
-                  fillColor: AppColor.surfaceContainer(context),
-                  onSearchChanged: (value) =>
-                      setState(() => _search = value.trim().toLowerCase()),
+        ],
+        const SizedBox(height: 16),
+        if (_guarded && _schemaMap.isEmpty)
+          DeviceSettingsNotice(
+            text: zh
+                ? '当前设备尚未登记可用的远程设置，请核对系统型号绑定。'
+                : 'No remote settings are registered. Check the device model binding.',
+          )
+        else if (searching && categories.isEmpty)
+          DeviceSettingsNotice(
+            text: zh ? '未找到匹配的参数' : 'No matching settings',
+          )
+        else if (searching)
+          _buildCategoryContent(l10n, categories)
+        else if (selected != null && categories.contains(selected)) ...[
+          DeviceSettingsCategoryBack(onPressed: () => _selectCategory(null)),
+          _buildCategoryContent(l10n, [selected]),
+        ] else if (categories.isNotEmpty) ...[
+          DeviceSettingsDirectory(
+            entries: [
+              for (final category in categories)
+                (
+                  title: l10n.str(category.titleKey),
+                  summary: _categorySummary(category),
+                  icon: category.icon,
+                  onTap: () => _selectCategory(category.id),
                 ),
-                const SizedBox(height: 12),
-              ],
-              // 读取时间提示
-              if (_lastReadAt != null)
-                Padding(
-                  padding: EdgeInsets.only(bottom: 8.h),
-                  child: Text(
-                    '${l10n.str("settings_last_read")}: ${_formatTime(_lastReadAt!)}',
-                    style: TextStyle(
-                      fontSize: 11.sp,
-                      color: AppColor.textSecondary(context),
-                    ),
-                  ),
-                ),
-              // 8 大功能分类：点击原地展开参数控件（手风琴）
-              if (_guarded && _schemaMap.isEmpty)
-                Text(
-                  Localizations.localeOf(context).languageCode == 'zh'
-                      ? '当前设备尚未登记可用的远程设置，请核对系统型号绑定。'
-                      : 'No remote settings are registered. Check the device model binding.',
-                ),
-              if (_guarded && categories.isNotEmpty)
-                SettingsCard(
-                  [
-                    for (final category in categories)
-                      _buildCategoryCard(l10n, category)
-                  ],
-                  margin: EdgeInsets.zero,
-                ),
-              if (!_guarded)
-                for (final category in categories)
-                  _buildCategoryCard(l10n, category),
-              if (_search.isNotEmpty && categories.isEmpty)
-                Text(Localizations.localeOf(context).languageCode == 'zh'
-                    ? '未找到匹配的参数'
-                    : 'No matching settings'),
-              SizedBox(height: 6.h),
-              // 高级参数入口（独立页：工程师模式）
-              if (!_guarded) _buildAdvancedEntry(l10n),
             ],
           ),
-        ),
+          if (!_guarded) ...[
+            const SizedBox(height: 12),
+            _buildAdvancedEntry(l10n),
+          ],
+        ],
       ],
     );
+  }
+
+  Widget _buildCategoryContent(
+    AppLocalizations l10n,
+    List<SettingsCategory> categories,
+  ) {
+    final cards = [
+      for (final category in categories) _buildCategoryCard(l10n, category),
+    ];
+    return _guarded
+        ? SettingsCard(cards, margin: EdgeInsets.zero)
+        : Column(children: cards);
   }
 
   String _formatTime(DateTime dt) {
     return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')}';
   }
 
-  /// 分类卡片：彩色图标圆底 + 标题 + 摘要/已修改数 + 展开箭头
-  ///
-  /// 点击切换展开：展开后内嵌该分类的参数控件（visibility 联动）。
   Widget _buildCategoryCard(AppLocalizations l10n, SettingsCategory category) {
-    final expanded = _expandedId == category.id || _search.isNotEmpty;
     final modified = category.paramKeys.where(_isModified).length;
     return DeviceSettingsGroupCard(
       compact: _guarded,
       title: l10n.str(category.titleKey),
       summary: _categorySummary(category),
       icon: category.icon,
-      accent: category.color,
-      expanded: expanded,
-      onToggle: () =>
-          setState(() => _expandedId = expanded ? null : category.id),
-      content: expanded
-          ? _buildExpandedParams(l10n, category)
-          : const SizedBox.shrink(),
+      accent: AppColor.primary(context),
+      expanded: true,
+      onToggle: null,
+      content: _buildExpandedParams(l10n, category),
       badge: modified == 0
           ? null
           : Text(

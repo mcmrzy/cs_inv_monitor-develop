@@ -51,6 +51,8 @@ class DeviceSectionNavigation extends StatelessWidget {
     String label,
   ) {
     final selected = index == selectedIndex;
+    final ink =
+        selected ? AppColor.primary(context) : AppColor.textSecondary(context);
     return Semantics(
       selected: selected,
       button: true,
@@ -58,20 +60,13 @@ class DeviceSectionNavigation extends StatelessWidget {
         onTap: () => onSelected(index),
         borderRadius: BorderRadius.circular(16.r),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
+          duration: MediaQuery.disableAnimationsOf(context)
+              ? Duration.zero
+              : const Duration(milliseconds: 200),
           curve: Curves.easeOut,
           padding: EdgeInsets.symmetric(vertical: 8.h),
           decoration: BoxDecoration(
-            gradient: selected
-                ? LinearGradient(
-                    colors: [
-                      AppColors.primary,
-                      AppColors.primary.withValues(alpha: 0.75),
-                    ],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                  )
-                : null,
+            color: selected ? AppColor.primarySoft(context) : null,
             borderRadius: BorderRadius.circular(16.r),
           ),
           child: Row(
@@ -80,8 +75,7 @@ class DeviceSectionNavigation extends StatelessWidget {
               Icon(
                 icon,
                 size: 17.sp,
-                color:
-                    selected ? Colors.white : AppColor.textSecondary(context),
+                color: ink,
               ),
               SizedBox(width: 5.w),
               Flexible(
@@ -92,9 +86,7 @@ class DeviceSectionNavigation extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 11.sp,
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    color: selected
-                        ? Colors.white
-                        : AppColor.textSecondary(context),
+                    color: ink,
                   ),
                 ),
               ),

@@ -13,6 +13,7 @@ import 'package:inv_app/features/ota/domain/entities/device_firmware_overview.da
 import 'package:inv_app/features/ota/domain/repositories/ota_repository.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 import 'package:inv_app/features/ota/presentation/models/firmware_module_presentation.dart';
+import 'package:inv_app/features/ota/presentation/widgets/firmware_release_access.dart';
 
 /// 固件库（OTA 升级中心四入口之一）
 ///
@@ -22,13 +23,20 @@ class FirmwareLibraryPage extends StatefulWidget {
   /// 预选设备 SN（可空）
   final String? initialSn;
 
-  const FirmwareLibraryPage({super.key, this.initialSn});
+  final bool deviceHistory;
+
+  const FirmwareLibraryPage({
+    super.key,
+    this.initialSn,
+    this.deviceHistory = false,
+  });
 
   @override
   State<FirmwareLibraryPage> createState() => _FirmwareLibraryPageState();
 }
 
-class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
+class _FirmwareLibraryPageState extends State<FirmwareLibraryPage>
+    with FirmwareReleaseAccess<FirmwareLibraryPage> {
   final FirmwareDownloadService _downloadService =
       getIt<FirmwareDownloadService>();
   final DeviceRepository _deviceRepo = getIt<DeviceRepository>();
@@ -50,10 +58,17 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
   int _resourceRequest = 0;
   final Map<String, String> _remoteRequestKeys = {};
 
+  bool get _deviceScoped =>
+      widget.deviceHistory && (widget.initialSn?.trim().isNotEmpty ?? false);
+
   @override
-  void initState() {
-    super.initState();
-    _loadDevices();
+  void onFirmwareReleasesAvailable() {
+    if (_deviceScoped) {
+      _selectedSn = widget.initialSn!.trim();
+      _loadResources();
+    } else {
+      _loadDevices();
+    }
   }
 
   String _str(dynamic map, List<String> keys) {
@@ -65,6 +80,7 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
   }
 
   Future<void> _loadDevices() async {
+    if (!canBrowseFirmwareReleases) return;
     setState(() {
       _loadingDevices = true;
       _deviceError = null;
@@ -125,7 +141,7 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
 
   Future<void> _loadResources() async {
     final sn = _selectedSn;
-    if (sn == null || sn.isEmpty) return;
+    if (!canBrowseFirmwareReleases || sn == null || sn.isEmpty) return;
     final request = ++_resourceRequest;
     setState(() {
       _loadingResources = true;
@@ -141,6 +157,9 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
       (resources) {
         setState(() {
           _resources = resources;
+          if (_deviceScoped && resources.isNotEmpty) {
+            _selectedModel = resources.first.model;
+          }
           _loadingResources = false;
         });
         for (final r in resources) {
@@ -159,6 +178,7 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
   }
 
   Future<void> _download(FirmwareResource r) async {
+    if (!canBrowseFirmwareReleases) return;
     final l10n = AppLocalizations.of(context)!;
     final request = _resourceRequest;
     final model = _selectedModel;
@@ -227,6 +247,7 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
       (d['online'] == true || d['status'] == 1 || d['status'] == 2),);
 
   Future<void> _remoteUpgrade(FirmwareResource resource) async {
+    if (!canBrowseFirmwareReleases) return;
     final sn = _selectedSn;
     if (sn == null ||
         !_selectedOnline ||
@@ -366,7 +387,9 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
       backgroundColor: AppColor.surface(context),
       appBar: AppBar(
         title: Text(
-          l10n.str('ota_firmware_library'),
+          l10n.str(
+            _deviceScoped ? 'firmware_release_history' : 'ota_firmware_library',
+          ),
           style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
         ),
         centerTitle: true,
@@ -375,62 +398,80 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
         backgroundColor: AppColor.surfaceContainer(context),
         foregroundColor: AppColor.textPrimary(context),
       ),
-      body: _loadingDevices
+      body: !firmwareReleaseAccessChecked
           ? const Center(child: CircularProgressIndicator())
-          : _deviceError != null
-              ? XiaoshuoStatePanel(
-                  asset: CsergyAssets.xiaoshuoOffline,
-                  title: l10n.loadFailed,
-                  message: _deviceError!,
-                  size: 160,
-                  action: OutlinedButton(
-                    onPressed: _loadDevices,
-                    child: Text(l10n.retry),
-                  ),
+          : !canBrowseFirmwareReleases
+              ? const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: FirmwareDownloadFirstNotice(),
                 )
-              : _devices.isEmpty
-                  ? XiaoshuoStatePanel(
-                      asset: CsergyAssets.emptyDevice,
-                      title: l10n.str('ota_firmware_library_no_device'),
-                      message:
-                          l10n.str('ota_firmware_library_select_device_hint'),
-                      size: 160,
-                    )
-                  : Column(
+              : _deviceScoped
+                  ? Column(
                       children: [
-                        SizedBox(
-                          height: 44.h,
-                          child: ListView.separated(
-                            scrollDirection: Axis.horizontal,
-                            padding: EdgeInsets.symmetric(horizontal: 16.w),
-                            itemCount: _devices.length,
-                            separatorBuilder: (_, __) => SizedBox(width: 8.w),
-                            itemBuilder: (_, i) {
-                              final device = _devices[i];
-                              final sn = _str(device, ['sn', 'device_sn']);
-                              final name = _str(device, [
-                                'alias',
-                                'name',
-                                'device_name',
-                              ]);
-                              final selected = sn == _selectedSn;
-                              return ChoiceChip(
-                                label: Text(name.isEmpty ? sn : name),
-                                selected: selected,
-                                onSelected: _triggeringRemote
-                                    ? null
-                                    : (_) {
-                                        if (selected) return;
-                                        _selectDevice(device);
-                                      },
-                              );
-                            },
-                          ),
+                        ListTile(
+                          leading: const Icon(Icons.devices_other_outlined),
+                          title: Text(_selectedSn ?? widget.initialSn!),
                         ),
-                        SizedBox(height: 8.h),
                         Expanded(child: _buildBody(l10n)),
                       ],
-                    ),
+                    )
+                  : _buildDevicePickerBody(l10n),
+    );
+  }
+
+  Widget _buildDevicePickerBody(AppLocalizations l10n) {
+    if (_loadingDevices) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_deviceError != null) {
+      return XiaoshuoStatePanel(
+        asset: CsergyAssets.xiaoshuoOffline,
+        title: l10n.loadFailed,
+        message: _deviceError!,
+        size: 160,
+        action: OutlinedButton(
+          onPressed: _loadDevices,
+          child: Text(l10n.retry),
+        ),
+      );
+    }
+    if (_devices.isEmpty) {
+      return XiaoshuoStatePanel(
+        asset: CsergyAssets.emptyDevice,
+        title: l10n.str('ota_firmware_library_no_device'),
+        message: l10n.str('ota_firmware_library_select_device_hint'),
+        size: 160,
+      );
+    }
+    return Column(
+      children: [
+        SizedBox(
+          height: 44.h,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: EdgeInsets.symmetric(horizontal: 16.w),
+            itemCount: _devices.length,
+            separatorBuilder: (_, __) => SizedBox(width: 8.w),
+            itemBuilder: (_, i) {
+              final device = _devices[i];
+              final sn = _str(device, ['sn', 'device_sn']);
+              final name = _str(device, ['alias', 'name', 'device_name']);
+              final selected = sn == _selectedSn;
+              return ChoiceChip(
+                label: Text(name.isEmpty ? sn : name),
+                selected: selected,
+                onSelected: _triggeringRemote
+                    ? null
+                    : (_) {
+                        if (!selected) _selectDevice(device);
+                      },
+              );
+            },
+          ),
+        ),
+        SizedBox(height: 8.h),
+        Expanded(child: _buildBody(l10n)),
+      ],
     );
   }
 
@@ -565,24 +606,22 @@ class _FirmwareLibraryPageState extends State<FirmwareLibraryPage> {
                 : '${l10n.str('firmware_hardware_range')}: ${r.hardwareVersions.join(', ')}',
             style: TextStyle(fontSize: 12.sp, color: AppColor.textSecondary(context)),
           ),
-          if (r.changelog.isNotEmpty) ...[
-            SizedBox(height: 8.h),
-            Text(
-              FirmwareModulePresentation.sanitizeCustomerCopy(
-                r.changelog,
-                l10n,
-              ),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 12.sp,
-                height: 1.4,
-                color: AppColor.textSecondary(context),
-              ),
+          SizedBox(height: 8.h),
+          Text(
+            r.changelog.trim().isEmpty
+                ? l10n.str('firmware_no_release_notes')
+                : FirmwareModulePresentation.sanitizeCustomerCopy(
+                    r.changelog,
+                    l10n,
+                  ),
+            style: TextStyle(
+              fontSize: 12.sp,
+              height: 1.4,
+              color: AppColor.textSecondary(context),
             ),
-          ],
+          ),
           SizedBox(height: 10.h),
-          if (r.canRemoteUpgrade) ...[
+          if (!_deviceScoped && r.canRemoteUpgrade) ...[
             SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(

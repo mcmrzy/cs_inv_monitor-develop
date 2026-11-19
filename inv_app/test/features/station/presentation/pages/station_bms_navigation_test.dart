@@ -16,6 +16,7 @@ import 'package:inv_app/core/entities/inverter_data.dart';
 import 'package:inv_app/core/services/network_status_service.dart';
 import 'package:inv_app/core/services/realtime_data_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
+import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
 import 'package:inv_app/features/device/presentation/pages/device_realtime_page.dart';
@@ -23,6 +24,8 @@ import 'package:inv_app/features/device/presentation/pages/device_storage_page.d
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
 import 'package:inv_app/features/station/presentation/pages/home_page.dart';
 import 'package:inv_app/features/station/presentation/pages/station_detail_page.dart';
+import 'package:inv_app/features/station/data/datasources/station_remote_data_source.dart';
+import 'package:inv_app/features/station/data/repositories/station_repository_impl.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -161,22 +164,98 @@ void main() {
     await getIt.reset();
   });
 
-  testWidgets('grid uses inverter junction for import, export and charging', (tester) async {
-    for (final power in [1800.0, -600.0, 0.0]) {
-      final snapshot = {...station, 'grid_power': power, 'batt_power': 600.0,
+  testWidgets('all-device energy diagram displays realtime values when station totals are zero', (tester) async {
+    final dio = Dio()..interceptors.add(InterceptorsWrapper(onRequest: (options, handler) {
+      handler.resolve(Response(requestOptions: options, statusCode: 200,
+        data: {'code': 0, 'data': options.path == '/stations/7'
+          ? {'station': {...station, 'pv_power': 0.0, 'load_power': 0.0, 'batt_power': 0.0},
+              'devices': [device('A')],}
+          : {'online': true, 'data_time': DateTime.now().toUtc().toIso8601String(),
+              'realtime': {'pv': {'pv_total_power': 2400}, 'ac': {'output_power': 1600, 'ac_input_power': 500},
+                'bat': {'battery_charge_power': 1300, 'battery_soc': 78},},},},),);
+    },),);
+    final result = await tester.runAsync(() => StationRepositoryImpl(StationRemoteDataSource(dio)).getDetail(7));
+    final data = result!.getOrElse((_) => throw StateError('detail failed'));
+    when(() => stationBloc.state).thenReturn(StationDetailLoaded(stationId: 7,
+      station: data['station'], devices: data['devices'] as List,),);
+    await pump(tester, const StationDetailPage(stationId: 7));
+    expect(find.text('2400'), findsNWidgets(2));
+    expect(find.text('1600'), findsOneWidget);
+    expect(find.text('1300'), findsOneWidget);
+    expect(find.text('500'), findsOneWidget);
+    final painter = tester.widgetList<CustomPaint>(find.byType(CustomPaint)).map((w) => w.painter)
+        .firstWhere((p) => p.runtimeType.toString() == '_EnergyFlowPainter') as dynamic;
+    expect(painter.flows as List<FlowEdge>, isNotEmpty);
+    await capture(tester, 'energy_realtime_recovered');
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('first load failure offers retry instead of an endless skeleton', (tester) async {
+    when(() => stationBloc.state).thenReturn(const StationError(message: 'Server error: 500'));
+    await pump(tester, const StationDetailPage(stationId: 7));
+    expect(find.byKey(const ValueKey('station-detail-retry')), findsOneWidget);
+    await capture(tester, 'energy_load_error');
+    await tester.tap(find.byKey(const ValueKey('station-detail-retry')));
+    verify(() => stationBloc.add(any(that: isA<StationDetailRequested>()))).called(2);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('station shows the original gradient paths when power starts flowing', (tester) async {
+    final states = StreamController<StationState>.broadcast();
+    addTearDown(states.close);
+    when(() => stationBloc.stream).thenAnswer((_) => states.stream);
+    await pump(tester, const StationDetailPage(stationId: 7));
+    final node = find.byKey(const ValueKey('station-energy-pv'));
+    expect(node, findsOneWidget);
+    states.add(StationDetailLoaded(stationId: 7, station: {
+      ...station, 'pv_power': 2400.0, 'load_power': 1600.0,
+      'batt_power': 1300.0, 'batt_soc': 78.0,
+      'grid_power': 500.0, 'grid_updated_at': DateTime.now().toUtc().toIso8601String(),
+    }, devices: [device('A'), device('B')],),);
+    await tester.pump();
+    final painter = tester.widgetList<CustomPaint>(find.byType(CustomPaint))
+        .map((w) => w.painter)
+        .firstWhere((p) => p.runtimeType.toString() == '_EnergyFlowPainter') as dynamic;
+    final flows = painter.flows as List<FlowEdge>;
+    expect(flows.any((flow) =>
+        flow.from == NodePosition.top && flow.to == NodePosition.bottom &&
+        flow.fromColor == AppColors.orange && flow.toColor == AppColors.blue,
+    ), isTrue);
+    expect(flows.any((flow) =>
+        flow.from == NodePosition.top && flow.to == NodePosition.left &&
+        flow.fromColor == AppColors.orange &&
+        flow.toColor == AppColors.successLight,
+    ), isTrue);
+    await capture(tester, 'energy_restored');
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('restored energy diagram puts signed grid power in the right-hand node', (tester) async {
+    for (final power in [1000.0, -600.0, 0.0]) {
+      final snapshot = {...station, 'grid_power': power, 'batt_power': 1100.0,
         'grid_updated_at': DateTime.now().toUtc().toIso8601String(),};
       when(() => stationBloc.state).thenReturn(StationDetailLoaded(
         stationId: 7, station: snapshot, devices: [device('A')],),);
       await pump(tester, const StationDetailPage(stationId: 7));
+      final grid = find.byKey(const ValueKey('station-energy-grid-reading'));
+      final battery = find.byKey(const ValueKey('station-energy-battery'));
+      final label = power > 0 ? 'Grid Input' : power < 0 ? 'Grid Output' : 'Grid';
+      expect(tester.getCenter(grid).dx, greaterThan(tester.getCenter(battery).dx));
+      expect(tester.getCenter(grid).dy, tester.getCenter(battery).dy);
+      expect(find.descendant(of: grid, matching: find.text(label)), findsOneWidget);
+      expect(
+        find.descendant(
+          of: grid,
+          matching: find.text(power.abs().toStringAsFixed(0)),
+        ),
+        findsOneWidget,
+      );
       final painter = tester.widgetList<CustomPaint>(find.byType(CustomPaint))
           .map((widget) => widget.painter)
           .firstWhere((painter) => painter.runtimeType.toString() == '_EnergyFlowPainter') as dynamic;
       final flows = painter.flows as List<FlowEdge>;
-      final grid = flows.singleWhere((flow) => flow.from == NodePosition.right || flow.to == NodePosition.right);
-      expect(grid.active, power.abs() > 5);
-      expect(grid.from, power < 0 ? NodePosition.center : NodePosition.right);
-      expect(grid.to, power < 0 ? NodePosition.right : NodePosition.center);
-      expect(flows.any((flow) => flow.from == NodePosition.center && flow.to == NodePosition.left && flow.active), isTrue);
+      expect(flows.any((flow) => flow.from.name == 'right'), power > 0);
+      expect(flows.any((flow) => flow.to.name == 'right'), power < 0);
       await capture(tester, power > 0 ? 'grid_import' : power < 0 ? 'grid_export' : 'grid_zero');
       await tester.pumpWidget(const SizedBox());
     }
@@ -188,18 +267,32 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('grid sample expires and stops arrows without a new response', (tester) async {
+  testWidgets('energy diagram fits small screens in both themes with large text', (tester) async {
+    when(() => stationBloc.state).thenReturn(StationDetailLoaded(
+      stationId: 7, station: {...station, 'pv_power': 2400.0,
+        'load_power': 1600.0, 'batt_power': -600.0, 'batt_soc': 78.0,
+        'grid_power': -800.0, 'grid_updated_at': DateTime.now().toUtc().toIso8601String(),},
+      devices: [device('A')],),);
+    for (final dark in [false, true]) {
+      await pump(tester, const StationDetailPage(stationId: 7),
+          width: 320, scale: 1.8, dark: dark,);
+      await capture(tester, dark ? 'energy_320_dark' : 'energy_320_light');
+      await tester.pumpWidget(const SizedBox());
+    }
+  });
+
+  testWidgets('grid sample clears when it expires without a new response', (tester) async {
     when(() => stationBloc.state).thenReturn(StationDetailLoaded(
       stationId: 7, station: {...station, 'grid_power': 800.0,
         'grid_updated_at': DateTime.now().toUtc().toIso8601String(),},
       devices: [device('A')],),);
     await pump(tester, const StationDetailPage(stationId: 7));
-    final paint = find.byWidgetPredicate((w) => w is CustomPaint && w.painter.runtimeType.toString() == '_EnergyFlowPainter');
-    FlowEdge grid() => ((tester.widget<CustomPaint>(paint).painter as dynamic).flows as List<FlowEdge>)
-        .singleWhere((flow) => flow.from == NodePosition.right || flow.to == NodePosition.right);
-    expect(grid().active, isTrue);
+    final grid = find.byKey(const ValueKey('station-energy-grid-reading'));
+    Finder reading(String value) => find.descendant(of: grid, matching: find.text(value));
+    expect(reading('800'), findsOneWidget);
     await tester.pump(const Duration(minutes: 5, seconds: 1));
-    expect(grid().active, isFalse);
+    expect(reading('800'), findsNothing);
+    expect(reading('—'), findsOneWidget);
     await capture(tester, 'grid_expired');
     await tester.pumpWidget(const SizedBox());
   });
@@ -327,8 +420,8 @@ void main() {
       await tester.tap(find.text('A').last);
       await tester.pump(const Duration(milliseconds: 600));
       final batteryNode = find.byKey(const ValueKey('station-energy-battery'));
-      expect(find.descendant(of: batteryNode, matching: find.text('--')), findsOneWidget);
-      expect(find.descendant(of: batteryNode, matching: find.text('--%')), findsOneWidget);
+      expect(find.descendant(of: batteryNode, matching: find.text('—')), findsOneWidget);
+      expect(find.descendant(of: batteryNode, matching: find.textContaining('%')), findsNothing);
       expect(find.descendant(of: batteryNode, matching: find.text('0')), findsNothing);
       await tester.pumpWidget(const SizedBox());
     });
@@ -357,13 +450,13 @@ void main() {
       final batteryNode = find.byKey(const ValueKey('station-energy-battery'));
       expect(find.descendant(of: batteryNode, matching: find.text('600')), findsOneWidget);
       final flowPaint = find.byWidgetPredicate((w) => w is CustomPaint && w.painter.runtimeType.toString() == '_EnergyFlowPainter');
-      expect(((tester.widget<CustomPaint>(flowPaint).painter as dynamic).flows as List<FlowEdge>).where((flow) => flow.active), isNotEmpty);
+      expect(((tester.widget<CustomPaint>(flowPaint).painter as dynamic).flows as List<FlowEdge>), isNotEmpty);
       // Polling returns no changed sample; only the expiry transition can
       // invalidate the values captured by the energy-flow AnimatedBuilder.
       await tester.pump(Duration(seconds: summary ? 211 : 301));
-      expect(find.descendant(of: batteryNode, matching: find.text('--')), findsOneWidget);
-      expect(find.descendant(of: batteryNode, matching: find.text('--%')), findsOneWidget);
-      expect(((tester.widget<CustomPaint>(flowPaint).painter as dynamic).flows as List<FlowEdge>).where((flow) => flow.active), isEmpty);
+      expect(find.descendant(of: batteryNode, matching: find.text('—')), findsOneWidget);
+      expect(find.descendant(of: batteryNode, matching: find.textContaining('%')), findsNothing);
+      expect(((tester.widget<CustomPaint>(flowPaint).painter as dynamic).flows as List<FlowEdge>), isEmpty);
       await tester.pumpWidget(const SizedBox());
     });
   }

@@ -7,6 +7,7 @@ import 'package:inv_app/core/errors/failures.dart';
 import 'package:inv_app/core/services/ble/ble_adapter.dart';
 import 'package:inv_app/core/services/ble/ble_device_manager.dart';
 import 'package:inv_app/core/services/firmware_download_service.dart';
+import 'package:inv_app/core/services/network_status_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/features/ota/domain/entities/local_channel.dart';
 import 'package:inv_app/features/ota/domain/repositories/ota_repository.dart';
@@ -22,6 +23,8 @@ class _Repository extends Mock implements OtaRepository {}
 class _Adapter extends Mock implements BleAdapter {}
 
 class _KeyStore extends Mock implements BleDeviceKeyStore {}
+
+class _Network extends Mock implements NetworkStatusService {}
 
 void main() {
   late _Downloads downloads;
@@ -154,6 +157,21 @@ void main() {
     await tester.pumpAndSettle();
     expect(downloadArguments![#url], canonical['download_url']);
     expect(downloadArguments![#hardwareVersions], ['HW-2']);
+  });
+
+  testWidgets('offline upgrade asks to pre-download without querying metadata',
+      (tester) async {
+    final network = _Network();
+    when(() => network.isOffline).thenReturn(true);
+    when(() => network.statusStream).thenAnswer((_) => const Stream.empty());
+    getIt.registerSingleton<NetworkStatusService>(network);
+
+    await pumpLegacy(tester);
+
+    expect(find.text('请先下载固件'), findsOneWidget);
+    expect(find.widgetWithText(ElevatedButton, '下载固件'), findsNothing);
+    verifyNever(() => repository.getFirmwareInfo(any()));
+    verify(() => downloads.listDownloadedFirmwares()).called(1);
   });
 
   testWidgets('no firmware ID and no scope keeps the old URL unavailable',

@@ -228,8 +228,8 @@ class _AnimatedEnergyValueState extends State<_AnimatedEnergyValue>
         // FittedBox(scaleDown)：大数值自动缩小，防三列布局溢出
         return FittedBox(
           fit: BoxFit.scaleDown,
-          child: RichText(
-            text: TextSpan(
+          child: Text.rich(
+            TextSpan(
               children: [
                 TextSpan(
                   text: _formatEnergy(

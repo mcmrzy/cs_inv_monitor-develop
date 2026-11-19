@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 
 /// 仪表盘骨架屏 - 全页加载态
@@ -17,28 +16,11 @@ class DashboardSkeleton extends StatelessWidget {
           // Hero 卡片
           const SkeletonStatisticsHeader(),
           SizedBox(height: 16.h),
-          // 状态行
-          Row(
-            children: List.generate(
-              3,
-              (_) => Expanded(
-                child: Container(
-                  margin: EdgeInsets.symmetric(horizontal: 4.w),
-                  height: 80.h,
-                  decoration: BoxDecoration(
-                    color: AppColor.surfaceContainer(context),
-                    borderRadius: BorderRadius.circular(14.r),
-                  ),
-                ),
-              ),
-            ),
-          ),
+          // 设备状态
+          const SkeletonCard(height: 165),
           SizedBox(height: 16.h),
           // 趋势图
           const SkeletonCard(height: 230),
-          SizedBox(height: 16.h),
-          // 设备分布
-          const SkeletonCard(height: 160),
           SizedBox(height: 16.h),
           // 电站排行
           const SkeletonCard(height: 220),

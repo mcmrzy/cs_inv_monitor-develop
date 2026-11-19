@@ -1,3 +1,4 @@
+import 'package:inv_app/core/network/offline_mode_interceptor.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:pretty_dio_logger/pretty_dio_logger.dart';
@@ -231,6 +232,10 @@ class ServiceLocator {
       ),
       dispose: (service) => service.dispose(),
     );
+    getIt<Dio>().interceptors.insert(
+          0,
+          OfflineModeInterceptor(getIt<StorageService>()),
+        );
 
     getIt.registerLazySingleton<ApiService>(
       () => ApiService(getIt()),

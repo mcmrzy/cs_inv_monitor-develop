@@ -631,7 +631,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
         }
       },
       child: Scaffold(
-        backgroundColor: AppColor.surfaceHover(context),
+        backgroundColor: AppColor.background(context),
         appBar: AppBar(
           title: Text(
             l10n.deviceDetail,
@@ -808,14 +808,13 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage>
             ],
           ),
         ),
-        // ── 底部 Tab 栏（品牌浮起容器）──
+        // 设备详情页签。
         _buildBottomTabBar(),
       ],
     );
   }
 
-  /// 底部 Tab 栏：品牌浮起圆角容器，图标 + 文字组合；
-  /// 选中项品牌色渐变药丸高亮，未选中灰色；SafeArea 适配底部安全区
+  /// 设备页签用浅色背景突出当前选择。
   Widget _buildBottomTabBar() {
     final l10n = AppLocalizations.of(context)!;
     final tabs = [

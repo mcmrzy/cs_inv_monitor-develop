@@ -15,29 +15,35 @@ class DashboardLoading extends DashboardState {
   const DashboardLoading();
 }
 
+enum DashboardSection { statistics, distribution, trend, ranking, alarms }
+
 class DashboardLoaded extends DashboardState {
   final DashboardData data;
   final bool isSSEConnected;
   final String selectedTimeRange;
-  final List<String> failedSections;
+  final Set<DashboardSection> pendingSections;
+  final Set<DashboardSection> failedSections;
 
   const DashboardLoaded({
     required this.data,
     this.isSSEConnected = false,
     this.selectedTimeRange = 'day',
-    this.failedSections = const [],
+    this.pendingSections = const {},
+    this.failedSections = const {},
   });
 
   DashboardLoaded copyWith({
     DashboardData? data,
     bool? isSSEConnected,
     String? selectedTimeRange,
-    List<String>? failedSections,
+    Set<DashboardSection>? pendingSections,
+    Set<DashboardSection>? failedSections,
   }) {
     return DashboardLoaded(
       data: data ?? this.data,
       isSSEConnected: isSSEConnected ?? this.isSSEConnected,
       selectedTimeRange: selectedTimeRange ?? this.selectedTimeRange,
+      pendingSections: pendingSections ?? this.pendingSections,
       failedSections: failedSections ?? this.failedSections,
     );
   }
@@ -56,6 +62,7 @@ class DashboardLoaded extends DashboardState {
         data.isFromCache,
         isSSEConnected,
         selectedTimeRange,
+        pendingSections,
         failedSections,
       ];
 }

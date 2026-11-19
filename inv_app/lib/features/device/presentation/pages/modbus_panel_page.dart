@@ -16,6 +16,7 @@ import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/features/device/presentation/pages/modbus_panel_aux_page.dart';
 import 'package:inv_app/features/device/presentation/widgets/device_connection_card.dart';
 import 'package:inv_app/features/device/presentation/widgets/device_settings_heading.dart';
+import 'package:inv_app/features/device/presentation/widgets/device_settings_navigation.dart';
 import 'package:inv_app/features/device/presentation/widgets/device_setting_change.dart';
 import 'package:inv_app/features/device/presentation/widgets/modbus_panel_overview.dart';
 import 'package:inv_app/features/device/presentation/widgets/device_power_buttons.dart';
@@ -374,7 +375,7 @@ class _ModbusPanelPageState extends State<ModbusPanelPage> {
     final localMode = getIt.isRegistered<ConnectionModeService>() &&
         getIt<ConnectionModeService>().isLocal;
     return Scaffold(
-      backgroundColor: AppColor.surfaceHover(context),
+      backgroundColor: AppColor.background(context),
       appBar: AppBar(
         title: Text(
           _label(context, '设备详情', 'Device details'),
@@ -403,9 +404,10 @@ class _ModbusPanelPageState extends State<ModbusPanelPage> {
         child: ListView(
           key: PageStorageKey(('panel-section', _section)),
           physics: const AlwaysScrollableScrollPhysics(),
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: const EdgeInsets.all(16),
           children: [
-            if (_section != 1 || !_connected)
+            if (_section != 1)
               DeviceConnectionCard(
                 icon: _connected ? Icons.bluetooth_connected : Icons.bluetooth,
                 connection: _reconnecting
@@ -477,28 +479,50 @@ class _ModbusPanelPageState extends State<ModbusPanelPage> {
                     : null,
               ),
             ] else if (_section == 1) ...[
-              DeviceSettingsHeading(
-                title: _label(context, '逆变器设置', 'Inverter settings'),
-                description: _connected
-                    ? _label(context, '蓝牙直连 · 点选参数查看或修改',
-                        'Bluetooth direct · Tap a setting to view or edit')
-                    : _label(context, '靠近面板并重新连接蓝牙后，可读取设置。',
-                        'Reconnect near the panel to read settings.'),
-              ),
               if (_connected && info != null)
                 _PanelSettings(
                   key: ValueKey((
                     widget.session.connectionSessionId,
                     info.context,
-                    _english
+                    _english,
                   )),
                   panel: _panel,
+                  device: sn,
                 )
-              else
-                Text(_connected
-                    ? _label(context, '正在读取参数目录', 'Reading settings catalogue')
-                    : _label(context, '连接蓝牙后可读取设置',
-                        'Connect Bluetooth to read settings')),
+              else ...[
+                DeviceSettingsHeader(
+                  title: _label(context, '逆变器设置', 'Inverter settings'),
+                  icon: Icons.bluetooth_rounded,
+                  device: sn,
+                  status: _reconnecting
+                      ? _label(context, '正在连接蓝牙', 'Connecting over Bluetooth')
+                      : _connected
+                          ? _label(context, '蓝牙直连', 'Bluetooth direct')
+                          : _label(context, '蓝牙已断开', 'Bluetooth disconnected'),
+                  ready: _connected,
+                  detail: _connected
+                      ? _label(
+                          context, '正在读取参数目录', 'Reading settings catalogue')
+                      : null,
+                  readLabel: _label(context, '读取设备', 'Read device'),
+                  reading: _connected && _error == null,
+                  refreshLabel: _connected || sn.isEmpty
+                      ? null
+                      : _label(context, '重新连接面板', 'Reconnect to panel'),
+                  onRefresh: _reconnecting ? null : _reconnect,
+                ),
+                if (!_connected) ...[
+                  const SizedBox(height: 10),
+                  DeviceSettingsNotice(
+                    warning: true,
+                    text: _label(
+                      context,
+                      '靠近面板并重新连接蓝牙后，可读取设置。',
+                      'Reconnect near the panel to read settings.',
+                    ),
+                  ),
+                ],
+              ],
               const SizedBox(height: 12),
               DeviceActionButton(
                 icon: Icons.settings_outlined,
@@ -634,54 +658,65 @@ class _ModbusPanelPageState extends State<ModbusPanelPage> {
 }
 
 class _PanelSettings extends StatefulWidget {
-  const _PanelSettings({super.key, required this.panel});
+  const _PanelSettings({
+    super.key,
+    required this.panel,
+    required this.device,
+  });
 
   final ModbusPanelBle panel;
+  final String device;
 
   @override
   State<_PanelSettings> createState() => _PanelSettingsState();
 }
 
 class _PanelSettingsState extends State<_PanelSettings> {
-  final _items = <ModbusPanelSetting>[];
+  List<ModbusPanelSetting> _items = [];
   ModbusPanelInfo? _info;
   bool _loading = false;
+  int _readCount = 0;
+  int _readTotal = 0;
   Object? _error;
   String _query = '';
+  String? _selectedGroup;
 
   @override
   void initState() {
     super.initState();
-    unawaited(_load(reset: true));
+    unawaited(_load());
   }
 
-  String? _expandedGroup;
-
-  Future<void> _load({bool reset = false}) async {
+  Future<void> _load() async {
     if (_loading) return;
     setState(() {
       _loading = true;
+      _readCount = 0;
+      _readTotal = _info?.count ?? 0;
       _error = null;
     });
     try {
       final info = await widget.panel.info();
       if (!mounted) return;
       setState(() {
-        if (reset ||
-            info.context != _info?.context ||
-            info.count != _info?.count) {
-          _items.clear();
+        _readTotal = info.count;
+        if (info.context != _info?.context || info.count != _info?.count) {
+          _items = [];
+          _selectedGroup = null;
         }
         _info = info;
       });
-      for (var index = _items.length; index < info.count && mounted; index++) {
+      final snapshot = <ModbusPanelSetting>[];
+      for (var index = 0; index < info.count && mounted; index++) {
         final item = await widget.panel.setting(index);
         if (!mounted) return;
         if (item.context != info.context) {
           throw const BleCommandException('CONTEXT_CHANGED', 'Model changed');
         }
-        setState(() => _items.add(item));
+        snapshot.add(item);
+        setState(() => _readCount = snapshot.length);
       }
+      if (mounted) setState(() => _items = snapshot);
     } catch (error) {
       if (mounted) setState(() => _error = error);
     } finally {
@@ -704,48 +739,86 @@ class _PanelSettingsState extends State<_PanelSettings> {
     setState(() => _items[updated.index] = updated);
   }
 
+  void _selectGroup(String group) {
+    Scrollable.maybeOf(context)?.position.jumpTo(0);
+    setState(() => _selectedGroup = group);
+  }
+
+  IconData _groupIcon(String group) => switch (group) {
+        '输出与模式' ||
+        '双路输出' ||
+        '并机设置' ||
+        'Output and mode' ||
+        'Dual output' ||
+        'Parallel settings' =>
+          Icons.power_outlined,
+        '充电与电池' ||
+        'Battery' ||
+        'Charging and battery' =>
+          Icons.battery_charging_full_outlined,
+        '均衡充电' || 'Equalization' => Icons.balance_rounded,
+        'BMS通信' || 'BMS' => Icons.cable_rounded,
+        '发电机' || 'Generator' => Icons.local_gas_station_outlined,
+        '系统功能' || 'System' => Icons.settings_outlined,
+        _ => Icons.tune_rounded,
+      };
+
+  String _groupSummary(List<ModbusPanelSetting> items) => _label(
+        context,
+        '${items.length} 项 · ${items.where((item) => item.editable).length} 项可调',
+        '${items.length} settings · ${items.where((item) => item.editable).length} adjustable',
+      );
+
   @override
   Widget build(BuildContext context) {
     final groups = <String, List<ModbusPanelSetting>>{};
-    for (final item in _items) {
-      if (item.id != 'panel_4123' &&
-          '${item.label} ${item.group} ${item.id}'
-              .toLowerCase()
-              .contains(_query)) {
+    final settings = _items.where((item) => item.id != 'panel_4123');
+    for (final item in settings) {
+      if ('${item.label} ${item.group} ${item.id}'
+          .toLowerCase()
+          .contains(_query)) {
         groups.putIfAbsent(item.group, () => []).add(item);
       }
     }
-    final count = _info?.count ?? 0;
-    final visibleCount = groups.values.fold<int>(
-      0,
-      (total, settings) => total + settings.length,
-    );
+    final searching = _query.isNotEmpty;
+    final selected =
+        _selectedGroup ?? (groups.length == 1 ? groups.keys.first : '');
+    final selectedItems = groups[selected];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                _loading
-                    ? _label(context, '正在读取参数', 'Reading settings')
-                    : _label(
-                        context, '$visibleCount 项参数', '$visibleCount settings'),
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
-            FilledButton.tonalIcon(
-              style: FilledButton.styleFrom(
-                minimumSize: const Size(144, 52),
-                backgroundColor: AppColor.primarySoft(context),
-                foregroundColor: AppColor.primary(context),
-              ),
-              onPressed: _loading ? null : () => _load(reset: true),
-              icon: const Icon(Icons.sync_rounded),
-              label: Text(_label(context, '读取设备', 'Read device')),
-            ),
-          ],
+        DeviceSettingsHeader(
+          title: _label(context, '逆变器设置', 'Inverter settings'),
+          icon: Icons.bluetooth_connected_rounded,
+          device: widget.device,
+          status: _label(context, '蓝牙直连', 'Bluetooth direct'),
+          ready: true,
+          readLabel: _label(context, '读取设备', 'Read device'),
+          detail: _loading
+              ? _label(
+                  context,
+                  _readTotal > 0 ? '读取中 $_readCount/$_readTotal' : '正在读取参数',
+                  _readTotal > 0
+                      ? 'Reading $_readCount/$_readTotal'
+                      : 'Reading settings',
+                )
+              : _error != null
+                  ? null
+                  : _label(
+                      context,
+                      '${settings.length} 项参数',
+                      '${settings.length} settings',
+                    ),
+          reading: _loading,
+          readProgress: _readTotal > 0 ? _readCount / _readTotal : null,
+          onRead: _load,
         ),
+        if (_error case final error?) ...[
+          const SizedBox(height: 10),
+          DeviceSettingsNotice(warning: true, text: _errorText(context, error)),
+        ],
+        const SizedBox(height: 14),
         DeviceSearchBar(
           padding: EdgeInsets.zero,
           hintText: _label(context, '搜索参数', 'Search settings'),
@@ -753,115 +826,98 @@ class _PanelSettingsState extends State<_PanelSettings> {
           onSearchChanged: (text) =>
               setState(() => _query = text.trim().toLowerCase()),
         ),
-        const SizedBox(height: 12),
-        if (_loading)
-          LinearProgressIndicator(
-            value: count > 0 ? _items.length / count : null,
-            semanticsLabel: _label(context, '正在读取参数', 'Reading settings'),
-          ),
-        if (_error != null) Text(_errorText(context, _error!)),
-        if (groups.isNotEmpty)
-          SettingsCard(
-            [
+        const SizedBox(height: 16),
+        if (!_loading && _error == null && groups.isEmpty)
+          DeviceSettingsNotice(
+            text: searching
+                ? _label(context, '未找到匹配的参数', 'No matching settings')
+                : _label(context, '设备当前没有可用参数', 'No settings available'),
+          )
+        else if (searching && groups.isNotEmpty)
+          _buildGroupContent(groups)
+        else if (selectedItems != null) ...[
+          DeviceSettingsCategoryBack(onPressed: () => _selectGroup('')),
+          _buildGroupContent({selected: selectedItems}),
+        ] else if (groups.isNotEmpty)
+          DeviceSettingsDirectory(
+            entries: [
               for (final group in groups.entries)
-                DeviceSettingsGroupCard(
-                  key: ValueKey(group.key),
-                  compact: true,
+                (
                   title: group.key,
-                  summary: _label(
-                    context,
-                    '${group.value.length} 项 · ${group.value.where((item) => item.editable).length} 项可调',
-                    '${group.value.length} settings · ${group.value.where((item) => item.editable).length} adjustable',
-                  ),
-                  icon: switch (group.key) {
-                    '输出与模式' || '双路输出' || '并机设置' => Icons.power_outlined,
-                    '充电与电池' ||
-                    '均衡充电' ||
-                    'BMS通信' =>
-                      Icons.battery_charging_full_outlined,
-                    '发电机' => Icons.local_gas_station_outlined,
-                    '系统功能' => Icons.settings_outlined,
-                    _ => Icons.tune_rounded,
-                  },
-                  accent: AppColors.primary,
-                  expanded: _expandedGroup == group.key ||
-                      _query.isNotEmpty ||
-                      (_expandedGroup == null && groups.length == 1),
-                  onToggle: () => setState(() {
-                    final expanded = _expandedGroup == group.key ||
-                        (_expandedGroup == null && groups.length == 1);
-                    _expandedGroup = expanded ? '' : group.key;
-                  }),
-                  content: Column(
-                    children: [
-                      for (final item in group.value)
-                        Column(
-                          children: [
-                            Divider(
-                                height: 1,
-                                indent: 44,
-                                endIndent: 14,
-                                color: AppColor.divider(context)),
-                            ListTile(
-                              dense: true,
-                              contentPadding: const EdgeInsetsDirectional.only(
-                                start: 44,
-                                end: 14,
-                              ),
-                              title: Row(
-                                children: [
-                                  Expanded(flex: 3, child: Text(item.label)),
-                                  const SizedBox(width: 8),
-                                  Flexible(
-                                    flex: 2,
-                                    child: Align(
-                                      alignment: AlignmentDirectional.centerEnd,
-                                      child: Text(
-                                        item.value != null ? item.text : '—',
-                                        textAlign: TextAlign.end,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodyMedium
-                                            ?.copyWith(
-                                              color:
-                                                  AppColor.textPrimary(context),
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              subtitle: item.reason.isNotEmpty
-                                  ? Text(item.reason)
-                                  : null,
-                              trailing: Icon(
-                                item.editable
-                                    ? Icons.chevron_right
-                                    : Icons.lock_outline,
-                                size: 17,
-                                color: AppColor.textSecondary(context),
-                              ),
-                              onTap: _loading ? null : () => _edit(item),
-                            ),
-                          ],
-                        ),
-                    ],
-                  ),
+                  summary: _groupSummary(group.value),
+                  icon: _groupIcon(group.key),
+                  onTap: () => _selectGroup(group.key),
                 ),
             ],
-            margin: EdgeInsets.zero,
-          ),
-        if (!_loading && _error == null && _query.isNotEmpty && groups.isEmpty)
-          ListTile(
-            title: Text(_label(context, '未找到匹配的参数', 'No matching settings')),
-          ),
-        if (!_loading && _error != null)
-          OutlinedButton(
-            onPressed: () => _load(reset: true),
-            child: Text(_label(context, '重新读取', 'Read again')),
           ),
       ],
+    );
+  }
+
+  Widget _buildGroupContent(Map<String, List<ModbusPanelSetting>> groups) {
+    return SettingsCard(
+      [
+        for (final group in groups.entries)
+          DeviceSettingsGroupCard(
+            key: ValueKey(group.key),
+            compact: true,
+            title: group.key,
+            summary: _groupSummary(group.value),
+            icon: _groupIcon(group.key),
+            accent: AppColor.primary(context),
+            expanded: true,
+            onToggle: null,
+            content: Column(
+              children: [
+                for (final item in group.value) ...[
+                  Divider(
+                    height: 1,
+                    indent: 14,
+                    endIndent: 14,
+                    color: AppColor.divider(context),
+                  ),
+                  ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+                    title: Row(
+                      children: [
+                        Expanded(flex: 3, child: Text(item.label)),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          flex: 2,
+                          child: Align(
+                            alignment: AlignmentDirectional.centerEnd,
+                            child: Text(
+                              item.value != null ? item.text : '—',
+                              textAlign: TextAlign.end,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
+                                    color: AppColor.textPrimary(context),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    subtitle: item.reason.isNotEmpty ? Text(item.reason) : null,
+                    trailing: Icon(
+                      item.editable
+                          ? Icons.chevron_right_rounded
+                          : Icons.lock_outline_rounded,
+                      size: 19,
+                      color: AppColor.textSecondary(context),
+                    ),
+                    onTap:
+                        _loading || _error != null ? null : () => _edit(item),
+                  ),
+                ],
+              ],
+            ),
+          ),
+      ],
+      margin: EdgeInsets.zero,
     );
   }
 }

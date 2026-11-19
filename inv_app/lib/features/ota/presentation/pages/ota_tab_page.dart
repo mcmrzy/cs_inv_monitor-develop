@@ -60,13 +60,13 @@ class _OtaTabPageState extends State<OtaTabPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final hasLargeText = MediaQuery.textScalerOf(context).scale(1) > 1.2;
     return Scaffold(
-      backgroundColor: AppColor.surface(context),
+      backgroundColor: AppColor.surfaceHover(context),
       appBar: AppBar(title: Text(l10n.str('ota_title')), centerTitle: true),
       body: RefreshIndicator(
         onRefresh: () => _load(reset: true),
         child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
           children: [
             _OverviewCard(
@@ -130,13 +130,7 @@ class _OtaTabPageState extends State<OtaTabPage> {
                     .titleMedium
                     ?.copyWith(fontWeight: FontWeight.w700),),
             const SizedBox(height: 10),
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 12,
-              childAspectRatio: hasLargeText ? .92 : 1.18,
+            _UpgradeTools(
               children: [
                 _ToolCard(
                     icon: Icons.cloud_sync_rounded,
@@ -386,6 +380,32 @@ class _StatusPill extends StatelessWidget {
       );
 }
 
+class _UpgradeTools extends StatelessWidget {
+  const _UpgradeTools({required this.children});
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const gap = 10.0;
+        final twoColumns = constraints.maxWidth >= 340 &&
+            MediaQuery.textScalerOf(context).scale(16) <= 20;
+        final tileWidth =
+            twoColumns ? (constraints.maxWidth - gap) / 2 : constraints.maxWidth;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            for (final tool in children)
+              SizedBox(width: tileWidth, child: tool),
+          ],
+        );
+      },
+    );
+  }
+}
+
 class _ToolCard extends StatelessWidget {
   const _ToolCard(
       {required this.icon,
@@ -421,15 +441,11 @@ class _ToolCard extends StatelessWidget {
                 ),
                 child: Icon(icon, color: color, size: 22),
               ),
-              const Spacer(),
+              const SizedBox(height: 12),
               Text(title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontWeight: FontWeight.w700),),
               const SizedBox(height: 3),
               Text(subtitle,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                       fontSize: 12, color: AppColor.textSecondary(context),),),
             ],),

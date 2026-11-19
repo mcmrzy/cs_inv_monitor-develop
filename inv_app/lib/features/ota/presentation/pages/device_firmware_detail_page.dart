@@ -9,6 +9,7 @@ import 'package:inv_app/features/ota/domain/entities/device_firmware_overview.da
 import 'package:inv_app/features/ota/domain/repositories/ota_repository.dart';
 import 'package:inv_app/features/ota/presentation/models/firmware_module_presentation.dart';
 import 'package:inv_app/features/ota/presentation/widgets/device_firmware_history_tile.dart';
+import 'package:inv_app/features/ota/presentation/widgets/firmware_release_access.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 class DeviceFirmwareDetailPage extends StatefulWidget {
@@ -25,7 +26,8 @@ class DeviceFirmwareDetailPage extends StatefulWidget {
       _DeviceFirmwareDetailPageState();
 }
 
-class _DeviceFirmwareDetailPageState extends State<DeviceFirmwareDetailPage> {
+class _DeviceFirmwareDetailPageState extends State<DeviceFirmwareDetailPage>
+    with FirmwareReleaseAccess<DeviceFirmwareDetailPage> {
   late final DeviceRepository _devices =
       widget.deviceRepository ?? getIt<DeviceRepository>();
   late final OtaRepository _ota =
@@ -44,10 +46,17 @@ class _DeviceFirmwareDetailPageState extends State<DeviceFirmwareDetailPage> {
   bool _refreshing = false;
 
   @override
-  void initState() {
-    super.initState();
-    _load();
-  }
+  void onFirmwareReleasesAvailable() => _load();
+
+  void _openReleasedVersions() => context.pushNamed(
+        'firmwareLibrary',
+        queryParameters: {'sn': widget.deviceSN, 'history': '1'},
+      );
+
+  void _openLocalUpgrade() => context.pushNamed(
+        'localUpgrade',
+        queryParameters: {'sn': widget.deviceSN},
+      );
 
   /// 检查更新：原地刷新固件概览与历史，不再 push 本页路由
   Future<void> _reloadOverview() async {
@@ -154,6 +163,7 @@ class _DeviceFirmwareDetailPageState extends State<DeviceFirmwareDetailPage> {
           _device?['status'] == 2);
 
   bool get _canUpgrade =>
+      canBrowseFirmwareReleases &&
       !_loadingDevice &&
       _deviceError == null &&
       _device != null &&
@@ -270,15 +280,30 @@ class _DeviceFirmwareDetailPageState extends State<DeviceFirmwareDetailPage> {
     );
     final model = _firstValue(['model', 'device_model']);
     final online = _online;
-    final canCheckUpdate = _canUpgrade;
     final textScale = MediaQuery.textScalerOf(context).scale(14) / 14;
     return Scaffold(
-      backgroundColor: AppColor.surface(context),
+      backgroundColor: AppColor.surfaceHover(context),
       appBar: AppBar(title: Text(l10n.str('firmware_device_detail'))),
-      body: RefreshIndicator(
+      body: !firmwareReleaseAccessChecked
+          ? const Center(child: CircularProgressIndicator())
+          : !canBrowseFirmwareReleases
+              ? ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    const FirmwareDownloadFirstNotice(),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: _openLocalUpgrade,
+                      icon: const Icon(Icons.bluetooth_rounded),
+                      label: Text(l10n.str('ota_local_upgrade')),
+                    ),
+                  ],
+                )
+              : RefreshIndicator(
         onRefresh: _load,
         child: ListView(
             key: const Key('deviceFirmwareDetailList'),
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
             children: [
               if (_loadingDevice)
@@ -296,6 +321,10 @@ class _DeviceFirmwareDetailPageState extends State<DeviceFirmwareDetailPage> {
                     model: model,
                     serialNumber: widget.deviceSN,
                     online: online,),
+              ],
+              const SizedBox(height: 12),
+              _buildFirmwareActions(l10n, online),
+              if (!_loadingDevice && _deviceError == null) ...[
                 const SizedBox(height: 24),
                 _SectionTitle(l10n.str('firmware_device_information')),
                 Container(
@@ -370,71 +399,75 @@ class _DeviceFirmwareDetailPageState extends State<DeviceFirmwareDetailPage> {
                     item: entry.$2,
                     isFirst: entry.$1 == 0,
                     isLast: entry.$1 == _history.length - 1,),),
-              const SizedBox(height: 24),
-              if (_device != null && !online) ...[
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.cloud_off_rounded,
-                        size: 18, color: AppColor.textSecondary(context),),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        l10n.str('firmware_offline_check_hint'),
-                        style: TextStyle(
-                          color: AppColor.textSecondary(context),
-                          fontSize: 13,
-                          height: 1.4,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-              ],
-              // 全部升级：仅当存在多个可更新模块时显示
-              if (_updatableModules.length > 1) ...[
-                SizedBox(
-                  key: const Key('firmwareUpgradeAllAction'),
-                  width: double.infinity,
-                  child: FilledButton.tonalIcon(
-                    onPressed: canCheckUpdate ? _triggerAll : null,
-                    icon: const Icon(Icons.upgrade_rounded),
-                    label: Text(
-                      '${l10n.str('firmware_upgrade_all_modules')} '
-                      '(${_updatableModules.length})',
-                      maxLines: 2,
-                      textAlign: TextAlign.center,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-              ],
-              SizedBox(
-                key: const Key('firmwareUpdateAction'),
-                width: double.infinity,
-                child: FilledButton.icon(
-                  // 原地刷新概览，避免 push 同一路由导致导航栈层层叠加
-                  onPressed:
-                      (_refreshing || _loadingOverview) ? null : _reloadOverview,
-                  icon: (_refreshing || _loadingOverview)
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.refresh_rounded),
-                  label: Text(
-                    l10n.str('firmware_check_update'),
-                    maxLines: 2,
-                    textAlign: TextAlign.center,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ),
             ],),
       ),
+    );
+  }
+
+  Widget _buildFirmwareActions(AppLocalizations l10n, bool online) {
+    final loading = _refreshing || _loadingOverview;
+    final updatableCount = _updatableModules.length;
+    return Column(
+      key: const Key('firmwareActions'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (_device != null && !online) ...[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                Icons.cloud_off_rounded,
+                size: 18,
+                color: AppColor.textSecondary(context),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  l10n.str('firmware_offline_check_hint'),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+        ],
+        SizedBox(
+          key: const Key('firmwareUpdateAction'),
+          child: FilledButton.icon(
+            onPressed: loading ? null : _reloadOverview,
+            icon: loading
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.refresh_rounded),
+            label: Text(
+              l10n.str('firmware_check_update'),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: _openReleasedVersions,
+          icon: const Icon(Icons.list_alt_rounded),
+          label: Text(l10n.str('firmware_release_history')),
+        ),
+        if (updatableCount > 1) ...[
+          const SizedBox(height: 8),
+          SizedBox(
+            key: const Key('firmwareUpgradeAllAction'),
+            child: FilledButton.tonalIcon(
+              onPressed: _canUpgrade ? _triggerAll : null,
+              icon: const Icon(Icons.upgrade_rounded),
+              label: Text(
+                '${l10n.str('firmware_upgrade_all_modules')} ($updatableCount)',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 
@@ -482,7 +515,7 @@ class _DeviceFirmwareDetailPageState extends State<DeviceFirmwareDetailPage> {
         crossAxisCount: 2,
         mainAxisSpacing: 12,
         crossAxisSpacing: 12,
-        mainAxisExtent: 200 + (textScale - 1) * 220,
+        mainAxisExtent: 210 + (textScale - 1) * 220,
       ),
       itemBuilder: (context, index) {
         final m = modules[index];
@@ -782,12 +815,13 @@ class _FirmwareCard extends StatelessWidget {
         if (canUpgrade && onUpgrade != null)
           SizedBox(
             width: double.infinity,
-            height: 30,
+            height: 44,
             child: FilledButton(
               style: FilledButton.styleFrom(
                 padding: EdgeInsets.zero,
-                textStyle: const TextStyle(
-                    fontSize: 11, fontWeight: FontWeight.w600,),
+                textStyle: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
               ),
               onPressed: onUpgrade,
               child: Text(l10n.str('firmware_upgrade_this_module')),

@@ -339,11 +339,12 @@ class AppRouter {
           final sn = state.pathParameters['sn']!;
 
           return _slidePage(
-              state,
-              DeviceTelemetryHistoryPage(
-                  sn: sn,
-                  timezone:
-                      state.uri.queryParameters['tz'] ?? 'Asia/Shanghai',),);
+            state,
+            DeviceTelemetryHistoryPage(
+              sn: sn,
+              timezone: state.uri.queryParameters['tz'] ?? 'Asia/Shanghai',
+            ),
+          );
         },
       ),
       // 储能 BMS 页（必须在 /device/:sn 之后声明，路径更具体者先匹配的规则见 :264 注释）
@@ -390,8 +391,10 @@ class AppRouter {
       GoRoute(
         path: '/wifi-config',
         name: 'wifiConfig',
-        pageBuilder: (context, state) =>
-            _slidePage(state, const WifiConfigPage()),
+        pageBuilder: (context, state) => _slidePage(
+          state,
+          WifiConfigPage(expectedSn: state.uri.queryParameters['sn']),
+        ),
       ),
       GoRoute(
         path: '/local-mode',
@@ -446,8 +449,10 @@ class AppRouter {
       GoRoute(
         path: '/offline-mode-settings',
         name: 'offlineModeSettings',
-        pageBuilder: (context, state) =>
-            _slidePage(state, const OfflineModeSettingsPage()),
+        pageBuilder: (context, state) => _slidePage(
+          state,
+          OfflineModeSettingsPage(expectedSn: state.uri.queryParameters['sn']),
+        ),
       ),
       GoRoute(
         path: '/edit-profile',
@@ -646,7 +651,10 @@ class AppRouter {
           final sn = state.uri.queryParameters['sn'];
           return _slidePage(
             state,
-            FirmwareLibraryPage(initialSn: sn),
+            FirmwareLibraryPage(
+              initialSn: sn,
+              deviceHistory: state.uri.queryParameters['history'] == '1',
+            ),
           );
         },
       ),

@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fpdart/fpdart.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:inv_app/core/errors/failures.dart';
 import 'package:inv_app/core/services/firmware_download_service.dart';
+import 'package:inv_app/core/services/network_status_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/features/device/domain/repositories/device_repository.dart';
 import 'package:inv_app/features/ota/domain/entities/device_firmware_overview.dart';
@@ -16,6 +19,7 @@ class _Devices extends Mock implements DeviceRepository {}
 class _Ota extends Mock implements OtaRepository {}
 
 class _Downloads extends Mock implements FirmwareDownloadService {}
+class _Network extends Mock implements NetworkStatusService {}
 
 void main() {
   late _Devices devices;
@@ -82,6 +86,56 @@ void main() {
         idempotencyKey: any(named: 'idempotencyKey'),),).called(1);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('device release history loads only the requested SN and shows full notes',
+      (tester) async {
+    const notes = '修复通信掉线\n优化重连\n改进升级进度\n完善故障记录';
+    when(() => ota.getFirmwareResources('TARGET'))
+        .thenAnswer((_) async => const Right([
+              FirmwareResource(
+                id: 17, model: 'L10', version: '1.1.0',
+                fileUrl: '/historical.bin', targetChip: 'esp', changelog: notes,
+              ),
+            ]));
+    await pumpMinimalApp(tester, const FirmwareLibraryPage(initialSn: 'TARGET', deviceHistory: true));
+    expect(find.text('历史发布版本'), findsOneWidget);
+    expect(find.text('TARGET'), findsOneWidget);
+    expect(find.text('1.1.0'), findsOneWidget);
+    final notesWidget = tester.widget<Text>(find.text(notes));
+    expect(notesWidget.maxLines, isNull);
+    verify(() => ota.getFirmwareResources('TARGET')).called(1);
+    verifyNever(() => ota.getFirmwareResources('SN'));
+    verifyNever(() => devices.getList(
+      page: any(named: 'page'), pageSize: any(named: 'pageSize'),
+    ));
+  });
+
+  testWidgets('device history waits for the network and reloads when it returns',
+      (tester) async {
+    final network = _Network();
+    var offline = true;
+    final connectivity = StreamController<bool>.broadcast();
+    addTearDown(connectivity.close);
+    when(() => network.isOffline).thenAnswer((_) => offline);
+    when(() => network.statusStream).thenAnswer((_) => connectivity.stream);
+    getIt.registerSingleton<NetworkStatusService>(network);
+    await pumpMinimalApp(
+      tester,
+      const FirmwareLibraryPage(initialSn: 'SN', deviceHistory: true),
+    );
+    expect(find.text('请先下载固件'), findsOneWidget);
+    verifyNever(() => ota.getFirmwareResources(any()));
+    verifyNever(() => devices.getList(
+      page: any(named: 'page'), pageSize: any(named: 'pageSize'),
+    ));
+
+    offline = false;
+    connectivity.add(true);
+    await tester.pumpAndSettle();
+    expect(find.text('请先下载固件'), findsNothing);
+    expect(find.text('1.0.18'), findsOneWidget);
+    verify(() => ota.getFirmwareResources('SN')).called(1);
   });
 
   testWidgets('offline resources keep remote button disabled', (tester) async {

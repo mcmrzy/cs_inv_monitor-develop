@@ -1,20 +1,39 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
-
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
 import 'package:inv_app/features/onboarding/data/setup_guide_storage.dart';
+import 'package:inv_app/features/onboarding/presentation/widgets/guide_artwork.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
-/// 首启快速设置向导（登录后无电站时触发）
-///
-/// 一步步带用户点击操作的三屏向导：创建电站 → 添加设备 → 配网（可选）。
-/// 每屏含图标、说明与可点击的子步骤清单，「去完成」直达对应页面；
-/// 返回后根据 StationBloc / DeviceBloc 实时数据判断完成并自动进入下一步。
-/// 跳过或完成置位后不再弹出。
+class _SetupStep {
+  const _SetupStep({
+    required this.title,
+    required this.description,
+    required this.items,
+    required this.route,
+    required this.asset,
+    required this.icon,
+    required this.accent,
+    this.done = false,
+    this.optional = false,
+  });
+
+  final String title;
+  final String description;
+  final List<String> items;
+  final String route;
+  final String asset;
+  final IconData icon;
+  final GuideAccent accent;
+  final bool done;
+  final bool optional;
+}
+
+/// 登录后引导用户创建电站、绑定设备和按需配网。
 class SetupGuidePage extends StatefulWidget {
   const SetupGuidePage({super.key});
 
@@ -23,18 +42,15 @@ class SetupGuidePage extends StatefulWidget {
 }
 
 class _SetupGuidePageState extends State<SetupGuidePage> {
+  static const _totalSteps = 3;
   final _guideStorage = SetupGuideStorage();
   final _pageController = PageController();
-
-  /// 当前步骤下标（0 创建电站 / 1 添加设备 / 2 配网）
   int _step = 0;
-
-  static const int _totalSteps = 3;
+  bool _finishing = false;
 
   @override
   void initState() {
     super.initState();
-    // 刷新完成状态所需的数据
     context.read<StationBloc>().add(StationSummaryRequested());
     context.read<DeviceBloc>().add(const DeviceListRequested(pageSize: 200));
   }
@@ -46,380 +62,539 @@ class _SetupGuidePageState extends State<SetupGuidePage> {
   }
 
   Future<void> _finishAndPop() async {
+    if (_finishing) return;
+    setState(() => _finishing = true);
     await _guideStorage.markDone();
-    if (!mounted) return;
-    context.pop();
+    if (mounted) context.pop();
   }
 
   void _goTo(int step) {
     final target = step.clamp(0, _totalSteps - 1);
-    if (target == _step) return;
+    if (target == _step || !_pageController.hasClients) return;
     setState(() => _step = target);
-    _pageController.animateToPage(
-      target,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOutCubic,
-    );
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _pageController.jumpToPage(target);
+    } else {
+      _pageController.animateToPage(
+        target,
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+      );
+    }
   }
 
-  /// 当前步骤是否已完成（第 3 步配网可选，无完成判据）
-  bool _stepDone(int step, StationState stationState, DeviceState deviceState) {
-    return switch (step) {
-      0 => stationState is StationSummaryLoaded && stationState.stations.isNotEmpty,
-      1 => deviceState is DeviceListLoaded && deviceState.devices.isNotEmpty,
-      _ => false,
-    };
-  }
+  bool _hasStation(StationState state) =>
+      state is StationSummaryLoaded && state.stations.isNotEmpty;
+
+  bool _hasDevice(DeviceState state) =>
+      state is DeviceListLoaded && state.devices.isNotEmpty;
+
+  List<_SetupStep> _steps(
+    AppLocalizations l10n,
+    StationState stationState,
+    DeviceState deviceState,
+  ) =>
+      [
+        _SetupStep(
+          title: l10n.createStation,
+          description: l10n.str('setup_guide_step1_desc'),
+          items: [
+            l10n.str('setup_guide_s1_item1'),
+            l10n.str('setup_guide_s1_item2'),
+            l10n.str('setup_guide_s1_item3'),
+          ],
+          route: '/station/create',
+          asset: CsergyAssets.xiaoshuoStation,
+          icon: Icons.solar_power_rounded,
+          accent: GuideAccent.solar,
+          done: _hasStation(stationState),
+        ),
+        _SetupStep(
+          title: l10n.addDevice,
+          description: l10n.str('setup_guide_step2_desc'),
+          items: [
+            l10n.str('setup_guide_s2_item1'),
+            l10n.str('setup_guide_s2_item2'),
+            l10n.str('setup_guide_s2_item3'),
+          ],
+          route: '/add-device',
+          asset: CsergyAssets.xiaoshuoDevice,
+          icon: Icons.qr_code_scanner_rounded,
+          accent: GuideAccent.device,
+          done: _hasDevice(deviceState),
+        ),
+        _SetupStep(
+          title: l10n.wifiConfig,
+          description: l10n.str('setup_guide_step3_desc'),
+          items: [
+            l10n.str('setup_guide_s3_item1'),
+            l10n.str('setup_guide_s3_item2'),
+            l10n.str('setup_guide_s3_item3'),
+          ],
+          route: '/wifi-config',
+          asset: CsergyAssets.xiaoshuoWifiGuide,
+          icon: Icons.wifi_rounded,
+          accent: GuideAccent.connection,
+          optional: true,
+        ),
+      ];
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final steps = _steps(
+      l10n,
+      context.watch<StationBloc>().state,
+      context.watch<DeviceBloc>().state,
+    );
+    final activeStep = steps[_step];
+
     return MultiBlocListener(
       listeners: [
-        // 完成电站创建 → 自动进入下一步
         BlocListener<StationBloc, StationState>(
-          listener: (context, state) {
-            if (_step == 0 && _stepDone(0, state, context.read<DeviceBloc>().state)) {
-              _goTo(1);
-            }
+          listener: (_, state) {
+            if (_step == 0 && _hasStation(state)) _goTo(1);
           },
         ),
-        // 完成设备绑定 → 自动进入配网步骤
         BlocListener<DeviceBloc, DeviceState>(
-          listener: (context, state) {
-            if (_step == 1 && _stepDone(1, context.read<StationBloc>().state, state)) {
-              _goTo(2);
-            }
+          listener: (_, state) {
+            if (_step == 1 && _hasDevice(state)) _goTo(2);
           },
         ),
       ],
       child: Scaffold(
+        backgroundColor: AppColor.background(context),
         appBar: AppBar(
           title: Text(l10n.str('setup_guide_title')),
+          backgroundColor: AppColor.background(context),
           actions: [
-            TextButton(
-              onPressed: _finishAndPop,
-              child: Text(l10n.skip),
+            Padding(
+              padding: const EdgeInsetsDirectional.only(end: 12),
+              child: TextButton(
+                onPressed: _finishing ? null : _finishAndPop,
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColor.textSecondary(context),
+                  minimumSize: const Size(48, 48),
+                ),
+                child: Text(l10n.skip),
+              ),
             ),
           ],
         ),
         body: SafeArea(
-          child: Column(
-            children: [
-              // 顶部进度：第 X / 3 步 + 进度条
-              Padding(
-                padding: EdgeInsets.fromLTRB(16.w, 8.h, 16.w, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      l10n.str(
-                        'setup_guide_step_of',
-                        {'current': '${_step + 1}', 'total': '$_totalSteps'},
-                      ),
-                      style: TextStyle(
-                        fontSize: 12.sp,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.primary,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 720),
+              child: Column(
+                children: [
+                  _SetupProgress(steps: steps, currentIndex: _step),
+                  Expanded(
+                    child: PageView.builder(
+                      controller: _pageController,
+                      itemCount: steps.length,
+                      onPageChanged: (index) {
+                        if (_step != index) setState(() => _step = index);
+                      },
+                      itemBuilder: (_, index) => _SetupSlide(
+                        key: ValueKey('setup-guide-step-$index'),
+                        step: steps[index],
                       ),
                     ),
-                    SizedBox(height: 8.h),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(4.r),
-                      child: LinearProgressIndicator(
-                        value: (_step + 1) / _totalSteps,
-                        minHeight: 6.h,
-                        backgroundColor: AppColor.surfaceHover(context),
-                        color: AppColors.primary,
+                  ),
+                  _SetupFooter(
+                    step: activeStep,
+                    first: _step == 0,
+                    last: _step == steps.length - 1,
+                    onPrimary: _finishing
+                        ? null
+                        : activeStep.done
+                            ? () => _goTo(_step + 1)
+                            : () => context.push(activeStep.route),
+                    onBack: _finishing ? null : () => _goTo(_step - 1),
+                    onAdvance: _finishing
+                        ? null
+                        : _step == steps.length - 1
+                            ? _finishAndPop
+                            : () => _goTo(_step + 1),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SetupProgress extends StatelessWidget {
+  const _SetupProgress({required this.steps, required this.currentIndex});
+
+  final List<_SetupStep> steps;
+  final int currentIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final primary = AppColor.primary(context);
+    final surface = AppColor.surfaceContainer(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 4, 24, 8),
+      child: Row(
+        children: [
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 150),
+            child: Text(
+              l10n.str('setup_guide_step_of', {
+                'current': '${currentIndex + 1}',
+                'total': '${steps.length}',
+              }),
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: AppColor.textSecondary(context),
+                  ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: ExcludeSemantics(
+              child: Row(
+                children: [
+                  for (var index = 0; index < steps.length; index++) ...[
+                    if (index > 0) const SizedBox(width: 6),
+                    Expanded(
+                      child: Container(
+                        height: 5,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          color: index == currentIndex
+                              ? primary
+                              : steps[index].done
+                                  ? _doneColor(context)
+                                  : Color.lerp(surface, primary, 0.16),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SetupSlide extends StatelessWidget {
+  const _SetupSlide({super.key, required this.step});
+
+  final _SetupStep step;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final textTheme = Theme.of(context).textTheme;
+    final heading = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Semantics(
+              header: true,
+              child: Text(
+                step.title,
+                style: textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: AppColor.textPrimary(context),
+                ),
+              ),
+            ),
+            if (step.done || step.optional)
+              _StepStatus(
+                label: l10n.str(
+                  step.done
+                      ? 'setup_guide_step_done'
+                      : 'setup_guide_step_optional',
+                ),
+                done: step.done,
+              ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          step.description,
+          style: textTheme.bodyMedium?.copyWith(
+            color: AppColor.textSecondary(context),
+            height: 1.5,
+          ),
+        ),
+      ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final sideBySide = constraints.maxWidth >= 600 &&
+            constraints.maxWidth > constraints.maxHeight;
+        const radius = Radius.circular(22);
+        final overview = DecoratedBox(
+          decoration: BoxDecoration(
+            color: AppColor.surfaceContainer(context),
+            borderRadius: const BorderRadius.all(radius),
+            border: Border.all(color: AppColor.divider(context)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                height: (constraints.maxHeight * 0.36)
+                    .clamp(100.0, 220.0)
+                    .toDouble(),
+                child: GuideArtwork(
+                  asset: step.asset,
+                  icon: step.icon,
+                  accent: step.accent,
+                  compact: true,
+                  borderRadius: const BorderRadius.vertical(top: radius),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                child: heading,
+              ),
+            ],
+          ),
+        );
+        final checklist = _SetupChecklist(
+          items: step.items,
+          accent: step.accent,
+        );
+        return SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
+          child: sideBySide
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: overview),
+                    const SizedBox(width: 24),
+                    Expanded(child: checklist),
+                  ],
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [overview, const SizedBox(height: 16), checklist],
+                ),
+        );
+      },
+    );
+  }
+}
+
+Color _doneColor(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFF68D4A9)
+        : AppColors.success;
+
+class _StepStatus extends StatelessWidget {
+  const _StepStatus({required this.label, required this.done});
+
+  final String label;
+  final bool done;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = done ? _doneColor(context) : AppColor.textSecondary(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: done
+            ? color.withValues(alpha: 0.12)
+            : AppColor.surfaceHover(context),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: color,
+                fontWeight: FontWeight.w700,
+              ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SetupChecklist extends StatelessWidget {
+  const _SetupChecklist({required this.items, required this.accent});
+
+  final List<String> items;
+  final GuideAccent accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final surface = AppColor.surfaceContainer(context);
+    final markerColor = dark ? accent.detail : accent.background;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: surface,
+        border: Border.all(color: AppColor.divider(context)),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        child: Column(
+          children: [
+            for (var index = 0; index < items.length; index++) ...[
+              if (index > 0)
+                Divider(
+                  height: 1,
+                  indent: 40,
+                  color: AppColor.divider(context),
+                ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Row(
+                  children: [
+                    Container(
+                      alignment: Alignment.center,
+                      constraints: const BoxConstraints(
+                        minWidth: 28,
+                        minHeight: 28,
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Color.lerp(
+                          surface,
+                          accent.light,
+                          dark ? 0.30 : 0.12,
+                        ),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '${index + 1}',
+                        style: textTheme.labelMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: markerColor,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        items[index],
+                        style: textTheme.bodyMedium?.copyWith(
+                          height: 1.4,
+                          color: AppColor.textPrimary(context),
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
-              // 三步内容
-              Expanded(
-                child: BlocBuilder<StationBloc, StationState>(
-                  builder: (context, stationState) {
-                    return BlocBuilder<DeviceBloc, DeviceState>(
-                      builder: (context, deviceState) {
-                        return PageView(
-                          controller: _pageController,
-                          onPageChanged: (index) => setState(() => _step = index),
-                          children: [
-                            _buildStepPage(
-                              l10n: l10n,
-                              step: 0,
-                              icon: Icons.home_work_rounded,
-                              title: l10n.createStation,
-                              desc: l10n.str('setup_guide_step1_desc'),
-                              items: [
-                                l10n.str('setup_guide_s1_item1'),
-                                l10n.str('setup_guide_s1_item2'),
-                                l10n.str('setup_guide_s1_item3'),
-                              ],
-                              route: '/station/create',
-                              done: _stepDone(0, stationState, deviceState),
-                            ),
-                            _buildStepPage(
-                              l10n: l10n,
-                              step: 1,
-                              icon: Icons.qr_code_scanner_rounded,
-                              title: l10n.addDevice,
-                              desc: l10n.str('setup_guide_step2_desc'),
-                              items: [
-                                l10n.str('setup_guide_s2_item1'),
-                                l10n.str('setup_guide_s2_item2'),
-                                l10n.str('setup_guide_s2_item3'),
-                              ],
-                              route: '/add-device',
-                              done: _stepDone(1, stationState, deviceState),
-                            ),
-                            _buildStepPage(
-                              l10n: l10n,
-                              step: 2,
-                              icon: Icons.wifi_rounded,
-                              title: l10n.wifiConfig,
-                              desc: l10n.str('setup_guide_step3_desc'),
-                              items: [
-                                l10n.str('setup_guide_s3_item1'),
-                                l10n.str('setup_guide_s3_item2'),
-                                l10n.str('setup_guide_s3_item3'),
-                              ],
-                              route: '/wifi-config',
-                              done: false,
-                              optional: true,
-                            ),
-                          ],
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
-              // 底部操作区
-              _buildBottomBar(l10n),
             ],
-          ),
+          ],
         ),
       ),
     );
   }
+}
 
-  /// 单步页面：图标 + 标题 + 说明 + 子步骤清单 + 「去完成」按钮
-  Widget _buildStepPage({
-    required AppLocalizations l10n,
-    required int step,
-    required IconData icon,
-    required String title,
-    required String desc,
-    required List<String> items,
-    required String route,
-    required bool done,
-    bool optional = false,
-  }) {
-    final accent = done ? AppColors.success : AppColors.primary;
-    return SingleChildScrollView(
-      padding: EdgeInsets.fromLTRB(20.w, 20.h, 20.w, 8.h),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // 图标
-          Container(
-            width: 72.w,
-            height: 72.w,
-            decoration: BoxDecoration(
-              color: accent.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: done
-                ? Icon(Icons.check_rounded, size: 36.sp, color: accent)
-                : Icon(icon, size: 34.sp, color: accent),
-          ),
-          SizedBox(height: 14.h),
-          // 标题（可选步骤带徽标）
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 18.sp,
-                  fontWeight: FontWeight.w700,
-                  color: AppColor.textPrimary(context),
-                ),
-              ),
-              if (optional) ...[
-                SizedBox(width: 8.w),
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 2.h),
-                  decoration: BoxDecoration(
-                    color: AppColor.surfaceHover(context),
-                    borderRadius: BorderRadius.circular(6.r),
-                  ),
-                  child: Text(
-                    l10n.str('setup_guide_step_optional'),
-                    style: TextStyle(
-                      fontSize: 10.sp,
-                      color: AppColor.textHint(context),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-          SizedBox(height: 6.h),
-          Text(
-            desc,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 13.sp,
-              color: AppColor.textHint(context),
-            ),
-          ),
-          SizedBox(height: 20.h),
-          // 操作步骤清单
-          Container(
-            width: double.infinity,
-            padding: EdgeInsets.all(16.w),
-            decoration: BoxDecoration(
-              color: AppColor.surfaceContainer(context),
-              borderRadius: BorderRadius.circular(16.r),
-              border: Border.all(
-                color: done
-                    ? AppColors.success.withValues(alpha: 0.35)
-                    : AppColor.divider(context),
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (var i = 0; i < items.length; i++) ...[
-                  if (i > 0) SizedBox(height: 14.h),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: 22.w,
-                        height: 22.w,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: accent.withValues(alpha: 0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Text(
-                          '${i + 1}',
-                          style: TextStyle(
-                            fontSize: 12.sp,
-                            fontWeight: FontWeight.w700,
-                            color: accent,
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: 10.w),
-                      Expanded(
-                        child: Padding(
-                          padding: EdgeInsets.only(top: 2.h),
-                          child: Text(
-                            items[i],
-                            style: TextStyle(
-                              fontSize: 13.sp,
-                              height: 1.5,
-                              color: AppColor.textSecondary(context),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-          ),
-          SizedBox(height: 20.h),
-          // 「去完成」直达按钮
-          SizedBox(
-            width: double.infinity,
-            height: 46.h,
-            child: done
-                ? OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.success,
-                      side: BorderSide(color: AppColors.success.withValues(alpha: 0.5)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12.r),
-                      ),
-                    ),
-                    onPressed: _step < _totalSteps - 1 ? () => _goTo(_step + 1) : null,
-                    icon: Icon(Icons.check_circle_rounded, size: 18.sp),
-                    label: Text(
-                      _step < _totalSteps - 1
-                          ? l10n.str('setup_guide_next')
-                          : l10n.str('setup_guide_step_done'),
-                      style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600),
-                    ),
-                  )
-                : FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12.r),
-                      ),
-                    ),
-                    onPressed: () => context.push(route),
-                    icon: Icon(Icons.arrow_forward_rounded, size: 18.sp),
-                    label: Text(
-                      l10n.str('setup_guide_go'),
-                      style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600),
-                    ),
-                  ),
-          ),
-        ],
-      ),
+class _SetupFooter extends StatelessWidget {
+  const _SetupFooter({
+    required this.step,
+    required this.first,
+    required this.last,
+    required this.onPrimary,
+    required this.onBack,
+    required this.onAdvance,
+  });
+
+  final _SetupStep step;
+  final bool first;
+  final bool last;
+  final VoidCallback? onPrimary;
+  final VoidCallback? onBack;
+  final VoidCallback? onAdvance;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final secondary = TextButton.styleFrom(
+      foregroundColor: AppColor.textSecondary(context),
+      minimumSize: const Size(48, 44),
     );
-  }
-
-  /// 底部操作区：上一步 / 跳过此步（可选步骤）/ 完成
-  Widget _buildBottomBar(AppLocalizations l10n) {
-    final isLast = _step == _totalSteps - 1;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(16.w, 8.h, 16.w, 16.h),
-      child: Row(
-        children: [
-          if (_step > 0) ...[
-            Expanded(
-              child: SizedBox(
-                height: 48.h,
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12.r),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColor.background(context),
+        border: Border(top: BorderSide(color: AppColor.divider(context))),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 10, 24, 8),
+        child: Column(
+          children: [
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                key: const Key('setup-guide-primary-action'),
+                onPressed: onPrimary,
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColor.primary(context),
+                  foregroundColor:
+                      dark ? const Color(0xFF102438) : Colors.white,
+                  minimumSize: const Size.fromHeight(50),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                ),
+                child: Text(
+                  step.done ? l10n.str('setup_guide_next') : step.title,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+            Row(
+              children: [
+                if (!first)
+                  Expanded(
+                    child: TextButton(
+                      onPressed: onBack,
+                      style: secondary,
+                      child: Text(
+                        l10n.str('setup_guide_back'),
+                        textAlign: TextAlign.center,
+                      ),
                     ),
                   ),
-                  onPressed: () => _goTo(_step - 1),
-                  child: Text(
-                    l10n.str('setup_guide_back'),
-                    style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600),
+                if (!step.done || last)
+                  Expanded(
+                    child: TextButton(
+                      key: const Key('setup-guide-secondary-action'),
+                      onPressed: onAdvance,
+                      style: secondary,
+                      child: Text(
+                        l10n.str(
+                          last ? 'setup_guide_finish' : 'setup_guide_next',
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
                   ),
-                ),
-              ),
+              ],
             ),
-            SizedBox(width: 12.w),
           ],
-          Expanded(
-            flex: _step > 0 ? 2 : 1,
-            child: SizedBox(
-              height: 48.h,
-              child: FilledButton(
-                onPressed: isLast ? _finishAndPop : () => _goTo(_step + 1),
-                child: Text(
-                  isLast
-                      ? l10n.str('setup_guide_finish')
-                      : l10n.str('setup_guide_next'),
-                  style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600),
-                ),
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

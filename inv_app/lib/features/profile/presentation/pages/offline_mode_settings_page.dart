@@ -1,10 +1,10 @@
+import 'package:inv_app/core/services/connection_mode_service.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import 'package:inv_app/core/data/local_cache_database.dart';
-import 'package:inv_app/core/services/ble/ble_binding_service.dart';
 import 'package:inv_app/core/services/ble/ble_device_manager.dart';
 import 'package:inv_app/core/services/ble/ble_direct_service.dart';
 import 'package:inv_app/core/services/ble/ble_polling_service.dart';
@@ -12,7 +12,6 @@ import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/widgets/app_toast.dart';
-import 'package:inv_app/core/widgets/ble_pin_bind_dialog.dart';
 import 'package:inv_app/core/widgets/settings_widgets.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/features/device/presentation/pages/modbus_panel_page.dart';
@@ -21,9 +20,11 @@ import 'package:inv_app/l10n/app_localizations.dart';
 /// 离网直连设置页
 ///
 /// 聚焦 BLE 直连链路：BLE 直连总开关、自动连接开关、
-/// 发现的设备列表（PIN 绑定）、轮询周期与本地缓存管理。
+/// 发现的设备列表（本地连接）、轮询周期与本地缓存管理。
 class OfflineModeSettingsPage extends StatefulWidget {
-  const OfflineModeSettingsPage({super.key});
+  const OfflineModeSettingsPage({super.key, this.expectedSn});
+
+  final String? expectedSn;
 
   @override
   State<OfflineModeSettingsPage> createState() =>
@@ -40,16 +41,12 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
   Set<String> _directConnectedDevices = {};
   bool _loading = true;
 
-  /// 绑定弹窗打开中标记，防止快速连点重复弹窗（触发 Duplicate GlobalKeys）
-  bool _bindDialogOpen = false;
   String? _openingPanelMac;
+  bool _enabling = false;
 
   /// 发现设备列表（来自 BleDirectService.scanResultsStream）
   StreamSubscription<List<BleDiscoveredDevice>>? _scanSub;
   List<BleDiscoveredDevice> _foundDevices = const [];
-
-  /// 发现设备的绑定状态（key: macAddress）：本地 keyStore 存有 device_key 即为已绑定
-  Map<String, bool> _boundByMac = const {};
 
   /// BLE 广播名前缀（形如 CS_INV_SN / CS-INV-SN），去掉后即为 SN
   static final RegExp _snPrefixPattern =
@@ -61,6 +58,13 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
     if (device.name.isEmpty) return device.macAddress;
     final sn = device.name.replaceFirst(_snPrefixPattern, '');
     return sn.isEmpty ? device.name : sn;
+  }
+
+  bool _matchesTarget(BleDiscoveredDevice device) {
+    final expected = widget.expectedSn?.trim();
+    if (expected == null || expected.isEmpty) return true;
+    final session = getIt<BleDeviceManager>().sessionOf(device.macAddress);
+    return (session?.sn ?? displaySnOf(device)) == expected;
   }
 
   @override
@@ -103,7 +107,6 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
         final service = getIt<BleDirectService>();
         _foundDevices = service.scanResults;
         _subscribeScanResults();
-        _refreshBoundStatuses(_foundDevices);
       }
     }
   }
@@ -137,7 +140,6 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
       if (!mounted) return;
       setState(() {
         _foundDevices = const [];
-        _boundByMac = const {};
       });
     }
     if (!mounted) return;
@@ -156,27 +158,54 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
   }
 
   Future<void> _toggleOfflineMode(bool value) async {
-    await _storage.saveIsOfflineMode(value);
+    if (value && !_isBleDirectEnabled) {
+      await _toggleBleDirect(true);
+      if (!_isBleDirectEnabled) return;
+    }
+    await getIt<ConnectionModeService>().setOfflineMode(value);
     if (!mounted) return;
     setState(() => _isOfflineMode = value);
     AppToast.show(
       context,
-      value ? '已开启离网模式' : '已关闭离网模式',
+      Localizations.localeOf(context).languageCode == 'zh'
+          ? (value ? '已切换至本地蓝牙与缓存' : '已切换至云端模式')
+          : (value
+              ? 'Local Bluetooth and cache are active'
+              : 'Cloud mode is active'),
       type: ToastType.success,
     );
   }
 
   Future<void> _toggleDeviceDirectConnection(
-      String macAddress, bool value,) async {
-    final updated = Set<String>.from(_directConnectedDevices);
-    if (value) {
-      updated.add(macAddress);
-    } else {
-      updated.remove(macAddress);
+    String macAddress,
+    bool value,
+  ) async {
+    try {
+      final updated = Set<String>.from(_directConnectedDevices);
+      final manager = getIt<BleDeviceManager>();
+      if (value) {
+        final session = await manager.connectDevice(macAddress);
+        if (session.state != BleDeviceState.ready) {
+          throw const BleCommandException('NOT_READY', 'Device not ready');
+        }
+        updated.add(macAddress);
+      } else {
+        await manager.disconnectDevice(macAddress);
+        updated.remove(macAddress);
+      }
+      await _storage.saveDirectConnectedDevices(updated);
+      if (!mounted) return;
+      setState(() => _directConnectedDevices = updated);
+    } catch (_) {
+      if (!mounted) return;
+      AppToast.show(
+        context,
+        Localizations.localeOf(context).languageCode == 'zh'
+            ? '蓝牙连接未完成，请靠近设备后重试。'
+            : 'Bluetooth connection failed. Move closer and retry.',
+        type: ToastType.error,
+      );
     }
-    await _storage.saveDirectConnectedDevices(updated);
-    if (!mounted) return;
-    setState(() => _directConnectedDevices = updated);
   }
 
   /// 订阅发现设备列表流
@@ -185,94 +214,7 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
     _scanSub = getIt<BleDirectService>().scanResultsStream.listen((devices) {
       if (!mounted) return;
       setState(() => _foundDevices = devices);
-      // 设备列表变化后异步刷新各设备的绑定状态
-      _refreshBoundStatuses(devices);
     });
-  }
-
-  /// 异步批量查询发现设备的绑定状态（本地 keyStore 按 SN 存有 device_key 即已绑定），
-  /// 结果以 macAddress 为 key 缓存供同步行渲染
-  Future<void> _refreshBoundStatuses(List<BleDiscoveredDevice> devices) async {
-    final keyStore = getIt<BleDeviceKeyStore>();
-    final result = <String, bool>{};
-    for (final device in devices) {
-      // 广播名去掉 CS[-_]INV[-_] 前缀即为 SN；解析不出 SN 则视为未绑定
-      final sn = device.name.replaceFirst(_snPrefixPattern, '');
-      if (device.name.isEmpty || sn.isEmpty) {
-        result[device.macAddress] = false;
-        continue;
-      }
-      try {
-        result[device.macAddress] = await keyStore.read(sn) != null;
-      } catch (_) {
-        // 安全存储读取异常：保守视为未绑定
-        result[device.macAddress] = false;
-      }
-    }
-    if (!mounted) return;
-    setState(() => _boundByMac = result);
-  }
-
-  /// 绑定对话框：设备名 + 铭牌 PIN 输入 → BLE 绑定（设备端校验 PIN）
-  Future<void> _showBindDialog(BleDiscoveredDevice device) async {
-    // 防止快速连点重复弹窗（同一 context 叠加多个 OverlayEntry 触发
-    // Duplicate GlobalKeys / dirty widget in wrong build scope）
-    if (_bindDialogOpen) return;
-    _bindDialogOpen = true;
-    try {
-      final enteredPin = await showBlePinBindDialog(
-        context: context,
-        deviceSn: displaySnOf(device),
-      );
-      if (enteredPin == null || !mounted) return;
-
-      final outcome = await getIt<BleBindingService>().bindAfterProvision(
-        macAddress: device.macAddress,
-        pin: enteredPin,
-      );
-      if (!mounted) return;
-
-      // 绑定失败（PIN 错误/锁定/连接失败）：主动断开设备的 GATT 会话，
-      // 否则 BleDeviceManager 中残留的 session 会让 UI 误判为"已连接"
-      if (outcome != BindOutcome.bound && outcome != BindOutcome.alreadyBound) {
-        try {
-          await getIt<BleDeviceManager>().disconnectDevice(device.macAddress);
-        } catch (_) {}
-      }
-
-      final (text, type) = switch (outcome) {
-        BindOutcome.bound => (
-            l10n.str('ble_binding_success'),
-            ToastType.success,
-          ),
-        BindOutcome.alreadyBound => (
-            l10n.str('ble_binding_already_bound'),
-            ToastType.info,
-          ),
-        BindOutcome.invalidPin => (l10n.pinInvalid, ToastType.error),
-        BindOutcome.locked => (l10n.pinLocked, ToastType.error),
-        BindOutcome.needLoginForSync => (
-            l10n.str('ble_binding_need_login'),
-            ToastType.info,
-          ),
-        _ => (
-            l10n.str('ble_binding_failed'),
-            ToastType.error,
-          ),
-      };
-      if (!mounted) return;
-      AppToast.show(context, text, type: type);
-      // 绑定成功（或设备端判定已绑定）：立即更新该行的绑定状态
-      if (outcome == BindOutcome.bound || outcome == BindOutcome.alreadyBound) {
-        _boundByMac = {..._boundByMac, device.macAddress: true};
-      }
-      // 刷新列表（会话状态可能变化）
-      if (mounted) {
-        setState(() => _foundDevices = getIt<BleDirectService>().scanResults);
-      }
-    } finally {
-      _bindDialogOpen = false;
-    }
   }
 
   Future<void> _showPollIntervalDialog() async {
@@ -364,311 +306,381 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final target = widget.expectedSn?.trim();
+    final targeted = target != null && target.isNotEmpty;
+    final zh = Localizations.localeOf(context).languageCode == 'zh';
+    final background = AppColor.background(context);
+    final accent = AppColor.primary(context);
+    final appBar = AppBar(
+      backgroundColor: background,
+      surfaceTintColor: Colors.transparent,
+      title: Text(
+        targeted
+            ? (zh ? '连接设备蓝牙' : 'Connect device over Bluetooth')
+            : (zh ? '蓝牙连接' : 'Bluetooth connections'),
+      ),
+    );
     if (_loading) {
       return Scaffold(
-        appBar: AppBar(title: Text(l10n.offlineModeSettings)),
+        backgroundColor: background,
+        appBar: appBar,
         body: const PageSkeleton(),
       );
     }
 
+    final connectedCount = getIt<BleDeviceManager>()
+        .sessions
+        .values
+        .where((session) => session.state == BleDeviceState.ready)
+        .length;
+    final devices = _foundDevices.where(_matchesTarget).toList();
+    final readyPanel =
+        targeted ? getIt<BleDeviceManager>().readyPanelFor(target) : null;
+    if (readyPanel != null &&
+        devices.every((device) => device.macAddress != readyPanel.macAddress)) {
+      devices.insert(
+        0,
+        BleDiscoveredDevice(
+          macAddress: readyPanel.macAddress,
+          name: target!,
+        ),
+      );
+    }
+    final status = !_isBleDirectEnabled
+        ? (zh ? '蓝牙直连已关闭' : 'Bluetooth direct is off')
+        : targeted
+            ? (devices.isEmpty ? target : null)
+            : (zh ? '已连接 $connectedCount 台' : '$connectedCount connected');
+
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.offlineModeSettings)),
-      body: ListView(
-        padding: EdgeInsets.only(bottom: 24.h),
-        children: [
-          SettingsSectionTitle(
-            icon: Icons.bluetooth_connected_rounded,
-            title: l10n.connectionSettings,
-            accent: AppColors.blue,
-          ),
-          SettingsCard([
-            SettingsSwitchRow(
-              icon: Icons.bluetooth,
-              accent: AppColors.blue,
-              title: l10n.bleDirectEnabled,
-              subtitle: l10n.bleDirectEnabledDesc,
-              value: _isBleDirectEnabled,
-              onChanged: _toggleBleDirect,
-            ),
-            SettingsSwitchRow(
-              icon: Icons.wifi_off_rounded,
-              accent: AppColors.orange,
-              title: l10n.bleOfflineMode,
-              subtitle: l10n.bleOfflineModeDesc,
-              value: _isOfflineMode,
-              onChanged: _toggleOfflineMode,
-            ),
-            SettingsSwitchRow(
-              icon: Icons.link_rounded,
-              accent: AppColors.blue,
-              title: l10n.str('ble_auto_connect'),
-              subtitle: l10n.str('ble_auto_connect_desc'),
-              value: _autoConnect,
-              onChanged: _toggleAutoConnect,
-            ),
-            SettingsValueRow(
-              icon: Icons.speed,
-              accent: AppColors.blue,
-              title: l10n.blePollInterval,
-              subtitle: l10n.blePollIntervalDesc,
-              trailing: Container(
-                padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
-                decoration: BoxDecoration(
-                  color: AppColors.blue.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10.r),
+      backgroundColor: background,
+      appBar: appBar,
+      body: SafeArea(
+        top: false,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 620),
+            child: ListView(
+              padding: const EdgeInsets.only(top: 12, bottom: 24),
+              children: [
+                _buildDiscoverySummary(
+                  targeted: targeted,
+                  status: status,
+                  zh: zh,
                 ),
-                child: Text(
-                  '$_blePollInterval s',
-                  style: TextStyle(
-                    fontSize: 12.sp,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.blue,
+                if (_isBleDirectEnabled) ...[
+                  SettingsSectionTitle(
+                    icon: Icons.sensors_rounded,
+                    title: targeted
+                        ? (zh ? '目标设备' : 'Target device')
+                        : l10n.str('ble_found_devices'),
+                    accent: accent,
                   ),
-                ),
-              ),
-              onTap: _showPollIntervalDialog,
-            ),
-            SettingsValueRow(
-              icon: Icons.storage_rounded,
-              accent: AppColors.teal,
-              title: l10n.str('local_cache_manage'),
-              subtitle: l10n.str('local_cache_manage_hint'),
-              onTap: () => _showCacheManageDialog(context, l10n),
-            ),
-          ]),
-          // 发现的设备列表：仅 BLE 直连开启时展示
-          if (_isBleDirectEnabled) ...[
-            SettingsSectionTitle(
-              icon: Icons.radar_rounded,
-              title: l10n.str('ble_found_devices'),
-              accent: AppColors.teal,
-              trailing: TextButton.icon(
-                onPressed: () => getIt<BleDirectService>().rescan(),
-                icon: Icon(Icons.refresh_rounded, size: 16.sp),
-                label: Text(
-                  l10n.str('ble_rescan'),
-                  style: TextStyle(fontSize: 12.sp),
-                ),
-              ),
-            ),
-            Padding(
-              padding: EdgeInsets.fromLTRB(16.w, 0, 16.w, 8.h),
-              child: Text(
-                l10n.str('ble_found_devices_hint'),
-                style: TextStyle(
-                  fontSize: 12.sp,
-                  color: AppColor.textHint(context),
-                ),
-              ),
-            ),
-            if (_foundDevices.isEmpty)
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16.w),
-                child: Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.symmetric(vertical: 24.h),
-                  decoration: BoxDecoration(
-                    color: AppColor.surfaceContainer(context),
-                    borderRadius: BorderRadius.circular(14.r),
-                  ),
-                  child: Column(
-                    children: [
-                      Icon(
-                        Icons.bluetooth_searching_rounded,
-                        size: 32.sp,
-                        color: AppColor.textHint(context),
-                      ),
-                      SizedBox(height: 8.h),
-                      Text(
-                        l10n.str('ble_found_empty'),
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 13.sp,
-                          color: AppColor.textHint(context),
+                  if (devices.isEmpty)
+                    SettingsCard([
+                      Padding(
+                        padding: const EdgeInsets.all(18),
+                        child: Text(
+                          targeted
+                              ? (zh
+                                  ? '暂未发现目标设备，可以靠近面板后重新扫描。'
+                                  : 'Device not found. Move closer to the panel and scan again.')
+                              : l10n.str('ble_found_empty'),
+                          style:
+                              TextStyle(color: AppColor.textSecondary(context)),
                         ),
                       ),
-                    ],
+                    ])
+                  else
+                    SettingsCard([
+                      for (final device in devices)
+                        _buildFoundDeviceRow(device, targeted: targeted),
+                    ]),
+                ],
+                if (!targeted) ...[
+                  SettingsSectionTitle(
+                    icon: Icons.bluetooth_connected_rounded,
+                    title: l10n.connectionSettings,
+                    accent: accent,
                   ),
-                ),
-              )
-            else
-              SettingsCard([
-                for (final device in _foundDevices)
-                  _buildFoundDeviceRow(device),
-              ]),
-            Padding(
-              padding: EdgeInsets.fromLTRB(16.w, 8.h, 16.w, 0),
-              child: Text(
-                l10n.str('ble_scanning_hint'),
-                style: TextStyle(
-                  fontSize: 11.sp,
-                  color: AppColor.textHint(context),
-                ),
-              ),
+                  SettingsCard([
+                    SettingsSwitchRow(
+                      icon: Icons.bluetooth,
+                      accent: accent,
+                      title: l10n.bleDirectEnabled,
+                      subtitle: l10n.bleDirectEnabledDesc,
+                      value: _isBleDirectEnabled,
+                      onChanged: _toggleBleDirect,
+                    ),
+                    SettingsSwitchRow(
+                      icon: Icons.wifi_off_rounded,
+                      accent: accent,
+                      title: l10n.bleOfflineMode,
+                      subtitle: l10n.bleOfflineModeDesc,
+                      value: _isOfflineMode,
+                      onChanged: _toggleOfflineMode,
+                    ),
+                    SettingsSwitchRow(
+                      icon: Icons.link_rounded,
+                      accent: accent,
+                      title: l10n.str('ble_auto_connect'),
+                      subtitle: l10n.str('ble_auto_connect_desc'),
+                      value: _autoConnect,
+                      onChanged: _toggleAutoConnect,
+                    ),
+                  ]),
+                  SettingsSectionTitle(
+                    icon: Icons.storage_rounded,
+                    title: zh ? '本地数据' : 'Local data',
+                    accent: accent,
+                  ),
+                  SettingsCard([
+                    SettingsValueRow(
+                      icon: Icons.speed,
+                      accent: accent,
+                      title: l10n.blePollInterval,
+                      subtitle: l10n.blePollIntervalDesc,
+                      trailing: Text(
+                        '$_blePollInterval s',
+                        style: TextStyle(
+                          fontSize: 13.sp,
+                          fontWeight: FontWeight.w600,
+                          color: AppColor.textSecondary(context),
+                        ),
+                      ),
+                      onTap: _showPollIntervalDialog,
+                    ),
+                    SettingsValueRow(
+                      icon: Icons.storage_rounded,
+                      accent: accent,
+                      title: l10n.str('local_cache_manage'),
+                      subtitle: l10n.str('local_cache_manage_hint'),
+                      onTap: () => _showCacheManageDialog(context, l10n),
+                    ),
+                  ]),
+                ],
+              ],
             ),
-          ],
-        ],
+          ),
+        ),
       ),
     );
   }
 
-  /// 发现设备行：SN + 直连开关 + 已连接徽标 > 已绑定徽标 > 绑定按钮
-  Widget _buildFoundDeviceRow(BleDiscoveredDevice device) {
-    final connected = getIt<BleDeviceManager>()
-            .sessionOf(device.macAddress)
-            ?.state ==
-        BleDeviceState.ready;
-    final bound = _boundByMac[device.macAddress] ?? false;
-    final displaySn = displaySnOf(device);
-    final isDirectEnabled = _directConnectedDevices.contains(device.macAddress);
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
-      child: Row(
-        children: [
-          Container(
-            width: 36.w,
-            height: 36.w,
-            decoration: BoxDecoration(
-              color: AppColors.blue.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.router_rounded,
-              size: 18.sp,
-              color: AppColors.blue,
-            ),
-          ),
-          SizedBox(width: 12.w),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildDiscoverySummary({
+    required bool targeted,
+    required String? status,
+    required bool zh,
+  }) {
+    final text = Theme.of(context).textTheme;
+    final accent = AppColor.primary(context);
+    final muted = AppColor.textSecondary(context);
+    final description = targeted
+        ? (zh
+            ? '在面板打开「手机连接」，核对序列号后连接。'
+            : 'Open Phone connection on the panel, then connect to the matching serial number.')
+        : _isOfflineMode
+            ? (zh
+                ? '离网模式 · 通过蓝牙和本地缓存访问设备'
+                : 'Offline mode · Uses Bluetooth and cached data')
+            : (zh
+                ? '云端模式 · 可同时连接附近的蓝牙设备'
+                : 'Cloud mode · Nearby devices can also connect over Bluetooth');
+
+    return SettingsCard([
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Text(
-                  displaySn,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 14.sp,
-                    fontWeight: FontWeight.w500,
-                    color: AppColor.textPrimary(context),
-                  ),
+                SettingsIconContainer(
+                  icon: Icons.bluetooth_rounded,
+                  accent: accent,
                 ),
-                SizedBox(height: 2.h),
-                // 副标题显示 SN（不再展示 MAC）
-                Text(
-                  displaySn,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 11.sp,
-                    color: AppColor.textHint(context),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        zh ? '蓝牙直连' : 'Bluetooth direct',
+                        style: text.titleMedium?.copyWith(
+                          color: AppColor.textPrimary(context),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      if (status != null)
+                        Text(
+                          status,
+                          style: text.bodySmall?.copyWith(color: muted),
+                        ),
+                    ],
                   ),
                 ),
               ],
             ),
-          ),
-          SizedBox(width: 8.w),
-          // 直连开关
-          Column(
-            children: [
-              Text(
-                l10n.deviceDirectToggle,
-                style: TextStyle(
-                    fontSize: 10.sp, color: AppColor.textHint(context),),
-              ),
-              SizedBox(
-                height: 28.h,
-                child: Switch(
-                  value: isDirectEnabled,
-                  onChanged: (value) =>
-                      _toggleDeviceDirectConnection(device.macAddress, value),
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            const SizedBox(height: 12),
+            Text(
+              description,
+              style: text.bodyMedium?.copyWith(color: muted, height: 1.45),
+            ),
+            const SizedBox(height: 6),
+            OutlinedButton.icon(
+              key: const ValueKey('bluetooth-discovery-action'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: accent,
+                minimumSize: const Size(0, 48),
+                side: BorderSide(color: AppColor.border(context)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
               ),
-            ],
-          ),
-          SizedBox(width: 8.w),
-          IconButton(
-            icon: _openingPanelMac == device.macAddress
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.bluetooth_connected),
-            tooltip: l10n.bleDirectEnabled,
-            onPressed: _openingPanelMac == null
-                ? () => _openPanel(device.macAddress)
-                : null,
-          ),
-          // 状态渲染优先级：已连接 > 已绑定 > 未绑定（绑定按钮）
-          if (connected)
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
-              decoration: BoxDecoration(
-                color: AppColors.success.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10.r),
+              onPressed: _openingPanelMac != null || _enabling
+                  ? null
+                  : _isBleDirectEnabled
+                      ? getIt<BleDirectService>().rescan
+                      : _enableBluetoothDiscovery,
+              icon: Icon(
+                _isBleDirectEnabled
+                    ? Icons.refresh_rounded
+                    : Icons.bluetooth_rounded,
+                size: 18,
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.check_circle_rounded,
-                    size: 12.sp,
-                    color: AppColors.success,
-                  ),
-                  SizedBox(width: 4.w),
-                  Text(
-                    l10n.str('ble_device_connected'),
-                    style: TextStyle(
-                      fontSize: 12.sp,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.success,
-                    ),
-                  ),
-                ],
-              ),
-            )
-          else if (bound)
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
-              decoration: BoxDecoration(
-                color: AppColors.blue.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10.r),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.link_rounded,
-                    size: 12.sp,
-                    color: AppColors.blue,
-                  ),
-                  SizedBox(width: 4.w),
-                  Text(
-                    l10n.str('ble_device_bound'),
-                    style: TextStyle(
-                      fontSize: 12.sp,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.blue,
-                    ),
-                  ),
-                ],
-              ),
-            )
-          else
-            FilledButton.tonal(
-              style: FilledButton.styleFrom(
-                padding: EdgeInsets.symmetric(horizontal: 14.w),
-                minimumSize: Size(0, 34.h),
-              ),
-              onPressed: () => _showBindDialog(device),
-              child: Text(
-                l10n.str('ble_bind_device'),
-                style: TextStyle(fontSize: 13.sp),
+              label: Text(
+                _enabling
+                    ? (zh ? '正在开启' : 'Enabling')
+                    : _isBleDirectEnabled
+                        ? l10n.str('ble_rescan')
+                        : (zh ? '开启蓝牙直连' : 'Enable Bluetooth direct'),
               ),
             ),
-        ],
+          ],
+        ),
       ),
+    ]);
+  }
+
+  Future<void> _enableBluetoothDiscovery() async {
+    setState(() => _enabling = true);
+    try {
+      await _toggleBleDirect(true);
+    } finally {
+      if (mounted) setState(() => _enabling = false);
+    }
+  }
+
+  Widget _buildFoundDeviceRow(
+    BleDiscoveredDevice device, {
+    required bool targeted,
+  }) {
+    final session = getIt<BleDeviceManager>().sessionOf(device.macAddress);
+    final connected = session?.state == BleDeviceState.ready;
+    final zh = Localizations.localeOf(context).languageCode == 'zh';
+    final opening = _openingPanelMac == device.macAddress;
+    final autoReconnect = _directConnectedDevices.contains(device.macAddress);
+    final accent = AppColor.primary(context);
+    final muted = AppColor.textSecondary(context);
+    final open =
+        _openingPanelMac == null ? () => _openPanel(device.macAddress) : null;
+    final status = opening
+        ? (zh ? '正在连接' : 'Connecting')
+        : connected
+            ? (zh ? '蓝牙已连接' : 'Bluetooth connected')
+            : (zh ? '等待连接' : 'Ready to connect');
+    final actionLabel = connected
+        ? (zh ? '进入设置' : 'Open settings')
+        : (zh ? '连接设备' : 'Connect device');
+    const spinner = SizedBox.square(
+      dimension: 16,
+      child: CircularProgressIndicator(strokeWidth: 2),
+    );
+    return Column(
+      key: ValueKey(device.macAddress),
+      children: [
+        ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+          leading: SettingsIconContainer(
+            icon: Icons.memory_rounded,
+            accent: connected ? accent : muted,
+          ),
+          title: Text(
+            session?.sn ?? displaySnOf(device),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: AppColor.textPrimary(context),
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+          subtitle: Text(
+            status,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: connected || opening ? accent : muted,
+                ),
+          ),
+          trailing: targeted
+              ? null
+              : SizedBox.square(
+                  dimension: 24,
+                  child: Center(
+                    child: opening
+                        ? spinner
+                        : Tooltip(
+                            message: actionLabel,
+                            child: Icon(
+                              connected
+                                  ? Icons.chevron_right_rounded
+                                  : Icons.link_rounded,
+                              size: 20,
+                              color: open == null ? muted : accent,
+                            ),
+                          ),
+                  ),
+                ),
+          onTap: open,
+        ),
+        if (targeted)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: SizedBox(
+              width: double.infinity,
+              child: FilledButton.tonalIcon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColor.primarySoft(context),
+                  foregroundColor: accent,
+                  disabledBackgroundColor: AppColor.surfaceHover(context),
+                  disabledForegroundColor: muted,
+                  minimumSize: const Size(0, 48),
+                ),
+                onPressed: open,
+                icon: opening
+                    ? spinner
+                    : Icon(connected ? Icons.tune_rounded : Icons.link_rounded),
+                label: Text(opening ? status : actionLabel),
+              ),
+            ),
+          ),
+        Divider(
+          color: AppColor.divider(context),
+          height: 1,
+          indent: 16,
+          endIndent: 16,
+        ),
+        SwitchListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+          title: Text(
+            zh ? '自动重连此设备' : 'Reconnect to this device',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppColor.textSecondary(context),
+                ),
+          ),
+          value: autoReconnect,
+          onChanged: _openingPanelMac == null
+              ? (value) =>
+                  _toggleDeviceDirectConnection(device.macAddress, value)
+              : null,
+        ),
+      ],
     );
   }
 
@@ -676,17 +688,34 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
     if (_openingPanelMac != null) return;
     setState(() => _openingPanelMac = mac);
     try {
-      final session = await getIt<BleDeviceManager>().connectDevice(mac);
+      final session = await getIt<BleDeviceManager>().connectDevice(
+        mac,
+        autoReconnect: _directConnectedDevices.contains(mac),
+      );
       if (session.state == BleDeviceState.connecting ||
           session.state == BleDeviceState.authenticating) {
-        await session.stateStream.firstWhere((state) =>
-            state == BleDeviceState.ready ||
-            state == BleDeviceState.disconnected,)
+        await session.stateStream
+            .firstWhere(
+              (state) =>
+                  state == BleDeviceState.ready ||
+                  state == BleDeviceState.disconnected,
+            )
             .timeout(const Duration(seconds: 15));
       }
       if (!mounted) return;
       if (session.state != BleDeviceState.ready) {
         throw const BleCommandException('NOT_READY', 'Panel not connected');
+      }
+      final expected = widget.expectedSn?.trim();
+      if (expected != null && expected.isNotEmpty && session.sn != expected) {
+        AppToast.show(
+          context,
+          Localizations.localeOf(context).languageCode == 'zh'
+              ? '蓝牙设备的序列号与所选设备不一致。'
+              : 'The Bluetooth device serial number does not match.',
+          type: ToastType.error,
+        );
+        return;
       }
       if (!session.supportsPanelApi) {
         AppToast.show(
@@ -699,15 +728,20 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
         return;
       }
       await Navigator.of(context).push<void>(
-        MaterialPageRoute(builder: (_) => ModbusPanelPage(session: session)),
+        MaterialPageRoute(
+          builder: (_) => ModbusPanelPage(
+            session: session,
+            startInSettings: expected?.isNotEmpty == true,
+          ),
+        ),
       );
     } catch (_) {
       if (!mounted) return;
       AppToast.show(
         context,
         Localizations.localeOf(context).languageCode == 'zh'
-            ? '无法连接设备，请靠近面板后重试。'
-            : 'Could not connect. Move closer to the panel and retry.',
+            ? '无法连接设备，请确认面板已打开「手机连接」并靠近后重试。'
+            : 'Could not connect. Open Phone connection on the panel, move closer and retry.',
         type: ToastType.error,
       );
     } finally {

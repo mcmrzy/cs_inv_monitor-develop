@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:developer' as dev;
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:fpdart/fpdart.dart';
+import 'package:inv_app/core/errors/failures.dart';
 import 'package:inv_app/core/services/data_cache_service.dart';
 import 'package:inv_app/core/services/network_status_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
@@ -20,6 +22,19 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
   final DashboardSSEDataSource sseDataSource;
 
   static const String _cacheKey = 'dashboard_data';
+  static const _emptyOverview = DashboardData(
+    todayEnergy: 0,
+    totalEnergy: 0,
+    deviceTotal: 0,
+    onlineCount: 0,
+    offlineCount: 0,
+    faultCount: 0,
+    trendData: [],
+    stationRanking: [],
+    recentAlarms: [],
+  );
+
+  Future<void>? _activeLoad;
 
   StreamSubscription<Map<String, dynamic>>? _sseSubscription;
 
@@ -56,166 +71,173 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     DashboardLoadRequested event,
     Emitter<DashboardState> emit,
   ) async {
-    // 如果已有数据，不显示 loading（避免刷新时闪烁）
-    if (state is! DashboardLoaded) {
-      emit(const DashboardLoading());
-    }
-
-    // 断网时直接加载缓存，不等待 30s×4 超时
-    if (!await _hasNetwork()) {
-      final cached = _loadCachedData();
-      if (cached != null) {
-        emit(DashboardLoaded(data: cached));
-      } else if (state is DashboardLoaded) {
-        // 保留旧数据
-      } else {
-        emit(
-          const DashboardError(
-            message: 'Failed to load, please check network',
-            kind: DashboardErrorKind.networkUnavailable,
-          ),
-        );
-      }
-      return;
-    }
-
-    // 每个 API 独立 try-catch，一个失败不影响其他
-    Map<String, dynamic> stats = {};
-    List<TrendDataPoint> trendData = [];
-    Map<String, dynamic> dist = {};
-    List<StationRankItem> ranking = [];
-    int successCount = 0;
-    final failedSections = <String>[];
-
-    // 1. 统计数据（Hero 卡片 + 告警）
+    final operation = _activeLoad ??= _loadOverview(emit);
     try {
-      final result = await repository.getStatistics();
-      result.fold(
-        (failure) {
-          failedSections.add('statistics');
-          dev.log('Dashboard: getStatistics failed: ${failure.message}');
-        },
-        (data) {
-          stats = data;
-          successCount++;
-        },
-      );
-    } catch (e) {
-      failedSections.add('statistics');
-      dev.log('Dashboard: getStatistics exception: $e');
+      await operation;
+    } finally {
+      if (identical(_activeLoad, operation)) _activeLoad = null;
+      event.completion?.complete();
     }
+  }
 
-    // 2. 趋势数据
-    try {
-      final result = await repository.getTrendData();
-      result.fold(
-        (failure) {
-          failedSections.add('trend');
-          dev.log('Dashboard: getTrendData failed: ${failure.message}');
-        },
-        (data) {
-          trendData = data;
-          successCount++;
-        },
-      );
-    } catch (e) {
-      failedSections.add('trend');
-      dev.log('Dashboard: getTrendData exception: $e');
-    }
-
-    // 3. 设备分布
-    try {
-      final result = await repository.getDeviceDistribution();
-      result.fold(
-        (failure) {
-          failedSections.add('distribution');
-          dev.log(
-            'Dashboard: getDeviceDistribution failed: ${failure.message}',
-          );
-        },
-        (data) {
-          dist = data;
-          successCount++;
-        },
-      );
-    } catch (e) {
-      failedSections.add('distribution');
-      dev.log('Dashboard: getDeviceDistribution exception: $e');
-    }
-
-    // 4. 电站排行
-    try {
-      final result = await repository.getStationRanking();
-      result.fold(
-        (failure) {
-          failedSections.add('ranking');
-          dev.log('Dashboard: getStationRanking failed: ${failure.message}');
-        },
-        (data) {
-          ranking = data;
-          successCount++;
-        },
-      );
-    } catch (e) {
-      failedSections.add('ranking');
-      dev.log('Dashboard: getStationRanking exception: $e');
-    }
-
-    // 全部失败时尝试缓存
-    if (successCount == 0) {
-      final cached = _loadCachedData();
-      if (cached != null) {
-        emit(DashboardLoaded(data: cached));
-      } else if (state is DashboardLoaded) {
-        // 保留旧数据
-      } else {
-        emit(
-          const DashboardError(
-            message: 'Failed to load, please check network',
-          ),
-        );
-      }
-      return;
-    }
-
-    final deviceStats = stats['deviceStats'] as Map<String, dynamic>? ?? {};
-    final recentAlarms = (stats['recentAlarms'] as List<dynamic>?)
-            ?.cast<Map<String, dynamic>>() ??
-        [];
-
-    final dashboardData = DashboardData(
-      todayEnergy: (stats['todayEnergy'] as num?)?.toDouble() ?? 0,
-      totalEnergy: (stats['totalEnergy'] as num?)?.toDouble() ?? 0,
-      deviceTotal: (deviceStats['total'] as num?)?.toInt() ?? 0,
-      onlineCount: (deviceStats['online'] as num?)?.toInt() ??
-          (dist['online'] as num?)?.toInt() ??
-          0,
-      offlineCount: (deviceStats['offline'] as num?)?.toInt() ??
-          (dist['offline'] as num?)?.toInt() ??
-          0,
-      faultCount: (deviceStats['fault'] as num?)?.toInt() ??
-          (dist['fault'] as num?)?.toInt() ??
-          0,
-      trendData: trendData,
-      stationRanking: ranking,
-      recentAlarms: recentAlarms,
-    );
-
-    // 缓存数据
-    await _cacheDashboardData(dashboardData);
-
-    final currentState = state;
-    if (currentState is DashboardLoaded) {
-      emit(
-        currentState.copyWith(
-          data: dashboardData,
-          failedSections: failedSections,
-        ),
-      );
+  void _showCachedOverview(
+    Emitter<DashboardState> emit, {
+    required DashboardErrorKind errorKind,
+  }) {
+    final current = state;
+    final cached = _loadCachedData();
+    if (cached != null) {
+      emit(DashboardLoaded(data: cached));
+    } else if (current is DashboardLoaded) {
+      emit(current.copyWith(data: current.data.copyWith(isFromCache: true)));
     } else {
       emit(
-        DashboardLoaded(data: dashboardData, failedSections: failedSections),
+        DashboardError(
+          message: 'Failed to load, please check network',
+          kind: errorKind,
+        ),
       );
+    }
+  }
+
+  Future<void> _loadOverview(Emitter<DashboardState> emit) async {
+    final initialLoad = state is! DashboardLoaded;
+    if (initialLoad) emit(const DashboardLoading());
+
+    final hasNetwork = await _hasNetwork();
+    if (emit.isDone) return;
+    if (!hasNetwork) {
+      _showCachedOverview(emit, errorKind: DashboardErrorKind.networkUnavailable);
+      return;
+    }
+
+    final pending = <DashboardSection>{
+      DashboardSection.statistics,
+      DashboardSection.distribution,
+      DashboardSection.trend,
+      DashboardSection.ranking,
+    };
+    final failed = <DashboardSection>{};
+    var hasData = false;
+    Map<String, dynamic>? statistics;
+    Map<String, dynamic>? distribution;
+    List<TrendDataPoint>? trend;
+    List<StationRankItem>? ranking;
+
+    DashboardLoaded buildOverview() {
+      final current = state;
+      final base = current is DashboardLoaded ? current.data : _emptyOverview;
+      final deviceStats = statistics?['deviceStats'] as Map<String, dynamic>?;
+      final online = (deviceStats?['online'] as num?)?.toInt() ??
+          (distribution?['online'] as num?)?.toInt();
+      final offline = (deviceStats?['offline'] as num?)?.toInt() ??
+          (distribution?['offline'] as num?)?.toInt();
+      final fault = (deviceStats?['fault'] as num?)?.toInt() ??
+          (distribution?['fault'] as num?)?.toInt();
+
+      final visiblePending = {...pending};
+      final visibleFailures = {...failed};
+      final hasCounts = online != null && offline != null && fault != null;
+      if (hasCounts) {
+        visiblePending.remove(DashboardSection.distribution);
+        visibleFailures.remove(DashboardSection.distribution);
+      } else if (pending.contains(DashboardSection.statistics) ||
+          pending.contains(DashboardSection.distribution)) {
+        visiblePending.add(DashboardSection.distribution);
+        visibleFailures.remove(DashboardSection.distribution);
+      } else {
+        visibleFailures.add(DashboardSection.distribution);
+      }
+      if (pending.contains(DashboardSection.statistics)) {
+        visiblePending.add(DashboardSection.alarms);
+      } else if (failed.contains(DashboardSection.statistics)) {
+        visibleFailures.add(DashboardSection.alarms);
+      }
+
+      final data = base.copyWith(
+        todayEnergy: (statistics?['todayEnergy'] as num?)?.toDouble(),
+        totalEnergy: (statistics?['totalEnergy'] as num?)?.toDouble(),
+        deviceTotal: (deviceStats?['total'] as num?)?.toInt() ??
+            (hasCounts ? online + offline + fault : null),
+        onlineCount: online,
+        offlineCount: offline,
+        faultCount: fault,
+        trendData: trend,
+        stationRanking: ranking,
+        recentAlarms: (statistics?['recentAlarms'] as List<dynamic>?)
+            ?.whereType<Map<String, dynamic>>()
+            .toList(),
+        isFromCache: false,
+      );
+
+      return (current is DashboardLoaded ? current : DashboardLoaded(data: data))
+          .copyWith(
+        data: data,
+        pendingSections: visiblePending,
+        failedSections: visibleFailures,
+      );
+    }
+
+    Future<void> loadSection<T>(
+      DashboardSection section,
+      Future<Either<Failure, T>> Function() fetch,
+      void Function(T) accept,
+    ) async {
+      try {
+        final result = await fetch();
+        result.fold(
+          (failure) {
+            failed.add(section);
+            dev.log('Dashboard: ${section.name} failed: ${failure.message}');
+          },
+          (data) {
+            accept(data);
+            hasData = true;
+          },
+        );
+      } catch (error) {
+        failed.add(section);
+        dev.log('Dashboard: ${section.name} failed: $error');
+      }
+
+      pending.remove(section);
+      if (initialLoad && hasData && pending.isNotEmpty && !emit.isDone) {
+        emit(buildOverview());
+      }
+    }
+
+    final timeRange = state is DashboardLoaded
+        ? (state as DashboardLoaded).selectedTimeRange
+        : 'day';
+    await Future.wait([
+      loadSection(DashboardSection.statistics, repository.getStatistics, (data) {
+        statistics = data;
+      }),
+      loadSection(
+        DashboardSection.distribution,
+        repository.getDeviceDistribution,
+        (data) => distribution = data,
+      ),
+      loadSection(
+        DashboardSection.trend,
+        () => repository.getTrendData(type: timeRange),
+        (data) => trend = data,
+      ),
+      loadSection(DashboardSection.ranking, repository.getStationRanking, (data) {
+        ranking = data;
+      }),
+    ]);
+
+    if (emit.isDone) return;
+    if (!hasData) {
+      _showCachedOverview(emit, errorKind: DashboardErrorKind.requestFailed);
+      return;
+    }
+
+    final overview = buildOverview();
+    emit(overview);
+    if (overview.failedSections.isEmpty) {
+      await _cacheDashboardData(overview.data);
     }
   }
 
@@ -300,10 +322,18 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
           trendData: currentData.trendData,
           stationRanking: currentData.stationRanking,
           recentAlarms: recentAlarms.cast<Map<String, dynamic>>(),
-          isFromCache: false,
+          isFromCache: currentData.isFromCache,
         );
 
-        emit(currentState.copyWith(data: updatedData));
+        final failures = {...currentState.failedSections};
+        if (recentAlarmsRaw != null) failures.remove(DashboardSection.alarms);
+        if (deviceStats?['total'] is num &&
+            deviceStats?['online'] is num &&
+            deviceStats?['offline'] is num &&
+            deviceStats?['fault'] is num) {
+          failures.remove(DashboardSection.distribution);
+        }
+        emit(currentState.copyWith(data: updatedData, failedSections: failures));
       }
     } catch (e) {
       dev.log('Dashboard: SSE data processing error: $e');

@@ -17,7 +17,7 @@ class OtaRemoteDataSource {
     String? targetChip,
   }) async =>
           dio.get(
-            '/ota/devices/$sn/firmware-resources',
+            '/ota/devices/${Uri.encodeComponent(sn)}/firmware-resources',
             queryParameters: {
               if (targetChip != null && targetChip.isNotEmpty)
                 'target_chip': targetChip,

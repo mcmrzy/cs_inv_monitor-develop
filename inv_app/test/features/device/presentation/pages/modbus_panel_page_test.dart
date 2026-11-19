@@ -8,9 +8,13 @@ import 'package:inv_app/features/device/presentation/pages/modbus_panel_aux_page
 import 'package:inv_app/features/device/presentation/pages/modbus_panel_page.dart';
 
 class _PanelSession implements BleDeviceSession {
+  _PanelSession({this.multipleCategories = false});
+
+  final bool multipleCategories;
   final states = StreamController<BleDeviceState>.broadcast();
   BleDeviceState connectionState = BleDeviceState.ready;
   int value = 24;
+  Future<void>? secondSettingGate;
   bool writeObserved = true;
   final writes = <Map<String, dynamic>>[];
   final sample = <String, dynamic>{
@@ -50,6 +54,18 @@ class _PanelSession implements BleDeviceSession {
   ]) async {
     switch (action) {
       case 'panel_setting':
+        if (multipleCategories && params['index'] == 1) {
+          await secondSettingGate;
+          return {
+            'id': 'panel_4112',
+            'label': 'Output frequency',
+            'group': 'Output',
+            'access': 1,
+            'value': 50,
+            'text': '50 Hz',
+            'context': 1,
+          };
+        }
         return {
           'id': 'panel_4101',
           'label': 'Charging current',
@@ -69,7 +85,7 @@ class _PanelSession implements BleDeviceSession {
       default:
         return {
           'model': '3KU',
-          'count': 1,
+          'count': multipleCategories ? 2 : 1,
           'online': true,
           'context': 1,
           'confirmed': true,
@@ -311,5 +327,74 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
     await session.states.close();
+  });
+
+  testWidgets('Bluetooth settings focus one category and search across groups',
+      (tester) async {
+    final session = _PanelSession(multipleCategories: true);
+    await tester.pumpWidget(
+      ScreenUtilInit(
+        builder: (_, __) => MaterialApp(
+          home: ModbusPanelPage(session: session, startInSettings: true),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Parameter categories'), findsOneWidget);
+    expect(find.text('Charging current'), findsNothing);
+    await tester.tap(find.text('Battery'));
+    await tester.pumpAndSettle();
+    expect(find.text('Charging current'), findsOneWidget);
+    expect(find.text('Output frequency'), findsNothing);
+
+    await tester.tap(find.text('All categories'));
+    await tester.pumpAndSettle();
+    expect(find.text('Output'), findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'frequency');
+    await tester.pumpAndSettle();
+    expect(find.text('Output frequency'), findsOneWidget);
+    expect(find.text('Charging current'), findsNothing);
+    expect(session.writes, isEmpty);
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await session.states.close();
+  });
+
+  testWidgets('reading settings preserves the current view until the read ends',
+      (tester) async {
+    final session = _PanelSession(multipleCategories: true);
+    await tester.pumpWidget(
+      ScreenUtilInit(
+        builder: (_, __) => MaterialApp(
+          home: ModbusPanelPage(session: session, startInSettings: true),
+        ),
+      ),
+    );
+    addTearDown(session.states.close);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Battery'));
+    await tester.pumpAndSettle();
+
+    final read = find.widgetWithText(OutlinedButton, 'Read device');
+    final position = tester.getRect(read);
+    final pending = Completer<void>();
+    session.secondSettingGate = pending.future;
+    session.value = 27;
+    await tester.tap(read);
+    await tester.pump();
+
+    expect(find.text('24 A'), findsOneWidget);
+    expect(find.text('27 A'), findsNothing);
+    expect(tester.getRect(read), position);
+    expect(tester.widget<OutlinedButton>(read).onPressed, isNull);
+
+    pending.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('24 A'), findsNothing);
+    expect(find.text('27 A'), findsOneWidget);
+    expect(tester.getRect(read), position);
+    await tester.pumpWidget(const SizedBox.shrink());
   });
 }

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/errors/ota_error_types.dart';
 import 'package:inv_app/core/platform/platform.dart';
 import 'package:inv_app/core/services/ble/ble_adapter.dart';
@@ -13,6 +14,7 @@ import 'package:inv_app/core/services/wifi_scan_service.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/widgets/app_toast.dart';
+import 'package:inv_app/core/widgets/device_workflow_card.dart';
 import 'package:inv_app/core/widgets/wifi_enable_dialog.dart';
 import 'package:inv_app/features/ota/data/datasources/ble_communication_service.dart';
 import 'package:inv_app/features/ota/data/datasources/local_ota_result_sync_queue.dart';
@@ -22,6 +24,7 @@ import 'package:inv_app/features/ota/domain/entities/local_channel.dart';
 import 'package:inv_app/features/ota/domain/repositories/local_communication_repository.dart';
 import 'package:inv_app/features/ota/domain/repositories/ota_repository.dart';
 import 'package:inv_app/features/ota/presentation/models/local_ota_presentation.dart';
+import 'package:inv_app/features/ota/presentation/widgets/firmware_release_access.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 import 'package:inv_app/features/ota/presentation/models/firmware_module_presentation.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -84,7 +87,8 @@ class LocalOTAPage extends StatefulWidget {
   State<LocalOTAPage> createState() => _LocalOTAPageState();
 }
 
-class _LocalOTAPageState extends State<LocalOTAPage> {
+class _LocalOTAPageState extends State<LocalOTAPage>
+    with FirmwareReleaseAccess<LocalOTAPage> {
   LocalOTAStep _currentStep = LocalOTAStep.selectFirmware;
   LocalOTAResult? _result;
   String? _resultMessage;
@@ -133,6 +137,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
           !(widget.hardwareVersions?.any((value) => value.trim().isNotEmpty) ?? false));
 
   bool get _metadataReadyForDownload =>
+      canBrowseFirmwareReleases &&
       (widget.firmwareId ?? 0) > 0 &&
       !_loadingFirmwareMeta &&
       (!_needsCanonicalMetadata || _firmwareMeta != null);
@@ -215,17 +220,34 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       }
     });
 
-    _loadingFirmwareMeta = _needsCanonicalMetadata;
-    _initFirmware();
     _loadDownloadedFirmwares();
+  }
+
+  @override
+  void onFirmwareReleasesAvailable() => unawaited(_initFirmware());
+
+  Future<void> _openReleasedVersions() async {
+    await context.pushNamed<void>(
+      'firmwareLibrary',
+      queryParameters: {'sn': widget.deviceSN, 'history': '1'},
+    );
+    if (mounted) await _loadDownloadedFirmwares();
   }
 
   Future<void> _initFirmware() async {
     // A cached file can only be selected together with its own persisted
     // metadata by _loadDownloadedFirmwares, never from a path alone.
-    if (!_needsCanonicalMetadata) return;
+    if (!_needsCanonicalMetadata || _firmwareMeta != null ||
+        _loadingFirmwareMeta) {
+      return;
+    }
+    setState(() {
+      _loadingFirmwareMeta = true;
+      _errorMessage = null;
+    });
     try {
       final result = await getIt<OtaRepository>().getFirmwareInfo(widget.firmwareId!);
+      if (!mounted || !canBrowseFirmwareReleases) return;
       result.fold(
         (failure) {
           if (mounted) {
@@ -244,7 +266,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         },
       );
     } catch (error) {
-      if (mounted) {
+      if (mounted && canBrowseFirmwareReleases) {
         setState(
           () => _errorMessage = AppLocalizations.of(context)!
               .str('download_failed', {'error': '$error'}),
@@ -1034,11 +1056,17 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     final l10n = AppLocalizations.of(context)!;
     final body = Column(
       children: [
-        _buildStepIndicator(),
         Expanded(
           child: SingleChildScrollView(
             padding: EdgeInsets.all(16.w),
-            child: _buildCurrentStepContent(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildStepIndicator(),
+                const SizedBox(height: 16),
+                _buildCurrentStepContent(),
+              ],
+            ),
           ),
         ),
       ],
@@ -1065,32 +1093,6 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
           centerTitle: true,
           elevation: 0,
           scrolledUnderElevation: 0.5,
-          actions: [
-            // 显示当前使用的通道类型
-            Padding(
-              padding: EdgeInsets.only(right: 16.w),
-              child: Chip(
-                label: Text(
-                  widget.channel == LocalCommunicationChannel.ble
-                      ? 'BLE'
-                      : 'WiFi',
-                  style: TextStyle(
-                    fontSize: 12.sp,
-                    fontWeight: FontWeight.w600,
-                    color: widget.channel == LocalCommunicationChannel.ble
-                        ? Colors.blue
-                        : Colors.orange,
-                  ),
-                ),
-                backgroundColor: widget.channel == LocalCommunicationChannel.ble
-                    ? Colors.blue.withValues(alpha: 0.1)
-                    : Colors.orange.withValues(alpha: 0.1),
-                side: BorderSide.none,
-                padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 2.h),
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-            ),
-          ],
         ),
         body: body,
       ),
@@ -1098,86 +1100,19 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   }
 
   Widget _buildStepIndicator() {
-    const steps = LocalOTAStep.values;
-    final currentIndex = steps.indexOf(_currentStep);
-
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 16.h),
-      color: AppColor.surfaceContainer(context),
-      child: Row(
-        children: steps.asMap().entries.map((entry) {
-          final index = entry.key;
-          final step = entry.value;
-          final isCompleted = currentIndex > index;
-          final isCurrent = currentIndex == index;
-
-          Color stepColor;
-          if (isCompleted) {
-            stepColor = AppColors.successLight;
-          } else if (isCurrent) {
-            stepColor = AppColors.primary;
-          } else {
-            stepColor = AppColor.textHint(context);
-          }
-
-          return Expanded(
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    children: [
-                      Container(
-                        width: 28.w,
-                        height: 28.w,
-                        decoration: BoxDecoration(
-                          color: stepColor.withValues(alpha: 0.1),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: stepColor, width: 2),
-                        ),
-                        child: isCompleted
-                            ? Icon(Icons.check, size: 14.sp, color: stepColor)
-                            : Center(
-                                child: Text(
-                                  '${index + 1}',
-                                  style: TextStyle(
-                                    fontSize: 12.sp,
-                                    fontWeight: FontWeight.w600,
-                                    color: stepColor,
-                                  ),
-                                ),
-                              ),
-                      ),
-                      SizedBox(height: 4.h),
-                      Text(
-                        _stepLabel(step),
-                        style: TextStyle(
-                          fontSize: 12.sp,
-                          color: isCurrent || isCompleted
-                              ? AppColor.textPrimary(context)
-                              : AppColor.textSecondary(context),
-                          fontWeight:
-                              isCurrent ? FontWeight.w600 : FontWeight.w400,
-                        ),
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                if (index < steps.length - 1)
-                  Container(
-                    width: 16.w,
-                    height: 2,
-                    color: isCompleted
-                        ? AppColors.successLight
-                        : AppColor.border(context),
-                  ),
-              ],
-            ),
-          );
-        }).toList(),
-      ),
+    final zh = Localizations.localeOf(context).languageCode == 'zh';
+    final ble = widget.channel == LocalCommunicationChannel.ble;
+    final steps = LocalOTAStep.values.length;
+    final index = _currentStep.index;
+    return DeviceWorkflowCard(
+      key: const ValueKey('local-ota-current-step'),
+      icon: ble ? Icons.bluetooth_connected_rounded : Icons.wifi_tethering_rounded,
+      title: _stepLabel(_currentStep),
+      subtitle: ble
+          ? (zh ? '蓝牙直连' : 'Bluetooth direct')
+          : (zh ? 'Wi-Fi 热点' : 'Wi-Fi hotspot'),
+      status: zh ? '第 ${index + 1}/$steps 步' : 'Step ${index + 1} of $steps',
+      progress: (index + 1) / steps,
     );
   }
 
@@ -1252,12 +1187,26 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                 _buildFirmwareListLoading()
               else if (_downloadedFirmwares.isNotEmpty)
                 _buildDownloadedFirmwareList()
-              else
+              else if (canBrowseFirmwareReleases)
                 Text(
                   l10n.firmwareDownloadHint,
                   style: TextStyle(
-                      fontSize: 13.sp, color: AppColor.textHint(context),),
+                    fontSize: 13.sp,
+                    color: AppColor.textHint(context),
+                  ),
                 ),
+              if (canBrowseFirmwareReleases) ...[
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: _isDownloading ? null : _openReleasedVersions,
+                  icon: const Icon(Icons.list_alt_rounded),
+                  label: Text(l10n.str('firmware_release_history')),
+                ),
+              ] else if (firmwareReleaseAccessChecked &&
+                  !_firmwareListLoading &&
+                  _selectedFilePath == null &&
+                  _downloadedFirmwares.isEmpty)
+                const FirmwareDownloadFirstNotice(),
               if (_errorMessage != null) ...[
                 SizedBox(height: 8.h),
                 Text(
@@ -1269,7 +1218,8 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
           ),
         ),
         SizedBox(height: 24.h),
-        if (_selectedFilePath == null &&
+        if (canBrowseFirmwareReleases &&
+            _selectedFilePath == null &&
             !_isDownloading &&
             _metaFirmwareUrl != null)
           SizedBox(

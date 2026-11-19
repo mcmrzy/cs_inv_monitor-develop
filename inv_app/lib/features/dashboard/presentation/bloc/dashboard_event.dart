@@ -9,7 +9,12 @@ abstract class DashboardEvent extends Equatable {
 
 /// 加载仪表盘数据（初始加载 + 下拉刷新）
 class DashboardLoadRequested extends DashboardEvent {
-  const DashboardLoadRequested();
+  final Completer<void>? completion;
+
+  const DashboardLoadRequested({this.completion});
+
+  @override
+  List<Object?> get props => [completion];
 }
 
 /// 连接到SSE流
