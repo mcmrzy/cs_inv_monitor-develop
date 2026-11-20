@@ -1,0 +1,84 @@
+name: Publish Android 1.1.21 (49)
+on:
+  push:
+    branches:
+      - codex/android-production-1.1.21-49
+    paths:
+      - .github/workflows/publish-android-49.yml
+      - deploy/releases/android-1.1.21-49/**
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: production-deploy
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      RELEASE_PATH: deploy/releases/android-1.1.21-49
+      APK_SHA256: f49ffb3e8fa081c1a963266bb34574ef5b62d07d5f57bc9c2a1e87a568f74a5e
+      PREVIOUS_SHA256: 269ab899ebd11330aa0b54d3be179aead8c2ece2327fb8c557efc79b7ffccb2e
+      API_DEPLOY_SHA: e5ab9a4ba9c3f6688576ca16757664665f6f5662
+      APK_CERT_SHA256: c9540eb2d59a398fb5565f59333171b76829526275043a4afbfcffd98d986e39
+      APK_NAME: com.csergy.app1-1.1.21-49-f49ffb3e8fa0.apk
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify release APK
+        run: |
+          set -euo pipefail
+          apk="$RELEASE_PATH/app-release.apk"
+          printf '%s  %s\n' "$APK_SHA256" "$apk" | sha256sum -c -
+          test "$(stat -c %s "$apk")" = 44985453
+          tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          "$tools/aapt" dump badging "$apk" > "$RUNNER_TEMP/android-49-badging"
+          grep -F "package: name='com.csergy.app1' versionCode='49' versionName='1.1.21'" "$RUNNER_TEMP/android-49-badging"
+          grep -xF "sdkVersion:'29'" "$RUNNER_TEMP/android-49-badging"
+          grep -xF "targetSdkVersion:'36'" "$RUNNER_TEMP/android-49-badging"
+          grep -xF "native-code: 'arm64-v8a'" "$RUNNER_TEMP/android-49-badging"
+          if grep -q '^application-debuggable' "$RUNNER_TEMP/android-49-badging"; then exit 1; fi
+          "$tools/apksigner" verify --print-certs "$apk" > "$RUNNER_TEMP/android-49-certificate"
+          grep -qF "certificate SHA-256 digest: $APK_CERT_SHA256" "$RUNNER_TEMP/android-49-certificate"
+          printf '%s\n' "$tools" > "$RUNNER_TEMP/android-49-tools"
+      - name: Publish installation package and verify origin
+        env:
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USERNAME: ${{ secrets.SERVER_USERNAME }}
+        run: |
+          set -euo pipefail
+          umask 077
+          work=$(mktemp -d)
+          trap 'rm -rf -- "$work"' EXIT
+          printf '%s\n' "$SSH_KEY" > "$work/deploy_key"
+          args=(-i "$work/deploy_key" -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=4)
+          remote="$SERVER_USERNAME@$SERVER_HOST"
+          latest="docker exec business-api wget -qO- 'http://127.0.0.1:8080/api/v1/ota/app/latest?platform=android'"
+          ssh "${args[@]}" "$remote" "$latest" > "$work/current.json"
+          previous_name=com.csergy.app1-1.1.20-48-269ab899ebd1.apk
+          jq -e --arg old "$PREVIOUS_SHA256" --arg new "$APK_SHA256" '
+            .code == 0 and ((.data.version_code == 48 and .data.file_sha256 == $old)
+                           or (.data.version_code == 49 and .data.file_sha256 == $new))
+          ' "$work/current.json"
+          ssh "${args[@]}" "$remote" "docker exec business-api cat /data/firmware/apps/android/$previous_name" > "$work/previous.apk"
+          printf '%s  %s\n' "$PREVIOUS_SHA256" "$work/previous.apk" | sha256sum -c -
+          tools=$(cat "$RUNNER_TEMP/android-49-tools")
+          "$tools/apksigner" verify --print-certs "$work/previous.apk" > "$work/previous-certificate"
+          grep -qF "certificate SHA-256 digest: $APK_CERT_SHA256" "$work/previous-certificate"
+
+          cp "$RELEASE_PATH"/{app-release.apk,publish.sql} "$work/"
+          cp deploy/verify-modbus-production.sql "$work/verify.sql"
+          printf '%s\n' "$APK_NAME" > "$work/filename"
+          tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner \
+            -czf "$work/publish.tar.gz" -C "$work" app-release.apk filename verify.sql publish.sql
+          archive_sha=$(sha256sum "$work/publish.tar.gz" | cut -d' ' -f1)
+          remote_dir="/opt/inv-mqtt/.release-relay/$GITHUB_SHA/app/$archive_sha"
+          python3 deploy/ssh-upload-chunks.py --file "$work/publish.tar.gz" --remote-dir "$remote_dir" --host "$remote" --identity "$work/deploy_key"
+          printf -v publish_command 'bash -c %q -- %q %q < %q' "$(cat "$RELEASE_PATH/publish.sh")" "$API_DEPLOY_SHA" "$APK_SHA256" "$remote_dir/payload"
+          ssh "${args[@]}" "$remote" "$publish_command"
+          ssh "${args[@]}" "$remote" "$latest" > "$work/published.json"
+          jq -e --arg sha "$APK_SHA256" '.code == 0 and .data.version_code == 49 and .data.file_sha256 == $sha' "$work/published.json"
+          ssh "${args[@]}" "$remote" "docker exec business-api cat /data/firmware/apps/android/$APK_NAME" > "$work/published.apk"
+          printf '%s  %s\n' "$APK_SHA256" "$work/published.apk" | sha256sum -c -
+          printf -v cleanup_command 'rm -rf -- %q' "$remote_dir"
+          ssh "${args[@]}" "$remote" "$cleanup_command"
