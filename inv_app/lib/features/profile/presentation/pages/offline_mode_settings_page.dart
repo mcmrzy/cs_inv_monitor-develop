@@ -11,6 +11,7 @@ import 'package:inv_app/core/services/ble/ble_polling_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/core/widgets/settings_widgets.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
@@ -487,8 +488,16 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
                 ? '云端模式 · 可同时连接附近的蓝牙设备'
                 : 'Cloud mode · Nearby devices can also connect over Bluetooth');
 
-    return SettingsCard([
-      Padding(
+    return Card(
+      margin: EdgeInsets.symmetric(horizontal: 16.w),
+      elevation: 0,
+      color: AppColor.surfaceContainer(context),
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: AppColor.divider(context)),
+      ),
+      child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -526,16 +535,16 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
               description,
               style: text.bodyMedium?.copyWith(color: muted, height: 1.45),
             ),
-            const SizedBox(height: 6),
-            OutlinedButton.icon(
+            const SizedBox(height: 10),
+            FilledButton.tonalIcon(
               key: const ValueKey('bluetooth-discovery-action'),
-              style: OutlinedButton.styleFrom(
+              style: FilledButton.styleFrom(
                 foregroundColor: accent,
-                minimumSize: const Size(0, 48),
-                side: BorderSide(color: AppColor.border(context)),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                backgroundColor: AppColor.primarySoft(context),
+                disabledForegroundColor: muted,
+                disabledBackgroundColor: AppColor.surfaceHover(context),
+                minimumSize: const Size(0, 44),
+                shape: const StadiumBorder(),
               ),
               onPressed: _openingPanelMac != null || _enabling
                   ? null
@@ -559,7 +568,7 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
           ],
         ),
       ),
-    ]);
+    );
   }
 
   Future<void> _enableBluetoothDiscovery() async {
@@ -589,6 +598,11 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
         : connected
             ? (zh ? '蓝牙已连接' : 'Bluetooth connected')
             : (zh ? '等待连接' : 'Ready to connect');
+    final statusColor = connected
+        ? AppColor.accent(context, AppColors.success)
+        : opening
+            ? accent
+            : muted;
     final actionLabel = connected
         ? (zh ? '进入设置' : 'Open settings')
         : (zh ? '连接设备' : 'Connect device');
@@ -600,10 +614,19 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
       key: ValueKey(device.macAddress),
       children: [
         ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-          leading: SettingsIconContainer(
-            icon: Icons.memory_rounded,
-            accent: connected ? accent : muted,
+          contentPadding: const EdgeInsetsDirectional.fromSTEB(14, 7, 16, 7),
+          horizontalTitleGap: 10,
+          leading: SizedBox(
+            width: 50,
+            height: 52,
+            child: Image.asset(
+              CsergyAssets.inverterThumbnail,
+              fit: BoxFit.contain,
+              cacheHeight: 156,
+              excludeFromSemantics: true,
+              errorBuilder: (_, __, ___) =>
+                  Icon(Icons.memory_outlined, size: 26, color: muted),
+            ),
           ),
           title: Text(
             session?.sn ?? displaySnOf(device),
@@ -612,11 +635,23 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
                   fontWeight: FontWeight.w600,
                 ),
           ),
-          subtitle: Text(
-            status,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: connected || opening ? accent : muted,
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 3),
+            child: Row(
+              children: [
+                Icon(Icons.circle, size: 7, color: statusColor),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    status,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: statusColor,
+                          fontWeight: FontWeight.w500,
+                        ),
+                  ),
                 ),
+              ],
+            ),
           ),
           trailing: targeted
               ? null
@@ -651,6 +686,7 @@ class _OfflineModeSettingsPageState extends State<OfflineModeSettingsPage> {
                   disabledBackgroundColor: AppColor.surfaceHover(context),
                   disabledForegroundColor: muted,
                   minimumSize: const Size(0, 48),
+                  shape: const StadiumBorder(),
                 ),
                 onPressed: open,
                 icon: opening

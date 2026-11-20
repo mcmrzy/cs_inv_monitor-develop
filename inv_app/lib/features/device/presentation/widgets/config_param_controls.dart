@@ -48,8 +48,8 @@ const List<SettingsCategory> settingsCategories = [
   ),
   SettingsCategory(
     id: 'battery',
-    icon: Icons.battery_charging_full_rounded,
-    color: Color(0xFF10B981),
+    icon: Icons.battery_charging_full_outlined,
+    color: AppColors.teal,
     paramKeys: [
       'set_battery_type',
       'set_battery_capacity',
@@ -60,8 +60,8 @@ const List<SettingsCategory> settingsCategories = [
   ),
   SettingsCategory(
     id: 'charge',
-    icon: Icons.bolt_rounded,
-    color: Color(0xFFF59E0B),
+    icon: Icons.bolt_outlined,
+    color: AppColors.orange,
     paramKeys: [
       'set_max_chg_curr',
       'set_max_charge_current',
@@ -78,8 +78,8 @@ const List<SettingsCategory> settingsCategories = [
   ),
   SettingsCategory(
     id: 'discharge',
-    icon: Icons.electric_bolt_rounded,
-    color: Color(0xFFEF4444),
+    icon: Icons.battery_alert_outlined,
+    color: AppColors.purple,
     paramKeys: [
       'set_max_discharge_current',
       'set_low_volt_return_utl',
@@ -92,8 +92,8 @@ const List<SettingsCategory> settingsCategories = [
   ),
   SettingsCategory(
     id: 'output',
-    icon: Icons.power_rounded,
-    color: Color(0xFF3B82F6),
+    icon: Icons.power_outlined,
+    color: AppColors.blue,
     paramKeys: [
       'set_output_voltage',
       'set_output_frequency',
@@ -104,14 +104,14 @@ const List<SettingsCategory> settingsCategories = [
   ),
   SettingsCategory(
     id: 'solar',
-    icon: Icons.solar_power_rounded,
+    icon: Icons.solar_power_outlined,
     color: Color(0xFFF9A825),
     paramKeys: ['set_solar_power_balance', 'set_charge_priority'],
   ),
   SettingsCategory(
     id: 'generator',
-    icon: Icons.local_gas_station_rounded,
-    color: Color(0xFF14B8A6),
+    icon: Icons.local_gas_station_outlined,
+    color: AppColors.teal,
     paramKeys: [
       'set_gen_start_voltage',
       'set_gen_stop_voltage',
@@ -121,7 +121,7 @@ const List<SettingsCategory> settingsCategories = [
   ),
   SettingsCategory(
     id: 'alarm',
-    icon: Icons.notifications_active_rounded,
+    icon: Icons.notifications_outlined,
     color: Color(0xFFEC4899),
     paramKeys: [
       'set_buzzer',
@@ -193,12 +193,19 @@ String? configEnumSummaryText(
   final schema = schemaMap[paramKey];
   final value = values[paramKey];
   if (schema == null || value == null) return null;
-  for (final opt in schema.enumOptions) {
-    if (opt.key == value.toString()) {
-      return configEnumOptionLabel(l10n, opt.value);
-    }
+  return _configEnumValueText(l10n, schema.enumOptions, value);
+}
+
+String _configEnumValueText(
+  AppLocalizations l10n,
+  Iterable<ConfigEnumOption> options,
+  Object value,
+) {
+  final key = value.toString();
+  for (final option in options) {
+    if (option.key == key) return configEnumOptionLabel(l10n, option.value);
   }
-  return value.toString();
+  return key;
 }
 
 /// 取某数值参数的当前值文案（含单位，Dashboard 摘要用），无值返回 null
@@ -228,7 +235,7 @@ String? configBoolSummaryText(
 // 参数控件（第 2 层分类页 / 第 3 层高级参数页共用）
 // ============================================================
 
-/// 单个参数的卡片式控件：标题行 + number(Slider) / enum(ChoiceChip) / boolean(Switch)
+/// 参数标题和与参数类型对应的控件，电流使用档位选择。
 ///
 /// [onRequestChange] 只是「请求修改」，是否纳入待提交由页面决定
 /// （页面负责 confirmation_mode=='modal' 的确认弹窗）。
@@ -248,6 +255,11 @@ class ConfigParamControl extends StatelessWidget {
   final bool dangerous;
   final bool compact;
 
+  /// 设置目录的详情使用参数名和当前值并排的列表行。
+  final bool embedded;
+
+  final Set<num>? currentCommandValues;
+
   final ValueChanged<dynamic> onRequestChange;
 
   const ConfigParamControl({
@@ -259,12 +271,16 @@ class ConfigParamControl extends StatelessWidget {
     this.disabled = false,
     this.dangerous = false,
     this.compact = false,
+    this.embedded = false,
+    this.currentCommandValues,
   });
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
+    if (embedded) return _buildListRow(context, l10n, theme);
+
     if (compact) {
       final label = _buildLabelRow(l10n, theme);
       if (schema.controlType == 'boolean') {
@@ -315,7 +331,10 @@ class ConfigParamControl extends StatelessWidget {
             : null,
       ),
       child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+        padding: EdgeInsets.symmetric(
+          horizontal: 16.w,
+          vertical: 12.h,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -326,6 +345,128 @@ class ConfigParamControl extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildListRow(
+    BuildContext context,
+    AppLocalizations l10n,
+    ThemeData theme,
+  ) {
+    final label = _buildLabelRow(l10n, theme);
+    final valueStyle = theme.textTheme.bodyMedium?.copyWith(
+      color: modified
+          ? AppColor.primary(context)
+          : AppColor.textSecondary(context),
+      fontWeight: FontWeight.w600,
+    );
+    Widget control;
+    VoidCallback? onTap;
+    if (schema.controlType == 'boolean') {
+      control = value == null && disabled
+          ? Text('—', style: valueStyle)
+          : Semantics(
+              label: configParamName(l10n, schema),
+              child: Switch(
+                value: configBoolIsOn(value),
+                onChanged: disabled
+                    ? null
+                    : (on) => onRequestChange(configBoolForWrite(on, value)),
+              ),
+            );
+    } else if (schema.isCurrent) {
+      control = _buildCurrentPicker(context, l10n, theme);
+    } else {
+      final isEnum = schema.controlType == 'enum';
+      final options = schema.enumOptions;
+      final min = schema.min;
+      final max = schema.max;
+      final editable = !disabled &&
+          (isEnum
+              ? options.isNotEmpty
+              : min != null && max != null && max > min);
+      final display = switch (value) {
+        null => '—',
+        final current when isEnum => _configEnumValueText(l10n, options, current),
+        final num current => formatConfigNumber(current, schema),
+        final current => current.toString(),
+      };
+      control = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(
+            child: Text(display, textAlign: TextAlign.end, style: valueStyle),
+          ),
+          if (editable) ...[
+            const SizedBox(width: 4),
+            Icon(
+              Icons.chevron_right_rounded,
+              color: AppColor.textSecondary(context),
+              size: 18,
+            ),
+          ],
+        ],
+      );
+      if (editable) onTap = () => _editListValue(context, l10n);
+    }
+
+    return InkWell(
+      onTap: onTap,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 52),
+        child: Row(
+          children: [
+            Expanded(flex: 3, child: label),
+            const SizedBox(width: 8),
+            Flexible(
+              flex: 2,
+              child: Align(
+                alignment: AlignmentDirectional.centerEnd,
+                child: control,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _editListValue(
+    BuildContext context,
+    AppLocalizations l10n,
+  ) async {
+    dynamic draft = value;
+    final selected = await showDialog<Object>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          scrollable: true,
+          title: Text(configParamName(l10n, schema)),
+          content: SizedBox(
+            width: 320,
+            child: ConfigParamControl(
+              schema: schema,
+              value: draft,
+              modified: false,
+              compact: compact,
+              onRequestChange: (selection) => setState(() => draft = selection),
+            )._buildControl(context, l10n, Theme.of(context)),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(l10n.cancel),
+            ),
+            FilledButton(
+              onPressed: draft == value
+                  ? null
+                  : () => Navigator.pop(dialogContext, draft),
+              child: Text(l10n.confirm),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (selected != null && context.mounted) onRequestChange(selected);
   }
 
   /// 标题行：危险图标 + 名称 + modal 提示 + 已修改徽标
@@ -386,6 +527,9 @@ class ConfigParamControl extends StatelessWidget {
     AppLocalizations l10n,
     ThemeData theme,
   ) {
+    if (schema.isCurrent && schema.controlType != 'boolean') {
+      return _buildCurrentPicker(context, l10n, theme);
+    }
     switch (schema.controlType) {
       case 'enum':
         return _buildEnum(l10n, theme);
@@ -394,6 +538,135 @@ class ConfigParamControl extends StatelessWidget {
       default:
         return _buildNumber(context, theme);
     }
+  }
+
+  Widget _buildCurrentPicker(
+    BuildContext context,
+    AppLocalizations l10n,
+    ThemeData theme,
+  ) {
+    final commandValues = currentCommandValues;
+    final labels = <num, String>{};
+    for (final option in schema.enumOptions) {
+      final amps = num.tryParse(option.key);
+      if (amps == null || !amps.isFinite) continue;
+      labels[amps] = configEnumOptionLabel(l10n, option.value);
+    }
+
+    final hasExplicitValues =
+        schema.enumMap?.isNotEmpty == true || commandValues != null;
+    final explicitValues = (labels.isNotEmpty
+            ? labels.keys.where((amps) => commandValues?.contains(amps) ?? true)
+            : commandValues ?? const <num>{})
+        .toList()
+      ..sort();
+    final lower = schema.min;
+    final upper = schema.max;
+    final step = schema.step;
+    final intervals = !hasExplicitValues &&
+            schema.controlType == 'number' &&
+            lower != null &&
+            lower.isFinite &&
+            upper != null &&
+            upper.isFinite &&
+            step != null &&
+            step.isFinite &&
+            step > 0
+        ? (upper - lower) / step
+        : -1.0;
+    final count = hasExplicitValues
+        ? explicitValues.length
+        : intervals.isFinite && intervals >= 0
+            ? (intervals + 1e-9).floor() + 1
+            : 0;
+    final current = num.tryParse(value?.toString() ?? '');
+
+    String label(num amps) {
+      final amount = amps == amps.truncateToDouble() ? amps.toInt() : amps;
+      return labels[amps] ?? '$amount A';
+    }
+
+    final display = current != null && current.isFinite ? label(current) : '—';
+    if (count == 0) {
+      return Text(
+        display,
+        style:
+            embedded ? theme.textTheme.bodyMedium : theme.textTheme.titleMedium,
+      );
+    }
+
+    return OutlinedButton.icon(
+      style: embedded
+          ? OutlinedButton.styleFrom(
+              minimumSize: const Size(0, 36),
+              padding: const EdgeInsetsDirectional.only(start: 10, end: 6),
+              foregroundColor: AppColor.primary(context),
+              backgroundColor: disabled ? null : AppColor.primarySoft(context),
+              side: BorderSide.none,
+            )
+          : null,
+      icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
+      iconAlignment: IconAlignment.end,
+      label: Text(display),
+      onPressed: disabled
+          ? null
+          : () async {
+              final selected = await showModalBottomSheet<num>(
+                context: context,
+                isScrollControlled: true,
+                showDragHandle: true,
+                builder: (sheetContext) => FractionallySizedBox(
+                  heightFactor: 0.6,
+                  child: SafeArea(
+                    top: false,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                          child: Text(
+                            configParamName(l10n, schema),
+                            style: theme.textTheme.titleMedium,
+                          ),
+                        ),
+                        Expanded(
+                          child: ListView.builder(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            itemCount: count,
+                            itemBuilder: (_, index) {
+                              final amps = hasExplicitValues
+                                  ? explicitValues[index]
+                                  : num.parse(
+                                      (lower! + index * step!)
+                                          .toStringAsPrecision(15),
+                                    );
+                              return ListTile(
+                                title: Text(label(amps)),
+                                selected: current == amps,
+                                selectedColor: AppColor.primary(sheetContext),
+                                selectedTileColor:
+                                    AppColor.primarySoft(sheetContext),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                trailing: current == amps
+                                    ? const Icon(Icons.check_rounded)
+                                    : null,
+                                onTap: () => Navigator.pop(sheetContext, amps),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+              if (selected != null && selected != current && context.mounted) {
+                onRequestChange(selected);
+              }
+            },
+    );
   }
 
   // ==================== number：Slider + 大号当前值 ====================

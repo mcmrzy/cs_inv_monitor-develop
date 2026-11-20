@@ -44,9 +44,12 @@ class DeviceSettingsGroupCard extends StatelessWidget {
             child: Row(
               children: [
                 if (compact)
-                  Icon(icon, size: 20.sp, color: AppColor.primary(context))
+                  Icon(icon, size: 20.sp, color: accent)
                 else
-                  SettingsIconContainer(icon: icon, accent: accent),
+                  SettingsIconContainer(
+                    icon: icon,
+                    accent: accent,
+                  ),
                 SizedBox(width: 12.w),
                 Expanded(
                   child: Column(

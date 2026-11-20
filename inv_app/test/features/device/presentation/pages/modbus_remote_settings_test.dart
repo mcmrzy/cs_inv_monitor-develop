@@ -15,7 +15,64 @@ void main() {
   setUp(() => getIt.pushNewScope());
   tearDown(() => getIt.popScope());
 
-  testWidgets('remote numeric steps respect bounds and remain pending',
+  testWidgets('legacy remote parameters share the category card surface',
+      (tester) async {
+    final dio = Dio();
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          final Object data = options.path.endsWith('/config-schema')
+              ? [
+                  {
+                    'param_key': 'set_ac_charge_current',
+                    'control_type': 'number',
+                    'unit': 'A',
+                  },
+                ]
+              : {
+                  'reported': {'set_ac_charge_current': 24},
+                  'sync_status': 'synced',
+                };
+          handler.resolve(
+            Response(
+              requestOptions: options,
+              statusCode: 200,
+              data: {'code': 0, 'data': data},
+            ),
+          );
+        },
+      ),
+    );
+    getIt.registerSingleton<Dio>(dio);
+    await pumpMinimalApp(
+      tester,
+      const Scaffold(
+        body: RemoteSettingsTab(sn: 'LEGACY-TEST', modelBindingMismatch: true),
+      ),
+    );
+    await tester.tap(find.text('充电管理'));
+    await tester.pumpAndSettle();
+    final parameter = find.byType(ConfigParamControl);
+    expect(parameter, findsOneWidget);
+    expect(
+      find.descendant(of: parameter, matching: find.text('24 A')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: parameter,
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is DecoratedBox &&
+              widget.decoration is BoxDecoration &&
+              (widget.decoration as BoxDecoration).color != null,
+        ),
+      ),
+      findsNothing,
+    );
+  });
+
+  testWidgets('remote current picker uses only the model command options',
       (tester) async {
     tester.view.physicalSize = const Size(390, 740);
     tester.view.devicePixelRatio = 1;
@@ -23,67 +80,66 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     var sent = 0;
     final dio = Dio();
-    dio.interceptors.add(InterceptorsWrapper(
-      onRequest: (options, handler) {
+    dio.interceptors.add(
+      InterceptorsWrapper(onRequest: (options, handler) {
         if (options.method == 'POST') sent++;
         final dynamic data = switch (options.path.split('/').last) {
           'config-schema' => [
               {
                 'param_key': 'set_ac_charge_current',
                 'control_type': 'number',
-                'min': 1,
-                'max': 2,
-                'step': 0.5,
+                'min': 0,
+                'max': 100,
+                'step': 1,
                 'unit': 'A',
               },
             ],
           'control-capabilities' => [
-              {'command_code': 'set_ac_charge_current', 'is_enabled': true},
+              {
+                'command_code': 'set_ac_charge_current',
+                'is_enabled': true,
+                'parameter_schema': {
+                  'args': [
+                    {'key': 'value', 'enum': [2, 10, 20]},
+                  ],
+                },
+              },
             ],
           'control-state' => {
-              'reported': {'set_ac_charge_current': 1},
+              'reported': {'set_ac_charge_current': 10},
               'sync_status': 'synced',
             },
           _ => <String, dynamic>{},
         };
-        handler.resolve(Response(
-          requestOptions: options,
-          statusCode: 200,
-          data: {'code': 0, 'data': data},
-        ));
-      },
-    ));
+        handler.resolve(
+          Response(
+            requestOptions: options,
+            statusCode: 200,
+            data: {'code': 0, 'data': data},
+          ),
+        );
+      }),
+    );
     getIt.registerSingleton<Dio>(dio);
     await pumpMinimalApp(
-        tester,
-        const Scaffold(
-          body: RemoteSettingsTab(sn: 'PANEL-3KU', cloudOnline: true),
-        ));
+      tester,
+      const Scaffold(
+        body: RemoteSettingsTab(sn: 'PANEL-3KU', cloudOnline: true),
+      ),
+    );
     await tester.tap(find.text('充电管理'));
     await tester.pumpAndSettle();
     expect(find.text('全部分类'), findsOneWidget);
-    expect(find.text('1.0 A'), findsWidgets);
-    expect(
-        tester
-            .widget<IconButton>(find.byWidgetPredicate(
-              (widget) => widget is IconButton && widget.tooltip == '减少',
-            ))
-            .onPressed,
-        isNull);
-    await tester.tap(find.byTooltip('增加'));
+    expect(find.byType(Slider), findsNothing);
+    await tester.tap(find.widgetWithText(OutlinedButton, '10 A'));
     await tester.pumpAndSettle();
-    expect(find.text('1.5 A'), findsOneWidget);
-    await tester.ensureVisible(find.byTooltip('增加'));
+    expect(find.widgetWithText(ListTile, '2 A'), findsOneWidget);
+    expect(find.widgetWithText(ListTile, '10 A'), findsOneWidget);
+    expect(find.widgetWithText(ListTile, '20 A'), findsOneWidget);
+    expect(find.text('15 A'), findsNothing);
+    await tester.tap(find.widgetWithText(ListTile, '20 A'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('增加'));
-    await tester.pumpAndSettle();
-    expect(
-        tester
-            .widget<IconButton>(find.byWidgetPredicate(
-              (widget) => widget is IconButton && widget.tooltip == '增加',
-            ))
-            .onPressed,
-        isNull);
+    expect(find.widgetWithText(OutlinedButton, '20 A'), findsOneWidget);
     expect(sent, 0);
     await tester.ensureVisible(find.byType(TextField));
     await tester.pumpAndSettle();
@@ -93,17 +149,87 @@ void main() {
     await tester.tap(find.byTooltip('清除搜索'));
     await tester.pumpAndSettle();
     expect(find.text('充电管理'), findsOneWidget);
-    expect(find.text('2.0 A'), findsWidgets);
+    expect(find.widgetWithText(OutlinedButton, '20 A'), findsOneWidget);
     expect(sent, 0);
     await tester.tap(find.text('全部分类'));
     await tester.pumpAndSettle();
     expect(find.text('全部分类'), findsNothing);
-    expect(find.byTooltip('增加'), findsNothing);
+    expect(find.widgetWithText(OutlinedButton, '20 A'), findsNothing);
     await tester.tap(find.text('充电管理'));
     await tester.pumpAndSettle();
-    expect(find.text('2.0 A'), findsWidgets);
+    expect(find.widgetWithText(OutlinedButton, '20 A'), findsOneWidget);
     expect(sent, 0);
     await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('remote value row keeps enum edits pending until apply',
+      (tester) async {
+    var writes = 0;
+    final dio = Dio();
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          if (options.method == 'POST') writes++;
+          final data = switch (options.path.split('/').last) {
+            'config-schema' => [
+                {
+                  'param_key': 'set_output_voltage',
+                  'control_type': 'enum',
+                  'enum_map': {'220': '220 V', '230': '230 V'},
+                  'unit': 'V',
+                },
+              ],
+            'control-capabilities' => [
+                {'command_code': 'set_output_voltage', 'is_enabled': true},
+              ],
+            'control-state' => {
+                'reported': {'set_output_voltage': 230},
+                'sync_status': 'synced',
+              },
+            _ => throw StateError(options.path),
+          };
+          handler.resolve(
+            Response(
+              requestOptions: options,
+              data: {'code': 0, 'data': data},
+            ),
+          );
+        },
+      ),
+    );
+    getIt.registerSingleton<Dio>(dio);
+    await pumpMinimalApp(
+      tester,
+      const Scaffold(
+        body: RemoteSettingsTab(sn: 'PANEL-3KU', cloudOnline: true),
+      ),
+    );
+
+    final output = find.text('交流输出');
+    await tester.ensureVisible(output);
+    await tester.tap(output);
+    await tester.pumpAndSettle();
+    final row = find.byType(ConfigParamControl);
+    final current = find.descendant(of: row, matching: find.text('230 V'));
+    expect(current, findsOneWidget);
+    expect(find.byType(ChoiceChip), findsNothing);
+
+    for (final action in ['取消', '确认']) {
+      await tester.tap(current);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ChoiceChip, '220 V'));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.text(action),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(writes, 0);
+      expect(current, action == '取消' ? findsOneWidget : findsNothing);
+    }
+    expect(find.descendant(of: row, matching: find.text('220 V')), findsOneWidget);
   });
 
   testWidgets('remote read applies only a new reported snapshot', (tester) async {
@@ -194,6 +320,38 @@ void main() {
     expect(find.text('正在读取设备配置...'), findsNothing);
     expect(find.textContaining('上次读取'), findsOneWidget);
     expect(tester.getRect(readButton), originalRect);
+  });
+
+  testWidgets('current picker preserves half-amp steps declared by the schema',
+      (tester) async {
+    final schema = ConfigParamSchema.fromJson({
+      'param_key': 'set_ac_charge_current',
+      'control_type': 'number',
+      'min': 1,
+      'max': 2.2,
+      'step': 0.5,
+      'unit': 'A',
+    });
+    num? selected;
+    await pumpMinimalApp(
+      tester,
+      Scaffold(
+        body: ConfigParamControl(
+          schema: schema,
+          value: 2.2,
+          modified: false,
+          onRequestChange: (value) => selected = value as num,
+        ),
+      ),
+    );
+
+    await tester.tap(find.widgetWithText(OutlinedButton, '2.2 A'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(ListTile, '2.2 A'), findsNothing);
+    expect(find.widgetWithText(ListTile, '2 A'), findsOneWidget);
+    await tester.tap(find.widgetWithText(ListTile, '1.5 A'));
+    await tester.pumpAndSettle();
+    expect(selected, 1.5);
   });
 
   testWidgets('SOC dropdown sends a numeric off value before the first read',

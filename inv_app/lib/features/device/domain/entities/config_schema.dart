@@ -103,6 +103,15 @@ class ConfigParamSchema {
   /// 是否需要修改前二次确认（modal）
   bool get needsModalConfirm => confirmationMode == 'modal';
 
+  bool get isCurrent =>
+      unit?.trim() == 'A' ||
+      const {
+        'set_max_charge_current',
+        'set_max_chg_curr',
+        'set_ac_charge_current',
+        'set_max_discharge_current',
+      }.contains(paramKey);
+
   /// display_name_key（config.set_xxx）→ l10n key（config_set_xxx）
   String get l10nNameKey => displayNameKey.replaceAll('.', '_');
 

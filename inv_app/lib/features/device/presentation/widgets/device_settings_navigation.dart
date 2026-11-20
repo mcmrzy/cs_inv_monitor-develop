@@ -34,114 +34,152 @@ class DeviceSettingsHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
+    final theme = Theme.of(context);
+    final text = theme.textTheme;
     final accent = AppColor.primary(context);
     final muted = AppColor.textSecondary(context);
     final fill = AppColor.primarySoft(context);
     final statusStyle = text.bodySmall?.copyWith(color: muted);
+    final statusColor =
+        ready ? AppColor.accent(context, AppColors.success) : muted;
 
-    return DecoratedBox(
-      decoration: AppColor.card(context).copyWith(
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                SettingsIconContainer(icon: icon, accent: accent),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: text.titleLarge?.copyWith(
-                          color: AppColor.textPrimary(context),
-                          fontWeight: FontWeight.w700,
-                        ),
+    final content = Padding(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              SettingsIconContainer(
+                icon: icon,
+                accent: accent,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: text.titleMedium?.copyWith(
+                        color: AppColor.textPrimary(context),
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
                       ),
-                      if (device case final serial? when serial.isNotEmpty)
-                        Text(
-                          serial,
-                          style: text.bodySmall?.copyWith(color: muted),
-                        ),
+                    ),
+                    if (device case final serial? when serial.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        serial,
+                        style: text.bodySmall?.copyWith(color: muted),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ],
-                  ),
-                ),
-                if (refreshLabel case final label?)
-                  IconButton(
-                    tooltip: label,
-                    color: accent,
-                    onPressed: onRefresh,
-                    icon: const Icon(Icons.refresh_rounded, size: 21),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: ready ? accent : AppColor.textHint(context),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const SizedBox.square(dimension: 7),
-                ),
-                const SizedBox(width: 7),
-                Expanded(
-                  child: Text(
-                    status,
-                    style: statusStyle?.copyWith(fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: reading ? null : onRead,
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size(0, 44),
-                foregroundColor: accent,
-                backgroundColor: fill,
-                disabledForegroundColor: reading ? accent : muted,
-                disabledBackgroundColor:
-                    reading ? fill : AppColor.surfaceHover(context),
-                side: BorderSide.none,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  ],
                 ),
               ),
-              icon: const Icon(Icons.sync_rounded, size: 18),
-              label: Text(readLabel, textAlign: TextAlign.center),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              detail ?? '\u00a0',
-              style: statusStyle,
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+              if (refreshLabel case final label?)
+                IconButton(
+                  tooltip: label,
+                  color: accent,
+                  onPressed: onRefresh,
+                  icon: const Icon(Icons.refresh_rounded, size: 21),
+                ),
+            ],
+          ),
+          Divider(height: 16, color: AppColor.divider(context)),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 3,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.circle, size: 7, color: statusColor),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            status,
+                            style: statusStyle?.copyWith(
+                              color: statusColor,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (detail case final message?)
+                      Padding(
+                        padding: const EdgeInsetsDirectional.only(
+                          start: 13,
+                          top: 3,
+                        ),
+                        child: Text(
+                          message,
+                          style: statusStyle,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 2,
+                child: Align(
+                  alignment: AlignmentDirectional.centerEnd,
+                  child: OutlinedButton.icon(
+                    onPressed: reading ? null : onRead,
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 44),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      foregroundColor: theme.colorScheme.onPrimary,
+                      backgroundColor: accent,
+                      disabledForegroundColor: reading ? accent : muted,
+                      disabledBackgroundColor:
+                          reading ? fill : AppColor.surfaceHover(context),
+                      side: BorderSide.none,
+                      shape: const StadiumBorder(),
+                    ),
+                    icon: const Icon(Icons.sync_rounded, size: 18),
+                    label: Text(readLabel, textAlign: TextAlign.center),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (reading) ...[
             const SizedBox(height: 5),
-            SizedBox(
-              height: 3,
-              child: reading
-                  ? LinearProgressIndicator(
-                      value: readProgress,
-                      color: accent,
-                      backgroundColor: fill,
-                      borderRadius: BorderRadius.circular(2),
-                      semanticsLabel: readLabel,
-                    )
-                  : null,
+            LinearProgressIndicator(
+              value: readProgress,
+              minHeight: 3,
+              color: accent,
+              backgroundColor: fill,
+              borderRadius: BorderRadius.circular(2),
+              semanticsLabel: readLabel,
             ),
           ],
-        ),
+        ],
       ),
+    );
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      color: AppColor.surfaceContainer(context),
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: AppColor.divider(context)),
+      ),
+      child: content,
     );
   }
 }
@@ -150,6 +188,7 @@ typedef DeviceSettingsEntry = ({
   String title,
   String summary,
   IconData icon,
+  Color accent,
   VoidCallback onTap,
 });
 
@@ -162,7 +201,6 @@ class DeviceSettingsDirectory extends StatelessWidget {
   Widget build(BuildContext context) {
     final zh = Localizations.localeOf(context).languageCode == 'zh';
     final text = Theme.of(context).textTheme;
-    final accent = AppColor.primary(context);
     final muted = AppColor.textSecondary(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -171,7 +209,10 @@ class DeviceSettingsDirectory extends StatelessWidget {
           padding: const EdgeInsetsDirectional.only(start: 4, bottom: 8),
           child: Text(
             zh ? '参数分类' : 'Parameter categories',
-            style: text.titleSmall?.copyWith(color: muted),
+            style: text.labelLarge?.copyWith(
+              color: muted,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
         SettingsCard(
@@ -179,20 +220,29 @@ class DeviceSettingsDirectory extends StatelessWidget {
             for (final entry in entries)
               ListTile(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 14),
-                leading:
-                    SettingsIconContainer(icon: entry.icon, accent: accent),
+                minTileHeight: 54,
+                horizontalTitleGap: 10,
+                leading: SizedBox.square(
+                  dimension: 28,
+                  child: Icon(entry.icon, color: entry.accent, size: 22),
+                ),
                 title: Text(
                   entry.title,
-                  style: text.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                  style: text.titleSmall?.copyWith(
+                    color: AppColor.textPrimary(context),
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 subtitle: entry.summary.isEmpty
                     ? null
                     : Text(
                         entry.summary,
                         style: text.bodySmall?.copyWith(color: muted),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                 trailing:
-                    Icon(Icons.chevron_right_rounded, color: muted, size: 20),
+                    Icon(Icons.chevron_right_rounded, color: muted, size: 18),
                 onTap: entry.onTap,
               ),
           ],

@@ -95,7 +95,7 @@ class SettingsCard extends StatelessWidget {
   }
 }
 
-/// 圆角图标容器：语义色 10% 浅底 + 语义色图标（列表项视觉锚点）
+/// 设置行的语义色图标容器。
 class SettingsIconContainer extends StatelessWidget {
   const SettingsIconContainer({
     super.key,
@@ -111,6 +111,7 @@ class SettingsIconContainer extends StatelessWidget {
     return Container(
       width: 36.w,
       height: 36.w,
+      alignment: Alignment.center,
       decoration: BoxDecoration(
         color: accent.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(10.r),
@@ -330,7 +331,10 @@ class SettingsValueRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListTile(
       contentPadding: EdgeInsets.symmetric(horizontal: 16.w),
-      leading: SettingsIconContainer(icon: icon, accent: accent),
+      leading: SettingsIconContainer(
+        icon: icon,
+        accent: accent,
+      ),
       title: Text(title, style: TextStyle(fontSize: 15.sp)),
       subtitle: subtitle == null
           ? null

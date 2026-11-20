@@ -60,6 +60,8 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
   bool _reading = false;
   String _search = '';
   Set<String> _commands = {};
+  // 命令能力可为旧版数值 schema 补充该机型的离散电流档位。
+  Map<String, Set<num>> _currentCommandValues = {};
   bool get _guarded => widget.cloudOnline != null;
   bool get _canWrite =>
       !widget.modelBindingMismatch && (!_guarded || widget.cloudOnline == true);
@@ -143,6 +145,7 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
       if (!mounted) return;
       setState(() {
         _commands = enabledDeviceCommands(capabilities);
+        _currentCommandValues = _readCurrentCommandValues(capabilities, schemas);
         _schemaMap = schemas;
         _showControlState(state);
         _readable = true;
@@ -160,6 +163,28 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
         _failed = true;
       });
     }
+  }
+
+  Map<String, Set<num>> _readCurrentCommandValues(
+    List<dynamic> capabilities,
+    Map<String, ConfigParamSchema> schemas,
+  ) {
+    final values = <String, Set<num>>{};
+    for (final capability in capabilities) {
+      if (capability is! Map || capability['is_enabled'] != true) continue;
+      final key = capability['command_code'];
+      if (key is! String || schemas[key]?.isCurrent != true) continue;
+      final spec = capability['parameter_schema'];
+      final args = spec is Map ? spec['args'] : null;
+      if (args is! List) continue;
+      for (final argument in args) {
+        if (argument is! Map || argument['key'] != 'value') continue;
+        final options = argument['enum'];
+        if (options is! List) continue;
+        values[key] = options.whereType<num>().where((n) => n.isFinite).toSet();
+      }
+    }
+    return values;
   }
 
   Future<Map<String, dynamic>?> _fetchControlState() async {
@@ -299,10 +324,15 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
         if (c != null) parts.add(c);
       case 'charge':
         final t = configNumberSummaryText(
-          _schemaMap,
-          _original,
-          'set_max_chg_curr',
-        );
+              _schemaMap,
+              _original,
+              'set_max_chg_curr',
+            ) ??
+            configNumberSummaryText(
+              _schemaMap,
+              _original,
+              'set_max_charge_current',
+            );
         if (t != null) parts.add(t);
       case 'discharge':
         final t = configNumberSummaryText(
@@ -701,6 +731,7 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
                   title: l10n.str(category.titleKey),
                   summary: _categorySummary(category),
                   icon: category.icon,
+                  accent: AppColor.accent(context, category.color),
                   onTap: () => _selectCategory(category.id),
                 ),
             ],
@@ -737,7 +768,7 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
       title: l10n.str(category.titleKey),
       summary: _categorySummary(category),
       icon: category.icon,
-      accent: AppColor.primary(context),
+      accent: AppColor.accent(context, category.color),
       expanded: true,
       onToggle: null,
       content: _buildExpandedParams(l10n, category),
@@ -784,10 +815,12 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
             )
           else
             for (final schema in params) ...[
-              if (_guarded && schema != params.first)
+              if (schema != params.first)
                 Divider(height: 1, color: AppColor.divider(context)),
               ConfigParamControl(
                 compact: _guarded,
+                embedded: true,
+                currentCommandValues: _currentCommandValues[schema.paramKey],
                 schema: schema,
                 value: _pending[schema.paramKey],
                 modified: _isModified(schema.paramKey),
@@ -803,79 +836,18 @@ class _RemoteSettingsTabState extends State<RemoteSettingsTab>
     );
   }
 
-  /// 高级参数入口：描边样式（工程师模式，独立页）
   Widget _buildAdvancedEntry(AppLocalizations l10n) {
-    final theme = Theme.of(context);
-    // 主题自适应的深色调：亮色用石墨灰、暗色用浅灰，避免硬编码色在暗色模式下失配
-    final accent = theme.brightness == Brightness.dark
-        ? theme.colorScheme.onSurfaceVariant
-        : const Color(0xFF374151);
-    return Card(
-      elevation: 0,
-      margin: EdgeInsets.only(bottom: 10.h),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16.r),
-        side: BorderSide(
-          color: AppColor.outline(context).withValues(alpha: 0.6),
-          width: 1,
+    return SettingsCard(
+      [
+        SettingsValueRow(
+          icon: Icons.construction_outlined,
+          accent: AppColor.textSecondary(context),
+          title: l10n.str('settings_cat_advanced'),
+          subtitle: l10n.str('settings_cat_advanced_desc'),
+          onTap: _openAdvanced,
         ),
-      ),
-      color: AppColor.surfaceContainer(context).withValues(alpha: 0.6),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16.r),
-        onTap: _openAdvanced,
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 14.h),
-          child: Row(
-            children: [
-              Container(
-                width: 40.w,
-                height: 40.w,
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.08),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.construction_rounded,
-                  size: 22.sp,
-                  color: accent,
-                ),
-              ),
-              SizedBox(width: 12.w),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      l10n.str('settings_cat_advanced'),
-                      style: TextStyle(
-                        fontSize: 15.sp,
-                        fontWeight: FontWeight.w600,
-                        color: accent,
-                      ),
-                    ),
-                    SizedBox(height: 3.h),
-                    Text(
-                      l10n.str('settings_cat_advanced_desc'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12.sp,
-                        color: AppColor.textSecondary(context),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                Icons.chevron_right_rounded,
-                size: 22.sp,
-                color: AppColor.textHint(context),
-              ),
-            ],
-          ),
-        ),
-      ),
+      ],
+      margin: EdgeInsets.zero,
     );
   }
 

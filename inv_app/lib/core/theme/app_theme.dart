@@ -584,6 +584,10 @@ class AppColor {
   static Color primary(BuildContext context) =>
       _isDark(context) ? const Color(0xFF42A5F5) : AppColors.primary;
 
+  static Color accent(BuildContext context, Color color) => HSLColor.fromColor(
+        color,
+      ).withLightness(_isDark(context) ? 0.72 : 0.28).toColor();
+
   static Color primaryContainer(BuildContext context) => _isDark(context)
       ? const Color(0xFF42A5F5).withValues(alpha: 0.18)
       : const Color(0xFFEFF6FF);

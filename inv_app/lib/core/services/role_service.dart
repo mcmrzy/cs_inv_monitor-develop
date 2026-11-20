@@ -1,24 +1,12 @@
-import 'package:flutter/material.dart';
-
-import 'package:inv_app/core/theme/csergy_assets.dart';
-
 enum ConnectionMode { remote, local }
 
 class NavItem {
   final String path;
   final String label;
-  final String iconAsset;
-  final String activeIconAsset;
-  final IconData fallbackIcon;
-  final IconData activeFallbackIcon;
 
   const NavItem({
     required this.path,
     required this.label,
-    required this.iconAsset,
-    required this.activeIconAsset,
-    this.fallbackIcon = Icons.home_outlined,
-    this.activeFallbackIcon = Icons.home,
   });
 }
 
@@ -63,45 +51,25 @@ class RoleService {
       NavItem(
         path: '/home',
         label: labelAt(0),
-        iconAsset: CsergyAssets.home.normalAsset,
-        activeIconAsset: CsergyAssets.home.activeAsset,
-        fallbackIcon: CsergyAssets.home.normalFallbackIcon,
-        activeFallbackIcon: CsergyAssets.home.activeFallbackIcon,
       ),
       if (canViewStatistics)
         NavItem(
           path: '/statistics',
           label: labelAt(1),
-          iconAsset: CsergyAssets.statistics.normalAsset,
-          activeIconAsset: CsergyAssets.statistics.activeAsset,
-          fallbackIcon: CsergyAssets.statistics.normalFallbackIcon,
-          activeFallbackIcon: CsergyAssets.statistics.activeFallbackIcon,
         ),
       if (canViewDevices)
         NavItem(
           path: '/devices',
           label: labelAt(2),
-          iconAsset: CsergyAssets.devices.normalAsset,
-          activeIconAsset: CsergyAssets.devices.activeAsset,
-          fallbackIcon: CsergyAssets.devices.normalFallbackIcon,
-          activeFallbackIcon: CsergyAssets.devices.activeFallbackIcon,
         ),
       if (canViewAlarms)
         NavItem(
           path: '/alarms',
           label: labelAt(3),
-          iconAsset: CsergyAssets.alarms.normalAsset,
-          activeIconAsset: CsergyAssets.alarms.activeAsset,
-          fallbackIcon: CsergyAssets.alarms.normalFallbackIcon,
-          activeFallbackIcon: CsergyAssets.alarms.activeFallbackIcon,
         ),
       NavItem(
         path: '/profile',
         label: labelAt(4),
-        iconAsset: CsergyAssets.profile.normalAsset,
-        activeIconAsset: CsergyAssets.profile.activeAsset,
-        fallbackIcon: CsergyAssets.profile.normalFallbackIcon,
-        activeFallbackIcon: CsergyAssets.profile.activeFallbackIcon,
       ),
     ];
   }

@@ -524,20 +524,31 @@ class _ModbusPanelPageState extends State<ModbusPanelPage> {
                 ],
               ],
               const SizedBox(height: 12),
-              DeviceActionButton(
-                icon: Icons.settings_outlined,
-                title: _label(context, '辅助设置', 'Panel settings'),
-                description: _label(context, '显示、声音、电池协议和时间',
-                    'Display, sound, battery protocol and time'),
-                onPressed: _connected
-                    ? () => Navigator.of(context).push<void>(
-                          MaterialPageRoute(
-                            builder: (_) => ModbusPanelAuxPage(
-                              sendCommand: _panel.command,
-                            ),
-                          ),
-                        )
-                    : null,
+              SettingsCard(
+                [
+                  SettingsValueRow(
+                    icon: Icons.settings_outlined,
+                    accent: _connected
+                        ? AppColor.primary(context)
+                        : AppColor.textSecondary(context),
+                    title: _label(context, '辅助设置', 'Panel settings'),
+                    subtitle: _label(
+                      context,
+                      '显示、声音、电池协议和时间',
+                      'Display, sound, battery protocol and time',
+                    ),
+                    onTap: _connected
+                        ? () => Navigator.of(context).push<void>(
+                              MaterialPageRoute(
+                                builder: (_) => ModbusPanelAuxPage(
+                                  sendCommand: _panel.command,
+                                ),
+                              ),
+                            )
+                        : null,
+                  ),
+                ],
+                margin: EdgeInsets.zero,
               ),
             ] else ...[
               Container(
@@ -744,30 +755,31 @@ class _PanelSettingsState extends State<_PanelSettings> {
     setState(() => _selectedGroup = group);
   }
 
-  IconData _groupIcon(String group) => switch (group) {
-        '输出与模式' ||
-        '双路输出' ||
-        '并机设置' ||
-        'Output and mode' ||
-        'Dual output' ||
-        'Parallel settings' =>
-          Icons.power_outlined,
-        '充电与电池' ||
-        'Battery' ||
-        'Charging and battery' =>
-          Icons.battery_charging_full_outlined,
-        '均衡充电' || 'Equalization' => Icons.balance_rounded,
-        'BMS通信' || 'BMS' => Icons.cable_rounded,
-        '发电机' || 'Generator' => Icons.local_gas_station_outlined,
-        '系统功能' || 'System' => Icons.settings_outlined,
-        _ => Icons.tune_rounded,
+  (IconData, Color) _groupStyle(String group) => switch (group) {
+        '输出与模式' || 'Output' || 'Output and mode' => (Icons.power_outlined, AppColors.blue),
+        '双路输出' || 'Dual output' || 'Output 2' => (Icons.electrical_services_rounded, AppColors.cyan),
+        '并机设置' || 'Parallel' || 'Parallel settings' => (Icons.hub_outlined, AppColors.indigo),
+        '充电与电池' || 'Battery' || 'Charging and battery' => (Icons.battery_charging_full_outlined, AppColors.teal),
+        '均衡充电' || 'Equalize' || 'Equalization' => (Icons.balance_rounded, AppColors.indigo),
+        'BMS通信' || 'BMS' || 'BMS link' => (Icons.cable_rounded, AppColors.cyan),
+        '发电机' || 'Generator' => (Icons.local_gas_station_outlined, AppColors.orange),
+        '系统功能' || 'System' => (Icons.settings_outlined, AppColors.purple),
+        _ => (Icons.tune_rounded, AppColors.blue),
       };
 
-  String _groupSummary(List<ModbusPanelSetting> items) => _label(
-        context,
-        '${items.length} 项 · ${items.where((item) => item.editable).length} 项可调',
-        '${items.length} settings · ${items.where((item) => item.editable).length} adjustable',
-      );
+  String _groupSummary(List<ModbusPanelSetting> items) {
+    final total = items.length;
+    final editable = items.where((item) => item.editable).length;
+    if (editable == total) {
+      return _label(context, '$total 项可调', '$total adjustable');
+    }
+    if (editable == 0) return _label(context, '$total 项只读', '$total read-only');
+    return _label(
+      context,
+      '$total 项参数 · $editable 项可调',
+      '$total settings · $editable adjustable',
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -840,83 +852,94 @@ class _PanelSettingsState extends State<_PanelSettings> {
           _buildGroupContent({selected: selectedItems}),
         ] else if (groups.isNotEmpty)
           DeviceSettingsDirectory(
-            entries: [
-              for (final group in groups.entries)
-                (
-                  title: group.key,
-                  summary: _groupSummary(group.value),
-                  icon: _groupIcon(group.key),
-                  onTap: () => _selectGroup(group.key),
-                ),
-            ],
+            entries: groups.entries.map((group) {
+              final (icon, color) = _groupStyle(group.key);
+              return (
+                title: group.key,
+                summary: _groupSummary(group.value),
+                icon: icon,
+                accent: AppColor.accent(context, color),
+                onTap: () => _selectGroup(group.key),
+              );
+            }).toList(),
           ),
       ],
     );
   }
 
   Widget _buildGroupContent(Map<String, List<ModbusPanelSetting>> groups) {
+    final theme = Theme.of(context);
+    final accent = AppColor.primary(context);
+    final muted = AppColor.textSecondary(context);
     return SettingsCard(
-      [
-        for (final group in groups.entries)
-          DeviceSettingsGroupCard(
-            key: ValueKey(group.key),
-            compact: true,
-            title: group.key,
-            summary: _groupSummary(group.value),
-            icon: _groupIcon(group.key),
-            accent: AppColor.primary(context),
-            expanded: true,
-            onToggle: null,
-            content: Column(
-              children: [
-                for (final item in group.value) ...[
-                  Divider(
-                    height: 1,
-                    indent: 14,
-                    endIndent: 14,
-                    color: AppColor.divider(context),
-                  ),
-                  ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14),
-                    title: Row(
-                      children: [
-                        Expanded(flex: 3, child: Text(item.label)),
-                        const SizedBox(width: 8),
-                        Flexible(
-                          flex: 2,
-                          child: Align(
-                            alignment: AlignmentDirectional.centerEnd,
-                            child: Text(
-                              item.value != null ? item.text : '—',
-                              textAlign: TextAlign.end,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(
-                                    color: AppColor.textPrimary(context),
-                                    fontWeight: FontWeight.w600,
-                                  ),
+      groups.entries.map((group) {
+        final (icon, color) = _groupStyle(group.key);
+        return DeviceSettingsGroupCard(
+          key: ValueKey(group.key),
+          compact: true,
+          title: group.key,
+          summary: _groupSummary(group.value),
+          icon: icon,
+          accent: AppColor.accent(context, color),
+          expanded: true,
+          onToggle: null,
+          content: Column(
+            children: [
+              for (final item in group.value) ...[
+                Divider(
+                  height: 1,
+                  indent: 14,
+                  endIndent: 14,
+                  color: AppColor.divider(context),
+                ),
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+                  title: Row(
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: Text(
+                          item.label,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: AppColor.textPrimary(context),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        flex: 2,
+                        child: Align(
+                          alignment: AlignmentDirectional.centerEnd,
+                          child: Text(
+                            item.value != null ? item.text : '—',
+                            textAlign: TextAlign.end,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: item.editable && item.value != null
+                                  ? accent
+                                  : muted,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
-                      ],
-                    ),
-                    subtitle: item.reason.isNotEmpty ? Text(item.reason) : null,
-                    trailing: Icon(
-                      item.editable
-                          ? Icons.chevron_right_rounded
-                          : Icons.lock_outline_rounded,
-                      size: 19,
-                      color: AppColor.textSecondary(context),
-                    ),
-                    onTap:
-                        _loading || _error != null ? null : () => _edit(item),
+                      ),
+                    ],
                   ),
-                ],
+                  subtitle: item.reason.isNotEmpty ? Text(item.reason) : null,
+                  trailing: Icon(
+                    item.editable
+                        ? Icons.chevron_right_rounded
+                        : Icons.lock_outline_rounded,
+                    size: 19,
+                    color: muted,
+                  ),
+                  onTap: _loading || _error != null ? null : () => _edit(item),
+                ),
               ],
-            ),
+            ],
           ),
-      ],
+        );
+      }).toList(),
       margin: EdgeInsets.zero,
     );
   }

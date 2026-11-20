@@ -1,22 +1,6 @@
-import 'package:flutter/material.dart';
-
-class CsergyNavAsset {
-  final String normalAsset;
-  final String activeAsset;
-  final IconData normalFallbackIcon;
-  final IconData activeFallbackIcon;
-
-  const CsergyNavAsset({
-    required this.normalAsset,
-    required this.activeAsset,
-    required this.normalFallbackIcon,
-    required this.activeFallbackIcon,
-  });
-}
-
 abstract final class CsergyAssets {
-  static const String iconDirectory = 'assets/icons/csergy';
-  static const double navigationIconSize = 24;
+  static const String inverterThumbnail =
+      'assets/images/inverter_thumbnail.png';
 
   // ============ 小烁角色动作（透明底 PNG） ============
   static const String characterDirectory = 'assets/character/xiaoshuo';
@@ -83,48 +67,4 @@ abstract final class CsergyAssets {
 
   /// 电站默认图片（无图时占位，与 home_page 电站卡片一致）
   static const String stationDefaultImage = 'assets/images/solar_panel.png';
-
-  static const CsergyNavAsset home = CsergyNavAsset(
-    normalAsset: '$iconDirectory/nav_home_normal.svg',
-    activeAsset: '$iconDirectory/nav_home_active.svg',
-    normalFallbackIcon: Icons.home_outlined,
-    activeFallbackIcon: Icons.home,
-  );
-
-  static const CsergyNavAsset statistics = CsergyNavAsset(
-    normalAsset: '$iconDirectory/nav_statistics_normal.svg',
-    activeAsset: '$iconDirectory/nav_statistics_active.svg',
-    normalFallbackIcon: Icons.insights_outlined,
-    activeFallbackIcon: Icons.insights,
-  );
-
-  static const CsergyNavAsset devices = CsergyNavAsset(
-    normalAsset: '$iconDirectory/nav_devices_normal.svg',
-    activeAsset: '$iconDirectory/nav_devices_active.svg',
-    normalFallbackIcon: Icons.devices_other_outlined,
-    activeFallbackIcon: Icons.devices_other,
-  );
-
-  static const CsergyNavAsset alarms = CsergyNavAsset(
-    normalAsset: '$iconDirectory/nav_alarms_normal.svg',
-    activeAsset: '$iconDirectory/nav_alarms_active.svg',
-    normalFallbackIcon: Icons.notifications_none,
-    activeFallbackIcon: Icons.notifications,
-  );
-
-  static const CsergyNavAsset profile = CsergyNavAsset(
-    normalAsset: '$iconDirectory/nav_profile_normal.svg',
-    activeAsset: '$iconDirectory/nav_profile_active.svg',
-    normalFallbackIcon: Icons.person_outline,
-    activeFallbackIcon: Icons.person,
-  );
-
-  /// 底部导航全部图标资产（预加载用：切换 tab 时避免异步校验导致图标闪现）
-  static const List<CsergyNavAsset> navAssets = [
-    home,
-    statistics,
-    devices,
-    alarms,
-    profile,
-  ];
 }
