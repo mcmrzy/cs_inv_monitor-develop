@@ -1,0 +1,356 @@
+.dashboard {
+  container: dashboard / inline-size;
+  display: grid;
+  min-width: 0;
+  gap: 16px;
+  color: #17273d;
+}
+
+.dashboard-header,
+.dashboard-header-actions,
+.dashboard-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dashboard-header {
+  flex-wrap: wrap;
+  padding: 4px 0;
+}
+
+.dashboard .dashboard-header h1 {
+  margin: 0;
+  color: inherit;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.dashboard-header-actions {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.dashboard-updated {
+  color: #53647a;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin: 0;
+}
+
+.dashboard-metric,
+.dashboard-panel,
+.dashboard .dashboard-chart {
+  min-width: 0;
+  border: 1px solid #e2e8f1;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.dashboard-metric {
+  --metric-icon-bg: #edf3fc;
+  --metric-icon-color: #28569a;
+  --metric-label-color: #465a72;
+  padding: 16px 20px;
+}
+
+.dashboard-metric--primary {
+  --metric-icon-bg: #ffffff26;
+  --metric-icon-color: #fff;
+  --metric-label-color: #e8f2ff;
+  border-color: transparent;
+  background: linear-gradient(115deg, #133d76, #155dc0);
+  color: #fff;
+}
+
+.dashboard-metric--online {
+  --metric-icon-bg: #e9f7f0;
+  --metric-icon-color: #18744f;
+}
+
+.dashboard-metric--fault {
+  --metric-icon-bg: #fff1ef;
+  --metric-icon-color: #b53837;
+}
+
+.dashboard-metric dt {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--metric-label-color);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.dashboard-metric-icon {
+  display: grid;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--metric-icon-bg);
+  color: var(--metric-icon-color);
+  font-size: 16px;
+}
+
+.dashboard-metric-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-metric dd {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  column-gap: 6px;
+  margin: 10px 0 0;
+  font-size: clamp(24px, 3cqw, 34px);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-metric--fault dd {
+  color: #a62630;
+}
+
+.dashboard-metric-unit {
+  color: var(--metric-label-color);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: normal;
+}
+
+.dashboard-operations {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  gap: 16px;
+}
+
+.dashboard-panel {
+  padding: 18px 20px;
+}
+
+.dashboard-panel-heading {
+  flex-wrap: wrap;
+  row-gap: 4px;
+  margin-bottom: 12px;
+}
+
+.dashboard-panel-heading h2,
+.dashboard-chart h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: #17273d;
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.dashboard-panel-heading h2 .anticon,
+.dashboard-chart h2 .anticon {
+  color: #315e9a;
+  font-size: 16px;
+}
+
+.dashboard-panel-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  color: #165cba;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.dashboard-panel-link:hover {
+  text-decoration: underline;
+}
+
+.dashboard-device-total {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: #53647a;
+  font-size: 13px;
+}
+
+.dashboard-device-total strong {
+  color: #17273d;
+  font-size: 30px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+
+.dashboard-status-bar {
+  display: flex;
+  height: 9px;
+  overflow: hidden;
+  margin: 12px 0 14px;
+  border-radius: 5px;
+  background: #edf1f6;
+}
+
+.dashboard-status--online { background: #25865c; }
+.dashboard-status--offline { background: #8595ab; }
+.dashboard-status--fault { background: #d54f47; }
+
+.dashboard-statuses,
+.dashboard-alerts {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.dashboard-statuses {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.dashboard-statuses li {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr);
+  align-items: center;
+  gap: 2px 6px;
+  color: #53647a;
+  font-size: 12px;
+}
+
+.dashboard-statuses strong {
+  grid-column: 2;
+  color: #17273d;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.dashboard-alerts li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px 12px;
+  min-height: 47px;
+  padding: 8px 0;
+}
+
+.dashboard-alerts li + li {
+  border-top: 1px solid #edf1f6;
+}
+
+.dashboard-alerts .ant-tag {
+  margin: 0;
+  color: #22344f;
+  font-weight: 600;
+}
+
+.dashboard-alert-details {
+  display: grid;
+  gap: 2px;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-alert-details strong {
+  line-height: 1.4;
+}
+
+.dashboard-alert-details span,
+.dashboard-alerts time {
+  color: #53647a;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-panel-state,
+.dashboard-chart-loading {
+  display: grid;
+  min-height: 124px;
+  place-items: center;
+}
+
+.dashboard .dashboard-chart > .ant-pro-card-header {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 18px 20px 0;
+}
+
+.dashboard .dashboard-chart > .ant-pro-card-body {
+  padding: 12px 20px 16px;
+}
+
+.dashboard-chart .ant-pro-card-extra {
+  min-width: 0;
+}
+
+.dashboard-chart .ant-segmented-group {
+  flex-wrap: wrap;
+}
+
+.dashboard-chart .ant-picker {
+  width: 140px;
+}
+
+@container dashboard (max-width: 840px) {
+  .dashboard-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container dashboard (max-width: 620px) {
+  .dashboard-operations {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dashboard-alerts li {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 4px 8px;
+  }
+
+  .dashboard-alerts time {
+    grid-column: 2;
+  }
+
+  .dashboard-metric,
+  .dashboard-panel {
+    padding: 12px;
+  }
+
+  .dashboard-metric dt {
+    gap: 6px;
+  }
+
+  .dashboard-metric-icon {
+    width: 26px;
+    height: 26px;
+    font-size: 14px;
+  }
+
+  .dashboard .dashboard-chart > .ant-pro-card-header {
+    padding: 12px 12px 0;
+  }
+
+  .dashboard .dashboard-chart > .ant-pro-card-body {
+    padding: 12px;
+  }
+}

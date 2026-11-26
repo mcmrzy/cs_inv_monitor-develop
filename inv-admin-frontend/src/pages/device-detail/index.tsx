@@ -21,12 +21,15 @@ import InstallTab from './InstallTab'
 import ParallelTab from './ParallelTab'
 import DebugTab from './DebugTab'
 import InfoTab from './InfoTab'
+import ModbusPanelOverview, { isModbusPanelDevice } from './ModbusPanelOverview'
 
 const { Text } = Typography
 
 interface DeviceHeaderInfo {
   alias?: string
   model?: string
+  reported_model?: string
+  firmware_esp?: string
   status?: number | string
   last_online_at?: string
 }
@@ -43,7 +46,7 @@ const DeviceDetailPage: React.FC = () => {
   const navigate = useNavigate()
   const screens = Grid.useBreakpoint()
   const { timezone } = useTimezoneStore()
-  const [activeTab, setActiveTab] = useState('energy')
+  const [activeTab, setActiveTab] = useState<string>()
 
   const { data: detail } = useQuery({
     queryKey: queryKeys.devices.detail(sn ?? ''),
@@ -53,7 +56,11 @@ const DeviceDetailPage: React.FC = () => {
   })
   // 详情接口返回 { device, model_fields, ... }；兼容旧版直接返回设备对象
   const device: DeviceHeaderInfo | undefined = detail?.device ?? detail ?? undefined
-  const online = device?.status === 1 || device?.status === 'online'
+  const modbusPanel = isModbusPanelDevice(device)
+  const defaultTab = modbusPanel ? 'modbus' : 'energy'
+  const online = modbusPanel
+    ? detail?.online_status?.online ?? (device?.status === 1 || device?.status === 2 || device?.status === 'online')
+    : device?.status === 1 || device?.status === 'online'
 
   if (!sn) {
     return (
@@ -104,10 +111,11 @@ const DeviceDetailPage: React.FC = () => {
 
       {/* ── 详情 Tab（窄屏自动收进「更多」下拉）── */}
       <Tabs
-        activeKey={activeTab}
+        activeKey={activeTab ?? defaultTab}
         onChange={setActiveTab}
         tabBarGutter={screens.md ? 28 : 16}
         items={[
+          ...(modbusPanel ? [{ key: 'modbus', label: t('deviceDetail.modbus.parameters'), children: <ModbusPanelOverview sn={sn} /> }] : []),
           { key: 'energy', label: t('deviceDetail.tab.energy'), children: <EnergyCenterTab sn={sn} /> },
           { key: 'bms', label: t('deviceDetail.tab.bms'), children: <BmsTab sn={sn} /> },
           { key: 'realtime', label: t('deviceDetail.tab.realtime'), children: <StatusTab sn={sn} /> },

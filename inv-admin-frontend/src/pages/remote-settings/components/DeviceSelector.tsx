@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Select, Spin, Card, Tag, Row, Col, Typography, Button } from 'antd'
-import { ReloadOutlined } from '@ant-design/icons'
+import { Select, Spin, Row, Col, Typography } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import { deviceApi } from '@/services/deviceApi'
 import api from '@/services/api'
@@ -12,8 +11,6 @@ const { Text } = Typography
 interface DeviceSelectorProps {
   selectedSn: string | null
   onDeviceChange: (sn: string) => void
-  onRead: () => void
-  reading: boolean
 }
 
 interface StationItem {
@@ -24,7 +21,7 @@ interface StationItem {
 const STATION_STORAGE_KEY = 'remote-settings-station-id'
 const DEVICE_STORAGE_KEY = 'remote-settings-device-sn'
 
-const DeviceSelector: React.FC<DeviceSelectorProps> = ({ selectedSn, onDeviceChange, onRead, reading }) => {
+const DeviceSelector: React.FC<DeviceSelectorProps> = ({ selectedSn, onDeviceChange }) => {
   const { t } = useTranslation()
   const [selectedStationId, setSelectedStationId] = useState<number | null>(() => {
     const saved = localStorage.getItem(STATION_STORAGE_KEY)
@@ -63,8 +60,6 @@ const DeviceSelector: React.FC<DeviceSelectorProps> = ({ selectedSn, onDeviceCha
     enabled: selectedStationId !== null,
   })
   const devices = Array.isArray(devicesData) ? devicesData : []
-  const selectedDevice = devices.find((d) => d.sn === selectedSn) ?? null
-  const isOnline = selectedDevice ? selectedDevice.status === 1 : false
 
   // 初始化时恢复上次选择的设备
   useEffect(() => {
@@ -135,37 +130,6 @@ const DeviceSelector: React.FC<DeviceSelectorProps> = ({ selectedSn, onDeviceCha
         </Col>
       </Row>
 
-      {selectedDevice && (
-        <Card bordered={false} style={{ borderRadius: 12 }}>
-          <Row align="middle" justify="space-between">
-            <Col>
-              <Row gutter={24}>
-                <Col>
-                  <Text type="secondary" style={{ fontSize: 12 }}>SN</Text>
-                  <div style={{ fontWeight: 600 }}>{selectedDevice.sn}</div>
-                </Col>
-                <Col>
-                  <Text type="secondary" style={{ fontSize: 12 }}>{t('remote.onlineStatus')}</Text>
-                  <div>
-                    <Tag color={isOnline ? '#22c55e' : '#8c8c8c'}>
-                      {isOnline ? t('remote.online') : t('remote.offline')}
-                    </Tag>
-                  </div>
-                </Col>
-                <Col>
-                  <Text type="secondary" style={{ fontSize: 12 }}>{t('remote.model')}</Text>
-                  <div>{selectedDevice.model || selectedDevice.device_type || '-'}</div>
-                </Col>
-              </Row>
-            </Col>
-            <Col>
-              <Button type="primary" icon={<ReloadOutlined />} onClick={onRead} loading={reading}>
-                {t('remote.readCurrent')}
-              </Button>
-            </Col>
-          </Row>
-        </Card>
-      )}
     </div>
   )
 }

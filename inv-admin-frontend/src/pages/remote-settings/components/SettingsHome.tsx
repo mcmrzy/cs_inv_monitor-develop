@@ -3,15 +3,15 @@
 // 点击展开该模块全部设置项（v1 平铺字段行：左侧标签、右侧控件，行间分隔线，无需再逐项展开）。
 
 import React, { useState } from 'react'
-import { Typography, Spin, Collapse, Empty, Alert } from 'antd'
+import { Typography, Spin, Collapse, Empty, Alert, Input } from 'antd'
 import {
   ControlOutlined, ExperimentOutlined, ThunderboltOutlined,
   ExportOutlined, PoweroffOutlined, BulbOutlined, ToolOutlined, AlertOutlined,
-  CodeOutlined, RightOutlined,
+  ClockCircleOutlined, CodeOutlined, RightOutlined, SearchOutlined,
 } from '@ant-design/icons'
 import useTranslation from '@/hooks/useTranslation'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
-import { MODULES } from '../config/fields'
+import { MODULES, type SettingsModule } from '../config/fields'
 import type { DeviceConfigApi } from '../hooks/useDeviceConfig'
 import { FieldRow } from './FieldControl'
 import './modulePage.css'
@@ -27,6 +27,32 @@ const MODULE_ICONS: Record<string, React.ReactNode> = {
   solar: <BulbOutlined />,
   generator: <ToolOutlined />,
   alarm: <AlertOutlined />,
+  other: <CodeOutlined />,
+  bms: <ExperimentOutlined />,
+  parallel: <ControlOutlined />,
+  output2: <PoweroffOutlined />,
+  socket: <PoweroffOutlined />,
+  schedule: <ClockCircleOutlined />,
+}
+
+const OTHER_MODULE: SettingsModule = {
+  id: 'other', nameKey: 'remote3.otherSettings', descKey: '', accent: '#64748b',
+  paramKeys: [], summaryKeys: [],
+}
+
+const EXTRA_MODULES: SettingsModule[] = [
+  ...['bms', 'parallel', 'output2', 'socket', 'schedule'].map((id) => ({
+    id, nameKey: `remote3.module.${id}`, descKey: '', accent: '#64748b',
+    paramKeys: [], summaryKeys: [],
+  })),
+  OTHER_MODULE,
+]
+
+const MODULE_FOR_GROUP: Record<string, string> = {
+  general: 'mode', application: 'output', charge: 'charge', equalize: 'charge',
+  discharge: 'discharge', soc: 'discharge', gen: 'generator', battery: 'battery',
+  system: 'alarm', parallel: 'parallel', bms: 'bms', output2: 'output2',
+  socket: 'socket', schedule: 'schedule',
 }
 
 interface SettingsHomeProps {
@@ -38,15 +64,31 @@ interface SettingsHomeProps {
 const SettingsHome: React.FC<SettingsHomeProps> = ({ cfg, loading, onOpenAdvanced }) => {
   const { t } = useTranslation()
   // 模块级展开状态（key = 模块 id），默认全部收起
-  const [activeKeys, setActiveKeys] = useState<string[]>([])
-
-  const sections = MODULES.map((m) => {
-    const visibleKeys = m.paramKeys.filter((key) => cfg.isVisible(cfg.getMeta(key)))
-    // 仅展示型号 schema 已登记的项（后端 config-schema 已按 device_model_commands 裁剪）；
-    // 不再用 reported 值兜底，避免 UI 出现型号不允许下发的参数。
-    const availableKeys = visibleKeys.filter((key) => cfg.schemaMap.has(key))
-    return { module: m, keys: availableKeys }
-  }).filter((s) => s.keys.length > 0)
+  const [activeKeys, setActiveKeys] = useState<string[] | null>(null)
+  const [search, setSearch] = useState('')
+  const query = search.trim().toLowerCase()
+  const available = new Set(cfg.schemaItems
+    .filter(({ param_key, catalog_access }) => catalog_access || cfg.isVisible(cfg.getMeta(param_key)))
+    .sort((a, b) => a.sort_order - b.sort_order || a.param_key.localeCompare(b.param_key))
+    .map(({ param_key }) => param_key))
+  for (const [key, value] of Object.entries(cfg.reported)) {
+    if (!cfg.schemaMap.has(key) && ['number', 'boolean', 'string'].includes(typeof value)) available.add(key)
+  }
+  const sections = [...MODULES, ...EXTRA_MODULES].map((module) => ({
+    module,
+    keys: module.paramKeys.filter((key) => available.delete(key)),
+  }))
+  for (const key of available) {
+    const field = cfg.schemaMap.get(key)
+    const id = MODULE_FOR_GROUP[field?.sub_group ?? ''] ?? MODULE_FOR_GROUP[field?.group_code ?? ''] ?? 'other'
+    sections.find(({ module }) => module.id === id)?.keys.push(key)
+  }
+  const matches = sections.map(({ module, keys }) => ({
+    module,
+    keys: !query || t(module.nameKey).toLowerCase().includes(query)
+      ? keys
+      : keys.filter((key) => `${cfg.fieldLabel(key)} ${key}`.toLowerCase().includes(query)),
+  })).filter(({ keys }) => keys.length > 0)
 
   return (
     <Spin spinning={loading}>
@@ -66,14 +108,26 @@ const SettingsHome: React.FC<SettingsHomeProps> = ({ cfg, loading, onOpenAdvance
         />
       )}
 
-      {sections.length > 0 ? (
+      {sections.some(({ keys }) => keys.length > 0) && (
+        <Input
+          type="search"
+          aria-label={t('remote3.searchSettings')}
+          placeholder={t('remote3.searchSettings')}
+          prefix={<SearchOutlined />}
+          allowClear
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          style={{ maxWidth: 420, marginBottom: 12 }}
+        />
+      )}
+      {matches.length > 0 ? (
         <Collapse
           ghost
           className="rs-module-collapse"
           expandIconPosition="end"
-          activeKey={activeKeys}
+          activeKey={query ? matches.map(({ module }) => module.id) : (activeKeys ?? [matches[0].module.id])}
           onChange={(keys) => setActiveKeys(Array.isArray(keys) ? (keys as string[]) : [keys])}
-          items={sections.map(({ module: m, keys }) => ({
+          items={matches.map(({ module: m, keys }) => ({
             key: m.id,
             label: (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -89,17 +143,17 @@ const SettingsHome: React.FC<SettingsHomeProps> = ({ cfg, loading, onOpenAdvance
                   {MODULE_ICONS[m.id]}
                 </div>
                 <Text strong style={{ fontSize: 15, color: '#111827' }}>{t(m.nameKey)}</Text>
-                <Text type="secondary" style={{ fontSize: 12 }}>{t(m.descKey)}</Text>
+                {m.descKey && <Text type="secondary" style={{ fontSize: 12 }}>{t(m.descKey)}</Text>}
               </div>
             ),
-            children: keys.map((key) => <FieldRow key={key} cfg={cfg} paramKey={key} />),
+            children: keys.map((key) => <FieldRow key={key} cfg={cfg} paramKey={key} reportedOnly={!cfg.schemaMap.has(key) || Boolean(cfg.schemaMap.get(key)?.catalog_access)} />),
           }))}
         />
       ) : (
         !loading && (
           <Empty
             description={
-              cfg.modelCommandsMissing
+              query ? t('remote3.noMatchingSettings') : cfg.modelCommandsMissing
                 ? t('remote.schema.emptyModelCommands')
                 : t('remote3.moduleEmpty')
             }

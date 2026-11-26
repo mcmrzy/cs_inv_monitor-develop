@@ -92,3 +92,15 @@ describe('Constants maps', () => {
   })
 
 })
+
+
+describe('Modbus panel cloud alarm codes', () => {
+  it('names standard, 3KU and collector alarms while preserving legacy codes', () => {
+    expect(ALARM_CODE_MESSAGE[17924]).toBe('过温')
+    expect(ALARM_CODE_MESSAGE[18433]).toBe('电池欠压')
+    expect(ALARM_CODE_MESSAGE[22530]).toBeTruthy()
+    expect(ALARM_CODE_MESSAGE[18944]).toBe('逆变器通信中断')
+    expect(ALARM_CODE_LEVEL[17924]).toBe(3)
+    expect(ALARM_CODE_MESSAGE[1]).toBe('逆变器过温保护')
+  })
+})

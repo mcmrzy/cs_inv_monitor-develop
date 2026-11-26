@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Button, Dropdown, Badge, Typography, Grid, Form, App, Modal, Input, Space, Tooltip,
+  Avatar, Button, Dropdown, Badge, Typography, Grid, Form, App, Modal, Input, Space, Tooltip,
 } from 'antd'
 import { ProLayout, ModalForm, ProFormText, ProFormSelect } from '@ant-design/pro-components'
 import type { ProLayoutProps } from '@ant-design/pro-components'
@@ -297,6 +297,8 @@ const MainLayout: React.FC = () => {
   }
 
   const siderCollapsed = isMobile ? mobileCollapsed : collapsed
+  const avatarSrc = resolveMediaUrl(user?.avatar, true)
+  const avatarTitle = user?.nickname || t('header.user')
 
   return (
     <>
@@ -339,19 +341,21 @@ const MainLayout: React.FC = () => {
           </a>
         )}
         actionsRender={() => [
-          <AlertBell key="alert-bell" />,
-          user && (
+          hasPermission(routePermission('/alerts')) && <AlertBell key="alert-bell" />,
+          !isMobile && user && (
             <Badge key="role" color={user.isSystemAdmin ? '#eb2f96' : '#1677ff'} text={<Typography.Text style={{ fontSize: 12 }}>{user.isSystemAdmin ? t('header.systemAdmin') : (hasPermission('admin:manage') ? t('header.orgAdmin') : t('header.member'))}</Typography.Text>} />
           ),
         ]}
         avatarProps={{
           size: 'small',
           icon: <UserOutlined />,
-          src: resolveMediaUrl(user?.avatar, true), // Avatar 增加默认图回退
-          title: user?.nickname || t('header.user'),
+          src: avatarSrc,
+          title: isMobile ? undefined : avatarTitle,
           render: (_, dom) => (
-            <Dropdown menu={{ items: userMenuItemsDropdown }} placement="bottomRight">
-              {dom}
+            <Dropdown menu={{ items: userMenuItemsDropdown }} placement="bottomRight" trigger={isMobile ? ['click'] : undefined}>
+              {isMobile ? (
+                <Button type="text" aria-label={avatarTitle} icon={<Avatar size="small" src={avatarSrc} icon={<UserOutlined />} />} />
+              ) : dom}
             </Dropdown>
           ),
         }}

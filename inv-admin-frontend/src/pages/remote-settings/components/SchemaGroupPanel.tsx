@@ -11,7 +11,7 @@ import { queryKeys } from '@/utils/queryKeys'
 import useTranslation from '@/hooks/useTranslation'
 import useAuthStore from '@/stores/authStore'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
-import type { CommandRecord } from '../types'
+import { commandRecordPresentation, type CommandRecord } from '../types'
 
 const { Text } = Typography
 
@@ -289,10 +289,10 @@ const SchemaGroupPanel: React.FC<SchemaGroupPanelProps> = ({ sn }) => {
       render: (v: string) => <Text code>{v}</Text>,
     },
     {
-      title: t('remote.stage'), dataIndex: 'stage', key: 'stage', width: 110,
+      title: t('remote.stage'), dataIndex: 'stage', key: 'stage', width: 240,
       render: (_, r) => {
-        const color = r.stage === 'completed' ? (r.success === false ? 'error' : 'success') : 'processing'
-        return <Tag color={color}>{r.stage}</Tag>
+        const presentation = commandRecordPresentation(r)
+        return <Tag color={presentation.color}>{presentation.label_zh}</Tag>
       },
     },
     {

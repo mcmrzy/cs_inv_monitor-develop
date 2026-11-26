@@ -16,6 +16,7 @@ import { deviceApi } from '@/services/deviceApi'
 import { getAlarmLevelDisplay, getAlarmMessageI18nKey } from '@/utils/constants'
 import { formatInTimezone } from '@/utils/timezone'
 import { safeNum } from '@/utils/format'
+import { measuredGridPower } from '@/utils/gridPower'
 import dayjs from 'dayjs'
 import useTimezoneStore from '@/stores/timezoneStore'
 import useTranslation from '@/hooks/useTranslation'
@@ -62,7 +63,7 @@ interface StationDetail {
   year_energy?: number
   pv_power?: number
   load_power?: number
-  grid_power?: number
+  grid_power?: number | null
   batt_power?: number
   batt_soc?: number
   today_discharge?: number
@@ -263,6 +264,7 @@ const StationDetailPage: React.FC = () => {
     let dailyCharge = 0, totalCharge = 0
     let dailyLoad = 0, totalLoad = 0
     let pvPower = 0, loadPower = 0, battPower = 0, gridPowerSum = 0, genPowerSum = 0, battSoc = 0, socCount = 0
+    let gridCount = 0
     rtList.forEach((rt: any) => {
       // 能量数据 - 扁平字段（已被 normalizeRealtimeData 展平）+ 嵌套回退
       dailyPv += safeNum(rt?.daily_pv ?? rt?.energy?.daily_pv)
@@ -284,7 +286,8 @@ const StationDetailPage: React.FC = () => {
       } else {
         battPower += safeNum(rt?.battery_power ?? rt?.charge_power ?? rt?.batt?.power ?? rt?.bat?.power)
       }
-      gridPowerSum += safeNum(rt?.grid_power ?? rt?.meter_power)
+      const grid = measuredGridPower(rt)
+      if (grid != null) { gridPowerSum += grid; gridCount++ }
       // 发电机功率（V2 型号上报 gen 功率或能量时聚合，无数据则为 0）
       genPowerSum += safeNum(rt?.gen_power ?? rt?.gen?.power ?? rt?.gen_energy_daily)
       const soc = safeNum(rt?.battery_soc ?? rt?.soc ?? rt?.batt?.soc)
@@ -293,7 +296,7 @@ const StationDetailPage: React.FC = () => {
     return {
       dailyPv, totalPv, dailyDischarge, totalDischarge,
       dailyLoad, totalLoad, dailyCharge, totalCharge,
-      pvPower, loadPower, battPower, gridPower: gridPowerSum,
+      pvPower, loadPower, battPower, gridPower: gridCount > 0 ? gridPowerSum : null,
       genPower: genPowerSum,
       battSoc: socCount > 0 ? battSoc / socCount : 0,
     }
@@ -344,14 +347,14 @@ const StationDetailPage: React.FC = () => {
   const aggregatedPv = !hasFreshRealtime ? 0 : ((station.pv_power || 0) > 0 ? station.pv_power! : (deviceEnergy?.pvPower ?? 0))
   const aggregatedLoad = !hasFreshRealtime ? 0 : ((station.load_power || 0) > 0 ? station.load_power! : (deviceEnergy?.loadPower ?? 0))
   const aggregatedBatt = !hasFreshRealtime ? 0 : ((station.batt_power || 0) !== 0 ? station.batt_power! : (deviceEnergy?.battPower ?? 0))
-  // 电网功率：仅使用实际数据，不使用能量守恒公式计算（离网设备无电网数据）
+  // 单设备优先使用该设备实测值；零功率也是有效数据。
   const gridPowerRaw = !hasFreshRealtime
-    ? 0
-    : (station.grid_power != null && station.grid_power !== 0)
-      ? station.grid_power
-      : (deviceEnergy?.gridPower ?? 0)
-  const hasGridData = gridPowerRaw !== 0
-  const aggregatedGrid = hasGridData ? gridPowerRaw : 0
+    ? null
+    : selectedDeviceSn === 'all'
+      ? (deviceEnergy?.gridPower ?? station.grid_power ?? null)
+      : (deviceEnergy?.gridPower ?? null)
+  const hasGridData = gridPowerRaw != null
+  const aggregatedGrid = gridPowerRaw
   // 发电机功率：仅使用实际上报数据（无数据时能量流图隐藏发电机路径）
   const aggregatedGen = deviceEnergy?.genPower ?? 0
   const avgSoc = (() => {
@@ -658,14 +661,14 @@ const StationDetailPage: React.FC = () => {
               {!hasGridData && gridVoltage === 0 && gridFreq === 0 ? (
                 <Row style={{ marginTop: 8 }}>
                   <Col span={24}>
-                    <Text type="secondary">{t('station.offGridNoGrid')}</Text>
+                    <Text type="secondary">{t('station.noData')}</Text>
                   </Col>
                 </Row>
               ) : (
                 <Row gutter={16} style={{ marginTop: 8 }}>
                   <Col span={8}>
                     <Text type="secondary">{t('station.power')}:</Text>{' '}
-                    <Text strong>{hasGridData ? `${Math.round(aggregatedGrid)} W` : '--'}</Text>
+                    <Text strong>{aggregatedGrid != null ? `${Math.round(aggregatedGrid)} W` : '--'}</Text>
                   </Col>
                   <Col span={8}>
                     <Text type="secondary">{t('station.voltage')}:</Text>{' '}

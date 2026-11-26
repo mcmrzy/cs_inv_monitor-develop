@@ -10,6 +10,7 @@
  * 必须 online === true 且 data_time 在新鲜度窗口内（与 StationDetailPage 同策略）。
  */
 import { safeNum } from '@/utils/format'
+import { measuredGridPower } from '@/utils/gridPower'
 
 /** 实时数据新鲜度窗口（10 分钟） */
 export const REALTIME_FRESH_WINDOW_MS = 10 * 60 * 1000
@@ -151,8 +152,7 @@ export function extractEnergyMetrics(rt: Record<string, any> | null | undefined)
   const acInputApparentPower = pick(r, 'ac.ac_input_apparent_power', 'ac_input_apparent_power')
   const acChargePower = pick(r, 'chr.ac_charge_power', 'ac_charge_power')
   const acChargeApparentPower = pick(r, 'chr.ac_charge_apparent_power', 'ac.ac_charge_apparent_power', 'ac_charge_apparent_power')
-  const gridPower = pick(r, 'grid_power', 'meter_power')
-    ?? ((acInputPower ?? 0) + (acChargePower ?? 0))
+  const gridPower = measuredGridPower(r) ?? 0
   return {
     pvPower: pick(r, 'pv.pv_total_power', 'pv_total_power', 'pv.pv_power_total', 'total_power') ?? 0,
     pv1Power: pick(r, 'pv.pv1_power', 'pv1_power') ?? 0,

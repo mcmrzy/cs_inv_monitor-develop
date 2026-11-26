@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { renderAsAdmin } from '@/test/test-utils'
+import { http, HttpResponse } from 'msw'
+import { server } from '@/test/mocks/server'
 import BatchSettingsPage from './index'
 
 // 注意：不要 mock @/utils/timezone —— 页面依赖其模块级 dayjs.extend(utc)
@@ -47,7 +49,17 @@ describe('BatchSettingsPage', () => {
     expect(screen.getByRole('button', { name: '下一步: 配置参数' })).toBeEnabled()
   })
 
-  it('advances to parameter config step with category cards', async () => {
+  it('shows schema fields with an enabled capability on every selected device', async () => {
+    const item = { param_key: 'set_modbus_power_saving', group_code: 'general', control_type: 'boolean', display_name_key: 'config.set_modbus_power_saving' }
+    const ok = (data: unknown) => HttpResponse.json({ code: 0, data })
+    server.use(
+      http.get('/api/v1/devices/by-sn/:sn', ({ params }) => ok({ device: { sn: params.sn, model: '3KU' }, online_status: { online: true } })),
+      http.get('/api/v1/devices/by-sn/:sn/config-schema', () => ok([item, { ...item, param_key: 'disabled_field', display_name_key: 'disabled_field' }])),
+      http.get('/api/v1/devices/by-sn/:sn/control-capabilities', () => ok([
+        { command_code: item.param_key, is_enabled: true }, { command_code: 'disabled_field', is_enabled: false },
+      ])),
+      http.get('/api/v1/devices/by-sn/:sn/control-state', () => ok({ reported: {} })),
+    )
     renderAsAdmin(<BatchSettingsPage />)
 
     await screen.findByText('INV20250001')
@@ -58,13 +70,10 @@ describe('BatchSettingsPage', () => {
       return btn
     }))
 
-    // 步骤 1：参数配置卡片（充电/放电/电网/应用 4 类参数，16 个开关）
-    await waitFor(() => {
-      expect(screen.getByText('参数配置')).toBeInTheDocument()
-    })
+    expect(await screen.findByRole('switch')).toBeInTheDocument()
+    expect(screen.getByText('参数配置')).toBeInTheDocument()
     expect(screen.getByText('选择需要修改的参数并设置值')).toBeInTheDocument()
-    const switches = document.querySelectorAll('button[role="switch"]')
-    expect(switches.length).toBeGreaterThanOrEqual(16)
+    expect(screen.queryByText('disabled_field')).not.toBeInTheDocument()
   })
 
   it('renders batch history section with empty placeholder', async () => {

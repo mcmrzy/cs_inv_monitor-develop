@@ -1,28 +1,26 @@
 import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useIsFetching, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Button, DatePicker, Empty, Segmented, Space, Spin, Tag, Typography } from 'antd'
+import { ProCard } from '@ant-design/pro-components'
 import {
-  Row, Col, Space, Tag, Typography,
-  Segmented, Empty, Grid, Badge, Button, DatePicker, Spin,
-} from 'antd'
-import { ProCard, ProTable } from '@ant-design/pro-components'
-import type { ProColumns } from '@ant-design/pro-components'
-import {
-  DashboardOutlined, WifiOutlined, ExclamationCircleOutlined, ThunderboltOutlined,
-  LineChartOutlined, PercentageOutlined, BarChartOutlined,
-  DesktopOutlined,
+  ArrowRightOutlined, BarChartOutlined, BellOutlined, DesktopOutlined, ExclamationCircleOutlined,
+  LineChartOutlined, ReloadOutlined, ThunderboltOutlined, WifiOutlined,
 } from '@ant-design/icons'
-import { useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import ReactECharts from '@/lib/echarts'
 import { dashboardApi } from '@/services/dashboardApi'
-import { ALARM_LEVEL_MAP, HERO_GRADIENTS, getAlarmLevelDisplay, getAlarmMessageI18nKey } from '@/utils/constants'
+import { getAlarmLevelDisplay, getAlarmMessageI18nKey } from '@/utils/constants'
 import { safeNum } from '@/utils/format'
 import { formatInTimezone } from '@/utils/timezone'
 import useTranslation from '@/hooks/useTranslation'
 import useAuthStore from '@/stores/authStore'
 import useTimezoneStore from '@/stores/timezoneStore'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
+import { getRoutePermissions } from '@/router/routeAccess'
+import { queryKeys } from '@/utils/queryKeys'
 import dayjs from 'dayjs'
 import dayjsTimezone from 'dayjs/plugin/timezone'
+import './dashboard.css'
 
 const { Title, Text } = Typography
 
@@ -46,52 +44,115 @@ interface StationRankItem {
   deviceCount: number
 }
 
-/* ==================== 主组件 ==================== */
+interface DeviceCounts {
+  total?: number
+  online?: number
+  offline?: number
+  fault?: number
+}
+
+interface DashboardStatistics extends DeviceCounts {
+  deviceStats?: DeviceCounts
+  totalDevices?: number
+  onlineDevices?: number
+  offlineDevices?: number
+  faultDevices?: number
+  todayEnergy?: number
+  totalEnergy?: number
+  recentAlarms?: AlertItem[]
+}
+
+interface TrendPoint {
+  date: string
+  energy?: number
+  load?: number
+}
+
+type TrendResponse = TrendPoint[] | { data?: TrendPoint[] | { data?: TrendPoint[] } }
+
+const EMPTY_TREND: TrendPoint[] = []
+const DASHBOARD_KEY = ['dashboard'] as const
+const LIVE_INTERVAL = 15_000
+const ANALYSIS_INTERVAL = 60_000
+
+function selectTrend(response: TrendResponse): TrendPoint[] {
+  if (Array.isArray(response)) return response
+  const data = response?.data
+  if (Array.isArray(data)) return data
+  return Array.isArray(data?.data) ? data.data : EMPTY_TREND
+}
+
+function useDashboardTrend(period: string) {
+  return useQuery({
+    queryKey: queryKeys.dashboard.trend(period),
+    queryFn: () => dashboardApi.getTrend(period).then((r): TrendResponse => r.data),
+    select: selectTrend,
+    refetchInterval: ANALYSIS_INTERVAL,
+    staleTime: ANALYSIS_INTERVAL,
+  })
+}
+
+function knownNumber(value: unknown): number | undefined {
+  if (typeof value !== 'number' && (typeof value !== 'string' || !value.trim())) return
+  const number = Number(value)
+  return Number.isFinite(number) ? number : undefined
+}
 
 const DashboardPage: React.FC = () => {
-  const navigate = useNavigate()
-  const screens = Grid.useBreakpoint()
-  const isMobile = !screens.md
-  const { t } = useTranslation()
+  const { t, lang } = useTranslation()
+  const { timezone } = useTimezoneStore()
+  const canViewAlerts = useAuthStore((s) => s.hasAnyPermission(...getRoutePermissions('/alerts')))
+  const canViewDevices = useAuthStore((s) => s.hasAnyPermission(...getRoutePermissions('/devices')))
+  const queryClient = useQueryClient()
+  const isFetching = useIsFetching({ queryKey: DASHBOARD_KEY }) > 0
+  const refreshDashboard = () => {
+    void queryClient.refetchQueries({ queryKey: DASHBOARD_KEY, type: 'active' }, { cancelRefetch: false })
+  }
 
-  /* ---------- 全局数据 ---------- */
-  const { data: statsRes, isLoading: statsLoading, error: statsError, refetch: refetchStats } = useQuery({
-    queryKey: ['dashboard', 'statistics'],
-    queryFn: () => dashboardApi.getStatistics().then((r) => r.data),
-    refetchInterval: 15000,
+  const {
+    data: stats, dataUpdatedAt: statsUpdatedAt, isLoading: statsLoading, error: statsError,
+  } = useQuery({
+    queryKey: queryKeys.dashboard.statistics(),
+    queryFn: () => dashboardApi.getStatistics().then((r): DashboardStatistics => r.data?.data ?? r.data),
+    refetchInterval: LIVE_INTERVAL,
   })
 
-  const { data: distRes, isLoading: distLoading, error: distError, refetch: refetchDist } = useQuery({
-    queryKey: ['dashboard', 'deviceDistribution'],
-    queryFn: () => dashboardApi.getDeviceDistribution().then((r) => r.data),
-    refetchInterval: 15000,
+  const ds = stats?.deviceStats ?? stats
+  const statisticsOnline = knownNumber(ds?.online ?? stats?.onlineDevices)
+  const statisticsOffline = knownNumber(ds?.offline ?? stats?.offlineDevices)
+  const statisticsFault = knownNumber(ds?.fault ?? stats?.faultDevices)
+  const needsDistribution = Boolean(statsError) || Boolean(stats && (
+    statisticsOnline == null || statisticsOffline == null || statisticsFault == null
+  ))
+  const { data: distribution, error: distError } = useQuery({
+    queryKey: queryKeys.dashboard.deviceDistribution(),
+    queryFn: () => dashboardApi.getDeviceDistribution().then((r): DeviceCounts => r.data?.data ?? r.data),
+    enabled: needsDistribution,
+    refetchInterval: LIVE_INTERVAL,
   })
 
-  const { data: trendRes, isLoading: trendLoading, error: trendError, refetch: refetchTrend } = useQuery({
-    queryKey: ['dashboard', 'trend', 'day'],
-    queryFn: () => dashboardApi.getTrend('day').then((r) => r.data),
-    refetchInterval: 15000,
-  })
-
-  const stats = (statsRes?.data ?? statsRes ?? {}) as any
-  const distribution = (distRes?.data ?? distRes ?? {}) as any
-  const trendData = Array.isArray(trendRes?.data)
-    ? trendRes.data
-    : (Array.isArray(trendRes?.data?.data) ? trendRes.data.data : []) as any[]
+  const fallback = needsDistribution ? distribution : undefined
+  const useFallbackSnapshot = Boolean(statsError && fallback)
+  const onlineCount = useFallbackSnapshot ? knownNumber(fallback?.online) : statisticsOnline ?? knownNumber(fallback?.online)
+  const offlineCount = useFallbackSnapshot ? knownNumber(fallback?.offline) : statisticsOffline ?? knownNumber(fallback?.offline)
+  const faultCount = useFallbackSnapshot ? knownNumber(fallback?.fault) : statisticsFault ?? knownNumber(fallback?.fault)
+  const sumOfCounts = onlineCount != null && offlineCount != null && faultCount != null
+    ? onlineCount + offlineCount + faultCount
+    : undefined
+  const totalDevices = useFallbackSnapshot ? sumOfCounts : knownNumber(ds?.total ?? stats?.totalDevices) ?? sumOfCounts
+  const onlineRate = totalDevices != null && totalDevices > 0 && onlineCount != null ? (onlineCount / totalDevices) * 100 : undefined
+  const recentAlerts = Array.isArray(stats?.recentAlarms) ? stats.recentAlarms : undefined
 
   /* ---------- 功率趋势 ---------- */
-  const { timezone } = useTimezoneStore()
-  const user = useAuthStore((s) => s.user)
-  const userTimezone = timezone
   const [selectedFlowDate, setFlowDate] = useState<string | null>(null)
   const flowDate = selectedFlowDate ?? dayjs().tz(timezone).format('YYYY-MM-DD')
 
-  const { data: flowRes, isLoading: flowLoading, error: flowError, refetch: refetchFlow } = useQuery({
-    queryKey: ['dashboard', 'energyFlow', flowDate, userTimezone],
+  const { data: flowRes, isLoading: flowLoading, error: flowError } = useQuery({
+    queryKey: [...DASHBOARD_KEY, 'energyFlow', flowDate, timezone],
     queryFn: () => dashboardApi.getEnergyFlow({
       date: selectedFlowDate ?? dayjs().tz(timezone).format('YYYY-MM-DD'),
     }).then((r) => r.data?.data ?? r.data ?? []),
-    refetchInterval: selectedFlowDate ? false : 15_000,
+    refetchInterval: selectedFlowDate ? false : LIVE_INTERVAL,
     staleTime: 0,
     refetchOnMount: true,
   })
@@ -100,64 +161,18 @@ const DashboardPage: React.FC = () => {
   /* ---------- 电量概览 ---------- */
   const [energyOverviewPeriod, setEnergyOverviewPeriod] = useState('day')
 
-  const { data: energyStatsRes, isLoading: energyStatsLoading, error: energyStatsError, refetch: refetchEnergyStats } = useQuery({
-    queryKey: ['dashboard', 'energyOverview', energyOverviewPeriod],
+  const { data: energyStatsRes, isLoading: energyStatsLoading, error: energyStatsError } = useQuery({
+    queryKey: queryKeys.dashboard.energyStats(energyOverviewPeriod),
     queryFn: () => dashboardApi.getEnergyStats({ type: energyOverviewPeriod }).then((r) => r.data),
-    refetchInterval: 15000,
+    refetchInterval: ANALYSIS_INTERVAL,
+    staleTime: ANALYSIS_INTERVAL,
   })
   const energyStatsRaw = (energyStatsRes?.data ?? energyStatsRes ?? {}) as any
 
-  const { data: energyTrendRes, error: energyTrendError, refetch: refetchEnergyTrend } = useQuery({
-    queryKey: ['dashboard', 'energyTrend', energyOverviewPeriod],
-    queryFn: () => dashboardApi.getTrend(energyOverviewPeriod).then((r) => r.data),
-    refetchInterval: 15000,
-  })
-  const energyTrendData = Array.isArray(energyTrendRes?.data)
-    ? energyTrendRes.data
-    : (Array.isArray(energyTrendRes?.data?.data) ? energyTrendRes.data.data : []) as any[]
-
-  // 30日发电趋势数据
-  const { data: trend30DaysRes, isLoading: trend30DaysLoading, error: trend30DaysError, refetch: refetchTrend30Days } = useQuery({
-    queryKey: ['dashboard', 'trend30Days'],
-    queryFn: () => dashboardApi.getTrend('30days').then((r) => r.data),
-    refetchInterval: 15000,
-  })
-  const trend30DaysData = Array.isArray(trend30DaysRes?.data)
-    ? trend30DaysRes.data
-    : (Array.isArray(trend30DaysRes?.data?.data) ? trend30DaysRes.data.data : []) as any[]
-
-  const recentAlerts = (Array.isArray(stats?.recentAlarms) ? stats.recentAlarms : []) as AlertItem[]
-
-  const ds = stats?.deviceStats ?? stats
-  const onlineCount = safeNum(ds?.online ?? distribution?.online ?? stats?.onlineDevices)
-  const offlineCount = safeNum(ds?.offline ?? distribution?.offline)
-  const faultCount = safeNum(ds?.fault ?? distribution?.fault ?? stats?.faultDevices)
-  const totalDevices = safeNum(ds?.total ?? stats?.totalDevices ?? (onlineCount + offlineCount + faultCount))
-  const onlineRate = totalDevices > 0 ? ((onlineCount / totalDevices) * 100).toFixed(1) : '0.0'
-
-  /* ============================================================
-   *  Tab 1: 总览
-   * ============================================================ */
-
-  const pieOption = useMemo(() => ({
-    tooltip: { trigger: 'item' as const, formatter: '{b}: {c} ({d}%)' },
-    legend: { bottom: 0, data: [t('common.online'), t('common.offline'), t('common.fault')] },
-    color: ['#52c41a', '#d9d9d9', '#ff4d4f'],
-    series: [{
-      type: 'pie' as const,
-      radius: ['48%', '72%'],
-      center: ['50%', '42%'],
-      avoidLabelOverlap: false,
-      itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 3 },
-      label: { show: false },
-      emphasis: { label: { show: true, fontSize: 15, fontWeight: 'bold' as const } },
-      data: [
-        { value: onlineCount, name: t('common.online') },
-        { value: offlineCount, name: t('common.offline') },
-        { value: faultCount, name: t('common.fault') },
-      ],
-    }],
-  }), [onlineCount, offlineCount, faultCount])
+  const { data: energyTrendData = EMPTY_TREND, isLoading: energyTrendLoading, error: energyTrendError } =
+    useDashboardTrend(energyOverviewPeriod)
+  const { data: trend30DaysData = EMPTY_TREND, isLoading: trend30DaysLoading, error: trend30DaysError } =
+    useDashboardTrend('30days')
 
   /* 功率趋势图配置 */
   const energyFlowOption = useMemo(() => {
@@ -215,7 +230,7 @@ const DashboardPage: React.FC = () => {
       ],
       markLine: { silent: true, lineStyle: { color: '#94a3b8', type: 'solid' as const, width: 1 }, data: [{ yAxis: 0 }], label: { show: false } },
     }
-  }, [flowData, timezone])
+  }, [flowData, timezone, t])
 
   /* 电量概览柱状图配置 */
   const energyOverviewOption = useMemo(() => {
@@ -226,15 +241,12 @@ const DashboardPage: React.FC = () => {
     const pvArr = Array.isArray(es?.pv) ? es.pv : []
     const chargeArr = Array.isArray(es?.batteryCharge) ? es.batteryCharge : []
     const dischargeArr = Array.isArray(es?.batteryDischarge) ? es.batteryDischarge : []
-    const loadMap: Record<string, number> = {}
-    for (const item of energyTrendData) {
-      loadMap[item.date] = safeNum(item.load)
-    }
+    const loadByDate = new Map(energyTrendData.map((item) => [item.date, knownNumber(item.load)]))
     const seriesConfig = [
       { name: t('dash.pvEnergy'), color: '#f59e0b', data: pvArr },
       { name: t('dash.battChargeEnergy'), color: '#22c55e', data: chargeArr },
       { name: t('dash.battDischargeEnergy'), color: '#3b82f6', data: dischargeArr },
-      { name: t('dash.loadConsumption'), color: '#ef4444', data: dates.map((d: string) => loadMap[d] ?? 0) },
+      { name: t('dash.loadConsumption'), color: '#ef4444', data: dates.map((date: string) => loadByDate.get(date) ?? null) },
     ]
     return {
       tooltip: { trigger: 'axis' as const, axisPointer: { type: 'shadow' as const } },
@@ -248,7 +260,7 @@ const DashboardPage: React.FC = () => {
       ],
       series: seriesConfig.map((s) => ({
         name: s.name, type: 'bar' as const,
-        data: s.data.map((v: any) => parseFloat(safeNum(v).toFixed(2))),
+        data: s.data.map((v: unknown) => v == null ? null : Number(safeNum(v).toFixed(2))),
         itemStyle: { color: s.color, borderRadius: [3, 3, 0, 0] },
         barMaxWidth: 20,
       })),
@@ -269,7 +281,7 @@ const DashboardPage: React.FC = () => {
       grid: { left: '3%', right: '4%', bottom: '12%', top: '45', containLabel: true },
       xAxis: {
         type: 'category' as const,
-        data: trend30DaysData.map((d: any) => dayjs(d.date).format('MM-DD')),
+        data: trend30DaysData.map((d) => dayjs(d.date).format('MM-DD')),
         axisLabel: { fontSize: 11, interval: 2 },
       },
       yAxis: { type: 'value' as const, name: 'kWh' },
@@ -280,7 +292,7 @@ const DashboardPage: React.FC = () => {
       series: [{
         name: t('station.genEnergy'),
         type: 'line' as const,
-        data: trend30DaysData.map((d: any) => parseFloat(safeNum(d.energy).toFixed(2))),
+        data: trend30DaysData.map((d) => knownNumber(d.energy) ?? null),
         smooth: true,
         symbol: 'none',
         lineStyle: { color: '#f59e0b', width: 2 },
@@ -292,8 +304,8 @@ const DashboardPage: React.FC = () => {
 
   /* 电站排行 */
   const [rankingPeriod, setRankingPeriod] = useState('today')
-  const { data: rankingRes, isLoading: rankingLoading, error: rankingError, refetch: refetchRanking } = useQuery({
-    queryKey: ['dashboard', 'stationRanking', rankingPeriod],
+  const { data: rankingRes, isLoading: rankingLoading, error: rankingError } = useQuery({
+    queryKey: queryKeys.dashboard.stationRanking(rankingPeriod),
     queryFn: () => dashboardApi.getStationRanking({ period: rankingPeriod, limit: 8 }).then((r) => r.data),
   })
   const rankingData: StationRankItem[] = (() => {
@@ -301,15 +313,8 @@ const DashboardPage: React.FC = () => {
     return Array.isArray(raw) ? raw : []
   })()
 
-  const queryError = statsError || distError || trendError || flowError
+  const queryError = statsError || (needsDistribution && distError) || flowError
     || energyStatsError || energyTrendError || trend30DaysError || rankingError
-
-  const retryDashboard = () => {
-    void Promise.all([
-      refetchStats(), refetchDist(), refetchTrend(), refetchFlow(),
-      refetchEnergyStats(), refetchEnergyTrend(), refetchTrend30Days(), refetchRanking(),
-    ])
-  }
 
   const rankingOption = useMemo(() => {
     if (!rankingData || rankingData.length === 0) return {}
@@ -332,114 +337,178 @@ const DashboardPage: React.FC = () => {
         label: { show: true, position: 'right' as const, formatter: (p: any) => Number(p.value).toFixed(1), fontSize: 11 },
       }],
     }
-  }, [rankingData])
+  }, [rankingData, t])
 
-  const alertColumns: ProColumns<AlertItem>[] = [
-    { title: t('dash.deviceSN'), dataIndex: 'device_sn', key: 'device_sn', width: 140, ellipsis: true },
+  const formatMetric = (value: number | undefined, digits = 0) => value == null ? '—' : value.toLocaleString(lang, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  })
+  const metrics = [
     {
-      title: t('dash.alertLevel'), dataIndex: 'alarm_level', key: 'alarm_level', width: 80,
-      render: (_: any, record: AlertItem) => {
-        const cfg = getAlarmLevelDisplay(record.fault_code, record.alarm_level)
-        return <Tag color={cfg.color}>{cfg.i18nKey ? t(cfg.i18nKey) : cfg.label}</Tag>
-      },
+      label: t('dash.todayGeneration'), value: knownNumber(stats?.todayEnergy), digits: 1, unit: 'kWh',
+      icon: <ThunderboltOutlined />, tone: 'primary',
     },
     {
-      title: t('dash.faultMessage'), dataIndex: 'fault_message', key: 'fault_message', ellipsis: true,
-      render: (_: any, record: AlertItem) => {
-        const key = getAlarmMessageI18nKey(record.fault_code)
-        return key ? t(key) : record.fault_message
-      },
+      label: t('dash.onlineRate'), value: onlineRate, digits: 1, unit: '%',
+      icon: <WifiOutlined />, tone: 'online',
     },
     {
-      title: t('common.time'), dataIndex: 'occurred_at', key: 'occurred_at', width: 150,
-      render: (_: any, record: AlertItem) => record.occurred_at ? formatInTimezone(record.occurred_at, timezone, 'MM-DD HH:mm:ss') : '-',
+      label: t('dash.deviceFault'), value: faultCount,
+      icon: <ExclamationCircleOutlined />, tone: faultCount ? 'fault' : 'neutral',
+    },
+    {
+      label: t('dash.totalGeneration'), value: knownNumber(stats?.totalEnergy), digits: 1, unit: 'kWh',
+      icon: <BarChartOutlined />, tone: 'neutral',
     },
   ]
+  const statuses = [
+    { key: 'online', label: t('common.online'), count: onlineCount },
+    { key: 'offline', label: t('common.offline'), count: offlineCount },
+    { key: 'fault', label: t('common.fault'), count: faultCount },
+  ]
 
-  const renderOverview = () => (
-    <>
-      {/* Hero 卡片 */}
-      <ProCard gutter={[16, 16]}>
-        {[
-          { title: t('dash.deviceTotal'), value: totalDevices, icon: <DashboardOutlined />, gradient: HERO_GRADIENTS[0] },
-          { title: t('dash.deviceOnline'), value: onlineCount, icon: <WifiOutlined />, gradient: HERO_GRADIENTS[2] },
-          { title: t('dash.deviceFault'), value: faultCount, icon: <ExclamationCircleOutlined />, gradient: HERO_GRADIENTS[1] },
-          { title: t('dash.todayGeneration'), value: safeNum(stats.todayEnergy), suffix: 'kWh', icon: <ThunderboltOutlined />, gradient: HERO_GRADIENTS[3], decimals: 1 },
-          { title: t('dash.totalGeneration'), value: safeNum(stats.totalEnergy), suffix: 'kWh', icon: <LineChartOutlined />, gradient: HERO_GRADIENTS[4], decimals: 1 },
-          { title: t('dash.onlineRate'), value: onlineRate, suffix: '%', icon: <PercentageOutlined />, gradient: HERO_GRADIENTS[5], decimals: 1 },
-        ].map((item, idx) => (
-          <ProCard colSpan={{ xs: 12, sm: 8, lg: 4 }} key={idx}
-            bordered={false}
-            style={{ background: item.gradient, borderRadius: 12 }}
-            bodyStyle={{ padding: isMobile ? '12px 10px' : '20px 16px' }}
-          >
-            <div style={{ color: '#fff', fontSize: 13, opacity: 0.9, marginBottom: 8 }}>
-              {item.icon} {item.title}
-            </div>
-            <div style={{ color: '#fff', fontSize: isMobile ? 22 : 28, fontWeight: 700, lineHeight: 1 }}>
-              {statsLoading ? '-' : (item.decimals != null ? safeNum(item.value).toFixed(item.decimals) : safeNum(item.value).toLocaleString())}
-              {item.suffix && <span style={{ fontSize: 14, fontWeight: 400, marginLeft: 4 }}>{item.suffix}</span>}
-            </div>
-          </ProCard>
-        ))}
-      </ProCard>
-
-      {/* 30日发电趋势 + 设备状态 */}
-      <ProCard gutter={[16, 16]} style={{ marginTop: 16 }}>
-        <ProCard colSpan={{ xs: 24, lg: 16 }} bordered={false} style={{ borderRadius: 12 }}
-          title={<Space><LineChartOutlined style={{ color: '#fa8c16' }} /><span>{t('station.genTrend30Days')}</span></Space>}
-          loading={trend30DaysLoading}
-        >
-          {trend30DaysData.length > 0 ? (
-            <ReactECharts option={trend30DaysOption} style={{ height: 300 }} />
-          ) : (
-            <Empty description={t('dash.noEnergyData')} />
+  return (
+    <div className="dashboard">
+      <header className="dashboard-header">
+        <Typography.Title level={1}>{t('dash.title')}</Typography.Title>
+        <div className="dashboard-header-actions">
+          {statsUpdatedAt > 0 && (
+            <span className="dashboard-updated">
+              {t('dash.statisticsUpdated', {
+                time: formatInTimezone(new Date(statsUpdatedAt).toISOString(), timezone, 'HH:mm:ss'),
+              })}
+            </span>
           )}
-        </ProCard>
-        <ProCard colSpan={{ xs: 24, lg: 8 }} bordered={false} title={t('dash.deviceStatus')} loading={distLoading}
-          style={{ borderRadius: 12 }}
-          bodyStyle={{ padding: '12px 16px' }}
-        >
-          <ReactECharts option={pieOption} style={{ height: 260 }} />
-          <Row gutter={16} style={{ textAlign: 'center', marginTop: 4 }}>
-            {[
-              { label: t('common.online'), value: onlineCount, color: '#52c41a' },
-              { label: t('common.offline'), value: offlineCount, color: '#d9d9d9' },
-              { label: t('common.fault'), value: faultCount, color: '#ff4d4f' },
-            ].map((i) => (
-              <Col span={8} key={i.label}>
-                <Badge color={i.color} text={<Text strong>{i.label} {i.value}</Text>} />
-              </Col>
+          <Button aria-label={t('common.refresh')} icon={<ReloadOutlined />} loading={isFetching} onClick={refreshDashboard}>
+            {t('common.refresh')}
+          </Button>
+        </div>
+      </header>
+
+      {queryError && (
+        <QueryErrorAlert
+          error={queryError}
+          message={statsError && stats ? t('dash.statisticsStale') : t('dash.dataUnavailable')}
+        />
+      )}
+
+      <dl className="dashboard-metrics">
+        {metrics.map(({ label, value, digits, unit, icon, tone }) => (
+          <div key={label} className={`dashboard-metric dashboard-metric--${tone}`}>
+            <dt><span className="dashboard-metric-icon" aria-hidden="true">{icon}</span><span className="dashboard-metric-label">{label}</span></dt>
+            <dd>
+              <span>{formatMetric(value, digits)}</span>
+              {value != null && unit && <span className="dashboard-metric-unit">{unit}</span>}
+            </dd>
+          </div>
+        ))}
+      </dl>
+
+      <div className="dashboard-operations">
+        <section aria-labelledby="dashboard-device-status" className="dashboard-panel">
+          <div className="dashboard-panel-heading">
+            <h2 id="dashboard-device-status"><DesktopOutlined aria-hidden="true" />{t('dash.deviceStatus')}</h2>
+            {canViewDevices && <Link to="/devices" className="dashboard-panel-link">{t('dash.viewDevices')} <ArrowRightOutlined aria-hidden="true" /></Link>}
+          </div>
+          <div className="dashboard-device-total">
+            <strong>{formatMetric(totalDevices)}</strong>
+            <span>{t('dash.deviceTotal')}</span>
+          </div>
+          <div className="dashboard-status-bar" aria-hidden="true">
+            {totalDevices != null && totalDevices > 0 && statuses.map(({ key, count }) => (
+              <span key={key} className={`dashboard-status--${key}`} style={{ width: `${(count ?? 0) / totalDevices * 100}%` }} />
             ))}
-          </Row>
-        </ProCard>
+          </div>
+          <ul className="dashboard-statuses">
+            {statuses.map(({ key, label, count }) => (
+              <li key={key}>
+                <span className={`dashboard-status-dot dashboard-status--${key}`} aria-hidden="true" />
+                <span>{label}</span>
+                <strong>{formatMetric(count)}</strong>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section aria-labelledby="dashboard-recent-alerts" className="dashboard-panel">
+          <div className="dashboard-panel-heading">
+            <h2 id="dashboard-recent-alerts"><BellOutlined aria-hidden="true" />{t('dash.recentAlerts')}</h2>
+            {canViewAlerts && <Link to="/alerts" className="dashboard-panel-link">{t('dash.viewAlerts')} <ArrowRightOutlined aria-hidden="true" /></Link>}
+          </div>
+          {statsLoading ? (
+            <div className="dashboard-panel-state"><Spin aria-label={t('common.loading')} /></div>
+          ) : recentAlerts?.length ? (
+            <ul className="dashboard-alerts">
+              {recentAlerts.slice(0, 5).map((alarm) => {
+                const level = getAlarmLevelDisplay(alarm.fault_code, alarm.alarm_level)
+                const messageKey = getAlarmMessageI18nKey(alarm.fault_code)
+                return (
+                  <li key={alarm.id}>
+                    <Tag bordered={false} style={{ backgroundColor: `${level.color}1c` }}>{level.i18nKey ? t(level.i18nKey) : level.label}</Tag>
+                    <div className="dashboard-alert-details">
+                      <strong>{messageKey ? t(messageKey) : alarm.fault_message || alarm.fault_code || '—'}</strong>
+                      <span>{alarm.device_sn}</span>
+                    </div>
+                    {alarm.occurred_at && (
+                      <time dateTime={alarm.occurred_at}>{formatInTimezone(alarm.occurred_at, timezone, 'MM-DD HH:mm')}</time>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          ) : (
+            <div className="dashboard-panel-state">
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(recentAlerts ? 'dash.noAlerts' : 'dash.alertsUnavailable')} />
+            </div>
+          )}
+        </section>
+      </div>
+
+      <ProCard
+        className="dashboard-chart"
+        title={<h2><LineChartOutlined aria-hidden="true" />{t('station.genTrend30Days')}</h2>}
+        loading={trend30DaysLoading}
+      >
+        {trend30DaysData.length > 0 ? (
+          <ReactECharts option={trend30DaysOption} style={{ height: 272 }} />
+        ) : (
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(trend30DaysError ? 'dash.chartUnavailable' : 'dash.noEnergyData')} />
+        )}
       </ProCard>
 
-      {/* 功率趋势 */}
-      <ProCard bordered={false} style={{ borderRadius: 12, marginTop: 16 }}
-        title={<Space><LineChartOutlined style={{ color: '#1677ff' }} /><span>{t('dash.powerTrend')}</span></Space>}
+      <ProCard
+        className="dashboard-chart"
+        title={<h2><LineChartOutlined aria-hidden="true" />{t('dash.powerTrend')}</h2>}
         extra={
-          <Space>
-            <DatePicker value={dayjs(flowDate)} onChange={(d) => d && setFlowDate(d.format('YYYY-MM-DD'))} allowClear={false} style={{ width: 150 }} />
+          <Space wrap>
+            <DatePicker
+              aria-label={t('dash.date')}
+              value={dayjs(flowDate)}
+              onChange={(date) => {
+                const next = date?.format('YYYY-MM-DD')
+                if (next) setFlowDate(next === dayjs().tz(timezone).format('YYYY-MM-DD') ? null : next)
+              }}
+              allowClear={false}
+            />
             <Button size="small" onClick={() => setFlowDate(dayjs().tz(timezone).subtract(1, 'day').format('YYYY-MM-DD'))}>{t('dash.yesterday')}</Button>
             <Button size="small" onClick={() => setFlowDate(null)}>{t('dash.today')}</Button>
           </Space>
         }
       >
         {flowLoading ? (
-          <div style={{ height: 340, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spin /></div>
+          <div className="dashboard-chart-loading"><Spin aria-label={t('common.loading')} /></div>
         ) : flowData.length > 0 ? (
           <ReactECharts option={energyFlowOption} style={{ height: 340 }} />
         ) : (
-          <Empty description={t('dash.noEnergyData')} />
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(flowError ? 'dash.chartUnavailable' : 'dash.noEnergyData')} />
         )}
       </ProCard>
 
-      {/* 电量概览 */}
-      <ProCard bordered={false} style={{ borderRadius: 12, marginTop: 16 }}
-        title={<Space><BarChartOutlined style={{ color: '#722ed1' }} /><span>{t('dash.energyOverview')}</span></Space>}
+      <ProCard
+        className="dashboard-chart"
+        title={<h2><BarChartOutlined aria-hidden="true" />{t('dash.energyOverview')}</h2>}
         extra={
-          <Segmented size="small" value={energyOverviewPeriod} onChange={(v) => setEnergyOverviewPeriod(v as string)}
+          <Segmented size="small" value={energyOverviewPeriod} onChange={setEnergyOverviewPeriod}
             options={[
               { label: t('dash.last7Days'), value: 'day' },
               { label: t('dash.last30Days'), value: '30days' },
@@ -449,74 +518,35 @@ const DashboardPage: React.FC = () => {
           />
         }
       >
-        {energyStatsLoading ? (
-          <div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spin /></div>
-        ) : (energyStatsRaw?.dates?.length ?? 0) > 0 ? (
+        {energyStatsLoading || energyTrendLoading ? (
+          <div className="dashboard-chart-loading"><Spin aria-label={t('common.loading')} /></div>
+        ) : Array.isArray(energyStatsRaw?.dates) && energyStatsRaw.dates.length > 0 ? (
           <ReactECharts option={energyOverviewOption} style={{ height: 300 }} />
         ) : (
-          <Empty description={t('dash.noEnergyData')} />
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(energyStatsError ? 'dash.chartUnavailable' : 'dash.noEnergyData')} />
         )}
       </ProCard>
 
-      {/* 电站排行 + 近期告警 */}
-      <ProCard gutter={[16, 16]} style={{ marginTop: 16 }}>
-        <ProCard colSpan={{ xs: 24, lg: 10 }} bordered={false} style={{ borderRadius: 12 }}
-          title={t('dash.stationRank')}
-          loading={rankingLoading}
-          extra={
-            <Segmented size="small" value={rankingPeriod} onChange={(v) => setRankingPeriod(v as string)}
-              options={[
-                { label: t('dash.today'), value: 'today' },
-                { label: t('dash.thisWeek'), value: 'week' },
-                { label: t('dash.thisMonth'), value: 'month' },
-              ]}
-            />
-          }
-        >
-          {rankingData && rankingData.length > 0 ? (
-            <ReactECharts option={rankingOption} style={{ height: 300 }} />
-          ) : (
-            <Empty description={t('dash.noStationData')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
-          )}
-        </ProCard>
-        <ProCard colSpan={{ xs: 24, lg: 14 }} bordered={false} title={t('dash.recentAlerts')} style={{ borderRadius: 12 }}
-          extra={<a onClick={() => navigate('/alerts')}>{t('common.viewAll')}</a>}
-        >
-          <ProTable columns={alertColumns} dataSource={recentAlerts.slice(0, 6)} rowKey="id"
-            pagination={false} size="small" scroll={{ x: 500 }} search={false} toolBarRender={false} />
-        </ProCard>
-      </ProCard>
-
-      {/* 快速上手引导（仅文字指引，不提供快捷按钮） */}
-      <ProCard bordered={false} style={{ borderRadius: 12, marginTop: 16 }}
-        title={<Space><ThunderboltOutlined style={{ color: '#1677ff' }} /><span>{t('dash.quickGuide')}</span></Space>}
+      <ProCard
+        className="dashboard-chart"
+        title={<h2><BarChartOutlined aria-hidden="true" />{t('dash.stationRank')}</h2>}
+        loading={rankingLoading}
+        extra={
+          <Segmented size="small" value={rankingPeriod} onChange={setRankingPeriod}
+            options={[
+              { label: t('dash.today'), value: 'today' },
+              { label: t('dash.thisWeek'), value: 'week' },
+              { label: t('dash.thisMonth'), value: 'month' },
+            ]}
+          />
+        }
       >
-        <Space direction="vertical" size={10} style={{ width: '100%' }}>
-          <div><ThunderboltOutlined style={{ color: '#fa8c16', marginRight: 8 }} /><Text>{t('dash.guideCreateStation', { menu: t('menu.stationManage') })}</Text></div>
-          <div><DesktopOutlined style={{ color: '#1677ff', marginRight: 8 }} /><Text>{t('dash.guideAddDevice', { menu: t('menu.deviceManage') })}</Text></div>
-          <div><WifiOutlined style={{ color: '#52c41a', marginRight: 8 }} /><Text>{t('dash.guideProvision')}</Text></div>
-        </Space>
+        {rankingData.length > 0 ? (
+          <ReactECharts option={rankingOption} style={{ height: 300 }} />
+        ) : (
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(rankingError ? 'dash.chartUnavailable' : 'dash.noStationData')} />
+        )}
       </ProCard>
-    </>
-  )
-
-  /* ============================================================
-   *  Tab 配置
-   * ============================================================ */
-
-  return (
-    <div>
-      <Title level={4} style={{ marginBottom: 16 }}>
-        {t('dash.title')}
-      </Title>
-      {queryError && (
-        <QueryErrorAlert
-          error={queryError}
-          onRetry={retryDashboard}
-          style={{ marginBottom: 16 }}
-        />
-      )}
-      {renderOverview()}
     </div>
   )
 }

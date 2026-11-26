@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { renderAsAdmin } from '@/test/test-utils'
+import { http, HttpResponse } from 'msw'
+import { server } from '@/test/mocks/server'
 import DeviceDetailPage from './index'
 
 // 注意：不要 mock @/utils/timezone —— 页面依赖其模块级 dayjs.extend(utc)
@@ -68,6 +70,32 @@ describe('DeviceDetailPage', () => {
     await waitFor(() => {
       expect(document.querySelector('.ant-tabs-tab-active')?.textContent).toContain('储能')
     })
+  })
+
+  it('shows the Modbus panel snapshot and opens remote settings for the exact device', async () => {
+    const sn = 'PANEL-3KU-001'
+    server.use(
+      http.get('http://localhost:5173/api/v1/devices/by-sn/PANEL-3KU-001', () => HttpResponse.json({
+        code: 0,
+        data: { device: { sn, model: '3KU', status: 0 } },
+      })),
+      http.get('http://localhost:5173/api/v1/devices/by-sn/PANEL-3KU-001/realtime', () => HttpResponse.json({
+        code: 0,
+        data: {
+          online: false,
+          data_time: '2026-11-12T06:30:00Z',
+          realtime: { pv_total_power: 1860, output_power: 1250, battery_soc: 72, grid_power: 0 },
+        },
+      })),
+    )
+
+    renderDetail(sn)
+    expect(await screen.findByText('云端上次采样')).toBeInTheDocument()
+    expect(screen.getByText('1.86 kW')).toBeInTheDocument()
+    expect(screen.getByText('72%')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /远程设置/ })).toHaveAttribute('href', '/remote-settings?sn=PANEL-3KU-001')
+    fireEvent.click(screen.getByRole('button', { name: /蓝牙设置/ }))
+    expect(await screen.findByText(/手机连接.*PIN/)).toBeInTheDocument()
   })
 
   it('shows N/A fallback when sn param is missing', () => {

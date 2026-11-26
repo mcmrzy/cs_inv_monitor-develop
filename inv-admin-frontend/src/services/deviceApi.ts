@@ -126,7 +126,10 @@ export const deviceApi = {
   // ── V2.1 健康诊断 / 配置 schema（CS-L10-6K2）──
   getDiagnostics: (sn: string, params?: any) => api.get(`/devices/by-sn/${sn}/diagnostics`, { params, expectedDataShape: 'array' }),
   getHealthHistory: (sn: string, params?: any) => api.get(`/devices/by-sn/${sn}/health-history`, { params, expectedDataShape: 'array' }),
-  getConfigSchema: (sn: string) => api.get(`/devices/by-sn/${sn}/config-schema`, { expectedDataShape: 'array' }),
+  getConfigSchema: (sn: string, includeCatalog = false) => api.get(`/devices/by-sn/${sn}/config-schema`, {
+    expectedDataShape: 'array',
+    params: includeCatalog ? { include_catalog: true } : undefined,
+  }),
 
   // ── 能源计划 ──
   getEnergySchedule: (sn: string) => api.get(`/devices/by-sn/${sn}/energy-schedule`, { expectedDataShape: 'object' }),

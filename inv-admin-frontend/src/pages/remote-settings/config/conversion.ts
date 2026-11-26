@@ -32,7 +32,7 @@ export interface ResolvedFieldMeta {
   max?: number
   step?: number
   enumOptions?: EnumOption[]
-  visibility?: { param: string; eq?: number; ne?: number }
+  visibility?: { param: string; eq?: number; ne?: number; in?: number[] }
   confirm?: boolean
   /** 元数据来源：后端 schema 或静态兜底 */
   fromBackend: boolean
@@ -83,9 +83,9 @@ export function resolveFieldMeta(
       min: backend.min ?? fallback?.min,
       max: backend.max ?? fallback?.max,
       step: backend.step ?? fallback?.step,
-      enumOptions: enumOptions ?? fallback?.enumKeys?.map((k, i) => ({ value: i, semanticKey: k })),
+      enumOptions: enumOptions ?? fallback?.enumKeys?.map((k, i) => ({ value: fallback.enumValues?.[i] ?? i, semanticKey: k })),
       visibility: backend.visibility?.param
-        ? { param: backend.visibility.param, eq: backend.visibility.eq, ne: backend.visibility.ne }
+        ? { param: backend.visibility.param, eq: backend.visibility.eq, ne: backend.visibility.ne, in: backend.visibility.in }
         : fallback?.visibility,
       confirm: backend.confirmation_mode === 'modal' || fallback?.confirm,
       fromBackend: true,
@@ -101,7 +101,7 @@ export function resolveFieldMeta(
       min: fallback.min,
       max: fallback.max,
       step: fallback.step,
-      enumOptions: fallback.enumKeys?.map((k, i) => ({ value: i, semanticKey: k })),
+      enumOptions: fallback.enumKeys?.map((k, i) => ({ value: fallback.enumValues?.[i] ?? i, semanticKey: k })),
       visibility: fallback.visibility,
       confirm: fallback.confirm,
       fromBackend: false,

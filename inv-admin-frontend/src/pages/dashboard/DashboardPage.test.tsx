@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { act, screen, waitFor } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { server } from '@/test/mocks/server'
 import { createTestQueryClient, renderAsAdmin } from '@/test/test-utils'
@@ -52,13 +52,12 @@ describe('DashboardPage', () => {
   })
 
   it('renders chart placeholders for trend/distribution sections', async () => {
+    server.use(http.get('/api/v1/dashboard/trend', () => HttpResponse.json({
+      code: 0, data: [{ date: '2026-10-01', energy: 25 }],
+    })))
     renderAsAdmin(<DashboardPage />)
 
-    // 近30日趋势、设备状态、功率趋势、电量概览等图表位（jsdom 下为 mock 占位）
-    await waitFor(() => {
-      const charts = screen.getAllByTestId('echarts-mock')
-      expect(charts.length).toBeGreaterThanOrEqual(1)
-    })
+    expect(await screen.findByTestId('echarts-mock')).toBeInTheDocument()
     expect(screen.getByText(/近30日发电趋势/)).toBeInTheDocument()
   })
 
@@ -74,8 +73,29 @@ describe('DashboardPage', () => {
     renderAsAdmin(<DashboardPage />)
 
     await waitFor(() => {
-      expect(screen.getByText(/最近通知/)).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: '最近告警' })).toBeInTheDocument()
     })
+  })
+
+  it('shares trend requests and uses complete device counts from statistics', async () => {
+    const trendPeriods: string[] = []
+    const getDistribution = vi.fn(() => HttpResponse.json({ code: 0, data: { online: 4, offline: 1, fault: 1 } }))
+    server.use(
+      http.get('/api/v1/dashboard/statistics', () => HttpResponse.json({
+        code: 0, data: { deviceStats: { total: 6, online: 4, offline: 1, fault: 1 }, recentAlarms: [] },
+      })),
+      http.get('/api/v1/dashboard/device-distribution', getDistribution),
+      http.get('/api/v1/dashboard/trend', ({ request }) => {
+        trendPeriods.push(new URL(request.url).searchParams.get('type') ?? '')
+        return HttpResponse.json({ code: 0, data: [] })
+      }),
+    )
+
+    renderAsAdmin(<DashboardPage />)
+
+    expect(await screen.findByText('66.7')).toBeInTheDocument()
+    await waitFor(() => expect([...trendPeriods].sort()).toEqual(['30days', 'day']))
+    expect(getDistribution).not.toHaveBeenCalled()
   })
 
   it('shows query error alert when statistics request fails', async () => {
@@ -91,5 +111,9 @@ describe('DashboardPage', () => {
       const alert = document.querySelector('.ant-alert-error')
       expect(alert).toBeInTheDocument()
     })
+    const alerts = screen.getByRole('region', { name: '最近告警' })
+    expect(within(alerts).getByText('告警暂不可用')).toBeInTheDocument()
+    expect(within(alerts).queryByText('暂无告警')).not.toBeInTheDocument()
+    expect(await screen.findByText('79.2')).toBeInTheDocument()
   })
 })

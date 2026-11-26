@@ -14,6 +14,7 @@ import {
   Switch,
   Segmented,
   Radio,
+  Select,
   Button,
   Tag,
   Tooltip,
@@ -32,7 +33,7 @@ import {
 import useTranslation from '@/hooks/useTranslation'
 import type { DeviceConfigApi } from '../hooks/useDeviceConfig'
 import { decimalsFor, displayUnit, type ResolvedFieldMeta } from '../config/conversion'
-import { priorityEnumToOrder, priorityOrderToEnum, type PrioritySource } from '../config/fields'
+import { priorityEnumToOrder, priorityOrderToEnum, STATIC_FIELD_META, type PrioritySource } from '../config/fields'
 
 const { Text } = Typography
 
@@ -53,15 +54,21 @@ const PRIORITY_LABEL_KEY: Record<PrioritySource, string> = {
 // ── 当前值摘要（收起态可见，一眼读出配置现状） ──
 const ValueSummary: React.FC<FieldCardProps> = ({ cfg, paramKey }) => {
   const { t, lang } = useTranslation()
-  const current = cfg.getEditValue(paramKey)
+  const current = cfg.getSummaryValue(paramKey)
   const meta = cfg.getMeta(paramKey)
+  const raw = cfg.reported?.[paramKey]
 
-  if (current === undefined) return <Text type="secondary">--</Text>
+  if (!meta.fromBackend && !STATIC_FIELD_META[paramKey]) {
+    if (typeof raw === 'boolean') return <Text>{t(raw ? 'remote3.enabled' : 'remote3.disabled')}</Text>
+    if (typeof raw === 'number' || typeof raw === 'string') return <Text>{String(raw)}</Text>
+  }
+
+  if (current === undefined) return <Text type="secondary">{t('remote.valueNotReported')}</Text>
 
   if (meta.kind === 'enum' && meta.enumOptions) {
     const semanticKey = meta.enumOptions.find((o) => o.value === current)?.semanticKey
     const label = semanticKey ? cfg.enumLabel(semanticKey) : ''
-    return <Text>{label || '--'}</Text>
+    return <Text>{label || String(current)}</Text>
   }
 
   if (meta.kind === 'boolean') {
@@ -97,7 +104,7 @@ const NumberField: React.FC<{ cfg: DeviceConfigApi; meta: ResolvedFieldMeta }> =
   const [draft, setDraft] = useState<number | undefined>(current)
   useEffect(() => {
     setDraft(current)
-  }, [current])
+  }, [current, cfg.controlState?.reported_at])
   const dirty =
     (draft !== undefined && current !== undefined && draft !== current) ||
     (draft !== undefined && current === undefined)
@@ -108,7 +115,7 @@ const NumberField: React.FC<{ cfg: DeviceConfigApi; meta: ResolvedFieldMeta }> =
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-      {hasRange && (
+      {hasRange && draft !== undefined && (
         <Slider
           style={{ flex: 1, minWidth: 140, maxWidth: 320 }}
           min={meta.min}
@@ -193,6 +200,11 @@ const FieldControlWidget: React.FC<FieldCardProps> = ({ cfg, paramKey }) => {
   const sending = cfg.sendingKey === paramKey
   const editable = cfg.canEdit(paramKey)
 
+  // Switch 与排序列表没有未知值状态，不能把缺失回报渲染成关闭或默认排序。
+  if (current === undefined && (meta.kind === 'boolean' || meta.kind === 'priority')) {
+    return <Text type="secondary">{t('remote.valueNotReported')}</Text>
+  }
+
   let control: React.ReactNode
 
   if (meta.kind === 'boolean') {
@@ -207,8 +219,16 @@ const FieldControlWidget: React.FC<FieldCardProps> = ({ cfg, paramKey }) => {
     )
   } else if (meta.kind === 'enum' && meta.enumOptions) {
     const options = meta.enumOptions.map((o) => ({ label: cfg.enumLabel(o.semanticKey), value: o.value }))
-    control =
-      options.length <= 4 ? (
+    control = options.length > 8 ? (
+      <Select
+        options={options}
+        value={current !== undefined && options.some((option) => option.value === current) ? current : undefined}
+        placeholder={t('remote.paramRequired')}
+        disabled={!editable || sending}
+        onChange={(value) => cfg.sendValue(meta, value)}
+        style={{ minWidth: 144 }}
+      />
+    ) : options.length <= 4 && current !== undefined ? (
         <Segmented
           options={options}
           value={current}
@@ -293,12 +313,13 @@ export const FieldCardBody: React.FC<FieldCardProps> = ({ cfg, paramKey }) => {
 }
 
 // ── Row：v1 平铺字段行（模块展开区用）—— 左侧「标签 + 徽标 + 锁标 + 问号」、右侧控件，行间分隔线 ──
-export const FieldRow: React.FC<FieldCardProps> = ({ cfg, paramKey }) => {
+export const FieldRow: React.FC<FieldCardProps & { reportedOnly?: boolean }> = ({ cfg, paramKey, reportedOnly }) => {
   const { t } = useTranslation()
   const label = cfg.fieldLabel(paramKey)
   const meta = cfg.getMeta(paramKey)
   const sync = cfg.isSynced(paramKey)
   const readOnly = !cfg.canEdit(paramKey)
+  const catalogAccess = cfg.schemaMap.get(paramKey)?.catalog_access
 
   // 取 desc 说明（remote3.desc.{paramKey}），有的才显示问号
   const descKey = `remote3.desc.${paramKey}`
@@ -331,8 +352,9 @@ export const FieldRow: React.FC<FieldCardProps> = ({ cfg, paramKey }) => {
               <QuestionCircleOutlined style={{ fontSize: 14, color: '#9ca3af', cursor: 'help' }} />
             </Tooltip>
           )}
-          {syncTag}
-          {readOnly && (
+          {!reportedOnly && syncTag}
+          {reportedOnly && <Text type="secondary">{t(catalogAccess ? `remote3.catalog.${catalogAccess}` : 'remote3.reportedOnly')}</Text>}
+          {!reportedOnly && readOnly && (
             <Tooltip title={t('remote3.readOnly')}>
               <LockOutlined style={{ fontSize: 12, color: '#9ca3af' }} />
             </Tooltip>
@@ -340,7 +362,9 @@ export const FieldRow: React.FC<FieldCardProps> = ({ cfg, paramKey }) => {
         </Space>
       </div>
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <FieldControlWidget cfg={cfg} paramKey={paramKey} />
+        {reportedOnly ? (
+          catalogAccess === 'panel_action' ? null : <ValueSummary cfg={cfg} paramKey={paramKey} />
+        ) : <FieldControlWidget cfg={cfg} paramKey={paramKey} />}
       </div>
     </div>
   )

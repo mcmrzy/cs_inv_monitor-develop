@@ -1,17 +1,15 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Row, Col, Card, Table, Button, Select, Space, Modal,
-  Switch, InputNumber, Typography, Tag, message, Steps, Divider,
-  Progress, Checkbox, Alert, Result, Descriptions, Tooltip,
+  Switch, InputNumber, Typography, Tag, message, Divider,
+  Progress, Checkbox, Alert, Result, Descriptions, Tooltip, Spin,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
-  SettingOutlined,
-  CheckCircleOutlined, CloseCircleOutlined, ReloadOutlined,
+  SettingOutlined, ReloadOutlined,
   ApartmentOutlined, SendOutlined, HistoryOutlined,
 } from '@ant-design/icons'
-import dayjs from 'dayjs'
 import api from '@/services/api'
 import { deviceApi } from '@/services/deviceApi'
 import useAuthStore from '@/stores/authStore'
@@ -20,6 +18,8 @@ import { formatInTimezone } from '@/utils/timezone'
 import useTimezoneStore from '@/stores/timezoneStore'
 import useTranslation from '@/hooks/useTranslation'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
+import { commandErrorDetail } from '../remote-settings/controlContract'
+import { commonBatchFields, executeDeviceSettings, isBatchValueValid, loadBatchTarget, type BatchTarget, type DeviceBatchResult, type SettingValue } from './remoteBatch'
 
 const { Title, Text } = Typography
 
@@ -44,51 +44,17 @@ interface DeviceItem {
   [key: string]: any
 }
 
-interface ParameterConfig {
-  key: string
-  labelKey: string
-  categoryKey: string
-  unit?: string
-  min?: number
-  max?: number
-  step?: number
-  defaultValue?: number | boolean
-  type: 'number' | 'boolean'
-}
-
 interface BatchHistoryRecord {
   id: string
   timestamp: string
   operator: string
   deviceCount: number
-  parameters: Record<string, any>
+  parameters: Record<string, SettingValue>
   successCount: number
   failedCount: number
+  incompleteCount: number
   status: 'completed' | 'partial' | 'failed'
 }
-
-/* ==================== 参数配置 ==================== */
-
-const PARAMETER_CONFIGS: ParameterConfig[] = [
-  { key: 'charge_power_limit', labelKey: 'batch.chargePowerLimit', categoryKey: 'batch.chargeSettings', unit: '%', min: 0, max: 100, step: 1, defaultValue: 0, type: 'number' },
-  { key: 'max_charge_current', labelKey: 'batch.maxChargeCurrent', categoryKey: 'batch.chargeSettings', unit: 'A', min: 0, max: 200, step: 1, defaultValue: 0, type: 'number' },
-  { key: 'charge_voltage_limit', labelKey: 'batch.chargeCutoffVoltage', categoryKey: 'batch.chargeSettings', unit: 'V', min: 40, max: 60, step: 0.1, defaultValue: 0, type: 'number' },
-  { key: 'enable_charge', labelKey: 'batch.enableCharge', categoryKey: 'batch.chargeSettings', type: 'boolean', defaultValue: true },
-  { key: 'discharge_power_limit', labelKey: 'batch.dischargePowerLimit', categoryKey: 'batch.dischargeSettings', unit: '%', min: 0, max: 100, step: 1, defaultValue: 0, type: 'number' },
-  { key: 'max_discharge_current', labelKey: 'batch.maxDischargeCurrent', categoryKey: 'batch.dischargeSettings', unit: 'A', min: 0, max: 200, step: 1, defaultValue: 0, type: 'number' },
-  { key: 'soc_lower_limit', labelKey: 'batch.socDischargeMin', categoryKey: 'batch.dischargeSettings', unit: '%', min: 0, max: 50, step: 1, defaultValue: 10, type: 'number' },
-  { key: 'enable_discharge', labelKey: 'batch.enableDischarge', categoryKey: 'batch.dischargeSettings', type: 'boolean', defaultValue: true },
-  { key: 'grid_frequency', labelKey: 'batch.gridFreq', categoryKey: 'batch.gridSettings', unit: 'Hz', min: 45, max: 65, step: 0.1, defaultValue: 50, type: 'number' },
-  { key: 'grid_voltage_upper', labelKey: 'batch.overVoltageThreshold', categoryKey: 'batch.gridSettings', unit: 'V', min: 200, max: 280, step: 1, defaultValue: 264, type: 'number' },
-  { key: 'grid_voltage_lower', labelKey: 'batch.underVoltageThreshold', categoryKey: 'batch.gridSettings', unit: 'V', min: 150, max: 220, step: 1, defaultValue: 176, type: 'number' },
-  { key: 'anti_backflow_enabled', labelKey: 'batch.antiReflux', categoryKey: 'batch.gridSettings', type: 'boolean', defaultValue: false },
-  { key: 'work_mode', labelKey: 'batch.workMode', categoryKey: 'batch.appSettings', unit: '', min: 0, max: 3, step: 1, defaultValue: 0, type: 'number' },
-  { key: 'export_power_limit', labelKey: 'batch.gridPowerLimit', categoryKey: 'batch.appSettings', unit: '%', min: 0, max: 100, step: 1, defaultValue: 100, type: 'number' },
-  { key: 'peak_shaving_enabled', labelKey: 'batch.peakShaving', categoryKey: 'batch.appSettings', type: 'boolean', defaultValue: false },
-  { key: 'backup_reserve_soc', labelKey: 'batch.backupSOC', categoryKey: 'batch.appSettings', unit: '%', min: 0, max: 100, step: 1, defaultValue: 20, type: 'number' },
-]
-
-const PARAM_CATEGORY_KEYS = [...new Set(PARAMETER_CONFIGS.map((p) => p.categoryKey))]
 
 /* ==================== 历史记录模拟存储 ==================== */
 
@@ -102,7 +68,7 @@ const BatchSettingsPage: React.FC = () => {
   const queryClient = useQueryClient()
   const [messageApi, contextHolder] = message.useMessage()
   const user = useAuthStore((state) => state.user)
-  const hasPermission = useAuthStore((state) => state.hasPermission)
+  const { hasPermission } = useAuthStore()
   const canControlDevices = hasPermission('devices:control')
   const operatorName = user?.nickname || user?.phone || '-'
 
@@ -115,17 +81,15 @@ const BatchSettingsPage: React.FC = () => {
 
   // 参数配置
   const [enabledParams, setEnabledParams] = useState<Record<string, boolean>>({})
-  const [paramValues, setParamValues] = useState<Record<string, any>>({})
+  const [paramValues, setParamValues] = useState<Record<string, SettingValue | undefined>>({})
 
   // 执行状态
   const [executing, setExecuting] = useState(false)
   const [executeProgress, setExecuteProgress] = useState(0)
-  const [executeResults, setExecuteResults] = useState<{
-    sn: string
-    success: boolean
-    message: string
-  }[]>([])
+  const [executeResults, setExecuteResults] = useState<DeviceBatchResult[]>([])
   const [executeDone, setExecuteDone] = useState(false)
+  const execution = useRef<AbortController | null>(null)
+  useEffect(() => () => execution.current?.abort(), [])
 
   // 历史
   const [batchHistory, setBatchHistory] = useState<BatchHistoryRecord[]>(batchHistoryStorage)
@@ -201,56 +165,96 @@ const BatchSettingsPage: React.FC = () => {
 
   /* ---------- 参数配置逻辑 ---------- */
 
-  const toggleParam = (key: string) => {
-    setEnabledParams((prev) => {
-      const next = { ...prev, [key]: !prev[key] }
-      if (next[key] && paramValues[key] === undefined) {
-        const cfg = PARAMETER_CONFIGS.find((p) => p.key === key)
-        if (cfg) {
-          setParamValues((pv) => ({ ...pv, [key]: cfg.defaultValue ?? (cfg.type === 'boolean' ? false : 0) }))
-        }
+  const targetsQuery = useQuery({
+    queryKey: ['batch', 'remote-settings', selectedDeviceSns],
+    enabled: currentStep === 1 && selectedDeviceSns.length > 0 && canControlDevices,
+    queryFn: async ({ signal }) => {
+      const targets: BatchTarget[] = []
+      for (let index = 0; index < selectedDeviceSns.length; index += 4) {
+        if (signal.aborted) throw signal.reason
+        const chunk = await Promise.all(selectedDeviceSns.slice(index, index + 4).map(loadBatchTarget))
+        targets.push(...chunk)
       }
-      return next
-    })
+      return targets
+    },
+    retry: false,
+  })
+  const fields = commonBatchFields(targetsQuery.data ?? [], hasPermission)
+  const activeFields = fields.filter((field) => enabledParams[field.param_key])
+  const enabledParamCount = activeFields.length
+  const fieldLabel = (key: string, displayKey = 'config.' + key) => t(displayKey) !== displayKey ? t(displayKey) : key
+  const enumLabel = (label: string) => {
+    const key = 'config.enum.' + label
+    return t(key) !== key ? t(key) : label
+  }
+  const formatValue = (key: string, value: unknown) => {
+    if (value == null) return '—'
+    const field = fields.find((item) => item.param_key === key)
+    if (field?.control_type === 'boolean' || typeof value === 'boolean') return t(Number(value) ? 'batch.on' : 'batch.off')
+    const label = field?.enum_map?.[String(value)]
+    return label ? enumLabel(label) : String(value)
   }
 
-  const setParamValue = (key: string, value: any) => {
+  const toggleParam = (key: string) => {
+    setEnabledParams((prev) => ({ ...prev, [key]: !prev[key] }))
+  }
+
+  const setParamValue = (key: string, value: SettingValue | undefined) => {
     setParamValues((prev) => ({ ...prev, [key]: value }))
   }
 
-  const enabledParamCount = Object.values(enabledParams).filter(Boolean).length
-
   /* ---------- 预览数据 ---------- */
 
-  const previewColumns: ColumnsType<{ sn: string; model: string; [key: string]: any }> = useMemo(() => {
-    const paramCols = PARAMETER_CONFIGS.filter((p) => enabledParams[p.key]).map((p) => ({
-      title: `${t(p.labelKey)}${p.unit ? `(${p.unit})` : ''}`,
-      dataIndex: p.key,
-      key: p.key,
-      width: 130,
-      render: (_: any, record: any) => {
-        const v = paramValues[p.key]
-        return p.type === 'boolean' ? (v ? t('batch.on') : t('batch.off')) : String(v)
-      },
-    }))
-    return [
+  const previewColumns: ColumnsType<DeviceItem> = [
       { title: t('common.deviceSN'), dataIndex: 'sn', key: 'sn', width: 160, fixed: 'left' as const },
       { title: t('common.model'), dataIndex: 'model', key: 'model', width: 120 },
-      ...paramCols,
-    ]
-  }, [enabledParams, paramValues, t])
+      ...activeFields.map((field) => ({
+        title: [fieldLabel(field.param_key, field.display_name_key), field.unit].filter(Boolean).join(' · '),
+        key: field.param_key,
+        width: 130,
+        render: () => formatValue(field.param_key, paramValues[field.param_key]),
+      })),
+  ]
 
   /* ---------- 执行逻辑 ---------- */
 
-  const buildCommandPayload = () => {
-    const params: Record<string, any> = {}
-    PARAMETER_CONFIGS.filter((p) => enabledParams[p.key]).forEach((p) => {
-      params[p.key] = paramValues[p.key] ?? p.defaultValue
-    })
-    return { command: 'batch_config', params }
-  }
-
   const handleExecute = async () => {
+    if (execution.current || !canProceedStep1 || !canControlDevices) return
+    const controller = new AbortController()
+    execution.current = controller
+    const changes: Record<string, SettingValue> = {}
+    for (const field of activeFields) changes[field.param_key] = paramValues[field.param_key]!
+    const available = new Set(allDevices.map((device) => device.sn))
+    const targetSns = selectedDeviceSns.filter((sn) => available.has(sn))
+    const total = targetSns.length
+    if (!total || total !== selectedDeviceSns.length) {
+      execution.current = null
+      setConfirmVisible(false)
+      messageApi.warning(t('batch.noValidTargets'))
+      return
+    }
+    setExecuting(true)
+    try {
+      const latest = await targetsQuery.refetch({ throwOnError: true })
+      if (controller.signal.aborted) return
+      const allowed = new Map(commonBatchFields(latest.data ?? [], hasPermission).map((item) => [item.param_key, item]))
+      const changed = Object.entries(changes).some(([key, value]) => {
+        const field = allowed.get(key)
+        return !field || !isBatchValueValid(field, value)
+      })
+      if (changed) {
+        setConfirmVisible(false)
+        messageApi.warning(t('batch.targetsChanged'))
+        return
+      }
+    } catch (error) {
+      if (!controller.signal.aborted) messageApi.error(commandErrorDetail(error) || t('batch.targetsChanged'))
+      return
+    } finally {
+      if (!controller.signal.aborted) setExecuting(false)
+      execution.current = null
+    }
+    execution.current = controller
     setConfirmVisible(false)
     setExecuting(true)
     setExecuteProgress(0)
@@ -258,57 +262,33 @@ const BatchSettingsPage: React.FC = () => {
     setExecuteDone(false)
     setCurrentStep(2)
 
-    const payload = buildCommandPayload()
-    // 兜底：以当前设备列表求交集，防止状态残留导致对不可见设备下发命令
-    const available = new Set(allDevices.map((d) => d.sn))
-    const targetSns = selectedDeviceSns.filter((sn) => available.has(sn))
-    const total = targetSns.length
-    const results: { sn: string; success: boolean; message: string }[] = []
-    if (total === 0) {
-      setExecuting(false)
-      setExecuteDone(true)
-      messageApi.warning(t('batch.noValidTargets'))
-      return
-    }
-
-    const promises = targetSns.map((sn) =>
-      deviceApi.sendCommand(sn, payload)
-        .then((res) => {
-          const d = res.data?.data ?? res.data
-          return { sn, success: d?.success ?? true, message: d?.message ?? t('common.success') }
-        })
-        .catch((err) => ({
-          sn,
-          success: false,
-          message: err?.response?.data?.message || err?.message || t('common.failed'),
-        }))
-    )
-
-    let completed = 0
-    const wrappedPromises = promises.map((p) =>
-      p.then((result) => {
+    const results: DeviceBatchResult[] = []
+    for (let index = 0; index < total && !controller.signal.aborted; index += 4) {
+      await Promise.all(targetSns.slice(index, index + 4).map(async (sn) => {
+        const result = await executeDeviceSettings(sn, changes, controller.signal)
+        if (controller.signal.aborted) return
         results.push(result)
-        completed++
-        setExecuteProgress(Math.round((completed / total) * 100))
+        setExecuteProgress(Math.round((results.length / total) * 100))
         setExecuteResults([...results])
-        return result
-      })
-    )
+      }))
+    }
+    execution.current = null
+    if (controller.signal.aborted) return
 
-    await Promise.allSettled(wrappedPromises)
-
-    const successCount = results.filter((r) => r.success).length
-    const failedCount = results.filter((r) => !r.success).length
+    const successCount = results.filter((r) => r.status === 'applied').length
+    const failedCount = results.filter((r) => r.status === 'failed').length
+    const incompleteCount = total - successCount - failedCount
 
     const historyRecord: BatchHistoryRecord = {
       id: `batch_${Date.now()}`,
       timestamp: new Date().toISOString(),
       operator: operatorName,
       deviceCount: total,
-      parameters: payload.params,
+      parameters: changes,
       successCount,
       failedCount,
-      status: failedCount === 0 ? 'completed' : successCount === 0 ? 'failed' : 'partial',
+      incompleteCount,
+      status: successCount === total ? 'completed' : failedCount === total ? 'failed' : 'partial',
     }
     batchHistoryStorage = [historyRecord, ...batchHistoryStorage].slice(0, 50)
     setBatchHistory([...batchHistoryStorage])
@@ -316,12 +296,12 @@ const BatchSettingsPage: React.FC = () => {
     setExecuting(false)
     setExecuteDone(true)
 
-    if (failedCount === 0) {
+    if (successCount === total) {
       messageApi.success(t('batch.executeSuccess', { total }))
-    } else if (successCount > 0) {
-      messageApi.warning(t('batch.partialExecuteSuccess', { success: successCount, failed: failedCount }))
-    } else {
+    } else if (failedCount === total) {
       messageApi.error(t('batch.executeFailed', { total }))
+    } else {
+      messageApi.warning(t('batch.batchSetResult', { total, success: successCount, failed: failedCount, incomplete: incompleteCount }))
     }
 
     queryClient.invalidateQueries({ queryKey: ['devices'] })
@@ -341,7 +321,12 @@ const BatchSettingsPage: React.FC = () => {
   /* ---------- 步骤验证 ---------- */
 
   const canProceedStep0 = selectedDeviceSns.length > 0
-  const canProceedStep1 = enabledParamCount > 0
+  const canProceedStep1 = !targetsQuery.isError && !targetsQuery.isFetching &&
+    enabledParamCount > 0 && activeFields.every((field) => isBatchValueValid(field, paramValues[field.param_key]))
+  const appliedCount = executeResults.filter((item) => item.status === 'applied').length
+  const failedCount = executeResults.filter((item) => item.status === 'failed').length
+  const incompleteCount = executeResults.length - appliedCount - failedCount
+  const fieldGroups = [...new Set(fields.map((field) => field.group_code))]
 
   /* ---------- 设备表格列定义 ---------- */
 
@@ -397,10 +382,7 @@ const BatchSettingsPage: React.FC = () => {
         const keys = Object.keys(record.parameters)
         return (
           <Space size={[0, 4]} wrap>
-            {keys.slice(0, 4).map((k) => {
-              const cfg = PARAMETER_CONFIGS.find((p) => p.key === k)
-              return <Tag key={k}>{cfg ? t(cfg.labelKey) : k}</Tag>
-            })}
+            {keys.slice(0, 4).map((key) => <Tag key={key}>{fieldLabel(key)}</Tag>)}
             {keys.length > 4 && <Tag>+{keys.length - 4}</Tag>}
           </Space>
         )
@@ -413,7 +395,7 @@ const BatchSettingsPage: React.FC = () => {
       render: (_: any, record: BatchHistoryRecord) => (
         <Space>
           <Text style={{ color: '#52c41a' }}>{record.successCount}</Text>
-          <Text>/</Text>
+          <Text style={{ color: '#d48806' }}>{record.incompleteCount}</Text>
           <Text style={{ color: '#ff4d4f' }}>{record.failedCount}</Text>
         </Space>
       ),
@@ -500,21 +482,28 @@ const BatchSettingsPage: React.FC = () => {
         showIcon
         style={{ marginBottom: 16 }}
       />
+      {targetsQuery.isFetching && <Spin style={{ marginBottom: 12 }} />}
+      {targetsQuery.isError && (
+        <QueryErrorAlert error={targetsQuery.error} onRetry={() => void targetsQuery.refetch()} />
+      )}
+      {!targetsQuery.isPending && !targetsQuery.isError && !fields.length &&
+        <Alert type="warning" showIcon message={t('batch.noCommonSettings')} />}
       <Row gutter={[16, 16]}>
-        {PARAM_CATEGORY_KEYS.map((categoryKey) => (
-          <Col xs={24} md={12} key={categoryKey}>
+        {fieldGroups.map((group) => (
+          <Col xs={24} md={12} key={group}>
             <Card
               size="small"
-              title={t(categoryKey)}
+              title={t(`remote.schema.${group}`)}
               bordered={false}
               style={{ height: '100%', borderRadius: 12 }}
               styles={{ body: { padding: '12px' } }}
             >
-              {PARAMETER_CONFIGS.filter((p) => p.categoryKey === categoryKey).map((param) => {
-                const isEnabled = !!enabledParams[param.key]
+              {fields.filter((field) => field.group_code === group).map((field) => {
+                const key = field.param_key
+                const isEnabled = !!enabledParams[key]
                 return (
                   <div
-                    key={param.key}
+                    key={key}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -528,32 +517,34 @@ const BatchSettingsPage: React.FC = () => {
                         <Switch
                           size="small"
                           checked={isEnabled}
-                          onChange={() => toggleParam(param.key)}
+                          onChange={() => toggleParam(key)}
                         />
-                        <Text strong={isEnabled}>{t(param.labelKey)}</Text>
-                        {param.unit && <Text type="secondary">({param.unit})</Text>}
+                        <Text strong={isEnabled}>{fieldLabel(key, field.display_name_key)}</Text>
+                        {field.unit && <Text type="secondary">({field.unit})</Text>}
                       </Space>
                     </div>
                     <div style={{ width: 160, textAlign: 'right' }}>
-                      {param.type === 'number' ? (
+                      {field.control_type === 'number' ? (
                         <InputNumber
                           size="small"
                           style={{ width: '100%' }}
-                          min={param.min}
-                          max={param.max}
-                          step={param.step}
-                          value={paramValues[param.key] as number}
-                          onChange={(v) => setParamValue(param.key, v)}
+                          min={field.min ?? undefined}
+                          max={field.max ?? undefined}
+                          step={field.step ?? undefined}
+                          value={paramValues[key] as number | undefined}
+                          onChange={(v) => setParamValue(key, v ?? undefined)}
                           disabled={!isEnabled}
-                          placeholder={`${param.min ?? 0} ~ ${param.max ?? 100}`}
                         />
                       ) : (
-                        <Switch
-                          checked={!!paramValues[param.key]}
-                          onChange={(v) => setParamValue(param.key, v)}
+                        <Select
+                          size="small"
+                          style={{ width: '100%' }}
+                          value={paramValues[key] === undefined ? undefined : Number(paramValues[key])}
+                          onChange={(value: number) => setParamValue(key, field.control_type === 'boolean' ? Boolean(value) : value)}
                           disabled={!isEnabled}
-                          checkedChildren={t('common.on')}
-                          unCheckedChildren={t('common.off')}
+                          options={field.control_type === 'boolean'
+                            ? [{ value: 1, label: t('batch.on') }, { value: 0, label: t('batch.off') }]
+                            : Object.entries(field.enum_map ?? {}).map(([value, label]) => ({ value: Number(value), label: enumLabel(label) }))}
                         />
                       )}
                     </div>
@@ -571,18 +562,19 @@ const BatchSettingsPage: React.FC = () => {
     <Card bordered={false} style={{ borderRadius: 12 }}>
       {executeDone ? (
         <Result
-          status={executeResults.every((r) => r.success) ? 'success' : executeResults.some((r) => r.success) ? 'warning' : 'error'}
+          status={incompleteCount > 0 || (appliedCount > 0 && failedCount > 0) ? 'warning' : failedCount > 0 ? 'error' : 'success'}
           title={
-            executeResults.every((r) => r.success)
+            failedCount === 0 && incompleteCount === 0
               ? t('batch.batchSetComplete')
-              : executeResults.some((r) => r.success)
+              : appliedCount > 0 || incompleteCount > 0
                 ? t('batch.batchSetPartial')
                 : t('batch.batchSetFailed')
           }
           subTitle={t('batch.batchSetResult', {
-            total: selectedDeviceSns.length,
-            success: executeResults.filter((r) => r.success).length,
-            failed: executeResults.filter((r) => !r.success).length,
+            total: executeResults.length,
+            success: appliedCount,
+            failed: failedCount,
+            incomplete: incompleteCount,
           })}
           extra={[
             <Button type="primary" key="again" onClick={handleReset}>
@@ -615,22 +607,38 @@ const BatchSettingsPage: React.FC = () => {
             rowKey="sn"
             size="small"
             pagination={false}
-            dataSource={executeResults.map((r, i) => ({ ...r, key: i }))}
+            dataSource={executeResults}
             columns={[
               { title: t('batch.resultDeviceSN'), dataIndex: 'sn', key: 'sn', width: 160 },
               {
                 title: t('batch.resultStatus'),
-                dataIndex: 'success',
-                key: 'success',
-                width: 100,
-                render: (v: boolean) =>
-                  v ? (
-                    <Tag icon={<CheckCircleOutlined />} color="success">{t('batch.resultSuccess')}</Tag>
-                  ) : (
-                    <Tag icon={<CloseCircleOutlined />} color="error">{t('batch.resultFailed')}</Tag>
-                  ),
+                dataIndex: 'status',
+                key: 'status',
+                width: 140,
+                render: (status: DeviceBatchResult['status']) => (
+                  <Tag color={status === 'applied' ? 'success' : status === 'failed' ? 'error' : 'warning'}>
+                    {t(`batch.device.${status}`)}
+                  </Tag>
+                ),
               },
-              { title: t('batch.resultMessage'), dataIndex: 'message', key: 'message' },
+              {
+                title: t('batch.resultMessage'),
+                key: 'tasks',
+                render: (_, result) => (
+                  <Space direction="vertical" size={4}>
+                    {result.tasks.map((task) => (
+                      <Space key={task.key} wrap>
+                        <Text>{fieldLabel(task.key)} · {t(`batch.task.${task.state}`)}</Text>
+                        <Text type="secondary">{t('remote.targetValue')} · {formatValue(task.key, paramValues[task.key])}</Text>
+                        {task.reported !== undefined &&
+                          <Text type="secondary">{t('batch.reportedValue')} · {formatValue(task.key, task.reported)}</Text>}
+                        {task.taskId && <Text copyable>{task.taskId}</Text>}
+                        {task.message && <Text type="secondary">{task.message}</Text>}
+                      </Space>
+                    ))}
+                  </Space>
+                ),
+              },
             ]}
             scroll={{ x: 500 }}
           />
@@ -646,10 +654,12 @@ const BatchSettingsPage: React.FC = () => {
       title={t('batch.confirmTitle')}
       open={confirmVisible}
       onOk={handleExecute}
-      onCancel={() => setConfirmVisible(false)}
+      onCancel={() => { if (!executing) setConfirmVisible(false) }}
       okText={t('batch.confirmExecute')}
       cancelText={t('batch.cancel')}
-      okButtonProps={{ danger: true, icon: <SendOutlined /> }}
+      confirmLoading={executing}
+      cancelButtonProps={{ disabled: executing }}
+      okButtonProps={{ danger: true, icon: <SendOutlined />, disabled: !canProceedStep1 }}
       width={800}
     >
       <Alert
@@ -675,14 +685,6 @@ const BatchSettingsPage: React.FC = () => {
       />
     </Modal>
   )
-
-  /* ---------- 步骤配置 ---------- */
-
-  const steps = [
-    { title: t('batch.step1'), description: t('batch.step1Desc') },
-    { title: t('batch.step2'), description: t('batch.step2Desc') },
-    { title: t('batch.step3'), description: t('batch.step3Desc') },
-  ]
 
   const queryFailure = stationsError
     ? { error: stationsError, retry: refetchStations }
@@ -739,13 +741,15 @@ const BatchSettingsPage: React.FC = () => {
           <Col>
             <Space>
               {currentStep === 0 && (
-                <Button
-                  type="primary"
-                  disabled={!canProceedStep0}
-                  onClick={() => setCurrentStep(1)}
-                >
-                  {t('batch.nextStep')}
-                </Button>
+                <Tooltip title={!canControlDevices ? t('batch.noControlPermission') : undefined}>
+                  <Button
+                    type="primary"
+                    disabled={!canProceedStep0 || !canControlDevices}
+                    onClick={() => setCurrentStep(1)}
+                  >
+                    {t('batch.nextStep')}
+                  </Button>
+                </Tooltip>
               )}
               {currentStep === 1 && (
                 <Tooltip title={!canControlDevices ? t('batch.noControlPermission') : undefined}>

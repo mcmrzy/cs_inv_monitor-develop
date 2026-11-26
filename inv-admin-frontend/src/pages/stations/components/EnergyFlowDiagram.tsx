@@ -6,7 +6,7 @@ interface EnergyFlowDiagramProps {
   pvPower: number;
   loadPower: number;
   battPower: number;
-  gridPower: number;
+  gridPower: number | null;
   battSoc: number;
   // 发电机功率（可选：CS-L10-6K2 等带发电机输入的型号上报时有值，否则路径隐藏）
   genPower?: number;
@@ -39,7 +39,7 @@ const NODE_COLORS: Record<string, string> = {
   pv: '#F59E0B',
   battery: '#22C55E',
   inverter: '#8B5CF6',
-  grid: '#94A3B8',
+  grid: '#8B5CF6',
   load: '#3B82F6',
   gen: '#F97316',
 };
@@ -53,7 +53,8 @@ const getNodes = (t: (key: string) => string): NodeConfig[] => [
   { type: 'load', x: 300, y: 465, color: NODE_COLORS.load, label: t('station.load'), image: '/images/energy-flow/load.jpg' },
 ];
 
-function formatPower(w: number): string {
+function formatPower(w: number | null): string {
+  if (w == null) return '--';
   const abs = Math.abs(Math.round(w));
   if (abs >= 1000) return `${(abs / 1000).toFixed(1)}kW`;
   return `${abs}W`;
@@ -135,25 +136,15 @@ function computeFlowEdges(
     markerId: 'arrow-batt',
   });
 
-  // 5. Grid → Inverter (straight, right to center) — consuming
+  // One physical AC connection; reverse its direction for measured export.
+  const exporting = gridPower < -MIN_FLOW_W;
   edges.push({
     id: 'grid-inv',
-    path: 'M 470 265 L 350 265',
+    path: exporting ? 'M 350 275 L 470 275' : 'M 470 275 L 350 275',
     color: NODE_COLORS.grid,
-    active: bitOn(sysBits?.acInput ?? gridPower > 0, gridPower > 0 ? gridPower : 0),
-    power: gridPower > 0 ? gridPower : 0,
+    active: Math.abs(gridPower) > MIN_FLOW_W,
+    power: Math.abs(gridPower),
     markerId: 'arrow-grid',
-  });
-
-  // 6. Inverter → Grid (straight, center to right) — feeding
-  // 无专用状态位（协议未定义馈电位），始终按功率方向驱动
-  edges.push({
-    id: 'inv-grid',
-    path: 'M 350 285 L 470 285',
-    color: NODE_COLORS.inverter,
-    active: gridPower < 0 && Math.abs(gridPower) > 0,
-    power: gridPower < 0 ? Math.abs(gridPower) : 0,
-    markerId: 'arrow-inv',
   });
 
   return edges;
@@ -176,11 +167,11 @@ const svgAnimations = `
 
 const FlowNode: React.FC<{
   node: NodeConfig;
-  power: number;
+  power: number | null;
   extra?: string;
 }> = React.memo(({ node, power, extra }) => {
   const { x, y, label, type, image } = node;
-  const displayPower = type === 'battery' && power < 0 ? Math.abs(power) : power;
+  const displayPower = power;
 
   const imgSize = 100;
   // Position category: 'top' = text above (battery/grid), 'topright' = text top-right (inverter), 'right' = text right (pv/load)
@@ -417,7 +408,7 @@ const EnergyFlowDiagram: React.FC<EnergyFlowDiagramProps> = ({
   const NODES = useMemo(() => getNodes(t), [t]);
 
   const edges = useMemo(
-    () => computeFlowEdges(pvPower, loadPower, battPower, gridPower, genPower, sysBits),
+    () => computeFlowEdges(pvPower, loadPower, battPower, gridPower ?? 0, genPower, sysBits),
     [pvPower, loadPower, battPower, gridPower, genPower, sysBits],
   );
 
@@ -445,7 +436,7 @@ const EnergyFlowDiagram: React.FC<EnergyFlowDiagramProps> = ({
       Math.max(pvPower, 0) +
       Math.max(genPower, 0) +
       (battPower < 0 ? Math.abs(battPower) : 0) +
-      (gridPower > 0 ? gridPower : 0);
+      Math.max(gridPower ?? 0, 0);
     return sources;
   }, [pvPower, genPower, battPower, gridPower]);
 
@@ -476,7 +467,7 @@ const EnergyFlowDiagram: React.FC<EnergyFlowDiagramProps> = ({
 
         {/* Nodes */}
         {NODES.map((node) => {
-          let power = 0;
+          let power: number | null = 0;
           let extra: string | undefined;
 
           switch (node.type) {
@@ -501,6 +492,9 @@ const EnergyFlowDiagram: React.FC<EnergyFlowDiagramProps> = ({
               break;
             case 'grid':
               power = gridPower;
+              if (gridPower != null && Math.abs(gridPower) > 5) {
+                extra = t(gridPower > 0 ? 'station.gridImport' : 'station.gridExport');
+              }
               break;
             case 'load':
               power = loadPower;

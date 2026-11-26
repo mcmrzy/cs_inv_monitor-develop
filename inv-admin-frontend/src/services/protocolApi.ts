@@ -62,6 +62,7 @@ export interface AlarmEvent {
   station_id?: number
   source: number
   code: string
+  fault_message?: string
   level: number
   state: string
   active_at?: string

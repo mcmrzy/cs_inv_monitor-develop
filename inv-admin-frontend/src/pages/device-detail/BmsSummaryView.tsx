@@ -8,6 +8,7 @@ import useTimezoneStore from '@/stores/timezoneStore'
 import { formatInTimezone } from '@/utils/timezone'
 import { bmsAvailability, cellExtrema, summaryFlags, summaryNumber, summaryTimestamp,
   summaryWord, SUMMARY_FIELDS, type BmsSummary, type SummaryFlag } from './bmsSummary'
+import StorageBatteryVisual from './StorageBatteryVisual'
 import './bmsSummary.css'
 
 interface Props { summary: BmsSummary; loading?: boolean; error?: unknown; onRefresh: () => void }
@@ -66,6 +67,7 @@ export default function BmsSummaryView({ summary, loading = false, error, onRefr
     return value !== null && value >= 0 && value <= 100 ? value : null
   }
   const soc = percentage('soc')
+  const batteryCount = n('battery_count')
   const date = (value: unknown) => summaryTimestamp(value) === null ? '--' : formatInTimezone(String(value), timezone, 'YYYY-MM-DD HH:mm:ss')
   const historical = !live ? `${s('historical')} · ` : ''
   const bitName = (flag: SummaryFlag) => {
@@ -178,7 +180,7 @@ export default function BmsSummaryView({ summary, loading = false, error, onRefr
     {error != null && <Alert className="cmd08-fetch-error" type="warning" showIcon message={s('refreshError')} action={<Button size="small" onClick={onRefresh}>{s('retry')}</Button>} />}
     <nav className="cmd08-navigation" aria-label={s('title')}>
       {([{ key: 'overview', icon: <DashboardOutlined /> }, { key: 'cells', icon: <AppstoreOutlined /> }, { key: 'diagnostics', icon: <SafetyOutlined /> }] as const).map(item =>
-        <button key={item.key} aria-label={s(item.key)} aria-pressed={view === item.key} className={view === item.key ? 'active' : ''} onClick={() => setView(item.key)}>{item.icon}{s(item.key)}</button>)}
+        <button key={item.key} aria-label={s(item.key)} aria-pressed={view === item.key} className={view === item.key ? 'active' : ''} onClick={() => setView(item.key)}>{item.icon}<span className="cmd08-navigation-label">{s(item.key)}</span></button>)}
     </nav>
     {!live && <div className="cmd08-notice"><DisconnectOutlined /><div><strong>{stateLabel}</strong><span>{s('historicalOnly')}</span></div></div>}
     {live && flags.activeCount > 0 && <div className={`cmd08-notice ${flags.protection.active.length || flags.fault.active.length ? 'danger' : 'warning'}`}><WarningOutlined /><div>
@@ -186,10 +188,9 @@ export default function BmsSummaryView({ summary, loading = false, error, onRefr
     <Spin spinning={loading}>
       {view === 'overview' && <section className="cmd08-summary">
         <div className="cmd08-soc"><div className="cmd08-muted cmd08-label">{s('soc')} <Tooltip title={s('provisional')}><InfoCircleOutlined tabIndex={0} aria-label={s('provisional')} /></Tooltip></div>
-          <div className="cmd08-soc-number">{display(soc, 1)}{soc !== null && <span>%</span>}</div>
-          <div className="cmd08-meter" role="meter" aria-label="SOC" aria-valuemin={0} aria-valuemax={100} aria-valuenow={soc ?? undefined} aria-valuetext={soc === null ? s('unavailable') : `${soc}%`}><div style={{ width: `${soc ?? 0}%` }} /></div>
+          <StorageBatteryVisual soc={soc} unavailableLabel={s('unavailable')} />
           <div className="cmd08-soc-footer"><span>{live ? flags.operations.active.filter(flag => flag.bit === 8 || flag.bit === 9).map(bitName).join(' · ') || s('noState') : stateLabel}</span>
-            <span className="cmd08-muted">{live ? s('packCount', { count: summaryNumber(v.battery_count) ?? 0 }) : '--'}</span></div>
+            <span className="cmd08-muted">{batteryCount === null ? '--' : s('packCount', { count: batteryCount })}</span></div>
         </div><div className="cmd08-summary-metrics"><Metric label={b('packVoltage')} value={display(n('voltage'), 2)} unit="V" />
           <Metric label={b('current')} value={display(n('current'), 2)} unit="A" subtle={live ? b('chgPositive') : undefined} />
           <Metric label={<>{s('soh')} <Tooltip title={s('provisional')}><InfoCircleOutlined tabIndex={0} /></Tooltip></>} value={display(percentage('soh'), 1)} unit="%" />

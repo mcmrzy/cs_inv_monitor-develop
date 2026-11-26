@@ -30,7 +30,7 @@ describe('DeviceSelector 缓存形状防御', () => {
 
     expect(() =>
       renderWithProviders(
-        <DeviceSelector selectedSn={null} onDeviceChange={() => undefined} onRead={() => undefined} reading={false} />,
+        <DeviceSelector selectedSn={null} onDeviceChange={() => undefined} />,
         { queryClient },
       ),
     ).not.toThrow()
@@ -42,7 +42,7 @@ describe('DeviceSelector 缓存形状防御', () => {
 
     expect(() =>
       renderWithProviders(
-        <DeviceSelector selectedSn={null} onDeviceChange={() => undefined} onRead={() => undefined} reading={false} />,
+        <DeviceSelector selectedSn={null} onDeviceChange={() => undefined} />,
         { queryClient },
       ),
     ).not.toThrow()
@@ -53,7 +53,7 @@ describe('DeviceSelector 缓存形状防御', () => {
     queryClient.setQueryData(['stations', 'all'], [{ id: 1, name: '测试电站' }] as any)
 
     const { container } = renderWithProviders(
-      <DeviceSelector selectedSn={null} onDeviceChange={() => undefined} onRead={() => undefined} reading={false} />,
+      <DeviceSelector selectedSn={null} onDeviceChange={() => undefined} />,
       { queryClient },
     )
     // 两个选择器（电站 + 设备）均正常渲染
