@@ -1,10 +1,11 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, onTestFinished, vi } from 'vitest'
 import { screen, waitFor, fireEvent } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { server } from '@/test/mocks/server'
 import { renderAsAdmin, renderWithProviders } from '@/test/test-utils'
 import { mockManagerUser } from '@/test/mocks/data'
 import { API_BASE } from '@/utils/urls'
+import { otaApi } from '@/services/otaApi'
 import OtaPage from './index'
 
 describe('OtaPage', () => {
@@ -37,6 +38,66 @@ describe('OtaPage', () => {
     expect(body).not.toContain('name="hardware_versions"')
     expect(body).toContain('name="model"')
   })
+
+  it('uses one file for multiple models and retries only the failed model', async () => {
+    const uploads: Array<{ model: string; chip: string }> = []
+    const file = new File(['bytes'], 'shared.bin')
+    const uploadFirmware = vi.spyOn(otaApi, 'uploadFirmware')
+    onTestFinished(() => { uploadFirmware.mockRestore() })
+    server.use(
+      http.get(`${API_BASE}/ota/firmware`, () => HttpResponse.json({ code: 0, data: [
+        { id: '901', model: '6KU', target_chip: 'esp', version: '1.0', release_status: 'published' },
+        { id: '902', model: '12KU', target_chip: 'esp', version: '1.0', release_status: 'published' },
+      ] })),
+      http.post(`${API_BASE}/ota/firmware`, async ({ request }) => {
+        const body = await request.text()
+        const model = body.match(/name="model"\r?\n\r?\n([^\r\n]+)/)?.[1] ?? ''
+        uploads.push({
+          model,
+          chip: body.match(/name="target_chip"\r?\n\r?\n([^\r\n]+)/)?.[1] ?? '',
+        })
+        if (model === '12KU' && uploads.filter((upload) => upload.model === model).length === 1) {
+          return HttpResponse.json({ code: 500, message: '临时上传错误' })
+        }
+        return HttpResponse.json({ code: 0, data: { version: '2.0', target_chip: 'esp' } })
+      }),
+    )
+    renderAsAdmin(<OtaPage />, { routerProps: { initialEntries: ['/ota?tab=firmware'] } })
+    fireEvent.click(await screen.findByRole('button', { name: /上传固件/ }))
+    const dialog = await screen.findByRole('dialog')
+    const [modelSelect, chipSelect] = dialog.querySelectorAll('[role="combobox"]')
+    fireEvent.mouseDown(modelSelect)
+    for (const model of ['6KU', '12KU']) {
+      fireEvent.click(await screen.findByText(model, { selector: '.ant-select-item-option-content' }))
+    }
+    fireEvent.mouseDown(chipSelect)
+    fireEvent.click(await screen.findByText('通信采集（ESP）', { selector: '.ant-select-item-option-content' }))
+    fireEvent.change(dialog.querySelector('input[type="file"]')!, {
+      target: { files: [file] },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /确.*定/ }))
+
+    expect(await screen.findByText(/12KU.*临时上传错误/)).toBeInTheDocument()
+    expect(uploads).toEqual([
+      { model: '6KU', chip: 'esp' },
+      { model: '12KU', chip: 'esp' },
+    ])
+    expect(dialog.querySelector('.ant-select-selection-item[title="6KU"]')).toBeNull()
+    expect(dialog.querySelector('.ant-select-selection-item[title="12KU"]')).toBeInTheDocument()
+    expect(screen.getByText('shared.bin')).toBeInTheDocument()
+
+    const retry = screen.getByRole('button', { name: /确.*定/ })
+    await waitFor(() => expect(retry).not.toHaveClass('ant-btn-loading'))
+    fireEvent.click(retry)
+    await waitFor(() => expect(uploads).toHaveLength(3))
+    expect(await screen.findByText(/固件上传成功.*2\.0/)).toBeInTheDocument()
+    expect(uploads.map(({ model }) => model)).toEqual(['6KU', '12KU', '12KU'])
+    expect(uploadFirmware).toHaveBeenCalledTimes(3)
+    for (const [data] of uploadFirmware.mock.calls) {
+      expect(data.get('file')).toBe(file)
+    }
+  })
+
   it('creates a task without hardware profiles while honoring server exclusions', async () => {
     let submitted: unknown
     server.use(

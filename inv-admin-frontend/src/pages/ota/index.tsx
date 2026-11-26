@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
-import { buildFirmwareUploadFormData } from './firmwareUpload'
+import { buildFirmwareUploadFormData, type FirmwareUploadInput } from './firmwareUpload'
 import {
   Tabs,
   Button,
@@ -55,7 +55,7 @@ import {
 } from '@ant-design/icons'
 import type { ProColumns } from '@ant-design/pro-components'
 import { ProTable, ProCard } from '@ant-design/pro-components'
-import type { UploadProps } from 'antd'
+import type { UploadFile, UploadProps } from 'antd'
 import { otaApi, createOtaIdempotencyKey } from '@/services/otaApi'
 import { modelApi } from '@/services/modelApi'
 import { queryKeys } from '@/utils/queryKeys'
@@ -91,10 +91,14 @@ function formatFileSize(bytes: number): string {
 }
 
 interface FirmwareFormValues {
-  model: string
+  model: string[]
   targetChip: string
-  version: string
   changelog: string
+}
+
+interface FirmwareUploadResult {
+  succeeded: number
+  failed: Array<{ model: string; reason: string }>
 }
 
 // =================== 任务状态映射 ===================
@@ -959,8 +963,8 @@ const FirmwareTab: React.FC = () => {
   const [modelFilter, setModelFilter] = useState<string>()
   const [chipFilter, setChipFilter] = useState<string>()
   const [uploadOpen, setUploadOpen] = useState(false)
-  const [uploading, setUploading] = useState(false)
-  const [fileList, setFileList] = useState<any[]>([])
+  const [fileList, setFileList] = useState<UploadFile[]>([])
+  const [uploadResult, setUploadResult] = useState<FirmwareUploadResult | null>(null)
   const [form] = Form.useForm<FirmwareFormValues>()
   const [publishOpen, setPublishOpen] = useState(false)
   const [publishTarget, setPublishTarget] = useState<Firmware | null>(null)
@@ -1016,11 +1020,41 @@ const FirmwareTab: React.FC = () => {
     }),
   })
 
+  const closeUpload = () => {
+    setUploadOpen(false)
+    form.resetFields()
+    setFileList([])
+    setUploadResult(null)
+  }
+
   const uploadMutation = useMutation({
-    mutationFn: (formData: FormData) => otaApi.uploadFirmware(formData),
-    onSuccess: (res: any) => {
-      const created = res?.data?.data
-      if (created?.version) {
+    mutationFn: async ({ models, ...input }: Omit<FirmwareUploadInput, 'model'> & { models: string[] }) => {
+      const result: FirmwareUploadResult = { succeeded: 0, failed: [] }
+      let created: Pick<Firmware, 'version' | 'target_chip' | 'file_size' | 'file_sha256'> | undefined
+      for (const model of models) {
+        try {
+          const res = await otaApi.uploadFirmware(buildFirmwareUploadFormData({ ...input, model }))
+          created = res.data?.data
+          result.succeeded++
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : t('ota.firmwareUploadFailed')
+          result.failed.push({ model, reason })
+        }
+      }
+      return { result, created }
+    },
+    onSuccess: ({ result, created }) => {
+      if (result.succeeded > 0) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.ota.all })
+      }
+      if (result.failed.length > 0) {
+        setUploadResult(result)
+        form.setFieldValue('model', result.failed.map(({ model }) => model))
+        return
+      }
+      if (result.succeeded > 1) {
+        message.success(t('ota.firmwareUploadBatchSuccess', { count: result.succeeded }))
+      } else if (created?.version) {
         message.success(
           t('ota.firmwareUploadDetail', {
             chip: firmwareModuleLabel(created.target_chip, t),
@@ -1032,13 +1066,8 @@ const FirmwareTab: React.FC = () => {
       } else {
         message.success(t('ota.firmwareUploadSuccess'))
       }
-      setUploadOpen(false); form.resetFields(); setFileList([])
-      queryClient.invalidateQueries({ queryKey: queryKeys.ota.all })
+      closeUpload()
     },
-    onError: (err: any) => {
-      message.error(err?.response?.data?.message || err?.message || t('ota.firmwareUploadFailed'))
-    },
-    onSettled: () => setUploading(false),
   })
 
   const deleteMutation = useMutation({
@@ -1079,19 +1108,21 @@ const FirmwareTab: React.FC = () => {
   })
 
   const handleUpload = async () => {
-    try {
-      const values = await form.validateFields()
-      if (fileList.length === 0) { message.warning(t('ota.pleaseSelectFirmware')); return }
-      setUploading(true)
-      const modelValue = Array.isArray(values.model) ? values.model[0] : values.model
-      const formData = buildFirmwareUploadFormData({
-        file: fileList[0].originFileObj,
-        model: modelValue,
-        targetChip: values.targetChip,
-        changelog: values.changelog,
-      })
-      uploadMutation.mutate(formData)
-    } catch { setUploading(false) }
+    if (uploadMutation.isPending) return
+    const values = await form.validateFields().catch(() => null)
+    if (!values) return
+    const file = fileList[0]?.originFileObj
+    if (!file) {
+      message.warning(t('ota.pleaseSelectFirmware'))
+      return
+    }
+    const models = [...new Set(values.model.map((model) => model.trim()).filter(Boolean))]
+    if (models.length === 0) {
+      form.setFields([{ name: 'model', errors: [t('ota.pleaseSelectOrInputModel')] }])
+      return
+    }
+    setUploadResult(null)
+    uploadMutation.mutate({ file, models, targetChip: values.targetChip, changelog: values.changelog })
   }
 
   const modelOptions = useMemo(() => {
@@ -1281,11 +1312,30 @@ const FirmwareTab: React.FC = () => {
       />
 
       <Modal title={t('ota.uploadFirmwareTitle')} open={uploadOpen}
-        onCancel={() => { setUploadOpen(false); form.resetFields(); setFileList([]) }}
-        onOk={handleUpload} confirmLoading={uploading} destroyOnClose width={560}>
-        <Form form={form} layout="vertical">
+        onCancel={() => { if (!uploadMutation.isPending) closeUpload() }}
+        onOk={handleUpload} confirmLoading={uploadMutation.isPending}
+        cancelButtonProps={{ disabled: uploadMutation.isPending }}
+        closable={!uploadMutation.isPending} maskClosable={!uploadMutation.isPending}
+        keyboard={!uploadMutation.isPending} destroyOnClose width={560}>
+        {uploadResult && (
+          <Alert
+            type={uploadResult.succeeded > 0 ? 'warning' : 'error'}
+            showIcon
+            style={{ marginBottom: 16 }}
+            message={t('ota.firmwareUploadBatchResult', {
+              succeeded: uploadResult.succeeded,
+              failed: uploadResult.failed.length,
+            })}
+            description={
+              <ul style={{ margin: 0, paddingInlineStart: 20 }}>
+                {uploadResult.failed.map(({ model, reason }) => <li key={model}>{model} · {reason}</li>)}
+              </ul>
+            }
+          />
+        )}
+        <Form form={form} layout="vertical" disabled={uploadMutation.isPending}>
           <Form.Item name="model" label={t('ota.model')} rules={[{ required: true, message: t('ota.pleaseSelectOrInputModel') }]}>
-            <Select showSearch allowClear mode="tags" maxCount={1} placeholder={t('ota.selectOrInputModel')} options={modelOptions}
+            <Select showSearch allowClear mode="tags" placeholder={t('ota.selectOrInputModel')} options={modelOptions}
               filterOption={(input, option) => (option?.label as string)?.toLowerCase().includes(input.toLowerCase())} />
           </Form.Item>
           <Form.Item name="targetChip" label={t('ota.module')} rules={[{ required: true, message: t('ota.pleaseSelectTargetChip') }]}>
@@ -1299,7 +1349,7 @@ const FirmwareTab: React.FC = () => {
           </Form.Item>
           <Form.Item name="changelog" label={t('ota.changelog')}><TextArea rows={3} placeholder={t('ota.inputChangelog')} /></Form.Item>
           <Form.Item label={t('ota.firmwareFile')}>
-            <Dragger {...uploadProps}>
+            <Dragger {...uploadProps} disabled={uploadMutation.isPending}>
               <p className="ant-upload-drag-icon"><InboxOutlined /></p>
               <p className="ant-upload-text">{t('ota.dragFirmware')}</p>
               <p className="ant-upload-hint">{t('ota.firmwareFormat')}</p>
