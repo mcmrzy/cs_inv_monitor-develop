@@ -151,6 +151,9 @@ func main() {
 			mqttClient.SetBindingQueryHandler(bindingService.Enqueue)
 			logger.Info("Signed binding state responder enabled", zap.Int("key_id", 1))
 		}
+		catalogService := service.NewFirmwareCatalogService(cfg.Backends.APIServer, cfg.Backends.InternalKey, mqttClient)
+		catalogService.Start(ctx)
+		mqttClient.SetPanelQueryHandler(catalogService.Enqueue)
 		if err := mqttClient.Connect(ctx); err != nil {
 			logger.Fatal("Failed to connect MQTT", zap.Error(err))
 		}

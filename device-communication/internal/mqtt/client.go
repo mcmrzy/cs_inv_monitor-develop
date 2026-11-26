@@ -35,6 +35,7 @@ type Client struct {
 	onCmdResult    func(sn string, payload []byte)
 	onAlarm        func(sn string, payload []byte)
 	onBindingQuery func(sn string, payload []byte) bool
+	onPanelQuery   func(sn string, payload []byte) bool
 }
 
 // DeviceStateUpdater abstracts the device state manager for the MQTT layer.
@@ -408,6 +409,9 @@ func (c *Client) Connect(ctx context.Context) error {
 			OnPublishReceived: []func(paho.PublishReceived) (bool, error){
 				func(pr paho.PublishReceived) (bool, error) {
 					topic := pr.Packet.Topic
+					if c.dispatchPanelRPC(topic, pr.Packet.Payload, pr.Packet.Retain) {
+						return true, nil
+					}
 					if c.dispatchBinding(topic, pr.Packet.Payload) {
 						return true, nil
 					}
