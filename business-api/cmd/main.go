@@ -937,6 +937,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		internal.POST("/three-phase", internalHandler.IngestThreePhaseV1)
 		internal.POST("/ota-status", internalHandler.OTAStatus)
 		internal.POST("/ota-cmd-ack", internalHandler.OTACmdAck)
+		internal.POST("/ota-catalog", internalHandler.PanelOTACatalog)
 	}
 
 	// 固件文件下载（无需认证，设备直接访问 /firmware/xxx.bin）
