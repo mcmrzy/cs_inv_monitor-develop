@@ -6,6 +6,7 @@ import 'package:inv_app/core/config/app_config.dart';
 import 'package:inv_app/core/services/app_update_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/core/widgets/app_update_flow.dart';
 import 'package:inv_app/core/widgets/settings_widgets.dart';
@@ -204,19 +205,13 @@ class _AboutEnergyHero extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 44.w,
-                height: 44.w,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(14.r),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.22),
-                  ),
-                ),
-                child: const Icon(
-                  Icons.solar_power_rounded,
-                  color: Colors.white,
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10.r),
+                child: Image.asset(
+                  CsergyAssets.appIcon,
+                  width: 52.w,
+                  height: 52.w,
+                  excludeFromSemantics: true,
                 ),
               ),
               SizedBox(height: 28.h),

@@ -17,6 +17,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:inv_app/features/auth/presentation/pages/auth_page.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
@@ -105,6 +106,13 @@ void main() {
     );
     // 首帧布局 + 固定推进到呼吸动画 100ms 相位（确定性截图）。
     await tester.pump(const Duration(milliseconds: 100));
+    await tester.runAsync(
+      () => precacheImage(
+        const AssetImage(CsergyAssets.brandLogoLight),
+        tester.element(find.byType(AuthPage)),
+      ),
+    );
+    await tester.pump();
 
     await expectLater(
       find.byType(AuthPage),

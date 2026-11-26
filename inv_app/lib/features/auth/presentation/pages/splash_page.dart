@@ -179,36 +179,52 @@ class _SplashPageState extends State<SplashPage> {
         }
       },
       child: Scaffold(
-        // 底色纯白与系统启动屏（白底+CSERGY logo）无缝衔接；开屏图解码完成即覆盖
-        backgroundColor: const Color(0xFFFFFFFF),
-        body: Stack(
-          children: [
-            // 品牌开屏完整图（用户设计稿：品牌字标/小烁/底座一体画面，全屏展示）
-            // contain：横幅图（1441×513 超宽）竖屏完整显示、上下留白，不裁切
-            Positioned.fill(
-              child: IgnorePointer(
-                child: Image.asset(
-                  CsergyAssets.bgSplash,
-                  fit: BoxFit.contain,
+        backgroundColor: const Color(0xFFCEE7FA),
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            final artworkWidth = constraints.maxWidth
+                .clamp(0.0, constraints.maxHeight * 0.6)
+                .toDouble();
+            return Center(
+              child: SizedBox(
+                width: artworkWidth,
+                height: constraints.maxHeight,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.asset(
+                      CsergyAssets.bgSplash,
+                      fit: BoxFit.cover,
+                    ),
+                    Positioned(
+                      top: constraints.maxHeight * 0.11,
+                      left: artworkWidth * 0.18,
+                      right: artworkWidth * 0.18,
+                      child: Image.asset(
+                        CsergyAssets.brandLogoZh,
+                        fit: BoxFit.contain,
+                        semanticLabel: 'CSERGY',
+                      ),
+                    ),
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 48.h,
+                      child: Text(
+                        'V${AppConfig.version}',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 12.sp,
+                          color: const Color(0xFF10284D).withValues(alpha: 0.6),
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-            // 底部版本号（动态读取 AppConfig.version，避免硬编码）
-            Positioned(
-                left: 0,
-                right: 0,
-                bottom: 48.h,
-                child: Text(
-                  'V${AppConfig.version}',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 12.sp,
-                    color: const Color(0xFF10284D).withValues(alpha: 0.4),
-                    letterSpacing: 1.2,
-                  ),
-                ),
-              ),
-          ],
+            );
+          },
         ),
       ),
     );

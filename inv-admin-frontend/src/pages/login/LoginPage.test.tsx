@@ -222,8 +222,10 @@ describe('LoginPage', () => {
   it('should show brand information', () => {
     renderWithProviders(<LoginPage />)
 
-    expect(screen.getByText('CSERGY')).toBeInTheDocument()
-    expect(screen.getByText('辰烁科技')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: '辰烁科技 CSERGY' })).toHaveAttribute(
+      'src',
+      '/csergy-logo-light.png',
+    )
   })
 
   it('should show feature descriptions', () => {

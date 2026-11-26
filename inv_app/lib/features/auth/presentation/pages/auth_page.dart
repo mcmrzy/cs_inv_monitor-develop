@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/services/connection_mode_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/theme/csergy_assets.dart';
 import 'package:inv_app/core/widgets/app_toast.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:inv_app/features/auth/presentation/widgets/login_form.dart';
@@ -217,7 +218,7 @@ class _AuthPageState extends State<AuthPage>
     );
   }
 
-  /// 品牌区：渐变头部 + 品牌名 + 副标语（无 CSERGY）
+  /// 品牌区：渐变头部、官方标识和副标语。
   /// 卖点胶囊沉在头部底部与文字分层；表单卡片上覆盖住头部底部一块。
   /// 注册模式向上缩小收起（高度 260→110、品牌名/副标语/胶囊淡出且不占位），只留渐变条
   Widget _buildBrandHeader() {
@@ -296,7 +297,7 @@ class _AuthPageState extends State<AuthPage>
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // 品牌名（随语言切换：辰烁科技 / CSERGY；注册模式淡出且不占位）
+                  // 注册模式隐藏品牌标识。
                   AnimatedOpacity(
                     opacity: isRegister ? 0 : 1,
                     duration: const Duration(milliseconds: 250),
@@ -304,16 +305,12 @@ class _AuthPageState extends State<AuthPage>
                       visible: !isRegister,
                       maintainState: true,
                       maintainAnimation: true,
-                      child: AnimatedDefaultTextStyle(
-                        duration: const Duration(milliseconds: 350),
-                        curve: Curves.easeInOutCubic,
-                        style: TextStyle(
-                          fontSize: isRegister ? 22.sp : 28.sp,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                          letterSpacing: 1.5,
-                        ),
-                        child: Text(l10n.brandName),
+                      child: Image.asset(
+                        CsergyAssets.brandLogoLight,
+                        width: 172.w,
+                        height: 36.h,
+                        fit: BoxFit.contain,
+                        semanticLabel: l10n.brandName,
                       ),
                     ),
                   ),

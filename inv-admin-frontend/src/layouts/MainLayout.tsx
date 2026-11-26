@@ -302,7 +302,7 @@ const MainLayout: React.FC = () => {
     <>
       <ProLayout
         title={false}
-        logo={<img src="/csergylogo.png" alt="logo" style={{ height: 48, width: 'auto' }} />}
+        logo={<img src="/csergylogo.png?v=20261126" alt="CSERGY" style={{ width: isMobile ? 140 : 184, height: 'auto' }} />}
         layout="mix"
         fixSiderbar
         fixedHeader

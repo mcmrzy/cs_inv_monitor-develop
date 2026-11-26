@@ -1,7 +1,7 @@
 import './big-screen.css'
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { FullscreenOutlined, FullscreenExitOutlined, RocketOutlined, GlobalOutlined } from '@ant-design/icons'
+import { FullscreenOutlined, FullscreenExitOutlined, GlobalOutlined } from '@ant-design/icons'
 import { dashboardApi } from '@/services/dashboardApi'
 import api from '@/services/api'
 import useLocaleStore from '@/stores/localeStore'
@@ -218,7 +218,7 @@ const BigScreenPage: React.FC = () => {
         <div className="bs-header-side" />
         <div className="bs-header-center">
           <span className="bs-header-deco-left" />
-          <RocketOutlined className="bs-header-icon" />
+          <img className="bs-header-icon" src="/csergy-mark.png" alt="" />
           <span className="bs-header-title">{t('bigScreen.title')}</span>
           <span className="bs-header-deco-right" />
         </div>

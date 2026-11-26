@@ -51,7 +51,7 @@ const buildCountryOptions = (lang: Lang) =>
 
 const i18n: Record<Lang, Record<string, string>> = {
   zh: {
-    brand: '辰烁科技', brandSub: 'CSERGY', title: '光伏逆变器\n智能监控平台',
+    brand: '辰烁科技 CSERGY', title: '光伏逆变器\n智能监控平台',
     subtitle: '一站式管理您的光伏逆变器设备',
     f1Title: '云端集中监控', f1Desc: '实时采集设备数据，多电站统一管理',
     f2Title: '远程设备管理', f2Desc: '远程配置与控制，设备状态实时掌握',
@@ -86,7 +86,7 @@ const i18n: Record<Lang, Record<string, string>> = {
     errRequestFailed: '请求失败，请稍后重试',
   },
   en: {
-    brand: 'CHENSHUO', brandSub: 'TECHNOLOGY', title: 'Solar Inverter\nSmart Monitoring Platform',
+    brand: 'CSERGY', title: 'Solar Inverter\nSmart Monitoring Platform',
     subtitle: 'All-in-one inverter management',
     f1Title: 'Cloud Monitoring', f1Desc: 'Real-time data, multi-station management',
     f2Title: 'Remote Device Mgmt', f2Desc: 'Remote config & control, real-time device status',
@@ -571,11 +571,11 @@ const LoginPage: React.FC = () => {
           borderRight: '1px solid rgba(255, 255, 255, 0.1)',
         }}>
           <div style={{ paddingTop: 4 }}>
-            <div style={{ marginBottom: 36 }}>
-              <span style={{ fontSize: 32, fontWeight: 800, color: '#fff', letterSpacing: 2 }}>CSERGY</span>
-              <span style={{ fontSize: 32, fontWeight: 300, color: 'rgba(255,255,255,0.3)', margin: '0 8px' }}>|</span>
-              <span style={{ fontSize: 32, fontWeight: 800, color: '#fff' }}>辰烁科技</span>
-            </div>
+            <img
+              src="/csergy-logo-light.png"
+              alt={t.brand}
+              style={{ display: 'block', width: 260, maxWidth: '100%', height: 'auto', marginBottom: 36, filter: 'drop-shadow(0 2px 8px rgba(15, 23, 42, 0.35))' }}
+            />
 
             <div style={{ fontSize: 42, fontWeight: 700, color: '#fff', lineHeight: 1.25, marginBottom: 40, letterSpacing: '-0.5px', whiteSpace: 'pre-line', textShadow: '0 2px 12px rgba(0,0,0,0.15)' }}>{t.title}</div>
 

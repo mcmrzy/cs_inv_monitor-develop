@@ -95,9 +95,9 @@
 }
 
 .bs-header-icon {
-  font-size: 26px;
-  color: var(--bs-gold);
-  filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.7));
+  width: 34px;
+  height: auto;
+  flex-shrink: 0;
 }
 
 .bs-header-title {

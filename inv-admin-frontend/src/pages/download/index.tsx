@@ -215,7 +215,7 @@ const DownloadPage: React.FC = () => {
       <header className="dlp-hero dlp-shell">
         <div className="dlp-hero-copy">
           <div className="dlp-badge">
-            <span className="dlp-badge-dot" />
+            <img src="/csergy-app-icon.png" width={24} height={24} alt="" />
             {t('dl.badge')}
             {release?.version_name ? <em>v{release.version_name}</em> : null}
           </div>
@@ -571,7 +571,6 @@ const dlpStyles = `
   color: #1d4ed8; font-size: 13px; font-weight: 600; letter-spacing: .3px;
 }
 .dlp-badge em { font-style: normal; font-weight: 800; color: var(--brand); }
-.dlp-badge-dot { width: 7px; height: 7px; border-radius: 50%; background: #10b981; box-shadow: 0 0 0 4px rgba(16,185,129,.15); }
 
 .dlp-title {
   margin: 20px 0 0; font-size: 52px; line-height: 1.1; font-weight: 800; letter-spacing: -.5px; color: var(--ink);

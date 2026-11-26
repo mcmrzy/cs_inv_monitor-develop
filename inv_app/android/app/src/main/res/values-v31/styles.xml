@@ -1,13 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Android 12+ (API 31) 系统级 SplashScreen：
-         品牌渐变背景（与 SplashPage 一致）+ 透明图标，
-         原生屏无缝衔接 SplashPage，感知为一段开屏画面 -->
+    <!-- Android 12+ 系统启动屏使用与插画相近的天空底色。 -->
     <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
-        <!-- 系统启动屏：纯白背景 + 辰烁科技 CSERGY 深蓝 logo（adaptive 图标，
-             mask 下完整可见）；Flutter 开屏页同白底，白底→开屏图无缝 -->
-        <item name="android:windowBackground">#FFFFFF</item>
-        <item name="android:windowSplashScreenBackground">#FFFFFF</item>
+        <item name="android:windowBackground">#CEE7FA</item>
+        <item name="android:windowSplashScreenBackground">#CEE7FA</item>
         <item name="android:windowSplashScreenAnimatedIcon">@mipmap/splash_logo</item>
         <item name="android:windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
     </style>

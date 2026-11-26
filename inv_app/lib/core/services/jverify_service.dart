@@ -307,7 +307,7 @@ class JVerifyService {
     // iOS 同名资源未配置时 imageNamed 返回 nil 安全降级为默认白底）
     uiConfig.authBackgroundImage = 'jverify_auth_bg';
 
-    // Logo：品牌区由自定义控件实现（圆形渐变图标 + 文字），隐藏 SDK 默认 logo
+    // 品牌区由自定义控件展示，隐藏 SDK 默认 Logo。
     uiConfig.logoHidden = true;
 
     // 脱敏号码：居中大字加粗（号码内容由 SDK 注入，如 138****1234）
@@ -356,8 +356,8 @@ class JVerifyService {
     uiConfig.privacyTextCenterGravity = true; // 协议文字居中，避免贴左缘
 
     // 品牌区自定义控件：屏宽 360dp 内居中，完整显示不裁剪
-    // logo：圆形品牌渐变图标（res/drawable-xxhdpi/jverify_brand_logo.png，
-    // 圆角/阴影已预置在 PNG 中）；button 类型仅用于加载图片背景
+    // Android drawable 和 iOS 资源目录使用同名品牌图标。
+    // button 类型仅用于加载图片背景。
     final logo = JVCustomWidget('brand_logo', JVCustomWidgetType.button)
       ..left = 148 // (360 - 64) / 2，水平居中
       ..top = 110 // 导航栏下方留白
